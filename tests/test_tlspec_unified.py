@@ -182,8 +182,69 @@ def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
+def _mlx_materialized_schema_v2_manifest(path: Path) -> dict[str, Any]:
+    """Return a schema v2 MLX materialized manifest backed by real blobs.
+
+    Parameters
+    ----------
+    path:
+        Existing ``.tlspec`` path whose saved blobs supply the body files.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mutable schema v2 manifest with MLX codec body entries.
+    """
+
+    manifest = _read_manifest(path)
+    body_index = manifest["body_index"]
+    tensor_entries = manifest["tensors"]
+    for entry in [*body_index, *tensor_entries]:
+        logical_dtype = f"mlx.core.{entry['dtype']}"
+        entry.update(
+            {
+                "logical_backend": "mlx",
+                "codec": "numpy_safetensors_v1",
+                "logical_dtype": logical_dtype,
+                "logical_device": "unknown",
+                "transport_backend": "safetensors.torch",
+                "transport_dtype": entry["dtype"],
+                "codec_metadata": {"logical_shape": entry["shape"]},
+            }
+        )
+    manifest.update(
+        {
+            "schema_version": 2,
+            "backend": "mlx",
+            "backend_runtime": {
+                "name": "mlx",
+                "version": "0.0.test",
+                "runtime_config": {},
+                "device_summary": {},
+                "compat_policy": {"policy": "materialized-test"},
+            },
+            "torch_version": None,
+            "model_fingerprint": {
+                "backend_fingerprint": {
+                    "callable_identity": "tests.test_tlspec_unified.mlx_fixture",
+                    "graph_digest": "mlx-materialized-fixture",
+                }
+            },
+            "body_format": "safetensors",
+            "backward_summary": None,
+            "derived_gradient_summary": None,
+            "payload_policy": {
+                "policy": "array_payloads",
+                "materialization_supported": True,
+                "payload_kinds": sorted({entry["intended_use"] for entry in body_index}),
+            },
+        }
+    )
+    return manifest
+
+
 def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: Path) -> None:
-    """Schema v2 admits the epoch-3 materialized array-payload vocabulary."""
+    """Schema v2 admits the MLX materialized array-payload vocabulary."""
 
     path = tmp_path / "array_payload_vocab.tlspec"
     _captured_log().save(path)
@@ -196,13 +257,13 @@ def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: 
     }
     manifest["body_index"][0].update(
         {
-            "logical_backend": "jax",
+            "logical_backend": "mlx",
             "codec": "numpy_safetensors_v1",
-            "logical_dtype": "float32",
-            "logical_device": "TFRT_CPU_0",
+            "logical_dtype": "mlx.core.float32",
+            "logical_device": "unknown",
             "transport_backend": "safetensors.torch",
             "transport_dtype": "float32",
-            "codec_metadata": {"weak_type": False},
+            "codec_metadata": {"logical_shape": [2, 3]},
         }
     )
     _write_manifest(path, manifest)
@@ -397,33 +458,77 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_schema_v2_non_torch_audit_manifest_validates(tmp_path: Path) -> None:
-    """Schema v2 accepts backend/runtime fields and nullable torch fields."""
+def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
+    """Schema v2 accepts MLX materialized backend/runtime and body fields."""
 
-    path = tmp_path / "mlx_audit.tlspec"
+    path = tmp_path / "mlx_materialized.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
     _write_manifest(path, manifest)
 
     validate_tlspec(path)
 
 
 @pytest.mark.smoke
-def test_schema_v2_non_torch_audit_loads_metadata(tmp_path: Path) -> None:
-    """Non-torch schema v2 audit traces load metadata without payloads."""
+def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
+    """MLX schema v2 materialized traces load body entries as MLX arrays."""
 
-    path = tmp_path / "mlx_audit_load.tlspec"
+    pytest.importorskip("mlx")
+    import mlx.core as mx
+
+    path = tmp_path / "mlx_materialized_load.tlspec"
     _captured_log().save(path)
-    _write_manifest(path, _mlx_schema_v2_manifest(path))
+    _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
 
     loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.backend == "mlx"
-    assert getattr(loaded, "payload_load_status") == "audit_only"
+    assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
     saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
     assert saved_ops
-    assert all(op.out is None for op in saved_ops)
+    assert all(isinstance(op.out, mx.array) for op in saved_ops)
+    assert loaded.validation_replay_status.state == "unavailable"
+    assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
+
+
+@pytest.mark.optional
+def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
+    """Public MLX portable saves write codec-backed safetensors body entries."""
+
+    pytest.importorskip("mlx")
+    import mlx.core as mx
+    import mlx.nn as mlx_nn
+
+    class MlxTinyModel(mlx_nn.Module):
+        """Small MLX model used for public tlspec save assertions."""
+
+        def __init__(self) -> None:
+            """Initialize the projection layer."""
+
+            super().__init__()
+            self.proj = mlx_nn.Linear(3, 2)
+
+        def __call__(self, x: mx.array) -> mx.array:
+            """Run the projection."""
+
+            return self.proj(x)
+
+    trace = tl.trace(MlxTinyModel(), mx.ones((1, 3)))
+    path = tmp_path / "mlx_public_materialized.tlspec"
+
+    tl.save(trace, path, level="portable")
+    validate_tlspec(path)
+    manifest = _read_manifest(path)
+
+    assert manifest["backend"] == "mlx"
+    assert manifest["body_format"] == "safetensors"
+    assert manifest["payload_policy"]["policy"] == "array_payloads"
+    assert manifest["payload_policy"]["materialization_supported"] is True
+    assert manifest["payload_policy"]["payload_kinds"]
+    assert manifest["body_index"]
+    assert all(entry["logical_backend"] == "mlx" for entry in manifest["body_index"])
+    assert all(entry["codec"] == "numpy_safetensors_v1" for entry in manifest["body_index"])
 
 
 @pytest.mark.smoke

@@ -5,13 +5,17 @@ from __future__ import annotations
 supports_backward_capture = False
 supports_fastlog = False
 supports_intervention = False
+supports_payload_materialization = True
 supports_rng_replay = False
 supports_compile_capture = False
+payload_policy = "array_payloads"
 
 __all__ = [
     "supports_backward_capture",
     "supports_compile_capture",
     "supports_fastlog",
     "supports_intervention",
+    "supports_payload_materialization",
     "supports_rng_replay",
+    "payload_policy",
 ]

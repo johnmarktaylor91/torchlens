@@ -447,8 +447,6 @@ def _blobify_tensor_field(
 
     if field_value is None:
         return None
-    if _is_mlx_array(field_value):
-        return _audit_null_tensor_field(owner, field_name, options, reason="mlx_array_audit_null")
     if not options.payload_materialization and not isinstance(field_value, torch.Tensor):
         return _audit_null_tensor_field(
             owner,
@@ -624,17 +622,6 @@ def _blobify_recursive_value(
     if spec is not None:
         return _scrub_value(value, options, memo, blob_specs, blob_counter)
     return _stringify_value(value)
-
-
-def _is_mlx_array(value: Any) -> bool:
-    """Return whether ``value`` is an MLX array without requiring MLX."""
-
-    try:
-        import mlx.core as mx
-    except ImportError:
-        return False
-    array_type = getattr(mx, "array", None)
-    return array_type is not None and isinstance(value, array_type)
 
 
 def _stringify_value(value: Any) -> str:

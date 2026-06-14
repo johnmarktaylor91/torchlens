@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 mlx = pytest.importorskip("mlx")
@@ -12,7 +13,8 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
+from torchlens.backends import BackendUnsupportedError, get_backend_spec  # noqa: E402
+import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 
 
 class TinyMLP(nn.Module):
@@ -113,6 +115,25 @@ def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) 
     )
 
 
+def _assert_mlx_materialized_manifest(manifest: dict[str, Any], expected_kinds: set[str]) -> None:
+    """Assert that a public MLX save wrote materialized codec body entries."""
+
+    assert manifest["body_format"] == "safetensors"
+    assert manifest["payload_policy"] == {
+        "policy": "array_payloads",
+        "materialization_supported": True,
+        "payload_kinds": sorted(expected_kinds),
+    }
+    assert manifest["body_index"]
+    assert {entry["intended_use"] for entry in manifest["body_index"]} == expected_kinds
+    assert all(entry["logical_backend"] == "mlx" for entry in manifest["body_index"])
+    assert all(entry["codec"] == "numpy_safetensors_v1" for entry in manifest["body_index"])
+    assert all(entry["filename"].endswith(".safetensors") for entry in manifest["body_index"])
+    assert not any(
+        record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]
+    )
+
+
 def _always_true(_op: Any) -> bool:
     """Return true for ``tl.where`` rejection tests."""
 
@@ -182,40 +203,60 @@ def test_mlx_repeated_trace_no_wrapper_leak() -> None:
 
 
 @pytest.mark.optional
-def test_mlx_save_load_audit_only(tmp_path: Path) -> None:
-    """MLX traces save/load with array payloads nulled as unsupported records."""
+def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
+    """MLX public saves now materialize array payloads through the MLX codec."""
 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
-    bundle_path = tmp_path / "mlx-audit.tlspec"
+    expected_outs = {
+        op.layer_label: np.asarray(op.out)
+        for op in trace.layer_list
+        if op.has_saved_activation and op.out is not None
+    }
+    bundle_path = tmp_path / "mlx-materialized.tlspec"
 
     tl.save(trace, bundle_path)
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
     assert loaded.backend == "mlx"
-    assert manifest["unsupported_tensors"]
-    assert all(
-        record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]
-    )
-    assert all(op.out is None for op in loaded.layer_list)
+    assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
+    _assert_mlx_materialized_manifest(manifest, {"out"})
+    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    assert loaded_saved_ops
+    assert all(isinstance(op.out, mx.array) for op in loaded_saved_ops)
+    for op in loaded_saved_ops:
+        np.testing.assert_allclose(np.asarray(op.out), expected_outs[op.layer_label])
+
+    status = loaded.validate_forward_pass([])
+    assert status is loaded.validation_replay_status
+    assert status.state == "unavailable"
+    assert status.available is False
+    assert status.reason == "loaded_trace_runtime_capture_stripped"
+    assert status.payload_load_status == "loaded_device_best_effort"
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(status)
 
 
 @pytest.mark.optional
 def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
-    """MLX static ``tl.func`` save filters public payloads after full capture."""
+    """MLX static ``tl.func`` save filters and materializes public payloads."""
 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.func("relu"))
 
     _assert_static_save_summary(trace, {"relu"})
 
-    bundle_path = tmp_path / "mlx-selective-audit.tlspec"
+    bundle_path = tmp_path / "mlx-selective-materialized.tlspec"
     tl.save(trace, bundle_path)
+    loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
+    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    loaded_unsaved_ops = [op for op in loaded.layer_list if not op.has_saved_activation]
 
-    assert len(manifest["unsupported_tensors"]) == trace.num_saved_ops
-    assert all(
-        record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]
-    )
+    _assert_mlx_materialized_manifest(manifest, {"out"})
+    assert len(manifest["body_index"]) == trace.num_saved_ops
+    assert loaded_saved_ops
+    assert all(isinstance(op.out, mx.array) for op in loaded_saved_ops)
+    assert all(op.out is None for op in loaded_unsaved_ops)
 
 
 @pytest.mark.optional
@@ -255,6 +296,19 @@ def test_mlx_static_save_rejects_unsupported_selector_kinds(
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         tl.trace(TinyMLP(), _tiny_mlp_input(), save=selector)
+
+
+@pytest.mark.optional
+def test_mlx_capability_flags_match_materialized_contract() -> None:
+    """MLX capability exports should advertise materialized array payloads."""
+
+    spec = get_backend_spec("mlx")
+
+    assert spec.capabilities.payload_materialization is True
+    assert spec.serialization_policy.payload_policy == "array_payloads"
+    assert spec.serialization_policy.body_format == "safetensors"
+    assert capabilities.supports_payload_materialization is True
+    assert capabilities.payload_policy == "array_payloads"
 
 
 @pytest.mark.optional

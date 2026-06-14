@@ -140,6 +140,7 @@ from .._source_links import file_line_text, terminal_file_line_link, vscode_file
 
 _USE_STORED_TRANSFORM = object()
 _JAX_VALIDATION_REPLAY_BACKEND = "jax"
+_MLX_VALIDATION_REPLAY_BACKEND = "mlx"
 _TINYGRAD_VALIDATION_REPLAY_BACKEND = "tinygrad"
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
@@ -379,13 +380,15 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
     Returns
     -------
     bool
-        True for loaded JAX/tinygrad traces whose backend runtime replay
+        True for loaded non-torch traces whose backend runtime replay
         capture lists were stripped by portable save.
     """
 
     if not bool(getattr(trace, "_loaded_from_bundle", False)):
         return False
     backend = str(getattr(trace, "backend", "torch"))
+    if backend == _MLX_VALIDATION_REPLAY_BACKEND:
+        return True
     if backend == _JAX_VALIDATION_REPLAY_BACKEND:
         return not bool(getattr(trace, "jax_equation_captures", ()))
     if backend == _TINYGRAD_VALIDATION_REPLAY_BACKEND:
@@ -5451,6 +5454,10 @@ class Trace(CapturedRun):
         """
         from ..backends import get_backend_spec
 
+        status = self.validation_replay_status
+        if bool(getattr(self, "_loaded_from_bundle", False)) and not status.available:
+            setattr(self, "_validation_replay_status", status)
+            return status
         spec = get_backend_spec(getattr(self, "backend", "torch"))
         return spec.validate_trace(
             self,
