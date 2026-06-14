@@ -9,7 +9,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
-| `mlx` | Technical preview | Unsupported | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads` only |
+| `mlx` | Technical preview | Unsupported | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
@@ -85,7 +85,18 @@ trace.derived_grads["inputs.0"]
 For `mlx.nn.Module` roots, TorchLens passes `model.parameters()` as an explicit
 `mx.value_and_grad` argument and rebinds it with `model.update(params)` during the AD rerun. The raw
 AD-rerun output must match the captured forward output within dtype tolerance before records are
-exposed. MLX intermediate derived gradients remain deferred, and `op.grads` /
+exposed.
+
+Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to request MLX saved-op
+intermediate derived gradients. The producer uses one extra `mx.value_and_grad` replay with
+custom-VJP identity taps installed by the MLX wrappers before their logging early return; normal
+capture logging remains off, so module call counts are not incremented by the AD replay. Attachment
+uses grouped structural signatures rather than a capture-index map, and duplicate or ambiguous
+groups are skipped. Each public record must pass an independent replacement-gradient and
+perturbation oracle, and only records with `status == "exact"` reach
+`trace.intermediate_derived_grads` and read-only `op.derived_grad`.
+
+These derived gradients are not true backward capture, and `op.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
 
 MLX rejects `tl.output(...)`, `tl.where(...)`,

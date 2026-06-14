@@ -23,8 +23,11 @@ with `GradOptions(intermediate_grads=True)` and are exposed only through
 `Trace.intermediate_derived_grads` and `Op.derived_grad`; they never populate true backward
 surfaces.
 MLX leaf gradients use `tl.backends.mlx.GradOptions`; they run a second
-`mx.value_and_grad` pass with module param rebinding and expose only `Trace.derived_grads` after
-the raw-output honesty guard passes.
+`mx.value_and_grad` pass with module param rebinding and expose `Trace.derived_grads` after
+the raw-output honesty guard passes. MLX intermediate derived gradients are requested with
+`GradOptions(intermediate_grads=True, max_intermediate_grads=...)`; the same AD replay installs
+custom-VJP taps through the MLX wrappers, then exposes only exact grouped-signature matches whose
+replacement-gradient and perturbation oracle passes.
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
 arrays by value; `jax_sharding_*` manifest fields are audit-only and multi-host/unaddressable
 sharded arrays fail closed.

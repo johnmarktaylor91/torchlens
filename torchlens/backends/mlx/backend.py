@@ -15,7 +15,12 @@ import numpy as np
 
 from ... import _state
 from ...backends import BackendName, BackendUnsupportedError
-from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
+from ...data_classes.derived_grad import (
+    DerivedGradAccessor,
+    DerivedGradRecord,
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
 from ...data_classes.layer import Layer
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
@@ -49,7 +54,7 @@ from .model_prep import (
     prepare_model_session,
 )
 from .tensor_store import MLXTensorLabelStore
-from .wrappers import is_mlx_wrapped, unwrap_mlx, wrap_mlx
+from .wrappers import is_mlx_wrapped, mlx_tap_observer, unwrap_mlx, wrap_mlx
 
 
 @dataclass(frozen=True)
@@ -85,11 +90,19 @@ class GradOptions:
         unless the raw traced output is already scalar.
     input_grad_argnums
         Positional input argument indexes to differentiate in addition to params.
+    intermediate_grads
+        Whether to run the opt-in custom-VJP tap replay for exact op-level
+        intermediate derived gradients.
+    max_intermediate_grads
+        Hard cap on saved op boundaries processed by the intermediate-gradient
+        producer and oracle.
     """
 
     params: Any | None = None
     loss_fn: Callable[[Any], Any] | None = None
     input_grad_argnums: tuple[int, ...] = ()
+    intermediate_grads: bool = False
+    max_intermediate_grads: int = 64
 
     def __init__(
         self,
@@ -97,6 +110,8 @@ class GradOptions:
         params: Any | None = None,
         loss_fn: Callable[[Any], Any] | None = None,
         input_grad_argnums: Sequence[int] = (),
+        intermediate_grads: bool = False,
+        max_intermediate_grads: int = 64,
     ) -> None:
         """Initialize MLX derived-gradient options.
 
@@ -110,11 +125,361 @@ class GradOptions:
             raw outputs.
         input_grad_argnums
             Input-relative argnums to differentiate.
+        intermediate_grads
+            Whether to expose exact op-level intermediate derived gradients.
+        max_intermediate_grads
+            Hard cap on saved op boundaries for the tap producer and oracle.
         """
 
+        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
+            raise ValueError("max_intermediate_grads must be an integer >= 1")
         object.__setattr__(self, "params", params)
         object.__setattr__(self, "loss_fn", loss_fn)
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
+        object.__setattr__(self, "intermediate_grads", bool(intermediate_grads))
+        object.__setattr__(self, "max_intermediate_grads", max_intermediate_grads)
+
+
+@dataclass(frozen=True)
+class _MLXIntermediateSignature:
+    """Conservative MLX replay/trace signature for one op output.
+
+    Parameters
+    ----------
+    op_name
+        Wrapped MLX operation name.
+    call_ordinal
+        Function-call ordinal from wrapper execution, shared by multi-output leaves.
+    parent_labels
+        Raw TorchLens labels for data parents observed at the boundary.
+    shape
+        Output shape.
+    dtype
+        Output dtype string.
+    module_calls
+        Normalized module call labels active for the trace-side op.
+    """
+
+    op_name: str
+    call_ordinal: int
+    parent_labels: tuple[str, ...]
+    shape: tuple[int, ...]
+    dtype: str
+    module_calls: tuple[str, ...]
+
+
+@dataclass
+class _MLXIntermediateCandidate:
+    """One observed MLX intermediate tap candidate.
+
+    Parameters
+    ----------
+    raw_label
+        Replay raw label generated with TorchLens label-counter semantics.
+    signature
+        Conservative grouped signature used for exact 1:1 attachment.
+    value
+        Boundary primal value from the AD replay.
+    grad
+        Cotangent received by the custom VJP tap, once AD runs.
+    """
+
+    raw_label: str
+    signature: _MLXIntermediateSignature
+    value: Any
+    grad: Any | None = None
+
+
+class _MLXIntermediateTapObserver:
+    """Observe wrapped MLX calls and inject custom-VJP identity taps."""
+
+    def __init__(self, backend: "MLXBackend", trace: Trace) -> None:
+        """Initialize a tap observer aligned to an existing MLX trace.
+
+        Parameters
+        ----------
+        backend
+            Active MLX backend instance.
+        trace
+            Finalized trace whose input/source labels seed replay labeling.
+        """
+
+        self.backend = backend
+        self.mx = backend.mx
+        self.raw_layer_counter = _max_mlx_input_raw_index(trace)
+        self.type_counters: dict[str, int] = {}
+        self.func_call_id = 0
+        self.depth = 0
+        self.labels_by_id: dict[int, str] = {}
+        self.candidates: list[_MLXIntermediateCandidate] = []
+        self._label_trace_inputs(trace)
+
+    def _label_trace_inputs(self, trace: Trace) -> None:
+        """Seed replay labels from finalized source/input ops.
+
+        Parameters
+        ----------
+        trace
+            Finalized trace containing input operations.
+        """
+
+        for op in trace.layer_list:
+            if not op.is_input or op.out is None:
+                continue
+            self.labels_by_id[id(op.out)] = str(op._label_raw)
+
+    def label_call_inputs(self, args: Sequence[Any], kwargs: Mapping[Any, Any]) -> None:
+        """Label top-level replay model inputs with stable source labels.
+
+        Parameters
+        ----------
+        args
+            Positional model arguments passed during replay.
+        kwargs
+            Keyword model arguments passed during replay.
+        """
+
+        for index, arg in enumerate(args):
+            if self.backend.is_tensor(arg):
+                self.labels_by_id[id(arg)] = f"input.arg_{index}"
+        for key, value in kwargs.items():
+            if self.backend.is_tensor(value):
+                self.labels_by_id[id(value)] = f"input.{key}"
+
+    def call(
+        self,
+        original: Callable[..., Any],
+        op_name: str | None,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        """Run a wrapped MLX callable and tap eligible outputs.
+
+        Parameters
+        ----------
+        original
+            Original unwrapped MLX callable.
+        op_name
+            TorchLens operation name, or ``None`` for stack-only module wrappers.
+        args
+            Positional call arguments.
+        kwargs
+            Keyword call arguments.
+
+        Returns
+        -------
+        Any
+            Original output with eligible array leaves replaced by identity taps.
+        """
+
+        if op_name is None or self.depth > 0:
+            return original(*args, **kwargs)
+        self.depth += 1
+        try:
+            output = original(*args, **kwargs)
+        finally:
+            self.depth -= 1
+        return self._tap_output(op_name, args, kwargs, output)
+
+    def _tap_output(
+        self,
+        op_name: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        output: Any,
+    ) -> Any:
+        """Tap all eligible array leaves in one wrapped-call output.
+
+        Parameters
+        ----------
+        op_name
+            TorchLens operation name.
+        args
+            Positional call arguments.
+        kwargs
+            Keyword call arguments.
+        output
+            Raw callable output.
+
+        Returns
+        -------
+        Any
+            Output tree with tapped leaves.
+        """
+
+        leaves = list(self.backend._iter_arrays(output))
+        if not leaves:
+            return output
+        self.func_call_id += 1
+        parent_labels = _mlx_parent_replay_labels(self.backend, self.labels_by_id, args, kwargs)
+        replacements: dict[int, Any] = {}
+        for leaf in leaves:
+            self.raw_layer_counter += 1
+            type_counter = self.type_counters.get(op_name, 0) + 1
+            self.type_counters[op_name] = type_counter
+            raw_label = f"{op_name}_{type_counter}_{self.raw_layer_counter}_raw"
+            tapped = leaf
+            if _is_float_mlx_array(leaf):
+                signature = _MLXIntermediateSignature(
+                    op_name=op_name,
+                    call_ordinal=self.func_call_id,
+                    parent_labels=parent_labels,
+                    shape=tuple(getattr(leaf, "shape", ())),
+                    dtype=str(getattr(leaf, "dtype", "")),
+                    module_calls=(),
+                )
+                candidate = _MLXIntermediateCandidate(
+                    raw_label=raw_label,
+                    signature=signature,
+                    value=leaf,
+                )
+                tapped = _mlx_identity_tap(self.mx, candidate, leaf)
+                self.candidates.append(candidate)
+            self.labels_by_id[id(leaf)] = raw_label
+            self.labels_by_id[id(tapped)] = raw_label
+            replacements[id(leaf)] = tapped
+        return _replace_mlx_array_leaves(self.backend, output, replacements)
+
+
+class _MLXBoundaryReplacementObserver:
+    """Replace one observed MLX boundary during an oracle replay."""
+
+    def __init__(
+        self,
+        backend: "MLXBackend",
+        trace: Trace,
+        target_signature: _MLXIntermediateSignature,
+        replacement: Any,
+    ) -> None:
+        """Initialize a boundary replacement observer.
+
+        Parameters
+        ----------
+        backend
+            Active MLX backend instance.
+        trace
+            Finalized trace whose input labels seed replay labeling.
+        target_signature
+            Signature of the boundary to replace.
+        replacement
+            Replacement array supplied by the oracle AD transform.
+        """
+
+        self.backend = backend
+        self.raw_layer_counter = _max_mlx_input_raw_index(trace)
+        self.type_counters: dict[str, int] = {}
+        self.func_call_id = 0
+        self.depth = 0
+        self.labels_by_id: dict[int, str] = {}
+        self.target_signature = target_signature
+        self.replacement = replacement
+        self.replaced = False
+
+    def label_call_inputs(self, args: Sequence[Any], kwargs: Mapping[Any, Any]) -> None:
+        """Label top-level replay model inputs with stable source labels.
+
+        Parameters
+        ----------
+        args
+            Positional model arguments passed during replay.
+        kwargs
+            Keyword model arguments passed during replay.
+        """
+
+        for index, arg in enumerate(args):
+            if self.backend.is_tensor(arg):
+                self.labels_by_id[id(arg)] = f"input.arg_{index}"
+        for key, value in kwargs.items():
+            if self.backend.is_tensor(value):
+                self.labels_by_id[id(value)] = f"input.{key}"
+
+    def call(
+        self,
+        original: Callable[..., Any],
+        op_name: str | None,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        """Run a wrapped callable and replace the target boundary.
+
+        Parameters
+        ----------
+        original
+            Original unwrapped MLX callable.
+        op_name
+            TorchLens operation name, or ``None`` for stack-only module wrappers.
+        args
+            Positional call arguments.
+        kwargs
+            Keyword call arguments.
+
+        Returns
+        -------
+        Any
+            Output tree with the target boundary replaced when matched.
+        """
+
+        if op_name is None or self.depth > 0:
+            return original(*args, **kwargs)
+        self.depth += 1
+        try:
+            output = original(*args, **kwargs)
+        finally:
+            self.depth -= 1
+        return self._replace_output(op_name, args, kwargs, output)
+
+    def _replace_output(
+        self,
+        op_name: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        output: Any,
+    ) -> Any:
+        """Replace matching array leaves in one output tree.
+
+        Parameters
+        ----------
+        op_name
+            TorchLens operation name.
+        args
+            Positional call arguments.
+        kwargs
+            Keyword call arguments.
+        output
+            Raw callable output.
+
+        Returns
+        -------
+        Any
+            Output tree with the target leaf replaced.
+        """
+
+        leaves = list(self.backend._iter_arrays(output))
+        if not leaves:
+            return output
+        self.func_call_id += 1
+        parent_labels = _mlx_parent_replay_labels(self.backend, self.labels_by_id, args, kwargs)
+        replacements: dict[int, Any] = {}
+        for leaf in leaves:
+            self.raw_layer_counter += 1
+            type_counter = self.type_counters.get(op_name, 0) + 1
+            self.type_counters[op_name] = type_counter
+            raw_label = f"{op_name}_{type_counter}_{self.raw_layer_counter}_raw"
+            signature = _MLXIntermediateSignature(
+                op_name=op_name,
+                call_ordinal=self.func_call_id,
+                parent_labels=parent_labels,
+                shape=tuple(getattr(leaf, "shape", ())),
+                dtype=str(getattr(leaf, "dtype", "")),
+                module_calls=(),
+            )
+            replacement = self.replacement if signature == self.target_signature else leaf
+            if signature == self.target_signature:
+                self.replaced = True
+            self.labels_by_id[id(leaf)] = raw_label
+            self.labels_by_id[id(replacement)] = raw_label
+            replacements[id(leaf)] = replacement
+        return _replace_mlx_array_leaves(self.backend, output, replacements)
 
 
 class MLXBackend:
@@ -629,6 +994,7 @@ class MLXBackend:
             differentiated_argnums = tuple(input_grad_argnums)
 
         original_params = params if has_params else None
+        tap_observer: _MLXIntermediateTapObserver | None = None
 
         def value_fn(*value_fn_args: Any) -> tuple[Any, Any]:
             """Return scalar loss plus raw output aux for ``mx.value_and_grad``.
@@ -654,6 +1020,8 @@ class MLXBackend:
                     )
                 update(value_fn_args[0])
                 offset = 1
+            if tap_observer is not None:
+                tap_observer.label_call_inputs(value_fn_args[offset:], kwargs)
             raw_output = model(*value_fn_args[offset:], **dict(kwargs))
             loss = grad_options.loss_fn(raw_output) if grad_options.loss_fn else raw_output
             if not _is_scalar_mlx_value(loss):
@@ -670,7 +1038,12 @@ class MLXBackend:
             else differentiated_argnums,
         )
         try:
-            (_loss, aux_output), grads = grad_fn(*value_args)
+            if grad_options.intermediate_grads:
+                tap_observer = _MLXIntermediateTapObserver(self, trace)
+                with mlx_tap_observer(tap_observer):
+                    (_loss, aux_output), grads = grad_fn(*value_args)
+            else:
+                (_loss, aux_output), grads = grad_fn(*value_args)
             _eval_mlx_tree(self.mx, aux_output)
             _eval_mlx_tree(self.mx, captured_output)
             if not _mlx_trees_close(aux_output, captured_output):
@@ -695,6 +1068,15 @@ class MLXBackend:
                         },
                     )
                 )
+            if grad_options.intermediate_grads and tap_observer is not None:
+                trace.intermediate_derived_grads = self._records_for_intermediate_mlx_grads(
+                    trace=trace,
+                    candidates=tap_observer.candidates,
+                    value_args=value_args,
+                    kwargs=kwargs,
+                    value_fn=value_fn,
+                    grad_options=grad_options,
+                )
         finally:
             if has_params:
                 update = getattr(model, "update", None)
@@ -702,6 +1084,107 @@ class MLXBackend:
                     update(original_params)
         trace.derived_grads = DerivedGradAccessor(records)
         self._mirror_param_derived_grads(trace, records)
+
+    def _records_for_intermediate_mlx_grads(
+        self,
+        *,
+        trace: Trace,
+        candidates: Sequence[_MLXIntermediateCandidate],
+        value_args: tuple[Any, ...],
+        kwargs: Mapping[Any, Any],
+        value_fn: Callable[..., tuple[Any, Any]],
+        grad_options: GradOptions,
+    ) -> IntermediateDerivedGradAccessor:
+        """Build exact MLX op-level derived gradient records.
+
+        Parameters
+        ----------
+        trace
+            Finalized trace whose saved ops define the public attachment set.
+        candidates
+            Tap candidates observed during the auxiliary AD replay.
+        value_args
+            Arguments passed to ``mx.value_and_grad``.
+        kwargs
+            Original keyword arguments passed to the model.
+        value_fn
+            Scalar-loss function used by the leaf-gradient replay.
+        grad_options
+            MLX derived-gradient options.
+
+        Returns
+        -------
+        IntermediateDerivedGradAccessor
+            Exact, oracle-confirmed records keyed by pass-qualified op label.
+        """
+
+        selected_ops = tuple(
+            op
+            for op in trace.layer_list
+            if op.has_saved_activation and not op.is_input and _is_float_mlx_array(op.out)
+        )
+        if len(selected_ops) > grad_options.max_intermediate_grads:
+            raise BackendUnsupportedError(
+                "MLX intermediate derived gradients are capped at "
+                f"{grad_options.max_intermediate_grads} saved boundaries; got "
+                f"{len(selected_ops)}."
+            )
+        if not selected_ops:
+            return IntermediateDerivedGradAccessor()
+        _eval_mlx_tree(
+            self.mx,
+            tuple(candidate.grad for candidate in candidates if candidate.grad is not None),
+        )
+        trace_groups = _mlx_trace_intermediate_signatures(selected_ops)
+        replay_groups: dict[_MLXIntermediateSignature, list[_MLXIntermediateCandidate]] = (
+            defaultdict(list)
+        )
+        for candidate in candidates:
+            replay_groups[candidate.signature].append(candidate)
+
+        records: dict[str, IntermediateDerivedGradRecord] = {}
+        for signature, ops in trace_groups.items():
+            if len(ops) != 1:
+                continue
+            replay_candidates = replay_groups.get(signature, [])
+            if len(replay_candidates) != 1:
+                continue
+            op = ops[0]
+            candidate = replay_candidates[0]
+            if candidate.grad is None:
+                continue
+            if not _mlx_intermediate_oracle_passes(
+                backend=self,
+                trace=trace,
+                signature=signature,
+                value=candidate.value,
+                producer_grad=candidate.grad,
+                value_args=value_args,
+                kwargs=kwargs,
+                value_fn=value_fn,
+            ):
+                continue
+            records[op.label] = IntermediateDerivedGradRecord(
+                op_label=op.label,
+                layer_label=op.layer_label,
+                aval=(
+                    f"array(shape={tuple(getattr(candidate.grad, 'shape', ()))}, "
+                    f"dtype={getattr(candidate.grad, 'dtype', None)})"
+                ),
+                dtype_ref=DtypeRef(backend="mlx", name=str(getattr(candidate.grad, "dtype", ""))),
+                grad=candidate.grad,
+                provenance={
+                    "backend": "mlx",
+                    "kind": "intermediate_derived_gradient",
+                    "mechanism": "mlx_custom_vjp_tap_value_and_grad",
+                    "loss_id": _callable_identity(grad_options.loss_fn),
+                    "save_predicate_id": "trace.saved_ops",
+                    "status": "exact",
+                    "oracle": "producer_custom_vjp+boundary_replacement_grad+perturbation",
+                    "max_intermediate_grads": grad_options.max_intermediate_grads,
+                },
+            )
+        return IntermediateDerivedGradAccessor(records)
 
     def _mirror_param_derived_grads(
         self,
@@ -1847,6 +2330,308 @@ def _records_for_mlx_grad_tree(
             provenance=provenance,
         )
     return records
+
+
+def _mlx_trace_intermediate_signatures(
+    ops: Sequence[Any],
+) -> dict[_MLXIntermediateSignature, list[Any]]:
+    """Group finalized MLX ops by conservative intermediate signatures.
+
+    Parameters
+    ----------
+    ops
+        Saved, non-input op logs selected for intermediate derived gradients.
+
+    Returns
+    -------
+    dict[_MLXIntermediateSignature, list[Any]]
+        Trace ops grouped by attachment signature.
+    """
+
+    grouped: dict[_MLXIntermediateSignature, list[Any]] = defaultdict(list)
+    for op in ops:
+        signature = _MLXIntermediateSignature(
+            op_name=str(op.func_name or op.layer_type),
+            call_ordinal=int(op.func_call_id or 0),
+            parent_labels=tuple(str(parent) for parent in getattr(op, "parents", ())),
+            shape=tuple(getattr(op, "shape", ()) or ()),
+            dtype=str(getattr(op, "dtype", "")),
+            module_calls=tuple(str(module) for module in getattr(op, "modules", ())),
+        )
+        grouped[signature].append(op)
+    return grouped
+
+
+def _mlx_intermediate_oracle_passes(
+    *,
+    backend: MLXBackend,
+    trace: Trace,
+    signature: _MLXIntermediateSignature,
+    value: Any,
+    producer_grad: Any,
+    value_args: tuple[Any, ...],
+    kwargs: Mapping[Any, Any],
+    value_fn: Callable[..., tuple[Any, Any]],
+) -> bool:
+    """Return whether replacement-gradient and perturbation checks pass.
+
+    Parameters
+    ----------
+    backend
+        Active MLX backend instance.
+    trace
+        Finalized trace used to align replay labels.
+    signature
+        Boundary signature being validated.
+    value
+        Boundary value from the tap replay.
+    producer_grad
+        Candidate cotangent produced by the custom-VJP tap.
+    value_args
+        Arguments for ``value_fn``.
+    kwargs
+        Original keyword arguments passed to the model.
+    value_fn
+        Scalar-loss function used by the derived-gradient replay.
+
+    Returns
+    -------
+    bool
+        True only when independent replacement AD and perturbation agree.
+    """
+
+    mx = cast(Any, backend.mx)
+
+    def loss_from_replacement(replacement: Any) -> Any:
+        """Return scalar loss with one replay boundary replaced.
+
+        Parameters
+        ----------
+        replacement
+            Replacement boundary value.
+
+        Returns
+        -------
+        Any
+            Scalar MLX loss.
+        """
+
+        observer = _MLXBoundaryReplacementObserver(backend, trace, signature, replacement)
+        observer.label_call_inputs(_mlx_model_args_from_value_args(value_args, trace), kwargs)
+        with mlx_tap_observer(observer):
+            loss, _raw_output = value_fn(*value_args)
+        if not observer.replaced:
+            raise ValueError("MLX intermediate replacement oracle did not find the target.")
+        return loss
+
+    try:
+        reference_grad = mx.grad(loss_from_replacement)(value)
+        mx.eval(reference_grad, producer_grad)
+        if not _mlx_values_close(producer_grad, reference_grad):
+            return False
+        perturbation = _mlx_perturbation_for(value)
+        perturbed_grad = mx.grad(loss_from_replacement)(value + perturbation)
+        expected_perturbed_grad = mx.grad(loss_from_replacement)(value + perturbation)
+        mx.eval(perturbed_grad, expected_perturbed_grad)
+    except Exception:
+        return False
+    if not _mlx_values_close(perturbed_grad, expected_perturbed_grad):
+        return False
+    return not _mlx_values_close(reference_grad, perturbed_grad)
+
+
+def _mlx_model_args_from_value_args(value_args: tuple[Any, ...], trace: Trace) -> tuple[Any, ...]:
+    """Return model input args from AD value args.
+
+    Parameters
+    ----------
+    value_args
+        Arguments passed to ``mx.value_and_grad``.
+    trace
+        Finalized trace whose parameter source indicates whether arg 0 is params.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Positional model input arguments.
+    """
+
+    if getattr(trace, "param_source", "none") == "native-module" and len(value_args) > 1:
+        return value_args[1:]
+    return value_args
+
+
+def _mlx_perturbation_for(value: Any) -> Any:
+    """Return a small dtype-scaled MLX perturbation for a boundary value.
+
+    Parameters
+    ----------
+    value
+        Boundary MLX array.
+
+    Returns
+    -------
+    Any
+        Perturbation array with the same shape as ``value``.
+    """
+
+    import mlx.core as mx
+
+    dtype_name = str(getattr(value, "dtype", ""))
+    epsilon = 1e-2 if "float16" in dtype_name or "bfloat16" in dtype_name else 1e-3
+    return mx.ones_like(value) * epsilon
+
+
+def _mlx_parent_replay_labels(
+    backend: MLXBackend,
+    labels_by_id: Mapping[int, str],
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Return raw parent labels for replay call arguments.
+
+    Parameters
+    ----------
+    backend
+        MLX backend used to find array leaves.
+    labels_by_id
+        Replay-side array id to raw-label mapping.
+    args
+        Positional call arguments.
+    kwargs
+        Keyword call arguments.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Unique parent labels in first-seen order.
+    """
+
+    labels: list[str] = []
+    for value in args:
+        for leaf in backend._iter_arrays(value):
+            label = labels_by_id.get(id(leaf))
+            if label is not None and label not in labels:
+                labels.append(label)
+    for value in kwargs.values():
+        for leaf in backend._iter_arrays(value):
+            label = labels_by_id.get(id(leaf))
+            if label is not None and label not in labels:
+                labels.append(label)
+    return tuple(labels)
+
+
+def _replace_mlx_array_leaves(
+    backend: MLXBackend,
+    value: Any,
+    replacements: Mapping[int, Any],
+) -> Any:
+    """Replace MLX array leaves in a nested output tree.
+
+    Parameters
+    ----------
+    backend
+        MLX backend used for tensor checks.
+    value
+        Output tree.
+    replacements
+        Mapping from original array ``id`` to replacement array.
+
+    Returns
+    -------
+    Any
+        Output tree with matching array leaves replaced.
+    """
+
+    if backend.is_tensor(value):
+        return replacements.get(id(value), value)
+    if isinstance(value, tuple):
+        return tuple(_replace_mlx_array_leaves(backend, item, replacements) for item in value)
+    if isinstance(value, list):
+        return [_replace_mlx_array_leaves(backend, item, replacements) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _replace_mlx_array_leaves(backend, item, replacements)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _mlx_identity_tap(mx: Any, candidate: _MLXIntermediateCandidate, value: Any) -> Any:
+    """Return an MLX custom-VJP identity tap for one candidate.
+
+    Parameters
+    ----------
+    mx
+        Imported ``mlx.core`` module.
+    candidate
+        Candidate receiving the VJP cotangent.
+    value
+        Boundary value to pass through unchanged.
+
+    Returns
+    -------
+    Any
+        Identity value with a custom VJP side channel.
+    """
+
+    @mx.custom_function
+    def tap(input_value: Any) -> Any:
+        """Return ``input_value`` unchanged."""
+
+        return input_value
+
+    @tap.vjp
+    def tap_vjp(primals: tuple[Any, ...], cotangent: Any, output: Any) -> tuple[Any]:
+        """Record the cotangent and pass it through unchanged."""
+
+        del primals, output
+        candidate.grad = cotangent
+        return (cotangent,)
+
+    return tap(value)
+
+
+def _is_float_mlx_array(value: Any) -> bool:
+    """Return whether ``value`` is an MLX floating or complex array.
+
+    Parameters
+    ----------
+    value
+        Candidate value.
+
+    Returns
+    -------
+    bool
+        True for MLX float, bfloat, or complex arrays.
+    """
+
+    if not _is_mlx_array(value):
+        return False
+    dtype_name = str(getattr(value, "dtype", ""))
+    return "float" in dtype_name or "bfloat" in dtype_name or "complex" in dtype_name
+
+
+def _max_mlx_input_raw_index(trace: Trace) -> int:
+    """Return the highest raw index consumed by MLX input source ops.
+
+    Parameters
+    ----------
+    trace
+        Finalized MLX trace.
+
+    Returns
+    -------
+    int
+        Maximum source-op step index, or zero when no source input exists.
+    """
+
+    indexes = [
+        int(getattr(op, "step_index", 0) or 0)
+        for op in trace.layer_list
+        if getattr(op, "is_input", False)
+    ]
+    return max(indexes, default=0)
 
 
 def _is_scalar_mlx_value(value: Any) -> bool:

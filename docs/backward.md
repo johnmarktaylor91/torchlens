@@ -149,10 +149,14 @@ another backend exposes hookable backward graphs. JAX exposes `trace.derived_gra
 `trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The JAX intermediate producer
 runs as a separate zero-tap AD replay and only exposes oracle-confirmed `status == "exact"`
-records. MLX exposes only `trace.derived_grads`, populated by
+records. MLX exposes `trace.derived_grads`, populated by
 `tl.backends.mlx.GradOptions` through a second pure `mx.value_and_grad` run that rebinds
 `mlx.nn.Module` params with `model.update(params)` and refuses records unless the AD-rerun raw
-output matches the captured output. MLX intermediate derived gradients remain deferred.
+output matches the captured output. MLX can optionally expose exact saved-op records through
+`trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The MLX intermediate producer
+uses custom-VJP identity taps in that auxiliary AD replay, attaches by unambiguous grouped
+signatures, skips duplicates, and only exposes oracle-confirmed `status == "exact"` records.
 tinygrad exposes `trace.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
 bracketed `DEV=PYTHON` leaf-gradient run, and can optionally expose exact unambiguous per-op
 records through `trace.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not

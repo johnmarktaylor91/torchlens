@@ -24,6 +24,7 @@ from torchlens.backends import (
     unregister_backend_spec,
 )
 from torchlens.backends.jax import capabilities as jax_capabilities
+from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
@@ -216,6 +217,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     """Default specs and per-backend capability mirrors stay in lockstep."""
 
     jax_spec = get_backend_spec("jax")
+    mlx_spec = get_backend_spec("mlx")
     tinygrad_spec = get_backend_spec("tinygrad")
 
     assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
@@ -234,6 +236,23 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     assert jax_spec.capabilities.module_identity_modes == jax_capabilities.module_identity_modes
     assert jax_spec.capabilities.trace_options == jax_capabilities.trace_options
     assert jax_spec.serialization_policy.payload_policy == jax_capabilities.payload_policy
+
+    assert mlx_spec.capabilities.backward_capture == mlx_capabilities.supports_backward_capture
+    assert mlx_spec.capabilities.validation_replay == mlx_capabilities.supports_validation_replay
+    assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
+    assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
+    assert (
+        mlx_spec.capabilities.intermediate_derived_grads
+        == mlx_capabilities.supports_intermediate_derived_grads
+    )
+    assert mlx_spec.capabilities.rng_replay == mlx_capabilities.supports_rng_replay
+    assert (
+        mlx_spec.capabilities.payload_materialization
+        == mlx_capabilities.supports_payload_materialization
+    )
+    assert mlx_spec.capabilities.module_identity_modes == mlx_capabilities.module_identity_modes
+    assert mlx_spec.capabilities.trace_options == mlx_capabilities.trace_options
+    assert mlx_spec.serialization_policy.payload_policy == mlx_capabilities.payload_policy
 
     assert (
         tinygrad_spec.capabilities.backward_capture

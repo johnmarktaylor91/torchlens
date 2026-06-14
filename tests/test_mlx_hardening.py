@@ -19,6 +19,7 @@ from torchlens.backends import (  # noqa: E402
     get_backend_spec,
 )
 from torchlens.backends.mlx import GradOptions  # noqa: E402
+import torchlens.backends.mlx.backend as mlx_backend  # noqa: E402
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 
 
@@ -196,6 +197,14 @@ def _grad_loss(output: mx.array) -> mx.array:
     return mx.sum(output * output)
 
 
+def _mlx_intermediate_loss(x: mx.array) -> mx.array:
+    """Return a scalar loss with MLX eager wrapper-visible intermediates."""
+
+    hidden = mx.multiply(x, x)
+    shifted = mx.add(hidden, 3.0)
+    return mx.sum(mx.multiply(shifted, shifted))
+
+
 @pytest.mark.optional
 def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
@@ -260,6 +269,182 @@ def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
     assert trace.params["proj.weight"].grad is trace.derived_grads["params.proj.weight"].grad
     assert trace.params["proj.bias"].grad is trace.derived_grads["params.proj.bias"].grad
     assert len(trace.intermediate_derived_grads) == 0
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
+    """MLX T1 should expose exact saved-op gradients confirmed by a direct reference."""
+
+    x = mx.array([1.5, -2.0], dtype=mx.float32)
+    trace = tl.trace(
+        _mlx_intermediate_loss,
+        x,
+        backend="mlx",
+        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+    )
+    hidden_op = next(
+        op for op in trace.layer_list if op.func_name == "multiply" and op.shape == (2,)
+    )
+
+    def suffix(boundary: mx.array) -> mx.array:
+        """Return the scalar suffix loss from the hidden boundary."""
+
+        shifted = mx.add(boundary, 3.0)
+        return mx.sum(mx.multiply(shifted, shifted))
+
+    expected = mx.grad(suffix)(hidden_op.out)
+    mx.eval(expected, hidden_op.derived_grad)
+
+    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert hidden_op.label in trace.intermediate_derived_grads
+    np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(expected))
+    record = trace.intermediate_derived_grads[hidden_op.label]
+    assert record.provenance["mechanism"] == "mlx_custom_vjp_tap_value_and_grad"
+    assert record.provenance["status"] == "exact"
+    assert record.provenance["oracle"] == (
+        "producer_custom_vjp+boundary_replacement_grad+perturbation"
+    )
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_perturbation_reference_oracle() -> None:
+    """The MLX T1 oracle should catch boundary-sensitive gradients."""
+
+    x = mx.array([1.5, -2.0], dtype=mx.float32)
+    hidden = mx.multiply(x, x)
+
+    def suffix(boundary: mx.array) -> mx.array:
+        """Return a nonlinear scalar suffix from the boundary."""
+
+        shifted = mx.add(boundary, 3.0)
+        return mx.sum(mx.multiply(shifted, shifted))
+
+    base_grad = mx.grad(suffix)(hidden)
+    perturbed_grad = mx.grad(suffix)(hidden + 0.25)
+    mx.eval(base_grad, perturbed_grad)
+    assert not np.allclose(np.asarray(base_grad), np.asarray(perturbed_grad))
+
+    trace = tl.trace(
+        _mlx_intermediate_loss,
+        x,
+        backend="mlx",
+        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+    )
+    hidden_op = next(
+        op for op in trace.layer_list if op.func_name == "multiply" and op.shape == (2,)
+    )
+
+    np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(base_grad))
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplicate grouped signatures should be skipped rather than guessed."""
+
+    original_grouping = mlx_backend._mlx_trace_intermediate_signatures
+
+    def duplicate_first_signature(ops: Any) -> dict[Any, list[Any]]:
+        """Return grouped signatures with one deliberate duplicate."""
+
+        grouped = original_grouping(ops)
+        for matches in grouped.values():
+            if matches:
+                matches.append(matches[0])
+                break
+        return grouped
+
+    monkeypatch.setattr(
+        mlx_backend, "_mlx_trace_intermediate_signatures", duplicate_first_signature
+    )
+    trace = tl.trace(
+        _mlx_intermediate_loss,
+        mx.array([1.5, -2.0], dtype=mx.float32),
+        backend="mlx",
+        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+    )
+
+    first_multiply = next(op for op in trace.layer_list if op.func_name == "multiply")
+
+    assert first_multiply.label not in trace.intermediate_derived_grads
+    assert first_multiply.derived_grad is None
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_do_not_pollute_module_call_counts() -> None:
+    """The MLX tap observer should not double-count nested module calls."""
+
+    model = TinyGradLinear()
+    x = mx.array([[1.0, -2.0, 0.5], [0.25, 0.75, -1.5]], dtype=mx.float32)
+    trace = tl.trace(
+        model,
+        x,
+        backend="mlx",
+        grad_options=GradOptions(
+            loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
+        ),
+    )
+
+    assert trace.modules["proj"].num_calls == 1
+    assert set(trace.module_calls.keys()) == {"self:1", "proj:1"}
+    assert trace.module_calls["proj:1"].num_ops >= 1
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_cap_hard_fails() -> None:
+    """Explicit MLX T1 should hard-fail when saved boundaries exceed the cap."""
+
+    with pytest.raises(BackendUnsupportedError, match="capped"):
+        tl.trace(
+            _mlx_intermediate_loss,
+            mx.array([1.5, -2.0], dtype=mx.float32),
+            backend="mlx",
+            grad_options=GradOptions(
+                input_grad_argnums=(0,),
+                intermediate_grads=True,
+                max_intermediate_grads=1,
+            ),
+        )
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Oracle-failed MLX T1 candidates should not reach ``op.derived_grad``."""
+
+    def always_reject(*args: Any, **kwargs: Any) -> bool:
+        """Reject every candidate in the patched oracle."""
+
+        return False
+
+    monkeypatch.setattr(mlx_backend, "_mlx_intermediate_oracle_passes", always_reject)
+    trace = tl.trace(
+        _mlx_intermediate_loss,
+        mx.array([1.5, -2.0], dtype=mx.float32),
+        backend="mlx",
+        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+    )
+
+    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert len(trace.intermediate_derived_grads) == 0
+    assert all(op.derived_grad is None for op in trace.layer_list)
+
+
+@pytest.mark.optional
+def test_mlx_intermediate_derived_grads_are_not_backward_capture() -> None:
+    """MLX T1 should still keep true backward op-gradient surfaces closed."""
+
+    trace = tl.trace(
+        _mlx_intermediate_loss,
+        mx.array([1.5, -2.0], dtype=mx.float32),
+        backend="mlx",
+        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+    )
+
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace[0].grads
 
 
 @pytest.mark.optional
@@ -528,11 +713,13 @@ def test_mlx_capability_flags_match_materialized_contract() -> None:
     spec = get_backend_spec("mlx")
 
     assert spec.capabilities.payload_materialization is True
+    assert spec.capabilities.intermediate_derived_grads is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
     assert spec.capabilities.trace_options == ("module_identity_mode", "grad_options")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
     assert capabilities.supports_payload_materialization is True
+    assert capabilities.supports_intermediate_derived_grads is True
     assert capabilities.payload_policy == "array_payloads"
 
 

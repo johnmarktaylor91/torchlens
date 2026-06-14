@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from contextlib import contextmanager
 from typing import Any
 
 from ... import _state
 from ...ir.events import ModuleFrame
 from .model_prep import MLXModuleTree
+
+_ACTIVE_TAP_OBSERVER: object | None = None
 
 
 class _MLXWrapperRegistry:
@@ -153,6 +156,10 @@ class _MLXWrapperRegistry:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             """Call an MLX function and emit an op event when logging is active."""
 
+            observer = _ACTIVE_TAP_OBSERVER
+            if observer is not None:
+                observe_call = getattr(observer, "call")
+                return observe_call(original, op_name, args, kwargs)
             if not _state._logging_enabled:
                 return original(*args, **kwargs)
             trace = _state._active_trace
@@ -179,6 +186,30 @@ class _MLXWrapperRegistry:
                     getattr(trace, "_mlx_module_stack").pop()
 
         setattr(owner, name, wrapper)
+
+
+@contextmanager
+def mlx_tap_observer(observer: object) -> Any:
+    """Install an MLX tap observer independently of normal capture logging.
+
+    Parameters
+    ----------
+    observer
+        Backend-owned object with a ``call`` method used by wrappers.
+
+    Yields
+    ------
+    None
+        The observer is active for wrapped MLX calls inside the context.
+    """
+
+    global _ACTIVE_TAP_OBSERVER
+    previous = _ACTIVE_TAP_OBSERVER
+    _ACTIVE_TAP_OBSERVER = observer
+    try:
+        yield
+    finally:
+        _ACTIVE_TAP_OBSERVER = previous
 
 
 def _module_instances_for_class(

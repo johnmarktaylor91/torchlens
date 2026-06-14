@@ -499,7 +499,7 @@ def register_default_backend_specs() -> None:
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,
-                intermediate_derived_grads=False,
+                intermediate_derived_grads=True,
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=MLX_TRACE_OPTIONS,
             ),
