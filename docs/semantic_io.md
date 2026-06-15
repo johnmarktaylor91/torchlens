@@ -128,6 +128,116 @@ trace.input_preprocessor = ResolvedPreprocessing(
 `draw(show_input_transform_summary=True)` adds the preprocessing summary next
 to the raw-input node. The default render remains unchanged.
 
+## Node Annotations
+
+Use `trace.annotate(...)` to attach small JSON data, tensor blobs, or an image
+path to selector-matched nodes. Annotation data is user-owned, survives
+`rerun()`/fork/save/load where the payload policy supports it, and does not
+change the default graph when no annotation-aware render hook is supplied.
+
+```python
+trace.annotate(tl.func("relu"), data={"note": "late block"}, max_fanout=4)
+trace.annotate(tl.label("conv2d_1_1"), data=torch.zeros(8, 2))
+annotated = trace.with_annotations(tl.func("linear"), image="thumbnail.png")
+```
+
+JSON-serializable `data=` is stored under the user annotation namespace.
+Torch tensor payloads are stored in `trace._annotation_blobs` and are currently
+torch-backend only. NumPy arrays should be converted explicitly to tensors or
+JSON lists before annotation so they do not lose numeric structure.
+
+## Model Profile
+
+`trace.model_profile` is a computed, non-persisted descriptor for semantic I/O
+readiness. It summarizes input modality, preprocessing source, output label
+source/count, raw-stimulus count, whether raw images are available, and whether
+the trace has enough semantic metadata for the image-classifier keystone flow.
+
+```python
+trace = tl.trace(
+    model,
+    image_list,
+    transform=image_batch_to_tensor,
+    output_style="classification",
+    save_raw_input=True,
+)
+trace.model_profile
+```
+
+For local transforms, set `trace.input_preprocessor` to a
+`ResolvedPreprocessing` record before presenting the profile. This keeps demos
+and integrations honest about where preprocessing came from without adding a
+new persisted field.
+
+## Representation Geometry Thumbnails
+
+`tl.repgeom` is the provisional representation-geometry surface. It has no
+optional plotting dependency. `tl.repgeom.mds_evolution(...)` computes
+classical two-dimensional MDS over the saved batch activation for selected
+single-pass layers, Procrustes-aligns each layer to the previous selected
+layer by default, and annotates the trace with coordinate tensors keyed by
+`layer:<layer_label>`.
+
+```python
+mds_layers = tl.in_module("block1") | tl.in_module("block2")
+trace = tl.trace(
+    model,
+    image_list,
+    transform=image_batch_to_tensor,
+    save=mds_layers,
+    save_raw_input=True,
+    output_style="classification",
+)
+coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
+```
+
+The selected activations must be saved by the original capture; this is why
+the demo uses a curated `save=` subset instead of `save="all"`. `min_n`
+defaults to 8 because the scatter is a visual summary over a stimulus batch,
+not a statistical inference routine. Recurrent aggregate layers are rejected;
+select a pass-qualified op when a reused module should be visualized.
+
+Render MDS thumbnails with the draw-time node hook:
+
+```python
+trace.draw(
+    node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8),
+)
+```
+
+The hook reads coordinate tensors from `_annotation_blobs` and raw PIL stimuli
+from `trace.raw_input` at draw time, then embeds a fresh PNG in the rendered
+node. If raw images are missing or the batch size no longer matches the
+coordinates, it renders an explicit point-cloud fallback.
+
+## Keystone Image-Classifier Flow
+
+The copy-paste flow for an image classifier is:
+
+```python
+mds_layers = tl.in_module("block1") | tl.in_module("block2")
+trace = tl.trace(
+    model,
+    image_list,
+    transform=image_batch_to_tensor,
+    save=mds_layers,
+    save_raw_input=True,
+    output_style="classification",
+)
+
+trace.model_profile
+trace.output_table(top_n=5)
+trace.summary(level="output")
+tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
+trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
+trace.draw(show_input_transform_summary=True)
+```
+
+Use `save_raw_input=True` for full-resolution original input display. The
+default `save_raw_input="small"` keeps portable bundles bounded by downsampling
+images before save, which is useful for storage but not ideal for this visual
+demo.
+
 ## Runnable Demo
 
 See `examples/semantic_io_legibility_demo.py` for a deterministic copy-paste
@@ -138,6 +248,10 @@ template. It demonstrates:
 - `output_style=` override and `tl.autoroute.output.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.raw_input` and `trace.input_preprocessor` provenance.
+
+See `notebooks/semantic_io_keystone_demo.ipynb` for the Sprint B keystone demo.
+It uses a tiny deterministic image classifier and synthetic PIL stimuli so the
+core flow runs without downloading external model weights.
 
 ## Provisional Public Names
 
@@ -155,3 +269,13 @@ template. It demonstrates:
 - `Trace.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`
 - `Trace.to_pandas(include_decoded_output_summary=True)`
+- `Trace.annotate(selector, data=..., image=..., max_fanout=..., copy=...)`
+- `Trace.with_annotations(selector, data=..., image=..., max_fanout=...)`
+- `Trace.model_profile`
+- `tl.repgeom.classical_mds(...)`
+- `tl.repgeom.procrustes_align(...)`
+- `tl.repgeom.activation_distance_matrix(...)`
+- `tl.repgeom.mds_evolution(...)`
+- `tl.repgeom.mds_scatter_node_spec(...)`
+- `Trace.draw(node_spec_fn=...)`
+- `Trace._annotation_blobs`

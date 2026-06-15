@@ -60,7 +60,27 @@ classifier_trace.summary(level="output")
 
 input_trace = tl.trace(model, raw_text, transform=text_to_tensor, save_raw_input="small")
 input_trace.draw(show_input_transform_summary=True)
+
+mds_layers = tl.in_module("block1") | tl.in_module("block2")
+image_trace = tl.trace(
+    model,
+    image_list,
+    transform=image_batch_to_tensor,
+    save=mds_layers,
+    save_raw_input=True,
+    output_style="classification",
+)
+image_trace.model_profile
+image_trace.output_table(top_n=5)
+tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_n=8)
+image_trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
 ```
+
+Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
+is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
+activations to have been saved at capture time; use a curated `save=` subset, not `save="all"`,
+for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
+annotation payloads and compatibility review.
 
 `record(keep_op=...)` and `record(keep_module=...)` are deprecated compatibility aliases for
 `record(save=...)`. `layers_to_save=[...]` still exists as the final-label two-pass path; an

@@ -64,7 +64,27 @@ log.to_pandas(include_decoded_output_summary=True)
 
 input_log = tl.trace(model, raw_text, transform=text_to_tensor, save_raw_input="small")
 input_log.draw(show_input_transform_summary=True)
+
+mds_layers = tl.in_module("block1") | tl.in_module("block2")
+image_log = tl.trace(
+    model,
+    image_list,
+    transform=image_batch_to_tensor,
+    save=mds_layers,
+    save_raw_input=True,
+    output_style="classification",
+)
+image_log.model_profile
+image_log.output_table(top_n=5)
+tl.repgeom.mds_evolution(image_log, save=mds_layers, min_n=8)
+image_log.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
 ```
+
+Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
+is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
+activations to have been saved at capture time; use a curated `save=` subset, not `save="all"`,
+for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
+annotation payloads and compatibility review.
 
 `backward_ready=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible
