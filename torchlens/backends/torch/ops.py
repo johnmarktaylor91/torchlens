@@ -2392,6 +2392,16 @@ def log_function_output_tensors_exhaustive(
 
     output_entries = _partition_output_entries_with_autograd_stats(out_orig)
     expected_output_count = len(output_entries)
+    loggable_output_count = sum(
+        1
+        for output_entry in output_entries
+        if _output_should_be_logged(output_entry.value, is_bottom_level_func)
+    )
+    use_single_output_fields = (
+        loggable_output_count == 1
+        and len(output_entries) == 1
+        and output_entries[0].container_spec is None
+    )
     shared_func_event_input = FunctionEventInput(
         func=func,
         func_name=func_name,
@@ -2413,7 +2423,9 @@ def log_function_output_tensors_exhaustive(
             continue
         out_tensor = cast(torch.Tensor, out)
 
-        fields_dict_onetensor = _copy_shared_fields_for_output(fields_dict)
+        fields_dict_onetensor = (
+            fields_dict if use_single_output_fields else _copy_shared_fields_for_output(fields_dict)
+        )
         fields_dict_onetensor["container_path"] = output_entry.container_path
         fields_dict_onetensor["container_spec"] = output_entry.container_spec
         if output_entry.container_spec is not None:
