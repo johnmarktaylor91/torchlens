@@ -275,6 +275,7 @@
       "_layer_num_to_lookup_keys_dict",
       "input_layers",
       "output_layers",
+      "_containers",
       "buffer_layers",
       "buffer_num_calls",
       "internal_source_ops",
@@ -818,6 +819,7 @@
       "_build_state",
       "_capture_events",
       "_code_context_cache",
+      "_containers",
       "_current_func_barcode",
       "_defer_streaming_bundle_finalization",
       "_exhaustive_module_stack",
@@ -1047,13 +1049,13 @@
     ]
   },
   "sha256_chunks": [
-    "4ee5d744",
-    "d7e48a06",
-    "d0d4e709",
-    "3beab9e9",
-    "a9de1856",
-    "84f81ed6",
-    "cbe72b8f",
-    "64f91dc1"
+    "da0418d2",
+    "f62dbc2b",
+    "3d1190dd",
+    "fca680f1",
+    "25071353",
+    "8f9aa8bf",
+    "178eff62",
+    "06dd118a"
   ]
 }

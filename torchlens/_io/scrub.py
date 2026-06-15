@@ -323,6 +323,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_out_sink",
         "_out_writer",
         "_container_ordinals_by_output_op_label",
+        "_container_ordinals_by_input_func_call_id",
         "_validation_replay_status",
         "jax_closed_jaxpr",
         "jax_equation_captures",

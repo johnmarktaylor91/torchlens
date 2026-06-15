@@ -69,6 +69,7 @@ from .ops import (
     _walk_output_tensors_with_paths,
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
+    register_call_input_container_snapshots,
 )
 from .buffer_writes import record_op_buffer_writes, snapshot_buffer_args
 from .sources import log_source_tensor
@@ -901,6 +902,13 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
+        register_call_input_container_snapshots(
+            trace,
+            args,
+            kwargs,
+            func_call_id=func_call_id,
+            event_index=func_call_id,
+        )
         nvtx_pushed = (
             _nvtx_range_push(f"torchlens::{func_name}")
             if getattr(trace, "emit_nvtx", False)

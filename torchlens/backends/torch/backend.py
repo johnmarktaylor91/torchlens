@@ -253,7 +253,9 @@ class TorchBackend:
                 if not addr_full:
                     input_args[arg_idx] = moved_tensor
                 else:
-                    nested_assign(input_args[arg_idx], addr_full, moved_tensor)
+                    input_args[arg_idx] = _assign_nested_input_value(
+                        input_args[arg_idx], addr_full, moved_tensor
+                    )
             if was_tuple and isinstance(input_args[arg_idx], list):
                 input_args[arg_idx] = tuple(input_args[arg_idx])
 
@@ -264,7 +266,9 @@ class TorchBackend:
                 if not addr_full:
                     input_kwargs[key] = moved_tensor
                 else:
-                    nested_assign(input_kwargs[key], addr_full, moved_tensor)
+                    input_kwargs[key] = _assign_nested_input_value(
+                        input_kwargs[key], addr_full, moved_tensor
+                    )
 
         # Build flat lists of (tensor, address) for both positional and keyword args.
         # Address format: "input.<argname>" or "input.<argname>.<nested_path>"
@@ -725,6 +729,61 @@ def _register_model_output_container_snapshot(
         leaf_occurrences=tuple(occurrences),
         reconstructable=True,
     )
+    registry.register_snapshot(
+        output,
+        site=ModelSite(model_ref="self:1", position="return"),
+        role=Role.CALL_OUTPUT,
+        phase=Phase.POST_CALL,
+        observed_at_event_index=int(getattr(trace, "_layer_counter", 0)),
+        spec=spec,
+        leaf_occurrences=tuple(occurrences),
+        reconstructable=True,
+    )
+
+
+def _assign_nested_input_value(
+    obj: Any,
+    addr: list[tuple[Any, Any]],
+    value: Any,
+) -> Any:
+    """Assign ``value`` inside nested input containers, rebuilding tuples.
+
+    Parameters
+    ----------
+    obj:
+        Root object to update.
+    addr:
+        Address path from ``get_vars_of_type_from_obj``.
+    value:
+        Replacement tensor.
+
+    Returns
+    -------
+    Any
+        Updated root object.
+    """
+
+    if not addr:
+        return value
+    entry_type, entry_val = addr[0]
+    rest = addr[1:]
+    if entry_type == "ind":
+        if isinstance(obj, tuple):
+            items = list(obj)
+            items[entry_val] = _assign_nested_input_value(items[entry_val], rest, value)
+            return tuple(items)
+        if isinstance(obj, list):
+            obj[entry_val] = _assign_nested_input_value(obj[entry_val], rest, value)
+            return obj
+        if isinstance(obj, dict):
+            obj[entry_val] = _assign_nested_input_value(obj[entry_val], rest, value)
+            return obj
+    if entry_type == "attr":
+        child = getattr(obj, entry_val)
+        setattr(obj, entry_val, _assign_nested_input_value(child, rest, value))
+        return obj
+    nested_assign(obj, addr, value)
+    return obj
 
 
 def _container_path_to_address(path: tuple[Any, ...]) -> str:

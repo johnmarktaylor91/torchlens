@@ -68,6 +68,7 @@ from ...ir import (
     ModulePrepEvent,
     replace_op_event,
 )
+from ...ir.container_registry import ModuleSite, Phase, Role, walk_container
 from ...utils.tensor_utils import (
     get_memory_amount,
     get_memory_amount_from_metadata,
@@ -831,6 +832,12 @@ def _record_module_entry_metadata(
     # Stash forward args for later use by _build_module_logs.
     trace._module_forward_args[(module_address, module_call_index)] = (args, kwargs)
     module_call_label_str = f"{module_address}:{module_call_index}"
+    _register_module_input_container_snapshots(
+        trace,
+        args,
+        kwargs,
+        module_call_label=module_call_label_str,
+    )
     should_capture_template = bool(
         getattr(trace, "intervention_ready", False) or getattr(trace, "save_arg_templates", False)
     )
@@ -935,6 +942,96 @@ def _record_module_entry_metadata(
         )
     )
     return input_tensor_labels, input_tensor_labels_at_entry
+
+
+def _register_module_input_container_snapshots(
+    trace: "Trace",
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    module_call_label: str,
+) -> None:
+    """Register tensor-bearing module input containers at call entry.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    args:
+        Positional module inputs.
+    kwargs:
+        Keyword module inputs.
+    module_call_label:
+        Stable module-call label for this invocation.
+    """
+
+    if not getattr(trace, "_capture_output_structure", False):
+        return
+    registry = trace._ensure_build_state().container_registry
+    event_index = int(getattr(trace, "_layer_counter", 0))
+    for index, arg in enumerate(args):
+        result = walk_container(arg, role=Role.CALL_INPUT, capability="full_spec")
+        if result is None:
+            continue
+        registry.register_snapshot(
+            arg,
+            site=ModuleSite(module_call_label=module_call_label, position=("arg", index)),
+            role=Role.CALL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=event_index,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+    for key, value in kwargs.items():
+        result = walk_container(value, role=Role.CALL_INPUT, capability="full_spec")
+        if result is None:
+            continue
+        registry.register_snapshot(
+            value,
+            site=ModuleSite(module_call_label=module_call_label, position=("kwarg", key)),
+            role=Role.CALL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=event_index,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+
+
+def _register_module_output_container_snapshot(
+    trace: "Trace",
+    output: Any,
+    *,
+    module_call_label: str,
+) -> None:
+    """Register a tensor-bearing module output container at call exit.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    output:
+        Raw module output object.
+    module_call_label:
+        Stable module-call label for this invocation.
+    """
+
+    if not getattr(trace, "_capture_output_structure", False):
+        return
+    result = walk_container(output, role=Role.CALL_OUTPUT, capability="full_spec")
+    if result is None:
+        return
+    trace._ensure_build_state().container_registry.register_snapshot(
+        output,
+        site=ModuleSite(module_call_label=module_call_label, position="return"),
+        role=Role.CALL_OUTPUT,
+        phase=Phase.POST_CALL,
+        observed_at_event_index=int(getattr(trace, "_layer_counter", 0)),
+        spec=result.spec,
+        leaf_occurrences=result.leaf_occurrences,
+        reconstructable=result.reconstructable,
+    )
 
 
 def _next_untagged_tensor_label(trace: "Trace", layer_type: str) -> tuple[str, int, int]:
@@ -1368,6 +1465,11 @@ def _record_module_exit_metadata(
         trace._module_build_data.setdefault("module_output_structures", {})[module_call_label] = (
             output_structure
         )
+    _register_module_output_container_snapshot(
+        trace,
+        out,
+        module_call_label=module_call_label,
+    )
     output_tensor_labels_raw: list[str] = []
     per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
     output_names: list[str | None] = []

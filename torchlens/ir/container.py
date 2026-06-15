@@ -60,6 +60,7 @@ class ContainerSpec:
         "dataclass",
         "hf_model_output",
         "literal",
+        "opaque",
         "registered",
     ]
     length: int | None = None
@@ -120,6 +121,8 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
     child_by_key = dict(spec.child_specs)
     if spec.kind == "literal":
         return spec.literal_value
+    if spec.kind == "opaque":
+        raise ValueError("Opaque ContainerSpec cannot be reconstructed.")
     if spec.kind in {"tuple", "list"}:
         values = [
             _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)

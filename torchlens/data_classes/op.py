@@ -1780,6 +1780,20 @@ class Op:
         return output_containers_from_op(self)
 
     @property
+    def input_containers(self) -> tuple[Any, ...]:
+        """Return input container views consumed by this op.
+
+        Returns
+        -------
+        tuple[Container, ...]
+            Registry-backed input container views keyed by this call site.
+        """
+
+        from .container import input_containers_from_op
+
+        return input_containers_from_op(self)
+
+    @property
     def is_module_input(self) -> bool:
         """Whether this Op's output feeds into at least one ModuleCall as an input.
 

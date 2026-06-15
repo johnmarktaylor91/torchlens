@@ -21,6 +21,8 @@ from .container_registry import (
     ModuleSite,
     Phase,
     Role,
+    WalkResult,
+    walk_container,
 )
 from .events import (
     ArgTemplateRef,
@@ -117,6 +119,8 @@ __all__ = [
     "RecordContext",
     "ReservedLabel",
     "Role",
+    "WalkResult",
+    "walk_container",
     "TensorRef",
     "TraceBuildState",
     "_DEFERRED_VALUE",

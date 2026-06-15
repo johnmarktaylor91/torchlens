@@ -44,6 +44,7 @@ from ..backends import (
     resolve_backend_spec,
 )
 from ..fastlog._halt import HaltSignal
+from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
 
 if TYPE_CHECKING:
@@ -360,6 +361,83 @@ def _fetch_label_move_input_tensors(
     )
 
 
+def _register_model_input_container_snapshots(
+    trace: "Trace",
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+) -> None:
+    """Register top-level model input containers before forward invocation.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    input_args:
+        Normalized positional model inputs.
+    input_kwargs:
+        Normalized keyword model inputs.
+    """
+
+    if not getattr(trace, "_capture_output_structure", False):
+        return
+    registry = trace._ensure_build_state().container_registry
+    first_spec = None
+    for index, arg in enumerate(input_args):
+        result = walk_container(arg, role=Role.MODEL_INPUT, capability="full_spec")
+        if result is None:
+            continue
+        if first_spec is None:
+            first_spec = result.spec
+        registry.register_snapshot(
+            arg,
+            site=ModelSite(model_ref="self:1", position=("arg", index)),
+            role=Role.MODEL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=0,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+        registry.register_snapshot(
+            arg,
+            site=ModelSite(model_ref="self:1", position=("arg", index)),
+            role=Role.CALL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=0,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+    for key, value in input_kwargs.items():
+        result = walk_container(value, role=Role.MODEL_INPUT, capability="full_spec")
+        if result is None:
+            continue
+        if first_spec is None:
+            first_spec = result.spec
+        registry.register_snapshot(
+            value,
+            site=ModelSite(model_ref="self:1", position=("kwarg", key)),
+            role=Role.MODEL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=0,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+        registry.register_snapshot(
+            value,
+            site=ModelSite(model_ref="self:1", position=("kwarg", key)),
+            role=Role.CALL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=0,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+    if first_spec is not None:
+        trace.__dict__["input_structure"] = first_spec
+
+
 def _extract_and_mark_outputs(
     self: "Trace",
     outputs: Any,
@@ -594,6 +672,7 @@ def run_and_log_inputs_through_model(
         with backend.active_logging(self):
             for i, t in enumerate(input_tensors):
                 backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
+            _register_model_input_container_snapshots(self, input_args, input_kwargs)
 
             if self.capture_mode == "predicate":
                 from ..capture.predicates import (

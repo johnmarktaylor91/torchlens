@@ -316,7 +316,36 @@ def output_containers_from_op(op: "Op") -> tuple[Container, ...]:
     for ordinal in dict.fromkeys(ordinals):
         record = trace._containers[ordinal]
         if isinstance(record, ContainerRecord):
-            containers.append(_container_from_record(op, record))
+            containers.append(_container_from_record(op, record, roles=_output_roles_for_op(op)))
+    return tuple(container for container in containers if container is not None)
+
+
+def input_containers_from_op(op: "Op") -> tuple[Container, ...]:
+    """Return input container views consumed by an op call site.
+
+    Parameters
+    ----------
+    op:
+        Operation whose function-call inputs should be viewed.
+
+    Returns
+    -------
+    tuple[Container, ...]
+        Registry-backed input containers for ``op.func_call_id``.
+    """
+
+    trace = getattr(op, "source_trace", None)
+    if trace is None or not hasattr(trace, "_containers"):
+        return ()
+    func_call_id = getattr(op, "func_call_id", None)
+    if func_call_id is None:
+        return ()
+    ordinals = _input_registry_index(trace).get(func_call_id, ())
+    containers = []
+    for ordinal in ordinals:
+        record = trace._containers[ordinal]
+        if isinstance(record, ContainerRecord):
+            containers.append(_container_from_record(op, record, roles={Role.CALL_INPUT}))
     return tuple(container for container in containers if container is not None)
 
 
@@ -337,10 +366,30 @@ def _container_from_registry(op: "Op") -> Container | None:
             record = trace._containers[ordinal]
             if not isinstance(record, ContainerRecord):
                 continue
-            container = _container_from_record(op, record)
+            container = _container_from_record(op, record, roles=_output_roles_for_op(op))
             if container is not None:
                 return container
     return None
+
+
+def _output_roles_for_op(op: "Op") -> set[Role]:
+    """Return output-container roles that should back ``op`` views.
+
+    Parameters
+    ----------
+    op:
+        Operation whose container view is being resolved.
+
+    Returns
+    -------
+    set[Role]
+        ``MODEL_OUTPUT`` for synthetic final-output ops and ``CALL_OUTPUT`` for
+        producer/call-site ops.
+    """
+
+    if _op_is_final_output(op):
+        return {Role.MODEL_OUTPUT}
+    return {Role.CALL_OUTPUT}
 
 
 def _output_registry_index(trace: Any) -> dict[str, tuple[int, ...]]:
@@ -373,17 +422,40 @@ def _output_registry_index(trace: Any) -> dict[str, tuple[int, ...]]:
     return frozen
 
 
-def _container_from_record(op: "Op", record: ContainerRecord) -> Container | None:
-    """Build a container view from the latest output snapshot in a record."""
+def _input_registry_index(trace: Any) -> dict[int, tuple[int, ...]]:
+    """Return a lazy reverse index from consuming func_call_id to container ordinals."""
 
-    output_snapshots = [
-        snapshot
-        for snapshot in record.snapshots
-        if snapshot.role in {Role.CALL_OUTPUT, Role.MODEL_OUTPUT}
-    ]
-    if not output_snapshots:
+    cached = trace.__dict__.get("_container_ordinals_by_input_func_call_id")
+    if isinstance(cached, dict):
+        return cached
+    index: dict[int, list[int]] = {}
+    for ordinal, record in getattr(trace, "_containers", {}).items():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if snapshot.role != Role.CALL_INPUT:
+                continue
+            func_call_id = getattr(snapshot.site, "func_call_id", None)
+            if isinstance(func_call_id, int):
+                index.setdefault(func_call_id, []).append(ordinal)
+    frozen = {key: tuple(dict.fromkeys(ordinals)) for key, ordinals in index.items()}
+    trace.__dict__["_container_ordinals_by_input_func_call_id"] = frozen
+    return frozen
+
+
+def _container_from_record(
+    op: "Op",
+    record: ContainerRecord,
+    *,
+    roles: set[Role] | None = None,
+) -> Container | None:
+    """Build a container view from the latest matching snapshot in a record."""
+
+    selected_roles = roles or {Role.CALL_OUTPUT, Role.MODEL_OUTPUT}
+    snapshots = [snapshot for snapshot in record.snapshots if snapshot.role in selected_roles]
+    if not snapshots:
         return None
-    snapshot = output_snapshots[-1]
+    snapshot = snapshots[-1]
     root_kind: ContainerRootKind = "final_output" if snapshot.role == Role.MODEL_OUTPUT else "call"
     leaves = _registry_sibling_leaves(op, snapshot)
     return Container(
@@ -413,7 +485,23 @@ def _registry_sibling_leaves(op: "Op", snapshot: Any) -> tuple["Op", ...]:
         label = occurrence.producer_op_label
         if label is not None and label in trace.ops:
             leaves.append(trace.ops[label])
+        elif label is not None:
+            raw_match = _op_from_raw_label(trace, label)
+            if raw_match is not None:
+                leaves.append(raw_match)
     return tuple(leaves) or (op,)
+
+
+def _op_from_raw_label(trace: Any, raw_label: str) -> "Op" | None:
+    """Return the op whose raw label matches ``raw_label``."""
+
+    for candidate in trace.ops:
+        if (
+            getattr(candidate, "layer_label_raw", None) == raw_label
+            or getattr(candidate, "_layer_label_raw", None) == raw_label
+        ):
+            return candidate
+    return None
 
 
 def _container_structure_capability(op: "Op") -> str:

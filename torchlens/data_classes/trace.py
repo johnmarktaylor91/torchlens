@@ -3101,6 +3101,7 @@ class Trace(CapturedRun):
         state["_out_hash_cache"] = {}
         state["_code_context_cache"] = {}
         state.pop("_container_ordinals_by_output_op_label", None)
+        state.pop("_container_ordinals_by_input_func_call_id", None)
         state.pop("_build_state", None)
         state["_backward_gradfn_refs"] = {}
         state["_tl_backward_hooked_tensor_keys"] = set()

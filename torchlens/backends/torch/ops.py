@@ -108,7 +108,13 @@ from ...ir.container import (
     TupleIndex,
     get_registered_container,
 )
-from ...ir.container_registry import ContainerLeafOccurrence, FuncSite, Phase, Role
+from ...ir.container_registry import (
+    ContainerLeafOccurrence,
+    FuncSite,
+    Phase,
+    Role,
+    walk_container,
+)
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -3057,6 +3063,63 @@ def _register_call_output_container_snapshot(
         leaf_occurrences=_container_leaf_occurrences_from_entries(output_entries),
         reconstructable=True,
     )
+
+
+def register_call_input_container_snapshots(
+    trace: "Trace",
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    func_call_id: int,
+    event_index: int,
+) -> None:
+    """Register tensor-bearing function-call input containers.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    args:
+        Function positional arguments at call entry.
+    kwargs:
+        Function keyword arguments at call entry.
+    func_call_id:
+        Function-call identifier for this boundary.
+    event_index:
+        Monotonic ordering value for the pre-call snapshot.
+    """
+
+    if not getattr(trace, "_capture_output_structure", False):
+        return
+    registry = trace._ensure_build_state().container_registry
+    for index, arg in enumerate(args):
+        result = walk_container(arg, role=Role.CALL_INPUT, capability="full_spec")
+        if result is None:
+            continue
+        registry.register_snapshot(
+            arg,
+            site=FuncSite(func_call_id=func_call_id, position=("arg", index)),
+            role=Role.CALL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=event_index,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
+    for key, value in kwargs.items():
+        result = walk_container(value, role=Role.CALL_INPUT, capability="full_spec")
+        if result is None:
+            continue
+        registry.register_snapshot(
+            value,
+            site=FuncSite(func_call_id=func_call_id, position=("kwarg", key)),
+            role=Role.CALL_INPUT,
+            phase=Phase.PRE_CALL,
+            observed_at_event_index=event_index,
+            spec=result.spec,
+            leaf_occurrences=result.leaf_occurrences,
+            reconstructable=result.reconstructable,
+        )
 
 
 def _container_leaf_occurrences_from_entries(
