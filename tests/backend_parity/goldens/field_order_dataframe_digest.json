@@ -275,6 +275,7 @@
       "_layer_num_to_lookup_keys_dict",
       "input_layers",
       "output_layers",
+      "input_structure",
       "_containers",
       "buffer_layers",
       "buffer_num_calls",
@@ -963,6 +964,7 @@
       "input_object_id",
       "input_preprocessor",
       "input_signature_hash",
+      "input_structure",
       "internal_sink_ops",
       "internal_source_ops",
       "internally_terminated_bool_ops",
@@ -1049,13 +1051,13 @@
     ]
   },
   "sha256_chunks": [
-    "da0418d2",
-    "f62dbc2b",
-    "3d1190dd",
-    "fca680f1",
-    "25071353",
-    "8f9aa8bf",
-    "178eff62",
-    "06dd118a"
+    "21e4255a",
+    "555a88ca",
+    "fde0e886",
+    "b656e1b0",
+    "e56f4017",
+    "afb0df37",
+    "0cb1a8d2",
+    "b0d28330"
   ]
 }

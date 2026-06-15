@@ -965,7 +965,7 @@ def _register_module_input_container_snapshots(
         Stable module-call label for this invocation.
     """
 
-    if not getattr(trace, "_capture_output_structure", False):
+    if not getattr(trace, "_capture_container_structure", False):
         return
     registry = trace._ensure_build_state().container_registry
     event_index = int(getattr(trace, "_layer_counter", 0))
@@ -1017,7 +1017,7 @@ def _register_module_output_container_snapshot(
         Stable module-call label for this invocation.
     """
 
-    if not getattr(trace, "_capture_output_structure", False):
+    if not getattr(trace, "_capture_container_structure", False):
         return
     result = walk_container(output, role=Role.CALL_OUTPUT, capability="full_spec")
     if result is None:

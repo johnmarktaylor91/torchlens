@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 import inspect
 import re
-from typing import Any
+from typing import Any, ClassVar
 
 import torch
 
+from .._io import FieldPolicy
 from .container import (
     ContainerSpec,
     DataclassField,
@@ -44,6 +45,11 @@ class Phase(Enum):
 class FuncSite:
     """Function-call boundary where a container was observed."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "func_call_id": FieldPolicy.KEEP,
+        "position": FieldPolicy.BLOB_RECURSIVE,
+    }
+
     func_call_id: int
     position: object
 
@@ -52,6 +58,11 @@ class FuncSite:
 class ModuleSite:
     """Module-call boundary where a container was observed."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "module_call_label": FieldPolicy.KEEP,
+        "position": FieldPolicy.BLOB_RECURSIVE,
+    }
+
     module_call_label: str
     position: object
 
@@ -59,6 +70,11 @@ class ModuleSite:
 @dataclass(frozen=True, slots=True)
 class ModelSite:
     """Model boundary where a container was observed."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "model_ref": FieldPolicy.KEEP,
+        "position": FieldPolicy.BLOB_RECURSIVE,
+    }
 
     model_ref: str
     position: object
@@ -71,6 +87,13 @@ Site = FuncSite | ModuleSite | ModelSite
 class ContainerLeafOccurrence:
     """One tensor occurrence at one container path."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "path": FieldPolicy.BLOB_RECURSIVE,
+        "producer_op_label": FieldPolicy.KEEP,
+        "tensor_identity": FieldPolicy.KEEP,
+        "occ_index": FieldPolicy.KEEP,
+    }
+
     path: tuple[OutputPathComponent, ...]
     producer_op_label: str | None
     tensor_identity: str | None
@@ -80,6 +103,17 @@ class ContainerLeafOccurrence:
 @dataclass(frozen=True, slots=True)
 class ContainerSnapshot:
     """Portable snapshot of one container observation."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "site": FieldPolicy.BLOB_RECURSIVE,
+        "role": FieldPolicy.KEEP,
+        "phase": FieldPolicy.KEEP,
+        "observed_at_event_index": FieldPolicy.KEEP,
+        "spec": FieldPolicy.BLOB_RECURSIVE,
+        "leaf_occurrences": FieldPolicy.BLOB_RECURSIVE,
+        "reconstructable": FieldPolicy.KEEP,
+        "site_aliases": FieldPolicy.BLOB_RECURSIVE,
+    }
 
     site: Site
     role: Role
@@ -94,6 +128,15 @@ class ContainerSnapshot:
 @dataclass(slots=True)
 class ContainerRecord:
     """Portable record for one container identity ordinal."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "ordinal": FieldPolicy.KEEP,
+        "object_kind": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
+        "first_seen_event_index": FieldPolicy.KEEP,
+        "roles": FieldPolicy.KEEP,
+        "snapshots": FieldPolicy.BLOB_RECURSIVE,
+    }
 
     ordinal: int
     object_kind: str

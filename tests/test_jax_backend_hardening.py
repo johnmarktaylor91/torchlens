@@ -1169,7 +1169,8 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True
-    assert spec.capabilities.container_structure == "paths_only"
+    assert spec.capabilities.input_container_structure == "paths_only"
+    assert spec.capabilities.output_container_structure == "paths_only"
     assert spec.capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
@@ -1178,7 +1179,8 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert capabilities.supports_fastlog is False
     assert capabilities.supports_intervention is False
     assert capabilities.supports_payload_materialization is True
-    assert capabilities.container_structure == "paths_only"
+    assert capabilities.input_container_structure == "paths_only"
+    assert capabilities.output_container_structure == "paths_only"
     assert capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert capabilities.payload_policy == "array_payloads"
     assert capabilities.trace_options == (

@@ -378,7 +378,7 @@ def _register_model_input_container_snapshots(
         Normalized keyword model inputs.
     """
 
-    if not getattr(trace, "_capture_output_structure", False):
+    if not getattr(trace, "_capture_container_structure", False):
         return
     registry = trace._ensure_build_state().container_registry
     first_spec = None

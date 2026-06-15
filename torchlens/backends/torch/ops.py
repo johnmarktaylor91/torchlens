@@ -3046,7 +3046,7 @@ def _register_call_output_container_snapshot(
 
     if not (
         getattr(trace, "intervention_ready", False)
-        or getattr(trace, "_capture_output_structure", False)
+        or getattr(trace, "_capture_container_structure", False)
     ):
         return
     spec = next((entry.container_spec for entry in output_entries if entry.container_spec), None)
@@ -3089,7 +3089,7 @@ def register_call_input_container_snapshots(
         Monotonic ordering value for the pre-call snapshot.
     """
 
-    if not getattr(trace, "_capture_output_structure", False):
+    if not getattr(trace, "_capture_container_structure", False):
         return
     registry = trace._ensure_build_state().container_registry
     for index, arg in enumerate(args):

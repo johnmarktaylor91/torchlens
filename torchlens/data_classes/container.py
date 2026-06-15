@@ -370,8 +370,8 @@ def container_from_op(op: "Op") -> Container | None:
         return registry_container
     spec = getattr(op, "container_spec", None)
     path = tuple(getattr(op, "container_path", ()) or ())
-    capability = _container_structure_capability(op)
-    if capability == "none" and spec is None:
+    capability = _output_container_structure_capability(op)
+    if capability == "none":
         return None
     if spec is None and not path:
         return None
@@ -585,7 +585,9 @@ def _container_from_record(
     snapshot = snapshots[-1]
     root_kind = _root_kind_for_role(snapshot.role)
     leaves = _registry_sibling_leaves(op, snapshot)
-    capability = _container_structure_capability(op)
+    capability = _container_structure_capability(op, snapshot.role)
+    if capability == "none":
+        return None
     return Container(
         spec=snapshot.spec if capability == "full_spec" else None,
         leaves=leaves,
@@ -619,12 +621,14 @@ def _container_from_snapshot(
     """
 
     return Container(
-        spec=snapshot.spec if _trace_container_capability(trace) == "full_spec" else None,
+        spec=snapshot.spec
+        if _trace_container_capability(trace, snapshot.role) == "full_spec"
+        else None,
         leaves=_registry_sibling_leaves_from_trace(trace, snapshot),
         root_kind=_root_kind_for_role(snapshot.role),
         root_id=("container", record.ordinal),
         supports_reconstruct=snapshot.reconstructable
-        and _trace_container_capability(trace) == "full_spec",
+        and _trace_container_capability(trace, snapshot.role) == "full_spec",
         leaf_occurrences=snapshot.leaf_occurrences,
     )
 
@@ -707,8 +711,28 @@ def _op_from_raw_label(trace: Any, raw_label: str) -> "Op" | None:
     return None
 
 
-def _container_structure_capability(op: "Op") -> str:
-    """Return the owning backend's declared container-structure capability.
+def _container_structure_capability(op: "Op", role: Role) -> str:
+    """Return the owning backend's declared role-specific container capability.
+
+    Parameters
+    ----------
+    op:
+        Operation whose source trace may declare a backend.
+    role:
+        Container role being viewed.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, ``"full_spec"``, or ``"full_spec"``
+        when the backend cannot be resolved for legacy in-memory traces.
+    """
+
+    return _trace_container_capability(getattr(op, "source_trace", None), role)
+
+
+def _input_container_structure_capability(op: "Op") -> str:
+    """Return the owning backend's declared input-container capability.
 
     Parameters
     ----------
@@ -722,16 +746,36 @@ def _container_structure_capability(op: "Op") -> str:
         when the backend cannot be resolved for legacy in-memory traces.
     """
 
-    return _trace_container_capability(getattr(op, "source_trace", None))
+    return _container_structure_capability(op, Role.CALL_INPUT)
 
 
-def _trace_container_capability(trace: Any) -> str:
-    """Return a trace backend's declared container-structure capability.
+def _output_container_structure_capability(op: "Op") -> str:
+    """Return the owning backend's declared output-container capability.
+
+    Parameters
+    ----------
+    op:
+        Operation whose source trace may declare a backend.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, ``"full_spec"``, or ``"full_spec"``
+        when the backend cannot be resolved for legacy in-memory traces.
+    """
+
+    return _container_structure_capability(op, Role.CALL_OUTPUT)
+
+
+def _trace_container_capability(trace: Any, role: Role) -> str:
+    """Return a trace backend's declared role-specific container capability.
 
     Parameters
     ----------
     trace:
         Trace-like object.
+    role:
+        Container role being viewed.
 
     Returns
     -------
@@ -745,7 +789,10 @@ def _trace_container_capability(trace: Any) -> str:
     try:
         from ..backends import get_backend_spec
 
-        return str(get_backend_spec(str(backend)).capabilities.container_structure)
+        capabilities = get_backend_spec(str(backend)).capabilities
+        if role in {Role.CALL_INPUT, Role.MODEL_INPUT}:
+            return str(capabilities.input_container_structure)
+        return str(capabilities.output_container_structure)
     except Exception:
         return "full_spec"
 
@@ -776,7 +823,7 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
         return trace.ops[output_labels[0]].out
     raise ValueError(
         "No reconstructable final-output container was captured. "
-        "Trace with intervention_ready=True to persist output structure."
+        "Trace with capture_container_structure=True to persist container structure."
     )
 
 

@@ -53,7 +53,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "detach_saved_activations",
     "recurrence_detection",
     "intervention_ready",
-    "capture_output_structure",
+    "capture_container_structure",
     "hooks",
     "unwrap_when_done",
     "verbose",
@@ -162,7 +162,8 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
     "intervention_ready": "intervention_ready",
-    "capture_output_structure": "capture_output_structure",
+    "capture_container_structure": "capture_container_structure",
+    "capture_output_structure": "capture_container_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
     "verbose": "verbose",
@@ -620,8 +621,8 @@ class CaptureOptions:
         Whether repeated graph patterns are detected during postprocess.
     intervention_ready:
         Whether replay-template metadata is captured for intervention APIs.
-    capture_output_structure:
-        Whether to persist final model-output container structure without
+    capture_container_structure:
+        Whether to persist input and output container structure without
         enabling intervention replay metadata.
     hooks:
         Optional live hook plan applied during capture.
@@ -689,7 +690,7 @@ class CaptureOptions:
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
     intervention_ready: bool = False
-    capture_output_structure: bool = False
+    capture_container_structure: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
     verbose: bool = False
@@ -734,7 +735,7 @@ class CaptureOptions:
         detach_saved_activations: bool | MissingType = MISSING,
         recurrence_detection: bool | MissingType = MISSING,
         intervention_ready: bool | MissingType = MISSING,
-        capture_output_structure: bool | MissingType = MISSING,
+        capture_container_structure: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
         verbose: bool | MissingType = MISSING,
@@ -758,6 +759,7 @@ class CaptureOptions:
         *,
         mark_layer_depths: bool | MissingType = MISSING,
         num_context_lines: int | MissingType = MISSING,
+        capture_output_structure: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -776,6 +778,17 @@ class CaptureOptions:
                 )
             warn_deprecated_alias("num_context_lines", "capture.source_context_lines")
             source_context_lines = num_context_lines
+        if capture_output_structure is not MISSING:
+            if capture_container_structure is not MISSING:
+                raise TypeError(
+                    "kwarg capture_output_structure deprecated, use "
+                    "capture_container_structure; do not pass both"
+                )
+            warn_deprecated_alias(
+                "capture_output_structure",
+                "capture.capture_container_structure",
+            )
+            capture_container_structure = capture_output_structure
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "layers_to_save": _resolve_option_value(
@@ -844,9 +857,9 @@ class CaptureOptions:
             "intervention_ready": _resolve_option_value(
                 "intervention_ready", intervention_ready, False, specified_fields
             ),
-            "capture_output_structure": _resolve_option_value(
-                "capture_output_structure",
-                capture_output_structure,
+            "capture_container_structure": _resolve_option_value(
+                "capture_container_structure",
+                capture_container_structure,
                 False,
                 specified_fields,
             ),
@@ -1637,6 +1650,7 @@ def merge_capture_options(
     for old_name, new_name in (
         ("num_context_lines", "source_context_lines"),
         ("mark_layer_depths", "compute_input_output_distances"),
+        ("capture_output_structure", "capture_container_structure"),
     ):
         if (
             flat_values.get(old_name, MISSING) is not MISSING

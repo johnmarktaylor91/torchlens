@@ -1,13 +1,13 @@
 # Containers
 
-TorchLens records output-container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `Container`, `output_at`, and `register_container`.
+TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `Container`, `input_at`, `output_at`, `register_container`, and `capture_container_structure`.
 
 ## Runtime View
 
 Each output leaf `Op` with container metadata exposes `op.container`. The value is a computed `Container` view backed by the captured `ContainerSpec` plus sibling leaf ops; it is not stored as another trace record.
 
 ```python
-trace = tl.trace(model, x, capture_output_structure=True)
+trace = tl.trace(model, x, capture_container_structure=True)
 container = trace.ops[trace.output_layers[0]].container
 
 container.kind
@@ -39,7 +39,7 @@ For model returns, use the trace convenience:
 output = trace.reconstruct_output()
 ```
 
-Final model-output reconstruction requires output structure to be captured. Use `capture_output_structure=True` when you need the top-level return object reconstructed after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures final-output structure as part of its broader replay-template metadata.
+Final model-output and input-container reconstruction require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or the top-level return object reconstructed after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures final-output structure as part of its broader replay-template metadata. `capture_output_structure=True` remains as a deprecated alias for existing callers.
 
 ## Nested Output Selection
 
@@ -71,13 +71,13 @@ Built-in handling already covers tuples, lists, dicts, namedtuples, dataclasses,
 
 ## Backend Capability
 
-Backends declare an honest `container_structure` capability:
+Backends declare honest `input_container_structure` and `output_container_structure` capabilities:
 
-- `torch`: `full_spec`
-- `jax`: `paths_only` in v1, with reconstructable specs for builtin `tuple`, `list`, and `dict` output pytrees whose leaves are tensors
-- `tinygrad`: `paths_only`
-- `mlx`: `none`
+- `torch`: `full_spec` for input and output
+- `jax`: `paths_only` for input and output builtin pytrees; custom pytrees are not reconstructable
+- `tinygrad`: `paths_only` for input and output
+- `mlx`: `none` for input and output
 
-If an op has only path metadata and no full `container_spec`, `op.container` may return a path-only view with `reconstructable=False`. Backends with `container_structure="none"` return `None` unless a real spec is present. TorchLens never promotes path-only metadata into a false reconstructable view.
+If an op has only path metadata and no full `container_spec`, `op.container` may return a path-only view with `reconstructable=False`. Backends with the role-appropriate capability set to `none` return no container view. TorchLens never promotes path-only metadata into a false reconstructable view.
 
 Unknown output objects do not crash capture. TorchLens degrades to the existing fallback traversal and marks the structure as non-reconstructable.

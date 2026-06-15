@@ -156,10 +156,10 @@ def test_trace_to_pandas_adds_output_role_column() -> None:
     assert roles["output_3"] == "1"
 
 
-def test_capture_output_structure_reconstructs_without_intervention_ready() -> None:
+def test_capture_container_structure_reconstructs_without_intervention_ready() -> None:
     """Opt-in final-output structure reconstructs without intervention metadata."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), capture_output_structure=True)
+    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), capture_container_structure=True)
     rebuilt = trace.reconstruct_output()
 
     assert trace.intervention_ready is False
@@ -168,13 +168,13 @@ def test_capture_output_structure_reconstructs_without_intervention_ready() -> N
     assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))
 
 
-def test_capture_output_structure_default_off_preserves_output_shape_metadata() -> None:
+def test_capture_container_structure_default_off_preserves_output_shape_metadata() -> None:
     """Default OFF matches explicit False and does not capture final output specs."""
 
     model = HFLikeModel()
     x = torch.tensor([1.0])
     default_trace = tl.trace(model, x, random_seed=0)
-    explicit_false_trace = tl.trace(model, x, random_seed=0, capture_output_structure=False)
+    explicit_false_trace = tl.trace(model, x, random_seed=0, capture_container_structure=False)
 
     assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
     assert (
@@ -244,28 +244,52 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
 
 
 def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
-    """A paths-only backend degrades registry-backed views to path-only."""
+    """A paths-only backend degrades registry-backed views to path-only by role."""
 
-    trace = tl.trace(TupleModel(), torch.tensor([1.0]), capture_output_structure=True)
+    trace = tl.trace(
+        StackTupleOutputModel(),
+        (torch.tensor([1.0]), torch.tensor([2.0])),
+        capture_container_structure=True,
+    )
     trace.backend = "jax"
 
     container = trace.ops[trace.output_layers[0]].container
+    stack_op = next(op for op in trace.ops if op.func_name == "stack")
+    input_container = stack_op.input_containers[0]
 
     assert isinstance(container, tl.Container)
     assert container.kind is None
     assert container.reconstructable is False
+    assert input_container.kind is None
+    assert input_container.reconstructable is False
     with pytest.raises(ValueError, match="Path-only"):
         container.reconstruct()
+    with pytest.raises(ValueError, match="Path-only"):
+        input_container.reconstruct()
 
 
 def test_backend_none_container_capability_returns_no_false_view() -> None:
-    """A backend declaring no structure does not expose a path-only false view."""
+    """A backend declaring no structure does not expose false registry views."""
 
-    trace = tl.trace(TupleModel(), torch.tensor([1.0]), intervention_ready=True)
-    op = trace.ops[trace.output_layers[0]].copy()
-    op.source_trace = trace
+    trace = tl.trace(
+        StackTupleOutputModel(),
+        (torch.tensor([1.0]), torch.tensor([2.0])),
+        capture_container_structure=True,
+    )
     trace.backend = "mlx"
-    op.container_spec = None
-    op.container_path = (TupleIndex(0),)
 
-    assert op.container is None
+    output_op = trace.ops[trace.output_layers[0]]
+    stack_op = next(op for op in trace.ops if op.func_name == "stack")
+
+    assert output_op.container is None
+    assert stack_op.input_containers == ()
+
+
+class StackTupleOutputModel(nn.Module):
+    """Consume a list at an op boundary and return a tuple output."""
+
+    def forward(self, left: torch.Tensor, right: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Stack two tensors and return a tuple."""
+
+        stacked = torch.stack([left, right])
+        return stacked, right - left

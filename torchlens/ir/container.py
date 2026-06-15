@@ -5,12 +5,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 import importlib
-from typing import Any, Literal, TypeAlias
+from typing import Any, ClassVar, Literal, TypeAlias
+
+from .._io import FieldPolicy
 
 
 @dataclass(frozen=True)
 class TupleIndex:
     """Index component for tuple/list output paths."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"index": FieldPolicy.KEEP}
 
     index: int
 
@@ -19,12 +23,16 @@ class TupleIndex:
 class DictKey:
     """Key component for dict output paths."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+
     key: Any
 
 
 @dataclass(frozen=True)
 class NamedField:
     """Field-name component for namedtuple output paths."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
 
     name: str
 
@@ -33,12 +41,16 @@ class NamedField:
 class DataclassField:
     """Field-name component for dataclass output paths."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+
     name: str
 
 
 @dataclass(frozen=True)
 class HFKey:
     """Key component for HuggingFace ``ModelOutput`` output paths."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
 
     key: Any
 
@@ -51,6 +63,18 @@ OutputPathComponent: TypeAlias = (
 @dataclass(frozen=True)
 class ContainerSpec:
     """Portable description of an output container seen during capture."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "kind": FieldPolicy.KEEP,
+        "length": FieldPolicy.KEEP,
+        "keys": FieldPolicy.BLOB_RECURSIVE,
+        "fields": FieldPolicy.KEEP,
+        "type_module": FieldPolicy.KEEP,
+        "type_qualname": FieldPolicy.KEEP,
+        "child_specs": FieldPolicy.BLOB_RECURSIVE,
+        "literal_value": FieldPolicy.BLOB_RECURSIVE,
+        "aux_data": FieldPolicy.BLOB_RECURSIVE,
+    }
 
     kind: Literal[
         "tuple",

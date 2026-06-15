@@ -1098,6 +1098,7 @@ class Trace(CapturedRun):
     jax_capture_index_to_final_op_label: dict[int, str]
     jax_inlined_call_primitives: tuple[str, ...]
     jax_static_argnums: tuple[int, ...]
+    input_structure: Any
     _containers: dict[int, Any]
     _last_sibling_ordering_decision: Any
 
@@ -1244,6 +1245,7 @@ class Trace(CapturedRun):
         "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
         "input_layers": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
+        "input_structure": FieldPolicy.BLOB_RECURSIVE,
         "_containers": FieldPolicy.BLOB_RECURSIVE,
         "buffer_layers": FieldPolicy.KEEP,
         "buffer_num_calls": FieldPolicy.KEEP,
@@ -3144,6 +3146,7 @@ class Trace(CapturedRun):
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state and rebuild weakref-backed links."""
         read_tlspec_version(state, cls_name=type(self).__name__)
+        containers_were_serialized = "_containers" in state and state["_containers"] is not None
         default_fill_state(
             state,
             defaults={
@@ -3292,6 +3295,8 @@ class Trace(CapturedRun):
         if state.get("total_autograd_memory") is not None:
             state["total_autograd_memory"] = Bytes(state["total_autograd_memory"])
         self.__dict__.update(state)
+        if not containers_were_serialized:
+            self.__dict__.pop("_containers", None)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
         if "_buffer_accessor" not in self.__dict__:

@@ -381,7 +381,7 @@ class TorchBackend:
 
         self_trace = cast("Trace", session)
         if getattr(self_trace, "intervention_ready", False) or getattr(
-            self_trace, "_capture_output_structure", False
+            self_trace, "_capture_container_structure", False
         ):
             output_entries = list(_walk_output_tensors_with_paths(outputs))
             output_tensors_w_addresses_all = [

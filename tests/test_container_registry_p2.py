@@ -100,7 +100,7 @@ def test_scalar_config_containers_emit_no_input_records() -> None:
     trace = tl.trace(
         ScalarConfigModel(),
         torch.randn(1, 6),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
 
     input_records = _records_with_role(trace, Role.CALL_INPUT)
@@ -111,7 +111,7 @@ def test_nested_tensor_bearing_input_records_recursively() -> None:
     """A nested dict-of-lists input container creates input records."""
 
     payload = {"items": [torch.tensor([1.0]), torch.tensor([2.0])]}
-    trace = tl.trace(NestedInputModel(), payload, capture_output_structure=True)
+    trace = tl.trace(NestedInputModel(), payload, capture_container_structure=True)
 
     records = _records_with_role(trace, Role.MODEL_INPUT)
     assert len(records) == 1
@@ -131,7 +131,7 @@ def test_same_site_input_output_mutation_has_distinct_snapshots() -> None:
     trace = tl.trace(
         MutatingCacheModel(),
         (cache, torch.tensor([2.0])),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
 
     records = [
@@ -157,7 +157,7 @@ def test_threaded_past_key_values_dedups_identical_snapshots() -> None:
     trace = tl.trace(
         ThreadedCacheModel(),
         (torch.tensor([3.0]), pkv),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
 
     records = [
@@ -185,7 +185,7 @@ def test_stack_list_arg_registers_as_consumed_input_container() -> None:
     trace = tl.trace(
         StackModel(),
         (torch.tensor([1.0]), torch.tensor([2.0]), torch.tensor([3.0])),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
 
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
@@ -201,7 +201,7 @@ def test_op_containers_unions_input_and_output_views() -> None:
     trace = tl.trace(
         StackReturnModel(),
         (torch.tensor([1.0]), torch.tensor([2.0])),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
 
     output_op = trace.ops[trace.output_layers[0]]
@@ -219,7 +219,7 @@ def test_input_at_selects_top_level_and_nested_input_leaf() -> None:
         "attention_mask": torch.tensor([1.0]),
         "past_key_values": ((torch.tensor([2.0]), torch.tensor([3.0])),),
     }
-    trace = tl.trace(NestedInputSelectModel(), payload, capture_output_structure=True)
+    trace = tl.trace(NestedInputSelectModel(), payload, capture_container_structure=True)
 
     top = trace.resolve_sites(tl.input_at("attention_mask")).first()
     nested = trace.resolve_sites(tl.input_at("past_key_values", 0, 1)).first()
@@ -245,7 +245,7 @@ def test_role_general_reconstructs_input_and_call_output_containers() -> None:
     """Live reconstruction works for non-final roles."""
 
     payload = {"items": [torch.tensor([1.0]), torch.tensor([2.0])]}
-    input_trace = tl.trace(NestedInputModel(), payload, capture_output_structure=True)
+    input_trace = tl.trace(NestedInputModel(), payload, capture_container_structure=True)
     rebuilt_input = input_trace.reconstruct_container(role=Role.MODEL_INPUT)
 
     assert torch.equal(rebuilt_input["items"][0], payload["items"][0])
@@ -255,7 +255,7 @@ def test_role_general_reconstructs_input_and_call_output_containers() -> None:
     output_trace = tl.trace(
         MutatingCacheModel(),
         (cache, torch.tensor([2.0])),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
     rebuilt_output = output_trace.reconstruct_container(role=Role.CALL_OUTPUT)
 
@@ -271,7 +271,7 @@ def test_multi_snapshot_record_requires_selector_and_reconstructs_selected_role(
     trace = tl.trace(
         MutatingCacheModel(),
         (cache, torch.tensor([2.0])),
-        capture_output_structure=True,
+        capture_container_structure=True,
     )
     record = next(
         record

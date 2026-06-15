@@ -9,6 +9,7 @@ used by ``torchlens.load(..., materialize_nested=False)``.
 from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
+import dataclasses
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
@@ -479,6 +480,8 @@ def _assign_rehydrated_field(value: Any, field_name: str, field_value: Any) -> N
     internal_set = getattr(value, "_internal_set", None)
     if callable(internal_set):
         internal_set(field_name, field_value)
+    elif dataclasses.is_dataclass(value) and getattr(type(value), "__dataclass_params__").frozen:
+        object.__setattr__(value, field_name, field_value)
     else:
         setattr(value, field_name, field_value)
 
