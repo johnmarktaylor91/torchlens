@@ -460,7 +460,7 @@ def _dataframe_projection(trace: Trace) -> dict[str, Any]:
         "op_field_order": list(LAYER_PASS_LOG_FIELD_ORDER),
         "trace_portable_fields": sorted(Trace.PORTABLE_STATE_SPEC),
         "op_portable_fields": sorted(Op.PORTABLE_STATE_SPEC),
-        "dataframe_columns": list(frame.columns),
+        "dataframe_columns": [column for column in frame.columns if column != "output_role"],
         "stable_rows": rows,
     }
 

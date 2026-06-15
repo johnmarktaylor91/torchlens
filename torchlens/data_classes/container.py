@@ -180,6 +180,17 @@ class Container:
         self._append_repr_lines(lines, indent=2)
         return "\n".join(lines)
 
+    def summary(self) -> str:
+        """Return an indented tree summary of this container.
+
+        Returns
+        -------
+        str
+            Human-readable container tree with leaf output references.
+        """
+
+        return repr(self)
+
     def _leaf_ops(self) -> tuple["Op", ...]:
         """Return leaf ops under this view in spec traversal order.
 
@@ -235,10 +246,7 @@ class Container:
                 lines.append(f"{' ' * indent}{label}: {value.kind}")
                 value._append_repr_lines(lines, indent=indent + 2)
             else:
-                layer_label = getattr(value, "layer_label", None)
-                if layer_label is None:
-                    layer_label = repr(value)
-                lines.append(f"{' ' * indent}{label}: {layer_label}")
+                lines.append(f"{' ' * indent}{label}: -> {_leaf_reference(value)}")
 
 
 def container_from_op(op: "Op") -> Container | None:
@@ -567,6 +575,26 @@ def _display_key(key: Any) -> str:
     """
 
     return f"[{key!r}]" if not isinstance(key, str) else key
+
+
+def _leaf_reference(value: Any) -> str:
+    """Return a stable leaf reference for a container tree line.
+
+    Parameters
+    ----------
+    value:
+        Leaf value, usually an ``Op``.
+
+    Returns
+    -------
+    str
+        Output-style layer label when available, otherwise ``repr(value)``.
+    """
+
+    layer_label = getattr(value, "layer_label", None)
+    if layer_label is not None:
+        return str(layer_label)
+    return repr(value)
 
 
 __all__ = ["Container", "container_from_op", "reconstruct_output"]

@@ -208,6 +208,37 @@ def _to_dagua_direction(direction: str) -> str:
     return mapping.get(direction, direction)
 
 
+def _path_component_role(component: Any) -> str:
+    """Return a display role for a typed container path component."""
+
+    for attr_name in ("index", "key", "name"):
+        if hasattr(component, attr_name):
+            return str(getattr(component, attr_name))
+    return str(component)
+
+
+def _container_semantic_attrs(entry: Any) -> dict[str, str | None]:
+    """Return portable container semantics for a trace entry."""
+
+    spec = getattr(entry, "container_spec", None)
+    path = tuple(getattr(entry, "container_path", ()) or ())
+    if spec is None or not path:
+        return {"container_group": None, "container_kind": None, "container_role": None}
+    func_call_id = getattr(entry, "func_call_id", None)
+    if bool(getattr(entry, "is_output", False)):
+        root = "final_output:0"
+    elif func_call_id is not None:
+        root = f"call:{func_call_id}"
+    else:
+        root = "path:" + ".".join(_path_component_role(component) for component in path[:-1])
+    kind = str(getattr(spec, "kind", "container"))
+    return {
+        "container_group": f"{root}:{kind}",
+        "container_kind": kind,
+        "container_role": _path_component_role(path[-1]),
+    }
+
+
 def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
     if vis_mode == "unrolled":
         return list(trace.layer_dict_main_keys.values())
@@ -478,6 +509,10 @@ def trace_to_dagua_graph(
     g.is_intervention_site = []
     g.is_in_cone = []
     g.interventions_summary = []
+    g.container_group = []
+    g.container_kind = []
+    g.container_role = []
+    g.edge_container_role = []
     g.has_direct_writes = bool(getattr(trace, "_has_direct_writes", False))
 
     module_shape = dagua.NodeStyle(shape="roundrect", corner_radius=8.0)
@@ -493,6 +528,10 @@ def trace_to_dagua_graph(
         g.is_intervention_site.append(is_site)
         g.is_in_cone.append(is_cone)
         g.interventions_summary.append(_interventions_summary(entry))
+        container_attrs = _container_semantic_attrs(entry)
+        g.container_group.append(container_attrs["container_group"])
+        g.container_kind.append(container_attrs["container_kind"])
+        g.container_role.append(container_attrs["container_role"])
 
         shape_override = op_shape
         if getattr(entry, "is_buffer", False):
@@ -540,6 +579,7 @@ def trace_to_dagua_graph(
             if not getattr(parent, "has_input_ancestor", True):
                 style = dagua.EdgeStyle(style="dashed")
             g.add_edge(parent_label, child_id, label=edge_label, type=edge_type, style=style)
+            g.edge_container_role.append(_container_semantic_attrs(child)["container_role"])
 
     if include_grad_edges is None:
         include_grad_edges = bool(getattr(trace, "has_gradients", False))
@@ -558,6 +598,7 @@ def trace_to_dagua_graph(
                     continue
                 edges_seen.add(edge_key)
                 g.add_edge(child_id, parent_label, type="back")
+                g.edge_container_role.append(None)
 
     kept_modules: dict[str, list[str]] = {}
     for entry in entries:

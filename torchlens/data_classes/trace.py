@@ -143,6 +143,31 @@ _JAX_VALIDATION_REPLAY_BACKEND = "jax"
 _MLX_VALIDATION_REPLAY_BACKEND = "mlx"
 _TINYGRAD_VALIDATION_REPLAY_BACKEND = "tinygrad"
 
+
+def _output_role_from_container_path(path: Any) -> str | None:
+    """Return the final output-container role for a dataframe row.
+
+    Parameters
+    ----------
+    path:
+        Captured typed container path.
+
+    Returns
+    -------
+    str | None
+        Last key/index/field component, or ``None`` for non-container rows.
+    """
+
+    components = tuple(path or ())
+    if not components:
+        return None
+    component = components[-1]
+    for attr_name in ("index", "key", "name"):
+        if hasattr(component, attr_name):
+            return str(getattr(component, attr_name))
+    return str(component)
+
+
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "trace_label": None,
     "model_label": None,
@@ -4755,6 +4780,8 @@ class Trace(CapturedRun):
         for_paper: bool = False,
         return_graph: bool = False,
         order_siblings: bool = True,
+        show_containers: Literal[False, "labels", "cluster", "collapsed", "auto"] = False,
+        container_max_inline: int = 12,
     ) -> Any:
         """Render the computational graph for this model log.
 
@@ -4764,7 +4791,8 @@ class Trace(CapturedRun):
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
         vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
-        vis_intervention_mode, vis_show_cone, code_panel, order_siblings:
+        vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
+        container_max_inline:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.draw`.
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
@@ -4830,6 +4858,8 @@ class Trace(CapturedRun):
             for_paper=for_paper,
             return_graph=return_graph,
             order_siblings=order_siblings,
+            show_containers=show_containers,
+            container_max_inline=container_max_inline,
         )
 
     def add_node_overlay(
@@ -5324,6 +5354,7 @@ class Trace(CapturedRun):
             "has_co_parents",
             "uses_params",
             "is_module_input",
+            "output_role",
             "num_saved_grads",
         ]
         fields_for_df = list(
@@ -5377,6 +5408,10 @@ class Trace(CapturedRun):
                     )
                 elif field_name == "num_saved_grads":
                     layer_dict[field_name] = len(getattr(layer_entry, "_grad_records", ()))
+                elif field_name == "output_role":
+                    layer_dict[field_name] = _output_role_from_container_path(
+                        getattr(layer_entry, "container_path", ())
+                    )
                 else:
                     layer_dict[field_name] = getattr(layer_entry, field_name)
             model_df_dictlist.append(layer_dict)

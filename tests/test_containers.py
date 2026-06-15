@@ -128,6 +128,34 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
     assert output_container["past_key_values"][0][1].layer_label in trace.output_layers
 
 
+def test_container_repr_summary_uses_output_cross_references() -> None:
+    """Container repr and summary expose an indented tree with output refs."""
+
+    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    output_container = trace.ops[trace.output_layers[0]].container
+
+    assert isinstance(output_container, tl.Container)
+    tree = repr(output_container)
+    assert "logits: -> output_1" in tree
+    assert "past_key_values: tuple" in tree
+    assert "[0]: tuple" in tree
+    assert "[1]: -> output_3" in tree
+    assert output_container.summary() == tree
+
+
+def test_trace_to_pandas_adds_output_role_column() -> None:
+    """Trace.to_pandas exports the leaf role within output containers."""
+
+    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    frame = trace.to_pandas()
+    roles = dict(zip(frame["layer_label"], frame["output_role"], strict=True))
+
+    assert "output_role" in frame.columns
+    assert roles["output_1"] == "logits"
+    assert roles["output_2"] == "0"
+    assert roles["output_3"] == "1"
+
+
 def test_capture_output_structure_reconstructs_without_intervention_ready() -> None:
     """Opt-in final-output structure reconstructs without intervention metadata."""
 

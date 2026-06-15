@@ -68,6 +68,14 @@ from .._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ..ir.container import (
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+)
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from ..data_classes.op import Op
@@ -120,6 +128,7 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
 
 BaseGraphNode = Union["Op", "Layer"]
+ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto"]
 
 
 @dataclass
@@ -653,6 +662,17 @@ class SiblingOrderChain:
 
 
 @dataclass(frozen=True)
+class ContainerClusterSpec:
+    """Graphviz cluster request for one single-owner output container."""
+
+    cluster_id: str
+    owner_key: str | int
+    node_names: tuple[str, ...]
+    title: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class PlainLayout:
     """Subset of ``dot -Tplain`` layout data needed by the verifier.
 
@@ -711,6 +731,8 @@ def draw(
     for_paper: bool = False,
     return_graph: bool = False,
     order_siblings: bool = True,
+    show_containers: ShowContainersLiteral = False,
+    container_max_inline: int = 12,
 ) -> Any:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -781,6 +803,13 @@ def draw(
             the Graphviz path or DOT text for direct text renderers.
         order_siblings: Whether Graphviz ``dot`` renders should add verified invisible
             rank constraints so true parallel sibling fanouts follow execution order.
+        show_containers: Optional output-container overlay. ``False`` preserves
+            the default render. ``"labels"`` adds midpoint key/index labels on
+            container leaf edges. ``"cluster"`` also clusters single-owner
+            containers. ``"collapsed"`` and ``"auto"`` collapse large
+            homogeneous containers to one summary node.
+        container_max_inline: Maximum homogeneous container leaves to inline in
+            ``"collapsed"``/``"auto"`` modes.
 
     Returns:
         The Graphviz DOT source string.
@@ -919,6 +948,8 @@ def draw(
     )
     layout_cost = estimate_rank_layout_cost(cost_node_labels, cost_edges)
     engine = get_node_placement_engine(vis_node_placement, layout_cost)
+    if show_containers:
+        engine = "dot"
     # The sibling-ordering post-pass only runs on the dot engine; set the
     # trivial decision up front so the attribute exists on every path.
     self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
@@ -1015,7 +1046,12 @@ def draw(
     # Accumulate edges per module cluster; actual Graphviz subgraphs are
     # created at the end in _setup_subgraphs to ensure proper nesting.
     module_cluster_dict: Dict[str, Any] = defaultdict(
-        lambda: {"edges": [], "has_input_ancestor": False, "rank_groups": []}
+        lambda: {
+            "edges": [],
+            "has_input_ancestor": False,
+            "rank_groups": [],
+            "container_clusters": [],
+        }
     )
     top_level_sibling_rank_groups: list[SiblingOrderChain] = []
     # Track which collapsed module nodes have been added to avoid duplicates
@@ -1027,6 +1063,15 @@ def draw(
     # node name -- without this, we'd get duplicate edges.
     edges_used: Set[tuple[str, str]] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
+    self._pending_container_collapse_nodes = []
+    container_clusters: list[ContainerClusterSpec] = []
+    collapsed_container_nodes = _collapsed_container_leaf_nodes(
+        self,
+        entries_to_plot,
+        vis_mode=vis_mode,
+        show_containers=show_containers,
+        container_max_inline=container_max_inline,
+    )
 
     for node_barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
@@ -1056,7 +1101,23 @@ def draw(
             node_label_fields,
             captured_forward_edges,
             rankdir,
+            show_containers,
+            collapsed_container_nodes,
         )
+
+    for node_args in getattr(self, "_pending_container_collapse_nodes", []):
+        dot.node(**node_args)
+
+    if show_containers == "cluster":
+        container_clusters = _container_clusters_for_graphviz(
+            self,
+            entries_to_plot,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+            collapsed_container_nodes=collapsed_container_nodes,
+        )
+        _queue_container_clusters(module_cluster_dict, container_clusters)
 
     if vis_intervention_mode == "as_node":
         _add_intervention_hook_nodes(dot, site_labels, vis_graph_overrides)
@@ -2652,6 +2713,263 @@ def _render_node_label(node: GraphNode, vis_mode: str) -> str:
     return node.layer_label
 
 
+def _container_group_id(node: BaseGraphNode) -> str | None:
+    """Return a stable semantic group id for a container leaf.
+
+    Parameters
+    ----------
+    node:
+        Layer or Op metadata.
+
+    Returns
+    -------
+    str | None
+        Container group id, or ``None`` when the node has no container.
+    """
+
+    spec = getattr(node, "container_spec", None)
+    path = tuple(getattr(node, "container_path", ()) or ())
+    if spec is None or not path:
+        return None
+    func_call_id = getattr(node, "func_call_id", None)
+    if bool(getattr(node, "is_output", False)):
+        root = "final_output:0"
+    elif func_call_id is not None:
+        root = f"call:{func_call_id}"
+    else:
+        root = f"path:{_container_path_label(path[:-1])}"
+    return f"{root}:{getattr(spec, 'kind', 'container')}"
+
+
+def _container_path_label(path: Sequence[OutputPathComponent]) -> str:
+    """Return a compact label for a typed container path.
+
+    Parameters
+    ----------
+    path:
+        Typed path components.
+
+    Returns
+    -------
+    str
+        Dot-safe-ish display fragment.
+    """
+
+    if not path:
+        return "root"
+    return ".".join(_container_component_role(component) for component in path)
+
+
+def _container_kind(node: BaseGraphNode) -> str | None:
+    """Return the node's container kind, if present."""
+
+    spec = getattr(node, "container_spec", None)
+    if spec is None:
+        return None
+    return str(getattr(spec, "kind", "container"))
+
+
+def _container_role(node: BaseGraphNode) -> str | None:
+    """Return the node's role within its container, if present."""
+
+    path = tuple(getattr(node, "container_path", ()) or ())
+    if not path:
+        return None
+    return _container_component_role(path[-1])
+
+
+def _container_leaf_groups(
+    entries_to_plot: Mapping[str, GraphNode],
+    *,
+    vis_mode: str,
+) -> dict[str, list[GraphNode]]:
+    """Group rendered container leaves by semantic container id."""
+
+    groups: dict[str, list[GraphNode]] = defaultdict(list)
+    for node in entries_to_plot.values():
+        if vis_mode != "unrolled" or not isinstance(node, Op):
+            continue
+        group_id = _container_group_id(node)
+        if group_id is not None:
+            groups[group_id].append(node)
+    return groups
+
+
+def _collapsed_container_leaf_nodes(
+    trace: "Trace",
+    entries_to_plot: Mapping[str, GraphNode],
+    *,
+    vis_mode: str,
+    show_containers: ShowContainersLiteral,
+    container_max_inline: int,
+) -> dict[str, str]:
+    """Return leaf-to-summary node names hidden by homogeneous collapse."""
+
+    if show_containers not in {"collapsed", "auto"} or vis_mode != "unrolled":
+        return {}
+    hidden: dict[str, str] = {}
+    for leaves in _container_leaf_groups(entries_to_plot, vis_mode=vis_mode).values():
+        if len(leaves) <= container_max_inline or not _container_leaf_shapes_identical(leaves):
+            continue
+        group_id = cast(str, _container_group_id(cast(BaseGraphNode, leaves[0])))
+        summary_node = _collapsed_container_node_name(group_id)
+        for leaf in leaves:
+            hidden[_render_node_label(leaf, vis_mode).replace(":", "pass")] = summary_node
+        _add_collapsed_container_node(trace, leaves, vis_mode=vis_mode)
+    return hidden
+
+
+def _container_leaf_shapes_identical(leaves: Sequence[GraphNode]) -> bool:
+    """Return whether all container leaves share one shape."""
+
+    shapes = {tuple(getattr(leaf, "shape", ()) or ()) for leaf in leaves}
+    return len(shapes) == 1
+
+
+def _add_collapsed_container_node(
+    trace: "Trace",
+    leaves: Sequence[GraphNode],
+    *,
+    vis_mode: str,
+) -> None:
+    """Record a collapsed container summary node for later emission."""
+
+    pending = getattr(trace, "_pending_container_collapse_nodes", None)
+    if pending is None:
+        pending = []
+        trace._pending_container_collapse_nodes = pending
+    first = leaves[0]
+    group_id = cast(str, _container_group_id(cast(BaseGraphNode, first)))
+    kind = _container_kind(cast(BaseGraphNode, first)) or "container"
+    shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
+    node_name = _collapsed_container_node_name(group_id)
+    pending.append(
+        {
+            "name": node_name,
+            "label": render_lines_to_html([f"{kind} x{len(leaves)}", shape]),
+            "shape": "box",
+            "style": "filled,dashed",
+            "fillcolor": "white",
+            "color": "black",
+            "fontcolor": "black",
+            "ordering": "out",
+        }
+    )
+
+
+def _collapsed_container_node_name(group_id: str) -> str:
+    """Return a stable Graphviz node name for a collapsed container."""
+
+    safe = "".join(char if char.isalnum() else "_" for char in group_id)
+    return f"container_{safe}"
+
+
+def _container_clusters_for_graphviz(
+    trace: "Trace",
+    entries_to_plot: Mapping[str, GraphNode],
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+    collapsed_container_nodes: Mapping[str, str],
+) -> list[ContainerClusterSpec]:
+    """Return single-owner container clusters for the active draw mode."""
+
+    clusters: list[ContainerClusterSpec] = []
+    for group_id, leaves in _container_leaf_groups(entries_to_plot, vis_mode=vis_mode).items():
+        node_names = tuple(
+            _render_node_label(leaf, vis_mode).replace(":", "pass") for leaf in leaves
+        )
+        if any(node_name in collapsed_container_nodes for node_name in node_names):
+            continue
+        owner_key = _single_container_owner(
+            trace,
+            leaves,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+        )
+        if owner_key is None:
+            continue
+        kind = _container_kind(cast(BaseGraphNode, leaves[0])) or "container"
+        clusters.append(
+            ContainerClusterSpec(
+                cluster_id=_collapsed_container_node_name(group_id),
+                owner_key=owner_key,
+                node_names=node_names,
+                title=f"{kind} {_container_path_label(())}",
+                kind=kind,
+            )
+        )
+    return clusters
+
+
+def _single_container_owner(
+    trace: "Trace",
+    leaves: Sequence[GraphNode],
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+) -> str | int | None:
+    """Return the sole active module-cluster owner for ``leaves``."""
+
+    owners: set[str | int] = set()
+    for leaf in leaves:
+        owner = _owner_module_key_for_node(
+            trace,
+            leaf,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+        )
+        owners.add(owner)
+    if len(owners) != 1:
+        return None
+    owner = next(iter(owners))
+    return owner if owner != -1 else None
+
+
+def _owner_module_key_for_node(
+    trace: "Trace",
+    node: GraphNode,
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+) -> str | int:
+    """Return the module cluster key that owns a rendered node."""
+
+    collapse_address = _collapse_address_for_node(
+        trace,
+        node,
+        vis_mode=vis_mode,
+        collapse_fn=collapse_fn,
+        max_module_depth=vis_call_depth,
+    )
+    if collapse_address is not None:
+        return collapse_address if vis_mode == "unrolled" else collapse_address.split(":", 1)[0]
+    modules = list(getattr(node, "modules", ()) or ())
+    if getattr(node, "is_atomic_module", False) and modules:
+        modules = modules[:-1]
+    if not modules:
+        return -1
+    owner = modules[-1]
+    return owner if vis_mode == "unrolled" else owner.split(":", 1)[0]
+
+
+def _queue_container_clusters(
+    module_cluster_dict: Dict[str, Any],
+    clusters: Sequence[ContainerClusterSpec],
+) -> None:
+    """Queue container clusters into their owning module cluster payload."""
+
+    for cluster in clusters:
+        if cluster.owner_key == -1:
+            continue
+        module_cluster_dict[cast(str, cluster.owner_key)]["container_clusters"].append(cluster)
+
+
 def _resolve_focus_module(
     trace: "Trace",
     module: "Module | str",
@@ -3043,6 +3361,8 @@ def _add_node_to_graphviz(
     node_label_fields: list[str] | None = None,
     captured_forward_edges: list[CapturedForwardEdge] | None = None,
     rankdir: str = "BT",
+    show_containers: ShowContainersLiteral = False,
+    collapsed_container_nodes: Mapping[str, str] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -3093,6 +3413,8 @@ def _add_node_to_graphviz(
             theme,
             node_overlay,
             node_label_fields,
+            show_containers,
+            collapsed_container_nodes,
         )
 
     _add_edges_for_node(
@@ -3113,6 +3435,8 @@ def _add_node_to_graphviz(
         intervention_site_labels,
         captured_forward_edges,
         rankdir,
+        show_containers,
+        collapsed_container_nodes,
     )
 
 
@@ -3315,6 +3639,8 @@ def _build_layer_node(
     theme: VisualizationTheme | None = None,
     node_overlay: str | OverlayScores | None = None,
     node_label_fields: list[str] | None = None,
+    show_containers: ShowContainersLiteral = False,
+    collapsed_container_nodes: Mapping[str, str] | None = None,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
@@ -3409,6 +3735,12 @@ def _build_layer_node(
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_label(node, vis_mode).replace(":", "pass")
+    if (
+        show_containers in {"collapsed", "auto"}
+        and collapsed_container_nodes is not None
+        and node_args["name"] in collapsed_container_nodes
+    ):
+        return node_color
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
     if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
         node_args["peripheries"] = "2"
@@ -4846,6 +5178,8 @@ def _add_edges_for_node(
     intervention_site_labels: set[str] | None = None,
     captured_forward_edges: list[CapturedForwardEdge] | None = None,
     rankdir: str = "BT",
+    show_containers: ShowContainersLiteral = False,
+    collapsed_container_nodes: Mapping[str, str] | None = None,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -4892,9 +5226,15 @@ def _add_edges_for_node(
     for render_edge in render_edges:
         child_node = render_edge.target
         metadata_child = render_edge.metadata_child
+        child_render_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
 
         if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
             continue
+        collapsed_head_name = (
+            collapsed_container_nodes.get(child_render_name)
+            if collapsed_container_nodes is not None
+            else None
+        )
 
         if parent_node.has_input_ancestor:
             edge_style = "solid"
@@ -4939,6 +5279,9 @@ def _add_edges_for_node(
                 head_name = module_tuple[0]
         else:
             head_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
+        if collapsed_head_name is not None:
+            head_name = collapsed_head_name
+            child_is_collapsed_module = False
 
         both_nodes_collapsed_modules = parent_is_collapsed_module and child_is_collapsed_module
 
@@ -5004,11 +5347,14 @@ def _add_edges_for_node(
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
             child_node, BoundaryNode
         )
+        metadata_base = (
+            _base_node_for_metadata(metadata_child)
+            if metadata_child is not None and not edge_has_boundary
+            else None
+        )
 
+        edge_label = None
         if not edge_is_self_loop and not child_is_collapsed_module and not edge_has_boundary:
-            metadata_base = (
-                _base_node_for_metadata(metadata_child) if metadata_child is not None else None
-            )
             edge_label = (
                 _compute_edge_label(
                     _base_node_for_metadata(parent_node),
@@ -5019,8 +5365,12 @@ def _add_edges_for_node(
                 if metadata_base is not None
                 else None
             )
-            if edge_label is not None:
-                edge_dict["label"] = edge_label
+        if edge_label is not None:
+            edge_dict["label"] = edge_label
+        if show_containers:
+            container_label = _container_edge_label(metadata_base)
+            if container_label is not None and "label" not in edge_dict:
+                edge_dict["label"] = _html_container_edge_label(container_label)
 
         # Annotate ops for rolled node edge if it varies across ops
         if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
@@ -5771,6 +6121,69 @@ def _should_mark_arguments_on_rolled_edge(
 _EDGE_LABEL_FONT_SIZE = 8
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
 _SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer left/right of a self-loop label
+
+
+def _container_component_role(component: OutputPathComponent) -> str:
+    """Return the visible role label for a typed container path component.
+
+    Parameters
+    ----------
+    component:
+        Typed path component captured on an output leaf.
+
+    Returns
+    -------
+    str
+        User-facing key, index, or field label.
+    """
+
+    if isinstance(component, TupleIndex):
+        return str(component.index)
+    if isinstance(component, (DictKey, HFKey)):
+        return str(component.key)
+    if isinstance(component, (NamedField, DataclassField)):
+        return component.name
+    return str(component)
+
+
+def _container_edge_label(node: BaseGraphNode | None) -> str | None:
+    """Return the midpoint container role label for an edge into ``node``.
+
+    Parameters
+    ----------
+    node:
+        Child node metadata, if available.
+
+    Returns
+    -------
+    str | None
+        Last path component label, or ``None`` when the node is not a
+        container leaf.
+    """
+
+    if node is None:
+        return None
+    path = tuple(getattr(node, "container_path", ()) or ())
+    if not path:
+        return None
+    return _container_component_role(path[-1])
+
+
+def _html_container_edge_label(text: str) -> str:
+    """Return the HTML midpoint label for a container leaf edge.
+
+    Parameters
+    ----------
+    text:
+        Plain key/index/field label.
+
+    Returns
+    -------
+    str
+        Graphviz HTML label string.
+    """
+
+    return _html_edge_label(text)
 
 
 def _html_edge_label(text: str) -> str:
@@ -6891,6 +7304,8 @@ def _setup_subgraphs_recurse(
             subgraph_nodes = cluster_payload.get("nodes", [])
             for node_args in subgraph_nodes:
                 s.node(**node_args)
+            for container_cluster in cluster_payload.get("container_clusters", []):
+                _emit_container_cluster(s, cast(ContainerClusterSpec, container_cluster))
             subgraph_edges = cluster_payload["edges"]
             for edge_dict in subgraph_edges:
                 s.edge(**edge_dict)
@@ -6898,6 +7313,26 @@ def _setup_subgraphs_recurse(
             for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
                 subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
         return emitted_rank_groups
+
+
+def _emit_container_cluster(
+    parent_graph: graphviz.Digraph,
+    container_cluster: ContainerClusterSpec,
+) -> None:
+    """Emit one opt-in container cluster inside an existing module cluster."""
+
+    with parent_graph.subgraph(name=f"cluster_{container_cluster.cluster_id}") as cluster:
+        cluster.attr(
+            **make_module_cluster_attrs(
+                title=container_cluster.title,
+                module_type=container_cluster.kind,
+                line_style="dotted",
+                penwidth=1.0,
+                fillcolor="white",
+            )
+        )
+        for node_name in container_cluster.node_names:
+            cluster.node(node_name)
 
 
 def _get_max_call_depth(

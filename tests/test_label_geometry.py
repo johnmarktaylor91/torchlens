@@ -13,8 +13,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import torch
 from torch import nn
 
+import torchlens as tl
 import test_loop_module_rolling as demos
 from support.label_geometry import audit_gv_source
 
@@ -90,3 +92,33 @@ def test_audit_negative_control_flags_label_node_overlap() -> None:
     assert "a->b" in description
     assert "overlapping head label" in description
     assert "penetration" in description
+
+
+class _ContainerLabelModel(nn.Module):
+    """Small model with a key-labeled dictionary output."""
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Run the model."""
+
+        return {"left": x + 1, "right": x + 2}
+
+
+def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -> None:
+    """Container key labels use midpoint labels without endpoint placement attrs."""
+
+    trace = tl.trace(_ContainerLabelModel(), torch.ones(2), intervention_ready=True)
+    gv_source = trace.draw(
+        show_containers="labels",
+        vis_save_only=True,
+        vis_fileformat="dot",
+        vis_outpath=str(tmp_path / "container_labels"),
+    )
+
+    assert '<FONT POINT-SIZE="8">left</FONT>' in gv_source
+    assert '<FONT POINT-SIZE="8">right</FONT>' in gv_source
+    assert "headlabel=" not in gv_source
+    assert "taillabel=" not in gv_source
+    assert "labeldistance=" not in gv_source
+    assert "labelangle=" not in gv_source
+    result = audit_gv_source(gv_source)
+    assert result.hard_violation_count == 0, result.describe_violations("container_labels")
