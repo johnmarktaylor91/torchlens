@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import argparse
 from collections import OrderedDict, deque
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from benchmarks.generate_perf_numbers import render_numbers_markdown
 from benchmarks.perf_gate import compare_gate_payloads, normalize_gate_payload
+from benchmarks.perf_suite import (
+    _assert_baseline_status_writable,
+    _validate_baseline_status_args,
+)
 from torchlens.backends.torch.model_prep import _traverse_model_modules
 from torchlens.postprocess.loop_detection import FrontierNodes, _pop_frontier_node
 
@@ -162,6 +168,60 @@ def test_generated_numbers_suppress_halt_headline_for_provisional_baseline() -> 
     markdown = render_numbers_markdown(payload)
 
     assert "Headline: measured `fastlog_halt_25`" not in markdown
+
+
+def test_generated_numbers_emit_halt_headline_for_canonical_baseline() -> None:
+    """Generator emits the halt headline for canonical baselines."""
+
+    payload = _payload(
+        [
+            _row("resnet18", "cpu", "raw_forward", 20.0),
+            _row("resnet18", "cpu", "fastlog_halt_25", 18.0),
+        ]
+    )
+    payload["baseline_status"] = "canonical"
+
+    markdown = render_numbers_markdown(payload)
+
+    assert "Headline: measured `fastlog_halt_25` is 0.90x raw forward" in markdown
+
+
+def test_canonical_baseline_rejects_smoke_mode() -> None:
+    """Canonical baseline stamping rejects smoke runs."""
+
+    args = argparse.Namespace(
+        baseline_status="canonical",
+        smoke=True,
+        addendum_no_save=False,
+    )
+
+    with pytest.raises(SystemExit, match="requires a complete full run"):
+        _validate_baseline_status_args(args)
+
+
+def test_canonical_baseline_rejects_addendum_no_save_mode() -> None:
+    """Canonical baseline stamping rejects addendum-only runs."""
+
+    args = argparse.Namespace(
+        baseline_status="canonical",
+        smoke=False,
+        addendum_no_save=True,
+    )
+
+    with pytest.raises(SystemExit, match="requires a complete full run"):
+        _validate_baseline_status_args(args)
+
+
+def test_partial_payload_is_not_writable_as_canonical() -> None:
+    """Canonical baseline stamping rejects incomplete assembled payloads."""
+
+    payload = {
+        "baseline_status": "canonical",
+        "status": "partial",
+    }
+
+    with pytest.raises(SystemExit, match="requires an ok run status"):
+        _assert_baseline_status_writable(payload)
 
 
 def test_emit_tensor_grad_event_populates_profile_buckets() -> None:

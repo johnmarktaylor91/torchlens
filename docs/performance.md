@@ -192,7 +192,7 @@ models amortize this. `global_wrap_dummy`/`first_capture_target` include one-tim
 
 ```bash
 # Full suite on the canonical bench host (quiet machine):
-python -m benchmarks.perf_suite --rerun \
+python -m benchmarks.perf_suite --rerun --baseline-status canonical \
   --out-json benchmarks/perf_baselines/<host>-<device>.json \
   --out-md benchmarks/perf_results_<date>.md
 # Sanity self-compare:
@@ -203,5 +203,5 @@ python -m benchmarks.generate_perf_numbers benchmarks/perf_baselines/<host>-<dev
   --out docs/_perf_numbers_provisional.md
 ```
 
-On the canonical host, drop the `-provisional` filename suffix and remove the `baseline_status`
-key so generated speed headlines are emitted.
+On the canonical host, drop the `-provisional` filename suffix; `--baseline-status canonical`
+requires a full non-smoke, non-addendum run and emits generated speed headlines.

@@ -1033,7 +1033,99 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-md", type=Path, default=RESULT_MD)
     parser.add_argument("--compare", type=Path, help="Committed baseline JSON to compare against")
     parser.add_argument("--compare-out", type=Path, help="Optional comparison JSON output path")
-    return parser.parse_args()
+    parser.add_argument(
+        "--baseline-status",
+        choices=("provisional", "canonical"),
+        default="provisional",
+        help="Stamp the emitted payload as provisional or canonical",
+    )
+    args = parser.parse_args()
+    _validate_baseline_status_args(args)
+    return args
+
+
+def _validate_baseline_status_args(args: argparse.Namespace) -> None:
+    """Reject canonical baseline stamps for partial-suite modes.
+
+    Parameters
+    ----------
+    args:
+        Parsed benchmark suite arguments.
+
+    Raises
+    ------
+    SystemExit
+        If a canonical baseline is requested for a partial suite.
+    """
+
+    if args.baseline_status == "canonical" and (args.smoke or args.addendum_no_save):
+        raise SystemExit(
+            "--baseline-status canonical requires a complete full run; "
+            "do not combine it with --smoke or --addendum-no-save."
+        )
+
+
+def _baseline_note(payload: dict[str, Any]) -> str:
+    """Return the baseline provenance note for a payload.
+
+    Parameters
+    ----------
+    payload:
+        Benchmark payload containing baseline status, date, and environment metadata.
+
+    Returns
+    -------
+    str
+        Human-readable baseline provenance note.
+    """
+
+    if payload.get("baseline_status") != "canonical":
+        return (
+            "Provisional baseline captured on a non-canonical Linux dev host. "
+            "Re-capture on the canonical bench host before any public perf claim."
+        )
+    environment = payload.get("environment", {})
+    hostname = environment.get("hostname", "unknown host")
+    date = payload.get("date", "unknown date")
+    return (
+        f"Canonical baseline captured on {hostname} on {date}. "
+        "Full suite completed without smoke or addendum-only mode."
+    )
+
+
+def _assert_baseline_status_writable(
+    payload: dict[str, Any],
+    *,
+    partial_suite: bool = False,
+) -> None:
+    """Reject canonical baseline writes for incomplete assembled payloads.
+
+    Parameters
+    ----------
+    payload:
+        Benchmark payload to write.
+    partial_suite:
+        Whether the current run used a partial-suite mode.
+
+    Raises
+    ------
+    SystemExit
+        If a canonical baseline payload is not complete.
+    """
+
+    if payload.get("baseline_status") != "canonical":
+        return
+    if partial_suite:
+        raise SystemExit(
+            "--baseline-status canonical requires a complete full run; refusing to write "
+            "a canonical-stamped payload from a partial-suite mode."
+        )
+    status = payload.get("status")
+    if status != "ok":
+        raise SystemExit(
+            "--baseline-status canonical requires an ok run status; refusing to write "
+            f"a canonical-stamped {status!r} payload."
+        )
 
 
 def main() -> None:
@@ -1116,15 +1208,16 @@ def main() -> None:
             "hooked_transformer_smoke": hooked_smoke,
             "rerun_tolerance": rerun_tolerance,
             "source_sha": source_sha,
-            "baseline_status": "provisional",
-            "baseline_note": (
-                "Provisional baseline captured on a non-canonical Linux dev host. "
-                "Re-capture on the canonical bench host before any public perf claim."
-            ),
+            "baseline_status": args.baseline_status,
         }
     )
+    payload["baseline_note"] = _baseline_note(payload)
     if args.addendum_no_save:
         payload = _merge_addendum_payload(payload, addendum_wall_clock_s)
+    _assert_baseline_status_writable(
+        payload,
+        partial_suite=args.smoke or args.addendum_no_save,
+    )
     args.out_json.parent.mkdir(parents=True, exist_ok=True)
     args.out_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     args.out_md.parent.mkdir(parents=True, exist_ok=True)
