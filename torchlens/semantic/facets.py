@@ -30,13 +30,74 @@ from ..ir.container import (
 
 
 RecordScope = Literal["op", "module", "any"]
-RecipeFunc = Callable[[Any], dict[str, Any]]
+RecipeFunc = Callable[[Any], Any]
 PredicateFunc = Callable[[Any], bool]
 RecipeSource = Literal["built-in", "user"]
 FacetKey: TypeAlias = str | tuple[OutputPathComponent, ...]
 HomeKind = Literal["op", "module_output", "module_input", "parameter", "computed"]
 CapabilityClass = Literal["bijective_view", "selection", "aliasing_selection", "computed"]
 ValueVersion = Literal["raw_out", "out_versions_by_child"]
+AbsenceStatus = Literal["structurally_absent", "needs_capture", "declared_not_produced"]
+MenuStatus = Literal[
+    "available_now", "structurally_absent", "needs_capture", "declared_not_produced"
+]
+
+
+@dataclass(frozen=True)
+class AbsenceReason:
+    """Reason a declared facet is unavailable in the current trace.
+
+    Parameters
+    ----------
+    status:
+        Absence category.
+    save_hint:
+        Optional capture instruction for actionable missing-payload cases.
+    detail:
+        Human-readable explanation of the absence.
+    """
+
+    status: AbsenceStatus
+    save_hint: str | None = None
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class FacetContribution:
+    """Facet recipe output split into produced values and absences.
+
+    Parameters
+    ----------
+    values:
+        Facet values available now.
+    missing:
+        Declared facets that are unavailable, keyed by facet name.
+    """
+
+    values: Mapping[FacetKey, Any]
+    missing: Mapping[FacetKey, AbsenceReason] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FacetMenuItem:
+    """Declarable-menu metadata for one facet.
+
+    Parameters
+    ----------
+    status:
+        Availability status for the facet.
+    recipe:
+        Recipe source that declared or produced the facet.
+    save_hint:
+        Optional capture instruction for unavailable payload-backed facets.
+    detail:
+        Human-readable explanation for unavailable facets.
+    """
+
+    status: MenuStatus
+    recipe: str | None = None
+    save_hint: str | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -732,6 +793,37 @@ class MissingFacet:
         raise RuntimeError("MissingFacet used as a torch value.")
 
 
+class MissingFacetError(KeyError):
+    """Raised when a declared facet needs a different capture to be available."""
+
+    def __init__(self, name: FacetKey, reason: AbsenceReason) -> None:
+        """Initialize the actionable missing-facet exception.
+
+        Parameters
+        ----------
+        name:
+            Facet key requested by the caller.
+        reason:
+            Missing metadata produced by the recipe.
+        """
+
+        self.name = name
+        self.reason = reason
+        super().__init__(self._message())
+
+    def _message(self) -> str:
+        """Return an actionable missing-facet message."""
+
+        name = self.name
+        if self.reason.status == "declared_not_produced":
+            detail = self.reason.detail or "declared by a matching recipe but not produced"
+            hint = self.reason.save_hint or "inspect facets.menu() for the full declaration status"
+            return f"Facet {name!r} is unavailable: {detail}. Unknown cause; {hint}."
+        hint = self.reason.save_hint or "re-run with save=... including the required activation"
+        detail = self.reason.detail or "required payload was not captured"
+        return f"Facet {name!r} is unavailable: {detail}. Re-run with {hint}."
+
+
 class MissingGradient:
     """Sentinel for a known facet gradient that is not currently saved."""
 
@@ -895,6 +987,8 @@ class FacetView(Mapping[FacetKey, Any]):
         self._snapshot = _snapshot_for_record(record)
         self._recipes = _matching_recipes(record, self._snapshot)
         self._cache: dict[FacetKey, Any] = {}
+        self._missing: dict[FacetKey, AbsenceReason] = {}
+        self._menu_cache: dict[FacetKey, FacetMenuItem] = {}
         self._computed = False
         self._structural = _structural_facets(record)
 
@@ -915,27 +1009,14 @@ class FacetView(Mapping[FacetKey, Any]):
         return names
 
     def keys(self) -> builtins.list[FacetKey]:  # type: ignore[override]
-        """Return available facet names without invoking recipe functions."""
+        """Return facet names available in the current trace."""
 
-        names: builtins.list[FacetKey] = []
-        seen: set[FacetKey] = set()
-        for name in self._structural:
-            if name not in seen:
-                names.append(name)
-                seen.add(name)
-        for recipe in self._recipes:
-            for name in recipe.declared_facets:
-                if name not in seen:
-                    names.append(name)
-                    seen.add(name)
-                alias = _tl_alias_for_native(name)
-                if alias is not None and alias not in seen:
-                    names.append(alias)
-                    seen.add(alias)
-        return names
+        if not self._computed:
+            self._compute()
+        return builtins.list(self._cache.keys())
 
     def has(self, name: FacetKey) -> bool:
-        """Return whether a facet name is declared without computing values."""
+        """Return whether a facet is available in the current trace."""
 
         return name in self.keys()
 
@@ -943,25 +1024,32 @@ class FacetView(Mapping[FacetKey, Any]):
         """Clear cached computed facet values."""
 
         self._cache.clear()
+        self._missing.clear()
+        self._menu_cache.clear()
         self._computed = False
 
     def get(self, name: FacetKey, default: Any = None) -> Any:
-        """Return a facet value or a default.
+        """Return an available facet value or a default.
 
         Parameters
         ----------
         name:
             Facet name.
         default:
-            Value returned when the facet is absent.
+            Value returned when the facet is unavailable now.
         """
 
-        if not self.has(name) and name not in self._cache:
-            return default
         try:
             return self[name]
         except KeyError:
             return default
+
+    def menu(self) -> dict[FacetKey, FacetMenuItem]:
+        """Return the provisional full declared facet menu with availability status."""
+
+        if not self._computed:
+            self._compute()
+        return dict(self._menu_cache)
 
     def head(self, head_index: int) -> AttentionHeadView:
         """Return a scoped view for one attention head."""
@@ -974,6 +1062,9 @@ class FacetView(Mapping[FacetKey, Any]):
         if name not in self._cache:
             self._compute()
         if name not in self._cache:
+            reason = self._missing.get(name)
+            if reason is not None and reason.status != "structurally_absent":
+                raise MissingFacetError(name, reason)
             raise KeyError(name)
         value = self._cache[name]
         if isinstance(value, FacetSpec):
@@ -988,30 +1079,60 @@ class FacetView(Mapping[FacetKey, Any]):
             raise AttributeError(name)
         try:
             return self[name]
+        except MissingFacetError:
+            raise
         except KeyError as exc:
             raise AttributeError(name) from exc
 
     def __iter__(self) -> Iterator[FacetKey]:
-        """Iterate declared facet names."""
+        """Iterate facet names available in the current trace."""
 
         return iter(self.keys())
 
     def __len__(self) -> int:
-        """Return the number of declared facet names."""
+        """Return the number of facets available in the current trace."""
 
         return len(self.keys())
 
     def _compute(self) -> None:
-        """Invoke matching recipes and merge their facet dictionaries."""
+        """Invoke matching recipes and merge their values and absences."""
 
         if self._computed:
             return
         values: dict[FacetKey, Any] = dict(self._structural)
+        missing: dict[FacetKey, AbsenceReason] = {}
+        menu: dict[FacetKey, FacetMenuItem] = {
+            key: FacetMenuItem(status="available_now", recipe=None) for key in self._structural
+        }
         facet_tiers: dict[FacetKey, tuple[int, int]] = {key: (-1, -1) for key in self._structural}
         for recipe in sorted(self._recipes, key=lambda item: _recipe_sort_key(item, self._record)):
-            contribution = recipe.func(self._record)
+            raw_contribution = recipe.func(self._record)
+            contribution = _normalize_contribution(raw_contribution)
             tier = _recipe_priority(recipe, self._record)
-            for name, value in contribution.items():
+            declared: set[FacetKey] = set(recipe.declared_facets)
+            declared.update(contribution.values.keys())
+            declared.update(contribution.missing.keys())
+            undeclared_missing = declared.difference(contribution.values, contribution.missing)
+            for name in sorted(undeclared_missing, key=str):
+                missing_reason = AbsenceReason(
+                    status="declared_not_produced",
+                    detail=(
+                        f"{recipe.public.recipe_name!r} declared this facet but did not produce "
+                        "a value or absence reason"
+                    ),
+                    save_hint="try a broader save= predicate or inspect the recipe implementation",
+                )
+                _merge_missing(
+                    name,
+                    missing_reason,
+                    recipe=recipe,
+                    tier=tier,
+                    values=values,
+                    missing=missing,
+                    menu=menu,
+                    facet_tiers=facet_tiers,
+                )
+            for name, value in contribution.values.items():
                 if name in values:
                     previous_tier = facet_tiers.get(name)
                     if previous_tier == tier:
@@ -1022,16 +1143,42 @@ class FacetView(Mapping[FacetKey, Any]):
                             stacklevel=2,
                         )
                 values[name] = value
+                missing.pop(name, None)
+                menu[name] = FacetMenuItem(status="available_now", recipe=recipe.public.recipe_name)
                 facet_tiers[name] = tier
+            for name, reason in contribution.missing.items():
+                _merge_missing(
+                    name,
+                    reason,
+                    recipe=recipe,
+                    tier=tier,
+                    values=values,
+                    missing=missing,
+                    menu=menu,
+                    facet_tiers=facet_tiers,
+                )
         if _TRANSFORMERLENS_ALIASES_ENABLED:
             for alias, native in _TRANSFORMERLENS_ALIAS_TO_NATIVE.items():
                 if native in values and alias not in values:
                     values[alias] = values[native]
                     facet_tiers[alias] = facet_tiers.get(native, (0, 0))
+                    native_item = menu.get(native, FacetMenuItem(status="available_now"))
+                    menu[alias] = replace(native_item, status="available_now")
+                if native in missing and alias not in values and alias not in missing:
+                    missing[alias] = missing[native]
+                    facet_tiers[alias] = facet_tiers.get(native, (0, 0))
+                    native_item = menu.get(native, FacetMenuItem(status=missing[native].status))
+                    menu[alias] = replace(
+                        native_item,
+                        status=_menu_status_from_absence(missing[native]),
+                    )
         self._cache = values
+        self._missing = missing
+        self._menu_cache = menu
         self._computed = True
 
 
+_MISSING_CONTRIBUTION_KEY = "__torchlens_missing_facets__"
 _REGISTRY: builtins.list[_RegisteredRecipe] = []
 _BUILTIN_REGISTRY: tuple[_RegisteredRecipe, ...] = ()
 _REGISTRY_VERSION = 0
@@ -1046,6 +1193,7 @@ _FACET_VIEW_RESERVED_NAMES = frozenset(
         "head",
         "items",
         "keys",
+        "menu",
         "recipe_source",
         "values",
     }
@@ -1286,6 +1434,64 @@ def mark_current_registry_as_builtins() -> None:
         marked.append(replace(recipe, public=replace(recipe.public, source="built-in")))
     _REGISTRY[:] = marked
     _BUILTIN_REGISTRY = tuple(marked)
+
+
+def _normalize_contribution(raw_contribution: Any) -> FacetContribution:
+    """Normalize legacy and split recipe returns into a contribution object."""
+
+    if isinstance(raw_contribution, FacetContribution):
+        return raw_contribution
+    if not isinstance(raw_contribution, Mapping):
+        return FacetContribution(values={})
+    values = dict(raw_contribution)
+    raw_missing = values.pop(_MISSING_CONTRIBUTION_KEY, {})
+    missing: dict[FacetKey, AbsenceReason] = {}
+    if isinstance(raw_missing, Mapping):
+        for name, reason in raw_missing.items():
+            if isinstance(reason, AbsenceReason):
+                missing[name] = reason
+    return FacetContribution(values=values, missing=missing)
+
+
+def _merge_missing(
+    name: FacetKey,
+    reason: AbsenceReason,
+    *,
+    recipe: _RegisteredRecipe,
+    tier: tuple[int, int],
+    values: dict[FacetKey, Any],
+    missing: dict[FacetKey, AbsenceReason],
+    menu: dict[FacetKey, FacetMenuItem],
+    facet_tiers: dict[FacetKey, tuple[int, int]],
+) -> None:
+    """Merge one missing facet with the same tier policy as produced values."""
+
+    previous_tier = facet_tiers.get(name)
+    if name in values and previous_tier is not None and previous_tier > tier:
+        return
+    if name in values:
+        values.pop(name, None)
+    if name in missing and previous_tier == tier:
+        warnings.warn(
+            f"Facet {name!r} has ambiguous same-tier absences; "
+            f"{recipe.public.recipe_name!r} wins by deterministic order.",
+            UserWarning,
+            stacklevel=2,
+        )
+    missing[name] = reason
+    facet_tiers[name] = tier
+    menu[name] = FacetMenuItem(
+        status=_menu_status_from_absence(reason),
+        recipe=recipe.public.recipe_name,
+        save_hint=reason.save_hint,
+        detail=reason.detail,
+    )
+
+
+def _menu_status_from_absence(reason: AbsenceReason) -> MenuStatus:
+    """Return the menu status corresponding to an absence reason."""
+
+    return reason.status
 
 
 def _as_tuple(value: str | tuple[str, ...] | None) -> tuple[str, ...]:

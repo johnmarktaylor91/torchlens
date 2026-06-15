@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..facets import FacetSpec, register
-from ._helpers import add_if_present, module_input_op_spec, module_output_spec
+from ..facets import AbsenceReason, FacetSpec, register
+from ._helpers import (
+    add_if_present,
+    module_input_op_spec,
+    module_output_spec,
+    needs_capture,
+    op_output_readable,
+)
 
 _RESIDUAL_FACETS = ("resid_pre", "resid_mid", "resid_post")
 _BLOCK_NAME_MARKERS = (
@@ -65,7 +71,7 @@ def transformer_residuals(module: Any) -> dict[str, Any]:
     return result
 
 
-def _resid_mid_spec(module: Any) -> FacetSpec | None:
+def _resid_mid_spec(module: Any) -> FacetSpec | AbsenceReason | None:
     """Return a spec for the post-attention residual add inside a block.
 
     Parameters
@@ -95,8 +101,19 @@ def _resid_mid_spec(module: Any) -> FacetSpec | None:
     for op in add_candidates:
         parents = set(getattr(op, "parents", ()) or ())
         if parents.intersection(attention_outputs):
+            if not op_output_readable(op):
+                return needs_capture(
+                    f"residual midpoint op {getattr(op, 'label', '<unknown>')!r} was not saved",
+                    f"save=... including {getattr(op, 'label', 'the residual midpoint')!r}",
+                )
             return FacetSpec.from_home(op, home_kind="op", recipe_id="transformer_residuals")
     if add_candidates:
+        if not op_output_readable(add_candidates[0]):
+            return needs_capture(
+                f"residual midpoint op {getattr(add_candidates[0], 'label', '<unknown>')!r} "
+                "was not saved",
+                f"save=... including {getattr(add_candidates[0], 'label', 'the residual midpoint')!r}",
+            )
         return FacetSpec.from_home(
             add_candidates[0], home_kind="op", recipe_id="transformer_residuals"
         )

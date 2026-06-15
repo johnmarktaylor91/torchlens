@@ -12,7 +12,7 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import MissingFacet
+from torchlens.semantic import MissingFacet, MissingFacetError
 from torchlens.semantic import facets as facets_mod
 from torchlens.semantic.recipes import _load_entrypoint_recipes
 
@@ -164,10 +164,12 @@ def test_reconstructed_sdpa_missing_prerequisite_names_arg_capture() -> None:
 
     model = _AttentionWrapper(LlamaSdpaAttention())
     log = tl.trace(model, torch.randn(2, 3, 8), layers_to_save="all")
-    value = log.modules["attn"].facets.pattern
+    facets = log.modules["attn"].facets
 
-    assert isinstance(value, MissingFacet)
-    assert "save_arg_values=True" in value.reason
+    assert "pattern" not in facets.keys()
+    assert facets.menu()["pattern"].status == "needs_capture"
+    with pytest.raises(MissingFacetError, match="save_arg_values=True"):
+        facets.pattern
 
 
 def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
@@ -241,6 +243,29 @@ def test_transformerlens_aliases_are_opt_in() -> None:
         view = aliased.modules["attn"].facets
         assert "hook_pattern" in view.keys()
         assert torch.allclose(view["hook_pattern"], view.pattern)
+    finally:
+        facets_mod.enable_transformerlens_aliases(False)
+
+
+def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
+    """TransformerLens aliases mirror native missing-facet menu status."""
+
+    model = _AttentionWrapper(LlamaSdpaAttention())
+    x = torch.randn(2, 3, 8)
+
+    facets_mod.enable_transformerlens_aliases(True)
+    try:
+        log = tl.trace(model, x, layers_to_save="all")
+        view = log.modules["attn"].facets
+        menu = view.menu()
+
+        assert "pattern" not in view.keys()
+        assert "hook_pattern" not in view.keys()
+        assert menu["pattern"].status == "needs_capture"
+        assert menu["hook_pattern"].status == "needs_capture"
+        assert menu["hook_pattern"].save_hint == menu["pattern"].save_hint
+        with pytest.raises(MissingFacetError, match="save_arg_values=True"):
+            view["hook_pattern"]
     finally:
         facets_mod.enable_transformerlens_aliases(False)
 

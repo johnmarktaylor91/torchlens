@@ -4090,18 +4090,18 @@ class Trace(CapturedRun):
         return self._module_logs
 
     def modules_with_facet(self, name: str) -> Iterator[Any]:
-        """Yield Modules whose semantic facet view declares a named facet.
+        """Yield Modules whose semantic facet view has a facet available now.
 
         Parameters
         ----------
         name:
-            Facet name to look up without computing facet values.
+            Facet name to look up using the current capture's available values.
         """
 
         return (module for module in self.modules if module.facets.has(name))
 
     def attention_blocks(self) -> Iterator[Any]:
-        """Yield Modules matched by attention recipes."""
+        """Yield Modules with an available query-projection facet."""
 
         return self.modules_with_facet("q")
 

@@ -461,7 +461,7 @@ def _run_patch(
 
 
 def _modules_with_facet(log: Any, facet_name: str) -> list[str]:
-    """Return module addresses exposing a facet."""
+    """Return module addresses with a facet available in the current capture."""
 
     return [
         str(module.address)
@@ -471,7 +471,7 @@ def _modules_with_facet(log: Any, facet_name: str) -> list[str]:
 
 
 def _ensure_matching_modules(log: Any, modules: Sequence[str], *, facet_name: str) -> None:
-    """Raise if a corrupted trace lacks a clean-trace facet owner."""
+    """Raise if a corrupted trace lacks an available clean-trace facet owner."""
 
     missing = [
         address

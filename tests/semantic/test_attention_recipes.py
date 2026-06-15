@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 from torchlens import trace as trace_fn
-from torchlens.semantic import MissingFacet
+from torchlens.semantic import MissingFacetError
 
 
 pytest.importorskip("transformers")
@@ -149,7 +149,7 @@ def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
     """DistilBERT eager class (MultiHeadSelfAttention) exposes q/k/v facets.
 
     Regression: only ``DistilBertSdpaAttention`` was registered, so switching to
-    ``_attn_implementation='eager'`` (the very fix the ``pattern`` MissingFacet
+    ``_attn_implementation='eager'`` (the very fix the ``pattern`` missing-capture
     recommends) landed on the unregistered eager class and raised ``KeyError('q')``.
     """
 
@@ -172,7 +172,7 @@ def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
     Regression: transformers 5.x collapsed the per-backend subclasses into one
     ``DistilBertSelfAttention`` class; it was unregistered, so facets.q raised
     ``KeyError('q')``. Its default backend is fused SDPA, so ``pattern`` is the
-    informative MissingFacet (RuntimeError on access), not a silent AttributeError.
+    informative MissingFacetError on access, not a silent AttributeError.
     """
 
     log = trace_fn(
@@ -182,11 +182,11 @@ def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
     assert view.recipe_source == "distilbert_attention"
     assert view.q.shape == (2, 3, 2, 4)
     assert view.head(1).q.shape == (2, 3, 4)
-    # Fused-by-default: pattern is declared but surfaced as an informative MissingFacet.
-    assert "pattern" in view.keys()
-    assert isinstance(view.pattern, MissingFacet)
-    with pytest.raises(RuntimeError, match="attention pattern not captured"):
-        torch.add(view.pattern, 1)
+    # Fused-by-default: pattern is declared in the menu but unavailable until recapture.
+    assert "pattern" not in view.keys()
+    assert view.menu()["pattern"].status == "needs_capture"
+    with pytest.raises(MissingFacetError, match="attention pattern not captured"):
+        view.pattern
 
 
 @pytest.mark.slow

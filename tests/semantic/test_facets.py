@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetRecipe, FacetSpec, FacetView, MissingGradient
+from torchlens.semantic import FacetRecipe, FacetSpec, FacetView, MissingFacetError, MissingGradient
 from torchlens.semantic import facets as facets_mod
 from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
 from torchlens.intervention.errors import SiteResolutionError
@@ -65,7 +65,7 @@ def test_facet_view_dict_and_attribute_access_uniformity() -> None:
 
 
 def test_lazy_compute_keys_has_and_cache() -> None:
-    """Recipe functions run only when a value is accessed."""
+    """Available-now dictionary methods compute once and reuse the cache."""
 
     calls = 0
 
@@ -82,7 +82,7 @@ def test_lazy_compute_keys_has_and_cache() -> None:
     assert view.has("x")
     assert list(view) == ["x"]
     assert len(view) == 1
-    assert calls == 0
+    assert calls == 1
     assert view.x == 10
     assert view.x == 10
     assert calls == 1
@@ -313,6 +313,82 @@ def test_structseq_output_facets_expose_torch_return_type_names() -> None:
 
     assert torch.equal(facets["values"], expected.values)
     assert torch.equal(facets["indices"], expected.indices)
+
+
+def test_keys_has_get_are_available_now_for_unsaved_op_backed_facets() -> None:
+    """Op-backed recipe facets are absent from keys when their home payload is unsaved."""
+
+    class Model(nn.Module):
+        """Tiny model with an unsaved LayerNorm output under predicate capture."""
+
+        def __init__(self) -> None:
+            """Initialize the model."""
+
+            super().__init__()
+            self.norm = nn.LayerNorm(4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run normalization followed by a saved ReLU."""
+
+            return torch.relu(self.norm(x))
+
+    log = tl.trace(Model(), torch.randn(2, 4), save=tl.func("relu"))
+    facets = log.modules["norm"].facets
+
+    assert "normalized" not in facets.keys()
+    assert "normalized" not in facets
+    assert not facets.has("normalized")
+    assert facets.get("normalized", "default") == "default"
+    assert facets.menu()["normalized"].status == "needs_capture"
+    with pytest.raises(MissingFacetError, match="save=.*including"):
+        facets["normalized"]
+    with pytest.raises(MissingFacetError, match="save=.*including"):
+        facets.normalized
+
+
+def test_structurally_absent_declared_facet_raises_plain_keyerror() -> None:
+    """Structurally absent built-in facets are omitted and raise plain KeyError."""
+
+    class RMSNorm(nn.Module):
+        """Tiny RMSNorm-like module with no bias parameter."""
+
+        def __init__(self) -> None:
+            """Initialize the weight parameter."""
+
+            super().__init__()
+            self.weight = nn.Parameter(torch.ones(4))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a minimal RMS normalization."""
+
+            denom = x.pow(2).mean(dim=-1, keepdim=True).add(1e-6).sqrt()
+            return x / denom * self.weight
+
+    class Model(nn.Module):
+        """Wrapper exposing an RMSNorm child."""
+
+        def __init__(self) -> None:
+            """Initialize the child module."""
+
+            super().__init__()
+            self.norm = RMSNorm()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the child module."""
+
+            return self.norm(x)
+
+    log = tl.trace(Model(), torch.randn(2, 4), layers_to_save="all")
+    facets = log.modules["norm"].facets
+
+    assert "beta" not in facets.keys()
+    assert "beta" not in facets
+    assert facets.menu()["beta"].status == "structurally_absent"
+    with pytest.raises(KeyError) as exc_info:
+        facets["beta"]
+    assert not isinstance(exc_info.value, MissingFacetError)
+    with pytest.raises(AttributeError):
+        facets.beta
 
 
 def test_lstm_multi_output_facets_preserve_single_call_roles() -> None:

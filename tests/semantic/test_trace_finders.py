@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 
 
@@ -55,3 +56,14 @@ def test_trace_finders_return_matching_modules() -> None:
     assert [module.address for module in attention_blocks] == ["attn"]
     assert q_modules == attention_blocks
     assert [module.address for module in norm_modules] == ["norm"]
+
+
+def test_trace_finders_use_available_now_semantics() -> None:
+    """Trace finders skip declared facets whose payloads were not captured."""
+
+    log = trace_fn(_FinderModel(), torch.randn(2, 3, 8), save=tl.func("relu"))
+
+    assert list(log.attention_blocks()) == []
+    assert list(log.modules_with_facet("normalized")) == []
+    assert log.modules["attn"].facets.menu()["q"].status == "needs_capture"
+    assert log.modules["norm"].facets.menu()["normalized"].status == "needs_capture"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..facets import register
+from ..facets import AbsenceReason, FacetSpec, register
 from ._helpers import (
     add_if_present,
     child_output_spec,
@@ -68,10 +68,14 @@ def _with_attention_common(
         result["d_head"] = d_head
     result["head"] = module.facets.head
     if _attention_is_fused(getattr(module, "class_name", "")):
-        result["scores"] = fused_sdpa_facet(module, "scores", "attention_reconstruction")
-        result["pattern"] = fused_sdpa_pattern(module)
-        result["z"] = fused_sdpa_facet(module, "z", "attention_reconstruction")
-        result["result"] = fused_sdpa_facet(module, "result", "attention_reconstruction")
+        add_if_present(
+            result, "scores", fused_sdpa_facet(module, "scores", "attention_reconstruction")
+        )
+        add_if_present(result, "pattern", fused_sdpa_pattern(module))
+        add_if_present(result, "z", fused_sdpa_facet(module, "z", "attention_reconstruction"))
+        add_if_present(
+            result, "result", fused_sdpa_facet(module, "result", "attention_reconstruction")
+        )
     return result
 
 
@@ -82,7 +86,7 @@ def _attention_is_fused(class_name: str) -> bool:
     ``...FlashAttention2``) and the transformers 5.x unified ``DistilBertSelfAttention``
     -- the 5.x class name no longer encodes the backend, but its default is fused SDPA,
     and the recipe never extracts the pattern in any case, so ``pattern`` is surfaced as
-    an informative MissingFacet rather than silently absent (AttributeError).
+    an actionable missing-capture facet rather than silently absent (AttributeError).
     """
 
     return (
@@ -97,19 +101,19 @@ def _attention_config(module: Any) -> tuple[int | None, int | None, int | None]:
 
     cls = getattr(module, "cls", None)
     n_q_heads = config_value(module, *_HEAD_COUNT_NAMES)
-    if n_q_heads is None:
+    if not isinstance(n_q_heads, int):
         n_q_heads = config_value(cls, *_HEAD_COUNT_NAMES)
     n_kv_heads = config_value(module, *_KV_HEAD_COUNT_NAMES)
-    if n_kv_heads is None:
+    if not isinstance(n_kv_heads, int):
         n_kv_heads = config_value(cls, *_KV_HEAD_COUNT_NAMES)
-    if n_kv_heads is None:
+    if not isinstance(n_kv_heads, int):
         n_kv_heads = n_q_heads
     d_head = config_value(module, *_HEAD_DIM_NAMES)
-    if d_head is None:
+    if not isinstance(d_head, int):
         d_head = config_value(cls, *_HEAD_DIM_NAMES)
-    if d_head is None:
+    if not isinstance(d_head, int):
         hidden_size = config_value(module, "dim", "embed_dim", "hidden_size", "all_head_size")
-        if hidden_size is None:
+        if not isinstance(hidden_size, int):
             hidden_size = config_value(cls, "dim", "embed_dim", "hidden_size", "all_head_size")
         if isinstance(hidden_size, int) and isinstance(n_q_heads, int) and n_q_heads:
             d_head = hidden_size // n_q_heads
@@ -140,7 +144,7 @@ def distilbert_attention(module: Any) -> dict[str, Any]:
     subclasses into one class and selects eager/sdpa via a runtime function). All
     forms project q/k/v through the same ``q_lin``/``k_lin``/``v_lin`` children, so
     one extraction body serves every implementation. The explicitly-fused 4.x
-    subclasses expose a ``pattern`` MissingFacet (their scores are never
+    subclasses expose ``pattern`` as needing capture (their scores are never
     materialized); the unified/eager classes omit ``pattern`` (the class name no
     longer reveals the backend), matching the other eager recipes (e.g. BERT).
     """
@@ -178,11 +182,15 @@ def gpt2_attention(module: Any) -> dict[str, Any]:
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     c_attn_out = child_output_spec(module, "c_attn", "gpt2_attention")
     result: dict[str, Any] = {}
-    if c_attn_out is not None and n_q_heads is not None:
+    if isinstance(c_attn_out, FacetSpec) and n_q_heads is not None:
         q_raw, k_raw, v_raw = c_attn_out.split(3, dim=-1)
         add_if_present(result, "q", reshape_heads(q_raw, n_q_heads, d_head))
         add_if_present(result, "k", reshape_heads(k_raw, n_kv_heads, d_head))
         add_if_present(result, "v", reshape_heads(v_raw, n_kv_heads, d_head))
+    elif isinstance(c_attn_out, AbsenceReason):
+        add_if_present(result, "q", c_attn_out)
+        add_if_present(result, "k", c_attn_out)
+        add_if_present(result, "v", c_attn_out)
     add_if_present(result, "attn_out", child_output_spec(module, "c_proj", "gpt2_attention"))
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
 

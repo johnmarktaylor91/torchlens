@@ -39,6 +39,18 @@ nested positional    -> out1.0
 the unified named access layer. If a module was called more than once,
 `module.facets` raises; choose an explicit pass with `module.calls[n].facets`.
 
+`keys()`, iteration, `in`, `has(name)`, and item/attribute access are
+available-now surfaces: recipes run once and only facets readable in the current
+capture appear. `.get(name, default)` returns `default` for any facet that is not
+available now. Use the provisional `menu()` accessor for declaration-level
+discovery; it reports every structural and declared recipe facet with status
+`available_now`, `structurally_absent`, `needs_capture`, or
+`declared_not_produced`, including any enabled aliases.
+
+Structurally absent facets are omitted and raise plain `KeyError` on item
+access. Declared facets that need additional payload capture are omitted and
+raise `MissingFacetError` with a recapture hint naming what to save.
+
 ## Specs
 
 Recipes now return `FacetSpec` objects rather than computed tensors. A spec
@@ -312,7 +324,8 @@ result            sum per-head W_O contributions and compare to output projectio
 
 GQA/MQA uses PyTorch SDPA's `enable_gqa` repeat-interleave convention. Causal
 masks and boolean/additive tensor masks are supported. Nonzero SDPA dropout is
-fail-closed for now; the facet returns `MissingFacet` naming dropout/RNG as the
+fail-closed for now; the facet is marked `needs_capture` in `facets.menu()` and
+item or attribute access raises `MissingFacetError` naming dropout/RNG as the
 missing prerequisite rather than serving an unvalidated value.
 
 ## Residuals
