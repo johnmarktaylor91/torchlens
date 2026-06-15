@@ -65,6 +65,7 @@ from .types import ActivationPostfunc, GradientPostfunc
 from .data_classes.trace import (
     Trace,
 )
+from .autoroute._builtin_output import semantic_output_cache_key
 from .options import (
     CaptureOptions,
     SaveOptions,
@@ -145,6 +146,8 @@ def _trace_mlx_model(
     save_raw_input: str | bool | MissingType,
     batch_render: str | MissingType,
     output_transform: Callable[[Any], Any] | None | MissingType,
+    output_style: str | None | MissingType,
+    output_head: str | None | MissingType,
     save_raw_output: str | bool | MissingType,
     layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
     save_visualizations: bool | MissingType,
@@ -348,6 +351,8 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         save_raw_input=kwargs["save_raw_input"],
         batch_render=kwargs["batch_render"],
         output_transform=kwargs["output_transform"],
+        output_style=kwargs["output_style"],
+        output_head=kwargs["output_head"],
         save_raw_output=kwargs["save_raw_output"],
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
@@ -1109,6 +1114,8 @@ def _run_model_and_save_specified_outs(
     save_raw_input: str | bool = "small",
     batch_render: str = "auto",
     output_transform: Callable[[Any], Any] | None = None,
+    output_style: str | None = None,
+    output_head: str | None = None,
     save_raw_output: str | bool = "small",
     layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
     save_visualizations: bool = False,
@@ -1192,6 +1199,8 @@ def _run_model_and_save_specified_outs(
         batch_render: Raw-input batch rendering policy for visualization.
         output_transform: Optional callable used to produce human-readable
             output metadata from model output.
+        output_style: Optional semantic output decode style.
+        output_head: Optional live-output head to decode.
         save_raw_output: Portable save policy for the transformed raw output.
         layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
         save_visualizations: Whether rendered thumbnails should persist in portable bundles.
@@ -1277,6 +1286,14 @@ def _run_model_and_save_specified_outs(
         facet_registry_snapshot=facets_mod.snapshot(recipes),
     )
     _capture_output_metadata_from_model_config(trace, model)
+    trace._output_style = output_style
+    trace._output_head = output_head
+    trace._output_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
+    trace._semantic_output_metadata = semantic_output_cache_key(
+        model,
+        output_style=output_style,
+        output_head=output_head,
+    )
     trace.trace_label = name
     trace.code_context = _get_code_context(
         num_context_lines,
@@ -1628,6 +1645,8 @@ def trace(
     save_raw_input: str | bool | MissingType = MISSING,
     batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    output_style: str | None | MissingType = MISSING,
+    output_head: str | None | MissingType = MISSING,
     save_raw_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -1734,6 +1753,8 @@ def trace(
         output_transform: Optional callable applied once to the model output
             after ``model.forward``. The returned value is stored as
             ``Trace.raw_output`` and does not affect the computational graph.
+        output_style: Optional semantic output decode style.
+        output_head: Optional live-output head to decode.
         save_raw_output: Raw output save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
         layers_to_save: Which layers to save outs for (see above).
@@ -1908,6 +1929,8 @@ def trace(
             "save_raw_input": save_raw_input,
             "batch_render": batch_render,
             "output_transform": output_transform,
+            "output_style": output_style,
+            "output_head": output_head,
             "save_raw_output": save_raw_output,
             "keep_orphans": keep_orphans,
             "output_device": output_device,
@@ -1984,6 +2007,8 @@ def _trace_torch_model(
     save_raw_input: str | bool | MissingType = MISSING,
     batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    output_style: str | None | MissingType = MISSING,
+    output_head: str | None | MissingType = MISSING,
     save_raw_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -2079,6 +2104,8 @@ def _trace_torch_model(
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=output_transform,
+        output_style=output_style,
+        output_head=output_head,
         save_raw_output=save_raw_output,
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
@@ -2170,6 +2197,8 @@ def _trace_torch_model(
     save_raw_input_policy = capture_options.save_raw_input
     batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
+    output_style_value = capture_options.output_style
+    output_head_value = capture_options.output_head
     save_raw_output_policy = capture_options.save_raw_output
     layer_visualizers_value = cast(
         "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
@@ -2323,6 +2352,13 @@ def _trace_torch_model(
             "inference_only": inference_only_value,
             "capture_container_structure": capture_container_structure,
             "output_transform": repr(output_transform_value),
+            "output_style": output_style_value,
+            "output_head": output_head_value,
+            "semantic_output_cache_key": semantic_output_cache_key(
+                model,
+                output_style=output_style_value,
+                output_head=output_head_value,
+            ),
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": repr(save_predicate),
             "intervene": repr(intervene),
@@ -2410,6 +2446,8 @@ def _trace_torch_model(
             save_raw_input=save_raw_input_policy,
             batch_render=batch_render_policy,
             output_transform=output_transform_value,
+            output_style=output_style_value,
+            output_head=output_head_value,
             save_raw_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
@@ -2482,6 +2520,8 @@ def _trace_torch_model(
             save_raw_input=save_raw_input_policy,
             batch_render=batch_render_policy,
             output_transform=output_transform_value,
+            output_style=output_style_value,
+            output_head=output_head_value,
             save_raw_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,

@@ -103,6 +103,9 @@ Repository = "https://github.com/johnmarktaylor91/torchlens"
 [tool.setuptools.packages.find]
 include = ["torchlens*"]
 
+[tool.setuptools.package-data]
+torchlens = ["autoroute/data/*.json", "autoroute/data/*.md"]
+
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

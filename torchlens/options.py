@@ -36,6 +36,8 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_input",
     "batch_render",
     "output_transform",
+    "output_style",
+    "output_head",
     "save_raw_output",
     "layer_visualizers",
     "save_visualizations",
@@ -143,6 +145,8 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
     "output_transform": "output_transform",
+    "output_style": "output_style",
+    "output_head": "output_head",
     "save_raw_output": "save_raw_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
@@ -585,6 +589,10 @@ class CaptureOptions:
         ``"shape_only"``.
     output_transform:
         Optional callable applied once to the model output after ``model.forward``.
+    output_style:
+        Optional semantic output decode style.
+    output_head:
+        Optional live-output head to decode.
     save_raw_output:
         Raw model-output save policy for portable bundles. ``"small"`` stores a
         bounded representation, ``True`` stores the full object, and ``False``
@@ -673,6 +681,8 @@ class CaptureOptions:
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
     output_transform: Callable[[Any], Any] | None = None
+    output_style: str | None = None
+    output_head: str | None = None
     save_raw_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
@@ -718,6 +728,8 @@ class CaptureOptions:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        output_style: str | None | MissingType = MISSING,
+        output_head: str | None | MissingType = MISSING,
         save_raw_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
         save_visualizations: bool | MissingType = MISSING,
@@ -803,6 +815,12 @@ class CaptureOptions:
             ),
             "output_transform": _resolve_option_value(
                 "output_transform", output_transform, None, specified_fields
+            ),
+            "output_style": _resolve_option_value(
+                "output_style", output_style, None, specified_fields
+            ),
+            "output_head": _resolve_option_value(
+                "output_head", output_head, None, specified_fields
             ),
             "save_raw_output": _resolve_option_value(
                 "save_raw_output", save_raw_output, "small", specified_fields

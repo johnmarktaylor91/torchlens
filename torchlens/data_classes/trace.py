@@ -5750,6 +5750,46 @@ class Trace(CapturedRun):
 
         return _impl(self, site, replay=replay_options)
 
+    def decode_output(self, top_n: int | None = None) -> Any:
+        """Return captured decoded output rows when available.
+
+        Parameters
+        ----------
+        top_n:
+            Optional maximum rank to return per batch item.
+
+        Returns
+        -------
+        Any
+            JSON-primitive decoded output captured during tracing.
+
+        Raises
+        ------
+        ValueError
+            If decoded output was not captured or the requested ``top_n`` exceeds
+            the capture-time bound.
+        """
+
+        if self.decoded_output is None:
+            raise ValueError(
+                "logits not retained; re-decode unavailable. Capture with semantic "
+                "output decoding enabled and retained logits to recompute."
+            )
+        if top_n is None:
+            return self.decoded_output
+        captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
+        if captured_top_n is not None and top_n > captured_top_n:
+            raise ValueError(
+                f"logits not retained; re-decode unavailable above captured top_n={captured_top_n}."
+            )
+        if not isinstance(self.decoded_output, list):
+            return self.decoded_output
+        return [
+            row
+            for row in self.decoded_output
+            if not isinstance(row, dict) or int(row.get("rank", 1)) <= top_n
+        ]
+
     def rerun(
         self,
         model: Any = None,

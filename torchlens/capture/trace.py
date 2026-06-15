@@ -813,6 +813,14 @@ def run_and_log_inputs_through_model(
 
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
+        from ..autoroute._builtin_output import decode_outputs_for_trace
+
+        decode_outputs_for_trace(
+            self,
+            outputs,
+            output_style=getattr(self, "_output_style", None),
+            output_head=getattr(self, "_output_head", None),
+        )
 
         self.forward_duration = Duration(
             time.time() - self.capture_start_time - self.setup_duration

@@ -220,7 +220,17 @@ def trace_text(
 
     tok = tokenizer or _resolve_tokenizer(model)
     transform = _make_text_transform(tok, chat_template=chat_template)
-    log = tl.trace(model, cast(Any, text), transform=transform, **kwargs)
+    kwargs.setdefault("output_style", "hf_text")
+    had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
+    previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
+    model._torchlens_output_tokenizer = tok
+    try:
+        log = tl.trace(model, cast(Any, text), transform=transform, **kwargs)
+    finally:
+        if had_tokenizer:
+            model._torchlens_output_tokenizer = previous_tokenizer
+        else:
+            delattr(model, "_torchlens_output_tokenizer")
     log.input_preprocessor = _tokenizer_preprocessing_record(tok, model)
     return log
 
