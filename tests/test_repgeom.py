@@ -369,6 +369,10 @@ def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> Non
     assert result.image is not None
     assert Path(result.image).is_file()
     assert result.image.endswith(".png")
+    image_module = pytest.importorskip("PIL.Image")
+    with image_module.open(result.image) as rendered:
+        assert rendered.mode == "RGB"
+        assert rendered.size == (420, 420)
     assert result.lines == [layer.layer_label]
     assert result.shape == "box"
     assert result.extra_attrs["imagescale"] == "true"
@@ -475,6 +479,10 @@ def test_mds_scatter_fallback_renders_points_without_raw_images() -> None:
     assert result is not None
     assert result.image is not None
     assert Path(result.image).is_file()
+    image_module = pytest.importorskip("PIL.Image")
+    with image_module.open(result.image) as rendered:
+        assert rendered.mode == "RGB"
+        assert rendered.size == (420, 420)
     assert result.tooltip is not None
     assert "points fallback" in result.tooltip
 
