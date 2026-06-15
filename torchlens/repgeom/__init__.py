@@ -7,7 +7,10 @@ helpers are for visualization-oriented representation geometry, not inference.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any, Literal, TypeAlias
+from collections.abc import Callable, Sequence
+from pathlib import Path
+import tempfile
+from typing import Any, Literal, TypeAlias, cast
 
 import numpy as np
 import torch
@@ -18,6 +21,14 @@ MDSEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
 
 _RANK_TOLERANCE = 1e-12
 _SYMMETRY_TOLERANCE = 1e-10
+_SCATTER_CANVAS_SIZE = 420
+_SCATTER_BACKGROUND = (255, 255, 255)
+_SCATTER_AXIS_COLOR = (215, 219, 226)
+_SCATTER_POINT_COLOR = (48, 93, 170)
+_SCATTER_TEXT_COLOR = (35, 39, 47)
+_SCATTER_MORE_FILL = (255, 255, 255)
+_SCATTER_MORE_OUTLINE = (120, 128, 140)
+_SCATTER_CAPTION_RESERVE = 56
 
 
 def _as_numpy_array(value: Any) -> np.ndarray:
@@ -460,6 +471,551 @@ def mds_evolution(
     return coords_by_key
 
 
+def mds_scatter_node_spec(
+    *,
+    max_thumbnails: int = 16,
+    thumbnail_size: int = 36,
+    canvas_size: int = _SCATTER_CANVAS_SIZE,
+    min_distance: float | None = None,
+) -> Callable[[Any, Any], Any | None]:
+    """Return a draw-time node callback for stored MDS scatter annotations.
+
+    The returned callback reads ``layer:<layer_label>`` or ``op:<op.label>``
+    coordinate tensors from ``trace._annotation_blobs`` and composes a fresh
+    PIL PNG every time a graph is drawn. When ``trace.raw_input`` is a PIL image
+    batch with the same leading count as the coordinates, thumbnails are pasted
+    at the normalized MDS positions. Otherwise, the callback renders an explicit
+    point-cloud fallback image.
+
+    Parameters
+    ----------
+    max_thumbnails:
+        Maximum number of stimuli to draw before adding a ``+K more`` indicator.
+    thumbnail_size:
+        Maximum width and height for each pasted thumbnail.
+    canvas_size:
+        Width and height of the rendered scatter image in pixels.
+    min_distance:
+        Minimum center-to-center distance in pixels. Defaults to the thumbnail
+        size for thumbnail scatters and a smaller point spacing for fallbacks.
+
+    Returns
+    -------
+    Callable[[Any, Any], Any | None]
+        ``node_spec_fn`` suitable for ``Trace.draw(node_spec_fn=...)``.
+
+    Raises
+    ------
+    ValueError
+        If sizing or cap parameters are invalid.
+    """
+
+    if max_thumbnails < 1:
+        raise ValueError("max_thumbnails must be at least 1.")
+    if thumbnail_size < 4:
+        raise ValueError("thumbnail_size must be at least 4.")
+    if canvas_size <= thumbnail_size * 2:
+        raise ValueError("canvas_size must be larger than twice thumbnail_size.")
+
+    def node_spec_fn(layer: Any, spec: Any) -> Any | None:
+        """Apply an MDS scatter image to a matching node spec.
+
+        Parameters
+        ----------
+        layer:
+            Layer or op-like render node passed by TorchLens.
+        spec:
+            Default ``NodeSpec`` to mutate by replacement.
+
+        Returns
+        -------
+        Any | None
+            Updated spec when coordinates are available, otherwise ``None``.
+        """
+
+        trace = getattr(layer, "source_trace", None)
+        if trace is None:
+            return None
+        key, coords = _mds_scatter_coords_for_node(trace, layer)
+        if key is None or coords is None:
+            return None
+
+        images = _matching_pil_image_batch(getattr(trace, "raw_input", None), coords.shape[0])
+        shown_count = min(max_thumbnails, coords.shape[0])
+        more_count = max(0, coords.shape[0] - shown_count)
+        fallback_reason = (
+            None if images is not None else "points fallback: raw PIL image batch unavailable"
+        )
+        scatter = _render_mds_scatter_image(
+            coords,
+            images=images,
+            max_thumbnails=max_thumbnails,
+            thumbnail_size=thumbnail_size,
+            canvas_size=canvas_size,
+            min_distance=min_distance,
+        )
+        image_path = _write_mds_scatter_image(trace, key, scatter)
+        tooltip = f"MDS thumbnail scatter for {key}: {coords.shape[0]} stimuli"
+        if fallback_reason is not None:
+            tooltip = f"MDS thumbnail scatter for {key} ({fallback_reason})"
+        if more_count > 0:
+            tooltip = f"{tooltip}; +{more_count} more"
+
+        caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
+        return spec.replace(
+            lines=[caption],
+            image=str(image_path),
+            shape="box",
+            tooltip=tooltip,
+            extra_attrs={
+                **getattr(spec, "extra_attrs", {}),
+                "imagescale": "true",
+                "labelloc": "b",
+                "fixedsize": "false",
+                "margin": "0.06,0.06",
+            },
+        )
+
+    return node_spec_fn
+
+
+def _mds_scatter_coords_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray | None]:
+    """Return stored MDS coordinates for a rendered layer or op node.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the annotation blobs.
+    node:
+        Rendered layer or op-like object.
+
+    Returns
+    -------
+    tuple[str | None, np.ndarray | None]
+        Annotation key and ``[N, 2]`` coordinates when present.
+    """
+
+    blobs = getattr(trace, "_annotation_blobs", None)
+    if not isinstance(blobs, dict):
+        return None, None
+    candidates = []
+    label = getattr(node, "label", None)
+    if label is not None:
+        candidates.append(f"op:{label}")
+    layer_label = getattr(node, "layer_label", None)
+    if layer_label is not None:
+        candidates.append(f"layer:{layer_label}")
+    for key in candidates:
+        value = blobs.get(key)
+        if value is None:
+            continue
+        coords = _as_numpy_array(value)
+        if coords.ndim == 2 and coords.shape[1] == 2 and coords.shape[0] > 0:
+            _validate_finite(coords, "MDS scatter coordinates")
+            return key, coords
+    return None, None
+
+
+def _matching_pil_image_batch(raw_input: Any, n_coords: int) -> Sequence[Any] | None:
+    """Return a matching raw PIL image batch if one is available.
+
+    Parameters
+    ----------
+    raw_input:
+        Trace raw input payload.
+    n_coords:
+        Required number of stimuli.
+
+    Returns
+    -------
+    Sequence[Any] | None
+        PIL image sequence when the length exactly matches the coordinates.
+    """
+
+    if raw_input is None or isinstance(raw_input, str | bytes | bytearray):
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    if isinstance(raw_input, Sequence):
+        sequence = raw_input
+    elif hasattr(raw_input, "__len__") and hasattr(raw_input, "__iter__"):
+        sequence = tuple(raw_input)
+    else:
+        return None
+    if len(sequence) != n_coords:
+        return None
+    if not all(isinstance(item, Image.Image) for item in sequence):
+        return None
+    return sequence
+
+
+def _render_mds_scatter_image(
+    coords: np.ndarray,
+    *,
+    images: Sequence[Any] | None,
+    max_thumbnails: int,
+    thumbnail_size: int,
+    canvas_size: int,
+    min_distance: float | None,
+) -> Any:
+    """Compose a PIL scatter image for MDS coordinates.
+
+    Parameters
+    ----------
+    coords:
+        ``[N, 2]`` coordinate matrix.
+    images:
+        Optional matching PIL image stimuli.
+    max_thumbnails:
+        Maximum number of stimuli to draw.
+    thumbnail_size:
+        Maximum thumbnail side length.
+    canvas_size:
+        Output image side length.
+    min_distance:
+        Optional minimum center spacing in pixels.
+
+    Returns
+    -------
+    Any
+        PIL ``Image`` containing the scatter.
+    """
+
+    from PIL import Image, ImageDraw
+
+    shown_count = min(max_thumbnails, coords.shape[0])
+    margin = thumbnail_size / 2.0 + _SCATTER_CAPTION_RESERVE
+    centers = _coords_to_pixel_centers(coords[:shown_count], canvas_size=canvas_size, margin=margin)
+    spacing = min_distance if min_distance is not None else (thumbnail_size if images else 14.0)
+    centers = _spread_close_centers(
+        centers, canvas_size=canvas_size, margin=margin, min_distance=spacing
+    )
+    canvas = Image.new("RGB", (canvas_size, canvas_size), _SCATTER_BACKGROUND)
+    draw = ImageDraw.Draw(canvas)
+    _draw_scatter_axes(draw, canvas_size=canvas_size, margin=int(round(margin)))
+    if images is None:
+        _draw_point_fallback(draw, centers)
+    else:
+        _paste_scatter_thumbnails(
+            canvas,
+            centers,
+            images[:shown_count],
+            thumbnail_size=thumbnail_size,
+        )
+    more_count = coords.shape[0] - shown_count
+    if more_count > 0:
+        _draw_more_indicator(draw, canvas_size=canvas_size, text=f"+{more_count} more")
+    return canvas
+
+
+def _coords_to_pixel_centers(
+    coords: np.ndarray,
+    *,
+    canvas_size: int,
+    margin: float,
+) -> list[tuple[float, float]]:
+    """Normalize MDS coordinates into drawable pixel centers.
+
+    Parameters
+    ----------
+    coords:
+        ``[N, 2]`` coordinate matrix.
+    canvas_size:
+        Output image side length.
+    margin:
+        Minimum distance from any center to the canvas edge.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Pixel-space centers.
+    """
+
+    if coords.shape[0] == 0:
+        return []
+    mins = coords.min(axis=0)
+    maxs = coords.max(axis=0)
+    spans = maxs - mins
+    drawable = max(1.0, float(canvas_size) - 2.0 * margin)
+    centers = []
+    for row in coords:
+        values = []
+        for axis in range(2):
+            if spans[axis] <= _RANK_TOLERANCE:
+                values.append(float(canvas_size) / 2.0)
+            else:
+                values.append(float(margin + ((row[axis] - mins[axis]) / spans[axis]) * drawable))
+        centers.append((values[0], float(canvas_size) - values[1]))
+    return centers
+
+
+def _spread_close_centers(
+    centers: list[tuple[float, float]],
+    *,
+    canvas_size: int,
+    margin: float,
+    min_distance: float,
+) -> list[tuple[float, float]]:
+    """Deterministically move close centers apart within canvas bounds.
+
+    Parameters
+    ----------
+    centers:
+        Initial pixel centers.
+    canvas_size:
+        Output image side length.
+    margin:
+        Minimum edge margin for centers.
+    min_distance:
+        Required center spacing.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Adjusted centers.
+    """
+
+    placed: list[tuple[float, float]] = []
+    for index, center in enumerate(centers):
+        candidate = _clamp_center(center, canvas_size=canvas_size, margin=margin)
+        if _is_far_enough(candidate, placed, min_distance=min_distance):
+            placed.append(candidate)
+            continue
+        for offset in _spiral_offsets(index=index, step=max(2.0, min_distance)):
+            candidate = _clamp_center(
+                (center[0] + offset[0], center[1] + offset[1]),
+                canvas_size=canvas_size,
+                margin=margin,
+            )
+            if _is_far_enough(candidate, placed, min_distance=min_distance):
+                break
+        placed.append(candidate)
+    return placed
+
+
+def _spiral_offsets(index: int, *, step: float) -> list[tuple[float, float]]:
+    """Return deterministic candidate offsets for overlap resolution.
+
+    Parameters
+    ----------
+    index:
+        Stimulus index, used only to rotate tie-break ordering.
+    step:
+        Base radial step.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Candidate offsets ordered from near to far.
+    """
+
+    directions = [
+        (1.0, 0.0),
+        (0.0, 1.0),
+        (-1.0, 0.0),
+        (0.0, -1.0),
+        (0.7071, 0.7071),
+        (-0.7071, 0.7071),
+        (-0.7071, -0.7071),
+        (0.7071, -0.7071),
+    ]
+    rotated = directions[index % len(directions) :] + directions[: index % len(directions)]
+    offsets = []
+    for radius in range(1, 9):
+        for dx, dy in rotated:
+            offsets.append((dx * step * radius, dy * step * radius))
+    return offsets
+
+
+def _clamp_center(
+    center: tuple[float, float],
+    *,
+    canvas_size: int,
+    margin: float,
+) -> tuple[float, float]:
+    """Clamp a center to the drawable area.
+
+    Parameters
+    ----------
+    center:
+        Candidate center.
+    canvas_size:
+        Output image side length.
+    margin:
+        Minimum edge margin.
+
+    Returns
+    -------
+    tuple[float, float]
+        Clamped center.
+    """
+
+    low = margin
+    high = float(canvas_size) - margin
+    return (min(high, max(low, center[0])), min(high, max(low, center[1])))
+
+
+def _is_far_enough(
+    center: tuple[float, float],
+    placed: list[tuple[float, float]],
+    *,
+    min_distance: float,
+) -> bool:
+    """Return whether a center clears all existing placements.
+
+    Parameters
+    ----------
+    center:
+        Candidate center.
+    placed:
+        Existing centers.
+    min_distance:
+        Required center spacing.
+
+    Returns
+    -------
+    bool
+        Whether the candidate is sufficiently separated.
+    """
+
+    min_squared = min_distance * min_distance
+    return all((center[0] - x) ** 2 + (center[1] - y) ** 2 >= min_squared for x, y in placed)
+
+
+def _draw_scatter_axes(draw: Any, *, canvas_size: int, margin: int) -> None:
+    """Draw unobtrusive MDS guide axes.
+
+    Parameters
+    ----------
+    draw:
+        PIL drawing context.
+    canvas_size:
+        Output image side length.
+    margin:
+        Drawable margin.
+    """
+
+    mid = canvas_size // 2
+    draw.line([(margin, mid), (canvas_size - margin, mid)], fill=_SCATTER_AXIS_COLOR, width=1)
+    draw.line([(mid, margin), (mid, canvas_size - margin)], fill=_SCATTER_AXIS_COLOR, width=1)
+
+
+def _draw_point_fallback(draw: Any, centers: list[tuple[float, float]]) -> None:
+    """Draw point markers for coords-only fallback rendering.
+
+    Parameters
+    ----------
+    draw:
+        PIL drawing context.
+    centers:
+        Pixel centers to draw.
+    """
+
+    radius = 5
+    for index, (x, y) in enumerate(centers):
+        draw.ellipse(
+            [(x - radius, y - radius), (x + radius, y + radius)],
+            fill=_SCATTER_POINT_COLOR,
+            outline=(20, 48, 100),
+        )
+        draw.text((x + radius + 2, y - radius - 1), str(index), fill=_SCATTER_TEXT_COLOR)
+
+
+def _paste_scatter_thumbnails(
+    canvas: Any,
+    centers: list[tuple[float, float]],
+    images: Sequence[Any],
+    *,
+    thumbnail_size: int,
+) -> None:
+    """Paste resized thumbnails onto the scatter canvas.
+
+    Parameters
+    ----------
+    canvas:
+        PIL canvas image.
+    centers:
+        Pixel centers.
+    images:
+        PIL images to paste.
+    thumbnail_size:
+        Maximum thumbnail side length.
+    """
+
+    from PIL import Image
+
+    for center, image in zip(centers, images, strict=True):
+        thumb = cast(Any, image).convert("RGB")
+        thumb.thumbnail((thumbnail_size, thumbnail_size), Image.Resampling.LANCZOS)
+        x = int(round(center[0] - thumb.width / 2.0))
+        y = int(round(center[1] - thumb.height / 2.0))
+        canvas.paste(thumb, (x, y))
+
+
+def _draw_more_indicator(draw: Any, *, canvas_size: int, text: str) -> None:
+    """Draw a ``+K more`` cap indicator in the scatter image.
+
+    Parameters
+    ----------
+    draw:
+        PIL drawing context.
+    canvas_size:
+        Output image side length.
+    text:
+        Indicator text.
+    """
+
+    try:
+        bbox = draw.textbbox((0, 0), text)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+    except AttributeError:
+        text_width, text_height = draw.textsize(text)
+    pad = 6
+    x0 = canvas_size - text_width - 2 * pad - 8
+    y0 = canvas_size - text_height - 2 * pad - 8
+    x1 = canvas_size - 8
+    y1 = canvas_size - 8
+    draw.rectangle(
+        [(x0, y0), (x1, y1)],
+        fill=_SCATTER_MORE_FILL,
+        outline=_SCATTER_MORE_OUTLINE,
+    )
+    draw.text((x0 + pad, y0 + pad), text, fill=_SCATTER_TEXT_COLOR)
+
+
+def _write_mds_scatter_image(trace: Any, key: str, image: Any) -> Path:
+    """Write a draw-time scatter image under the trace visualizer directory.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the draw.
+    key:
+        Annotation key for the rendered coordinates.
+    image:
+        PIL image to save.
+
+    Returns
+    -------
+    Path
+        Local PNG path for ``NodeSpec.image``.
+    """
+
+    output_dir = getattr(trace, "_visualizer_dir", None)
+    if output_dir is None:
+        output_dir = tempfile.mkdtemp(prefix="torchlens_visualizers_")
+        trace._visualizer_dir = str(output_dir)
+    scatter_dir = Path(str(output_dir)) / "mds_scatter"
+    scatter_dir.mkdir(parents=True, exist_ok=True)
+    safe_key = "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in key)
+    image_path = scatter_dir / f"{safe_key}.png"
+    image.save(image_path)
+    return image_path
+
+
 def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, Any]]:
     """Resolve the layer or op payloads that should receive MDS coordinates.
 
@@ -691,5 +1247,6 @@ __all__ = [
     "activation_distance_matrix",
     "classical_mds",
     "mds_evolution",
+    "mds_scatter_node_spec",
     "procrustes_align",
 ]

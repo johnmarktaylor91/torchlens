@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
@@ -15,6 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import repgeom
+from torchlens.visualization.node_spec import NodeSpec
 
 
 ANALYTIC_POINTS = np.array(
@@ -100,6 +102,50 @@ def _pairwise_distances(points: np.ndarray) -> np.ndarray:
 
     differences = points[:, None, :] - points[None, :, :]
     return np.sqrt(np.sum(differences * differences, axis=-1))
+
+
+def _pil_stimuli(n_items: int = 8) -> list[Any]:
+    """Return deterministic PIL image stimuli for scatter-render tests.
+
+    Parameters
+    ----------
+    n_items:
+        Number of image stimuli to create.
+
+    Returns
+    -------
+    list[Any]
+        RGB PIL images with stable colors and simple index marks.
+    """
+
+    image_module = pytest.importorskip("PIL.Image")
+    draw_module = pytest.importorskip("PIL.ImageDraw")
+    images = []
+    for index in range(n_items):
+        image = image_module.new(
+            "RGB",
+            (28, 24),
+            color=((37 * index) % 255, (91 + 23 * index) % 255, (170 - 11 * index) % 255),
+        )
+        draw = draw_module.Draw(image)
+        draw.text((3, 4), str(index), fill=(255, 255, 255))
+        images.append(image)
+    return images
+
+
+def _trace_with_mds_and_images() -> Any:
+    """Return a trace with MDS coords and matching PIL raw stimuli.
+
+    Returns
+    -------
+    Any
+        TorchLens trace with two annotated linear layers.
+    """
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    trace.raw_input = _pil_stimuli(8)
+    repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+    return trace
 
 
 def _reflection_allowed_procrustes_residual(source: np.ndarray, target: np.ndarray) -> float:
@@ -307,6 +353,161 @@ def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
     assert loaded._annotation_blobs is not None
     for key, coords in coords_by_key.items():
         assert torch.equal(loaded._annotation_blobs[key], torch.from_numpy(coords))
+
+
+def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> None:
+    """The scatter hook should set a transient image only for annotated layers."""
+
+    trace = _trace_with_mds_and_images()
+    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
+    hook = repgeom.mds_scatter_node_spec(max_thumbnails=8)
+    spec = NodeSpec(lines=[layer.layer_label])
+
+    result = hook(layer, spec)
+
+    assert result is not None
+    assert result.image is not None
+    assert Path(result.image).is_file()
+    assert result.image.endswith(".png")
+    assert result.lines == [layer.layer_label]
+    assert result.shape == "box"
+    assert result.extra_attrs["imagescale"] == "true"
+    assert result.extra_attrs["labelloc"] == "b"
+    assert "MDS thumbnail scatter" in result.tooltip
+
+
+def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: Path) -> None:
+    """Scatter thumbnails should be composited into one bordered node image."""
+
+    trace = _trace_with_mds_and_images()
+    annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
+    output_path = tmp_path / "scatter_contained.svg"
+
+    trace.draw(
+        vis_outpath=str(output_path),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        node_spec_fn=repgeom.mds_scatter_node_spec(max_thumbnails=8),
+    )
+
+    svg_text = output_path.read_text(encoding="utf-8")
+    image_tags = re.findall(r"<image\b[^>]+>", svg_text)
+    assert len(image_tags) == len(annotated_layers) + 1
+
+    for layer in annotated_layers:
+        node_name = f"{layer.layer_label}pass1"
+        block_match = re.search(
+            rf"<title>{re.escape(node_name)}</title>(.*?)(?=<!--|</svg>)",
+            svg_text,
+            flags=re.DOTALL,
+        )
+        assert block_match is not None
+        node_block = block_match.group(1)
+        node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
+        assert len(node_images) == 1
+        assert node_images[0].startswith("data:image/png;base64,")
+        assert "<polygon" in node_block
+        assert f">{layer.layer_label}</text>" in node_block
+
+
+def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path) -> None:
+    """Scatter SVG output should inline draw-time PNGs after TLSPEC reload."""
+
+    trace = _trace_with_mds_and_images()
+    bundle_path = tmp_path / "scatter_source.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+    output_path = tmp_path / "scatter.svg"
+
+    loaded.draw(
+        vis_outpath=str(output_path),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        node_spec_fn=repgeom.mds_scatter_node_spec(max_thumbnails=8),
+    )
+
+    svg_text = output_path.read_text(encoding="utf-8")
+    hrefs = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', svg_text)
+    assert any(href.startswith("data:image/png;base64,") for href in hrefs)
+    assert "/tmp/torchlens_visualizers_" not in svg_text
+
+
+def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
+    """Close coordinates should render deterministically with a visible cap label."""
+
+    trace = _trace_with_mds_and_images()
+    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
+    assert trace._annotation_blobs is not None
+    trace._annotation_blobs[f"layer:{layer.layer_label}"] = torch.zeros(8, 2)
+    hook = repgeom.mds_scatter_node_spec(max_thumbnails=3, thumbnail_size=28)
+
+    first = hook(layer, NodeSpec(lines=[layer.layer_label]))
+    second = hook(layer, NodeSpec(lines=[layer.layer_label]))
+
+    assert first is not None
+    assert second is not None
+    assert first.tooltip is not None
+    assert "+5 more" in first.tooltip
+    assert first.image is not None
+    assert second.image is not None
+    assert Path(first.image).read_bytes() == Path(second.image).read_bytes()
+
+    output_path = tmp_path / "scatter_cap.svg"
+    trace.draw(
+        vis_outpath=str(output_path),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        node_spec_fn=hook,
+    )
+    assert "+5 more" in output_path.read_text(encoding="utf-8")
+
+
+def test_mds_scatter_fallback_renders_points_without_raw_images() -> None:
+    """Coords without matching raw PIL images should render a points fallback."""
+
+    trace = _trace_with_mds_and_images()
+    trace.raw_input = None
+    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
+    hook = repgeom.mds_scatter_node_spec(max_thumbnails=8)
+
+    result = hook(layer, NodeSpec(lines=[layer.layer_label]))
+
+    assert result is not None
+    assert result.image is not None
+    assert Path(result.image).is_file()
+    assert result.tooltip is not None
+    assert "points fallback" in result.tooltip
+
+
+def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> None:
+    """Default rendering should not change when the opt-in scatter hook is absent."""
+
+    trace = _trace_with_mds_and_images()
+    first_path = tmp_path / "default_first.svg"
+    second_path = tmp_path / "default_second.svg"
+
+    trace.draw(vis_outpath=str(first_path), vis_save_only=True, vis_fileformat="svg")
+    trace.draw(vis_outpath=str(second_path), vis_save_only=True, vis_fileformat="svg")
+
+    assert first_path.read_bytes() == second_path.read_bytes()
+
+
+def test_mds_scatter_import_does_not_load_matplotlib() -> None:
+    """The scatter renderer must stay PIL-only and avoid matplotlib imports."""
+
+    script = """
+import sys
+import torchlens.repgeom as repgeom
+repgeom.mds_scatter_node_spec()
+print('matplotlib' in sys.modules)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == "False"
 
 
 def test_mds_evolution_recurrent_aggregate_requires_pass_selection() -> None:
