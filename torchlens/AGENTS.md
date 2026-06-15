@@ -51,6 +51,17 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 ```
 
+Provisional semantic I/O examples (review-day names):
+
+```python
+classifier_trace = tl.trace(model, x, output_style="classification", output_head="logits")
+classifier_trace.output_table(top_n=5)
+classifier_trace.summary(level="output")
+
+input_trace = tl.trace(model, raw_text, transform=text_to_tensor, save_raw_input="small")
+input_trace.draw(show_input_transform_summary=True)
+```
+
 `record(keep_op=...)` and `record(keep_module=...)` are deprecated compatibility aliases for
 `record(save=...)`. `layers_to_save=[...]` still exists as the final-label two-pass path; an
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.

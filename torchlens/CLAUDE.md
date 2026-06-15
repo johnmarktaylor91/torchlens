@@ -54,6 +54,18 @@ trace_from_recording = recording.to_trace()
 trace.draw(show_containers="nodes")
 ```
 
+Provisional semantic I/O surface (review-day names):
+
+```python
+log = tl.trace(model, x, output_style="classification", output_head="logits")
+log.output_table(top_n=5)
+log.summary(level="output")
+log.to_pandas(include_decoded_output_summary=True)
+
+input_log = tl.trace(model, raw_text, transform=text_to_tensor, save_raw_input="small")
+input_log.draw(show_input_transform_summary=True)
+```
+
 `backward_ready=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible
 detaching or disk-only out storage.
