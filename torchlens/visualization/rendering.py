@@ -4303,7 +4303,9 @@ def _build_layer_node(
         if raw_input_attrs is not None:
             node_args.update(raw_input_attrs)
     elif node.is_output:
-        raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
+        raw_output_attrs = _render_raw_output(getattr(self, "decoded_output", None))
+        if raw_output_attrs is None:
+            raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_label(node, vis_mode).replace(":", "pass")
@@ -4651,6 +4653,12 @@ def _render_raw_output(value: Any) -> dict[str, str] | None:
             "label": render_lines_to_html(lines),
             "tooltip": repr(value),
         }
+    if _is_batch_topk_output(value):
+        lines = _format_batch_topk_output_lines(value)
+        return {
+            "label": render_lines_to_html(lines),
+            "tooltip": repr(value),
+        }
     if isinstance(value, Mapping):
         rows = list(value.items())[:5]
         lines = [
@@ -4662,6 +4670,63 @@ def _render_raw_output(value: Any) -> dict[str, str] | None:
             "tooltip": repr(value),
         }
     return None
+
+
+def _is_batch_topk_output(value: Any) -> bool:
+    """Return whether ``value`` is a typed batch top-k decoded output.
+
+    Parameters
+    ----------
+    value:
+        Candidate decoded output value.
+
+    Returns
+    -------
+    bool
+        Whether the value has a renderable ``batch_topk`` row payload.
+    """
+
+    return (
+        isinstance(value, Mapping)
+        and value.get("kind") == "batch_topk"
+        and isinstance(value.get("rows"), list)
+    )
+
+
+def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
+    """Format a compact batch top-k table for an output node.
+
+    Parameters
+    ----------
+    value:
+        Typed decoded output representation.
+
+    Returns
+    -------
+    list[str]
+        Plain text lines suitable for ``render_lines_to_html``.
+    """
+
+    rows = [
+        row
+        for row in value.get("rows", [])
+        if isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
+    ]
+    lines = ["output"]
+    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:3]:
+        item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:5]
+        lines.append(f"item {batch_item}")
+        lines.extend(
+            [
+                f"{int(row.get('rank', 0))}. "
+                f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
+                f"{float(row.get('prob', 0.0)):.0%}"
+                for row in item_rows
+            ]
+        )
+    if not rows:
+        lines.append("no decoded rows")
+    return lines
 
 
 def _is_label_score_sequence(value: Any) -> bool:

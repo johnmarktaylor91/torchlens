@@ -18,6 +18,14 @@ from torchlens.data_classes.trace import ResolvedPostprocessing
 from torchlens.user_funcs import semantic_output_cache_key
 
 
+def _decoded_rows(trace: tl.Trace) -> list[dict[str, Any]]:
+    """Return classification decoded rows from the typed A3 representation."""
+
+    assert trace.decoded_output is not None
+    assert trace.decoded_output["kind"] == "batch_topk"
+    return trace.decoded_output["rows"]
+
+
 class _Config:
     """Small config object exposing classifier label metadata."""
 
@@ -132,10 +140,10 @@ def test_config_id2label_decodes_topk_labels_and_probs() -> None:
 
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.source == "hf_config"
-    assert trace.decoded_output is not None
-    assert trace.decoded_output[0]["label"] == "positive"
-    assert trace.decoded_output[0]["class_index"] == 1
-    assert pytest.approx(trace.decoded_output[0]["prob"], rel=1e-5) == float(
+    rows = _decoded_rows(trace)
+    assert rows[0]["label"] == "positive"
+    assert rows[0]["class_index"] == 1
+    assert pytest.approx(rows[0]["prob"], rel=1e-5) == float(
         torch.softmax(torch.tensor([0.0, 4.0, 1.0]), dim=0)[1]
     )
 
@@ -155,8 +163,7 @@ def test_output_style_override_and_output_head_select_named_head() -> None:
 
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.selected_output_head == "main"
-    assert trace.decoded_output is not None
-    assert trace.decoded_output[0]["label"] == "hot"
+    assert _decoded_rows(trace)[0]["label"] == "hot"
 
 
 def test_custom_registered_output_detector_decodes() -> None:
@@ -187,8 +194,7 @@ def test_custom_registered_output_detector_decodes() -> None:
 
         trace = tl.trace(model, torch.ones(1, 2), output_style="custom_labels")
 
-    assert trace.decoded_output is not None
-    assert trace.decoded_output[0]["label"] == "left"
+    assert _decoded_rows(trace)[0]["label"] == "left"
 
 
 def test_backward_ready_decode_keeps_graph_connected_output() -> None:
@@ -271,9 +277,11 @@ def test_decoded_output_roundtrips_tlspec_and_decode_output_is_bounded(tmp_path:
     restored = tl.load(bundle_path)
 
     assert restored.decoded_output == trace.decoded_output
-    assert restored.decode_output(top_n=1) == [trace.decoded_output[0]]
-    with pytest.raises(ValueError, match="re-decode unavailable"):
-        restored.decode_output(top_n=10)
+    assert restored.decode_output(top_n=1) == {
+        "kind": "batch_topk",
+        "rows": [trace.decoded_output["rows"][0]],
+    }
+    assert len(restored.decode_output(top_n=10)["rows"]) == 3
 
 
 def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
@@ -289,8 +297,8 @@ def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
     assert first.capture_cache_key != second.capture_cache_key
     assert first.decoded_output is not None
     assert second.decoded_output is not None
-    assert first.decoded_output[0]["label"] == "old-yes"
-    assert second.decoded_output[0]["label"] == "new-yes"
+    assert first.decoded_output["rows"][0]["label"] == "old-yes"
+    assert second.decoded_output["rows"][0]["label"] == "new-yes"
     assert semantic_output_cache_key(model, output_style=None, output_head=None)["config"][
         "id2label"
     ] == {0: "new-no", 1: "new-yes"}

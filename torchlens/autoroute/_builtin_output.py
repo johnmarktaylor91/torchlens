@@ -85,7 +85,9 @@ def decode_outputs_for_trace(
     if decoded is None:
         return
 
-    trace.decoded_output = decoded
+    trace.decoded_output = (
+        {"kind": "batch_topk", "rows": decoded} if resolved.style != "hf_text" else decoded
+    )
     trace.output_postprocessor = replace(
         resolved,
         selected_output_head=selected_head,
@@ -467,8 +469,8 @@ def _decode_classification(
 
     if logits.ndim == 1:
         logits_copy = logits.detach().clone().unsqueeze(0)
-    elif logits.ndim >= 2:
-        logits_copy = logits.detach().clone().reshape(-1, logits.shape[-1])
+    elif logits.ndim == 2:
+        logits_copy = logits.detach().clone()
     else:
         return None
     if logits_copy.shape[-1] > len(labels):

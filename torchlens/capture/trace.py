@@ -821,6 +821,13 @@ def run_and_log_inputs_through_model(
             output_style=getattr(self, "_output_style", None),
             output_head=getattr(self, "_output_head", None),
         )
+        for attr_name in (
+            "_output_style",
+            "_output_head",
+            "_output_tokenizer",
+            "_semantic_output_metadata",
+        ):
+            self.__dict__.pop(attr_name, None)
 
         self.forward_duration = Duration(
             time.time() - self.capture_start_time - self.setup_duration

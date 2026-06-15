@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 SummaryLevel = Literal[
-    "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall"
+    "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall", "output"
 ]
 SummaryMode = Literal["auto", "rolled", "unrolled"]
 
@@ -55,6 +55,10 @@ _COLUMN_LABELS: Dict[str, str] = {
     "bool_layer": "Bool Layer",
     "branch_ops": "Branch Ops",
     "notes": "Notes",
+    "batch_item": "Batch",
+    "rank": "Rank",
+    "label": "Label",
+    "prob": "Prob",
 }
 
 _LEVEL_DEFAULT_FIELDS: Dict[str, List[str]] = {
@@ -64,6 +68,7 @@ _LEVEL_DEFAULT_FIELDS: Dict[str, List[str]] = {
     "control_flow": ["site", "source", "taken", "bool_layer", "branch_ops", "notes"],
     "compute": ["name", "params", "flops", "macs", "time_ms", "dtype"],
     "waterfall": ["name", "start_ms", "time_ms", "end_ms", "memory"],
+    "output": ["batch_item", "rank", "label", "prob"],
 }
 
 
@@ -212,6 +217,7 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
         f"  input_shape: {_input_shape_summary(trace)}",
         *_input_preprocessing_lines(trace),
+        *_output_postprocessing_lines(trace),
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
         f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
@@ -263,6 +269,95 @@ def _input_preprocessing_lines(trace: "Trace") -> list[str]:
     if record is None:
         return []
     return ["Input preprocessing:", f"  {record.description}"]
+
+
+def _output_postprocessing_lines(trace: "Trace") -> list[str]:
+    """Return output-postprocessing summary lines.
+
+    Parameters
+    ----------
+    trace:
+        Model log to inspect.
+
+    Returns
+    -------
+    list[str]
+        Compact output decode provenance and preview lines.
+    """
+
+    record = getattr(trace, "output_postprocessor", None)
+    if record is None:
+        return [
+            "Output postprocessing:",
+            "  undetected; pass output_style= to decode.",
+        ]
+    verified = "verified" if bool(getattr(record, "verified", False)) else "unverified"
+    confidence = getattr(record, "confidence", None)
+    confidence_text = "" if confidence is None else f", confidence={float(confidence):.2f}"
+    lines = [
+        "Output postprocessing:",
+        f"  style={getattr(record, 'style', None) or 'unknown'}; {verified}{confidence_text}; "
+        f"{getattr(record, 'description', '')}",
+    ]
+    preview = _decoded_output_preview(trace)
+    if preview:
+        lines.append(f"  preview: {preview}")
+    return lines
+
+
+def _decoded_output_preview(trace: "Trace") -> str | None:
+    """Return a compact decoded-output preview for discoverability summary.
+
+    Parameters
+    ----------
+    trace:
+        Model log to inspect.
+
+    Returns
+    -------
+    str | None
+        Preview text, if a batch top-k table is available.
+    """
+
+    rows = _decoded_batch_topk_rows(getattr(trace, "decoded_output", None))
+    if not rows:
+        return None
+    parts: list[str] = []
+    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:2]:
+        item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:3]
+        labels = ", ".join(
+            f"{row.get('label')} {float(row.get('prob', 0.0)):.0%}" for row in item_rows
+        )
+        parts.append(f"item {batch_item}: {labels}")
+    return " | ".join(parts)
+
+
+def _decoded_batch_topk_rows(value: Any) -> list[Mapping[str, Any]] | None:
+    """Return batch top-k rows from a decoded output value.
+
+    Parameters
+    ----------
+    value:
+        Decoded output candidate.
+
+    Returns
+    -------
+    list[Mapping[str, Any]] | None
+        Rows if the value is a batch top-k table.
+    """
+
+    if isinstance(value, Mapping) and value.get("kind") == "batch_topk":
+        rows = value.get("rows")
+    elif isinstance(value, list):
+        rows = value
+    else:
+        return None
+    if isinstance(rows, list) and all(
+        isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
+        for row in rows
+    ):
+        return cast(list[Mapping[str, Any]], rows)
+    return None
 
 
 def _input_shape_summary(trace: "Trace") -> str:
@@ -942,6 +1037,7 @@ def _level_title(*, trace: "Trace", level: str) -> str:
         "control_flow": f"Control-Flow Summary: {trace.model_class_name}",
         "compute": f"Compute Summary: {trace.model_class_name}",
         "waterfall": f"Waterfall Summary: {trace.model_class_name}",
+        "output": f"Output Summary: {trace.model_class_name}",
     }
     return title_map[level]
 
@@ -978,6 +1074,8 @@ def _build_level_rows(
         return _build_control_flow_rows(trace)
     if level == "waterfall":
         return _build_waterfall_rows(trace, mode=mode)
+    if level == "output":
+        return _build_output_rows(trace)
     return _build_compute_rows(trace)
 
 
@@ -1167,6 +1265,36 @@ def _build_compute_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]
         f"Forward time: {trace.forward_duration * 1000:.2f} ms",
     ]
     return rows, footer_lines
+
+
+def _build_output_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
+    """Build decoded output rows for the output summary level.
+
+    Parameters
+    ----------
+    trace:
+        Finalized log object.
+
+    Returns
+    -------
+    tuple[list[dict[str, str]], list[str]]
+        Output table rows and footer lines.
+    """
+
+    try:
+        table = trace.output_table()
+    except ValueError as exc:
+        return [], [str(exc)]
+    rows = [
+        {
+            "batch_item": str(row["batch_item"]),
+            "rank": str(row["rank"]),
+            "label": str(row["label"]),
+            "prob": f"{float(row['prob']):.1%}",
+        }
+        for row in table.to_dict(orient="records")
+    ]
+    return rows, [f"Decoded output rows: {len(rows)}"]
 
 
 def _build_waterfall_rows(

@@ -151,8 +151,10 @@ def test_priority_ordering_is_deterministic() -> None:
     assert list(registry.iter_by_priority()) == [first, second, third, fourth, fifth]
 
 
-def test_output_namespace_is_reserved() -> None:
-    """The output auto-route namespace is importable but reserved."""
+def test_output_namespace_lists_registered_detectors() -> None:
+    """The output auto-route namespace lists registered detectors."""
 
-    with pytest.raises(NotImplementedError, match="reserved for a future sprint"):
-        tl.autoroute.output.list()
+    detector_names = [detector.name for detector in tl.autoroute.output.list()]
+
+    assert "hf_config_classifier" in detector_names
+    assert "imagenet_verified" in detector_names
