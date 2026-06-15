@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, overload
 
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from .types import TargetSpec
 
 SelectorKind: TypeAlias = Literal[
@@ -15,6 +16,7 @@ SelectorKind: TypeAlias = Literal[
     "func_transform",
     "module",
     "output",
+    "output_at",
     "contains",
     "predicate",
     "in_module",
@@ -278,6 +280,33 @@ class OutputSelector(BaseSelector):
         object.__setattr__(self, "selector_kind", "output")
         object.__setattr__(self, "selector_value", target)
         object.__setattr__(self, "target", target)
+
+
+@dataclass(frozen=True, repr=False)
+class OutputPathSelector(BaseSelector):
+    """Nested output-path selector.
+
+    Parameters
+    ----------
+    path:
+        Path such as ``("past_key_values", 0, 1)``.
+    """
+
+    path: tuple[Any, ...]
+
+    def __init__(self, path: tuple[Any, ...] | list[Any]) -> None:
+        """Create a nested output-path selector.
+
+        Parameters
+        ----------
+        path:
+            Nested output path.
+        """
+
+        normalized = tuple(path)
+        object.__setattr__(self, "selector_kind", "output_at")
+        object.__setattr__(self, "selector_value", normalized)
+        object.__setattr__(self, "path", normalized)
 
 
 @dataclass(frozen=True, repr=False)
@@ -884,6 +913,23 @@ def output(target: int | str) -> OutputSelector:
     return OutputSelector(target)
 
 
+def output_at(path: tuple[Any, ...] | list[Any]) -> OutputPathSelector:
+    """Create a nested output-path selector.
+
+    Parameters
+    ----------
+    path:
+        Nested path into a captured output container.
+
+    Returns
+    -------
+    OutputPathSelector
+        Immutable selector.
+    """
+
+    return OutputPathSelector(path)
+
+
 def module(address: str) -> ModuleSelector:
     """Create a module-address selector.
 
@@ -1290,6 +1336,11 @@ def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
         )
     if kind == "output":
         return getattr(ctx, "output_index", None) == selector.selector_value
+    if kind == "output_at":
+        return _output_path_matches(
+            tuple(getattr(ctx, "container_path", ()) or ()),
+            tuple(selector.selector_value),
+        )
     if kind == "predicate":
         predicate = getattr(selector, "predicate")
         return bool(predicate(ctx))
@@ -1344,6 +1395,55 @@ def _module_pass_matches(module_pass: str, address: str) -> bool:
     return module_pass == address or module_address == address
 
 
+def _output_path_matches(saved_path: tuple[Any, ...], requested_path: tuple[Any, ...]) -> bool:
+    """Return whether a captured typed path matches a user path.
+
+    Parameters
+    ----------
+    saved_path:
+        Captured output path.
+    requested_path:
+        User path.
+
+    Returns
+    -------
+    bool
+        Whether both paths address the same output.
+    """
+
+    if len(saved_path) != len(requested_path):
+        return False
+    return all(
+        _output_path_component_matches(saved_component, requested_component)
+        for saved_component, requested_component in zip(saved_path, requested_path)
+    )
+
+
+def _output_path_component_matches(saved_component: Any, requested_component: Any) -> bool:
+    """Return whether one captured path component matches a user component.
+
+    Parameters
+    ----------
+    saved_component:
+        Captured typed path component.
+    requested_component:
+        User path component.
+
+    Returns
+    -------
+    bool
+        Whether both components address the same child.
+    """
+
+    if isinstance(saved_component, TupleIndex):
+        return saved_component.index == requested_component
+    if isinstance(saved_component, (DictKey, HFKey)):
+        return saved_component.key == requested_component
+    if isinstance(saved_component, (NamedField, DataclassField)):
+        return saved_component.name == requested_component
+    return saved_component == requested_component
+
+
 def _classify_selector_direction(
     sel: SelectorLike,
 ) -> Literal["forward", "backward"] | None:
@@ -1372,6 +1472,7 @@ def _classify_selector_direction(
             "label",
             "module",
             "output",
+            "output_at",
             "contains",
             "predicate",
             "in_module",
@@ -1400,6 +1501,7 @@ def _classify_selector_direction(
             LabelSelector,
             ModuleSelector,
             OutputSelector,
+            OutputPathSelector,
             ContainsSelector,
             FacetSelector,
             WhereSelector,
@@ -1461,6 +1563,7 @@ __all__ = [
     "ModuleSelector",
     "NotSelector",
     "OutputSelector",
+    "OutputPathSelector",
     "PrecededBySelector",
     "SelectorLike",
     "WhereSelector",
@@ -1480,6 +1583,7 @@ __all__ = [
     "label",
     "module",
     "output",
+    "output_at",
     "preceded_by",
     "where",
 ]

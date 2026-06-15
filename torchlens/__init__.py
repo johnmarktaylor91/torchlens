@@ -41,6 +41,7 @@ from ._io.bundle import load, save
 from .captured_run import ActivationLookup, CapturedRun
 from .stats import aggregate
 from .data_classes.layer import Layer
+from .data_classes.container import Container
 from .data_classes.op import Op
 from .data_classes.trace import Trace
 from .fastlog import Recording, record
@@ -72,6 +73,7 @@ from .intervention import (  # type: ignore[no-redef]
     module,
     noise,
     output,
+    output_at,
     preceded_by,
     project_off,
     project_onto,
@@ -88,6 +90,7 @@ from .intervention import (  # type: ignore[no-redef]
     when,
     zero_ablate,
 )
+from .ir.container import register_container
 from .user_funcs import (
     decide_recording_of_batch,
     trace as _trace,
@@ -842,6 +845,7 @@ __all__ = [
     "validate",
     "Trace",
     "Layer",
+    "Container",
     "Op",
     "Quantity",
     "Bytes",
@@ -858,6 +862,8 @@ __all__ = [
     "intervening",
     "module",
     "output",
+    "output_at",
+    "register_container",
     "preceded_by",
     "contains",
     "facet",

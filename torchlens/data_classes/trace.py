@@ -3038,6 +3038,24 @@ class Trace(CapturedRun):
 
         save_bundle(self, path, **kwargs)
 
+    def reconstruct_output(self, values: Literal["out", "transformed"] = "out") -> Any:
+        """Reconstruct the traced model's final Python output object.
+
+        Parameters
+        ----------
+        values:
+            Leaf value source: ``"out"`` or ``"transformed"``.
+
+        Returns
+        -------
+        Any
+            Reconstructed model return value.
+        """
+
+        from .container import reconstruct_output
+
+        return reconstruct_output(self, values=values)
+
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with non-picklable weakref-backed accessors stripped."""
         state = self.__dict__.copy()

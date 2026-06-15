@@ -1752,6 +1752,20 @@ class Op:
         )
 
     @property
+    def container(self) -> Any:
+        """Return the runtime container view for this op, when available.
+
+        Returns
+        -------
+        Container | None
+            Computed container view, degraded path-only view, or ``None``.
+        """
+
+        from .container import container_from_op
+
+        return container_from_op(self)
+
+    @property
     def is_module_input(self) -> bool:
         """Whether this Op's output feeds into at least one ModuleCall as an input.
 

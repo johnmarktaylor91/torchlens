@@ -25,6 +25,7 @@ from .selectors import (
     in_module,
 )
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -501,6 +502,8 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "output":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
+    if kind == "output_at":
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "contains":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "in_module":
@@ -600,6 +603,8 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
         return normalized_site == normalized_value
     if kind == "output":
         return _output_matches(site, value)
+    if kind == "output_at":
+        return _output_path_matches(tuple(getattr(site, "container_path", ()) or ()), tuple(value))
     if kind == "module":
         return _module_output_matches(site, str(value))
     if kind == "contains":
@@ -726,6 +731,55 @@ def _output_matches(site: Site, value: Any) -> bool:
     if isinstance(value, int):
         return getattr(site, "multi_output_index", None) == value
     return getattr(site, "multi_output_name", None) == str(value)
+
+
+def _output_path_matches(saved_path: tuple[Any, ...], requested_path: tuple[Any, ...]) -> bool:
+    """Return whether a saved typed path matches a user path.
+
+    Parameters
+    ----------
+    saved_path:
+        Captured typed output path.
+    requested_path:
+        User path using plain indices/keys/field names.
+
+    Returns
+    -------
+    bool
+        Whether the paths address the same output leaf.
+    """
+
+    if len(saved_path) != len(requested_path):
+        return False
+    return all(
+        _output_path_component_matches(saved_component, requested_component)
+        for saved_component, requested_component in zip(saved_path, requested_path)
+    )
+
+
+def _output_path_component_matches(saved_component: Any, requested_component: Any) -> bool:
+    """Return whether one typed path component matches a user component.
+
+    Parameters
+    ----------
+    saved_component:
+        Captured typed path component.
+    requested_component:
+        User path component.
+
+    Returns
+    -------
+    bool
+        Whether the components are equivalent.
+    """
+
+    if isinstance(saved_component, TupleIndex):
+        return saved_component.index == requested_component
+    if isinstance(saved_component, (DictKey, HFKey)):
+        return saved_component.key == requested_component
+    if isinstance(saved_component, (NamedField, DataclassField)):
+        return saved_component.name == requested_component
+    return saved_component == requested_component
 
 
 def _grad_fn_type_matches(site: "GradFn", requested: str) -> bool:

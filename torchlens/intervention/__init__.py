@@ -83,6 +83,7 @@ from .selectors import (
     label,
     module,
     output,
+    output_at,
     preceded_by,
     where,
 )
@@ -272,6 +273,7 @@ __all__ = [
     "normalize_hook_plan",
     "NormalizedHookEntry",
     "output",
+    "output_at",
     "preceded_by",
     "pearson_correlation_distance",
     "project_off",

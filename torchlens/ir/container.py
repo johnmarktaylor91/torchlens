@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import importlib
 from typing import Any, Literal, TypeAlias
@@ -51,7 +52,16 @@ OutputPathComponent: TypeAlias = (
 class ContainerSpec:
     """Portable description of an output container seen during capture."""
 
-    kind: Literal["tuple", "list", "dict", "namedtuple", "dataclass", "hf_model_output", "literal"]
+    kind: Literal[
+        "tuple",
+        "list",
+        "dict",
+        "namedtuple",
+        "dataclass",
+        "hf_model_output",
+        "literal",
+        "registered",
+    ]
     length: int | None = None
     keys: tuple[Any, ...] = ()
     fields: tuple[str, ...] = ()
@@ -59,6 +69,7 @@ class ContainerSpec:
     type_qualname: str | None = None
     child_specs: tuple[tuple[OutputPathComponent, "ContainerSpec"], ...] = ()
     literal_value: Any = None
+    aux_data: Any = None
 
 
 def rebuild_container_from_spec(spec: ContainerSpec, leaves: list[Any] | tuple[Any, ...]) -> Any:
@@ -145,6 +156,23 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         if container_type is not None:
             return container_type(**key_values)
         return key_values
+    if spec.kind == "registered":
+        values = [
+            _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
+            for index in range(spec.length or 0)
+        ]
+        container_type = _import_container_type(spec)
+        if container_type is None:
+            raise ValueError(
+                f"Registered container type {spec.type_module}.{spec.type_qualname} "
+                "could not be imported."
+            )
+        registration = get_registered_container(container_type)
+        if registration is None:
+            raise ValueError(
+                f"Container type {container_type.__qualname__!r} is not registered in this runtime."
+            )
+        return registration.unflatten(spec.aux_data, values)
     raise ValueError(f"Unsupported ContainerSpec kind {spec.kind!r}.")
 
 
@@ -209,6 +237,71 @@ def _import_container_type(spec: ContainerSpec) -> type[Any] | None:
     return obj if isinstance(obj, type) else None
 
 
+class RegisteredContainer:
+    """Flatten/unflatten hooks for a user-registered container type."""
+
+    def __init__(
+        self,
+        flatten: Callable[[Any], tuple[list[Any] | tuple[Any, ...], Any]],
+        unflatten: Callable[[Any, list[Any]], Any],
+    ) -> None:
+        """Create a registered container hook pair.
+
+        Parameters
+        ----------
+        flatten:
+            Callable returning ``(children, aux_data)``.
+        unflatten:
+            Callable accepting ``(aux_data, children)``.
+        """
+
+        self.flatten = flatten
+        self.unflatten = unflatten
+
+
+_CONTAINER_REGISTRY: dict[type[Any], RegisteredContainer] = {}
+
+
+def register_container(
+    container_type: type[Any],
+    flatten: Callable[[Any], tuple[list[Any] | tuple[Any, ...], Any]],
+    unflatten: Callable[[Any, list[Any]], Any],
+) -> None:
+    """Register a custom container type for capture and reconstruction.
+
+    Parameters
+    ----------
+    container_type:
+        Runtime class to recognize as a container.
+    flatten:
+        Callable returning ``(children, aux_data)`` for an instance.
+    unflatten:
+        Callable accepting ``(aux_data, children)`` and returning an instance.
+    """
+
+    _CONTAINER_REGISTRY[container_type] = RegisteredContainer(flatten, unflatten)
+
+
+def get_registered_container(container_type: type[Any]) -> RegisteredContainer | None:
+    """Return the registration for a container type, if present.
+
+    Parameters
+    ----------
+    container_type:
+        Runtime class to look up.
+
+    Returns
+    -------
+    RegisteredContainer | None
+        Registered hook pair or ``None``.
+    """
+
+    for registered_type, registration in _CONTAINER_REGISTRY.items():
+        if issubclass(container_type, registered_type):
+            return registration
+    return None
+
+
 __all__ = [
     "ContainerSpec",
     "DataclassField",
@@ -216,6 +309,9 @@ __all__ = [
     "HFKey",
     "NamedField",
     "OutputPathComponent",
+    "RegisteredContainer",
     "TupleIndex",
+    "get_registered_container",
+    "register_container",
     "rebuild_container_from_spec",
 ]

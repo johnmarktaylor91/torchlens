@@ -106,6 +106,7 @@ from ...ir.container import (
     NamedField,
     OutputPathComponent,
     TupleIndex,
+    get_registered_container,
 )
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.predicate import RetroactiveCaptureDecision
@@ -721,6 +722,22 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if _literal_value_supported(value) or isinstance(value, torch.Size):
         return ContainerSpec(kind="literal", literal_value=value)
     child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+    registered = get_registered_container(type(value))
+    if registered is not None:
+        children, aux_data = registered.flatten(value)
+        for index, item in enumerate(children):
+            child_spec = _build_container_spec(item)
+            if child_spec is not None:
+                child_specs.append((TupleIndex(index), child_spec))
+        module, qualname = _container_type_ref(value)
+        return ContainerSpec(
+            kind="registered",
+            length=len(children),
+            type_module=module,
+            type_qualname=qualname,
+            child_specs=tuple(child_specs),
+            aux_data=aux_data,
+        )
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         for key in keys:
@@ -820,6 +837,16 @@ def _walk_supported_output_container(
     if isinstance(out, torch.Tensor):
         if not isinstance(out, torch.nn.Parameter):
             yield out, path, root_spec
+        return
+    registered = get_registered_container(type(out))
+    if registered is not None:
+        children, _aux_data = registered.flatten(out)
+        for index, item in enumerate(children):
+            yield from _walk_supported_output_container(
+                item,
+                root_spec=root_spec,
+                path=(*path, TupleIndex(index)),
+            )
         return
     if _is_hf_model_output(out):
         for key in out.keys():
