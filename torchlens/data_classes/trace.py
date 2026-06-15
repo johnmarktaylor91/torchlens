@@ -300,7 +300,6 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_spec_revision": 0,
     "_out_recipe_revision": 0,
     "_annotation_blobs": None,
-    "_annotation_revision": 0,
     "_append_sequence_id": 0,
     "_last_hook_handle_ids": (),
     "state": TraceState.PRISTINE,
@@ -1901,7 +1900,6 @@ class Trace(CapturedRun):
         self.input_layers: List[str] = []
         self.output_layers: List[str] = []
         self._annotation_blobs: dict[str, Any] | None = None
-        self._annotation_revision = 0
         self.buffer_layers: List[str] = []
         self.buffer_num_calls: Dict[str, int] = {}
         self._buffer_accessor = None
@@ -3969,7 +3967,6 @@ class Trace(CapturedRun):
             "_out_recipe_revision",
             "input_annotations",
             "_annotation_blobs",
-            "_annotation_revision",
         )
         current_state = dict(state_items(self))
         preserved_trace_user_annotations = self._copy_user_annotations(
@@ -3978,6 +3975,8 @@ class Trace(CapturedRun):
         preserved_state = {
             field_name: current_state.get(field_name) for field_name in preserved_fields
         }
+        if "_annotation_revision" in current_state:
+            preserved_state["_annotation_revision"] = current_state["_annotation_revision"]
         replacement_state = dict(state_items(new_log))
         replacement_state.update(preserved_state)
         replacement_state["annotations"] = self._merge_user_annotations(
