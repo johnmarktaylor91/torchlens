@@ -567,6 +567,23 @@ def test_field_order_and_dataframe_golden() -> None:
     )
 
 
+def test_semantic_output_fields_do_not_add_dataframe_columns() -> None:
+    """A1 Trace provenance fields do not leak into default pandas output."""
+
+    projection = _dataframe_projection(_default_trace())
+    semantic_fields = {
+        "transform_repr",
+        "decoded_output",
+        "output_postprocessor",
+        "output_id2label",
+        "output_num_classes",
+    }
+
+    assert semantic_fields <= set(projection["model_field_order"])
+    assert semantic_fields <= set(projection["trace_portable_fields"])
+    assert not (semantic_fields & set(projection["dataframe_columns"]))
+
+
 def test_public_accessor_golden() -> None:
     """Public accessors and grad-adjacent op surfaces match goldens."""
 

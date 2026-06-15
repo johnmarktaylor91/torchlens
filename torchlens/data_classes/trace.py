@@ -306,6 +306,52 @@ class ResolvedPreprocessing:
     description: str
 
 
+@dataclass
+class ResolvedPostprocessing:
+    """Structured provenance for automatic output postprocessing.
+
+    Attributes
+    ----------
+    source:
+        Resolver source that selected the postprocessing transform.
+    identifier:
+        Model, weights, label bank, or default-policy identifier.
+    verified:
+        Whether the postprocessing came from model-specific metadata.
+    config:
+        Best-effort serializable postprocessing configuration.
+    description:
+        Human-readable one-line summary for trace summaries.
+    style:
+        Resolved output decoding style.
+    selected_output_head:
+        Selected output head name or path for multi-output models.
+    label_source:
+        Label source used for decoded outputs.
+    label_source_version:
+        Version or revision for the label source.
+    confidence:
+        Resolver confidence, when available.
+    top_n_captured:
+        Number of decoded rows captured per item.
+    ambiguous:
+        Whether detection found multiple plausible postprocessing choices.
+    """
+
+    source: str
+    identifier: str
+    verified: bool
+    config: dict[str, Any]
+    description: str
+    style: str | None = None
+    selected_output_head: str | None = None
+    label_source: str | None = None
+    label_source_version: str | None = None
+    confidence: float | None = None
+    top_n_captured: int | None = None
+    ambiguous: bool = False
+
+
 # Op fields deliberately omitted from ``Trace.to_pandas()`` columns. Every
 # field in ``LAYER_PASS_LOG_FIELD_ORDER`` must either appear as a dataframe
 # column or be listed here -- ``tests/test_io_pandas.py`` enforces this so new
@@ -1075,6 +1121,9 @@ class Trace(CapturedRun):
     tlspec_version: int
     annotations: Dict[str, Any]
     input_preprocessor: ResolvedPreprocessing | None
+    output_postprocessor: ResolvedPostprocessing | None
+    output_id2label: dict[int, str] | None
+    output_num_classes: int | None
     input_object_id: int | None
     model_object_id: int | None
     input_signature_hash: str | None
@@ -1126,9 +1175,14 @@ class Trace(CapturedRun):
         "raw_input": FieldPolicy.KEEP,
         "input_preprocessor": FieldPolicy.KEEP,
         "_transform": FieldPolicy.DROP,
+        "transform_repr": FieldPolicy.KEEP,
         "save_raw_input": FieldPolicy.KEEP,
         "batch_render": FieldPolicy.KEEP,
         "raw_output": FieldPolicy.KEEP,
+        "decoded_output": FieldPolicy.KEEP,
+        "output_postprocessor": FieldPolicy.KEEP,
+        "output_id2label": FieldPolicy.KEEP,
+        "output_num_classes": FieldPolicy.KEEP,
         "_output_transform": FieldPolicy.DROP,
         "save_raw_output": FieldPolicy.KEEP,
         "layer_visualizers": FieldPolicy.DROP,
@@ -1462,9 +1516,14 @@ class Trace(CapturedRun):
         self.raw_input = raw_input
         self.input_preprocessor: ResolvedPreprocessing | None = None
         self._transform = transform
+        self.transform_repr = repr(transform) if transform is not None else None
         self.save_raw_input = save_raw_input
         self.batch_render = batch_render
         self.raw_output = raw_output
+        self.decoded_output: Any | None = None
+        self.output_postprocessor: ResolvedPostprocessing | None = None
+        self.output_id2label: dict[int, str] | None = None
+        self.output_num_classes: int | None = None
         self._output_transform = output_transform
         self.save_raw_output = save_raw_output
         self.layer_visualizers = layer_visualizers
@@ -3152,6 +3211,11 @@ class Trace(CapturedRun):
             defaults={
                 **_MODEL_LOG_DEFAULT_FILL,
                 "tlspec_version": TLSPEC_VERSION,
+                "transform_repr": None,
+                "decoded_output": None,
+                "output_postprocessor": None,
+                "output_id2label": None,
+                "output_num_classes": None,
                 "_activation_transform_repr": None,
                 "module_identity_mode": "torch_module",
                 "param_source": "native-module",

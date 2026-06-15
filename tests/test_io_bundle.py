@@ -16,6 +16,7 @@ pytest.importorskip("safetensors")
 from torchlens import Trace, cleanup_tmp, load, trace as trace_fn, save
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.manifest import Manifest
+from torchlens.data_classes.trace import ResolvedPostprocessing
 
 
 class _ConvBundleModel(nn.Module):
@@ -47,6 +48,26 @@ class _ActivationPostfuncModel(nn.Module):
         """Run the test model."""
 
         return self.linear2(torch.relu(self.linear1(x)))
+
+
+class _InputTransformModel(nn.Module):
+    """Small model for input transform provenance tests."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a simple affine operation.
+
+        Parameters
+        ----------
+        x:
+            Model input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Shifted tensor.
+        """
+
+        return x + 1
 
 
 def _build_conv_log(seed: int = 0) -> Trace:
@@ -242,6 +263,91 @@ def test_bundle_roundtrip_preserves_saved_outs_bit_exactly(tmp_path: Path) -> No
     assert live_by_label.keys() == restored_by_label.keys()
     for layer_label, live_out in live_by_label.items():
         assert torch.equal(live_out, restored_by_label[layer_label])
+
+
+def test_semantic_output_fields_default_none_roundtrip(tmp_path: Path) -> None:
+    """Semantic output provenance fields default to ``None`` and survive bundle load."""
+
+    trace = _build_conv_log()
+
+    assert trace.output_postprocessor is None
+    assert trace.transform_repr is None
+    assert trace.output_id2label is None
+    assert trace.output_num_classes is None
+    assert trace.decoded_output is None
+
+    bundle_path = tmp_path / "semantic_defaults.tlspec"
+    save(trace, bundle_path)
+    restored = load(bundle_path)
+
+    assert restored.output_postprocessor is None
+    assert restored.transform_repr is None
+    assert restored.output_id2label is None
+    assert restored.output_num_classes is None
+    assert restored.decoded_output is None
+
+
+def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> None:
+    """Resolved output postprocessing provenance is portable state."""
+
+    trace = _build_conv_log()
+    trace.output_postprocessor = ResolvedPostprocessing(
+        source="hf_config",
+        identifier="tiny-classifier",
+        verified=True,
+        config={"num_labels": 2},
+        description="HF config labels",
+        style="classification",
+        selected_output_head="logits",
+        label_source="config.id2label",
+        label_source_version="test",
+        confidence=0.95,
+        top_n_captured=5,
+        ambiguous=False,
+    )
+    trace.decoded_output = [{"batch_item": 0, "rank": 1, "label": "cat", "prob": 0.8}]
+
+    bundle_path = tmp_path / "postprocessor.tlspec"
+    save(trace, bundle_path)
+    restored = load(bundle_path)
+
+    assert restored.output_postprocessor == trace.output_postprocessor
+    assert restored.decoded_output == trace.decoded_output
+
+
+def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) -> None:
+    """Input transform repr is kept while the live callable remains non-portable."""
+
+    def double_input(x: torch.Tensor) -> torch.Tensor:
+        """Double the input tensor for capture.
+
+        Parameters
+        ----------
+        x:
+            Raw input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Doubled tensor.
+        """
+
+        return x * 2
+
+    trace = trace_fn(
+        _InputTransformModel(),
+        torch.ones(1, 2),
+        transform=double_input,
+    )
+    assert trace.transform_repr == repr(double_input)
+    assert trace._transform is double_input
+
+    bundle_path = tmp_path / "input_transform.tlspec"
+    save(trace, bundle_path)
+    restored = load(bundle_path)
+
+    assert restored.transform_repr == trace.transform_repr
+    assert restored._transform is None
 
 
 def test_bundle_save_strict_default_raises_on_sparse_tensor(tmp_path: Path) -> None:

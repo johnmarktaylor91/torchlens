@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -22,6 +23,33 @@ class _KpiModel(torch.nn.Module):
         y = torch.relu(x)
         tl.record_kpi_in_graph("loss", float(y.sum().detach()))
         return y
+
+
+class _ConfiguredClassifier(torch.nn.Module):
+    """Tiny classifier carrying HF-style output metadata on ``config``."""
+
+    def __init__(self) -> None:
+        """Initialize the classifier and its portable config metadata."""
+
+        super().__init__()
+        self.linear = torch.nn.Linear(2, 2)
+        self.config = SimpleNamespace(id2label={"0": "negative", 1: "positive"}, num_labels=2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a linear classifier.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Class logits.
+        """
+
+        return self.linear(x)
 
 
 def _minimal_activation_fields(label: str) -> dict[str, Any]:
@@ -66,6 +94,24 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
     assert first.capture_cache_hit is False
     assert second.capture_cache_hit is True
     assert first.capture_cache_key == second.capture_cache_key
+
+
+def test_config_output_metadata_pickles_into_capture_cache(tmp_path: Path) -> None:
+    """HF-style config metadata is captured before cache serialization."""
+
+    model = _ConfiguredClassifier()
+    x = torch.ones(1, 2)
+    capture = CaptureOptions(cache=True, cache_dir=tmp_path)
+
+    first = tl.trace(model, x, capture=capture)
+    second = tl.trace(model, x, capture=capture)
+
+    assert first.capture_cache_hit is False
+    assert first.output_id2label == {0: "negative", 1: "positive"}
+    assert first.output_num_classes == 2
+    assert second.capture_cache_hit is True
+    assert second.output_id2label == {0: "negative", 1: "positive"}
+    assert second.output_num_classes == 2
 
 
 def test_public_option_spine_changes_capture_cache_key(tmp_path: Path) -> None:

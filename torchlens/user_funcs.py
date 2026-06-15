@@ -805,6 +805,42 @@ def _facet_recipe_cache_key(
     return tuple(f"{recipe.__module__}.{recipe.__qualname__}" for recipe in recipes)
 
 
+def _capture_output_metadata_from_model_config(trace: Trace, model: nn.Module) -> None:
+    """Capture portable output metadata from ``model.config`` into ``trace``.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving the in-band output metadata.
+    model:
+        Model being captured.
+    """
+
+    config = getattr(model, "config", None)
+    if config is None:
+        return
+
+    id2label = getattr(config, "id2label", None)
+    if isinstance(id2label, dict):
+        normalized_id2label: dict[int, str] = {}
+        for key, value in id2label.items():
+            try:
+                normalized_key = int(key)
+            except (TypeError, ValueError):
+                continue
+            normalized_id2label[normalized_key] = str(value)
+        trace.output_id2label = normalized_id2label or None
+
+    num_labels = getattr(config, "num_labels", None)
+    if num_labels is None and trace.output_id2label is not None:
+        num_labels = len(trace.output_id2label)
+    if num_labels is not None:
+        try:
+            trace.output_num_classes = int(num_labels)
+        except (TypeError, ValueError):
+            trace.output_num_classes = None
+
+
 def _prepare_log_for_capture_cache(trace: Trace) -> None:
     """Detach non-leaf tensors and autograd objects before cache serialization.
 
@@ -1240,6 +1276,7 @@ def _run_model_and_save_specified_outs(
         save_visualizations=save_visualizations,
         facet_registry_snapshot=facets_mod.snapshot(recipes),
     )
+    _capture_output_metadata_from_model_config(trace, model)
     trace.trace_label = name
     trace.code_context = _get_code_context(
         num_context_lines,
