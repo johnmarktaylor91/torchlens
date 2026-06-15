@@ -62,12 +62,14 @@ def test_report_namespace_is_not_top_level_all() -> None:
     Capture-unification P5 added ``when``, ``add``, and ``replace_with``.
     torch.func transform capture added ``func_transform``.
     Backend-completion sharded payload hints added two public dataclasses.
+    The Container value-core added ``Container`` / ``output_at`` /
+    ``register_container`` (= 65); container-completion added ``input_at`` (= 66).
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 62
+    assert len(tl.__all__) == 66
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:
