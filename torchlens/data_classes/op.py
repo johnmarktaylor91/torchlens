@@ -1794,6 +1794,20 @@ class Op:
         return input_containers_from_op(self)
 
     @property
+    def containers(self) -> tuple[Any, ...]:
+        """Return all input and output container views associated with this op.
+
+        Returns
+        -------
+        tuple[Container, ...]
+            Deduplicated union of input and output container views.
+        """
+
+        from .container import containers_from_op
+
+        return containers_from_op(self)
+
+    @property
     def is_module_input(self) -> bool:
         """Whether this Op's output feeds into at least one ModuleCall as an input.
 

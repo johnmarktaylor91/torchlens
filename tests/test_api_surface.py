@@ -44,6 +44,7 @@ TARGET_ALL = [
     "module",
     "output",
     "output_at",
+    "input_at",
     "register_container",
     "preceded_by",
     "contains",
@@ -102,7 +103,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_65() -> None:
+def test_all_size_exactly_66() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -116,10 +117,11 @@ def test_all_size_exactly_65() -> None:
     torch.func transform capture adds `func_transform` = 60.
     Backend-completion sharded payload hints add `JaxPayloadLoadHint` and
     `PayloadLoadHints` = 62. Container value-core adds `Container`,
-    `output_at`, and `register_container` = 65.
+    `output_at`, and `register_container` = 65. Container-completion P3 adds
+    `input_at` = 66.
     """
 
-    assert len(torchlens.__all__) == 65
+    assert len(torchlens.__all__) == 66
     assert torchlens.__all__ == TARGET_ALL
 
 

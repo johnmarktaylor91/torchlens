@@ -243,6 +243,21 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
         container.reconstruct()
 
 
+def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
+    """A paths-only backend degrades registry-backed views to path-only."""
+
+    trace = tl.trace(TupleModel(), torch.tensor([1.0]), capture_output_structure=True)
+    trace.backend = "jax"
+
+    container = trace.ops[trace.output_layers[0]].container
+
+    assert isinstance(container, tl.Container)
+    assert container.kind is None
+    assert container.reconstructable is False
+    with pytest.raises(ValueError, match="Path-only"):
+        container.reconstruct()
+
+
 def test_backend_none_container_capability_returns_no_false_view() -> None:
     """A backend declaring no structure does not expose a path-only false view."""
 

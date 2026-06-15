@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+import pytest
 from torch import nn
 
 import torchlens as tl
@@ -38,6 +39,15 @@ class StackModel(nn.Module):
         """Stack three tensors."""
 
         return torch.stack([a, b, c])
+
+
+class StackReturnModel(nn.Module):
+    """Return a stack result inside a final-output container."""
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Stack two tensors and return the result in a dict."""
+
+        return {"stacked": torch.stack([a, b])}
 
 
 class MutatingCacheModel(nn.Module):
@@ -183,6 +193,102 @@ def test_stack_list_arg_registers_as_consumed_input_container() -> None:
     assert len(containers) == 1
     assert containers[0].kind == "list"
     assert len(containers[0].leaves) == 3
+
+
+def test_op_containers_unions_input_and_output_views() -> None:
+    """The union view includes input and output containers for one op."""
+
+    trace = tl.trace(
+        StackReturnModel(),
+        (torch.tensor([1.0]), torch.tensor([2.0])),
+        capture_output_structure=True,
+    )
+
+    output_op = trace.ops[trace.output_layers[0]]
+    containers = output_op.containers
+
+    assert len(output_op.input_containers) == 1
+    assert len(output_op.output_containers) == 1
+    assert {container.kind for container in containers} == {"list", "dict"}
+
+
+def test_input_at_selects_top_level_and_nested_input_leaf() -> None:
+    """Nested input selector resolves leaf ops matching the captured structure."""
+
+    payload = {
+        "attention_mask": torch.tensor([1.0]),
+        "past_key_values": ((torch.tensor([2.0]), torch.tensor([3.0])),),
+    }
+    trace = tl.trace(NestedInputSelectModel(), payload, capture_output_structure=True)
+
+    top = trace.resolve_sites(tl.input_at("attention_mask")).first()
+    nested = trace.resolve_sites(tl.input_at("past_key_values", 0, 1)).first()
+
+    assert torch.equal(top.out, payload["attention_mask"])
+    assert torch.equal(nested.out, payload["past_key_values"][0][1])
+
+
+class NestedInputSelectModel(nn.Module):
+    """Read top-level and nested input leaves."""
+
+    def forward(self, payload: dict[str, object]) -> torch.Tensor:
+        """Return a sum involving two selected input leaves."""
+
+        attention_mask = payload["attention_mask"]
+        past_key_values = payload["past_key_values"]
+        assert isinstance(attention_mask, torch.Tensor)
+        assert isinstance(past_key_values, tuple)
+        return attention_mask + past_key_values[0][1]
+
+
+def test_role_general_reconstructs_input_and_call_output_containers() -> None:
+    """Live reconstruction works for non-final roles."""
+
+    payload = {"items": [torch.tensor([1.0]), torch.tensor([2.0])]}
+    input_trace = tl.trace(NestedInputModel(), payload, capture_output_structure=True)
+    rebuilt_input = input_trace.reconstruct_container(role=Role.MODEL_INPUT)
+
+    assert torch.equal(rebuilt_input["items"][0], payload["items"][0])
+    assert torch.equal(rebuilt_input["items"][1], payload["items"][1])
+
+    cache = [torch.tensor([1.0])]
+    output_trace = tl.trace(
+        MutatingCacheModel(),
+        (cache, torch.tensor([2.0])),
+        capture_output_structure=True,
+    )
+    rebuilt_output = output_trace.reconstruct_container(role=Role.CALL_OUTPUT)
+
+    assert isinstance(rebuilt_output, list)
+    assert torch.equal(rebuilt_output[0], torch.tensor([1.0]))
+    assert torch.equal(rebuilt_output[1], torch.tensor([2.0]))
+
+
+def test_multi_snapshot_record_requires_selector_and_reconstructs_selected_role() -> None:
+    """Multi-snapshot records reject ambiguous spec reads and support role selection."""
+
+    cache = [torch.tensor([1.0])]
+    trace = tl.trace(
+        MutatingCacheModel(),
+        (cache, torch.tensor([2.0])),
+        capture_output_structure=True,
+    )
+    record = next(
+        record
+        for record in trace._containers.values()
+        if Role.CALL_INPUT in record.roles and Role.CALL_OUTPUT in record.roles
+    )
+
+    with pytest.raises(ValueError, match="spec_at"):
+        _ = record.spec
+
+    input_spec = record.spec_at(role=Role.CALL_INPUT)
+    output_spec = record.spec_at(role=Role.CALL_OUTPUT)
+    rebuilt = trace.reconstruct_container(role=Role.CALL_OUTPUT)
+
+    assert input_spec.length == 1
+    assert output_spec.length == 2
+    assert torch.equal(rebuilt[1], torch.tensor([2.0]))
 
 
 def test_aliasing_empty_container_and_tensor_dict_key_degradation() -> None:

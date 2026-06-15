@@ -26,6 +26,7 @@ from .selectors import (
 )
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from ..ir.container_registry import Role
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -504,6 +505,8 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "output_at":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
+    if kind == "input_at":
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "contains":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "in_module":
@@ -605,6 +608,8 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
         return _output_matches(site, value)
     if kind == "output_at":
         return _output_path_matches(tuple(getattr(site, "container_path", ()) or ()), tuple(value))
+    if kind == "input_at":
+        return _input_path_matches(site, tuple(value))
     if kind == "module":
         return _module_output_matches(site, str(value))
     if kind == "contains":
@@ -780,6 +785,48 @@ def _output_path_component_matches(saved_component: Any, requested_component: An
     if isinstance(saved_component, (NamedField, DataclassField)):
         return saved_component.name == requested_component
     return saved_component == requested_component
+
+
+def _input_path_matches(site: Site, requested_path: tuple[Any, ...]) -> bool:
+    """Return whether a forward site consumes an input at ``requested_path``.
+
+    Parameters
+    ----------
+    site:
+        Candidate forward site.
+    requested_path:
+        User path using plain indices, keys, or field names.
+
+    Returns
+    -------
+    bool
+        Whether any input-container leaf occurrence matches the path.
+    """
+
+    trace = getattr(site, "source_trace", None)
+    site_labels = {
+        label
+        for label in (
+            getattr(site, "layer_label", None),
+            getattr(site, "layer_label_raw", None),
+            getattr(site, "_layer_label_raw", None),
+        )
+        if label is not None
+    }
+    for record in getattr(trace, "_containers", {}).values():
+        for snapshot in getattr(record, "snapshots", ()) or ():
+            if getattr(snapshot, "role", None) != Role.MODEL_INPUT:
+                continue
+            for occurrence in getattr(snapshot, "leaf_occurrences", ()) or ():
+                if occurrence.producer_op_label not in site_labels:
+                    continue
+                if _output_path_matches(tuple(occurrence.path), requested_path):
+                    return True
+    for container in getattr(site, "input_containers", ()) or ():
+        for occurrence in getattr(container, "leaf_occurrences", ()) or ():
+            if _output_path_matches(tuple(occurrence.path), requested_path):
+                return True
+    return False
 
 
 def _grad_fn_type_matches(site: "GradFn", requested: str) -> bool:

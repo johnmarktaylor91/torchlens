@@ -17,6 +17,7 @@ SelectorKind: TypeAlias = Literal[
     "module",
     "output",
     "output_at",
+    "input_at",
     "contains",
     "predicate",
     "in_module",
@@ -305,6 +306,35 @@ class OutputPathSelector(BaseSelector):
 
         normalized = tuple(path)
         object.__setattr__(self, "selector_kind", "output_at")
+        object.__setattr__(self, "selector_value", normalized)
+        object.__setattr__(self, "path", normalized)
+
+
+@dataclass(frozen=True, repr=False)
+class InputPathSelector(BaseSelector):
+    """Nested model-input path selector.
+
+    Parameters
+    ----------
+    path:
+        Path such as ``("past_key_values", 0, 1)``.
+    """
+
+    path: tuple[Any, ...]
+
+    def __init__(self, *path: Any) -> None:
+        """Create a nested model-input path selector.
+
+        Parameters
+        ----------
+        *path:
+            Nested input path components.
+        """
+
+        normalized = (
+            tuple(path[0]) if len(path) == 1 and isinstance(path[0], (tuple, list)) else path
+        )
+        object.__setattr__(self, "selector_kind", "input_at")
         object.__setattr__(self, "selector_value", normalized)
         object.__setattr__(self, "path", normalized)
 
@@ -930,6 +960,23 @@ def output_at(path: tuple[Any, ...] | list[Any]) -> OutputPathSelector:
     return OutputPathSelector(path)
 
 
+def input_at(*path: Any) -> InputPathSelector:
+    """Create a nested model-input path selector.
+
+    Parameters
+    ----------
+    *path:
+        Nested path into a captured model-input container.
+
+    Returns
+    -------
+    InputPathSelector
+        Immutable selector.
+    """
+
+    return InputPathSelector(*path)
+
+
 def module(address: str) -> ModuleSelector:
     """Create a module-address selector.
 
@@ -1341,6 +1388,8 @@ def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
             tuple(getattr(ctx, "container_path", ()) or ()),
             tuple(selector.selector_value),
         )
+    if kind == "input_at":
+        return _input_path_matches(ctx, tuple(selector.selector_value))
     if kind == "predicate":
         predicate = getattr(selector, "predicate")
         return bool(predicate(ctx))
@@ -1444,6 +1493,29 @@ def _output_path_component_matches(saved_component: Any, requested_component: An
     return saved_component == requested_component
 
 
+def _input_path_matches(ctx: Any, requested_path: tuple[Any, ...]) -> bool:
+    """Return whether hook context belongs to an input container path.
+
+    Parameters
+    ----------
+    ctx:
+        Hook context.
+    requested_path:
+        User-facing path.
+
+    Returns
+    -------
+    bool
+        Whether the context path matches.
+    """
+
+    for container in getattr(ctx, "input_containers", ()) or ():
+        for occurrence in getattr(container, "leaf_occurrences", ()) or ():
+            if _output_path_matches(tuple(occurrence.path), requested_path):
+                return True
+    return False
+
+
 def _classify_selector_direction(
     sel: SelectorLike,
 ) -> Literal["forward", "backward"] | None:
@@ -1473,6 +1545,7 @@ def _classify_selector_direction(
             "module",
             "output",
             "output_at",
+            "input_at",
             "contains",
             "predicate",
             "in_module",
@@ -1502,6 +1575,7 @@ def _classify_selector_direction(
             ModuleSelector,
             OutputSelector,
             OutputPathSelector,
+            InputPathSelector,
             ContainsSelector,
             FacetSelector,
             WhereSelector,
@@ -1558,6 +1632,7 @@ __all__ = [
     "GradFnLabelSelector",
     "GradFnSelector",
     "InModuleSelector",
+    "InputPathSelector",
     "InterveningSelector",
     "LabelSelector",
     "ModuleSelector",
@@ -1584,6 +1659,7 @@ __all__ = [
     "module",
     "output",
     "output_at",
+    "input_at",
     "preceded_by",
     "where",
 ]

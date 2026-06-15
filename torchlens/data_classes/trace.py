@@ -3089,6 +3089,34 @@ class Trace(CapturedRun):
 
         return reconstruct_output(self, values=values)
 
+    def reconstruct_container(
+        self,
+        *,
+        site: Any = None,
+        role: Any = None,
+        values: Literal["out", "transformed"] = "out",
+    ) -> Any:
+        """Reconstruct a captured container selected by site and role.
+
+        Parameters
+        ----------
+        site:
+            Optional boundary site selector.
+        role:
+            Optional boundary role selector.
+        values:
+            Leaf value source: ``"out"`` or ``"transformed"``.
+
+        Returns
+        -------
+        Any
+            Reconstructed Python container.
+        """
+
+        from .container import reconstruct_container
+
+        return reconstruct_container(self, site=site, role=role, values=values)
+
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with non-picklable weakref-backed accessors stripped."""
         state = self.__dict__.copy()

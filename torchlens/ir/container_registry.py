@@ -102,6 +102,91 @@ class ContainerRecord:
     roles: set[Role] = field(default_factory=set)
     snapshots: list[ContainerSnapshot] = field(default_factory=list)
 
+    @property
+    def spec(self) -> ContainerSpec:
+        """Return the sole snapshot spec for this record.
+
+        Returns
+        -------
+        ContainerSpec
+            The only captured snapshot specification.
+
+        Raises
+        ------
+        ValueError
+            If the record has no snapshots or more than one snapshot.
+        """
+
+        if len(self.snapshots) != 1:
+            raise ValueError(
+                "ContainerRecord.spec is only available for records with exactly one "
+                "snapshot; use spec_at(site=..., role=...) for multi-snapshot records."
+            )
+        return self.snapshots[0].spec
+
+    def spec_at(self, *, site: Site | None = None, role: Role | None = None) -> ContainerSpec:
+        """Return a snapshot spec selected by site and role.
+
+        Parameters
+        ----------
+        site:
+            Optional boundary site. Site aliases are considered matches.
+        role:
+            Optional boundary role.
+
+        Returns
+        -------
+        ContainerSpec
+            Matching snapshot specification.
+
+        Raises
+        ------
+        ValueError
+            If the selector is ambiguous or matches no snapshot.
+        """
+
+        return self.snapshot_at(site=site, role=role).spec
+
+    def snapshot_at(
+        self,
+        *,
+        site: Site | None = None,
+        role: Role | None = None,
+    ) -> ContainerSnapshot:
+        """Return a snapshot selected by site and role.
+
+        Parameters
+        ----------
+        site:
+            Optional boundary site. Site aliases are considered matches.
+        role:
+            Optional boundary role.
+
+        Returns
+        -------
+        ContainerSnapshot
+            Matching snapshot.
+
+        Raises
+        ------
+        ValueError
+            If the selector is ambiguous or matches no snapshot.
+        """
+
+        snapshots = [
+            snapshot
+            for snapshot in self.snapshots
+            if (role is None or snapshot.role == role)
+            and (site is None or _snapshot_matches_site(snapshot, site))
+        ]
+        if len(snapshots) != 1:
+            detail = "matched no snapshots" if not snapshots else "matched multiple snapshots"
+            raise ValueError(
+                f"ContainerRecord snapshot selector {detail}; pass a more specific "
+                "site=... and role=... selector."
+            )
+        return snapshots[0]
+
 
 @dataclass(slots=True)
 class IdentityEntry:
@@ -310,6 +395,25 @@ def _snapshots_dedup_equivalent(left: ContainerSnapshot, right: ContainerSnapsho
         and left.leaf_occurrences == right.leaf_occurrences
         and left.reconstructable == right.reconstructable
     )
+
+
+def _snapshot_matches_site(snapshot: ContainerSnapshot, site: Site) -> bool:
+    """Return whether a snapshot was observed at ``site`` or an alias.
+
+    Parameters
+    ----------
+    snapshot:
+        Snapshot to inspect.
+    site:
+        Boundary site selector.
+
+    Returns
+    -------
+    bool
+        ``True`` when the primary site or one of its aliases matches.
+    """
+
+    return snapshot.site == site or site in snapshot.site_aliases
 
 
 def _container_has_tensor_leaf(value: Any, *, memo: set[int]) -> bool:

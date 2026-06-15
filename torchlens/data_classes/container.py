@@ -16,7 +16,13 @@ from ..ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
-from ..ir.container_registry import ContainerRecord, Role
+from ..ir.container_registry import (
+    ContainerLeafOccurrence,
+    ContainerRecord,
+    ContainerSnapshot,
+    Role,
+    Site,
+)
 
 if TYPE_CHECKING:
     from .op import Op
@@ -34,6 +40,7 @@ class Container:
     root_id: tuple[str, Any]
     path: tuple[OutputPathComponent, ...] = ()
     supports_reconstruct: bool = True
+    leaf_occurrences: tuple[ContainerLeafOccurrence, ...] = ()
 
     @property
     def kind(self) -> str | None:
@@ -130,10 +137,11 @@ class Container:
                 root_id=self.root_id,
                 path=child_path,
                 supports_reconstruct=self.supports_reconstruct,
+                leaf_occurrences=self.leaf_occurrences,
             )
-        for op in self.leaves:
-            if tuple(getattr(op, "container_path", ()) or ()) == child_path:
-                return op
+        leaf = self._leaf_by_path(child_path)
+        if leaf is not None:
+            return leaf
         if self.spec.kind == "literal":
             return self.spec.literal_value
         raise KeyError(key)
@@ -160,6 +168,8 @@ class Container:
 
         if self.spec is None:
             raise ValueError("Path-only container views cannot be reconstructed.")
+        if not self.supports_reconstruct:
+            raise ValueError("This container view is not reconstructable for the current backend.")
         leaves = []
         for op in self._leaf_ops():
             value = _value_for_op(op, values)
@@ -167,6 +177,49 @@ class Container:
                 raise ValueError(f"Container leaf {op.layer_label!r} has no saved {values} value.")
             leaves.append(value)
         return rebuild_container_from_spec(self.spec, leaves)
+
+    def reconstruct_at(
+        self,
+        *,
+        site: Site | None = None,
+        role: Role | None = None,
+        values: Literal["out", "transformed"] = "out",
+    ) -> Any:
+        """Reconstruct this registry-backed container with a snapshot selector.
+
+        Parameters
+        ----------
+        site:
+            Optional boundary site. Site aliases are considered matches.
+        role:
+            Optional boundary role.
+        values:
+            Leaf value source. ``"out"`` uses saved outputs; ``"transformed"``
+            uses transformed outputs.
+
+        Returns
+        -------
+        Any
+            Rebuilt Python object.
+
+        Raises
+        ------
+        ValueError
+            If the selector is invalid for this view.
+        """
+
+        ordinal = self.root_id[1] if self.root_id[0] == "container" else None
+        trace = self._source_trace()
+        if ordinal is None or trace is None:
+            if site is not None or role is not None:
+                raise ValueError("Snapshot selectors require a registry-backed container view.")
+            return self.reconstruct(values=values)
+        record = getattr(trace, "_containers", {}).get(ordinal)
+        if not isinstance(record, ContainerRecord):
+            raise ValueError("Snapshot selectors require a registry-backed container record.")
+        snapshot = record.snapshot_at(site=site, role=role)
+        selected = _container_from_snapshot(trace, record, snapshot)
+        return selected.reconstruct(values=values)
 
     def __repr__(self) -> str:
         """Return an indented tree representation.
@@ -203,10 +256,58 @@ class Container:
 
         if self.spec is None:
             return ()
+        if len(self.leaf_occurrences) == len(self.leaves):
+            by_path = {
+                tuple(occurrence.path): op
+                for occurrence, op in zip(self.leaf_occurrences, self.leaves, strict=True)
+            }
+            return tuple(
+                by_path[path]
+                for path in _leaf_paths(self.spec, prefix=self.path)
+                if path in by_path
+            )
         by_path = {tuple(getattr(op, "container_path", ()) or ()): op for op in self.leaves}
         return tuple(
             by_path[path] for path in _leaf_paths(self.spec, prefix=self.path) if path in by_path
         )
+
+    def _leaf_by_path(self, path: tuple[OutputPathComponent, ...]) -> "Op" | None:
+        """Return the leaf operation at ``path``.
+
+        Parameters
+        ----------
+        path:
+            Typed container path.
+
+        Returns
+        -------
+        Op | None
+            Leaf op when present.
+        """
+
+        if len(self.leaf_occurrences) == len(self.leaves):
+            for occurrence, op in zip(self.leaf_occurrences, self.leaves, strict=True):
+                if tuple(occurrence.path) == path:
+                    return op
+        for op in self.leaves:
+            if tuple(getattr(op, "container_path", ()) or ()) == path:
+                return op
+        return None
+
+    def _source_trace(self) -> Any:
+        """Return a source trace attached to this view, if available.
+
+        Returns
+        -------
+        Any
+            Source trace or ``None``.
+        """
+
+        for op in self.leaves:
+            trace = getattr(op, "source_trace", None)
+            if trace is not None:
+                return trace
+        return None
 
     def _repr_line(self) -> str:
         """Return the root line for ``repr``.
@@ -318,6 +419,32 @@ def output_containers_from_op(op: "Op") -> tuple[Container, ...]:
         if isinstance(record, ContainerRecord):
             containers.append(_container_from_record(op, record, roles=_output_roles_for_op(op)))
     return tuple(container for container in containers if container is not None)
+
+
+def containers_from_op(op: "Op") -> tuple[Container, ...]:
+    """Return all input and output container views associated with an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose container memberships should be viewed.
+
+    Returns
+    -------
+    tuple[Container, ...]
+        Deduplicated input and output container views.
+    """
+
+    containers = (*input_containers_from_op(op), *output_containers_from_op(op))
+    unique: list[Container] = []
+    seen: set[tuple[tuple[str, Any], tuple[OutputPathComponent, ...]]] = set()
+    for container in containers:
+        key = (container.root_id, container.path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(container)
+    return tuple(unique)
 
 
 def input_containers_from_op(op: "Op") -> tuple[Container, ...]:
@@ -456,23 +583,99 @@ def _container_from_record(
     if not snapshots:
         return None
     snapshot = snapshots[-1]
-    root_kind: ContainerRootKind = "final_output" if snapshot.role == Role.MODEL_OUTPUT else "call"
+    root_kind = _root_kind_for_role(snapshot.role)
     leaves = _registry_sibling_leaves(op, snapshot)
+    capability = _container_structure_capability(op)
     return Container(
-        spec=snapshot.spec,
+        spec=snapshot.spec if capability == "full_spec" else None,
         leaves=leaves,
         root_kind=root_kind,
         root_id=("container", record.ordinal),
-        supports_reconstruct=snapshot.reconstructable,
+        supports_reconstruct=snapshot.reconstructable and capability == "full_spec",
+        leaf_occurrences=snapshot.leaf_occurrences,
     )
 
 
-def _registry_sibling_leaves(op: "Op", snapshot: Any) -> tuple["Op", ...]:
+def _container_from_snapshot(
+    trace: Any,
+    record: ContainerRecord,
+    snapshot: ContainerSnapshot,
+) -> Container:
+    """Build a container view for an explicitly selected snapshot.
+
+    Parameters
+    ----------
+    trace:
+        Source trace.
+    record:
+        Container identity record.
+    snapshot:
+        Selected snapshot.
+
+    Returns
+    -------
+    Container
+        Snapshot-specific runtime view.
+    """
+
+    return Container(
+        spec=snapshot.spec if _trace_container_capability(trace) == "full_spec" else None,
+        leaves=_registry_sibling_leaves_from_trace(trace, snapshot),
+        root_kind=_root_kind_for_role(snapshot.role),
+        root_id=("container", record.ordinal),
+        supports_reconstruct=snapshot.reconstructable
+        and _trace_container_capability(trace) == "full_spec",
+        leaf_occurrences=snapshot.leaf_occurrences,
+    )
+
+
+def _root_kind_for_role(role: Role) -> ContainerRootKind:
+    """Return the public root kind for a snapshot role.
+
+    Parameters
+    ----------
+    role:
+        Snapshot role.
+
+    Returns
+    -------
+    ContainerRootKind
+        Public container root kind.
+    """
+
+    if role == Role.MODEL_OUTPUT:
+        return "final_output"
+    return "call"
+
+
+def _registry_sibling_leaves(op: "Op", snapshot: ContainerSnapshot) -> tuple["Op", ...]:
     """Return leaf ops named by a registry snapshot."""
 
     trace = getattr(op, "source_trace", None)
     if trace is None:
         return (op,)
+    return _registry_sibling_leaves_from_trace(trace, snapshot) or (op,)
+
+
+def _registry_sibling_leaves_from_trace(
+    trace: Any,
+    snapshot: ContainerSnapshot,
+) -> tuple["Op", ...]:
+    """Return leaf ops named by a registry snapshot in a trace.
+
+    Parameters
+    ----------
+    trace:
+        Source trace.
+    snapshot:
+        Container snapshot.
+
+    Returns
+    -------
+    tuple[Op, ...]
+        Leaf operations in snapshot occurrence order.
+    """
+
     leaves = []
     for occurrence in snapshot.leaf_occurrences:
         if snapshot.role == Role.MODEL_OUTPUT:
@@ -489,7 +692,7 @@ def _registry_sibling_leaves(op: "Op", snapshot: Any) -> tuple["Op", ...]:
             raw_match = _op_from_raw_label(trace, label)
             if raw_match is not None:
                 leaves.append(raw_match)
-    return tuple(leaves) or (op,)
+    return tuple(leaves)
 
 
 def _op_from_raw_label(trace: Any, raw_label: str) -> "Op" | None:
@@ -519,7 +722,23 @@ def _container_structure_capability(op: "Op") -> str:
         when the backend cannot be resolved for legacy in-memory traces.
     """
 
-    trace = getattr(op, "source_trace", None)
+    return _trace_container_capability(getattr(op, "source_trace", None))
+
+
+def _trace_container_capability(trace: Any) -> str:
+    """Return a trace backend's declared container-structure capability.
+
+    Parameters
+    ----------
+    trace:
+        Trace-like object.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, or ``"full_spec"``.
+    """
+
     backend = getattr(trace, "backend", None)
     if backend is None:
         return "full_spec"
@@ -559,6 +778,57 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
         "No reconstructable final-output container was captured. "
         "Trace with intervention_ready=True to persist output structure."
     )
+
+
+def reconstruct_container(
+    trace: Any,
+    *,
+    site: Site | None = None,
+    role: Role | None = None,
+    values: Literal["out", "transformed"] = "out",
+) -> Any:
+    """Reconstruct a captured container selected by site and role.
+
+    Parameters
+    ----------
+    trace:
+        Trace with container registry records.
+    site:
+        Optional boundary site. Site aliases are considered matches.
+    role:
+        Optional boundary role.
+    values:
+        Leaf value source.
+
+    Returns
+    -------
+    Any
+        Rebuilt Python object.
+
+    Raises
+    ------
+    ValueError
+        If the selector is ambiguous or reconstructability is unavailable.
+    """
+
+    selected: list[tuple[ContainerRecord, ContainerSnapshot]] = []
+    for record in getattr(trace, "_containers", {}).values():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if role is not None and snapshot.role != role:
+                continue
+            if site is not None and snapshot.site != site and site not in snapshot.site_aliases:
+                continue
+            selected.append((record, snapshot))
+    if len(selected) != 1:
+        detail = "matched no containers" if not selected else "matched multiple containers"
+        raise ValueError(
+            f"Container reconstruct selector {detail}; pass a more specific site=... "
+            "and role=... selector."
+        )
+    record, snapshot = selected[0]
+    return _container_from_snapshot(trace, record, snapshot).reconstruct(values=values)
 
 
 def _root_identity(op: "Op") -> tuple[ContainerRootKind, tuple[str, Any]]:
@@ -820,4 +1090,10 @@ def _leaf_reference(value: Any) -> str:
     return repr(value)
 
 
-__all__ = ["Container", "container_from_op", "reconstruct_output"]
+__all__ = [
+    "Container",
+    "container_from_op",
+    "containers_from_op",
+    "reconstruct_container",
+    "reconstruct_output",
+]
