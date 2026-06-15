@@ -835,6 +835,13 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
                 setattr(layer_log, field_name, value.detach().cpu())
         layer_log.grad_fn_handle = None
         layer_log.grad_fn_handle = None
+    trace.__dict__.pop("_container_ordinals_by_output_op_label", None)
+    build_state = trace.__dict__.get("_build_state")
+    if build_state is not None:
+        registry = getattr(build_state, "container_registry", None)
+        if registry is not None:
+            registry.clear_live_state()
+        trace.__dict__.pop("_build_state", None)
 
 
 def _detach_nested_for_cache(value: Any) -> Any:

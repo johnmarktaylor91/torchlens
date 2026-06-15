@@ -162,6 +162,7 @@ MODEL_LOG_FIELD_ORDER = [
     # Special layers
     "input_layers",
     "output_layers",
+    "_containers",
     "buffer_layers",
     "buffer_num_calls",
     "internal_source_ops",

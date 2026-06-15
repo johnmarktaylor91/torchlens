@@ -1766,6 +1766,20 @@ class Op:
         return container_from_op(self)
 
     @property
+    def output_containers(self) -> tuple[Any, ...]:
+        """Return output container views associated with this op.
+
+        Returns
+        -------
+        tuple[Container, ...]
+            Registry-backed output container views, or a legacy single view.
+        """
+
+        from .container import output_containers_from_op
+
+        return output_containers_from_op(self)
+
+    @property
     def is_module_input(self) -> bool:
         """Whether this Op's output feeds into at least one ModuleCall as an input.
 

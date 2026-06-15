@@ -1098,6 +1098,7 @@ class Trace(CapturedRun):
     jax_capture_index_to_final_op_label: dict[int, str]
     jax_inlined_call_primitives: tuple[str, ...]
     jax_static_argnums: tuple[int, ...]
+    _containers: dict[int, Any]
     _last_sibling_ordering_decision: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -1243,6 +1244,7 @@ class Trace(CapturedRun):
         "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
         "input_layers": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
+        "_containers": FieldPolicy.BLOB_RECURSIVE,
         "buffer_layers": FieldPolicy.KEEP,
         "buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
@@ -3098,6 +3100,7 @@ class Trace(CapturedRun):
         state["_out_identity_cache"] = {}
         state["_out_hash_cache"] = {}
         state["_code_context_cache"] = {}
+        state.pop("_container_ordinals_by_output_op_label", None)
         state.pop("_build_state", None)
         state["_backward_gradfn_refs"] = {}
         state["_tl_backward_hooked_tensor_keys"] = set()

@@ -108,6 +108,7 @@ from ...ir.container import (
     TupleIndex,
     get_registered_container,
 )
+from ...ir.container_registry import ContainerLeafOccurrence, FuncSite, Phase, Role
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -2428,6 +2429,13 @@ def log_function_output_tensors_exhaustive(
         )
 
     output_entries = _partition_output_entries_with_autograd_stats(out_orig)
+    _register_call_output_container_snapshot(
+        self,
+        out_orig,
+        output_entries=output_entries,
+        func_call_id=func_call_id,
+        event_index=int(fields_dict.get("raw_index") or func_call_id),
+    )
     expected_output_count = len(output_entries)
     loggable_output_count = sum(
         1
@@ -3004,6 +3012,83 @@ def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTe
         )
 
     return partitioned_entries
+
+
+def _register_call_output_container_snapshot(
+    trace: "Trace",
+    output: Any,
+    *,
+    output_entries: list[_OutputTensorEntry],
+    func_call_id: int,
+    event_index: int,
+) -> None:
+    """Register a function-call output container snapshot when opt-in capture is active.
+
+    Parameters
+    ----------
+    trace
+        Active trace.
+    output
+        Raw function output object.
+    output_entries
+        Path-aware tensor output entries from the existing output walker.
+    func_call_id
+        Function call identifier for the output boundary.
+    event_index
+        Capture event index used for ordering.
+    """
+
+    if not (
+        getattr(trace, "intervention_ready", False)
+        or getattr(trace, "_capture_output_structure", False)
+    ):
+        return
+    spec = next((entry.container_spec for entry in output_entries if entry.container_spec), None)
+    if spec is None:
+        return
+    registry = trace._ensure_build_state().container_registry
+    registry.register_snapshot(
+        output,
+        site=FuncSite(func_call_id=func_call_id, position="return"),
+        role=Role.CALL_OUTPUT,
+        phase=Phase.POST_CALL,
+        observed_at_event_index=event_index,
+        spec=spec,
+        leaf_occurrences=_container_leaf_occurrences_from_entries(output_entries),
+        reconstructable=True,
+    )
+
+
+def _container_leaf_occurrences_from_entries(
+    output_entries: list[_OutputTensorEntry],
+) -> tuple[ContainerLeafOccurrence, ...]:
+    """Build ordered leaf occurrences from path-aware output entries.
+
+    Parameters
+    ----------
+    output_entries
+        Path-aware tensor output entries.
+
+    Returns
+    -------
+    tuple[ContainerLeafOccurrence, ...]
+        Occurrence records preserving repeated tensors at multiple paths.
+    """
+
+    occurrences: list[ContainerLeafOccurrence] = []
+    for occ_index, entry in enumerate(output_entries):
+        producer_label = (
+            get_tensor_label(entry.value) if isinstance(entry.value, torch.Tensor) else None
+        )
+        occurrences.append(
+            ContainerLeafOccurrence(
+                path=entry.container_path,
+                producer_op_label=producer_label,
+                tensor_identity=producer_label,
+                occ_index=occ_index,
+            )
+        )
+    return tuple(occurrences)
 
 
 def _get_autograd_saved_stats_for_tensor(

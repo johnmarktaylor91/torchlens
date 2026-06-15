@@ -134,6 +134,11 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         and self.__dict__.get("_out_writer") is not None
     )
     keep_selective_sink = self.__dict__.get("_out_sink") is not None
+    build_state = self.__dict__.get("_build_state")
+    if build_state is not None:
+        registry = getattr(build_state, "container_registry", None)
+        if registry is not None:
+            registry.clear_live_state()
     field_names = [
         "_build_state",
         "capture_events",
@@ -335,6 +340,14 @@ def postprocess(
     # Step 17: log the pass as finished, changing the Trace behavior to its user-facing version.
     with _vtimed(self, "  Step 17: Mark pass finished"):
         _set_tracing_finished(self)
+
+    build_state = self.__dict__.get("_build_state")
+    if build_state is not None:
+        registry = getattr(build_state, "container_registry", None)
+        if registry is not None:
+            if registry.records:
+                self.__dict__["_containers"] = dict(registry.records)
+            registry.clear_live_state()
 
     for field_name in ("_build_state", "capture_events", "_output_container_specs_by_raw_label"):
         self.__dict__.pop(field_name, None)

@@ -125,6 +125,11 @@ def _clear_saved_activation_dedup_caches(trace: "Trace") -> None:
         cache = getattr(trace, cache_name, None)
         if isinstance(cache, dict):
             cache.clear()
+    build_state = trace.__dict__.get("_build_state")
+    if build_state is not None:
+        registry = getattr(build_state, "container_registry", None)
+        if registry is not None:
+            registry.clear_live_state()
 
 
 def save_new_outs(

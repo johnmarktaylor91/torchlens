@@ -16,6 +16,7 @@ from ..ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
+from ..ir.container_registry import ContainerRecord, Role
 
 if TYPE_CHECKING:
     from .op import Op
@@ -263,6 +264,9 @@ def container_from_op(op: "Op") -> Container | None:
         Runtime container view, degraded path-only view, or ``None``.
     """
 
+    registry_container = _container_from_registry(op)
+    if registry_container is not None:
+        return registry_container
     spec = getattr(op, "container_spec", None)
     path = tuple(getattr(op, "container_path", ()) or ())
     capability = _container_structure_capability(op)
@@ -279,6 +283,137 @@ def container_from_op(op: "Op") -> Container | None:
         root_id=root_id,
         supports_reconstruct=spec is not None,
     )
+
+
+def output_containers_from_op(op: "Op") -> tuple[Container, ...]:
+    """Return output container views associated with an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose output-container records should be viewed.
+
+    Returns
+    -------
+    tuple[Container, ...]
+        Registry-backed output containers, or the legacy single container view.
+    """
+
+    trace = getattr(op, "source_trace", None)
+    if trace is None or not hasattr(trace, "_containers"):
+        container = container_from_op(op)
+        return () if container is None else (container,)
+    if getattr(op, "container_spec", None) is None:
+        container = container_from_op(op)
+        return () if container is None else (container,)
+    index = _output_registry_index(trace)
+    labels = (getattr(op, "layer_label", None), getattr(op, "layer_label_raw", None))
+    ordinals: list[int] = []
+    for label in labels:
+        if label is not None:
+            ordinals.extend(index.get(label, ()))
+    containers = []
+    for ordinal in dict.fromkeys(ordinals):
+        record = trace._containers[ordinal]
+        if isinstance(record, ContainerRecord):
+            containers.append(_container_from_record(op, record))
+    return tuple(container for container in containers if container is not None)
+
+
+def _container_from_registry(op: "Op") -> Container | None:
+    """Build the primary output container view from registry records when available."""
+
+    trace = getattr(op, "source_trace", None)
+    if trace is None or not hasattr(trace, "_containers"):
+        return None
+    if getattr(op, "container_spec", None) is None:
+        return None
+    index = _output_registry_index(trace)
+    labels = (getattr(op, "layer_label", None), getattr(op, "layer_label_raw", None))
+    for label in labels:
+        if label is None:
+            continue
+        for ordinal in index.get(label, ()):
+            record = trace._containers[ordinal]
+            if not isinstance(record, ContainerRecord):
+                continue
+            container = _container_from_record(op, record)
+            if container is not None:
+                return container
+    return None
+
+
+def _output_registry_index(trace: Any) -> dict[str, tuple[int, ...]]:
+    """Return a lazy reverse index from output op label to container ordinals."""
+
+    cached = trace.__dict__.get("_container_ordinals_by_output_op_label")
+    if isinstance(cached, dict):
+        return cached
+    index: dict[str, list[int]] = {}
+    for ordinal, record in getattr(trace, "_containers", {}).items():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if snapshot.role not in {Role.CALL_OUTPUT, Role.MODEL_OUTPUT}:
+                continue
+            for occurrence in snapshot.leaf_occurrences:
+                label = occurrence.producer_op_label
+                if label is not None:
+                    index.setdefault(label, []).append(ordinal)
+                if snapshot.role == Role.MODEL_OUTPUT:
+                    for output_label in getattr(trace, "output_layers", ()) or ():
+                        output_op = trace.ops[output_label]
+                        if tuple(getattr(output_op, "container_path", ()) or ()) == occurrence.path:
+                            index.setdefault(output_label, []).append(ordinal)
+                            raw_label = getattr(output_op, "layer_label_raw", None)
+                            if raw_label is not None:
+                                index.setdefault(raw_label, []).append(ordinal)
+    frozen = {label: tuple(dict.fromkeys(ordinals)) for label, ordinals in index.items()}
+    trace.__dict__["_container_ordinals_by_output_op_label"] = frozen
+    return frozen
+
+
+def _container_from_record(op: "Op", record: ContainerRecord) -> Container | None:
+    """Build a container view from the latest output snapshot in a record."""
+
+    output_snapshots = [
+        snapshot
+        for snapshot in record.snapshots
+        if snapshot.role in {Role.CALL_OUTPUT, Role.MODEL_OUTPUT}
+    ]
+    if not output_snapshots:
+        return None
+    snapshot = output_snapshots[-1]
+    root_kind: ContainerRootKind = "final_output" if snapshot.role == Role.MODEL_OUTPUT else "call"
+    leaves = _registry_sibling_leaves(op, snapshot)
+    return Container(
+        spec=snapshot.spec,
+        leaves=leaves,
+        root_kind=root_kind,
+        root_id=("container", record.ordinal),
+        supports_reconstruct=snapshot.reconstructable,
+    )
+
+
+def _registry_sibling_leaves(op: "Op", snapshot: Any) -> tuple["Op", ...]:
+    """Return leaf ops named by a registry snapshot."""
+
+    trace = getattr(op, "source_trace", None)
+    if trace is None:
+        return (op,)
+    leaves = []
+    for occurrence in snapshot.leaf_occurrences:
+        if snapshot.role == Role.MODEL_OUTPUT:
+            for output_label in getattr(trace, "output_layers", ()) or ():
+                output_op = trace.ops[output_label]
+                if tuple(getattr(output_op, "container_path", ()) or ()) == occurrence.path:
+                    leaves.append(output_op)
+                    break
+            continue
+        label = occurrence.producer_op_label
+        if label is not None and label in trace.ops:
+            leaves.append(trace.ops[label])
+    return tuple(leaves) or (op,)
 
 
 def _container_structure_capability(op: "Op") -> str:

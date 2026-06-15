@@ -14,6 +14,8 @@ from ...data_classes.internal_types import FuncExecutionContext
 from ...fastlog.types import ModuleStackFrame
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
+from ...ir.container import ContainerSpec, OutputPathComponent
+from ...ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, Role
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -377,12 +379,13 @@ class TorchBackend:
         if getattr(self_trace, "intervention_ready", False) or getattr(
             self_trace, "_capture_output_structure", False
         ):
+            output_entries = list(_walk_output_tensors_with_paths(outputs))
             output_tensors_w_addresses_all = [
                 (tensor, _container_path_to_address(path), None)
-                for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs)
+                for tensor, path, container_spec in output_entries
             ]
             output_specs_by_raw_label = {}
-            for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs):
+            for tensor, path, container_spec in output_entries:
                 _label_raw = _tl.get_tensor_label(tensor)
                 if _label_raw is not None:
                     output_specs_by_raw_label[_label_raw] = (
@@ -390,6 +393,7 @@ class TorchBackend:
                         container_spec,
                     )
             setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
+            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
         else:
             output_tensors_w_addresses_all = get_vars_of_type_from_obj(
                 outputs,
@@ -675,6 +679,52 @@ class TorchBackend:
         print(
             "************\nFeature extraction failed; returning model and environment to normal\n*************"
         )
+
+
+def _register_model_output_container_snapshot(
+    trace: "Trace",
+    output: object,
+    output_entries: list[
+        tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
+    ],
+) -> None:
+    """Register the final model-output container snapshot when present.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    output:
+        Raw model output object.
+    output_entries:
+        Path-aware tensor entries from the existing output walker.
+    """
+
+    spec = next((container_spec for _, _, container_spec in output_entries if container_spec), None)
+    if spec is None:
+        return
+    occurrences: list[ContainerLeafOccurrence] = []
+    for occ_index, (tensor, path, _container_spec) in enumerate(output_entries):
+        producer_label = _tl.get_tensor_label(tensor)
+        occurrences.append(
+            ContainerLeafOccurrence(
+                path=path,
+                producer_op_label=producer_label,
+                tensor_identity=producer_label,
+                occ_index=occ_index,
+            )
+        )
+    registry = trace._ensure_build_state().container_registry
+    registry.register_snapshot(
+        output,
+        site=ModelSite(model_ref="self:1", position="return"),
+        role=Role.MODEL_OUTPUT,
+        phase=Phase.POST_CALL,
+        observed_at_event_index=int(getattr(trace, "_layer_counter", 0)),
+        spec=spec,
+        leaf_occurrences=tuple(occurrences),
+        reconstructable=True,
+    )
 
 
 def _container_path_to_address(path: tuple[Any, ...]) -> str:

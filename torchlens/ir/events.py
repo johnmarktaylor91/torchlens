@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from .container import ContainerSpec
+from .container_registry import ContainerRegistry
 
 if TYPE_CHECKING:
     from .intervention import FireResult, InterventionTemplateRef
@@ -487,6 +488,7 @@ class TraceBuildState:
     raw_layer_type_counter: dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
     output_container_specs_by_raw_label: dict[str, ContainerSpec] = field(default_factory=dict)
     output_container_specs: tuple[ContainerSpec, ...] = ()
+    container_registry: ContainerRegistry = field(default_factory=ContainerRegistry)
     input_tensor_addresses: list[int] = field(default_factory=list)
     module_events: list[ModuleEvent] = field(default_factory=list)
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)
