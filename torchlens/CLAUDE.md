@@ -77,7 +77,13 @@ image_log = tl.trace(
 image_log.model_profile
 image_log.output_table(top_n=5)
 tl.repgeom.mds_evolution(image_log, save=mds_layers, min_n=8)
+tl.repgeom.rdm_evolution(image_log, save=mds_layers)
+tl.viz.feature_map_evolution(image_log, save=mds_layers)
+tl.repgeom.scree_evolution(image_log, save=mds_layers)
 image_log.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
+image_log.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
+image_log.draw(node_spec_fn=tl.viz.feature_map_node_spec())
+image_log.draw(node_spec_fn=tl.repgeom.scree_node_spec())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
@@ -85,6 +91,8 @@ is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target 
 activations to have been saved at capture time; use a curated `save=` subset, not `save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
+Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed
+from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 
 `backward_ready=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible

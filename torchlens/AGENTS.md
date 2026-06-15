@@ -73,7 +73,13 @@ image_trace = tl.trace(
 image_trace.model_profile
 image_trace.output_table(top_n=5)
 tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_n=8)
+tl.repgeom.rdm_evolution(image_trace, save=mds_layers)
+tl.viz.feature_map_evolution(image_trace, save=mds_layers)
+tl.repgeom.scree_evolution(image_trace, save=mds_layers)
 image_trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
+image_trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
+image_trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
+image_trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
@@ -81,6 +87,8 @@ is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target 
 activations to have been saved at capture time; use a curated `save=` subset, not `save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
+Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed
+from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 
 `record(keep_op=...)` and `record(keep_module=...)` are deprecated compatibility aliases for
 `record(save=...)`. `layers_to_save=[...]` still exists as the final-label two-pass path; an

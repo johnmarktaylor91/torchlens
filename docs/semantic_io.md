@@ -210,6 +210,76 @@ from `trace.raw_input` at draw time, then embeds a fresh PNG in the rendered
 node. If raw images are missing or the batch size no longer matches the
 coordinates, it renders an explicit point-cloud fallback.
 
+## Node-Visual Render Toolkit (provisional)
+
+Sprint C extends the provisional node-visual surface with PIL-only render
+primitives and three additional templates. These names are provisional pending
+review-day signoff.
+
+The low-level primitives live under `tl.viz`:
+
+```python
+heatmap_image = tl.viz.render_heatmap(array)
+lineplot_image = tl.viz.render_lineplot(series)
+scatter_image = tl.viz.render_image_scatter(coords, images=image_list)
+```
+
+They return bounded `PIL.Image.Image` objects directly. Matplotlib is
+intentionally not used, so graph drawing can compose compact deterministic
+images without adding a plotting dependency. These are separate from the older
+`tl.viz.heatmap(max_size=...)` visualizer factory, which returns a callable for
+tensor payload display.
+
+RDM annotations use the representation-geometry helpers:
+
+```python
+rdm_matrix = tl.repgeom.rdm(activations)
+rdms_by_layer = tl.repgeom.rdm_evolution(trace, save=mds_layers)
+trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
+```
+
+`rdm_evolution(...)` stores an `N x N` representational dissimilarity matrix
+for each selected saved activation site. `rdm_node_spec(...)` renders the
+stored matrix as a heatmap, optionally with symmetric raw-input thumbnails on
+both axes when the captured `trace.raw_input` still matches the stimulus batch.
+
+Feature and activation map annotations live under `tl.viz` because they are
+activation displays, not representation-geometry numerics:
+
+```python
+feature_maps = tl.viz.feature_map_evolution(trace, save=mds_layers)
+trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
+```
+
+`feature_map_evolution(...)` requires saved spatial activations with shape
+`[N, C, H, W]`; capture the convolutional layers you want to inspect before
+calling it. Non-spatial sites are skipped, and the call raises only when no
+selected site has spatial activations. By default, `feature_map_node_spec()`
+renders a channel-aggregate heatmap overlay on the matching stimulus thumbnail.
+Use `channels=None` for the aggregate view, explicit channel indices for
+specific channels, or `channels="top"` to select the strongest channels per
+stimulus.
+
+Scree annotations expose the layerwise eigenspectrum:
+
+```python
+eigenvalues = tl.repgeom.scree(activations)
+dim_info = tl.repgeom.effective_dimensionality(activations)
+scree_by_layer = tl.repgeom.scree_evolution(trace, save=mds_layers)
+trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+```
+
+`effective_dimensionality(...)` returns variance-explained and dimensionality
+summary fields, including participation ratio and the number of components
+needed for a variance threshold. `scree_node_spec(...)` renders the stored
+eigenvalues as a variance-explained line plot with a compact dimensionality
+callout.
+
+All four templates render at draw time through `Trace.draw(node_spec_fn=...)`.
+The evolution helpers store tensor payloads in `Trace._annotation_blobs`, so
+the visuals survive `.tlspec` save/load with the annotation payloads. No new
+`Trace` field was added for Sprint C.
+
 ## Keystone Image-Classifier Flow
 
 The copy-paste flow for an image classifier is:
