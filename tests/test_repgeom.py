@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 import subprocess
 import sys
+from typing import Any
 
 import numpy as np
 import pytest
+import torch
+from torch import nn
 
 import torchlens as tl
 from torchlens import repgeom
@@ -26,6 +30,58 @@ ANALYTIC_POINTS = np.array(
     ],
     dtype=np.float64,
 )
+
+
+class _MDSClassifier(nn.Module):
+    """Small multi-layer model with batch activations for MDS tests."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic linear layers."""
+
+        super().__init__()
+        self.fc1 = nn.Linear(5, 5)
+        self.fc2 = nn.Linear(5, 5)
+        with torch.no_grad():
+            self.fc1.weight.copy_(torch.eye(5))
+            self.fc1.bias.zero_()
+            self.fc2.weight.copy_(
+                torch.tensor(
+                    [
+                        [0.8, -0.6, 0.0, 0.0, 0.0],
+                        [0.6, 0.8, 0.0, 0.0, 0.0],
+                        [0.2, 0.1, 1.0, 0.0, 0.0],
+                        [0.0, 0.3, 0.0, 1.0, 0.0],
+                        [0.1, 0.0, 0.0, 0.0, 1.0],
+                    ],
+                    dtype=torch.float32,
+                )
+            )
+            self.fc2.bias.zero_()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run two saved linear layers."""
+
+        return self.fc2(torch.tanh(self.fc1(x)))
+
+
+class _RecurrentMDS(nn.Module):
+    """Model that reuses one linear layer across multiple passes."""
+
+    def __init__(self) -> None:
+        """Initialize the recurrent layer."""
+
+        super().__init__()
+        self.attn = nn.Linear(5, 5)
+        with torch.no_grad():
+            self.attn.weight.copy_(torch.eye(5))
+            self.attn.bias.zero_()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the same module three times."""
+
+        for _index in range(3):
+            x = torch.tanh(self.attn(x))
+        return x
 
 
 def _pairwise_distances(points: np.ndarray) -> np.ndarray:
@@ -68,6 +124,28 @@ def _reflection_allowed_procrustes_residual(source: np.ndarray, target: np.ndarr
     aligned = source_centered @ (u @ vt)
     denominator = np.linalg.norm(target_centered)
     return float(np.linalg.norm(aligned - target_centered) / denominator)
+
+
+def _mds_trace(model: nn.Module, save: Any) -> tl.Trace:
+    """Capture a deterministic MDS test trace.
+
+    Parameters
+    ----------
+    model:
+        Model to trace.
+    save:
+        TorchLens save selector.
+
+    Returns
+    -------
+    tl.Trace
+        Captured trace with requested saved activations.
+    """
+
+    torch.manual_seed(1001)
+    zeros = np.zeros((ANALYTIC_POINTS.shape[0], 3), dtype=np.float64)
+    x = torch.tensor(np.concatenate([ANALYTIC_POINTS, zeros], axis=1), dtype=torch.float32)
+    return tl.trace(model, x, save=save, random_seed=1001)
 
 
 def test_classical_mds_recovers_closed_form_asymmetric_fixture() -> None:
@@ -200,3 +278,76 @@ def test_repgeom_direct_import_clean() -> None:
     """Direct import of the submodule should succeed in the current interpreter."""
 
     assert importlib.import_module("torchlens.repgeom") is repgeom
+
+
+def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Path) -> None:
+    """MDS evolution should compute, align, annotate, and persist coords."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
+
+    coords_by_key = repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+
+    assert list(coords_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
+    assert trace._annotation_blobs is not None
+    first_key, second_key = list(coords_by_key)
+    for key, coords in coords_by_key.items():
+        assert coords.shape == (8, 2)
+        assert torch.equal(trace._annotation_blobs[key], torch.from_numpy(coords))
+
+    raw_second_distances = repgeom.activation_distance_matrix(linear_layers[1].out)
+    raw_second_coords, _info = repgeom.classical_mds(raw_second_distances, min_n=8)
+    expected_second = repgeom.procrustes_align(raw_second_coords, coords_by_key[first_key])
+    assert np.allclose(coords_by_key[second_key], expected_second)
+
+    bundle_path = tmp_path / "mds_evolution.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+
+    assert loaded._annotation_blobs is not None
+    for key, coords in coords_by_key.items():
+        assert torch.equal(loaded._annotation_blobs[key], torch.from_numpy(coords))
+
+
+def test_mds_evolution_recurrent_aggregate_requires_pass_selection() -> None:
+    """Aggregate recurrent layers should raise a clear pass-selection error."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+
+    with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
+        repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+
+
+def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
+    """A single recurrent pass selection should read op.out and store op coords."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    linear_op = next(
+        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
+    )
+
+    coords_by_key = repgeom.mds_evolution(trace, save=tl.label(linear_op.label), min_n=8)
+
+    key = f"op:{linear_op.label}"
+    assert list(coords_by_key) == [key]
+    assert coords_by_key[key].shape == (8, 2)
+    assert trace._annotation_blobs is not None
+    assert torch.equal(trace._annotation_blobs[key], torch.from_numpy(coords_by_key[key]))
+
+
+def test_mds_evolution_unsaved_activation_raises_capture_guidance() -> None:
+    """Selected layers without saved outs should raise save= guidance."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("tanh"))
+
+    with pytest.raises(ValueError, match="capture with save=.*MDS layers"):
+        repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+
+
+def test_mds_evolution_min_n_gate_is_honored() -> None:
+    """MDS evolution should forward the minimum stimulus gate."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+
+    with pytest.raises(ValueError, match="too few stimuli"):
+        repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=9)

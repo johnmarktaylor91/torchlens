@@ -6,6 +6,7 @@ helpers are for visualization-oriented representation geometry, not inference.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any, Literal, TypeAlias
 
 import numpy as np
@@ -13,6 +14,7 @@ import torch
 
 DistanceMetric: TypeAlias = Literal["euclidean", "cosine", "correlation"]
 MDSInfo: TypeAlias = dict[str, int | float | bool | str]
+MDSEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
 
 _RANK_TOLERANCE = 1e-12
 _SYMMETRY_TOLERANCE = 1e-10
@@ -406,6 +408,262 @@ def procrustes_align(source_2d: Any, target_2d: Any) -> np.ndarray:
     return source_centered @ rotation + target_mean
 
 
+def mds_evolution(
+    trace: Any,
+    save: Any | None = None,
+    *,
+    metric: DistanceMetric = "euclidean",
+    min_n: int = 8,
+    align: bool = True,
+) -> MDSEvolution:
+    """Compute and annotate per-layer 2D MDS coordinates.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace with saved activation payloads.
+    save:
+        Optional selector limiting which layers or pass-qualified ops to
+        process. When omitted, all layers with saved activations are used.
+    metric:
+        Activation distance metric passed to :func:`activation_distance_matrix`.
+    min_n:
+        Minimum number of stimuli required by :func:`classical_mds`.
+    align:
+        Whether to Procrustes-align each processed embedding to the previous
+        processed embedding.
+
+    Returns
+    -------
+    OrderedDict[str, np.ndarray]
+        Coordinate arrays keyed by ``layer:<layer_label>`` for single-pass
+        layers and ``op:<op.label>`` for pass-qualified recurrent selections.
+
+    Raises
+    ------
+    ValueError
+        If a selected site has no saved activation, is recurrent without a
+        pass-qualified selection, or fails MDS preconditions.
+    """
+
+    selected = _selected_mds_sites(trace, save)
+    coords_by_key: MDSEvolution = OrderedDict()
+    previous_coords: np.ndarray | None = None
+    for key, site, activations in selected:
+        distances = activation_distance_matrix(activations, metric=metric)
+        coords, _info = classical_mds(distances, n_components=2, min_n=min_n)
+        if align and previous_coords is not None:
+            coords = procrustes_align(coords, previous_coords)
+        _annotate_mds_coords(trace, site, coords)
+        coords_by_key[key] = coords
+        previous_coords = coords
+    return coords_by_key
+
+
+def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, Any]]:
+    """Resolve the layer or op payloads that should receive MDS coordinates.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace.
+    save:
+        Optional selector passed by the user.
+
+    Returns
+    -------
+    list[tuple[str, Any, Any]]
+        Tuples of annotation key, resolved annotation site, and activation
+        payload.
+    """
+
+    if save is None:
+        return _default_saved_mds_sites(trace)
+
+    sites = list(trace.resolve_sites(save, max_fanout=1_000_000))
+    selected_by_layer: dict[str, list[Any]] = OrderedDict()
+    for site in sites:
+        selected_by_layer.setdefault(str(getattr(site, "layer_label")), []).append(site)
+
+    selected: list[tuple[str, Any, Any]] = []
+    for layer_label, layer_sites in selected_by_layer.items():
+        layer = trace.layer_logs[layer_label]
+        if int(getattr(layer, "num_passes", 1)) > 1:
+            if len(layer_sites) != 1:
+                _raise_recurrent_layer_requires_pass(layer)
+            site = layer_sites[0]
+            if not _site_label_is_pass_qualified(site):
+                _raise_recurrent_layer_requires_pass(layer)
+            selected.append(_op_mds_site(site))
+        else:
+            selected.append(_single_pass_layer_mds_site(layer))
+    return selected
+
+
+def _default_saved_mds_sites(trace: Any) -> list[tuple[str, Any, Any]]:
+    """Return saved single-pass layer payloads for default MDS evolution.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace.
+
+    Returns
+    -------
+    list[tuple[str, Any, Any]]
+        Tuples of annotation key, resolved site, and activation payload.
+    """
+
+    selected: list[tuple[str, Any, Any]] = []
+    for layer in trace.layers:
+        if int(getattr(layer, "num_passes", 1)) > 1:
+            saved_ops = [op for op in layer.ops if bool(getattr(op, "has_saved_activation", False))]
+            if saved_ops:
+                _raise_recurrent_layer_requires_pass(layer)
+            continue
+        if bool(getattr(layer, "has_saved_activation", False)):
+            selected.append(_single_pass_layer_mds_site(layer))
+    if not selected:
+        raise ValueError(
+            "mds_evolution requires saved activations; capture with save= covering "
+            "the MDS layers before calling mds_evolution."
+        )
+    return selected
+
+
+def _single_pass_layer_mds_site(layer: Any) -> tuple[str, Any, Any]:
+    """Return the MDS payload tuple for a single-pass layer.
+
+    Parameters
+    ----------
+    layer:
+        Aggregate single-pass layer.
+
+    Returns
+    -------
+    tuple[str, Any, Any]
+        Annotation key, annotation site, and activation payload.
+    """
+
+    layer_label = str(getattr(layer, "layer_label"))
+    if not bool(getattr(layer, "has_saved_activation", False)):
+        _raise_unsaved_activation(layer_label)
+    out = getattr(layer, "out", None)
+    if out is None:
+        _raise_unsaved_activation(layer_label)
+    return f"layer:{layer_label}", layer.ops[0], out
+
+
+def _op_mds_site(op: Any) -> tuple[str, Any, Any]:
+    """Return the MDS payload tuple for a pass-qualified op.
+
+    Parameters
+    ----------
+    op:
+        Pass-qualified op selected by the caller.
+
+    Returns
+    -------
+    tuple[str, Any, Any]
+        Annotation key, annotation site, and activation payload.
+    """
+
+    op_label = str(getattr(op, "label"))
+    if not bool(getattr(op, "has_saved_activation", False)):
+        _raise_unsaved_activation(op_label)
+    out = getattr(op, "out", None)
+    if out is None:
+        _raise_unsaved_activation(op_label)
+    return f"op:{op_label}", op, out
+
+
+def _site_label_is_pass_qualified(site: Any) -> bool:
+    """Return whether a resolved site carries a pass-qualified op label.
+
+    Parameters
+    ----------
+    site:
+        Resolved layer-pass record.
+
+    Returns
+    -------
+    bool
+        Whether the final op label differs from the aggregate layer label.
+    """
+
+    return str(getattr(site, "label", "")) != str(getattr(site, "layer_label", ""))
+
+
+def _annotate_mds_coords(trace: Any, site: Any, coords: np.ndarray) -> None:
+    """Persist MDS coordinates as a Torch tensor annotation blob.
+
+    Parameters
+    ----------
+    trace:
+        Trace to annotate.
+    site:
+        Resolved layer-pass site.
+    coords:
+        ``N x 2`` coordinate array.
+
+    Returns
+    -------
+    None
+        The trace is mutated in place through ``Trace.annotate``.
+    """
+
+    from ..intervention.selectors import label
+
+    trace.annotate(
+        label(str(getattr(site, "label"))),
+        data=torch.from_numpy(coords),
+        max_fanout=1_000_000,
+    )
+
+
+def _raise_recurrent_layer_requires_pass(layer: Any) -> None:
+    """Raise the public recurrent-layer selector error for MDS evolution.
+
+    Parameters
+    ----------
+    layer:
+        Aggregate recurrent layer.
+
+    Raises
+    ------
+    ValueError
+        Always raised with a pass-selection diagnostic.
+    """
+
+    layer_label = str(getattr(layer, "layer_label"))
+    num_passes = int(getattr(layer, "num_passes", 0))
+    raise ValueError(
+        f"mds_evolution cannot compute aggregate MDS for recurrent layer "
+        f"{layer_label!r} with {num_passes} passes; select a pass "
+        f"(layer is recurrent), for example tl.label('{layer_label}:1')."
+    )
+
+
+def _raise_unsaved_activation(label: str) -> None:
+    """Raise the public unsaved-activation error for MDS evolution.
+
+    Parameters
+    ----------
+    label:
+        Layer or op label selected for MDS.
+
+    Raises
+    ------
+    ValueError
+        Always raised with capture guidance.
+    """
+
+    raise ValueError(
+        f"mds_evolution requires saved activations for {label!r}; capture with "
+        "save= covering the MDS layers before calling mds_evolution."
+    )
+
+
 def _validate_procrustes_points(points: np.ndarray, name: str) -> None:
     """Validate a 2D point cloud for Procrustes alignment.
 
@@ -432,5 +690,6 @@ def _validate_procrustes_points(points: np.ndarray, name: str) -> None:
 __all__ = [
     "activation_distance_matrix",
     "classical_mds",
+    "mds_evolution",
     "procrustes_align",
 ]
