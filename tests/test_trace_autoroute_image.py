@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import builtins
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -121,6 +124,7 @@ def test_unknown_cnn_uses_imagenet_default_with_warning() -> None:
     assert log.input_preprocessor.source == "imagenet_default"
     assert log.input_preprocessor.verified is False
     assert "UNVERIFIED" in log.input_preprocessor.description
+    assert log.raw_input is not None
 
 
 def test_transform_override_skips_image_autoroute() -> None:
@@ -136,6 +140,38 @@ def test_transform_override_skips_image_autoroute() -> None:
     )
 
     assert log.input_preprocessor is None
+
+
+def test_pil_raw_input_svg_embeds_montage_data_uri(tmp_path: Path) -> None:
+    """SVG raw-input image previews should embed local montages as data URIs."""
+
+    image_module = pytest.importorskip("PIL.Image")
+    images = [
+        image_module.new("RGB", (24, 24), color=(120, 30, 200)),
+        image_module.new("RGB", (24, 24), color=(20, 180, 90)),
+    ]
+    log = tl.trace(
+        _ImageModel(),
+        images,
+        transform=lambda _: torch.ones(2, 3, 8, 8),
+        layers_to_save="none",
+    )
+    output_path = tmp_path / "input_display.svg"
+
+    log.draw(
+        vis_outpath=str(output_path),
+        vis_save_only=True,
+        vis_fileformat="svg",
+    )
+    svg_text = output_path.read_text(encoding="utf-8")
+    href_match = re.search(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', svg_text)
+
+    assert href_match is not None
+    href = href_match.group(1)
+    assert href.startswith("data:image/png;base64,")
+    payload = href.removeprefix("data:image/png;base64,")
+    assert len(base64.b64decode(payload)) > 100
+    assert "/tmp/torchlens_visualizers_" not in svg_text
 
 
 def test_tensor_input_does_not_route_to_image_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -164,6 +200,7 @@ def test_list_of_pil_images_batches() -> None:
 
     assert log.input_preprocessor is not None
     assert log.num_ops > 0
+    assert isinstance(log.raw_input, list)
 
 
 def test_pil_import_failure_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,6 +10,7 @@ are dropped or stringified before writing ``metadata.pkl``.
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
@@ -29,6 +30,9 @@ _RAW_INPUT_TENSOR_BYTES_LIMIT = 1_000_000
 _RAW_OUTPUT_TEXT_LIMIT = _RAW_INPUT_TEXT_LIMIT
 _RAW_OUTPUT_TENSOR_BYTES_LIMIT = _RAW_INPUT_TENSOR_BYTES_LIMIT
 _RAW_CONTAINER_ITEM_LIMIT = 20
+_RAW_INPUT_IMAGE_MAX_EDGE = 256
+_RAW_INPUT_IMAGE_BYTES_LIMIT = 256_000
+_RAW_IMAGE_SENTINEL = "__torchlens_small_raw_image__"
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -469,8 +473,11 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
     Returns
     -------
     Any
-        Truncated string, small tensor, recursively bounded container, or
-        ``None`` when the value is too large or unsupported.
+        Truncated string, small tensor, bounded image bytes, recursively
+        bounded container, or ``None`` when the value is too large or
+        unsupported. PIL images under ``save_raw_input="small"`` are copied,
+        downsampled to at most 256 px on the longest edge, encoded as PNG or
+        JPEG bytes, and dropped if the encoded payload exceeds 256 KB.
     """
 
     if value is None:
@@ -491,6 +498,10 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
             "Dropping %s tensor over small-policy cap: %s bytes", field_name, tensor_bytes
         )
         return None
+    if field_name == "raw_input":
+        small_image = _small_raw_image_value(value)
+        if small_image is not None:
+            return small_image
     if isinstance(value, list):
         return [
             _small_raw_value(item, field_name=field_name)
@@ -512,6 +523,80 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
         type(value).__name__,
     )
     return None
+
+
+def _small_raw_image_value(value: Any) -> dict[str, Any] | None:
+    """Return bounded bytes for a PIL image under the small raw-input policy.
+
+    Parameters
+    ----------
+    value:
+        Candidate raw input value.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Sentinel dictionary containing encoded image bytes and metadata, or
+        ``None`` when ``value`` is not a PIL image or cannot fit the cap.
+    """
+
+    try:
+        from PIL.Image import Image as PILImage
+    except ImportError:
+        return None
+    if not isinstance(value, PILImage):
+        return None
+
+    image = value.copy()
+    original_size = tuple(image.size)
+    image.thumbnail((_RAW_INPUT_IMAGE_MAX_EDGE, _RAW_INPUT_IMAGE_MAX_EDGE))
+    if image.mode not in {"RGB", "L"}:
+        image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+    encoded = _encode_small_raw_image(image, fmt="PNG")
+    image_format = "PNG"
+    if encoded is None and image.mode != "RGBA":
+        encoded = _encode_small_raw_image(image.convert("RGB"), fmt="JPEG")
+        image_format = "JPEG"
+    if encoded is None:
+        _LOGGER.debug("Dropping raw_input PIL image over small-policy cap.")
+        return None
+    return {
+        _RAW_IMAGE_SENTINEL: True,
+        "format": image_format,
+        "mode": image.mode,
+        "size": tuple(image.size),
+        "original_size": original_size,
+        "max_edge": _RAW_INPUT_IMAGE_MAX_EDGE,
+        "bytes_limit": _RAW_INPUT_IMAGE_BYTES_LIMIT,
+        "data": encoded,
+    }
+
+
+def _encode_small_raw_image(image: Any, *, fmt: str) -> bytes | None:
+    """Encode a PIL image and enforce the small-policy byte cap.
+
+    Parameters
+    ----------
+    image:
+        PIL image to encode.
+    fmt:
+        Pillow format name.
+
+    Returns
+    -------
+    bytes | None
+        Encoded bytes when they fit the cap, otherwise ``None``.
+    """
+
+    buffer = BytesIO()
+    save_kwargs: dict[str, Any] = {"format": fmt}
+    if fmt == "JPEG":
+        save_kwargs.update({"quality": 85, "optimize": True})
+    image.save(buffer, **save_kwargs)
+    data = buffer.getvalue()
+    if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
+        return None
+    return data
 
 
 def _blobify_tensor_field(

@@ -2157,7 +2157,10 @@ def _trace_torch_model(
             input_args = transformed_input
             input_kwargs = None
     else:
+        original_input_args = input_args
         input_args = _coerce_input_args(model, input_args)
+        if _should_store_auto_coerced_raw_input(original_input_args, input_args):
+            raw_input = original_input_args
 
     check_model_and_input_variants(model, input_args, input_kwargs)
     grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
@@ -2574,6 +2577,92 @@ def _trace_torch_model(
             pickle.dump(trace, file)
 
     return trace
+
+
+def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:
+    """Return whether auto-coercion should preserve the original raw input.
+
+    Parameters
+    ----------
+    original:
+        User-provided input before duck-typed coercion.
+    coerced:
+        Model-ready input returned by ``_coerce_input_args``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a supported non-tensor ergonomic input was converted to a
+        different object and should be available for display/save.
+    """
+
+    return coerced is not original and _contains_auto_coercible_raw_input(original)
+
+
+def _contains_auto_coercible_raw_input(value: Any) -> bool:
+    """Return whether ``value`` contains a raw input handled by auto-coercion.
+
+    Parameters
+    ----------
+    value:
+        Candidate user input or nested positional container.
+
+    Returns
+    -------
+    bool
+        ``True`` for text, PIL images, NumPy arrays, or containers containing
+        one of those values.
+    """
+
+    if isinstance(value, str) or _is_pil_image_value(value) or _is_numpy_array_value(value):
+        return True
+    if isinstance(value, collections.abc.Mapping):
+        return any(_contains_auto_coercible_raw_input(item) for item in value.values())
+    if isinstance(value, collections.abc.Sequence) and not isinstance(value, bytes | bytearray):
+        return any(_contains_auto_coercible_raw_input(item) for item in value)
+    return False
+
+
+def _is_pil_image_value(value: Any) -> bool:
+    """Return whether ``value`` is a PIL image without requiring PIL at import.
+
+    Parameters
+    ----------
+    value:
+        Candidate object.
+
+    Returns
+    -------
+    bool
+        ``True`` when Pillow is installed and ``value`` is a PIL image.
+    """
+
+    try:
+        from PIL.Image import Image as PILImage
+    except ImportError:
+        return False
+    return isinstance(value, PILImage)
+
+
+def _is_numpy_array_value(value: Any) -> bool:
+    """Return whether ``value`` is a NumPy array without requiring NumPy.
+
+    Parameters
+    ----------
+    value:
+        Candidate object.
+
+    Returns
+    -------
+    bool
+        ``True`` when NumPy is installed and ``value`` is an ndarray.
+    """
+
+    try:
+        import numpy as np
+    except ImportError:
+        return False
+    return isinstance(value, np.ndarray)
 
 
 def log_model_metadata(

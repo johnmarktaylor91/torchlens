@@ -84,6 +84,7 @@ def render_model_summary(
     include_ops: Optional[bool] = None,
     max_rows: Optional[int] = 200,
     print_to: Optional[Callable[[str], None]] = None,
+    show_input_preprocessing_details: bool = False,
 ) -> str:
     """Render a textual summary for a ``Trace``.
 
@@ -112,6 +113,8 @@ def render_model_summary(
         Maximum number of rows to render per table. ``None`` disables truncation.
     print_to:
         Optional callable that receives the rendered summary.
+    show_input_preprocessing_details:
+        Whether to include input preprocessing verification/source detail.
 
     Returns
     -------
@@ -139,7 +142,10 @@ def render_model_summary(
             show_ops=resolved_show_ops,
             max_rows=max_rows,
         )
-    text = f"{format_discoverability_summary(trace)}\n\n{legacy_text}"
+    text = (
+        f"{format_discoverability_summary(trace, show_input_preprocessing_details=show_input_preprocessing_details)}"
+        f"\n\n{legacy_text}"
+    )
     if print_to is not None:
         print_to(text)
     return text
@@ -193,13 +199,19 @@ def _live_op_count(trace: "Trace") -> int:
     return len(trace._raw_layer_dict)
 
 
-def format_discoverability_summary(trace: "Trace") -> str:
+def format_discoverability_summary(
+    trace: "Trace",
+    *,
+    show_input_preprocessing_details: bool = False,
+) -> str:
     """Render the Phase 13 user-facing discoverability summary.
 
     Parameters
     ----------
     trace:
         Model log to summarize.
+    show_input_preprocessing_details:
+        Whether to include verification/source detail for input preprocessing.
 
     Returns
     -------
@@ -216,7 +228,10 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  name: {getattr(trace, 'trace_label', None)!r}",
         f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
         f"  input_shape: {_input_shape_summary(trace)}",
-        *_input_preprocessing_lines(trace),
+        *_input_preprocessing_lines(
+            trace,
+            show_details=show_input_preprocessing_details,
+        ),
         *_output_postprocessing_lines(trace),
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
@@ -250,13 +265,19 @@ def format_discoverability_summary(trace: "Trace") -> str:
     return "\n".join(lines)
 
 
-def _input_preprocessing_lines(trace: "Trace") -> list[str]:
+def _input_preprocessing_lines(
+    trace: "Trace",
+    *,
+    show_details: bool = False,
+) -> list[str]:
     """Return optional input-preprocessing summary lines.
 
     Parameters
     ----------
     trace:
         Model log to inspect.
+    show_details:
+        Whether to include verification/source detail.
 
     Returns
     -------
@@ -268,7 +289,18 @@ def _input_preprocessing_lines(trace: "Trace") -> list[str]:
     record = getattr(trace, "input_preprocessor", None)
     if record is None:
         return []
-    return ["Input preprocessing:", f"  {record.description}"]
+    lines = ["Input preprocessing:", f"  {record.description}"]
+    if not show_details:
+        return lines
+    verified = bool(getattr(record, "verified", False))
+    status = "verified" if verified else "UNVERIFIED"
+    lines.append(
+        f"  status: {status}; source={getattr(record, 'source', None)}; "
+        f"identifier={getattr(record, 'identifier', None)}"
+    )
+    if not verified:
+        lines.append("  WARNING: input preprocessing is UNVERIFIED; inspect transform assumptions.")
+    return lines
 
 
 def _output_postprocessing_lines(trace: "Trace") -> list[str]:

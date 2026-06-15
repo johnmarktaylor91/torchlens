@@ -318,8 +318,21 @@ def test_trace_with_attached_tokenizer_string() -> None:
     try:
         assert len(trace.layer_list) > 0
         assert model.tokenizer_calls == [("hello world", "pt")]
+        assert trace.raw_input == "hello world"
     finally:
         trace.cleanup()
+
+
+def test_trace_with_numpy_array_preserves_raw_input() -> None:
+    """End-to-end auto-coercion should retain the original NumPy input."""
+
+    np = pytest.importorskip("numpy")
+    array = np.ones((1, 3), dtype=np.float32)
+    model = nn.Linear(3, 2)
+
+    trace = tl.trace(model, array, layers_to_save="none")
+
+    assert trace.raw_input is array
 
 
 def test_fastlog_record_with_attached_tokenizer_string() -> None:
@@ -422,5 +435,6 @@ def test_trace_with_pil_image_and_attached_processor() -> None:
     try:
         assert len(trace.layer_list) > 0
         assert model.processor_calls == 1
+        assert trace.raw_input is not None
     finally:
         trace.cleanup()

@@ -29,8 +29,11 @@ Key mechanisms:
   Trace. This check prevents IndexError crashes when nodes reference absent layers.
 """
 
+import base64
 import copy
+import html
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -770,6 +773,7 @@ def draw(
     order_siblings: bool = True,
     show_containers: ShowContainersLiteral = False,
     container_max_inline: int = 12,
+    show_input_transform_summary: bool = False,
 ) -> Any:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -849,6 +853,9 @@ def draw(
             dashed member-of ties for mid-graph output containers.
         container_max_inline: Maximum homogeneous container leaves to inline in
             ``"collapsed"``/``"auto"`` modes.
+        show_input_transform_summary: Whether to show input preprocessing
+            provenance next to the raw input node when available. Defaults to
+            ``False`` to preserve existing raw-input node rendering.
 
     Returns:
         The Graphviz DOT source string.
@@ -1142,6 +1149,7 @@ def draw(
             rankdir,
             show_containers,
             collapsed_container_nodes,
+            show_input_transform_summary,
         )
 
     for node_args in getattr(self, "_pending_container_collapse_nodes", []):
@@ -1237,7 +1245,7 @@ def draw(
         if compose_code_panel:
             # Compose the graph SVG beside a standalone code panel so the inline
             # preview matches the saved output and leaves the graph undistorted.
-            graph_svg = dot.pipe(format="svg").decode("utf-8")
+            graph_svg = _inline_svg_local_images(dot.pipe(format="svg").decode("utf-8"))
             combined_svg = compose_graph_with_code_panel(graph_svg, cast(str, source_text))
             display_fn(SVG(combined_svg))
         else:
@@ -1276,6 +1284,8 @@ def draw(
             else:
                 cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
                 subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+                if vis_fileformat == "svg":
+                    _inline_svg_file_local_images(rendered_path)
             _validate_rendered_output(rendered_path, source_path, "forward graph")
             if not vis_save_only:
                 _view_rendered_file(rendered_path)
@@ -1332,7 +1342,227 @@ def _render_graph_only_svg(engine: str, source_path: str, timeout: int) -> str:
         check=True,
         capture_output=True,
     )
-    return completed.stdout.decode("utf-8")
+    return _inline_svg_local_images(completed.stdout.decode("utf-8"))
+
+
+_SVG_IMAGE_TAG_RE = re.compile(r"<image\b(?P<attrs>[^>]*)>", re.IGNORECASE)
+_SVG_ATTR_RE = re.compile(r"""(?P<name>[\w:.-]+)\s*=\s*(?P<quote>["'])(?P<value>.*?)(?P=quote)""")
+
+
+def _inline_svg_file_local_images(svg_path: str) -> None:
+    """Inline local image hrefs in a saved SVG file.
+
+    Parameters
+    ----------
+    svg_path:
+        Path to the rendered SVG file to update in place.
+    """
+
+    with open(svg_path, encoding="utf-8") as svg_file:
+        svg_text = svg_file.read()
+    inlined_svg = _inline_svg_local_images(svg_text)
+    if inlined_svg != svg_text:
+        with open(svg_path, "w", encoding="utf-8") as svg_file:
+            svg_file.write(inlined_svg)
+
+
+def _inline_svg_local_images(svg_text: str) -> str:
+    """Replace local SVG image references with embedded data URIs.
+
+    Parameters
+    ----------
+    svg_text:
+        SVG text produced by Graphviz.
+
+    Returns
+    -------
+    str
+        SVG text with existing local image hrefs inlined. Non-file hrefs are
+        left untouched. Missing or unreadable local files are replaced with a
+        short placeholder so the node is not an empty image box.
+    """
+
+    def replace_image_tag(match: re.Match[str]) -> str:
+        """Return an updated SVG image tag or placeholder text."""
+
+        tag = match.group(0)
+        attrs = _svg_attrs_to_dict(match.group("attrs"))
+        href_attr = "xlink:href" if "xlink:href" in attrs else "href"
+        href = attrs.get(href_attr)
+        if href is None or _is_non_file_svg_href(href):
+            return tag
+        image_path = _resolve_svg_image_path(href)
+        try:
+            payload = image_path.read_bytes()
+        except OSError:
+            return _svg_image_placeholder(attrs)
+        mime_type = _svg_image_mime_type(image_path)
+        data_uri = f"data:{mime_type};base64,{base64.b64encode(payload).decode('ascii')}"
+        return _replace_svg_attr_value(tag, href_attr, data_uri)
+
+    return _SVG_IMAGE_TAG_RE.sub(replace_image_tag, svg_text)
+
+
+def _svg_attrs_to_dict(attrs_text: str) -> dict[str, str]:
+    """Parse simple SVG tag attributes into a dictionary.
+
+    Parameters
+    ----------
+    attrs_text:
+        Raw attribute text from an SVG tag.
+
+    Returns
+    -------
+    dict[str, str]
+        Attribute values keyed by attribute name.
+    """
+
+    return {
+        match.group("name"): html.unescape(match.group("value"))
+        for match in _SVG_ATTR_RE.finditer(attrs_text)
+    }
+
+
+def _is_non_file_svg_href(href: str) -> bool:
+    """Return whether an SVG href should not be treated as a local file.
+
+    Parameters
+    ----------
+    href:
+        SVG image href value.
+
+    Returns
+    -------
+    bool
+        True for data URIs, fragments, and network URLs.
+    """
+
+    lowered = href.lower()
+    return (
+        lowered.startswith("data:")
+        or lowered.startswith("#")
+        or lowered.startswith("http://")
+        or lowered.startswith("https://")
+        or lowered.startswith("file:")
+    )
+
+
+def _resolve_svg_image_path(href: str) -> Path:
+    """Resolve an SVG href to a local path.
+
+    Parameters
+    ----------
+    href:
+        SVG image href value.
+
+    Returns
+    -------
+    Path
+        Local image path. The caller handles missing or unreadable files.
+    """
+
+    candidate = Path(href).expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    return candidate
+
+
+def _replace_svg_attr_value(tag: str, attr_name: str, value: str) -> str:
+    """Replace an attribute value in an SVG tag.
+
+    Parameters
+    ----------
+    tag:
+        SVG tag text.
+    attr_name:
+        Attribute name to replace.
+    value:
+        Replacement attribute value.
+
+    Returns
+    -------
+    str
+        Updated SVG tag.
+    """
+
+    escaped_value = html.escape(value, quote=True)
+    pattern = re.compile(
+        rf"""(?P<prefix>\b{re.escape(attr_name)}\s*=\s*)(?P<quote>["']).*?(?P=quote)"""
+    )
+    return pattern.sub(rf"\g<prefix>\g<quote>{escaped_value}\g<quote>", tag, count=1)
+
+
+def _svg_image_mime_type(path: Path) -> str:
+    """Return the data-URI MIME type for an SVG image file.
+
+    Parameters
+    ----------
+    path:
+        Local image path.
+
+    Returns
+    -------
+    str
+        MIME type for the data URI.
+    """
+
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".gif":
+        return "image/gif"
+    if suffix == ".svg":
+        return "image/svg+xml"
+    return "image/png"
+
+
+def _svg_image_placeholder(attrs: Mapping[str, str]) -> str:
+    """Return SVG text for an unreadable image placeholder.
+
+    Parameters
+    ----------
+    attrs:
+        Parsed attributes from the original SVG image tag.
+
+    Returns
+    -------
+    str
+        Replacement SVG text element.
+    """
+
+    x = _svg_numeric_attr(attrs, "x")
+    y = _svg_numeric_attr(attrs, "y")
+    width = _svg_numeric_attr(attrs, "width")
+    height = _svg_numeric_attr(attrs, "height")
+    text_x = x + (width / 2.0)
+    text_y = y + (height / 2.0)
+    return (
+        f'<text text-anchor="middle" x="{text_x:.2f}" y="{text_y:.2f}" '
+        'font-family="Times,serif" font-size="10.00">preview unavailable</text>'
+    )
+
+
+def _svg_numeric_attr(attrs: Mapping[str, str], name: str) -> float:
+    """Read a numeric SVG attribute, defaulting to zero.
+
+    Parameters
+    ----------
+    attrs:
+        Parsed SVG attributes.
+    name:
+        Attribute name to parse.
+
+    Returns
+    -------
+    float
+        Parsed number, or zero when absent/unparseable.
+    """
+
+    value = attrs.get(name, "0")
+    match = re.match(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", value)
+    if match is None:
+        return 0.0
+    return float(match.group(0))
 
 
 def _write_composed_code_panel(
@@ -3935,6 +4165,7 @@ def _add_node_to_graphviz(
     rankdir: str = "BT",
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
+    show_input_transform_summary: bool = False,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -3987,6 +4218,7 @@ def _add_node_to_graphviz(
             node_label_fields,
             show_containers,
             collapsed_container_nodes,
+            show_input_transform_summary,
         )
 
     _add_edges_for_node(
@@ -4213,6 +4445,7 @@ def _build_layer_node(
     node_label_fields: list[str] | None = None,
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
+    show_input_transform_summary: bool = False,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
@@ -4302,6 +4535,8 @@ def _build_layer_node(
         )
         if raw_input_attrs is not None:
             node_args.update(raw_input_attrs)
+        if show_input_transform_summary:
+            node_args.update(_input_transform_summary_attrs(self, node_args))
     elif node.is_output:
         raw_output_attrs = _render_raw_output(getattr(self, "decoded_output", None))
         if raw_output_attrs is None:
@@ -4399,6 +4634,37 @@ def _render_raw_input(
         total = len(images) if include_more else min(len(images), max_items)
         return _render_raw_input_image_batch(trace, images, max_items=max_items, total=total)
     return None
+
+
+def _input_transform_summary_attrs(trace: "Trace", node_args: dict[str, str]) -> dict[str, str]:
+    """Return opt-in input preprocessing Graphviz attributes.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the rendered input node.
+    node_args:
+        Current input-node attributes, used to preserve and extend tooltips.
+
+    Returns
+    -------
+    dict[str, str]
+        Attributes to merge into the input node, or an empty dict when no
+        preprocessing record is present.
+    """
+
+    record = getattr(trace, "input_preprocessor", None)
+    if record is None:
+        return {}
+    verified = bool(getattr(record, "verified", False))
+    status = "verified" if verified else "UNVERIFIED"
+    source = str(getattr(record, "source", "unknown"))
+    description = _truncate_raw_input_text(str(getattr(record, "description", "")), limit=72)
+    attrs = {"xlabel": render_lines_to_html(["preprocess", description, f"{status}: {source}"])}
+    summary = f"Input preprocessing {status}: {description}"
+    existing_tooltip = node_args.get("tooltip")
+    attrs["tooltip"] = f"{existing_tooltip}\n{summary}" if existing_tooltip else summary
+    return attrs
 
 
 def _batch_render_limit(batch_render: str) -> int:
@@ -4532,11 +4798,17 @@ def _render_raw_input_image_batch(
         return None
     image_dir = _raw_input_visualizer_dir(trace)
     image_path = image_dir / "input_batch_montage.png"
-    batch_summary.montage(images, max_items).save(image_path)
     label_lines = ["input"]
     more_count = total - min(total, max_items)
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
+    try:
+        batch_summary.montage(images, max_items).save(image_path)
+    except OSError:
+        return {
+            "label": render_lines_to_html([*label_lines, "preview unavailable"]),
+            "tooltip": f"{total} input images (preview unavailable)",
+        }
     return {
         "image": str(image_path),
         "imagescale": "true",

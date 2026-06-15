@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 import dataclasses
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
@@ -23,6 +24,7 @@ from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .payload_codec import materialize_transport_tensor
 from .paths import resolve_bundle_blob_path
+from .scrub import _RAW_IMAGE_SENTINEL
 from ..backends import BackendRuntimeCompatibilityError
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
@@ -93,6 +95,8 @@ def rehydrate_trace(
 
     trace = Trace.__new__(Trace)
     trace.__setstate__(state_for_load)
+    trace.raw_input = _rehydrate_small_raw_images(getattr(trace, "raw_input", None))
+    trace.raw_output = _rehydrate_small_raw_images(getattr(trace, "raw_output", None))
     _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 
@@ -124,6 +128,41 @@ def rehydrate_trace(
     _set_payload_load_status(trace, manifest_index, payload_statuses)
     _restore_trace_state_order(trace, portable_key_order)
     return trace
+
+
+def _rehydrate_small_raw_images(value: Any) -> Any:
+    """Restore bounded raw-image sentinels to PIL images when possible.
+
+    Parameters
+    ----------
+    value:
+        Scrubbed raw input or output value.
+
+    Returns
+    -------
+    Any
+        Value with TorchLens small-image sentinels replaced by PIL images when
+        Pillow can decode them; otherwise the original sentinel is retained.
+    """
+
+    if isinstance(value, dict) and value.get(_RAW_IMAGE_SENTINEL) is True:
+        data = value.get("data")
+        if not isinstance(data, bytes):
+            return value
+        try:
+            from PIL import Image
+        except ImportError:
+            return value
+        image = Image.open(BytesIO(data))
+        image.load()
+        return image
+    if isinstance(value, list):
+        return [_rehydrate_small_raw_images(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_rehydrate_small_raw_images(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _rehydrate_small_raw_images(item) for key, item in value.items()}
+    return value
 
 
 def _source_io_format_version(

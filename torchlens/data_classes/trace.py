@@ -5019,6 +5019,7 @@ class Trace(CapturedRun):
         order_siblings: bool = True,
         show_containers: Literal[False, "labels", "cluster", "collapsed", "auto"] = False,
         container_max_inline: int = 12,
+        show_input_transform_summary: bool = False,
     ) -> Any:
         """Render the computational graph for this model log.
 
@@ -5029,7 +5030,7 @@ class Trace(CapturedRun):
         vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
         vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
-        container_max_inline:
+        container_max_inline, show_input_transform_summary:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.draw`.
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
@@ -5097,6 +5098,7 @@ class Trace(CapturedRun):
             order_siblings=order_siblings,
             show_containers=show_containers,
             container_max_inline=container_max_inline,
+            show_input_transform_summary=show_input_transform_summary,
         )
 
     def add_node_overlay(
@@ -5419,6 +5421,7 @@ class Trace(CapturedRun):
         max_rows: Optional[int] = 200,
         print_to: Optional[Callable[[str], None]] = None,
         count_fma_as_two: bool = False,
+        show_input_preprocessing_details: bool = False,
     ) -> str:
         """Render a concise text summary of the logged model.
 
@@ -5447,6 +5450,9 @@ class Trace(CapturedRun):
             FLOP/MAC convention marker for summary consumers. Current captured
             counts are displayed as stored; this flag reserves the public
             convention toggle without changing saved metadata.
+        show_input_preprocessing_details:
+            Whether to include verification/source detail for input
+            preprocessing records.
 
         Returns
         -------
@@ -5467,6 +5473,7 @@ class Trace(CapturedRun):
             include_ops=include_ops,
             max_rows=max_rows,
             print_to=print_to,
+            show_input_preprocessing_details=show_input_preprocessing_details,
         )
 
     def render_dagua_graph(
