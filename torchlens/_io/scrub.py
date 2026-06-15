@@ -319,6 +319,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_last_sibling_ordering_decision",
         "_defer_streaming_bundle_finalization",
         "_keep_outs_in_memory",
+        "_capture_output_structure",
         "_out_sink",
         "_out_writer",
         "_validation_replay_status",

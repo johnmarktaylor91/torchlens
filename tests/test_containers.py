@@ -128,6 +128,39 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
     assert output_container["past_key_values"][0][1].layer_label in trace.output_layers
 
 
+def test_capture_output_structure_reconstructs_without_intervention_ready() -> None:
+    """Opt-in final-output structure reconstructs without intervention metadata."""
+
+    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), capture_output_structure=True)
+    rebuilt = trace.reconstruct_output()
+
+    assert trace.intervention_ready is False
+    assert isinstance(rebuilt, DemoModelOutput)
+    assert torch.equal(rebuilt["logits"], torch.tensor([2.0]))
+    assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))
+
+
+def test_capture_output_structure_default_off_preserves_output_shape_metadata() -> None:
+    """Default OFF matches explicit False and does not capture final output specs."""
+
+    model = HFLikeModel()
+    x = torch.tensor([1.0])
+    default_trace = tl.trace(model, x, random_seed=0)
+    explicit_false_trace = tl.trace(model, x, random_seed=0, capture_output_structure=False)
+
+    assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
+    assert (
+        [default_trace.ops[label].container_spec for label in default_trace.output_layers]
+        == [
+            explicit_false_trace.ops[label].container_spec
+            for label in explicit_false_trace.output_layers
+        ]
+        == [None, None, None]
+    )
+    with pytest.raises(ValueError, match="No reconstructable final-output container"):
+        default_trace.reconstruct_output()
+
+
 def test_custom_registered_container_reconstructs() -> None:
     """Registered custom containers are captured and reconstructable."""
 
@@ -180,3 +213,16 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
     assert container.reconstructable is False
     with pytest.raises(ValueError, match="Path-only"):
         container.reconstruct()
+
+
+def test_backend_none_container_capability_returns_no_false_view() -> None:
+    """A backend declaring no structure does not expose a path-only false view."""
+
+    trace = tl.trace(TupleModel(), torch.tensor([1.0]), intervention_ready=True)
+    op = trace.ops[trace.output_layers[0]].copy()
+    op.source_trace = trace
+    trace.backend = "mlx"
+    op.container_spec = None
+    op.container_path = (TupleIndex(0),)
+
+    assert op.container is None

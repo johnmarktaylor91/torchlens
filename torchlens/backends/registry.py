@@ -28,6 +28,7 @@ TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("epoch2_tinygrad_t1", ()),
     ("epoch3_codec_materialization", ("payload_policy", "save_preview")),
     ("epoch4_intermediate_derived_grads", ()),
+    ("epoch5_container_structure", ("capture_output_structure",)),
 )
 """Ordered public trace-option capability epochs.
 
@@ -124,6 +125,11 @@ class BackendCapabilities:
     intermediate_derived_grads:
         Whether the backend can derive exact op-level gradients outside true
         backward capture.
+    container_structure:
+        Public output-container structure level. ``"none"`` means no stable
+        paths/specs, ``"paths_only"`` means path metadata may exist but is not
+        generally reconstructable, and ``"full_spec"`` means full portable
+        ``ContainerSpec`` metadata is supported.
     module_identity_modes:
         Supported module identity modes.
     save_levels:
@@ -141,6 +147,7 @@ class BackendCapabilities:
     payload_materialization: bool
     streaming: bool
     intermediate_derived_grads: bool = False
+    container_structure: Literal["none", "paths_only", "full_spec"] = "none"
     module_identity_modes: tuple[str, ...] = ("torch_module",)
     save_levels: tuple[str, ...] = ("audit", "executable_with_callables", "portable")
     trace_options: tuple[str, ...] = ()

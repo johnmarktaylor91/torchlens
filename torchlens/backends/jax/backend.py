@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from functools import reduce
 from operator import mul
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from ..._deprecations import MISSING, MissingType
 from ...backends import BackendName, BackendUnsupportedError
@@ -39,7 +39,7 @@ from ...ir.events import (
 )
 from ...ir.events import is_control_edge_use
 from ...ir.intervention import FunctionEventInput
-from ...ir.container import DictKey, TupleIndex
+from ...ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -222,6 +222,9 @@ class _JaxIntermediateTapSpec:
     value: Any
     aval: str
     dtype_ref: DtypeRef | None
+
+
+_UNSUPPORTED_CONTAINER_SPEC: Final = object()
 
 
 class JAXBackend:
@@ -481,12 +484,13 @@ class JAXBackend:
             jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
         )
         output_leaf_paths = self._output_leaf_paths(output)
+        output_container_spec = self._builtin_output_container_spec(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_equations(trace, result)
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
-        self._mark_output_events(trace, result.outputs, output_leaf_paths)
+        self._mark_output_events(trace, result.outputs, output_leaf_paths, output_container_spec)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         if use_pytree_module:
@@ -1111,7 +1115,7 @@ class JAXBackend:
         output: object,
         parents: tuple[ParentEdge, ...],
         parent_arg_positions: dict[str, dict[Any, str]],
-        container_path: tuple[str, ...],
+        container_path: tuple[object, ...],
         annotations: Mapping[str, object],
         equivalence_class: str | None = None,
         module_stack: Sequence[str] = (),
@@ -1373,6 +1377,7 @@ class JAXBackend:
         trace: Trace,
         outputs: Sequence[Any],
         output_leaf_paths: Sequence[tuple[object, ...]],
+        output_container_spec: ContainerSpec | None,
     ) -> None:
         """Mark final equation outputs as output parents.
 
@@ -1384,6 +1389,9 @@ class JAXBackend:
             Flat interpreter outputs.
         output_leaf_paths
             Flat direct-output pytree container paths in jaxpr output order.
+        output_container_spec
+            Full builtin output-container spec when one can be reconstructed
+            portably, otherwise ``None`` for path-only degradation.
 
         Returns
         -------
@@ -1413,6 +1421,7 @@ class JAXBackend:
                 multi_output_index=leaf_index if is_multi_output else None,
                 in_multi_output=is_multi_output,
                 container_path=container_path,
+                container_spec=output_container_spec,
             )
             updated = replace(event, is_output_parent=True, output=updated_output)
             trace.capture_events.op_event_by_label_raw[event.label_raw] = updated
@@ -2433,6 +2442,90 @@ class JAXBackend:
 
         leaves_with_paths, _treedef = jax.tree_util.tree_flatten_with_path(output)
         return tuple(_path_to_components(path) for path, _value in leaves_with_paths)
+
+    def _builtin_output_container_spec(self, output: object) -> ContainerSpec | None:
+        """Return a reconstructable spec for builtin JAX output pytrees.
+
+        Parameters
+        ----------
+        output
+            Direct callable output.
+
+        Returns
+        -------
+        ContainerSpec | None
+            Full spec for builtin tuple/list/dict trees with tensor leaves, or
+            ``None`` for scalar outputs, custom pytrees, and mixed non-tensor leaves.
+        """
+
+        spec = self._builtin_container_spec(output, is_root=True)
+        if spec is _UNSUPPORTED_CONTAINER_SPEC:
+            return None
+        return cast(ContainerSpec | None, spec)
+
+    def _builtin_container_spec(
+        self,
+        value: object,
+        *,
+        is_root: bool = False,
+    ) -> ContainerSpec | None | object:
+        """Build a spec for builtin tuple/list/dict containers only.
+
+        Parameters
+        ----------
+        value
+            Candidate container or leaf value.
+        is_root
+            Whether ``value`` is the top-level model output.
+
+        Returns
+        -------
+        ContainerSpec | None | object
+            Container spec, ``None`` for tensor leaves, or ``None`` for the
+            root when an unsupported non-tensor leaf/custom node is seen.
+        """
+
+        if isinstance(value, tuple) and type(value) is tuple:
+            tuple_child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+            for index, child in enumerate(value):
+                child_spec = self._builtin_container_spec(child)
+                if child_spec is _UNSUPPORTED_CONTAINER_SPEC:
+                    return _UNSUPPORTED_CONTAINER_SPEC
+                if child_spec is not None:
+                    tuple_child_specs.append((TupleIndex(index), cast(ContainerSpec, child_spec)))
+            return ContainerSpec(
+                kind="tuple",
+                length=len(value),
+                child_specs=tuple(tuple_child_specs),
+            )
+        if isinstance(value, list):
+            list_child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+            for index, child in enumerate(value):
+                child_spec = self._builtin_container_spec(child)
+                if child_spec is _UNSUPPORTED_CONTAINER_SPEC:
+                    return _UNSUPPORTED_CONTAINER_SPEC
+                if child_spec is not None:
+                    list_child_specs.append((TupleIndex(index), cast(ContainerSpec, child_spec)))
+            return ContainerSpec(
+                kind="list",
+                length=len(value),
+                child_specs=tuple(list_child_specs),
+            )
+        if isinstance(value, dict) and type(value) is dict:
+            dict_child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+            keys = _jax_dict_keys(value)
+            for key in keys:
+                child_spec = self._builtin_container_spec(value[key])
+                if child_spec is _UNSUPPORTED_CONTAINER_SPEC:
+                    return _UNSUPPORTED_CONTAINER_SPEC
+                if child_spec is not None:
+                    dict_child_specs.append((DictKey(key), cast(ContainerSpec, child_spec)))
+            return ContainerSpec(kind="dict", keys=keys, child_specs=tuple(dict_child_specs))
+        if self.is_tensor(value):
+            return None
+        if is_root:
+            return None
+        return _UNSUPPORTED_CONTAINER_SPEC
 
     def _reject_unsupported_options(self, **options: Any) -> None:
         """Reject public trace options unsupported by the JAX preview.
@@ -4234,6 +4327,26 @@ def _path_to_string(path: Sequence[Any]) -> str:
         else:
             parts.append(str(entry).strip("[]'"))
     return ".".join(parts)
+
+
+def _jax_dict_keys(value: Mapping[Any, Any]) -> tuple[Any, ...]:
+    """Return dict keys in JAX builtin pytree traversal order.
+
+    Parameters
+    ----------
+    value
+        Builtin dict output.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Keys sorted when possible, matching JAX's dict pytree order.
+    """
+
+    try:
+        return tuple(sorted(value.keys()))
+    except TypeError:
+        return tuple(value.keys())
 
 
 def _path_to_components(path: Sequence[Any]) -> tuple[object, ...]:

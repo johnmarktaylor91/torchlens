@@ -7,7 +7,7 @@ TorchLens records output-container structure for supported Python containers and
 Each output leaf `Op` with container metadata exposes `op.container`. The value is a computed `Container` view backed by the captured `ContainerSpec` plus sibling leaf ops; it is not stored as another trace record.
 
 ```python
-trace = tl.trace(model, x, intervention_ready=True)
+trace = tl.trace(model, x, capture_output_structure=True)
 container = trace.ops[trace.output_layers[0]].container
 
 container.kind
@@ -39,7 +39,7 @@ For model returns, use the trace convenience:
 output = trace.reconstruct_output()
 ```
 
-Final model-output reconstruction requires output structure to be captured. Use `intervention_ready=True` for traces where you need the top-level return object reconstructed after capture or after `.tlspec` load.
+Final model-output reconstruction requires output structure to be captured. Use `capture_output_structure=True` when you need the top-level return object reconstructed after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures final-output structure as part of its broader replay-template metadata.
 
 ## Nested Output Selection
 
@@ -69,6 +69,15 @@ Built-in handling already covers tuples, lists, dicts, namedtuples, dataclasses,
 
 ## Capability Degradation
 
-If an op has only path metadata and no full `container_spec`, `op.container` may return a path-only view with `reconstructable=False`. Plain non-container ops return `None`.
+## Backend Capability
+
+Backends declare an honest `container_structure` capability:
+
+- `torch`: `full_spec`
+- `jax`: `paths_only` in v1, with reconstructable specs for builtin `tuple`, `list`, and `dict` output pytrees whose leaves are tensors
+- `tinygrad`: `paths_only`
+- `mlx`: `none`
+
+If an op has only path metadata and no full `container_spec`, `op.container` may return a path-only view with `reconstructable=False`. Backends with `container_structure="none"` return `None` unless a real spec is present. TorchLens never promotes path-only metadata into a false reconstructable view.
 
 Unknown output objects do not crash capture. TorchLens degrades to the existing fallback traversal and marks the structure as non-reconstructable.

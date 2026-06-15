@@ -12,6 +12,7 @@ supports_payload_materialization = True
 supports_rng_replay = False
 supports_validation_replay = False
 supports_compile_capture = False
+container_structure = "none"
 payload_policy = "array_payloads"
 module_identity_modes = ("function_root", "object_module")
 trace_options = MLX_TRACE_OPTIONS
@@ -19,6 +20,7 @@ trace_options = MLX_TRACE_OPTIONS
 __all__ = [
     "supports_backward_capture",
     "supports_compile_capture",
+    "container_structure",
     "supports_fastlog",
     "supports_intervention",
     "supports_intermediate_derived_grads",

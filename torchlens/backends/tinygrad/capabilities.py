@@ -11,6 +11,7 @@ supports_intermediate_derived_grads = True
 supports_payload_materialization = True
 supports_rng_replay = False
 supports_validation_replay = True
+container_structure = "paths_only"
 module_identity_modes = ("function_root", "object_module")
 payload_policy = "array_payloads"
 live_payload_policy = "dev_python_realized_copy"
@@ -20,6 +21,7 @@ __all__ = [
     "live_payload_policy",
     "module_identity_modes",
     "payload_policy",
+    "container_structure",
     "supports_backward_capture",
     "supports_fastlog",
     "supports_intervention",

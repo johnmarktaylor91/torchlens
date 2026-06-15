@@ -1047,6 +1047,7 @@ def _run_model_and_save_specified_outs(
     retain_grads_in_memory: bool = True,
     out_sink: Callable[[str, torch.Tensor], None] | None = None,
     intervention_ready: bool = False,
+    capture_output_structure: bool = False,
     hooks: Any | None = None,
     intervention_spec: Any | None = None,
     normalized_hook_plan: Any | None = None,
@@ -1125,6 +1126,8 @@ def _run_model_and_save_specified_outs(
         intervention_ready: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
+        capture_output_structure: If True, persist final model-output container
+            structure without enabling intervention replay metadata.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
             ``Trace.attach_hooks`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
@@ -1234,6 +1237,7 @@ def _run_model_and_save_specified_outs(
     forward_code = getattr(model.forward, "__code__", None)
     trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
     trace.intervention_ready = intervention_ready
+    trace._capture_output_structure = capture_output_structure
     if hook_plan:
         trace.state = TraceState.LIVE_CAPTURED
         trace._initial_hook_plan = tuple(hook_plan)
@@ -1327,6 +1331,8 @@ def _run_model_and_save_specified_outs(
         raise
     finally:
         _state.reset_capture_runtime_context()
+        if hasattr(trace, "_capture_output_structure"):
+            delattr(trace, "_capture_output_structure")
     return trace
 
 
@@ -1596,6 +1602,7 @@ def trace(
     keep_outs_in_memory: bool | MissingType = MISSING,
     out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     intervention_ready: bool | MissingType = MISSING,
+    capture_output_structure: bool | MissingType = MISSING,
     hooks: Any | None | MissingType = MISSING,
     unwrap_when_done: bool | MissingType = MISSING,
     verbose: bool | MissingType = MISSING,
@@ -1734,6 +1741,9 @@ def trace(
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence. This does not imply
             ``save_arg_values=True``.
+        capture_output_structure: If True, persist final model-output container
+            structure without enabling intervention replay metadata. Default
+            ``False`` preserves legacy bytes and graph shape.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
             ``Trace.attach_hooks`` and executes during this capture when supplied.
         unwrap_when_done: If True, restore original torch callables after logging.
@@ -1858,6 +1868,7 @@ def trace(
             "keep_outs_in_memory": keep_outs_in_memory,
             "out_sink": out_sink,
             "intervention_ready": intervention_ready,
+            "capture_output_structure": capture_output_structure,
             "hooks": hooks,
             "unwrap_when_done": unwrap_when_done,
             "verbose": verbose,
@@ -1932,6 +1943,7 @@ def _trace_torch_model(
     keep_outs_in_memory: bool | MissingType = MISSING,
     out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     intervention_ready: bool | MissingType = MISSING,
+    capture_output_structure: bool | MissingType = MISSING,
     hooks: Any | None | MissingType = MISSING,
     unwrap_when_done: bool | MissingType = MISSING,
     verbose: bool | MissingType = MISSING,
@@ -2020,6 +2032,7 @@ def _trace_torch_model(
         detach_saved_activations=detach_saved_activations,
         recurrence_detection=recurrence_detection,
         intervention_ready=intervention_ready,
+        capture_output_structure=capture_output_structure,
         hooks=hooks,
         unwrap_when_done=unwrap_when_done,
         verbose=verbose,
@@ -2114,6 +2127,7 @@ def _trace_torch_model(
     detach_saved_activations = capture_options.detach_saved_activations
     recurrence_detection = capture_options.recurrence_detection
     intervention_ready = capture_options.intervention_ready
+    capture_output_structure = capture_options.capture_output_structure
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
     verbose = capture_options.verbose
@@ -2228,6 +2242,7 @@ def _trace_torch_model(
             "save_mode": save_mode_value,
             "recurrence_detection": recurrence_detection,
             "backward_ready": train_mode_value,
+            "capture_output_structure": capture_output_structure,
             "output_transform": repr(output_transform_value),
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": repr(save_predicate),
@@ -2299,6 +2314,7 @@ def _trace_torch_model(
             retain_grads_in_memory=retain_grads_in_memory_value,
             out_sink=streaming_options.out_callback,
             intervention_ready=intervention_ready,
+            capture_output_structure=capture_output_structure,
             hooks=hooks,
             intervention_spec=None,
             normalized_hook_plan=None,
@@ -2369,6 +2385,7 @@ def _trace_torch_model(
             retain_grads_in_memory=retain_grads_in_memory_value,
             out_sink=streaming_options.out_callback,
             intervention_ready=intervention_ready,
+            capture_output_structure=capture_output_structure,
             hooks=hooks,
             intervention_spec=None,
             normalized_hook_plan=None,

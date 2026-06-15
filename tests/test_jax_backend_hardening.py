@@ -1169,6 +1169,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True
+    assert spec.capabilities.container_structure == "paths_only"
     assert spec.capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
@@ -1177,6 +1178,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert capabilities.supports_fastlog is False
     assert capabilities.supports_intervention is False
     assert capabilities.supports_payload_materialization is True
+    assert capabilities.container_structure == "paths_only"
     assert capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert capabilities.payload_policy == "array_payloads"
     assert capabilities.trace_options == (
@@ -1186,3 +1188,37 @@ def test_jax_capability_flags_match_preview_contract() -> None:
         "jax_max_control_flow_unroll",
         "module_identity_mode",
     )
+
+
+def test_jax_builtin_output_pytree_container_reconstructs() -> None:
+    """Builtin tuple/list/dict output pytrees expose reconstructable containers."""
+
+    def model(params: dict[str, Any], x: Any) -> dict[str, Any]:
+        """Return a builtin nested pytree output.
+
+        Parameters
+        ----------
+        params
+            Unused parameter pytree.
+        x
+            Input JAX array.
+
+        Returns
+        -------
+        dict[str, Any]
+            Nested builtin pytree.
+        """
+
+        del params
+        return {"a": x + 1, "b": (x + 2, x + 3)}
+
+    x = jnp.ones((2,), dtype=jnp.float32)
+    trace = tl.trace(cast(Any, model), ({}, x), backend="jax")
+    container = trace.ops[trace.output_layers[0]].container
+
+    assert isinstance(container, tl.Container)
+    assert container.reconstructable is True
+    rebuilt = container.reconstruct()
+    assert set(rebuilt) == {"a", "b"}
+    np.testing.assert_allclose(np.asarray(rebuilt["a"]), np.asarray(x + 1))
+    np.testing.assert_allclose(np.asarray(rebuilt["b"][1]), np.asarray(x + 3))

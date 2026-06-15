@@ -235,7 +235,10 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     )
     assert jax_spec.capabilities.module_identity_modes == jax_capabilities.module_identity_modes
     assert jax_spec.capabilities.trace_options == jax_capabilities.trace_options
+    assert jax_spec.capabilities.container_structure == jax_capabilities.container_structure
     assert jax_spec.serialization_policy.payload_policy == jax_capabilities.payload_policy
+
+    assert get_backend_spec("torch").capabilities.container_structure == "full_spec"
 
     assert mlx_spec.capabilities.backward_capture == mlx_capabilities.supports_backward_capture
     assert mlx_spec.capabilities.validation_replay == mlx_capabilities.supports_validation_replay
@@ -252,6 +255,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     )
     assert mlx_spec.capabilities.module_identity_modes == mlx_capabilities.module_identity_modes
     assert mlx_spec.capabilities.trace_options == mlx_capabilities.trace_options
+    assert mlx_spec.capabilities.container_structure == mlx_capabilities.container_structure
     assert mlx_spec.serialization_policy.payload_policy == mlx_capabilities.payload_policy
 
     assert (
@@ -278,6 +282,9 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.module_identity_modes
     )
     assert tinygrad_spec.capabilities.trace_options == tinygrad_capabilities.trace_options
+    assert (
+        tinygrad_spec.capabilities.container_structure == tinygrad_capabilities.container_structure
+    )
     assert tinygrad_spec.serialization_policy.payload_policy == tinygrad_capabilities.payload_policy
 
 

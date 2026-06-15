@@ -235,7 +235,9 @@ class Container:
                 lines.append(f"{' ' * indent}{label}: {value.kind}")
                 value._append_repr_lines(lines, indent=indent + 2)
             else:
-                layer_label = getattr(value, "layer_label", repr(value))
+                layer_label = getattr(value, "layer_label", None)
+                if layer_label is None:
+                    layer_label = repr(value)
                 lines.append(f"{' ' * indent}{label}: {layer_label}")
 
 
@@ -255,6 +257,9 @@ def container_from_op(op: "Op") -> Container | None:
 
     spec = getattr(op, "container_spec", None)
     path = tuple(getattr(op, "container_path", ()) or ())
+    capability = _container_structure_capability(op)
+    if capability == "none" and spec is None:
+        return None
     if spec is None and not path:
         return None
     root_kind, root_id = _root_identity(op)
@@ -266,6 +271,33 @@ def container_from_op(op: "Op") -> Container | None:
         root_id=root_id,
         supports_reconstruct=spec is not None,
     )
+
+
+def _container_structure_capability(op: "Op") -> str:
+    """Return the owning backend's declared container-structure capability.
+
+    Parameters
+    ----------
+    op:
+        Operation whose source trace may declare a backend.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, ``"full_spec"``, or ``"full_spec"``
+        when the backend cannot be resolved for legacy in-memory traces.
+    """
+
+    trace = getattr(op, "source_trace", None)
+    backend = getattr(trace, "backend", None)
+    if backend is None:
+        return "full_spec"
+    try:
+        from ..backends import get_backend_spec
+
+        return str(get_backend_spec(str(backend)).capabilities.container_structure)
+    except Exception:
+        return "full_spec"
 
 
 def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out") -> Any:
@@ -312,7 +344,7 @@ def _root_identity(op: "Op") -> tuple[ContainerRootKind, tuple[str, Any]]:
         Root kind and stable root id.
     """
 
-    if bool(getattr(op, "is_output", False)):
+    if _op_is_final_output(op):
         return "final_output", ("final_output", 0)
     func_call_id = getattr(op, "func_call_id", None)
     if func_call_id is not None:
@@ -351,17 +383,61 @@ def _sibling_leaves(
     for label in candidates:
         sibling = trace.ops[label]
         if root_kind == "final_output":
-            if (
-                bool(getattr(sibling, "is_output", False))
-                and getattr(sibling, "container_spec", None) is spec
-            ):
+            if _same_container_spec(getattr(sibling, "container_spec", None), spec):
                 leaves.append(sibling)
             continue
         if getattr(sibling, "func_call_id", None) == getattr(op, "func_call_id", None) and (
-            spec is None or getattr(sibling, "container_spec", None) is spec
+            spec is None or _same_container_spec(getattr(sibling, "container_spec", None), spec)
         ):
             leaves.append(sibling)
     return tuple(leaves) or (op,)
+
+
+def _op_is_final_output(op: "Op") -> bool:
+    """Return whether an op belongs to the trace final-output layer set.
+
+    Parameters
+    ----------
+    op:
+        Candidate operation.
+
+    Returns
+    -------
+    bool
+        ``True`` when the op is explicitly marked output or appears in
+        ``trace.output_layers``.
+    """
+
+    if bool(getattr(op, "is_output", False)):
+        return True
+    trace = getattr(op, "source_trace", None)
+    if trace is None:
+        return False
+    output_labels = set(getattr(trace, "output_layers", ()) or ())
+    if getattr(op, "layer_label", None) in output_labels:
+        return True
+    if getattr(op, "layer_label_raw", None) in output_labels:
+        return True
+    return any(trace.ops[label] is op for label in output_labels if label in trace.ops)
+
+
+def _same_container_spec(left: ContainerSpec | None, right: ContainerSpec | None) -> bool:
+    """Return whether two specs represent the same captured container root.
+
+    Parameters
+    ----------
+    left:
+        Candidate sibling spec.
+    right:
+        Seed op spec.
+
+    Returns
+    -------
+    bool
+        ``True`` when specs are the same object or equal frozen dataclasses.
+    """
+
+    return left is right or (left is not None and right is not None and left == right)
 
 
 def _value_for_op(op: "Op", source: str) -> Any:

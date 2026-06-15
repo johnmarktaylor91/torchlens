@@ -53,6 +53,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "detach_saved_activations",
     "recurrence_detection",
     "intervention_ready",
+    "capture_output_structure",
     "hooks",
     "unwrap_when_done",
     "verbose",
@@ -160,6 +161,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
     "intervention_ready": "intervention_ready",
+    "capture_output_structure": "capture_output_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
     "verbose": "verbose",
@@ -616,6 +618,9 @@ class CaptureOptions:
         Whether repeated graph patterns are detected during postprocess.
     intervention_ready:
         Whether replay-template metadata is captured for intervention APIs.
+    capture_output_structure:
+        Whether to persist final model-output container structure without
+        enabling intervention replay metadata.
     hooks:
         Optional live hook plan applied during capture.
     unwrap_when_done:
@@ -680,6 +685,7 @@ class CaptureOptions:
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
     intervention_ready: bool = False
+    capture_output_structure: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
     verbose: bool = False
@@ -723,6 +729,7 @@ class CaptureOptions:
         detach_saved_activations: bool | MissingType = MISSING,
         recurrence_detection: bool | MissingType = MISSING,
         intervention_ready: bool | MissingType = MISSING,
+        capture_output_structure: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
         verbose: bool | MissingType = MISSING,
@@ -830,6 +837,12 @@ class CaptureOptions:
             ),
             "intervention_ready": _resolve_option_value(
                 "intervention_ready", intervention_ready, False, specified_fields
+            ),
+            "capture_output_structure": _resolve_option_value(
+                "capture_output_structure",
+                capture_output_structure,
+                False,
+                specified_fields,
             ),
             "hooks": _resolve_option_value("hooks", hooks, None, specified_fields),
             "unwrap_when_done": _resolve_option_value(
