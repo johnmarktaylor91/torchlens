@@ -32,6 +32,7 @@ from . import (
     options,
     partial,
     report,
+    repgeom,
     stats,
     viz,
 )
