@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import os
 import re
 import time
 import weakref
@@ -17,10 +18,13 @@ import torch
 from ..._deprecations import MISSING, MissingType
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
+from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ...data_classes.grad_fn import GradFn
 from ...data_classes.grad_fn_call import GradFnCall
 from ...data_classes.backward_pass import BackwardPass
+from ...errors import ConfigurationError
+from ...utils.introspection import _get_code_qualname, _get_col_offset
 from ...ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
@@ -35,6 +39,72 @@ _BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
 _ORIGINAL_AUTOGRAD_BACKWARD: Callable[..., Any] | None = None
 _ORIGINAL_AUTOGRAD_GRAD: Callable[..., Any] | None = None
 _AUTOGRAD_WRAPPERS_INSTALLED = False
+_TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_INFERENCE_ONLY_BACKWARD_ERROR = (
+    "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
+    "graph was discarded during capture. Re-capture without inference_only (optionally with "
+    "backward_ready=True) to enable deferred backward."
+)
+
+
+def _ensure_not_inference_only_backward(trace: Any) -> None:
+    """Reject deferred backward capture for inference-only traces.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving backward metadata.
+
+    Raises
+    ------
+    ConfigurationError
+        If the trace was captured with ``inference_only=True``.
+    """
+
+    if getattr(trace, "inference_only", False):
+        raise ConfigurationError(_INFERENCE_ONLY_BACKWARD_ERROR)
+
+
+def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
+    """Return the first non-TorchLens caller location for a backward API call.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose source-loading preference controls lazy source context.
+
+    Returns
+    -------
+    FuncCallLocation | None
+        User-visible call-site location, or ``None`` if no external frame is found.
+    """
+
+    frame = inspect.currentframe()
+    if frame is None:
+        return None
+    frame = frame.f_back
+    while frame is not None:
+        filename = os.path.abspath(frame.f_code.co_filename)
+        if not filename.startswith(_TORCHLENS_PKG_DIR):
+            source_loading_enabled = bool(getattr(trace, "save_code_context", False))
+            func_name = frame.f_code.co_name
+            return FuncCallLocation(
+                file=frame.f_code.co_filename,
+                line_number=frame.f_lineno,
+                func_name=func_name,
+                num_context_lines_requested=int(getattr(trace, "num_context_lines", 7)),
+                _frame_func_obj=(
+                    frame.f_locals.get(func_name) or frame.f_globals.get(func_name)
+                    if source_loading_enabled
+                    else None
+                ),
+                code_firstlineno=frame.f_code.co_firstlineno,
+                func_qualname=_get_code_qualname(frame),
+                col_offset=_get_col_offset(frame),
+                source_loading_enabled=source_loading_enabled,
+            )
+        frame = frame.f_back
+    return None
 
 
 def _strong_grad_fn_refs(trace: Any) -> list[Any]:
@@ -1223,7 +1293,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
             trigger=start.trigger if start is not None else "implicit",
             implicit=start.implicit if start is not None else True,
             outer_context=start.outer_context if start is not None else None,
-            call_context=start.call_context_ref if start is not None else None,
+            backward_call_context=start.call_context_ref if start is not None else None,
             root_grad_fn_ids=root_grad_fn_ids,
             root_meta=tuple(start.root_meta) if start is not None else (),
             root_grad_arguments=start.root_grad_arguments if start is not None else None,
@@ -1980,6 +2050,7 @@ def _run_backward_with_capture(
     engine_flags: dict[str, object] | None = None,
     save_grads: Any | MissingType = MISSING,
     forward_op_count_at_trigger: int | None = None,
+    backward_call_context: FuncCallLocation | None = None,
 ) -> Any:
     """Capture a backward graph, run backward, and record memory delta.
 
@@ -2000,6 +2071,7 @@ def _run_backward_with_capture(
     from ... import _state
     from ...intervention.hooks import normalize_hooks_from_spec
 
+    _ensure_not_inference_only_backward(trace)
     previous_trace = _state._active_trace
     previous_plan = _state._active_hook_plan
     previous_spec = _state._active_intervention_spec
@@ -2028,7 +2100,7 @@ def _run_backward_with_capture(
             trigger=cast(Any, trigger),
             implicit=False,
             outer_context=outer_context,
-            call_context_ref=None,
+            call_context_ref=backward_call_context,
             root_meta=(
                 {
                     "shape": tuple(loss.shape),
@@ -2340,6 +2412,8 @@ def log_backward(
     Any
         The same Trace, for chaining.
     """
+    _ensure_not_inference_only_backward(self)
+    backward_call_context = _capture_backward_call_context(self)
     _ensure_layer_grad_hooks(self)
 
     def run() -> Any:
@@ -2353,6 +2427,7 @@ def log_backward(
         trigger="backward",
         engine_flags=dict(backward_kwargs),
         save_grads=save_grads,
+        backward_call_context=backward_call_context,
     )
     _finalize_grad_streaming(self)
     return self

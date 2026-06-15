@@ -183,6 +183,7 @@
       "detach_saved_activations",
       "output_device",
       "backward_ready",
+      "inference_only",
       "module_filter",
       "emit_nvtx",
       "raise_on_nan",
@@ -950,6 +951,7 @@
       "halted",
       "has_backward_pass",
       "has_gradients",
+      "inference_only",
       "init_docstring",
       "init_signature",
       "init_source_file",
@@ -1045,13 +1047,13 @@
     ]
   },
   "sha256_chunks": [
-    "50ac2aa3",
-    "0a506859",
-    "b68e00fe",
-    "c67d65be",
-    "86f04c67",
-    "4f4c2280",
-    "2159ab28",
-    "0ae382cf"
+    "4ee5d744",
+    "d7e48a06",
+    "d0d4e709",
+    "3beab9e9",
+    "a9de1856",
+    "84f81ed6",
+    "cbe72b8f",
+    "64f91dc1"
   ]
 }

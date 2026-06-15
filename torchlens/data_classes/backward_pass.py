@@ -35,7 +35,7 @@ class BackwardPass:
         "trigger": FieldPolicy.KEEP,
         "implicit": FieldPolicy.KEEP,
         "outer_context": FieldPolicy.KEEP,
-        "call_context": FieldPolicy.KEEP,
+        "backward_call_context": FieldPolicy.KEEP,
         "root_grad_fn_ids": FieldPolicy.KEEP,
         "root_meta": FieldPolicy.KEEP,
         "root_grad_arguments": FieldPolicy.KEEP,
@@ -56,7 +56,7 @@ class BackwardPass:
     trigger: str
     implicit: bool
     outer_context: str | None = None
-    call_context: object | None = None
+    backward_call_context: object | None = None
     root_grad_fn_ids: list[int] = field(default_factory=list)
     root_meta: tuple[object, ...] = field(default_factory=tuple)
     root_grad_arguments: object | None = None
@@ -88,7 +88,7 @@ class BackwardPass:
             state,
             defaults={
                 "outer_context": None,
-                "call_context": None,
+                "backward_call_context": None,
                 "root_grad_fn_ids": [],
                 "root_meta": (),
                 "root_grad_arguments": None,
@@ -105,6 +105,7 @@ class BackwardPass:
                 "_source_trace_ref": None,
             },
         )
+        state.pop("call_context", None)
         self.__dict__.update(state)
 
     @property
@@ -147,6 +148,7 @@ class BackwardPass:
             "trigger": self.trigger,
             "implicit": self.implicit,
             "outer_context": self.outer_context,
+            "backward_call_context": self.backward_call_context,
             "order": self.order,
             "origin_backward_pass": self.origin_backward_pass,
             "duration": self.duration,

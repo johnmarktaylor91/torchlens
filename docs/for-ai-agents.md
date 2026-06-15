@@ -145,6 +145,11 @@ relu_site = trace.find_sites(tl.func("relu")).first()
 assert relu_site.grad is not None
 ```
 
+For forward-only analysis where backward will never be run, use
+`tl.trace(..., inference_only=True)` or `CaptureOptions(inference_only=True)` to capture under
+`torch.no_grad()`. Do not combine it with `backward_ready=True`, `save_grads=...`, or
+`intervention_ready=True`.
+
 Draw after capture:
 
 ```python

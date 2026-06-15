@@ -26,6 +26,7 @@ Key functions:
       input setup, logging toggle, forward pass, output marking, and postprocessing
 """
 
+import contextlib
 import random
 import time
 from collections import defaultdict
@@ -658,9 +659,15 @@ def run_and_log_inputs_through_model(
                     if not halt_only:
                         state.append_context(enter_ctx)
                 outputs = None
+                inference_context = (
+                    torch.no_grad()
+                    if getattr(self, "inference_only", False)
+                    else contextlib.nullcontext()
+                )
                 try:
                     with _timed_phase(self, "dispatch:forward_model"):
-                        outputs = model(*input_args, **input_kwargs)
+                        with inference_context:
+                            outputs = model(*input_args, **input_kwargs)
                 finally:
                     state.event_index += 1
                     exit_ctx = _build_record_context(
@@ -709,8 +716,14 @@ def run_and_log_inputs_through_model(
                             state.append_context(exit_ctx)
                         backend.pop_module_frame(self, state.module_stack, root_frame)
             else:
+                inference_context = (
+                    torch.no_grad()
+                    if getattr(self, "inference_only", False)
+                    else contextlib.nullcontext()
+                )
                 with _timed_phase(self, "dispatch:forward_model"):
-                    outputs = model(*input_args, **input_kwargs)
+                    with inference_context:
+                        outputs = model(*input_args, **input_kwargs)
 
         backend.finalize_forward_session(self)
 

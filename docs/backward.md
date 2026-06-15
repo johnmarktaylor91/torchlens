@@ -47,6 +47,12 @@ hard engine boundary; use TorchLens triggers for exact pass boundaries.
 1-based lookup with `trace.backward_passes.for_pass(k)`. `trace.last_backward_pass` returns the
 latest projected pass.
 
+`BackwardPass.backward_call_context` stores the Python source location where
+`trace.log_backward(loss)` or `trace.backward(loss)` was invoked. It is a `FuncCallLocation`, so it
+exposes fields such as `file`, `line_number`, and `func_name`. Implicit passes inferred from
+orphan tensor-hook emissions have no explicit TorchLens call site and leave
+`backward_call_context` as `None`.
+
 `GradFn` records represent distinct autograd node objects. Labels use backward-native names such
 as `addmm_back_1_4`; the forward correspondence is metadata, not part of the label. A fired node
 has local dense call labels like `addmm_back_1_4:2`. Positional access remains 0-based, while

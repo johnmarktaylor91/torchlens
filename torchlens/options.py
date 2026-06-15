@@ -58,6 +58,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "unwrap_when_done",
     "verbose",
     "backward_ready",
+    "inference_only",
     "name",
     "cache",
     "cache_dir",
@@ -166,6 +167,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "unwrap_when_done": "unwrap_when_done",
     "verbose": "verbose",
     "backward_ready": "backward_ready",
+    "inference_only": "inference_only",
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
@@ -629,6 +631,8 @@ class CaptureOptions:
         Whether progress messages are printed.
     backward_ready:
         Whether capture keeps autograd-connected tensors for training workflows.
+    inference_only:
+        Whether capture wraps the user forward in ``torch.no_grad()``.
     name:
         Optional user-facing name for the returned log.
     cache:
@@ -690,6 +694,7 @@ class CaptureOptions:
     unwrap_when_done: bool = False
     verbose: bool = False
     backward_ready: bool = False
+    inference_only: bool = False
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
@@ -734,6 +739,7 @@ class CaptureOptions:
         unwrap_when_done: bool | MissingType = MISSING,
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
+        inference_only: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
@@ -851,6 +857,9 @@ class CaptureOptions:
             "verbose": _resolve_option_value("verbose", verbose, False, specified_fields),
             "backward_ready": _resolve_option_value(
                 "backward_ready", backward_ready, False, specified_fields
+            ),
+            "inference_only": _resolve_option_value(
+                "inference_only", inference_only, False, specified_fields
             ),
             "name": _resolve_option_value("name", name, None, specified_fields),
             "cache": _resolve_option_value("cache", cache, False, specified_fields),

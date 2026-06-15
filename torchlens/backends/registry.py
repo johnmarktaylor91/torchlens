@@ -29,6 +29,7 @@ TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("epoch3_codec_materialization", ("payload_policy", "save_preview")),
     ("epoch4_intermediate_derived_grads", ()),
     ("epoch5_container_structure", ("capture_output_structure",)),
+    ("epoch6_inference_only", ("inference_only",)),
 )
 """Ordered public trace-option capability epochs.
 

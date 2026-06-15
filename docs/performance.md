@@ -80,6 +80,7 @@ assert gelu_site.out.shape == (2, 4)
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure; disk I/O becomes part of capture cost. |
 | Gradients | `save_grads=False` unless needed | Backward-ready captures preserve more state and hooks. |
+| Forward-only autograd | `inference_only=True` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
 
 ### Phase timing buckets

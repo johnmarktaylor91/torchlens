@@ -93,6 +93,8 @@ pytest tests/ -m "not slow" -x --tb=short
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
 10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
+10a. `inference_only=True` wraps forward capture in `torch.no_grad()` for forward-only analysis
+     and is mutually exclusive with backward-related capture because it discards autograd history.
 11. Sibling ordering is forward/unrolled/dot-only; collapsed, rolled, backward, focused,
     conditional, and large graphs must conservatively no-op.
 12. Predicate `save=` is the primary selective-capture spelling; `record(keep_op=...)` and

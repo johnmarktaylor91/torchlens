@@ -77,6 +77,8 @@ def validate_training_compatibility(
     detach_saved_activations: bool | None = None,
     save_outs_to: str | Path | None = None,
     inference_mode_active: bool | None = None,
+    inference_only: bool = False,
+    inference_only_conflicts: tuple[str, ...] = (),
 ) -> None:
     """Validate user options for autograd-retaining training captures.
 
@@ -92,13 +94,26 @@ def validate_training_compatibility(
         Legacy disk-save path, if supplied outside grouped streaming options.
     inference_mode_active:
         Whether PyTorch inference mode is active at validation time.
+    inference_only:
+        Whether the user requested no-grad forward capture.
+    inference_only_conflicts:
+        Explicit backward-related flags that require a retained autograd graph.
 
     Raises
     ------
     TrainingModeConfigError
         If ``backward_ready=True`` conflicts with disk persistence, explicit
-        detaching, or active inference mode.
+        detaching, active inference mode, or if ``inference_only=True``
+        conflicts with explicit backward-related capture flags.
     """
+
+    if inference_only and inference_only_conflicts:
+        offending = ", ".join(inference_only_conflicts)
+        raise TrainingModeConfigError(
+            "inference_only=True cannot be combined with backward-related capture "
+            f"({offending}); these require the autograd graph that inference_only discards. "
+            "Drop inference_only or drop the backward flag."
+        )
 
     if not backward_ready:
         return

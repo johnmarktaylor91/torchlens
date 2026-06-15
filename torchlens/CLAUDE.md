@@ -56,6 +56,8 @@ trace_from_recording = recording.to_trace()
 `backward_ready=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible
 detaching or disk-only out storage.
+`inference_only=True` is the opt-in no-grad capture path for forward-only analysis; it is mutually
+exclusive with backward-related capture because it discards the autograd graph.
 
 ## Top-Level Modules
 

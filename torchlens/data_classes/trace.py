@@ -237,6 +237,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_code_context_cache": {},
     "capture_tensor_grad_hooks": True,
     "save_grads": None,
+    "inference_only": False,
     "is_appended": False,
     "relationship_evidence": {},
     "replay_frontier": {},
@@ -1080,6 +1081,7 @@ class Trace(CapturedRun):
     state_history: list[Any]
     replay_frontier: dict[str, torch.Tensor]
     backward_ready: bool
+    inference_only: bool
     profile_enabled: bool
     save_arg_templates: bool
     op_equivalence_classes: Dict[str, set[str]]
@@ -1148,6 +1150,7 @@ class Trace(CapturedRun):
         "output_device": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "backward_ready": FieldPolicy.DROP,
+        "inference_only": FieldPolicy.KEEP,
         "module_filter": FieldPolicy.DROP,
         "emit_nvtx": FieldPolicy.KEEP,
         "raise_on_nan": FieldPolicy.KEEP,
@@ -1361,6 +1364,7 @@ class Trace(CapturedRun):
         recurrence_detection: bool = True,
         verbose: bool = False,
         backward_ready: bool = False,
+        inference_only: bool = False,
         module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
         facet_registry_snapshot: Any | None = None,
@@ -1403,6 +1407,7 @@ class Trace(CapturedRun):
             verbose: If True, print timed progress messages at each major pipeline stage.
             backward_ready: Session-time flag for training-compatible out retention.
                 Portable bundle load restores the default ``False`` value.
+            inference_only: Whether the forward was captured under ``torch.no_grad()``.
             emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
             facet_registry_snapshot: Immutable facet recipe snapshot captured for
                 this trace.
@@ -1484,6 +1489,7 @@ class Trace(CapturedRun):
         self.output_device = output_device
         self.detach_saved_activations = detach_saved_activations
         self.backward_ready = backward_ready
+        self.inference_only = inference_only
         self.module_filter = module_filter
         self.emit_nvtx = emit_nvtx
         self.facet_registry_snapshot = facet_registry_snapshot
@@ -3153,6 +3159,7 @@ class Trace(CapturedRun):
                 "_source_code_blob": {},
                 "_source_model_ref": None,
                 "backward_ready": False,
+                "inference_only": False,
                 "module_filter": None,
                 "raise_on_nan": False,
                 "keep_orphans": False,
@@ -3207,6 +3214,8 @@ class Trace(CapturedRun):
             }
         if state["backward_ready"] is None:
             state["backward_ready"] = False
+        if state["inference_only"] is None:
+            state["inference_only"] = False
         for field_name in (
             "setup_duration",
             "forward_duration",

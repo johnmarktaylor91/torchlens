@@ -65,6 +65,7 @@ MODEL_LOG_FIELD_ORDER = [
     "detach_saved_activations",
     "output_device",
     "backward_ready",
+    "inference_only",
     "module_filter",
     "emit_nvtx",
     "raise_on_nan",
