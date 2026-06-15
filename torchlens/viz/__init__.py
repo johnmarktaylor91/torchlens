@@ -10,6 +10,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from . import batch_summary
+from .feature_maps import feature_map_evolution, feature_map_node_spec
 from .node_plots import render_heatmap, render_image_scatter, render_lineplot
 from ..visualization.bundle_diff import bundle_diff
 
@@ -18,6 +19,8 @@ __all__ = [
     "bundle_diff",
     "causal_trace_heatmap",
     "channel_grid",
+    "feature_map_evolution",
+    "feature_map_node_spec",
     "heatmap",
     "histogram",
     "render_heatmap",
