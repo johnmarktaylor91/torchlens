@@ -9,6 +9,7 @@ from .buffer import (
     register_live_event,
     replace_op_event,
 )
+from .container import ContainerSpec
 from .events import (
     ArgTemplateRef,
     BackwardPassEnd,
@@ -17,7 +18,6 @@ from .events import (
     BufferEvent,
     BufferWriteEvent,
     ConditionalEvent,
-    ContainerSpec,
     EdgeUseKind,
     FunctionCallRef,
     GradFnDiscovered,

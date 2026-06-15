@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib
+import subprocess
 import sys
 from dataclasses import FrozenInstanceError, fields, is_dataclass
+from typing import get_type_hints
 from unittest.mock import patch
 
 import pytest
@@ -83,10 +85,7 @@ def _build_ir_instances() -> dict[str, object]:
     )
     container_spec = ContainerSpec(
         kind="tuple",
-        type_name="tuple",
-        fields=(),
         length=1,
-        metadata=(("source", "test"),),
     )
     output_ref = OutputRef(
         tensor=tensor_ref,
@@ -472,7 +471,6 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
         "blob_ref",
         "deferred_ref",
         "tensor_ref",
-        "container_spec",
         "output_ref",
         "function_ref",
         "arg_template_ref",
@@ -494,6 +492,42 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
 
     for name in frozen_names:
         _assert_frozen_and_slotted(instances[name])
+
+
+def test_container_spec_is_rich_leaf_type() -> None:
+    """Assert IR output metadata uses the leaf recursive ContainerSpec."""
+
+    from torchlens.ir.container import ContainerSpec as LeafContainerSpec
+
+    instances = _build_ir_instances()
+    events_module = importlib.import_module("torchlens.ir.events")
+    hints = get_type_hints(
+        OutputRef,
+        globalns={**vars(events_module), "TensorRef": TensorRef},
+    )
+    assert ContainerSpec is LeafContainerSpec
+    assert isinstance(instances["container_spec"], LeafContainerSpec)
+    assert hints["container_spec"] == LeafContainerSpec | None
+
+
+def test_container_leaf_import_order_has_no_cycle() -> None:
+    """Import the container leaf before higher-level intervention modules."""
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import torchlens.ir.container; "
+                "import torchlens.intervention.types; "
+                "print('IMPORT_OK')"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == "IMPORT_OK"
 
 
 def test_mutable_slotted_state_dataclasses_reject_undeclared_fields() -> None:

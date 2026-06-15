@@ -206,7 +206,7 @@ def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
     output_structure = getattr(root_call, "output_structure", None)
     if output_structure is None:
         return output_layers
-    from ..intervention.types import rebuild_container_from_spec
+    from ..ir.container import rebuild_container_from_spec
 
     try:
         return rebuild_container_from_spec(output_structure, output_layers)

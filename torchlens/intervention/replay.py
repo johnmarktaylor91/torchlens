@@ -13,6 +13,14 @@ import torch
 
 from .._deprecations import MISSING, MissingType
 from ..ir import CaptureEvents
+from ..ir.container import (
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+)
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
 from ..quantities import Bytes
@@ -33,16 +41,10 @@ from .hooks import (
 from .runtime import _execute_hook
 from .types import (
     CapturedArgTemplate,
-    DataclassField,
-    DictKey,
     FireRecord,
-    HFKey,
     LiteralTensor,
     LiteralValue,
-    NamedField,
-    OutputPathComponent,
     ParentRef,
-    TupleIndex,
     Unsupported,
 )
 

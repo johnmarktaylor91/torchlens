@@ -39,10 +39,10 @@ from ...ir.events import (
 )
 from ...ir.events import is_control_edge_use
 from ...ir.intervention import FunctionEventInput
+from ...ir.container import DictKey, TupleIndex
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...intervention.types import DictKey, TupleIndex
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_root_module_log
 from ...postprocess.finalization import _build_module_logs

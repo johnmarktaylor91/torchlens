@@ -98,6 +98,15 @@ from ...ir.events import (
     ParentEdge,
 )
 from ...ir.intervention import FireResult, FunctionEventInput
+from ...ir.container import (
+    ContainerSpec,
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+)
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -110,18 +119,11 @@ from ...intervention.selectors import (
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
-    ContainerSpec,
-    DataclassField,
-    DictKey,
     EdgeUseRecord,
     FunctionRegistryKey,
-    HFKey,
     LiteralTensor,
     LiteralValue,
-    NamedField,
-    OutputPathComponent,
     ParentRef,
-    TupleIndex,
     Unsupported,
 )
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan

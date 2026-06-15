@@ -15,6 +15,8 @@ from torchlens.errors import MultiOutputModuleError, TorchLensError
 from torchlens.intervention.types import (
     ContainerSpec,
     DataclassField,
+    DictKey,
+    TupleIndex,
     rebuild_container_from_spec,
 )
 
@@ -347,3 +349,26 @@ def test_rebuild_container_from_spec_roundtrips_supported_shapes() -> None:
         child_specs=((DataclassField("second"), ContainerSpec(kind="tuple", length=2)),),
     )
     assert rebuild_container_from_spec(dataclass_spec, [1, 2, 3]) == PairBox(1, (2, 3))
+
+
+def test_rebuild_container_from_spec_roundtrips_nested_dict_list() -> None:
+    """ContainerSpec reconstruction preserves nested dict/list structure."""
+
+    nested_spec = ContainerSpec(
+        kind="dict",
+        keys=("a", "nested"),
+        child_specs=(
+            (
+                DictKey("nested"),
+                ContainerSpec(
+                    kind="list",
+                    length=2,
+                    child_specs=((TupleIndex(1), ContainerSpec(kind="tuple", length=2)),),
+                ),
+            ),
+        ),
+    )
+    assert rebuild_container_from_spec(nested_spec, [1, 2, 3, 4]) == {
+        "a": 1,
+        "nested": [2, (3, 4)],
+    }

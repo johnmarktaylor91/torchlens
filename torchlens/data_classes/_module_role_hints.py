@@ -7,7 +7,7 @@ from typing import Any
 
 from torch import nn
 
-from ..intervention.types import (
+from ..ir.container import (
     DataclassField,
     DictKey,
     HFKey,

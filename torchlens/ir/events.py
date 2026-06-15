@@ -6,6 +6,8 @@ from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+from .container import ContainerSpec
+
 if TYPE_CHECKING:
     from .intervention import FireResult, InterventionTemplateRef
     from .refs import ParamRef, TensorRef
@@ -116,17 +118,6 @@ class GradFnFired:
     intervention_fire_ref: object | None
     timestamp: float
     seq: int
-
-
-@dataclass(frozen=True, slots=True)
-class ContainerSpec:
-    """Backend-neutral description of an output container."""
-
-    kind: str
-    type_name: str | None
-    fields: tuple[str, ...]
-    length: int | None
-    metadata: tuple[tuple[str, object], ...]
 
 
 @dataclass(frozen=True, slots=True)

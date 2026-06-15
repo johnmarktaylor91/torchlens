@@ -2528,6 +2528,7 @@ class Op:
         * ``parent_params`` - references to nn.Parameters, must stay shared.
         * ``out``, ``out_versions_by_child`` - large tensors;
           shared references are safe since they're replaced (not mutated).
+        * ``container_spec`` - frozen dataclass shared by sibling output leaves.
 
         Returns:
             A new Op (or subclass) with the same field values.
@@ -2549,6 +2550,7 @@ class Op:
             "transformed_out",
             "transformed_grad",
             "out_versions_by_child",
+            "container_spec",
         ]
         for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:

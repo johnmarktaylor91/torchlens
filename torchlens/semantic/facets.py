@@ -19,7 +19,7 @@ from typing import Any, Literal, TypeAlias, overload
 
 import torch
 
-from ..intervention.types import (
+from ..ir.container import (
     DataclassField,
     DictKey,
     HFKey,

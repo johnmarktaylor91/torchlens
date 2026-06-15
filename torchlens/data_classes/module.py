@@ -51,10 +51,10 @@ if TYPE_CHECKING:
 
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
-    from .trace import Trace
     from .op import Op
     from .param import ParamAccessor
-    from ..intervention.types import ContainerSpec
+    from .trace import Trace
+    from ..ir.container import ContainerSpec
 
 
 class ModuleCallAccessor(Accessor["ModuleCall"]):
