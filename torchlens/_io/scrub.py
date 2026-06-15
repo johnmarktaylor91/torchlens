@@ -345,6 +345,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_output_head",
         "_output_tokenizer",
         "_semantic_output_metadata",
+        "_annotation_revision",
         "tinygrad_payload_policy",
         "tinygrad_uop_captures",
     }
@@ -828,6 +829,8 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "grad_fn_grad"
     if field_name == "_buffer_initial_values":
         return "buffer_initial_value"
+    if field_name == "_annotation_blobs":
+        return "annotation_blob"
     if field_name == "orphan_records":
         return "orphan_payload"
     raise TorchLensIOError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")

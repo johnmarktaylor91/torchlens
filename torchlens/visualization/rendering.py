@@ -4520,6 +4520,22 @@ def _build_layer_node(
                 "fixedsize": "false",
             },
         )
+    annotation_image = _annotation_image_path_for_node(self, node)
+    if annotation_image is not None:
+        default_spec = default_spec.replace(
+            image=annotation_image,
+            shape="none",
+            style="",
+            fillcolor=None,
+            color=None,
+            fontcolor=node_color,
+            extra_attrs={
+                **default_spec.extra_attrs,
+                "imagescale": "true",
+                "labelloc": "b",
+                "fixedsize": "false",
+            },
+        )
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
@@ -5849,6 +5865,42 @@ def _apply_node_spec_fn(
         return mode_spec
     result = node_spec_fn(layer_log, mode_spec)
     return mode_spec if result is None else result
+
+
+def _annotation_image_path_for_node(trace: "Trace", node: GraphNode) -> str | None:
+    """Return a user annotation image path for a rendered node.
+
+    Parameters
+    ----------
+    trace:
+        Owning Trace.
+    node:
+        Rendered Op or Layer.
+
+    Returns
+    -------
+    str | None
+        Image path stored in ``annotations["user"]["image"]``, if present.
+    """
+
+    if isinstance(node, BoundaryNode):
+        return None
+    candidates: list[Any] = [node]
+    try:
+        candidates.append(_layer_log_for_node(trace, node))
+    except ValueError:
+        pass
+    for candidate in candidates:
+        annotations = getattr(candidate, "annotations", None)
+        if not isinstance(annotations, dict):
+            continue
+        user_annotations = annotations.get("user")
+        if not isinstance(user_annotations, dict):
+            continue
+        image = user_annotations.get("image")
+        if isinstance(image, str) and image:
+            return image
+    return None
 
 
 def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "Layer":

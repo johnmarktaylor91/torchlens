@@ -30,6 +30,7 @@ Key design patterns:
 
 import copy
 import inspect
+import json
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -298,6 +299,8 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_warned_mutate_in_place": False,
     "_spec_revision": 0,
     "_out_recipe_revision": 0,
+    "_annotation_blobs": None,
+    "_annotation_revision": 0,
     "_append_sequence_id": 0,
     "_last_hook_handle_ids": (),
     "state": TraceState.PRISTINE,
@@ -1250,6 +1253,8 @@ class Trace(CapturedRun):
     jax_static_argnums: tuple[int, ...]
     input_structure: Any
     _containers: dict[int, Any]
+    _annotation_blobs: dict[str, Any] | None
+    _annotation_revision: int
     _last_sibling_ordering_decision: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -1402,6 +1407,7 @@ class Trace(CapturedRun):
         "output_layers": FieldPolicy.KEEP,
         "input_structure": FieldPolicy.BLOB_RECURSIVE,
         "_containers": FieldPolicy.BLOB_RECURSIVE,
+        "_annotation_blobs": FieldPolicy.BLOB_RECURSIVE,
         "buffer_layers": FieldPolicy.KEEP,
         "buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
@@ -1747,6 +1753,8 @@ class Trace(CapturedRun):
         # Special Layers:
         self.input_layers: List[str] = []
         self.output_layers: List[str] = []
+        self._annotation_blobs: dict[str, Any] | None = None
+        self._annotation_revision = 0
         self.buffer_layers: List[str] = []
         self.buffer_num_calls: Dict[str, int] = {}
         self._buffer_accessor = None
@@ -1887,6 +1895,288 @@ class Trace(CapturedRun):
         from ..intervention.resolver import resolve_sites
 
         return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+
+    def annotate(
+        self,
+        selector: Any,
+        *,
+        data: Any = None,
+        image: str | Path | None = None,
+        max_fanout: int = 1_000_000,
+        copy: bool = False,
+    ) -> "Trace":
+        """Attach user-owned annotation data to selected graph nodes.
+
+        Parameters
+        ----------
+        selector:
+            Selector, target spec, frozen target spec, or non-strict bare string.
+        data:
+            JSON-serializable metadata or a portable tensor payload. Tensor
+            payloads are persisted under ``_annotation_blobs`` and are supported
+            only for torch traces in this sprint.
+        image:
+            Optional local image path used by the existing ``NodeSpec.image``
+            render hook.
+        max_fanout:
+            Explicit maximum number of selected sites. The default is
+            intentionally large so annotation can fan out across many layers.
+        copy:
+            If ``True``, annotate and return an owned fork instead of mutating
+            this trace.
+
+        Returns
+        -------
+        Trace
+            The annotated trace. This is ``self`` unless ``copy=True``.
+        """
+
+        target = self.fork(name=None) if copy else self
+        target._annotate_in_place(selector, data=data, image=image, max_fanout=max_fanout)
+        return target
+
+    def with_annotations(
+        self,
+        selector: Any,
+        *,
+        data: Any = None,
+        image: str | Path | None = None,
+        max_fanout: int = 1_000_000,
+    ) -> "Trace":
+        """Return an owned annotated copy of this trace.
+
+        Parameters
+        ----------
+        selector:
+            Selector, target spec, frozen target spec, or non-strict bare string.
+        data:
+            JSON-serializable metadata or a portable tensor payload.
+        image:
+            Optional local image path used by the existing ``NodeSpec.image``
+            render hook.
+        max_fanout:
+            Explicit maximum number of selected sites.
+
+        Returns
+        -------
+        Trace
+            Forked trace carrying the requested annotations.
+        """
+
+        return self.annotate(selector, data=data, image=image, max_fanout=max_fanout, copy=True)
+
+    def _annotate_in_place(
+        self,
+        selector: Any,
+        *,
+        data: Any,
+        image: str | Path | None,
+        max_fanout: int,
+    ) -> None:
+        """Apply annotation updates directly to this trace.
+
+        Parameters
+        ----------
+        selector:
+            Selector resolved against this trace.
+        data:
+            Annotation data supplied by the caller.
+        image:
+            Optional image path supplied by the caller.
+        max_fanout:
+            Explicit fan-out limit passed to the site resolver.
+
+        Returns
+        -------
+        None
+            This trace is mutated in place.
+        """
+
+        if data is None and image is None:
+            raise ValueError("annotate() requires data=, image=, or both.")
+        sites = self.resolve_sites(selector, max_fanout=max_fanout)
+        image_value = str(image) if image is not None else None
+        data_kind = self._annotation_data_kind(data)
+        for site in sites:
+            key = self._annotation_key_for_site(site)
+            if data is not None:
+                if data_kind == "blob":
+                    self._store_annotation_blob(key, data)
+                else:
+                    self._store_annotation_breadcrumb(site, "data", data)
+            if image_value is not None:
+                self._store_annotation_breadcrumb(site, "image", image_value)
+        self._mark_annotations_mutated()
+
+    def _annotation_data_kind(self, data: Any) -> str:
+        """Classify and validate annotation data.
+
+        Parameters
+        ----------
+        data:
+            Candidate annotation payload.
+
+        Returns
+        -------
+        str
+            ``"none"``, ``"blob"``, or ``"json"``.
+        """
+
+        if data is None:
+            return "none"
+        if isinstance(data, torch.Tensor):
+            self._validate_annotation_tensor(data)
+            return "blob"
+        self._validate_annotation_json(data)
+        return "json"
+
+    def _validate_annotation_tensor(self, tensor: torch.Tensor) -> None:
+        """Validate that a tensor annotation matches the active payload codec.
+
+        Parameters
+        ----------
+        tensor:
+            Tensor annotation candidate.
+
+        Returns
+        -------
+        None
+            Raises if the tensor is not portable for this trace.
+        """
+
+        backend_name = str(getattr(self, "backend", "torch"))
+        if backend_name != "torch":
+            raise ValueError(
+                "annotate(data=torch.Tensor) is supported only for torch traces in this "
+                f"release; this trace uses backend={backend_name!r}."
+            )
+        from .._io.payload_codec import get_payload_codec
+
+        decision = get_payload_codec(backend_name).validate_for_save(tensor, strict=True)
+        if decision.__class__.__name__ != "Ok":
+            reason = getattr(decision, "text", "unsupported tensor payload")
+            raise ValueError(
+                f"Annotation tensor is not portable for backend {backend_name!r}: {reason}."
+            )
+
+    @staticmethod
+    def _validate_annotation_json(data: Any) -> None:
+        """Validate that an annotation breadcrumb can be persisted as JSON data.
+
+        Parameters
+        ----------
+        data:
+            Candidate JSON breadcrumb.
+
+        Returns
+        -------
+        None
+            Raises if ``data`` is not JSON-serializable.
+        """
+
+        try:
+            json.dumps(data, sort_keys=True)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "annotate(data=...) must be JSON-serializable or a torch.Tensor. "
+                "Convert arrays to torch.Tensor for blob persistence; values are never "
+                "silently stringified."
+            ) from exc
+
+    def _annotation_key_for_site(self, site: Any) -> str:
+        """Return the persistent annotation blob key for a resolved site.
+
+        Parameters
+        ----------
+        site:
+            Resolved layer-pass record.
+
+        Returns
+        -------
+        str
+            ``layer:<layer_label>`` for single-pass layers, otherwise
+            ``op:<op.label>``.
+        """
+
+        layer_label = str(getattr(site, "layer_label"))
+        if self.layer_num_calls.get(layer_label, 1) == 1:
+            return f"layer:{layer_label}"
+        return f"op:{getattr(site, 'label')}"
+
+    def _store_annotation_blob(self, key: str, data: Any) -> None:
+        """Store a blob annotation under ``_annotation_blobs``.
+
+        Parameters
+        ----------
+        key:
+            Namespaced annotation key.
+        data:
+            Codec-validated payload.
+
+        Returns
+        -------
+        None
+            This trace's blob mapping is mutated in place.
+        """
+
+        if self._annotation_blobs is None:
+            self._annotation_blobs = {}
+        self._annotation_blobs[key] = data
+
+    def _store_annotation_breadcrumb(self, site: Any, name: str, value: Any) -> None:
+        """Store a small user breadcrumb on the selected Op and Layer.
+
+        Parameters
+        ----------
+        site:
+            Resolved layer-pass record.
+        name:
+            User-namespace field name.
+        value:
+            JSON-compatible breadcrumb value.
+
+        Returns
+        -------
+        None
+            The selected Op and aggregate Layer annotation dicts are mutated.
+        """
+
+        self._user_annotation_dict(site.annotations)[name] = value
+        layer_log = self.layer_logs.get(str(getattr(site, "layer_label")))
+        if layer_log is not None:
+            self._user_annotation_dict(layer_log.annotations)[name] = value
+
+    @staticmethod
+    def _user_annotation_dict(annotations: dict[str, Any]) -> dict[str, Any]:
+        """Return the reserved user annotation namespace.
+
+        Parameters
+        ----------
+        annotations:
+            Op, Layer, or Trace annotation mapping.
+
+        Returns
+        -------
+        dict[str, Any]
+            Mutable ``annotations["user"]`` mapping.
+        """
+
+        user_annotations = annotations.setdefault("user", {})
+        if not isinstance(user_annotations, dict):
+            raise ValueError('annotations["user"] must be a dict to store user annotations.')
+        return user_annotations
+
+    def _mark_annotations_mutated(self) -> None:
+        """Bump the annotation revision and invalidate render-only caches.
+
+        Returns
+        -------
+        None
+            This trace's annotation revision is incremented.
+        """
+
+        self._annotation_revision = int(getattr(self, "_annotation_revision", 0)) + 1
+        self.__dict__.pop("_last_sibling_ordering_decision", None)
 
     def find_layers(self, query: str, *, limit: int = 10) -> List[str]:
         """Return layer labels matching a fuzzy query.
@@ -3530,13 +3820,23 @@ class Trace(CapturedRun):
             "_has_direct_writes",
             "_spec_revision",
             "_out_recipe_revision",
+            "input_annotations",
+            "_annotation_blobs",
+            "_annotation_revision",
         )
         current_state = dict(state_items(self))
+        preserved_trace_user_annotations = self._copy_user_annotations(
+            current_state.get("annotations")
+        )
         preserved_state = {
             field_name: current_state.get(field_name) for field_name in preserved_fields
         }
         replacement_state = dict(state_items(new_log))
         replacement_state.update(preserved_state)
+        replacement_state["annotations"] = self._merge_user_annotations(
+            self._copy_rerun_value(getattr(new_log, "annotations", {})),
+            preserved_trace_user_annotations,
+        )
         state_restore(self, replacement_state)
         _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
         _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
@@ -3601,12 +3901,18 @@ class Trace(CapturedRun):
             "is_in_conditional_body",
         }
         new_layer_state = dict(state_items(new_layer))
+        preserved_user_annotations = self._copy_user_annotations(
+            getattr(layer, "annotations", None)
+        )
         for field_name in LAYER_PASS_LOG_FIELD_ORDER:
             if field_name in preserved_fields:
                 continue
+            value = self._copy_rerun_value(new_layer_state.get(field_name))
+            if field_name == "annotations":
+                value = self._merge_user_annotations(value, preserved_user_annotations)
             layer._internal_set(
                 field_name,
-                self._copy_rerun_value(new_layer_state.get(field_name)),
+                value,
             )
         for field_name in (
             "out_ref",
@@ -3623,9 +3929,12 @@ class Trace(CapturedRun):
             "_edge_uses",
         ):
             if hasattr(new_layer, field_name):
+                value = self._copy_rerun_value(new_layer_state.get(field_name))
+                if field_name == "annotations":
+                    value = self._merge_user_annotations(value, preserved_user_annotations)
                 layer._internal_set(
                     field_name,
-                    self._copy_rerun_value(new_layer_state.get(field_name)),
+                    value,
                 )
         layer.source_trace = self
 
@@ -3643,11 +3952,66 @@ class Trace(CapturedRun):
             new_layer_log = new_layer_logs.get(label)
             if new_layer_log is None:
                 continue
+            preserved_user_annotations = self._copy_user_annotations(
+                getattr(layer_log, "annotations", None)
+            )
             for field_name, value in state_items(new_layer_log):
                 if field_name in {"_source_trace_ref", "ops"}:
                     continue
-                setattr(layer_log, field_name, self._copy_rerun_value(value))
+                copied_value = self._copy_rerun_value(value)
+                if field_name == "annotations":
+                    copied_value = self._merge_user_annotations(
+                        copied_value,
+                        preserved_user_annotations,
+                    )
+                setattr(layer_log, field_name, copied_value)
             layer_log.source_trace = self
+
+    def _copy_user_annotations(self, annotations: Any) -> dict[str, Any] | None:
+        """Copy the reserved user annotation namespace from a mapping.
+
+        Parameters
+        ----------
+        annotations:
+            Existing annotation mapping.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Copied user namespace, or ``None`` when absent.
+        """
+
+        if not isinstance(annotations, dict):
+            return None
+        user_annotations = annotations.get("user")
+        if not isinstance(user_annotations, dict):
+            return None
+        return self._copy_rerun_value(user_annotations)
+
+    def _merge_user_annotations(
+        self,
+        fresh_annotations: Any,
+        preserved_user_annotations: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Merge preserved user annotations into fresh internal annotations.
+
+        Parameters
+        ----------
+        fresh_annotations:
+            Annotation mapping from the fresh rerun.
+        preserved_user_annotations:
+            Previously stored ``annotations["user"]`` mapping.
+
+        Returns
+        -------
+        dict[str, Any]
+            Fresh annotations plus the preserved user namespace.
+        """
+
+        merged = fresh_annotations if isinstance(fresh_annotations, dict) else {}
+        if preserved_user_annotations is not None:
+            merged["user"] = self._copy_rerun_value(preserved_user_annotations)
+        return merged
 
     def _refresh_rerun_trace_fields_from(self, new_log: "Trace") -> None:
         """Refresh trace-level run fields without replacing graph containers.

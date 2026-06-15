@@ -169,6 +169,7 @@ MODEL_LOG_FIELD_ORDER = [
     "output_layers",
     "input_structure",
     "_containers",
+    "_annotation_blobs",
     "buffer_layers",
     "buffer_num_calls",
     "internal_source_ops",
