@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 import torch
@@ -273,6 +274,58 @@ def test_buffer_write_models_validate_and_expose_entities(
         assert buffer.final_value is not None
         assert buffer.num_overwrites == overwrite_count
     assert not any(op.is_buffer for op in trace.compute_ops)
+
+
+def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
+    """Assert derived buffer op accessors partition the flat buffer op population."""
+
+    expected_read_ops = [
+        op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is None
+    ]
+    expected_write_ops = [
+        op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is not None
+    ]
+    all_buffer_ops = [op.label for op in trace.layer_list if op.is_buffer]
+
+    assert trace.buffer_read_ops == expected_read_ops
+    assert trace.buffer_write_ops == expected_write_ops
+    assert trace.num_buffer_read_ops == len(trace.buffer_read_ops)
+    assert trace.num_buffer_write_ops == len(trace.buffer_write_ops)
+    assert set(trace.buffer_read_ops).isdisjoint(trace.buffer_write_ops)
+    assert set(trace.buffer_read_ops) | set(trace.buffer_write_ops) == set(all_buffer_ops)
+    assert {trace[op_label].layer_label for op_label in all_buffer_ops} == set(trace.buffer_layers)
+    assert trace.num_buffer_layers == len(trace.buffer_layers) == len(all_buffer_ops)
+
+
+def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
+    """Read/write op accessors partition buffer versions, including dual-role buffers."""
+
+    trace = tl.trace(DualRoleInplace(), torch.ones(2), save_arg_values=True)
+
+    _assert_buffer_op_accessors_partition_buffer_ops(trace)
+    assert trace.buffer_read_ops
+    assert trace.buffer_write_ops
+
+    b_versions = {version.label for version in trace.buffers["b"].versions}
+    assert b_versions & set(trace.buffer_read_ops)
+    assert b_versions & set(trace.buffer_write_ops)
+
+
+def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
+    """Derived buffer op accessors remain correct after portable ``.tlspec`` load."""
+
+    pytest.importorskip("safetensors")
+    trace = tl.trace(DualRoleInplace(), torch.ones(2), save_arg_values=True)
+    path = tmp_path / "buffer_ops.tlspec"
+
+    trace.save(path, level="portable")
+    loaded = tl.load(path)
+
+    _assert_buffer_op_accessors_partition_buffer_ops(loaded)
+    assert loaded.buffer_read_ops == trace.buffer_read_ops
+    assert loaded.buffer_write_ops == trace.buffer_write_ops
+    assert loaded.num_buffer_read_ops == trace.num_buffer_read_ops
+    assert loaded.num_buffer_write_ops == trace.num_buffer_write_ops
 
 
 def test_reassignment_double_count_is_exact() -> None:

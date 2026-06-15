@@ -60,6 +60,8 @@ trace.buffers["bn.running_mean"]
 trace["bn.running_mean:2"]      # graph Op for a specific buffer version
 trace.buffers["bn.running_mean"].versions
 trace.modules["bn"].buffers
+trace.buffer_read_ops           # provisional: buffer version Ops read into graph
+trace.buffer_write_ops          # provisional: buffer version Ops created by writes
 ```
 
 `Buffer.value_at(n)` returns a 1-based observed version value.

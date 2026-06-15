@@ -4661,6 +4661,32 @@ class Trace(CapturedRun):
         return len(self.buffer_layers)
 
     @property
+    def buffer_read_ops(self) -> list[str]:
+        """Labels for buffer Ops that read registered-buffer values into the graph."""
+
+        return [op.label for op in self.layer_list if op.is_buffer and op.buffer_write_kind is None]
+
+    @property
+    def buffer_write_ops(self) -> list[str]:
+        """Labels for buffer Ops that record registered-buffer write events."""
+
+        return [
+            op.label for op in self.layer_list if op.is_buffer and op.buffer_write_kind is not None
+        ]
+
+    @property
+    def num_buffer_read_ops(self) -> int:
+        """Number of buffer Ops that read registered-buffer values into the graph."""
+
+        return len(self.buffer_read_ops)
+
+    @property
+    def num_buffer_write_ops(self) -> int:
+        """Number of buffer Ops that record registered-buffer write events."""
+
+        return len(self.buffer_write_ops)
+
+    @property
     def internal_source_layers(self) -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
