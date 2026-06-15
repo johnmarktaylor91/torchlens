@@ -51,13 +51,14 @@ OutputPathComponent: TypeAlias = (
 class ContainerSpec:
     """Portable description of an output container seen during capture."""
 
-    kind: Literal["tuple", "list", "dict", "namedtuple", "dataclass", "hf_model_output"]
+    kind: Literal["tuple", "list", "dict", "namedtuple", "dataclass", "hf_model_output", "literal"]
     length: int | None = None
     keys: tuple[Any, ...] = ()
     fields: tuple[str, ...] = ()
     type_module: str | None = None
     type_qualname: str | None = None
     child_specs: tuple[tuple[OutputPathComponent, "ContainerSpec"], ...] = ()
+    literal_value: Any = None
 
 
 def rebuild_container_from_spec(spec: ContainerSpec, leaves: list[Any] | tuple[Any, ...]) -> Any:
@@ -106,6 +107,8 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
     """
 
     child_by_key = dict(spec.child_specs)
+    if spec.kind == "literal":
+        return spec.literal_value
     if spec.kind in {"tuple", "list"}:
         values = [
             _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)

@@ -4,13 +4,16 @@ Covers: import paths, registry consistency, perturbation unit tests,
 deep clone helpers, and integration tests through specific exemption paths.
 """
 
+from types import SimpleNamespace
+from typing import cast
+
 import pytest
 import torch
 import torch.nn as nn
-from typing import cast
 
 from torchlens import validate_forward_pass, validate_saved_outs, Trace, trace as trace_fn
 from torchlens import check_metadata_invariants, MetadataInvariantError
+from torchlens.intervention.types import DictKey
 from torchlens.validation import validate_saved_outs as validate_from_subpkg
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
@@ -22,6 +25,7 @@ from torchlens.validation.core import (
     _perturb_layer_outs,
     _deep_clone_tensors,
     _copy_validation_args,
+    _execute_func_with_restored_state,
     MAX_PERTURB_ATTEMPTS,
 )
 from torchlens.validation.status import (
@@ -102,6 +106,95 @@ def test_validation_replay_status_aggregate_fold() -> None:
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
     assert callable(validate_forward_pass)
+
+
+def test_validate_forward_pass_replays_dict_output_by_typed_path() -> None:
+    """Validation replay indexes dict-returning outputs by typed container path."""
+
+    class DictOutputBlock(nn.Module):
+        """Return a dict of tensors from a submodule."""
+
+        def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+            """Run the block.
+
+            Parameters
+            ----------
+            x:
+                Input tensor.
+
+            Returns
+            -------
+            dict[str, torch.Tensor]
+                Dict output consumed by the parent module.
+            """
+
+            return {"hidden": x.relu(), "logits": x.sigmoid()}
+
+    class DictOutputModel(nn.Module):
+        """Consume one tensor from a dict-returning child module."""
+
+        def __init__(self) -> None:
+            """Initialize the model."""
+
+            super().__init__()
+            self.block = DictOutputBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model.
+
+            Parameters
+            ----------
+            x:
+                Input tensor.
+
+            Returns
+            -------
+            torch.Tensor
+                Tensor selected from a dict output.
+            """
+
+            output = self.block(x)
+            return output["logits"] * 2
+
+    assert validate_forward_pass(DictOutputModel(), torch.tensor([-1.0, 2.0]))
+
+
+def test_validation_recompute_selects_dict_output_by_container_path() -> None:
+    """Validation replay selects a dict leaf by typed path, not raw integer index."""
+
+    def return_dict(x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Return a dict with two tensor leaves.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        dict[str, torch.Tensor]
+            Dict output.
+        """
+
+        return {"hidden": x.relu(), "logits": x.sigmoid()}
+
+    layer = SimpleNamespace(
+        func=return_dict,
+        func_rng_states=None,
+        func_autocast_state=None,
+        multi_output_index=0,
+        container_path=(DictKey("logits"),),
+    )
+
+    recomputed = _execute_func_with_restored_state(
+        layer=layer,
+        input_args={"args": [torch.tensor([-1.0, 2.0])], "kwargs": {}},
+        layers_to_perturb=[],
+        layer_label="dict_output",
+        verbose=False,
+    )
+
+    assert torch.allclose(recomputed, torch.tensor([-1.0, 2.0]).sigmoid())
 
 
 def test_validate_forward_pass_output_aliasing_a_reassigned_buffer():

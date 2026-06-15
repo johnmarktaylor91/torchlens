@@ -718,6 +718,8 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
         Container spec, or ``None`` for a single tensor / unsupported scalar.
     """
 
+    if _literal_value_supported(value) or isinstance(value, torch.Size):
+        return ContainerSpec(kind="literal", literal_value=value)
     child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
@@ -1623,6 +1625,12 @@ def _replace_output_value(
 
     if path in replacements:
         return replacements[path]
+    if _is_hf_model_output(value):
+        key_values = {
+            key: _replace_output_value(item, (*path, HFKey(key)), replacements)
+            for key, item in value.items()
+        }
+        return type(value)(**key_values)
     if isinstance(value, tuple) and hasattr(value, "_fields"):
         replaced_items = [
             _replace_output_value(item, (*path, NamedField(field)), replacements)

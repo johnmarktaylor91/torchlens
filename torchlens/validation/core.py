@@ -21,6 +21,14 @@ import torch
 
 from ..data_classes.op import Op
 from ..ir.events import is_control_edge_use
+from ..ir.container import (
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+)
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -869,12 +877,73 @@ def _execute_func_with_restored_state(
     if layer_func.__name__ in ("__setitem__", "zero_", "__delitem__"):
         recomputed_output = input_args["args"][0]
 
-    # Multi-output functions (e.g., torch.max with dim) return a tuple;
-    # select the specific output this layer represents.
-    if isinstance(recomputed_output, (list, tuple)):
+    # Multi-output functions may return typed containers; select the specific
+    # output this layer represents using the captured typed path when available.
+    container_path = tuple(getattr(layer, "container_path", ()) or ())
+    if container_path:
+        recomputed_output = _slice_recomputed_output_by_path(recomputed_output, container_path)
+    elif isinstance(recomputed_output, (list, tuple)):
         recomputed_output = recomputed_output[layer.multi_output_index]
 
     return recomputed_output
+
+
+def _slice_recomputed_output_by_path(
+    output: Any,
+    path: tuple[OutputPathComponent, ...],
+) -> Any:
+    """Return the recomputed output leaf addressed by a typed container path.
+
+    Parameters
+    ----------
+    output:
+        Function return value.
+    path:
+        Captured output path for one tensor leaf.
+
+    Returns
+    -------
+    Any
+        Leaf value at the requested path.
+    """
+
+    current = output
+    for component in path:
+        current = _index_recomputed_output_component(current, component)
+    return current
+
+
+def _index_recomputed_output_component(output: Any, component: OutputPathComponent) -> Any:
+    """Index one component into a recomputed output container.
+
+    Parameters
+    ----------
+    output:
+        Current output container.
+    component:
+        Typed path component.
+
+    Returns
+    -------
+    Any
+        Nested value.
+    """
+
+    if isinstance(component, TupleIndex):
+        return output[component.index]
+    if isinstance(component, DictKey):
+        return output[component.key]
+    if isinstance(component, NamedField):
+        return getattr(output, component.name)
+    if isinstance(component, DataclassField):
+        return getattr(output, component.name)
+    if isinstance(component, HFKey):
+        return output[component.key]
+    if isinstance(component, int):
+        return output[component]
+    if isinstance(component, str):
+        return output[component]
+    raise TypeError(f"Unsupported output path component {component!r}.")
 
 
 def _deep_numeric_replay_matches_saved(

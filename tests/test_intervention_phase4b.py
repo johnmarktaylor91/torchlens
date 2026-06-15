@@ -10,7 +10,10 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.backends.torch.ops import _walk_output_tensors_with_paths
+from torchlens.backends.torch.ops import (
+    _replace_output_tensors_by_path,
+    _walk_output_tensors_with_paths,
+)
 from torchlens.intervention.types import (
     ContainerSpec,
     DataclassField,
@@ -45,6 +48,25 @@ class _HFModelOutput(dict):
         """
 
         super().__init__(kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        """Return stored values through attribute access.
+
+        Parameters
+        ----------
+        name:
+            Attribute name.
+
+        Returns
+        -------
+        Any
+            Stored output value.
+        """
+
+        try:
+            return self[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
 
     def keys(self) -> Any:
         """Return output keys.
@@ -124,6 +146,21 @@ def test_path_walker_supports_required_output_containers() -> None:
             assert specs
             assert all(isinstance(spec, ContainerSpec) for spec in specs)
             assert {spec.kind for spec in specs} == set(expected_kinds)
+
+
+def test_hf_model_output_replacement_preserves_concrete_type_and_attributes() -> None:
+    """Live output replacement preserves HF-style output subclasses."""
+
+    logits = torch.randn(2, 3)
+    hidden = torch.randn(2, 3)
+    replacement = torch.zeros_like(logits)
+    output = _HFModelOutput(last_hidden_state=hidden, logits=logits)
+
+    replaced = _replace_output_tensors_by_path(output, {(HFKey("logits"),): replacement})
+
+    assert isinstance(replaced, _HFModelOutput)
+    assert replaced.logits is replacement
+    assert replaced.last_hidden_state is hidden
 
 
 @pytest.mark.smoke

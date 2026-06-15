@@ -372,3 +372,111 @@ def test_rebuild_container_from_spec_roundtrips_nested_dict_list() -> None:
         "a": 1,
         "nested": [2, (3, 4)],
     }
+
+
+def test_rebuild_container_from_spec_preserves_literal_leaves() -> None:
+    """ContainerSpec reconstruction restores non-tensor leaves at their original paths."""
+
+    tuple_spec = ContainerSpec(
+        kind="tuple",
+        length=2,
+        child_specs=((TupleIndex(1), ContainerSpec(kind="literal", literal_value=5)),),
+    )
+    tuple_rebuilt = rebuild_container_from_spec(tuple_spec, [torch.tensor([1.0])])
+    assert torch.equal(tuple_rebuilt[0], torch.tensor([1.0]))
+    assert tuple_rebuilt[1] == 5
+
+    dict_spec = ContainerSpec(
+        kind="dict",
+        keys=("x", "n", "y"),
+        child_specs=((DictKey("n"), ContainerSpec(kind="literal", literal_value=3)),),
+    )
+    rebuilt = rebuild_container_from_spec(dict_spec, [torch.tensor([1.0]), torch.tensor([2.0])])
+
+    assert torch.equal(rebuilt["x"], torch.tensor([1.0]))
+    assert rebuilt["n"] == 3
+    assert torch.equal(rebuilt["y"], torch.tensor([2.0]))
+
+
+def test_traced_container_specs_preserve_literal_return_leaves() -> None:
+    """Captured container specs faithfully reconstruct returns containing scalar leaves."""
+
+    class TupleLiteralModel(nn.Module):
+        """Return a tensor plus a scalar literal."""
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, int]:
+            """Run the model.
+
+            Parameters
+            ----------
+            x:
+                Input tensor.
+
+            Returns
+            -------
+            tuple[torch.Tensor, int]
+                Tensor output and scalar literal.
+            """
+
+            return x.relu(), 5
+
+    class DictLiteralModel(nn.Module):
+        """Return tensor leaves around a scalar literal."""
+
+        def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor | int]:
+            """Run the model.
+
+            Parameters
+            ----------
+            x:
+                Input tensor.
+
+            Returns
+            -------
+            dict[str, torch.Tensor | int]
+                Dict output with tensor and scalar leaves.
+            """
+
+            return {"x": x.relu(), "n": 3, "y": x.sigmoid()}
+
+    tuple_trace = tl.trace(TupleLiteralModel(), torch.tensor([-1.0, 2.0]), intervention_ready=True)
+    tuple_outputs = [tuple_trace.ops[label] for label in tuple_trace.output_layers]
+    tuple_spec = next(
+        output.container_spec for output in tuple_outputs if output.container_spec is not None
+    )
+    tuple_rebuilt = rebuild_container_from_spec(
+        tuple_spec, [output.out for output in tuple_outputs]
+    )
+    assert torch.equal(tuple_rebuilt[0], torch.tensor([0.0, 2.0]))
+    assert tuple_rebuilt[1] == 5
+
+    dict_trace = tl.trace(DictLiteralModel(), torch.tensor([-1.0, 2.0]), intervention_ready=True)
+    dict_outputs = [dict_trace.ops[label] for label in dict_trace.output_layers]
+    dict_spec = next(
+        output.container_spec for output in dict_outputs if output.container_spec is not None
+    )
+    dict_rebuilt = rebuild_container_from_spec(dict_spec, [output.out for output in dict_outputs])
+    assert torch.equal(dict_rebuilt["x"], torch.tensor([0.0, 2.0]))
+    assert dict_rebuilt["n"] == 3
+    assert torch.allclose(dict_rebuilt["y"], torch.tensor([-1.0, 2.0]).sigmoid())
+
+
+def test_rebuild_container_from_spec_handles_empty_and_aliasing_returns() -> None:
+    """ContainerSpec reconstruction locks empty containers and repeated tensor positions."""
+
+    assert rebuild_container_from_spec(ContainerSpec(kind="tuple", length=0), []) == ()
+    assert rebuild_container_from_spec(ContainerSpec(kind="dict", keys=()), []) == {}
+
+    tensor = torch.tensor([1.0])
+    rebuilt = rebuild_container_from_spec(ContainerSpec(kind="tuple", length=2), [tensor, tensor])
+    assert rebuilt[0] is tensor
+    assert rebuilt[1] is tensor
+
+
+def test_literal_container_spec_is_picklable() -> None:
+    """Literal leaf specs stay portable through pickle serialization."""
+
+    import pickle
+
+    spec = ContainerSpec(kind="literal", literal_value=3)
+    assert pickle.loads(pickle.dumps(spec)) == spec
