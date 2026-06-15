@@ -10,6 +10,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from . import batch_summary
+from .node_plots import render_heatmap, render_image_scatter, render_lineplot
 from ..visualization.bundle_diff import bundle_diff
 
 __all__ = [
@@ -19,6 +20,9 @@ __all__ = [
     "channel_grid",
     "heatmap",
     "histogram",
+    "render_heatmap",
+    "render_image_scatter",
+    "render_lineplot",
 ]
 
 _HEATMAP_COLORS = (
