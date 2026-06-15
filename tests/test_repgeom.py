@@ -292,6 +292,39 @@ def test_activation_distance_matrix_metrics() -> None:
     assert np.allclose(euclidean, euclidean.T)
 
 
+def test_rdm_alias_matches_activation_distance_matrix_for_core_metrics() -> None:
+    """RDM should be a thin alias over the activation distance helper."""
+
+    activations = np.array(
+        [
+            [[1.0, 0.0, 2.0], [0.5, 1.5, -0.5]],
+            [[0.0, 1.0, 3.0], [1.0, -0.5, 0.25]],
+            [[1.0, 1.0, 4.0], [-1.0, 0.75, 0.5]],
+        ]
+    )
+
+    for metric in ("euclidean", "cosine", "correlation"):
+        expected = repgeom.activation_distance_matrix(activations, metric=metric)
+        assert np.array_equal(repgeom.rdm(activations, metric=metric), expected)
+
+
+def test_rdm_degenerate_min_n_and_angular_metrics_raise_clear_errors() -> None:
+    """RDM public paths should reject too-small and zero-norm cases clearly."""
+
+    with pytest.raises(ValueError, match="min_n must be at least 2"):
+        repgeom.rdm_evolution(_mds_trace(_MDSClassifier(), tl.func("linear")), min_n=1)
+
+    trace = tl.trace(nn.Linear(3, 3), torch.ones(1, 3), save=tl.func("linear"))
+    with pytest.raises(ValueError, match="too few stimuli"):
+        repgeom.rdm_evolution(trace, min_n=2)
+
+    with pytest.raises(ValueError, match="cosine distance is undefined for zero-norm stimuli"):
+        repgeom.rdm(np.array([[0.0, 0.0], [1.0, 0.0]]), metric="cosine")
+
+    with pytest.raises(ValueError, match="correlation distance is undefined for zero-norm stimuli"):
+        repgeom.rdm(np.array([[1.0, 1.0], [1.0, 2.0]]), metric="correlation")
+
+
 def test_repgeom_reachable_as_top_level_submodule() -> None:
     """``tl.repgeom`` should be exposed without expanding ``tl.__all__``."""
 
@@ -355,6 +388,30 @@ def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
         assert torch.equal(loaded._annotation_blobs[key], torch.from_numpy(coords))
 
 
+def test_rdm_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Path) -> None:
+    """RDM evolution should compute, annotate, and persist matrices."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
+
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+
+    assert list(matrices_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
+    assert trace._annotation_blobs is not None
+    for key, matrix in matrices_by_key.items():
+        assert matrix.shape == (8, 8)
+        assert np.allclose(matrix, matrix.T)
+        assert torch.equal(trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrix))
+
+    bundle_path = tmp_path / "rdm_evolution.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+
+    assert loaded._annotation_blobs is not None
+    for key, matrix in matrices_by_key.items():
+        assert torch.equal(loaded._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrix))
+
+
 def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> None:
     """The scatter hook should set a transient image only for annotated layers."""
 
@@ -378,6 +435,35 @@ def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> Non
     assert result.extra_attrs["imagescale"] == "true"
     assert result.extra_attrs["labelloc"] == "b"
     assert "MDS thumbnail scatter" in result.tooltip
+
+
+def test_rdm_node_spec_sets_one_draw_time_heatmap_for_annotated_layer() -> None:
+    """The RDM hook should set one bounded heatmap image for annotated layers."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    trace.raw_input = _pil_stimuli(8)
+    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
+    hook = repgeom.rdm_node_spec(max_stimuli=8)
+    spec = NodeSpec(lines=[layer.layer_label])
+
+    result = hook(layer, spec)
+
+    assert result is not None
+    assert result.image is not None
+    assert Path(result.image).is_file()
+    assert result.image.endswith(".png")
+    image_module = pytest.importorskip("PIL.Image")
+    with image_module.open(result.image) as rendered:
+        assert rendered.mode == "RGB"
+        assert rendered.size == (360, 360)
+    assert result.lines == [layer.layer_label]
+    assert result.shape == "box"
+    assert result.extra_attrs["imagescale"] == "true"
+    assert result.extra_attrs["labelloc"] == "b"
+    assert result.tooltip is not None
+    assert "RDM heatmap" in result.tooltip
+    assert "metric=precomputed" in result.tooltip
 
 
 def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: Path) -> None:
@@ -434,6 +520,46 @@ def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path)
     hrefs = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', svg_text)
     assert any(href.startswith("data:image/png;base64,") for href in hrefs)
     assert "/tmp/torchlens_visualizers_" not in svg_text
+
+
+def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
+    tmp_path: Path,
+) -> None:
+    """RDM SVG output should inline one heatmap image per annotated node after reload."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    trace.raw_input = _pil_stimuli(8)
+    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+    annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
+    bundle_path = tmp_path / "rdm_source.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+    output_path = tmp_path / "rdm.svg"
+
+    loaded.draw(
+        vis_outpath=str(output_path),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        node_spec_fn=repgeom.rdm_node_spec(max_stimuli=8),
+    )
+
+    svg_text = output_path.read_text(encoding="utf-8")
+    image_tags = re.findall(r"<image\b[^>]+>", svg_text)
+    assert len(image_tags) == len(annotated_layers) + 1
+    for layer in annotated_layers:
+        node_name = f"{layer.layer_label}pass1"
+        block_match = re.search(
+            rf"<title>{re.escape(node_name)}</title>(.*?)(?=<!--|</svg>)",
+            svg_text,
+            flags=re.DOTALL,
+        )
+        assert block_match is not None
+        node_block = block_match.group(1)
+        node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
+        assert len(node_images) == 1
+        assert node_images[0].startswith("data:image/png;base64,")
+        assert "<polygon" in node_block
+        assert f">{layer.layer_label}</text>" in node_block
 
 
 def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
@@ -500,6 +626,23 @@ def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> 
     assert first_path.read_bytes() == second_path.read_bytes()
 
 
+def test_plain_trace_draw_without_rdm_hook_does_not_create_annotation_blobs(
+    tmp_path: Path,
+) -> None:
+    """Default draw should stay byte-identical and leave annotation blobs absent."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    first_path = tmp_path / "plain_default_first.svg"
+    second_path = tmp_path / "plain_default_second.svg"
+
+    assert trace._annotation_blobs is None
+    trace.draw(vis_outpath=str(first_path), vis_save_only=True, vis_fileformat="svg")
+    trace.draw(vis_outpath=str(second_path), vis_save_only=True, vis_fileformat="svg")
+
+    assert trace._annotation_blobs is None
+    assert first_path.read_bytes() == second_path.read_bytes()
+
+
 def test_mds_scatter_import_does_not_load_matplotlib() -> None:
     """The scatter renderer must stay PIL-only and avoid matplotlib imports."""
 
@@ -542,6 +685,34 @@ def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     assert coords_by_key[key].shape == (8, 2)
     assert trace._annotation_blobs is not None
     assert torch.equal(trace._annotation_blobs[key], torch.from_numpy(coords_by_key[key]))
+
+
+def test_rdm_evolution_recurrent_aggregate_requires_pass_selection() -> None:
+    """Aggregate recurrent layers should raise the same pass-selection error for RDM."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+
+    with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
+        repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+
+
+def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
+    """A single recurrent pass selection should read op.out and store op RDM."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    linear_op = next(
+        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
+    )
+
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.label(linear_op.label), min_n=8)
+
+    key = f"op:{linear_op.label}"
+    assert list(matrices_by_key) == [key]
+    assert matrices_by_key[key].shape == (8, 8)
+    assert trace._annotation_blobs is not None
+    assert torch.equal(
+        trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrices_by_key[key])
+    )
 
 
 def test_mds_evolution_unsaved_activation_raises_capture_guidance() -> None:

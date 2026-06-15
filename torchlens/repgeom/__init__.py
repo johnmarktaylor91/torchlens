@@ -15,11 +15,12 @@ from typing import Any, Literal, TypeAlias
 import numpy as np
 import torch
 
-from ..viz.node_plots import render_image_scatter
+from ..viz.node_plots import render_heatmap, render_image_scatter
 
 DistanceMetric: TypeAlias = Literal["euclidean", "cosine", "correlation"]
 MDSInfo: TypeAlias = dict[str, int | float | bool | str]
 MDSEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
+RDMEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
 
 _RANK_TOLERANCE = 1e-12
 _SYMMETRY_TOLERANCE = 1e-10
@@ -246,6 +247,36 @@ def activation_distance_matrix(
     return distances
 
 
+def rdm(activations: Any, metric: DistanceMetric = "euclidean") -> np.ndarray:
+    """Return a representational dissimilarity matrix for activations.
+
+    This is a thin public alias for :func:`activation_distance_matrix` using
+    RDM terminology. The first activation dimension is treated as the stimulus
+    dimension and all remaining dimensions are flattened per stimulus.
+
+    Parameters
+    ----------
+    activations:
+        Activation array or tensor with shape ``[N, ...]``.
+    metric:
+        RDM dissimilarity metric. Supported values are ``"euclidean"``,
+        ``"cosine"``, and ``"correlation"``.
+
+    Returns
+    -------
+    np.ndarray
+        Square ``N x N`` representational dissimilarity matrix.
+
+    Raises
+    ------
+    ValueError
+        If activations are non-finite, empty, zero-norm for angular metrics, or
+        the metric is unsupported.
+    """
+
+    return activation_distance_matrix(activations, metric=metric)
+
+
 def _angular_dissimilarity(features: np.ndarray, *, center_rows: bool) -> np.ndarray:
     """Return cosine or correlation dissimilarities for row-wise features.
 
@@ -460,10 +491,62 @@ def mds_evolution(
         coords, _info = classical_mds(distances, n_components=2, min_n=min_n)
         if align and previous_coords is not None:
             coords = procrustes_align(coords, previous_coords)
-        _annotate_mds_coords(trace, site, coords)
+        _annotate_mds_coords(trace, key, coords)
         coords_by_key[key] = coords
         previous_coords = coords
     return coords_by_key
+
+
+def rdm_evolution(
+    trace: Any,
+    save: Any | None = None,
+    *,
+    metric: DistanceMetric = "euclidean",
+    min_n: int = 2,
+) -> RDMEvolution:
+    """Compute and annotate per-layer representational dissimilarity matrices.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace with saved activation payloads.
+    save:
+        Optional selector limiting which layers or pass-qualified ops to
+        process. When omitted, all layers with saved activations are used.
+    metric:
+        Activation distance metric passed to :func:`activation_distance_matrix`.
+    min_n:
+        Minimum number of stimuli required for each RDM. Must be at least 2.
+
+    Returns
+    -------
+    OrderedDict[str, np.ndarray]
+        RDM arrays keyed by ``layer:<layer_label>`` for single-pass layers and
+        ``op:<op.label>`` for pass-qualified recurrent selections.
+
+    Raises
+    ------
+    ValueError
+        If a selected site has no saved activation, has too few stimuli, is
+        recurrent without a pass-qualified selection, or fails metric
+        preconditions.
+    """
+
+    if min_n < 2:
+        raise ValueError("min_n must be at least 2 for rdm_evolution.")
+
+    selected = _selected_activation_sites(trace, save)
+    matrices_by_key: RDMEvolution = OrderedDict()
+    for key, _site, activations in selected:
+        matrix = activation_distance_matrix(activations, metric=metric)
+        if matrix.shape[0] < min_n:
+            raise ValueError(
+                f"rdm_evolution has too few stimuli for {key!r}: "
+                f"got {matrix.shape[0]}, need at least {min_n}."
+            )
+        _store_annotation_tensor(trace, f"rdm:{key}", torch.from_numpy(matrix))
+        matrices_by_key[key] = matrix
+    return matrices_by_key
 
 
 def mds_scatter_node_spec(
@@ -574,6 +657,147 @@ def mds_scatter_node_spec(
     return node_spec_fn
 
 
+def rdm_node_spec(
+    *,
+    max_stimuli: int = 8,
+    thumbnail_size: int = 24,
+    canvas_size: int = 360,
+    cmap: str = "viridis",
+    show_axis_thumbnails: bool = True,
+) -> Callable[[Any, Any], Any | None]:
+    """Return a draw-time node callback for stored RDM heatmap annotations.
+
+    Parameters
+    ----------
+    max_stimuli:
+        Maximum number of stimulus rows/columns to label before adding a cap
+        marker.
+    thumbnail_size:
+        Maximum width and height for axis thumbnails.
+    canvas_size:
+        Width and height of the rendered heatmap image in pixels.
+    cmap:
+        Colormap passed to :func:`torchlens.viz.render_heatmap`.
+    show_axis_thumbnails:
+        Whether to use matching raw PIL image stimuli as symmetric axis
+        thumbnails when available.
+
+    Returns
+    -------
+    Callable[[Any, Any], Any | None]
+        ``node_spec_fn`` suitable for ``Trace.draw(node_spec_fn=...)``.
+
+    Raises
+    ------
+    ValueError
+        If sizing or cap parameters are invalid.
+    """
+
+    if max_stimuli < 1:
+        raise ValueError("max_stimuli must be at least 1.")
+    if thumbnail_size < 4:
+        raise ValueError("thumbnail_size must be at least 4.")
+    if canvas_size <= thumbnail_size * 2:
+        raise ValueError("canvas_size must be larger than twice thumbnail_size.")
+
+    def node_spec_fn(layer: Any, spec: Any) -> Any | None:
+        """Apply an RDM heatmap image to a matching node spec.
+
+        Parameters
+        ----------
+        layer:
+            Layer or op-like render node passed by TorchLens.
+        spec:
+            Default ``NodeSpec`` to mutate by replacement.
+
+        Returns
+        -------
+        Any | None
+            Updated spec when an RDM is available, otherwise ``None``.
+        """
+
+        trace = getattr(layer, "source_trace", None)
+        if trace is None:
+            return None
+        key, matrix = _rdm_matrix_for_node(trace, layer)
+        if key is None or matrix is None:
+            return None
+
+        images = None
+        if show_axis_thumbnails:
+            images = _matching_pil_image_batch(getattr(trace, "raw_input", None), matrix.shape[0])
+        labels = None if images is not None else [f"s{index}" for index in range(matrix.shape[0])]
+        heatmap = render_heatmap(
+            matrix,
+            width=canvas_size,
+            height=canvas_size,
+            cmap=cmap,
+            axis_images=images,
+            axis_labels=labels,
+            max_axis_items=max_stimuli,
+        )
+        image_path = _write_node_plot_image(trace, "rdm", key, heatmap)
+        shown_count = min(max_stimuli, matrix.shape[0])
+        more_count = max(0, matrix.shape[0] - shown_count)
+        more_text = f"; +{more_count} more" if more_count > 0 else ""
+        tooltip = (
+            f"RDM heatmap for {key}: metric=precomputed, N={matrix.shape[0]} stimuli{more_text}"
+        )
+        caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
+        return spec.replace(
+            lines=[caption],
+            image=str(image_path),
+            shape="box",
+            tooltip=tooltip,
+            extra_attrs={
+                **getattr(spec, "extra_attrs", {}),
+                "imagescale": "true",
+                "labelloc": "b",
+                "fixedsize": "false",
+                "margin": "0.06,0.06",
+            },
+        )
+
+    return node_spec_fn
+
+
+def _rdm_matrix_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray | None]:
+    """Return a stored RDM matrix for a rendered layer or op node.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the annotation blobs.
+    node:
+        Rendered layer or op-like object.
+
+    Returns
+    -------
+    tuple[str | None, np.ndarray | None]
+        Base annotation key and ``[N, N]`` matrix when present.
+    """
+
+    blobs = getattr(trace, "_annotation_blobs", None)
+    if not isinstance(blobs, dict):
+        return None, None
+    candidates = []
+    label = getattr(node, "label", None)
+    if label is not None:
+        candidates.append(f"op:{label}")
+    layer_label = getattr(node, "layer_label", None)
+    if layer_label is not None:
+        candidates.append(f"layer:{layer_label}")
+    for key in candidates:
+        value = blobs.get(f"rdm:{key}")
+        if value is None:
+            continue
+        matrix = _as_numpy_array(value)
+        if matrix.ndim == 2 and matrix.shape[0] == matrix.shape[1] and matrix.shape[0] > 0:
+            _check_square_distances(matrix)
+            return key, matrix
+    return None, None
+
+
 def _mds_scatter_coords_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray | None]:
     """Return stored MDS coordinates for a rendered layer or op node.
 
@@ -664,14 +888,37 @@ def _write_mds_scatter_image(trace: Any, key: str, image: Any) -> Path:
         Local PNG path for ``NodeSpec.image``.
     """
 
+    return _write_node_plot_image(trace, "mds_scatter", key, image)
+
+
+def _write_node_plot_image(trace: Any, namespace: str, key: str, image: Any) -> Path:
+    """Write a draw-time node plot image under the trace visualizer directory.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the draw.
+    namespace:
+        Subdirectory namespace for the rendered image.
+    key:
+        Annotation key for the rendered payload.
+    image:
+        PIL image to save.
+
+    Returns
+    -------
+    Path
+        Local PNG path for ``NodeSpec.image``.
+    """
+
     output_dir = getattr(trace, "_visualizer_dir", None)
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="torchlens_visualizers_")
         trace._visualizer_dir = str(output_dir)
-    scatter_dir = Path(str(output_dir)) / "mds_scatter"
-    scatter_dir.mkdir(parents=True, exist_ok=True)
+    plot_dir = Path(str(output_dir)) / namespace
+    plot_dir.mkdir(parents=True, exist_ok=True)
     safe_key = "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in key)
-    image_path = scatter_dir / f"{safe_key}.png"
+    image_path = plot_dir / f"{safe_key}.png"
     image.save(image_path)
     return image_path
 
@@ -714,6 +961,9 @@ def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, An
         else:
             selected.append(_single_pass_layer_mds_site(layer))
     return selected
+
+
+_selected_activation_sites = _selected_mds_sites
 
 
 def _default_saved_mds_sites(trace: Any) -> list[tuple[str, Any, Any]]:
@@ -810,31 +1060,70 @@ def _site_label_is_pass_qualified(site: Any) -> bool:
     return str(getattr(site, "label", "")) != str(getattr(site, "layer_label", ""))
 
 
-def _annotate_mds_coords(trace: Any, site: Any, coords: np.ndarray) -> None:
+def _annotate_mds_coords(trace: Any, key: str, coords: np.ndarray) -> None:
     """Persist MDS coordinates as a Torch tensor annotation blob.
 
     Parameters
     ----------
     trace:
         Trace to annotate.
-    site:
-        Resolved layer-pass site.
+    key:
+        Annotation key for the selected layer or pass-qualified op.
     coords:
         ``N x 2`` coordinate array.
 
     Returns
     -------
     None
-        The trace is mutated in place through ``Trace.annotate``.
+        The trace is mutated in place through ``_annotation_blobs``.
     """
 
-    from ..intervention.selectors import label
+    _store_annotation_tensor(trace, key, torch.from_numpy(coords))
 
-    trace.annotate(
-        label(str(getattr(site, "label"))),
-        data=torch.from_numpy(coords),
-        max_fanout=1_000_000,
-    )
+
+def _store_annotation_tensor(trace: Any, key: str, tensor: torch.Tensor) -> None:
+    """Store a validated tensor annotation blob on a torch trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace to annotate.
+    key:
+        Exact annotation blob key to write.
+    tensor:
+        Tensor payload to store.
+
+    Returns
+    -------
+    None
+        The trace is mutated in place through ``_annotation_blobs``.
+
+    Raises
+    ------
+    ValueError
+        If the trace is not a torch trace or the payload is not portable.
+    TypeError
+        If ``tensor`` is not a torch tensor.
+    """
+
+    if not isinstance(tensor, torch.Tensor):
+        raise TypeError("_store_annotation_tensor requires a torch.Tensor payload.")
+    backend_name = str(getattr(trace, "backend", "torch"))
+    if backend_name != "torch":
+        raise ValueError(
+            "Tensor annotation blobs are supported only for torch traces in this "
+            f"release; this trace uses backend={backend_name!r}."
+        )
+    validate_tensor = getattr(trace, "_validate_annotation_tensor", None)
+    if not callable(validate_tensor):
+        raise ValueError("trace does not support validated tensor annotation blobs.")
+    validate_tensor(tensor)
+    if getattr(trace, "_annotation_blobs", None) is None:
+        trace._annotation_blobs = {}
+    trace._annotation_blobs[key] = tensor
+    mark_mutated = getattr(trace, "_mark_annotations_mutated", None)
+    if callable(mark_mutated):
+        mark_mutated()
 
 
 def _raise_recurrent_layer_requires_pass(layer: Any) -> None:
@@ -909,4 +1198,7 @@ __all__ = [
     "mds_evolution",
     "mds_scatter_node_spec",
     "procrustes_align",
+    "rdm",
+    "rdm_evolution",
+    "rdm_node_spec",
 ]
