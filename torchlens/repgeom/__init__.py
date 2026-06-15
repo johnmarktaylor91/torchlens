@@ -10,17 +10,32 @@ from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from pathlib import Path
 import tempfile
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import numpy as np
+from PIL import Image, ImageDraw
 import torch
 
-from ..viz.node_plots import render_heatmap, render_image_scatter
+from ..viz.node_plots import render_heatmap, render_image_scatter, render_lineplot
 
 DistanceMetric: TypeAlias = Literal["euclidean", "cosine", "correlation"]
 MDSInfo: TypeAlias = dict[str, int | float | bool | str]
 MDSEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
 RDMEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
+ScreeEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
+
+
+class EffectiveDimensionalityInfo(TypedDict):
+    """Summary statistics for a representation scree spectrum."""
+
+    eigenvalues: np.ndarray
+    variance_explained: np.ndarray
+    cumulative_variance: np.ndarray
+    participation_ratio: float
+    n_components_for_threshold: int
+    total_positive_variance: float
+    effective_rank: int
+
 
 _RANK_TOLERANCE = 1e-12
 _SYMMETRY_TOLERANCE = 1e-10
@@ -198,6 +213,63 @@ def _canonicalize_axis_signs(embedding: np.ndarray) -> np.ndarray:
     return result
 
 
+def _centered_gram_eigh(distances: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return descending eigensystem of the double-centered distance Gram.
+
+    Parameters
+    ----------
+    distances:
+        Square symmetric pairwise distance matrix with zero diagonal.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Descending eigenvalues and column-aligned eigenvectors.
+    """
+
+    _check_square_distances(distances)
+    n_stimuli = distances.shape[0]
+    squared = distances * distances
+    centering = np.eye(n_stimuli) - np.full((n_stimuli, n_stimuli), 1.0 / n_stimuli)
+    gram = -0.5 * centering @ squared @ centering
+    gram = (gram + gram.T) * 0.5
+
+    eigenvalues, eigenvectors = np.linalg.eigh(gram)
+    order = np.argsort(eigenvalues)[::-1]
+    return eigenvalues[order], eigenvectors[:, order]
+
+
+def _as_distance_matrix_or_activations(data: Any, metric: DistanceMetric) -> np.ndarray:
+    """Return a distance matrix from precomputed distances or activations.
+
+    Parameters
+    ----------
+    data:
+        Square distance matrix or activation representation with leading
+        stimulus dimension.
+    metric:
+        Metric used when ``data`` is not already a distance matrix.
+
+    Returns
+    -------
+    np.ndarray
+        Square pairwise distance matrix.
+    """
+
+    array = _as_numpy_array(data)
+    _validate_finite(array, "data")
+    distances = (
+        array.copy()
+        if _looks_like_distance_matrix(array)
+        else activation_distance_matrix(
+            array,
+            metric=metric,
+        )
+    )
+    _check_square_distances(distances)
+    return distances
+
+
 def activation_distance_matrix(
     activations: Any,
     metric: DistanceMetric = "euclidean",
@@ -349,24 +421,14 @@ def classical_mds(
 
     array = _as_numpy_array(data)
     _validate_finite(array, "data")
-    distances = (
-        array.copy() if _looks_like_distance_matrix(array) else activation_distance_matrix(array)
-    )
-    _check_square_distances(distances)
+    input_is_distances = _looks_like_distance_matrix(array)
+    distances = _as_distance_matrix_or_activations(data, metric="euclidean")
     n_stimuli = distances.shape[0]
     _check_stimulus_count(n_stimuli, min_n)
     if _has_duplicate_distances(distances):
         raise ValueError("classical_mds input is rank-deficient or contains duplicate stimuli.")
 
-    squared = distances * distances
-    centering = np.eye(n_stimuli) - np.full((n_stimuli, n_stimuli), 1.0 / n_stimuli)
-    gram = -0.5 * centering @ squared @ centering
-    gram = (gram + gram.T) * 0.5
-
-    eigenvalues, eigenvectors = np.linalg.eigh(gram)
-    order = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[order]
-    eigenvectors = eigenvectors[:, order]
+    eigenvalues, eigenvectors = _centered_gram_eigh(distances)
 
     positive_tolerance = _positive_rank_tolerance(eigenvalues)
     positive_mask = eigenvalues > positive_tolerance
@@ -393,9 +455,87 @@ def classical_mds(
         "min_n": min_n,
         "negative_eigenvalue_count": int(np.count_nonzero(negative_mask)),
         "discarded_variance_fraction": discarded_fraction,
-        "input_kind": "distances" if _looks_like_distance_matrix(array) else "features",
+        "input_kind": "distances" if input_is_distances else "features",
     }
     return embedding, info
+
+
+def scree(
+    activations: Any,
+    *,
+    metric: DistanceMetric = "euclidean",
+    min_n: int = 3,
+) -> np.ndarray:
+    """Return sorted non-negative centered-Gram eigenvalues for activations.
+
+    Parameters
+    ----------
+    activations:
+        Activation representation with leading stimulus dimension, or a square
+        precomputed distance matrix.
+    metric:
+        Distance metric used when activations are not already distances.
+    min_n:
+        Minimum number of stimuli required to compute the scree spectrum.
+
+    Returns
+    -------
+    np.ndarray
+        Descending non-negative eigenvalues.
+
+    Raises
+    ------
+    ValueError
+        If inputs are malformed, non-finite, or have too few stimuli.
+    """
+
+    if min_n < 3:
+        raise ValueError("min_n must be at least 3 for scree.")
+    distances = _as_distance_matrix_or_activations(activations, metric=metric)
+    _check_stimulus_count(distances.shape[0], min_n)
+    eigenvalues, _eigenvectors = _centered_gram_eigh(distances)
+    return np.clip(eigenvalues, 0.0, None)
+
+
+def effective_dimensionality(
+    activations: Any,
+    *,
+    metric: DistanceMetric = "euclidean",
+    min_n: int = 3,
+    variance_threshold: float = 0.90,
+) -> EffectiveDimensionalityInfo:
+    """Return scree-derived effective-dimensionality statistics.
+
+    Parameters
+    ----------
+    activations:
+        Activation representation with leading stimulus dimension, or a square
+        precomputed distance matrix.
+    metric:
+        Distance metric used when activations are not already distances.
+    min_n:
+        Minimum number of stimuli required to compute the scree spectrum.
+    variance_threshold:
+        Cumulative variance fraction used for the component-count callout.
+
+    Returns
+    -------
+    EffectiveDimensionalityInfo
+        Eigenvalues, variance fractions, cumulative fractions, participation
+        ratio, threshold component count, total positive variance, and rank.
+
+    Raises
+    ------
+    ValueError
+        If inputs are malformed or ``variance_threshold`` is outside ``[0, 1]``.
+    """
+
+    _validate_variance_threshold(variance_threshold)
+    eigenvalues = scree(activations, metric=metric, min_n=min_n)
+    return _effective_dimensionality_from_eigenvalues(
+        eigenvalues,
+        variance_threshold=variance_threshold,
+    )
 
 
 def procrustes_align(source_2d: Any, target_2d: Any) -> np.ndarray:
@@ -547,6 +687,55 @@ def rdm_evolution(
         _store_annotation_tensor(trace, f"rdm:{key}", torch.from_numpy(matrix))
         matrices_by_key[key] = matrix
     return matrices_by_key
+
+
+def scree_evolution(
+    trace: Any,
+    save: Any | None = None,
+    *,
+    metric: DistanceMetric = "euclidean",
+    min_n: int = 3,
+    variance_threshold: float = 0.90,
+) -> ScreeEvolution:
+    """Compute and annotate per-layer scree eigenvalue spectra.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace with saved activation payloads.
+    save:
+        Optional selector limiting which layers or pass-qualified ops to
+        process. When omitted, all layers with saved activations are used.
+    metric:
+        Activation distance metric passed to :func:`activation_distance_matrix`.
+    min_n:
+        Minimum number of stimuli required for each scree spectrum.
+    variance_threshold:
+        Validated threshold for consistency with render-time callouts. The
+        returned and stored payloads remain eigenvalue vectors only.
+
+    Returns
+    -------
+    OrderedDict[str, np.ndarray]
+        Eigenvalue arrays keyed by ``layer:<layer_label>`` for single-pass
+        layers and ``op:<op.label>`` for pass-qualified recurrent selections.
+
+    Raises
+    ------
+    ValueError
+        If a selected site has no saved activation, has too few stimuli, is
+        recurrent without a pass-qualified selection, or fails metric
+        preconditions.
+    """
+
+    _validate_variance_threshold(variance_threshold)
+    selected = _selected_activation_sites(trace, save)
+    eigenvalues_by_key: ScreeEvolution = OrderedDict()
+    for key, _site, activations in selected:
+        eigenvalues = scree(activations, metric=metric, min_n=min_n)
+        _store_annotation_tensor(trace, f"scree:{key}", torch.from_numpy(eigenvalues))
+        eigenvalues_by_key[key] = eigenvalues
+    return eigenvalues_by_key
 
 
 def mds_scatter_node_spec(
@@ -761,6 +950,209 @@ def rdm_node_spec(
     return node_spec_fn
 
 
+def scree_node_spec(
+    *,
+    max_components: int = 24,
+    width: int = 320,
+    height: int = 180,
+    variance_threshold: float = 0.90,
+) -> Callable[[Any, Any], Any | None]:
+    """Return a draw-time node callback for stored scree annotations.
+
+    Parameters
+    ----------
+    max_components:
+        Maximum number of leading components to plot.
+    width:
+        Width of the rendered scree image in pixels.
+    height:
+        Height of the rendered scree image in pixels.
+    variance_threshold:
+        Cumulative variance fraction used for the threshold line and callout.
+
+    Returns
+    -------
+    Callable[[Any, Any], Any | None]
+        ``node_spec_fn`` suitable for ``Trace.draw(node_spec_fn=...)``.
+
+    Raises
+    ------
+    ValueError
+        If sizing, cap, or threshold parameters are invalid.
+    """
+
+    if max_components < 1:
+        raise ValueError("max_components must be at least 1.")
+    if width < 120:
+        raise ValueError("width must be at least 120.")
+    if height < 90:
+        raise ValueError("height must be at least 90.")
+    _validate_variance_threshold(variance_threshold)
+
+    def node_spec_fn(layer: Any, spec: Any) -> Any | None:
+        """Apply a scree plot image to a matching node spec.
+
+        Parameters
+        ----------
+        layer:
+            Layer or op-like render node passed by TorchLens.
+        spec:
+            Default ``NodeSpec`` to mutate by replacement.
+
+        Returns
+        -------
+        Any | None
+            Updated spec when scree eigenvalues are available, otherwise
+            ``None``.
+        """
+
+        trace = getattr(layer, "source_trace", None)
+        if trace is None:
+            return None
+        key, eigenvalues = _scree_eigenvalues_for_node(trace, layer)
+        if key is None or eigenvalues is None:
+            return None
+
+        info = _effective_dimensionality_from_eigenvalues(
+            eigenvalues,
+            variance_threshold=variance_threshold,
+        )
+        image = _render_scree_image(
+            info,
+            max_components=max_components,
+            width=width,
+            height=height,
+            variance_threshold=variance_threshold,
+        )
+        image_path = _write_node_plot_image(trace, "scree", key, image)
+        caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
+        threshold_percent = int(round(variance_threshold * 100.0))
+        tooltip = (
+            f"Scree plot for {key}: PR={info['participation_ratio']:.2f}, "
+            f"{info['n_components_for_threshold']} comps for {threshold_percent}% variance, "
+            f"rank {info['effective_rank']}"
+        )
+        return spec.replace(
+            lines=[caption],
+            image=str(image_path),
+            shape="box",
+            tooltip=tooltip,
+            extra_attrs={
+                **getattr(spec, "extra_attrs", {}),
+                "imagescale": "true",
+                "labelloc": "b",
+                "fixedsize": "false",
+                "margin": "0.06,0.06",
+            },
+        )
+
+    return node_spec_fn
+
+
+def _scree_eigenvalues_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray | None]:
+    """Return stored scree eigenvalues for a rendered layer or op node.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the annotation blobs.
+    node:
+        Rendered layer or op-like object.
+
+    Returns
+    -------
+    tuple[str | None, np.ndarray | None]
+        Base annotation key and one-dimensional eigenvalue vector when present.
+    """
+
+    blobs = getattr(trace, "_annotation_blobs", None)
+    if not isinstance(blobs, dict):
+        return None, None
+    candidates = []
+    label = getattr(node, "label", None)
+    if label is not None:
+        candidates.append(f"op:{label}")
+    layer_label = getattr(node, "layer_label", None)
+    if layer_label is not None:
+        candidates.append(f"layer:{layer_label}")
+    for key in candidates:
+        value = blobs.get(f"scree:{key}")
+        if value is None:
+            continue
+        eigenvalues = _as_numpy_array(value)
+        if eigenvalues.ndim == 1 and eigenvalues.shape[0] > 0:
+            _validate_finite(eigenvalues, "scree eigenvalues")
+            return key, np.clip(eigenvalues, 0.0, None)
+    return None, None
+
+
+def _render_scree_image(
+    info: EffectiveDimensionalityInfo,
+    *,
+    max_components: int,
+    width: int,
+    height: int,
+    variance_threshold: float,
+) -> Image.Image:
+    """Render a scree line plot with a compact statistics callout.
+
+    Parameters
+    ----------
+    info:
+        Effective-dimensionality statistics derived from stored eigenvalues.
+    max_components:
+        Maximum number of leading components to draw.
+    width:
+        Output image width in pixels.
+    height:
+        Output image height in pixels.
+    variance_threshold:
+        Cumulative variance threshold for the reference line and callout.
+
+    Returns
+    -------
+    Image.Image
+        RGB image containing the scree plot and text callout.
+    """
+
+    eigenvalues = info["eigenvalues"]
+    n_components = min(max_components, max(1, eigenvalues.shape[0]))
+    x_values = np.arange(1, n_components + 1, dtype=np.float64)
+    variance = info["variance_explained"][:n_components]
+    cumulative = info["cumulative_variance"][:n_components]
+    if variance.shape[0] < n_components:
+        variance = np.pad(variance, (0, n_components - variance.shape[0]))
+        cumulative = np.pad(cumulative, (0, n_components - cumulative.shape[0]))
+    threshold = np.full(n_components, variance_threshold, dtype=np.float64)
+    plot = render_lineplot(
+        np.vstack([variance, cumulative, threshold]),
+        x_values=x_values,
+        labels=("variance", "cumulative", "threshold"),
+        width=width,
+        height=height,
+        y_min=0.0,
+        y_max=1.0,
+        colors=((48, 93, 170), (32, 128, 90), (160, 72, 72)),
+        show_legend=True,
+        x_label="component",
+        y_label="fraction",
+    )
+    callout_height = 34
+    canvas = Image.new("RGB", (width, height + callout_height), "white")
+    canvas.paste(plot, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    threshold_percent = int(round(variance_threshold * 100.0))
+    callout = (
+        f"PR={info['participation_ratio']:.2f}, "
+        f"{info['n_components_for_threshold']} comps for {threshold_percent}% var, "
+        f"rank {info['effective_rank']}"
+    )
+    draw.rectangle([(0, height), (width - 1, height + callout_height - 1)], fill=(255, 255, 255))
+    draw.line([(0, height), (width - 1, height)], fill=(215, 219, 226))
+    draw.text((8, height + 10), callout, fill=(35, 39, 47))
+    return canvas
+
+
 def _rdm_matrix_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray | None]:
     """Return a stored RDM matrix for a rendered layer or op node.
 
@@ -921,6 +1313,73 @@ def _write_node_plot_image(trace: Any, namespace: str, key: str, image: Any) -> 
     image_path = plot_dir / f"{safe_key}.png"
     image.save(image_path)
     return image_path
+
+
+def _validate_variance_threshold(variance_threshold: float) -> None:
+    """Validate a cumulative variance threshold.
+
+    Parameters
+    ----------
+    variance_threshold:
+        Candidate threshold value.
+
+    Raises
+    ------
+    ValueError
+        If the threshold is non-finite or outside ``[0, 1]``.
+    """
+
+    if not np.isfinite(variance_threshold) or not 0.0 <= variance_threshold <= 1.0:
+        raise ValueError("variance_threshold must be finite and between 0 and 1.")
+
+
+def _effective_dimensionality_from_eigenvalues(
+    eigenvalues: np.ndarray,
+    *,
+    variance_threshold: float,
+) -> EffectiveDimensionalityInfo:
+    """Return effective-dimensionality statistics from scree eigenvalues.
+
+    Parameters
+    ----------
+    eigenvalues:
+        Descending centered-Gram eigenvalues.
+    variance_threshold:
+        Cumulative variance fraction used for the component-count callout.
+
+    Returns
+    -------
+    EffectiveDimensionalityInfo
+        Scree-derived statistics.
+    """
+
+    _validate_variance_threshold(variance_threshold)
+    clipped = np.clip(np.asarray(eigenvalues, dtype=np.float64), 0.0, None)
+    _validate_finite(clipped, "scree eigenvalues")
+    total_positive = float(np.sum(clipped))
+    if total_positive > 0.0:
+        variance = clipped / total_positive
+        cumulative = np.cumsum(variance)
+        denominator = float(np.sum(clipped * clipped))
+        participation_ratio = (
+            (total_positive * total_positive) / denominator if denominator > 0.0 else 0.0
+        )
+        n_components = int(np.searchsorted(cumulative, variance_threshold, side="left") + 1)
+    else:
+        variance = np.zeros_like(clipped)
+        cumulative = np.zeros_like(clipped)
+        participation_ratio = 0.0
+        n_components = 0
+    tolerance = _positive_rank_tolerance(clipped)
+    return {
+        "eigenvalues": clipped,
+        "variance_explained": variance,
+        "cumulative_variance": cumulative,
+        "participation_ratio": float(participation_ratio),
+        "n_components_for_threshold": n_components,
+        "total_positive_variance": total_positive,
+        "effective_rank": int(np.count_nonzero(clipped > tolerance)),
+    }
 
 
 def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, Any]]:
@@ -1195,10 +1654,14 @@ def _validate_procrustes_points(points: np.ndarray, name: str) -> None:
 __all__ = [
     "activation_distance_matrix",
     "classical_mds",
+    "effective_dimensionality",
     "mds_evolution",
     "mds_scatter_node_spec",
     "procrustes_align",
     "rdm",
     "rdm_evolution",
     "rdm_node_spec",
+    "scree",
+    "scree_evolution",
+    "scree_node_spec",
 ]

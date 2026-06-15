@@ -412,6 +412,67 @@ def test_rdm_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
         assert torch.equal(loaded._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrix))
 
 
+def test_scree_and_effective_dimensionality_low_rank_fixture() -> None:
+    """Scree helpers should recover a sorted non-negative low-rank spectrum."""
+
+    eigenvalues = repgeom.scree(ANALYTIC_POINTS, min_n=8)
+    info = repgeom.effective_dimensionality(
+        ANALYTIC_POINTS,
+        min_n=8,
+        variance_threshold=0.90,
+    )
+
+    assert np.all(eigenvalues[:-1] >= eigenvalues[1:])
+    assert np.all(eigenvalues >= 0.0)
+    assert info["effective_rank"] == 2
+    assert info["n_components_for_threshold"] == 2
+    assert 1.0 < info["participation_ratio"] <= 2.0
+    assert np.array_equal(info["eigenvalues"], eigenvalues)
+    assert np.isclose(np.sum(info["variance_explained"]), 1.0)
+    assert np.all(np.diff(info["cumulative_variance"]) >= -1e-12)
+
+
+def test_effective_dimensionality_all_zero_fixture_is_safe() -> None:
+    """All-zero representations should report rank zero without warnings."""
+
+    activations = np.zeros((5, 4), dtype=np.float64)
+    with np.errstate(all="raise"):
+        info = repgeom.effective_dimensionality(activations, min_n=3)
+
+    assert np.array_equal(info["eigenvalues"], np.zeros(5))
+    assert np.array_equal(info["variance_explained"], np.zeros(5))
+    assert np.array_equal(info["cumulative_variance"], np.zeros(5))
+    assert info["participation_ratio"] == 0.0
+    assert info["n_components_for_threshold"] == 0
+    assert info["total_positive_variance"] == 0.0
+    assert info["effective_rank"] == 0
+
+
+def test_scree_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Path) -> None:
+    """Scree evolution should compute, annotate, and persist eigenvalues."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
+
+    spectra_by_key = repgeom.scree_evolution(trace, save=tl.func("linear"), min_n=8)
+
+    assert list(spectra_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
+    assert trace._annotation_blobs is not None
+    for key, eigenvalues in spectra_by_key.items():
+        assert eigenvalues.shape == (8,)
+        assert np.all(eigenvalues[:-1] >= eigenvalues[1:])
+        assert np.all(eigenvalues >= 0.0)
+        assert torch.equal(trace._annotation_blobs[f"scree:{key}"], torch.from_numpy(eigenvalues))
+
+    bundle_path = tmp_path / "scree_evolution.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+
+    assert loaded._annotation_blobs is not None
+    for key, eigenvalues in spectra_by_key.items():
+        assert torch.equal(loaded._annotation_blobs[f"scree:{key}"], torch.from_numpy(eigenvalues))
+
+
 def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> None:
     """The scatter hook should set a transient image only for annotated layers."""
 
@@ -464,6 +525,34 @@ def test_rdm_node_spec_sets_one_draw_time_heatmap_for_annotated_layer() -> None:
     assert result.tooltip is not None
     assert "RDM heatmap" in result.tooltip
     assert "metric=precomputed" in result.tooltip
+
+
+def test_scree_node_spec_sets_one_draw_time_image_for_annotated_layer() -> None:
+    """The scree hook should set one bounded line-plot image for annotated layers."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    repgeom.scree_evolution(trace, save=tl.func("linear"), min_n=8)
+    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
+    hook = repgeom.scree_node_spec(max_components=8)
+    spec = NodeSpec(lines=[layer.layer_label])
+
+    result = hook(layer, spec)
+
+    assert result is not None
+    assert result.image is not None
+    assert Path(result.image).is_file()
+    assert result.image.endswith(".png")
+    image_module = pytest.importorskip("PIL.Image")
+    with image_module.open(result.image) as rendered:
+        assert rendered.mode == "RGB"
+        assert rendered.size == (320, 214)
+    assert result.lines == [layer.layer_label]
+    assert result.shape == "box"
+    assert result.extra_attrs["imagescale"] == "true"
+    assert result.extra_attrs["labelloc"] == "b"
+    assert result.tooltip is not None
+    assert "Scree plot" in result.tooltip
+    assert "rank" in result.tooltip
 
 
 def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: Path) -> None:
@@ -546,6 +635,47 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     svg_text = output_path.read_text(encoding="utf-8")
     image_tags = re.findall(r"<image\b[^>]+>", svg_text)
     assert len(image_tags) == len(annotated_layers) + 1
+    for layer in annotated_layers:
+        node_name = f"{layer.layer_label}pass1"
+        block_match = re.search(
+            rf"<title>{re.escape(node_name)}</title>(.*?)(?=<!--|</svg>)",
+            svg_text,
+            flags=re.DOTALL,
+        )
+        assert block_match is not None
+        node_block = block_match.group(1)
+        node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
+        assert len(node_images) == 1
+        assert node_images[0].startswith("data:image/png;base64,")
+        assert "<polygon" in node_block
+        assert f">{layer.layer_label}</text>" in node_block
+
+
+def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
+    tmp_path: Path,
+) -> None:
+    """Scree SVG output should inline one plot image per annotated node after reload."""
+
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
+    repgeom.scree_evolution(trace, save=tl.func("linear"), min_n=8)
+    annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
+    bundle_path = tmp_path / "scree_source.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+    output_path = tmp_path / "scree.svg"
+
+    loaded.draw(
+        vis_outpath=str(output_path),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        node_spec_fn=repgeom.scree_node_spec(max_components=8),
+    )
+
+    svg_text = output_path.read_text(encoding="utf-8")
+    image_tags = re.findall(r"<image\b[^>]+>", svg_text)
+    assert len(image_tags) == len(annotated_layers)
+    assert "PR=" in svg_text
+    assert "comps for 90% var" in svg_text
     for layer in annotated_layers:
         node_name = f"{layer.layer_label}pass1"
         block_match = re.search(
@@ -712,6 +842,33 @@ def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     assert trace._annotation_blobs is not None
     assert torch.equal(
         trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrices_by_key[key])
+    )
+
+
+def test_scree_evolution_recurrent_pass_qualified_selector_uses_op_key(tmp_path: Path) -> None:
+    """A single recurrent pass selection should read op.out and store op scree."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    linear_op = next(
+        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
+    )
+
+    spectra_by_key = repgeom.scree_evolution(trace, save=tl.label(linear_op.label), min_n=8)
+
+    key = f"op:{linear_op.label}"
+    assert list(spectra_by_key) == [key]
+    assert spectra_by_key[key].shape == (8,)
+    assert trace._annotation_blobs is not None
+    assert torch.equal(
+        trace._annotation_blobs[f"scree:{key}"], torch.from_numpy(spectra_by_key[key])
+    )
+
+    bundle_path = tmp_path / "scree_recurrent.tlspec"
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+    assert loaded._annotation_blobs is not None
+    assert torch.equal(
+        loaded._annotation_blobs[f"scree:{key}"], torch.from_numpy(spectra_by_key[key])
     )
 
 
