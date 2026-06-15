@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+import pytest
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -28,6 +29,7 @@ class DynamicMLP(nn.Module):
         return x
 
 
+@pytest.mark.heavy
 def test_dynamic_graph_records_1000_ops_with_varying_event_counts() -> None:
     """Recorder handles 1000 input-dependent ops and preserves pass counts."""
 

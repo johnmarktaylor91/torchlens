@@ -164,6 +164,7 @@ class TinyTransformer(torch.nn.Module):
         return self.encoder(x)
 
 
+@pytest.mark.heavy
 def test_googlenet_sibling_chains_are_execution_ordered(tmp_path: Path) -> None:
     """GoogLeNet's nine Inception fanouts render in execution order left-to-right."""
 
@@ -207,6 +208,7 @@ def test_distorter_chain_drops_by_ratio_cap(tmp_path: Path) -> None:
     assert dot_source.count("tl:sibling-order:start") == 1
 
 
+@pytest.mark.heavy
 def test_mixed_googlenet_and_distorter_decisions(tmp_path: Path) -> None:
     """Mixed case keeps all GoogLeNet chains and drops the distorter chain independently."""
 
@@ -253,6 +255,7 @@ def test_residual_toy_is_safe_noop(tmp_path: Path) -> None:
     assert ordered_source == baseline_source
 
 
+@pytest.mark.slow
 def test_densenet_is_safe_noop(tmp_path: Path) -> None:
     """DenseNet fanouts are skipped and match the baseline dot layout."""
 
@@ -314,6 +317,7 @@ def test_lr_direction_places_first_exec_topmost(tmp_path: Path) -> None:
         assert chain == sorted(chain, key=lambda node: nodes[node][1], reverse=True)
 
 
+@pytest.mark.heavy
 def test_real_model_calibration_ratios_stay_below_cap(tmp_path: Path) -> None:
     """Real-model calibration keeps legitimate chains under the selected cap."""
 

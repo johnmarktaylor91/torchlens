@@ -915,6 +915,7 @@ def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) ->
         assert 'label="↻"' not in dot
 
 
+@pytest.mark.heavy
 def test_render_loop_module_rolling_demos() -> None:
     """Render SVG, PDF, and PNG demos into the committed test-output folder."""
 

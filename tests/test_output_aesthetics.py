@@ -1317,6 +1317,7 @@ def _ensure_vis_pdfs_exist():
     shutil.which("pdflatex") is None,
     reason="pdflatex not installed (install texlive for PDF report generation)",
 )
+@pytest.mark.heavy
 def test_generate_pdf_report():
     """Generate the LaTeX PDF report with all outputs and visualizations.
 

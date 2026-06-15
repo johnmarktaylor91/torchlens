@@ -26,6 +26,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 ```bash
 pytest tests/                              # default suite excluding rare
 pytest tests/ -m smoke                     # critical path
+pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # fast per-step gate
 pytest tests/ -m "not slow"                # skip slow real-world tests
 pytest tests/test_toy_models.py            # single file
 pytest tests/test_toy_models.py::test_name # single test
@@ -37,6 +38,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 
 ## Markers
 - `slow` - long-running real-world or heavy tests.
+- `heavy` - mid-cost tests excluded from the fast per-step gate.
 - `smoke` - fast critical-path checks.
 - `rare` - excluded by default unless explicitly selected.
 

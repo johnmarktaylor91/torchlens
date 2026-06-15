@@ -14,6 +14,7 @@ import signal
 import time
 from os.path import join as opj
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -480,6 +481,7 @@ def _generate_overhead_report(results):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_profiling_report():
     """Run profiling across all models and write report to test_outputs/."""
     results = []

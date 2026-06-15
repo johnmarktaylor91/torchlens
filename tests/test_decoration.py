@@ -179,6 +179,7 @@ class TestLazyDecoration:
                 raise RuntimeError("test error")
         assert _state._is_decorated is False
 
+    @pytest.mark.heavy
     def test_wrap_unwrap_cycle(self):
         """Multiple wrap/unwrap cycles should work correctly."""
         for _ in range(3):
@@ -358,6 +359,7 @@ class TestSequenceSlotFix:
         unwrap_torch()
         self._check_tensor_from_0d("after unwrap")
 
+    @pytest.mark.heavy
     def test_tensor_from_0d_after_wrap_unwrap_cycle(self):
         """torch.tensor([0-d, 0-d]) survives multiple wrap/unwrap cycles."""
         for i in range(3):

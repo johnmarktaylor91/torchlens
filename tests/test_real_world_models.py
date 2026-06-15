@@ -33,6 +33,7 @@ from torchlens import show_model_graph, validate_forward_pass  # noqa: E402
 # =============================================================================
 
 
+@pytest.mark.slow
 def test_alexnet(default_input1):
     model = torchvision.models.AlexNet()
     assert validate_forward_pass(model, default_input1)
@@ -77,6 +78,7 @@ def test_alexnet(default_input1):
     )
 
 
+@pytest.mark.slow
 def test_vgg16(default_input1):
     model = torchvision.models.vgg16()
     assert validate_forward_pass(model, default_input1)
@@ -719,6 +721,7 @@ def test_timm_beit_base_patch16_224(default_input1):
     assert validate_forward_pass(model, default_input1)
 
 
+@pytest.mark.slow
 def test_timm_gluon_resnext101_32x4d():
     timm = pytest.importorskip("timm")
     model = timm.create_model("gluon_resnext101_32x4d", pretrained=False)
@@ -733,6 +736,7 @@ def test_timm_gluon_resnext101_32x4d():
     assert validate_forward_pass(model, model_input)
 
 
+@pytest.mark.slow
 def test_timm_ecaresnet101d():
     timm = pytest.importorskip("timm")
     model = timm.create_model("ecaresnet101d", pretrained=False)
@@ -747,6 +751,7 @@ def test_timm_ecaresnet101d():
     assert validate_forward_pass(model, model_input)
 
 
+@pytest.mark.slow
 def test_mobilevit_xxs():
     timm = pytest.importorskip("timm")
     model = timm.create_model("mobilevitv2_050", pretrained=False)
@@ -972,6 +977,7 @@ def test_timm_seresnet152():
 # =============================================================================
 
 
+@pytest.mark.slow
 def test_audio_conv_tasnet_base():
     torchaudio = pytest.importorskip("torchaudio")
     model = torchaudio.models.conv_tasnet_base()
@@ -986,6 +992,7 @@ def test_audio_conv_tasnet_base():
     assert validate_forward_pass(model, model_input)
 
 
+@pytest.mark.heavy
 def test_audio_wav2letter():
     torchaudio = pytest.importorskip("torchaudio")
     model = torchaudio.models.Wav2Letter()
@@ -1132,6 +1139,7 @@ def test_rnn():
     assert validate_forward_pass(model, model_input)
 
 
+@pytest.mark.slow
 def test_gpt2():
     transformers = pytest.importorskip("transformers")
     tokenizer = transformers.GPT2Tokenizer.from_pretrained("gpt2")
@@ -1149,6 +1157,7 @@ def test_gpt2():
     assert validate_forward_pass(model, [], model_inputs)
 
 
+@pytest.mark.heavy
 def test_distilbert():
     transformers = pytest.importorskip("transformers")
     tokenizer = transformers.AutoTokenizer.from_pretrained("distilbert-base-uncased")
@@ -1165,6 +1174,7 @@ def test_distilbert():
     assert validate_forward_pass(model, [], model_inputs)
 
 
+@pytest.mark.heavy
 def test_electra_small():
     transformers = pytest.importorskip("transformers")
     tokenizer = transformers.AutoTokenizer.from_pretrained("google/electra-small-discriminator")
@@ -1200,6 +1210,7 @@ def test_bert():
     assert validate_forward_pass(model, [], model_inputs)
 
 
+@pytest.mark.slow
 def test_t5_small():
     transformers = pytest.importorskip("transformers")
     tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
@@ -1275,6 +1286,7 @@ def test_sentence_transformer():
 # =============================================================================
 
 
+@pytest.mark.heavy
 def test_stable_diffusion():
     model = example_models.ContextUnet(3, 16, 10)
     model_inputs = (
@@ -1626,6 +1638,7 @@ def test_falcon_mamba() -> None:
 # =============================================================================
 
 
+@pytest.mark.heavy
 def test_autoencoder_vit_mae():
     """ViT-MAE as masked autoencoder (small config, no pretrained weights)."""
     transformers = pytest.importorskip("transformers")

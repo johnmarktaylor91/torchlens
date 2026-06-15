@@ -139,9 +139,16 @@ The glossary is the **canonical** API spec (vault `brain/projects/torchlens/repo
 ```bash
 ruff check . --fix
 mypy torchlens/
-pytest tests/ -m smoke -x --tb=short
-pytest tests/ -m "not slow" -x --tb=short  # for public API or boundary changes
+pytest tests/ -m smoke -x --tb=short                            # ~28s: true sub-minute per-step gate
+pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # ~8min mid backstop (heavy = 5-20s tests)
+pytest tests/ -m "not slow" -x --tb=short  # full fast suite (~15min); for public API or boundary changes
 ```
+
+Tiers by cost: `smoke` (~28s) is the real per-step gate; `heavy` carries the 5-20s tests and
+`slow` the >20s ones, so the `not rare and not slow and not heavy` tier (~8min) is a mid
+backstop and full `not slow` (~15min) is the phase-boundary backstop. NOTE: `pytest -n auto`
+(xdist) is NOT faster here — torch's intra-op threads oversubscribe the 20 workers and the
+fast tier rises to ~13min; the per-test bottleneck is torch import/fixture setup, not CPU.
 
 Use `pytest.importorskip()` for optional migration dependencies. Keep tests
 deterministic and run documentation examples when they are meant to be executable.

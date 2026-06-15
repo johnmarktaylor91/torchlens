@@ -71,6 +71,7 @@ def test_clip_image_uses_auto_processor_fallback() -> None:
     assert log.input_preprocessor.verified is True
 
 
+@pytest.mark.heavy
 def test_torchvision_resnet_weights_uses_tier_two_or_default() -> None:
     """Torchvision models use attached weights when available, otherwise default."""
 

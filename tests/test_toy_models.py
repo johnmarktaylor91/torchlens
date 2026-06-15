@@ -653,6 +653,7 @@ def test_repeated_module(default_input1):
     )
 
 
+@pytest.mark.heavy
 def test_nested_modules(default_input1):
     model = example_models.NestedModules()
     assert validate_forward_pass(model, default_input1)
