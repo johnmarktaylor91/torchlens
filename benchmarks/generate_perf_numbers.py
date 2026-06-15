@@ -52,19 +52,21 @@ def render_numbers_markdown(payload: dict[str, Any]) -> str:
             )
             + " |"
         )
-    headline = _halt_headline(rows)
+    headline = _halt_headline(rows, baseline_status=payload.get("baseline_status"))
     if headline is not None:
         lines.extend(["", headline])
     return "\n".join(lines) + "\n"
 
 
-def _halt_headline(rows: list[dict[str, Any]]) -> str | None:
+def _halt_headline(rows: list[dict[str, Any]], *, baseline_status: object = None) -> str | None:
     """Return the halt sub-1.0x headline only when measured.
 
     Parameters
     ----------
     rows:
         Gate rows.
+    baseline_status:
+        Optional provenance status from the source payload.
 
     Returns
     -------
@@ -72,6 +74,8 @@ def _halt_headline(rows: list[dict[str, Any]]) -> str | None:
         Honest headline, or ``None`` when the measured row is not sub-1.0x.
     """
 
+    if baseline_status == "provisional":
+        return None
     for row in rows:
         if row.get("operation") != "fastlog_halt_25" or row.get("status") != "ok":
             continue

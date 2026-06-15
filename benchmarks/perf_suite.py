@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import platform
 import re
 import subprocess
 import sys
@@ -142,6 +143,18 @@ def _version(package: str) -> str | None:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
         return None
+
+
+def _cpu_model() -> str:
+    """Best-effort CPU model string for baseline host-stamping."""
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or platform.machine() or "unknown"
 
 
 def _git_sha() -> str | None:
@@ -1079,6 +1092,9 @@ def main() -> None:
             "smoke": args.smoke,
             "wall_clock_s": addendum_wall_clock_s,
             "environment": {
+                "hostname": platform.node(),
+                "os": f"{platform.system()} {platform.release()}",
+                "cpu_model": _cpu_model(),
                 "torch": torch.__version__,
                 "cuda_available": torch.cuda.is_available(),
                 "cuda": torch.version.cuda,
@@ -1100,6 +1116,11 @@ def main() -> None:
             "hooked_transformer_smoke": hooked_smoke,
             "rerun_tolerance": rerun_tolerance,
             "source_sha": source_sha,
+            "baseline_status": "provisional",
+            "baseline_note": (
+                "Provisional baseline captured on a non-canonical Linux dev host. "
+                "Re-capture on the canonical bench host before any public perf claim."
+            ),
         }
     )
     if args.addendum_no_save:

@@ -148,6 +148,22 @@ def test_generated_numbers_print_halt_headline_only_when_sub_raw() -> None:
     assert "| resnet18 | cpu | fastlog_halt_25 | 21.0 | 1.05x | ok |" in slower
 
 
+def test_generated_numbers_suppress_halt_headline_for_provisional_baseline() -> None:
+    """Generator suppresses the halt headline for provisional baselines."""
+
+    payload = _payload(
+        [
+            _row("resnet18", "cpu", "raw_forward", 20.0),
+            _row("resnet18", "cpu", "fastlog_halt_25", 18.0),
+        ]
+    )
+    payload["baseline_status"] = "provisional"
+
+    markdown = render_numbers_markdown(payload)
+
+    assert "Headline: measured `fastlog_halt_25`" not in markdown
+
+
 def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
     """Tensor grad hooks record P6 profiling buckets for later optimization."""
 

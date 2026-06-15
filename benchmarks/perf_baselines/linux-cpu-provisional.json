@@ -1,0 +1,4165 @@
+{
+  "baseline_note": "Provisional baseline captured on a non-canonical Linux dev host. Re-capture on the canonical bench host before any public perf claim.",
+  "baseline_status": "provisional",
+  "cells": [
+    {
+      "device": "cpu",
+      "elapsed_s": 1.706583296181634,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_forward",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.021876301616430283,
+        "mean_ms": 0.9258880047127604,
+        "median_ms": 0.9162630885839462,
+        "p5_ms": 0.9042723104357719,
+        "p95_ms": 0.9486950817517936,
+        "sample_count": 50,
+        "samples_ms": [
+          0.97848498262465,
+          0.9038010612130165,
+          0.9322790428996086,
+          0.9149371180683374,
+          0.9321409743279219,
+          0.9074690751731396,
+          0.915684038773179,
+          0.9175720624625683,
+          0.9249739814549685,
+          0.907067907974124,
+          0.9063140023499727,
+          0.9204989764839411,
+          0.9190861601382494,
+          1.2291478924453259,
+          0.9140889160335064,
+          0.9089079685509205,
+          0.9123850613832474,
+          0.9300331585109234,
+          0.9010918438434601,
+          0.9069109801203012,
+          0.9041130542755127,
+          0.937136122956872,
+          0.9128970559686422,
+          0.914114061743021,
+          0.9216039907187223,
+          0.915102893486619,
+          0.9296380449086428,
+          0.941957114264369,
+          0.9366970043629408,
+          0.9119859896600246,
+          0.9542079642415047,
+          0.9063510224223137,
+          0.9229159913957119,
+          0.9207918774336576,
+          0.9313209448009729,
+          0.9049780201166868,
+          0.9353149216622114,
+          0.9130320977419615,
+          0.9075729176402092,
+          0.9402499999850988,
+          0.9067780338227749,
+          0.9202710352838039,
+          0.9095498826354742,
+          0.9285712148994207,
+          0.9044669568538666,
+          0.9227239061146975,
+          0.9056439157575369,
+          0.9273348841816187,
+          0.9073619730770588,
+          0.9168421383947134
+        ],
+        "stdev_ms": 0.04616555638018635
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 1.9708144650794566,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 273.2890625,
+        "final_uss_mb": 283.71875,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 510.8828125,
+        "uss_delta_mb_memory_pass": 10.4296875
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_forward",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.1492344660218805,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_tl_import",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.2602535532787442,
+        "mean_ms": 1.0401749517768621,
+        "median_ms": 0.9557829471305013,
+        "p5_ms": 0.9129601297900081,
+        "p95_ms": 1.2142005958594382,
+        "sample_count": 50,
+        "samples_ms": [
+          1.2609169352799654,
+          0.9294289629906416,
+          0.9340080432593822,
+          0.9248571004718542,
+          1.011935994029045,
+          0.9159089531749487,
+          0.9179511107504368,
+          0.9233560413122177,
+          0.955773051828146,
+          0.9179229382425547,
+          0.9665428660809994,
+          0.9219790808856487,
+          0.9149941615760326,
+          0.9261260274797678,
+          0.9251490700989962,
+          0.9128719102591276,
+          0.9198600891977549,
+          0.9271330200135708,
+          0.9121168404817581,
+          0.9171089623123407,
+          0.9256289340555668,
+          0.9937100112438202,
+          0.9130679536610842,
+          0.9086141362786293,
+          0.9240140207111835,
+          0.9244908578693867,
+          0.9271369781345129,
+          0.9171320125460625,
+          0.9203869849443436,
+          0.9557928424328566,
+          1.1970249470323324,
+          1.218543155118823,
+          1.187165966257453,
+          1.2088930234313011,
+          1.1877140495926142,
+          1.1781509965658188,
+          1.2224640231579542,
+          1.1752431746572256,
+          1.1678831651806831,
+          1.182895852252841,
+          1.17344013415277,
+          1.1777319014072418,
+          1.1890411842614412,
+          1.199949998408556,
+          1.1696279980242252,
+          1.177794998511672,
+          1.1937490198761225,
+          1.1868651490658522,
+          1.1816199403256178,
+          1.1870330199599266
+        ],
+        "stdev_ms": 0.13216856380112846
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.201129457913339,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 359.84765625,
+        "final_uss_mb": 370.0390625,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 649.890625,
+        "uss_delta_mb_memory_pass": 10.19140625
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_tl_import",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.4001539680175483,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_global_wrapped",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.10359403677284718,
+        "mean_ms": 1.0135913081467152,
+        "median_ms": 0.923196435905993,
+        "p5_ms": 0.8333962992765009,
+        "p95_ms": 1.597164408303795,
+        "sample_count": 50,
+        "samples_ms": [
+          1.0120579972863197,
+          0.9399091359227896,
+          0.949065200984478,
+          0.9436779655516148,
+          1.0543649550527334,
+          0.9722330141812563,
+          0.9853369556367397,
+          0.9067200589925051,
+          1.13119394518435,
+          1.036197179928422,
+          1.1162350419908762,
+          1.1061110999435186,
+          1.0126291308552027,
+          0.8396711200475693,
+          0.8289888501167297,
+          0.8696320001035929,
+          0.8361870422959328,
+          0.8887569420039654,
+          0.8942559361457825,
+          0.8377879858016968,
+          0.8396909106522799,
+          0.8454180788248777,
+          0.8598039858043194,
+          0.831112964078784,
+          0.8305648807436228,
+          1.0409990791231394,
+          1.0808389633893967,
+          1.9784129690378904,
+          0.9218400809913874,
+          0.9457289706915617,
+          0.9322899859398603,
+          0.9112961124628782,
+          1.0566848795861006,
+          0.9204340167343616,
+          0.9040150325745344,
+          0.9065968915820122,
+          0.9092919062823057,
+          0.9010399226099253,
+          0.9341060649603605,
+          0.9165238589048386,
+          0.9532691910862923,
+          0.9055042173713446,
+          0.9232349693775177,
+          2.262683119624853,
+          2.380040008574724,
+          0.9231579024344683,
+          0.9226419497281313,
+          0.9345330763608217,
+          0.9261369705200195,
+          0.9206628892570734
+        ],
+        "stdev_ms": 0.31684509023265717
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.4724033549427986,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 384.65234375,
+        "final_uss_mb": 393.265625,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 684.71875,
+        "uss_delta_mb_memory_pass": 8.61328125
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_global_wrapped",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.5380269510205835,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_target_prepared",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.023970205802470446,
+        "mean_ms": 0.97312206402421,
+        "median_ms": 0.9337475057691336,
+        "p5_ms": 0.9186440496705472,
+        "p95_ms": 1.0259484872221944,
+        "sample_count": 50,
+        "samples_ms": [
+          0.9328150190412998,
+          0.9546978399157524,
+          0.9530470706522465,
+          0.9551839902997017,
+          0.9343749843537807,
+          0.925412867218256,
+          0.9353689383715391,
+          0.9282869286835194,
+          0.9244959801435471,
+          0.919864047318697,
+          0.9439741261303425,
+          0.9623540099710226,
+          0.9264410473406315,
+          0.921871978789568,
+          0.9244850371032953,
+          0.9574058931320906,
+          0.9193518199026585,
+          0.9403571020811796,
+          0.9331200271844864,
+          0.9228819981217384,
+          0.94396504573524,
+          1.0031999554485083,
+          1.0445609223097563,
+          0.920137157663703,
+          0.9305959101766348,
+          0.9504710324108601,
+          0.9176409803330898,
+          0.9325190912932158,
+          0.9633959271013737,
+          0.9246908593922853,
+          0.9246440604329109,
+          0.9351489134132862,
+          0.976156909018755,
+          0.9289530571550131,
+          0.9312939364463091,
+          0.9244540706276894,
+          0.9480388835072517,
+          0.9380439296364784,
+          0.9313519112765789,
+          0.9381351992487907,
+          1.924054929986596,
+          0.9180649649351835,
+          0.9304978884756565,
+          0.9384311269968748,
+          0.9474838152527809,
+          0.9198051411658525,
+          0.9149089455604553,
+          0.9483860339969397,
+          1.642575953155756,
+          0.9487059433013201
+        ],
+        "stdev_ms": 0.1709528405945235
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.823903256095946,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 401.171875,
+        "final_uss_mb": 402.73046875,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 686.60546875,
+        "uss_delta_mb_memory_pass": 1.55859375
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_target_prepared",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 2.0869456520304084,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_inference_mode",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.10881462367251515,
+        "mean_ms": 2.1579730417579412,
+        "median_ms": 1.1443599360063672,
+        "p5_ms": 1.1098039336502552,
+        "p95_ms": 5.732420051936058,
+        "sample_count": 50,
+        "samples_ms": [
+          1.1791829019784927,
+          1.334866974502802,
+          1.1420960072427988,
+          1.1256078723818064,
+          1.1146541219204664,
+          32.05403406172991,
+          1.278960146009922,
+          6.024855189025402,
+          1.1563031002879143,
+          1.1272351257503033,
+          1.1031229514628649,
+          1.21779995970428,
+          1.1695660650730133,
+          1.1226041242480278,
+          1.2527948711067438,
+          1.1129931081086397,
+          1.1191610246896744,
+          1.1275741271674633,
+          5.43292798101902,
+          1.125918934121728,
+          1.128641190007329,
+          1.1353630106896162,
+          1.1090969201177359,
+          1.1480790562927723,
+          1.1538970284163952,
+          1.1342230718582869,
+          1.1370549909770489,
+          1.1106680613011122,
+          1.1628679931163788,
+          5.977459019050002,
+          1.1208190117031336,
+          2.848197938874364,
+          1.2262552045285702,
+          1.3354690745472908,
+          1.1163970921188593,
+          1.1140869464725256,
+          1.1944330763071775,
+          4.3055349960923195,
+          1.2362950947135687,
+          1.141684129834175,
+          1.1472059413790703,
+          1.1047108564525843,
+          1.1332749854773283,
+          1.1467330623418093,
+          1.2348389718681574,
+          1.4464759733527899,
+          1.121079083532095,
+          1.1466238647699356,
+          1.1233019176870584,
+          1.1356258764863014
+        ],
+        "stdev_ms": 4.47839452942796
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 2.060432248050347,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 269.41796875,
+        "final_uss_mb": 279.03515625,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 512.4921875,
+        "uss_delta_mb_memory_pass": 9.6171875
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_inference_mode",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 4.106556537095457,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "global_wrap_dummy",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.0,
+        "mean_ms": 1660.6599220540375,
+        "median_ms": 1660.6599220540375,
+        "p5_ms": 1660.6599220540375,
+        "p95_ms": 1660.6599220540375,
+        "sample_count": 1,
+        "samples_ms": [
+          1660.6599220540375
+        ],
+        "stdev_ms": 0.0
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 4.003321212017909,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 276.12109375,
+        "final_uss_mb": 395.9765625,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 679.29296875,
+        "uss_delta_mb_memory_pass": 119.85546875
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "global_wrap_dummy",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.70030595199205,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "first_capture_target",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 0.0,
+        "mean_ms": 344.0105449408293,
+        "median_ms": 344.0105449408293,
+        "p5_ms": 344.0105449408293,
+        "p95_ms": 344.0105449408293,
+        "sample_count": 1,
+        "samples_ms": [
+          344.0105449408293
+        ],
+        "stdev_ms": 0.0
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.9401881801895797,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 349.5546875,
+        "final_uss_mb": 414.0,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 708.79296875,
+        "uss_delta_mb_memory_pass": 64.4453125
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "first_capture_target",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 6.339045165106654,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "tl_trace",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 23.073158808983862,
+        "mean_ms": 53.12007943633944,
+        "median_ms": 38.77976490184665,
+        "p5_ms": 35.98998460220173,
+        "p95_ms": 121.38750758022056,
+        "sample_count": 50,
+        "samples_ms": [
+          43.84388402104378,
+          33.497295808047056,
+          36.040158942341805,
+          36.25320713035762,
+          36.577674793079495,
+          37.16773306950927,
+          37.44659083895385,
+          36.66647197678685,
+          159.89334788173437,
+          44.841225957497954,
+          70.27400098741055,
+          144.5521400310099,
+          64.11159713752568,
+          65.69646811112761,
+          36.26282210461795,
+          62.341044889763,
+          91.03498514741659,
+          36.55976499430835,
+          35.626082913950086,
+          37.96095703728497,
+          36.84149403125048,
+          38.37175713852048,
+          37.34725504182279,
+          42.46351099573076,
+          54.35299687087536,
+          60.70203706622124,
+          66.90969388000667,
+          42.99637395888567,
+          51.75658012740314,
+          38.88154588639736,
+          39.93641585111618,
+          81.12684497609735,
+          37.18393808230758,
+          40.637759026139975,
+          73.45281122252345,
+          93.0751790292561,
+          40.809569181874394,
+          36.95772401988506,
+          36.2282230053097,
+          39.298468036577106,
+          36.2210578750819,
+          36.10342903994024,
+          36.93762677721679,
+          36.26460209488869,
+          168.41287817806005,
+          36.74998297356069,
+          35.94893286935985,
+          38.67798391729593,
+          37.77392394840717,
+          56.935922941192985
+        ],
+        "stdev_ms": 30.71056814624549
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 4.029822705080733,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 399.11328125,
+        "final_uss_mb": 426.1484375,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 712.34375,
+        "uss_delta_mb_memory_pass": 27.03515625
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "tl_trace",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 6.846219030208886,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {
+        "phase_timings": {
+          "clone_save:activation_fields": {
+            "count": 13,
+            "total_s": 0.0006463674362748861
+          },
+          "ctx_build:model_prepare": {
+            "count": 1,
+            "total_s": 0.0029870320577174425
+          },
+          "ctx_build:shared_fields": {
+            "count": 17,
+            "total_s": 0.005322892218828201
+          },
+          "dispatch:forward_model": {
+            "count": 1,
+            "total_s": 0.019074826035648584
+          },
+          "object_construction:op": {
+            "count": 13,
+            "total_s": 0.0013229085598140955
+          },
+          "postprocess:Step 0: Materialize capture events": {
+            "count": 1,
+            "total_s": 0.0026220008730888367
+          },
+          "postprocess:Step 10: Rename labels": {
+            "count": 1,
+            "total_s": 9.513390250504017e-05
+          },
+          "postprocess:Step 11: Build lookup keys": {
+            "count": 1,
+            "total_s": 0.00039682304486632347
+          },
+          "postprocess:Step 12: Undecorate tensors": {
+            "count": 1,
+            "total_s": 6.41639344394207e-05
+          },
+          "postprocess:Step 14: Log timing": {
+            "count": 1,
+            "total_s": 8.03009606897831e-06
+          },
+          "postprocess:Step 15.5: Build layer logs": {
+            "count": 1,
+            "total_s": 0.0004948009736835957
+          },
+          "postprocess:Step 15: Finalize params": {
+            "count": 1,
+            "total_s": 3.0193012207746506e-05
+          },
+          "postprocess:Step 16.5: Graph shape hash": {
+            "count": 1,
+            "total_s": 0.0001411018893122673
+          },
+          "postprocess:Step 16: Build module logs": {
+            "count": 1,
+            "total_s": 0.0007278518751263618
+          },
+          "postprocess:Step 17: Mark pass finished": {
+            "count": 1,
+            "total_s": 1.1021038517355919e-05
+          },
+          "postprocess:Step 1: Add output layers": {
+            "count": 1,
+            "total_s": 0.0008543918374925852
+          },
+          "postprocess:Step 20: Release param refs": {
+            "count": 1,
+            "total_s": 1.0910909622907639e-05
+          },
+          "postprocess:Step 2: Trace output ancestors": {
+            "count": 1,
+            "total_s": 0.00018965802155435085
+          },
+          "postprocess:Step 3: Remove orphan nodes": {
+            "count": 1,
+            "total_s": 0.0002724500373005867
+          },
+          "postprocess:Step 4: Input/output distances": {
+            "count": 1,
+            "total_s": 0.0003594330046325922
+          },
+          "postprocess:Step 5: Mark conditional branches": {
+            "count": 1,
+            "total_s": 1.5380792319774628e-06
+          },
+          "postprocess:Step 6: Fix buffer layers": {
+            "count": 1,
+            "total_s": 2.908986061811447e-06
+          },
+          "postprocess:Step 7: Loop detection (full)": {
+            "count": 1,
+            "total_s": 0.0003112850245088339
+          },
+          "postprocess:Step 8: Map labels": {
+            "count": 1,
+            "total_s": 9.965803474187851e-05
+          },
+          "postprocess:Step 9: Log final info": {
+            "count": 1,
+            "total_s": 0.0007895389571785927
+          }
+        },
+        "profile_enabled": true
+      },
+      "model": "tinynet",
+      "operation": "tl_trace_profile",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 11.618790624197572,
+        "mean_ms": 62.74786712601781,
+        "median_ms": 40.96457140985876,
+        "p5_ms": 36.312102305237204,
+        "p95_ms": 175.851853180211,
+        "sample_count": 50,
+        "samples_ms": [
+          43.24481007643044,
+          42.53486101515591,
+          42.20374207943678,
+          45.1489039696753,
+          41.51487909257412,
+          37.866021040827036,
+          82.07001583650708,
+          41.36088001541793,
+          179.2120321188122,
+          95.4171170014888,
+          57.80437309294939,
+          65.56668505072594,
+          50.392994191497564,
+          38.79312099888921,
+          38.10441889800131,
+          44.630620162934065,
+          46.97206593118608,
+          171.7449678108096,
+          40.299690095707774,
+          41.18170589208603,
+          46.86369188129902,
+          67.2552059404552,
+          38.64865889772773,
+          354.08183303661644,
+          242.1738300472498,
+          59.25298202782869,
+          75.40915696881711,
+          39.75021303631365,
+          44.97455386444926,
+          42.18653403222561,
+          39.44490686990321,
+          36.74028301611543,
+          36.102262092754245,
+          36.66685405187309,
+          39.461501874029636,
+          37.73448499850929,
+          37.0821061078459,
+          36.69516113586724,
+          36.44343907944858,
+          37.24318812601268,
+          36.578533006832004,
+          39.293671026825905,
+          36.88833303749561,
+          36.204644944518805,
+          165.22391000762582,
+          39.62817997671664,
+          40.7474369276315,
+          38.077822886407375,
+          40.627036010846496,
+          33.8490370195359
+        ],
+        "stdev_ms": 59.714707716368565
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 4.175055074039847,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 396.98046875,
+        "final_uss_mb": 424.0390625,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 712.9296875,
+        "uss_delta_mb_memory_pass": 27.05859375
+      },
+      "metadata": {
+        "phase_timings": {
+          "clone_save:activation_fields": {
+            "count": 13,
+            "total_s": 0.0009518011938780546
+          },
+          "ctx_build:model_prepare": {
+            "count": 1,
+            "total_s": 0.002870278898626566
+          },
+          "ctx_build:shared_fields": {
+            "count": 17,
+            "total_s": 0.006170414388179779
+          },
+          "dispatch:forward_model": {
+            "count": 1,
+            "total_s": 0.02151019894517958
+          },
+          "object_construction:op": {
+            "count": 13,
+            "total_s": 0.0015701290685683489
+          },
+          "postprocess:Step 0: Materialize capture events": {
+            "count": 1,
+            "total_s": 0.0030328992288559675
+          },
+          "postprocess:Step 10: Rename labels": {
+            "count": 1,
+            "total_s": 0.00011110096238553524
+          },
+          "postprocess:Step 11: Build lookup keys": {
+            "count": 1,
+            "total_s": 0.00039418810047209263
+          },
+          "postprocess:Step 12: Undecorate tensors": {
+            "count": 1,
+            "total_s": 6.456812843680382e-05
+          },
+          "postprocess:Step 14: Log timing": {
+            "count": 1,
+            "total_s": 8.02706927061081e-06
+          },
+          "postprocess:Step 15.5: Build layer logs": {
+            "count": 1,
+            "total_s": 0.000491216080263257
+          },
+          "postprocess:Step 15: Finalize params": {
+            "count": 1,
+            "total_s": 3.0102906748652458e-05
+          },
+          "postprocess:Step 16.5: Graph shape hash": {
+            "count": 1,
+            "total_s": 0.00013871700502932072
+          },
+          "postprocess:Step 16: Build module logs": {
+            "count": 1,
+            "total_s": 0.0007632509805262089
+          },
+          "postprocess:Step 17: Mark pass finished": {
+            "count": 1,
+            "total_s": 1.054094173014164e-05
+          },
+          "postprocess:Step 1: Add output layers": {
+            "count": 1,
+            "total_s": 0.0010026751551777124
+          },
+          "postprocess:Step 20: Release param refs": {
+            "count": 1,
+            "total_s": 1.1141877621412277e-05
+          },
+          "postprocess:Step 2: Trace output ancestors": {
+            "count": 1,
+            "total_s": 0.00018339301459491253
+          },
+          "postprocess:Step 3: Remove orphan nodes": {
+            "count": 1,
+            "total_s": 0.0002636199351400137
+          },
+          "postprocess:Step 4: Input/output distances": {
+            "count": 1,
+            "total_s": 0.00035693193785846233
+          },
+          "postprocess:Step 5: Mark conditional branches": {
+            "count": 1,
+            "total_s": 2.2989697754383087e-06
+          },
+          "postprocess:Step 6: Fix buffer layers": {
+            "count": 1,
+            "total_s": 2.4212058633565903e-06
+          },
+          "postprocess:Step 7: Loop detection (full)": {
+            "count": 1,
+            "total_s": 0.00030432711355388165
+          },
+          "postprocess:Step 8: Map labels": {
+            "count": 1,
+            "total_s": 9.829201735556126e-05
+          },
+          "postprocess:Step 9: Log final info": {
+            "count": 1,
+            "total_s": 0.0007836290169507265
+          }
+        },
+        "profile_enabled": true
+      },
+      "model": "tinynet",
+      "operation": "tl_trace_profile",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 7.122802166966721,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {
+        "rerun_policy": "steady_state"
+      },
+      "model": "tinynet",
+      "operation": "tl_rerun",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support UntypedStorage; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support RemovableHandle; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 2.773555868770927,
+        "mean_ms": 57.38264812156558,
+        "median_ms": 49.44387834984809,
+        "p5_ms": 47.608713374938816,
+        "p95_ms": 114.29830634733635,
+        "sample_count": 50,
+        "samples_ms": [
+          54.87572797574103,
+          61.634279089048505,
+          57.392755057662725,
+          157.38705592229962,
+          48.305603209882975,
+          47.85274411551654,
+          51.08403507620096,
+          49.87264494411647,
+          49.23843313008547,
+          46.07810196466744,
+          50.006140023469925,
+          49.58076402544975,
+          51.98269011452794,
+          49.95661205612123,
+          48.33983210846782,
+          48.67263208143413,
+          48.01020002923906,
+          48.988062189891934,
+          49.05760707333684,
+          52.24239989183843,
+          48.68706106208265,
+          49.32252480648458,
+          49.00070815347135,
+          48.51126600988209,
+          50.39665405638516,
+          49.99884497374296,
+          172.60763398371637,
+          54.92547596804798,
+          49.91002194583416,
+          48.13126614317298,
+          49.736350076273084,
+          51.918898010626435,
+          48.25885803438723,
+          51.857765996828675,
+          48.31109079532325,
+          47.69885400310159,
+          51.09443096444011,
+          50.045572919771075,
+          48.364106100052595,
+          47.744879964739084,
+          48.30243205651641,
+          48.257613088935614,
+          49.5652318932116,
+          48.73318085446954,
+          48.80725312978029,
+          51.27592198550701,
+          47.26758995093405,
+          50.920824985951185,
+          47.53496195189655,
+          191.38681213371456
+        ],
+        "stdev_ms": 30.024963254166693
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 4.293528226902708,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 400.98046875,
+        "final_uss_mb": 428.56640625,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 713.60546875,
+        "uss_delta_mb_memory_pass": 27.5859375
+      },
+      "metadata": {
+        "rerun_policy": "steady_state"
+      },
+      "model": "tinynet",
+      "operation": "tl_rerun",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support UntypedStorage; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support RemovableHandle; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 4.720065486850217,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "fastlog_module",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 3.1259426032193005,
+        "mean_ms": 21.285769497044384,
+        "median_ms": 15.680309501476586,
+        "p5_ms": 13.297073100693524,
+        "p95_ms": 39.01490379357708,
+        "sample_count": 50,
+        "samples_ms": [
+          14.853301923722029,
+          17.95455999672413,
+          14.928225195035338,
+          14.839448034763336,
+          15.559783205389977,
+          14.773380011320114,
+          15.22459601983428,
+          15.606669941917062,
+          14.746334170922637,
+          14.945052098482847,
+          15.615457203239202,
+          14.854013919830322,
+          14.903381001204252,
+          15.801070956513286,
+          14.79808590374887,
+          15.204793075099587,
+          15.65789501182735,
+          14.909109100699425,
+          15.908599132671952,
+          102.87432000041008,
+          29.25366908311844,
+          17.973618814721704,
+          32.22707798704505,
+          42.39455494098365,
+          34.88421905785799,
+          17.768339021131396,
+          15.891107963398099,
+          18.78431485965848,
+          17.624874133616686,
+          19.733223831281066,
+          15.702723991125822,
+          128.0066550243646,
+          18.765483982861042,
+          19.164105877280235,
+          16.166908899322152,
+          13.63372290506959,
+          14.176791068166494,
+          20.088101038709283,
+          17.01442408375442,
+          13.6538150254637,
+          13.822864973917603,
+          12.98389513976872,
+          13.581989100202918,
+          13.990907929837704,
+          12.718257028609514,
+          13.063960010185838,
+          15.874118078500032,
+          18.811602145433426,
+          16.04455104097724,
+          16.530521912500262
+        ],
+        "stdev_ms": 20.373764281372704
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.612464599078521,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 400.48828125,
+        "final_uss_mb": 407.359375,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 692.02734375,
+        "uss_delta_mb_memory_pass": 6.87109375
+      },
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "fastlog_module",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 5.4605185920372605,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {
+        "serialized_file_size_bytes": 4096
+      },
+      "model": "tinynet",
+      "operation": "aux_save",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 4.967630375176668,
+        "mean_ms": 31.00049113854766,
+        "median_ms": 29.013828607276082,
+        "p5_ms": 27.4584979750216,
+        "p95_ms": 39.796998340170816,
+        "sample_count": 50,
+        "samples_ms": [
+          31.533377012237906,
+          29.38978187739849,
+          34.51537201181054,
+          31.283685006201267,
+          44.76994089782238,
+          28.69652397930622,
+          36.039793165400624,
+          32.86140179261565,
+          35.545669961720705,
+          41.25910997390747,
+          28.710306156426668,
+          30.55764501914382,
+          54.15943521074951,
+          35.351902013644576,
+          38.00997301004827,
+          31.519531039521098,
+          28.1658919993788,
+          27.726694010198116,
+          31.063376925885677,
+          28.242592001333833,
+          29.92714522406459,
+          27.471575886011124,
+          27.457984164357185,
+          27.471237117424607,
+          28.76090514473617,
+          28.563452186062932,
+          27.58034598082304,
+          27.686630142852664,
+          27.48019597493112,
+          27.506974060088396,
+          31.676665879786015,
+          34.1758350841701,
+          27.649311814457178,
+          28.203583089634776,
+          29.74954596720636,
+          27.94614084996283,
+          27.309868950396776,
+          27.577900094911456,
+          27.494926005601883,
+          27.459125965833664,
+          33.332946011796594,
+          29.266752069815993,
+          30.961979879066348,
+          29.644092079252005,
+          33.49200286902487,
+          27.57473406381905,
+          27.556977001950145,
+          33.986422000452876,
+          28.293949086219072,
+          27.363349217921495
+        ],
+        "stdev_ms": 5.067914387517218
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.9973813539836556,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 390.43359375,
+        "final_uss_mb": 391.5234375,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 687.36328125,
+        "uss_delta_mb_memory_pass": 1.08984375
+      },
+      "metadata": {
+        "serialized_file_size_bytes": 4096
+      },
+      "model": "tinynet",
+      "operation": "aux_save",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 5.09814407187514,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "metadata": {
+        "serialized_file_size_bytes": 4096
+      },
+      "model": "tinynet",
+      "operation": "aux_load",
+      "pass_type": "timing",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timing": {
+        "iqr_ms": 6.361376203130931,
+        "mean_ms": 31.587109277024865,
+        "median_ms": 30.193276004865766,
+        "p5_ms": 25.874316110275686,
+        "p95_ms": 43.4721726574935,
+        "sample_count": 50,
+        "samples_ms": [
+          32.64095005579293,
+          33.53672684170306,
+          43.04114496335387,
+          35.7131571508944,
+          26.627721032127738,
+          26.917555136606097,
+          49.924019956961274,
+          31.92903194576502,
+          25.88515100069344,
+          26.140933157876134,
+          27.093210024759173,
+          25.585626950487494,
+          25.865451199933887,
+          27.11612288840115,
+          28.831347124651074,
+          25.653152028098702,
+          26.012989226728678,
+          34.125491976737976,
+          30.39561305195093,
+          26.75283793359995,
+          27.72844908758998,
+          26.765796123072505,
+          29.24238401465118,
+          26.65039896965027,
+          27.55536395125091,
+          31.74425894394517,
+          28.53045705705881,
+          31.062565045431256,
+          33.53487583808601,
+          33.04509213194251,
+          34.08280806615949,
+          43.35042298771441,
+          43.571786023676395,
+          37.29413193650544,
+          40.506057906895876,
+          27.17193798162043,
+          29.43843393586576,
+          32.1504520252347,
+          46.2695499882102,
+          28.615490067750216,
+          27.41521201096475,
+          33.36118394508958,
+          30.804557027295232,
+          27.694304939359426,
+          36.01522115059197,
+          29.9909389577806,
+          32.89613500237465,
+          32.53872995264828,
+          30.74932098388672,
+          29.79091415181756
+        ],
+        "stdev_ms": 5.760779766979517
+      }
+    },
+    {
+      "device": "cpu",
+      "elapsed_s": 3.6566603151150048,
+      "env": {
+        "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+        "cuda": "12.8",
+        "gpu_name": null,
+        "hostname": "zmachine",
+        "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+        "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+        "torch": "2.8.0+cu128",
+        "torchlens_git_sha": "a1df040",
+        "versions": {
+          "baukit": null,
+          "captum": "0.9.0",
+          "nnsight": "0.7.0",
+          "psutil": "5.9.5",
+          "torchlens": "2.17.0",
+          "torchvision": "0.23.0+cu128",
+          "transformer_lens": "3.2.1",
+          "transformers": "4.57.6"
+        }
+      },
+      "input_summary": "(4, 3, 32, 32)",
+      "memory": {
+        "baseline_uss_mb": 400.37890625,
+        "final_uss_mb": 410.08203125,
+        "memory_run_count": 10,
+        "process_high_water_rss_mb": 697.18359375,
+        "uss_delta_mb_memory_pass": 9.703125
+      },
+      "metadata": {
+        "serialized_file_size_bytes": 4096
+      },
+      "model": "tinynet",
+      "operation": "aux_load",
+      "pass_type": "memory",
+      "returncode": 0,
+      "status": "ok",
+      "stderr_tail": "",
+      "stdout_tail": ""
+    }
+  ],
+  "date": "2026-06-14",
+  "environment": {
+    "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+    "cuda": "12.8",
+    "cuda_available": true,
+    "hostname": "zmachine",
+    "install_notes": {
+      "baukit": "pip install baukit failed: no matching distribution found",
+      "transformer_lens": "installed separately after baukit failed the combined install"
+    },
+    "os": "Linux 5.15.0-139-generic",
+    "torch": "2.8.0+cu128",
+    "torchlens_git_sha": "a1df040",
+    "versions": {
+      "baukit": null,
+      "captum": "0.9.0",
+      "nnsight": "0.7.0",
+      "psutil": "5.9.5",
+      "transformer_lens": "3.2.1"
+    }
+  },
+  "hooked_transformer_smoke": null,
+  "rerun_tolerance": {
+    "checks": [
+      {
+        "device": "cpu",
+        "diff_ms": 0.002411194145679474,
+        "iqr_run1_ms": 0.021876301616430283,
+        "iqr_run2_ms": 0.011071155313402414,
+        "median_run1_ms": 0.9162630885839462,
+        "median_run2_ms": 0.9138518944382668,
+        "model": "tinynet",
+        "operation": "raw_forward",
+        "passed": true,
+        "tolerance_ms": 0.5
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.04889036063104868,
+        "iqr_run1_ms": 0.2602535532787442,
+        "iqr_run2_ms": 0.12998719466850162,
+        "median_run1_ms": 0.9557829471305013,
+        "median_run2_ms": 0.9068925864994526,
+        "model": "tinynet",
+        "operation": "raw_tl_import",
+        "passed": true,
+        "tolerance_ms": 0.5205071065574884
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.023446627892553806,
+        "iqr_run1_ms": 0.10359403677284718,
+        "iqr_run2_ms": 0.021824962459504604,
+        "median_run1_ms": 0.923196435905993,
+        "median_run2_ms": 0.9466430637985468,
+        "model": "tinynet",
+        "operation": "raw_global_wrapped",
+        "passed": true,
+        "tolerance_ms": 0.5
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.02202799078077078,
+        "iqr_run1_ms": 0.023970205802470446,
+        "iqr_run2_ms": 0.026847352273762226,
+        "median_run1_ms": 0.9337475057691336,
+        "median_run2_ms": 0.9557754965499043,
+        "model": "tinynet",
+        "operation": "raw_target_prepared",
+        "passed": true,
+        "tolerance_ms": 0.5
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.29660749714821577,
+        "iqr_run1_ms": 0.10881462367251515,
+        "iqr_run2_ms": 0.014323682989925146,
+        "median_run1_ms": 1.1443599360063672,
+        "median_run2_ms": 0.8477524388581514,
+        "model": "tinynet",
+        "operation": "raw_inference_mode",
+        "passed": true,
+        "tolerance_ms": 0.5
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 168.73727506026626,
+        "iqr_run1_ms": 0.0,
+        "iqr_run2_ms": 0.0,
+        "median_run1_ms": 1660.6599220540375,
+        "median_run2_ms": 1491.9226469937712,
+        "model": "tinynet",
+        "operation": "global_wrap_dummy",
+        "passed": false,
+        "tolerance_ms": 166.06599220540375
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 408.1111040432006,
+        "iqr_run1_ms": 0.0,
+        "iqr_run2_ms": 0.0,
+        "median_run1_ms": 344.0105449408293,
+        "median_run2_ms": 752.1216489840299,
+        "model": "tinynet",
+        "operation": "first_capture_target",
+        "passed": false,
+        "tolerance_ms": 34.40105449408293
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.07658486720174551,
+        "iqr_run1_ms": 23.073158808983862,
+        "iqr_run2_ms": 14.69894970068708,
+        "median_run1_ms": 38.77976490184665,
+        "median_run2_ms": 38.7031800346449,
+        "model": "tinynet",
+        "operation": "tl_trace",
+        "passed": true,
+        "tolerance_ms": 46.146317617967725
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 2.523454953916371,
+        "iqr_run1_ms": 11.618790624197572,
+        "iqr_run2_ms": 11.962658376432955,
+        "median_run1_ms": 40.96457140985876,
+        "median_run2_ms": 38.44111645594239,
+        "model": "tinynet",
+        "operation": "tl_trace_profile",
+        "passed": true,
+        "tolerance_ms": 23.92531675286591
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 4.597877152264118,
+        "iqr_run1_ms": 2.773555868770927,
+        "iqr_run2_ms": 15.489956014789641,
+        "median_run1_ms": 49.44387834984809,
+        "median_run2_ms": 54.04175550211221,
+        "model": "tinynet",
+        "operation": "tl_rerun",
+        "passed": true,
+        "tolerance_ms": 30.979912029579282
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.3771515330299735,
+        "iqr_run1_ms": 3.1259426032193005,
+        "iqr_run2_ms": 10.022274102084339,
+        "median_run1_ms": 15.680309501476586,
+        "median_run2_ms": 16.05746103450656,
+        "model": "tinynet",
+        "operation": "fastlog_module",
+        "passed": true,
+        "tolerance_ms": 20.044548204168677
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 0.8165288018062711,
+        "iqr_run1_ms": 4.967630375176668,
+        "iqr_run2_ms": 4.769909719470888,
+        "median_run1_ms": 29.013828607276082,
+        "median_run2_ms": 29.830357409082353,
+        "model": "tinynet",
+        "operation": "aux_save",
+        "passed": true,
+        "tolerance_ms": 9.935260750353336
+      },
+      {
+        "device": "cpu",
+        "diff_ms": 2.338214428164065,
+        "iqr_run1_ms": 6.361376203130931,
+        "iqr_run2_ms": 4.509843536652625,
+        "median_run1_ms": 30.193276004865766,
+        "median_run2_ms": 27.8550615767017,
+        "model": "tinynet",
+        "operation": "aux_load",
+        "passed": true,
+        "tolerance_ms": 12.722752406261861
+      }
+    ],
+    "passed": false
+  },
+  "rows": [
+    {
+      "device": "cpu",
+      "label": "Pure raw forward",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_forward",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 1.9708144650794566,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 273.2890625,
+            "final_uss_mb": 283.71875,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 510.8828125,
+            "uss_delta_mb_memory_pass": 10.4296875
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_forward",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 1.706583296181634,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_forward",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.021876301616430283,
+            "mean_ms": 0.9258880047127604,
+            "median_ms": 0.9162630885839462,
+            "p5_ms": 0.9042723104357719,
+            "p95_ms": 0.9486950817517936,
+            "sample_count": 50,
+            "samples_ms": [
+              0.97848498262465,
+              0.9038010612130165,
+              0.9322790428996086,
+              0.9149371180683374,
+              0.9321409743279219,
+              0.9074690751731396,
+              0.915684038773179,
+              0.9175720624625683,
+              0.9249739814549685,
+              0.907067907974124,
+              0.9063140023499727,
+              0.9204989764839411,
+              0.9190861601382494,
+              1.2291478924453259,
+              0.9140889160335064,
+              0.9089079685509205,
+              0.9123850613832474,
+              0.9300331585109234,
+              0.9010918438434601,
+              0.9069109801203012,
+              0.9041130542755127,
+              0.937136122956872,
+              0.9128970559686422,
+              0.914114061743021,
+              0.9216039907187223,
+              0.915102893486619,
+              0.9296380449086428,
+              0.941957114264369,
+              0.9366970043629408,
+              0.9119859896600246,
+              0.9542079642415047,
+              0.9063510224223137,
+              0.9229159913957119,
+              0.9207918774336576,
+              0.9313209448009729,
+              0.9049780201166868,
+              0.9353149216622114,
+              0.9130320977419615,
+              0.9075729176402092,
+              0.9402499999850988,
+              0.9067780338227749,
+              0.9202710352838039,
+              0.9095498826354742,
+              0.9285712148994207,
+              0.9044669568538666,
+              0.9227239061146975,
+              0.9056439157575369,
+              0.9273348841816187,
+              0.9073619730770588,
+              0.9168421383947134
+            ],
+            "stdev_ms": 0.04616555638018635
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "Raw forward, TL imported",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_tl_import",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.201129457913339,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 359.84765625,
+            "final_uss_mb": 370.0390625,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 649.890625,
+            "uss_delta_mb_memory_pass": 10.19140625
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_tl_import",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 3.1492344660218805,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_tl_import",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.2602535532787442,
+            "mean_ms": 1.0401749517768621,
+            "median_ms": 0.9557829471305013,
+            "p5_ms": 0.9129601297900081,
+            "p95_ms": 1.2142005958594382,
+            "sample_count": 50,
+            "samples_ms": [
+              1.2609169352799654,
+              0.9294289629906416,
+              0.9340080432593822,
+              0.9248571004718542,
+              1.011935994029045,
+              0.9159089531749487,
+              0.9179511107504368,
+              0.9233560413122177,
+              0.955773051828146,
+              0.9179229382425547,
+              0.9665428660809994,
+              0.9219790808856487,
+              0.9149941615760326,
+              0.9261260274797678,
+              0.9251490700989962,
+              0.9128719102591276,
+              0.9198600891977549,
+              0.9271330200135708,
+              0.9121168404817581,
+              0.9171089623123407,
+              0.9256289340555668,
+              0.9937100112438202,
+              0.9130679536610842,
+              0.9086141362786293,
+              0.9240140207111835,
+              0.9244908578693867,
+              0.9271369781345129,
+              0.9171320125460625,
+              0.9203869849443436,
+              0.9557928424328566,
+              1.1970249470323324,
+              1.218543155118823,
+              1.187165966257453,
+              1.2088930234313011,
+              1.1877140495926142,
+              1.1781509965658188,
+              1.2224640231579542,
+              1.1752431746572256,
+              1.1678831651806831,
+              1.182895852252841,
+              1.17344013415277,
+              1.1777319014072418,
+              1.1890411842614412,
+              1.199949998408556,
+              1.1696279980242252,
+              1.177794998511672,
+              1.1937490198761225,
+              1.1868651490658522,
+              1.1816199403256178,
+              1.1870330199599266
+            ],
+            "stdev_ms": 0.13216856380112846
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "Raw forward, global wrappers installed",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_global_wrapped",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.4724033549427986,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 384.65234375,
+            "final_uss_mb": 393.265625,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 684.71875,
+            "uss_delta_mb_memory_pass": 8.61328125
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_global_wrapped",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 3.4001539680175483,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_global_wrapped",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.10359403677284718,
+            "mean_ms": 1.0135913081467152,
+            "median_ms": 0.923196435905993,
+            "p5_ms": 0.8333962992765009,
+            "p95_ms": 1.597164408303795,
+            "sample_count": 50,
+            "samples_ms": [
+              1.0120579972863197,
+              0.9399091359227896,
+              0.949065200984478,
+              0.9436779655516148,
+              1.0543649550527334,
+              0.9722330141812563,
+              0.9853369556367397,
+              0.9067200589925051,
+              1.13119394518435,
+              1.036197179928422,
+              1.1162350419908762,
+              1.1061110999435186,
+              1.0126291308552027,
+              0.8396711200475693,
+              0.8289888501167297,
+              0.8696320001035929,
+              0.8361870422959328,
+              0.8887569420039654,
+              0.8942559361457825,
+              0.8377879858016968,
+              0.8396909106522799,
+              0.8454180788248777,
+              0.8598039858043194,
+              0.831112964078784,
+              0.8305648807436228,
+              1.0409990791231394,
+              1.0808389633893967,
+              1.9784129690378904,
+              0.9218400809913874,
+              0.9457289706915617,
+              0.9322899859398603,
+              0.9112961124628782,
+              1.0566848795861006,
+              0.9204340167343616,
+              0.9040150325745344,
+              0.9065968915820122,
+              0.9092919062823057,
+              0.9010399226099253,
+              0.9341060649603605,
+              0.9165238589048386,
+              0.9532691910862923,
+              0.9055042173713446,
+              0.9232349693775177,
+              2.262683119624853,
+              2.380040008574724,
+              0.9231579024344683,
+              0.9226419497281313,
+              0.9345330763608217,
+              0.9261369705200195,
+              0.9206628892570734
+            ],
+            "stdev_ms": 0.31684509023265717
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "Raw forward, target model prepared",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_target_prepared",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.823903256095946,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 401.171875,
+            "final_uss_mb": 402.73046875,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 686.60546875,
+            "uss_delta_mb_memory_pass": 1.55859375
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_target_prepared",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 3.5380269510205835,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_target_prepared",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.023970205802470446,
+            "mean_ms": 0.97312206402421,
+            "median_ms": 0.9337475057691336,
+            "p5_ms": 0.9186440496705472,
+            "p95_ms": 1.0259484872221944,
+            "sample_count": 50,
+            "samples_ms": [
+              0.9328150190412998,
+              0.9546978399157524,
+              0.9530470706522465,
+              0.9551839902997017,
+              0.9343749843537807,
+              0.925412867218256,
+              0.9353689383715391,
+              0.9282869286835194,
+              0.9244959801435471,
+              0.919864047318697,
+              0.9439741261303425,
+              0.9623540099710226,
+              0.9264410473406315,
+              0.921871978789568,
+              0.9244850371032953,
+              0.9574058931320906,
+              0.9193518199026585,
+              0.9403571020811796,
+              0.9331200271844864,
+              0.9228819981217384,
+              0.94396504573524,
+              1.0031999554485083,
+              1.0445609223097563,
+              0.920137157663703,
+              0.9305959101766348,
+              0.9504710324108601,
+              0.9176409803330898,
+              0.9325190912932158,
+              0.9633959271013737,
+              0.9246908593922853,
+              0.9246440604329109,
+              0.9351489134132862,
+              0.976156909018755,
+              0.9289530571550131,
+              0.9312939364463091,
+              0.9244540706276894,
+              0.9480388835072517,
+              0.9380439296364784,
+              0.9313519112765789,
+              0.9381351992487907,
+              1.924054929986596,
+              0.9180649649351835,
+              0.9304978884756565,
+              0.9384311269968748,
+              0.9474838152527809,
+              0.9198051411658525,
+              0.9149089455604553,
+              0.9483860339969397,
+              1.642575953155756,
+              0.9487059433013201
+            ],
+            "stdev_ms": 0.1709528405945235
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "Raw + torch.inference_mode floor",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "raw_inference_mode",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 2.060432248050347,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 269.41796875,
+            "final_uss_mb": 279.03515625,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 512.4921875,
+            "uss_delta_mb_memory_pass": 9.6171875
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_inference_mode",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 2.0869456520304084,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "raw_inference_mode",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.10881462367251515,
+            "mean_ms": 2.1579730417579412,
+            "median_ms": 1.1443599360063672,
+            "p5_ms": 1.1098039336502552,
+            "p95_ms": 5.732420051936058,
+            "sample_count": 50,
+            "samples_ms": [
+              1.1791829019784927,
+              1.334866974502802,
+              1.1420960072427988,
+              1.1256078723818064,
+              1.1146541219204664,
+              32.05403406172991,
+              1.278960146009922,
+              6.024855189025402,
+              1.1563031002879143,
+              1.1272351257503033,
+              1.1031229514628649,
+              1.21779995970428,
+              1.1695660650730133,
+              1.1226041242480278,
+              1.2527948711067438,
+              1.1129931081086397,
+              1.1191610246896744,
+              1.1275741271674633,
+              5.43292798101902,
+              1.125918934121728,
+              1.128641190007329,
+              1.1353630106896162,
+              1.1090969201177359,
+              1.1480790562927723,
+              1.1538970284163952,
+              1.1342230718582869,
+              1.1370549909770489,
+              1.1106680613011122,
+              1.1628679931163788,
+              5.977459019050002,
+              1.1208190117031336,
+              2.848197938874364,
+              1.2262552045285702,
+              1.3354690745472908,
+              1.1163970921188593,
+              1.1140869464725256,
+              1.1944330763071775,
+              4.3055349960923195,
+              1.2362950947135687,
+              1.141684129834175,
+              1.1472059413790703,
+              1.1047108564525843,
+              1.1332749854773283,
+              1.1467330623418093,
+              1.2348389718681574,
+              1.4464759733527899,
+              1.121079083532095,
+              1.1466238647699356,
+              1.1233019176870584,
+              1.1356258764863014
+            ],
+            "stdev_ms": 4.47839452942796
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "global-wrap-on-dummy startup",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "global_wrap_dummy",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 4.003321212017909,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 276.12109375,
+            "final_uss_mb": 395.9765625,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 679.29296875,
+            "uss_delta_mb_memory_pass": 119.85546875
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "global_wrap_dummy",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 4.106556537095457,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "global_wrap_dummy",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.0,
+            "mean_ms": 1660.6599220540375,
+            "median_ms": 1660.6599220540375,
+            "p5_ms": 1660.6599220540375,
+            "p95_ms": 1660.6599220540375,
+            "sample_count": 1,
+            "samples_ms": [
+              1660.6599220540375
+            ],
+            "stdev_ms": 0.0
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "first-capture-of-target-model startup",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "first_capture_target",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.9401881801895797,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 349.5546875,
+            "final_uss_mb": 414.0,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 708.79296875,
+            "uss_delta_mb_memory_pass": 64.4453125
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "first_capture_target",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 3.70030595199205,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "first_capture_target",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 0.0,
+            "mean_ms": 344.0105449408293,
+            "median_ms": 344.0105449408293,
+            "p5_ms": 344.0105449408293,
+            "p95_ms": 344.0105449408293,
+            "sample_count": 1,
+            "samples_ms": [
+              344.0105449408293
+            ],
+            "stdev_ms": 0.0
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "TL Trace, every-op capture",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "tl_trace",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 4.029822705080733,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 399.11328125,
+            "final_uss_mb": 426.1484375,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 712.34375,
+            "uss_delta_mb_memory_pass": 27.03515625
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "tl_trace",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 6.339045165106654,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "tl_trace",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 23.073158808983862,
+            "mean_ms": 53.12007943633944,
+            "median_ms": 38.77976490184665,
+            "p5_ms": 35.98998460220173,
+            "p95_ms": 121.38750758022056,
+            "sample_count": 50,
+            "samples_ms": [
+              43.84388402104378,
+              33.497295808047056,
+              36.040158942341805,
+              36.25320713035762,
+              36.577674793079495,
+              37.16773306950927,
+              37.44659083895385,
+              36.66647197678685,
+              159.89334788173437,
+              44.841225957497954,
+              70.27400098741055,
+              144.5521400310099,
+              64.11159713752568,
+              65.69646811112761,
+              36.26282210461795,
+              62.341044889763,
+              91.03498514741659,
+              36.55976499430835,
+              35.626082913950086,
+              37.96095703728497,
+              36.84149403125048,
+              38.37175713852048,
+              37.34725504182279,
+              42.46351099573076,
+              54.35299687087536,
+              60.70203706622124,
+              66.90969388000667,
+              42.99637395888567,
+              51.75658012740314,
+              38.88154588639736,
+              39.93641585111618,
+              81.12684497609735,
+              37.18393808230758,
+              40.637759026139975,
+              73.45281122252345,
+              93.0751790292561,
+              40.809569181874394,
+              36.95772401988506,
+              36.2282230053097,
+              39.298468036577106,
+              36.2210578750819,
+              36.10342903994024,
+              36.93762677721679,
+              36.26460209488869,
+              168.41287817806005,
+              36.74998297356069,
+              35.94893286935985,
+              38.67798391729593,
+              37.77392394840717,
+              56.935922941192985
+            ],
+            "stdev_ms": 30.71056814624549
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "TL Trace, phase profile",
+      "metadata": {
+        "phase_timings": {
+          "clone_save:activation_fields": {
+            "count": 13,
+            "total_s": 0.0009518011938780546
+          },
+          "ctx_build:model_prepare": {
+            "count": 1,
+            "total_s": 0.002870278898626566
+          },
+          "ctx_build:shared_fields": {
+            "count": 17,
+            "total_s": 0.006170414388179779
+          },
+          "dispatch:forward_model": {
+            "count": 1,
+            "total_s": 0.02151019894517958
+          },
+          "object_construction:op": {
+            "count": 13,
+            "total_s": 0.0015701290685683489
+          },
+          "postprocess:Step 0: Materialize capture events": {
+            "count": 1,
+            "total_s": 0.0030328992288559675
+          },
+          "postprocess:Step 10: Rename labels": {
+            "count": 1,
+            "total_s": 0.00011110096238553524
+          },
+          "postprocess:Step 11: Build lookup keys": {
+            "count": 1,
+            "total_s": 0.00039418810047209263
+          },
+          "postprocess:Step 12: Undecorate tensors": {
+            "count": 1,
+            "total_s": 6.456812843680382e-05
+          },
+          "postprocess:Step 14: Log timing": {
+            "count": 1,
+            "total_s": 8.02706927061081e-06
+          },
+          "postprocess:Step 15.5: Build layer logs": {
+            "count": 1,
+            "total_s": 0.000491216080263257
+          },
+          "postprocess:Step 15: Finalize params": {
+            "count": 1,
+            "total_s": 3.0102906748652458e-05
+          },
+          "postprocess:Step 16.5: Graph shape hash": {
+            "count": 1,
+            "total_s": 0.00013871700502932072
+          },
+          "postprocess:Step 16: Build module logs": {
+            "count": 1,
+            "total_s": 0.0007632509805262089
+          },
+          "postprocess:Step 17: Mark pass finished": {
+            "count": 1,
+            "total_s": 1.054094173014164e-05
+          },
+          "postprocess:Step 1: Add output layers": {
+            "count": 1,
+            "total_s": 0.0010026751551777124
+          },
+          "postprocess:Step 20: Release param refs": {
+            "count": 1,
+            "total_s": 1.1141877621412277e-05
+          },
+          "postprocess:Step 2: Trace output ancestors": {
+            "count": 1,
+            "total_s": 0.00018339301459491253
+          },
+          "postprocess:Step 3: Remove orphan nodes": {
+            "count": 1,
+            "total_s": 0.0002636199351400137
+          },
+          "postprocess:Step 4: Input/output distances": {
+            "count": 1,
+            "total_s": 0.00035693193785846233
+          },
+          "postprocess:Step 5: Mark conditional branches": {
+            "count": 1,
+            "total_s": 2.2989697754383087e-06
+          },
+          "postprocess:Step 6: Fix buffer layers": {
+            "count": 1,
+            "total_s": 2.4212058633565903e-06
+          },
+          "postprocess:Step 7: Loop detection (full)": {
+            "count": 1,
+            "total_s": 0.00030432711355388165
+          },
+          "postprocess:Step 8: Map labels": {
+            "count": 1,
+            "total_s": 9.829201735556126e-05
+          },
+          "postprocess:Step 9: Log final info": {
+            "count": 1,
+            "total_s": 0.0007836290169507265
+          }
+        },
+        "profile_enabled": true
+      },
+      "model": "tinynet",
+      "operation": "tl_trace_profile",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 4.175055074039847,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 396.98046875,
+            "final_uss_mb": 424.0390625,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 712.9296875,
+            "uss_delta_mb_memory_pass": 27.05859375
+          },
+          "metadata": {
+            "phase_timings": {
+              "clone_save:activation_fields": {
+                "count": 13,
+                "total_s": 0.0009518011938780546
+              },
+              "ctx_build:model_prepare": {
+                "count": 1,
+                "total_s": 0.002870278898626566
+              },
+              "ctx_build:shared_fields": {
+                "count": 17,
+                "total_s": 0.006170414388179779
+              },
+              "dispatch:forward_model": {
+                "count": 1,
+                "total_s": 0.02151019894517958
+              },
+              "object_construction:op": {
+                "count": 13,
+                "total_s": 0.0015701290685683489
+              },
+              "postprocess:Step 0: Materialize capture events": {
+                "count": 1,
+                "total_s": 0.0030328992288559675
+              },
+              "postprocess:Step 10: Rename labels": {
+                "count": 1,
+                "total_s": 0.00011110096238553524
+              },
+              "postprocess:Step 11: Build lookup keys": {
+                "count": 1,
+                "total_s": 0.00039418810047209263
+              },
+              "postprocess:Step 12: Undecorate tensors": {
+                "count": 1,
+                "total_s": 6.456812843680382e-05
+              },
+              "postprocess:Step 14: Log timing": {
+                "count": 1,
+                "total_s": 8.02706927061081e-06
+              },
+              "postprocess:Step 15.5: Build layer logs": {
+                "count": 1,
+                "total_s": 0.000491216080263257
+              },
+              "postprocess:Step 15: Finalize params": {
+                "count": 1,
+                "total_s": 3.0102906748652458e-05
+              },
+              "postprocess:Step 16.5: Graph shape hash": {
+                "count": 1,
+                "total_s": 0.00013871700502932072
+              },
+              "postprocess:Step 16: Build module logs": {
+                "count": 1,
+                "total_s": 0.0007632509805262089
+              },
+              "postprocess:Step 17: Mark pass finished": {
+                "count": 1,
+                "total_s": 1.054094173014164e-05
+              },
+              "postprocess:Step 1: Add output layers": {
+                "count": 1,
+                "total_s": 0.0010026751551777124
+              },
+              "postprocess:Step 20: Release param refs": {
+                "count": 1,
+                "total_s": 1.1141877621412277e-05
+              },
+              "postprocess:Step 2: Trace output ancestors": {
+                "count": 1,
+                "total_s": 0.00018339301459491253
+              },
+              "postprocess:Step 3: Remove orphan nodes": {
+                "count": 1,
+                "total_s": 0.0002636199351400137
+              },
+              "postprocess:Step 4: Input/output distances": {
+                "count": 1,
+                "total_s": 0.00035693193785846233
+              },
+              "postprocess:Step 5: Mark conditional branches": {
+                "count": 1,
+                "total_s": 2.2989697754383087e-06
+              },
+              "postprocess:Step 6: Fix buffer layers": {
+                "count": 1,
+                "total_s": 2.4212058633565903e-06
+              },
+              "postprocess:Step 7: Loop detection (full)": {
+                "count": 1,
+                "total_s": 0.00030432711355388165
+              },
+              "postprocess:Step 8: Map labels": {
+                "count": 1,
+                "total_s": 9.829201735556126e-05
+              },
+              "postprocess:Step 9: Log final info": {
+                "count": 1,
+                "total_s": 0.0007836290169507265
+              }
+            },
+            "profile_enabled": true
+          },
+          "model": "tinynet",
+          "operation": "tl_trace_profile",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 6.846219030208886,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {
+            "phase_timings": {
+              "clone_save:activation_fields": {
+                "count": 13,
+                "total_s": 0.0006463674362748861
+              },
+              "ctx_build:model_prepare": {
+                "count": 1,
+                "total_s": 0.0029870320577174425
+              },
+              "ctx_build:shared_fields": {
+                "count": 17,
+                "total_s": 0.005322892218828201
+              },
+              "dispatch:forward_model": {
+                "count": 1,
+                "total_s": 0.019074826035648584
+              },
+              "object_construction:op": {
+                "count": 13,
+                "total_s": 0.0013229085598140955
+              },
+              "postprocess:Step 0: Materialize capture events": {
+                "count": 1,
+                "total_s": 0.0026220008730888367
+              },
+              "postprocess:Step 10: Rename labels": {
+                "count": 1,
+                "total_s": 9.513390250504017e-05
+              },
+              "postprocess:Step 11: Build lookup keys": {
+                "count": 1,
+                "total_s": 0.00039682304486632347
+              },
+              "postprocess:Step 12: Undecorate tensors": {
+                "count": 1,
+                "total_s": 6.41639344394207e-05
+              },
+              "postprocess:Step 14: Log timing": {
+                "count": 1,
+                "total_s": 8.03009606897831e-06
+              },
+              "postprocess:Step 15.5: Build layer logs": {
+                "count": 1,
+                "total_s": 0.0004948009736835957
+              },
+              "postprocess:Step 15: Finalize params": {
+                "count": 1,
+                "total_s": 3.0193012207746506e-05
+              },
+              "postprocess:Step 16.5: Graph shape hash": {
+                "count": 1,
+                "total_s": 0.0001411018893122673
+              },
+              "postprocess:Step 16: Build module logs": {
+                "count": 1,
+                "total_s": 0.0007278518751263618
+              },
+              "postprocess:Step 17: Mark pass finished": {
+                "count": 1,
+                "total_s": 1.1021038517355919e-05
+              },
+              "postprocess:Step 1: Add output layers": {
+                "count": 1,
+                "total_s": 0.0008543918374925852
+              },
+              "postprocess:Step 20: Release param refs": {
+                "count": 1,
+                "total_s": 1.0910909622907639e-05
+              },
+              "postprocess:Step 2: Trace output ancestors": {
+                "count": 1,
+                "total_s": 0.00018965802155435085
+              },
+              "postprocess:Step 3: Remove orphan nodes": {
+                "count": 1,
+                "total_s": 0.0002724500373005867
+              },
+              "postprocess:Step 4: Input/output distances": {
+                "count": 1,
+                "total_s": 0.0003594330046325922
+              },
+              "postprocess:Step 5: Mark conditional branches": {
+                "count": 1,
+                "total_s": 1.5380792319774628e-06
+              },
+              "postprocess:Step 6: Fix buffer layers": {
+                "count": 1,
+                "total_s": 2.908986061811447e-06
+              },
+              "postprocess:Step 7: Loop detection (full)": {
+                "count": 1,
+                "total_s": 0.0003112850245088339
+              },
+              "postprocess:Step 8: Map labels": {
+                "count": 1,
+                "total_s": 9.965803474187851e-05
+              },
+              "postprocess:Step 9: Log final info": {
+                "count": 1,
+                "total_s": 0.0007895389571785927
+              }
+            },
+            "profile_enabled": true
+          },
+          "model": "tinynet",
+          "operation": "tl_trace_profile",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 11.618790624197572,
+            "mean_ms": 62.74786712601781,
+            "median_ms": 40.96457140985876,
+            "p5_ms": 36.312102305237204,
+            "p95_ms": 175.851853180211,
+            "sample_count": 50,
+            "samples_ms": [
+              43.24481007643044,
+              42.53486101515591,
+              42.20374207943678,
+              45.1489039696753,
+              41.51487909257412,
+              37.866021040827036,
+              82.07001583650708,
+              41.36088001541793,
+              179.2120321188122,
+              95.4171170014888,
+              57.80437309294939,
+              65.56668505072594,
+              50.392994191497564,
+              38.79312099888921,
+              38.10441889800131,
+              44.630620162934065,
+              46.97206593118608,
+              171.7449678108096,
+              40.299690095707774,
+              41.18170589208603,
+              46.86369188129902,
+              67.2552059404552,
+              38.64865889772773,
+              354.08183303661644,
+              242.1738300472498,
+              59.25298202782869,
+              75.40915696881711,
+              39.75021303631365,
+              44.97455386444926,
+              42.18653403222561,
+              39.44490686990321,
+              36.74028301611543,
+              36.102262092754245,
+              36.66685405187309,
+              39.461501874029636,
+              37.73448499850929,
+              37.0821061078459,
+              36.69516113586724,
+              36.44343907944858,
+              37.24318812601268,
+              36.578533006832004,
+              39.293671026825905,
+              36.88833303749561,
+              36.204644944518805,
+              165.22391000762582,
+              39.62817997671664,
+              40.7474369276315,
+              38.077822886407375,
+              40.627036010846496,
+              33.8490370195359
+            ],
+            "stdev_ms": 59.714707716368565
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "Trace.rerun(model, x)",
+      "metadata": {
+        "rerun_policy": "steady_state"
+      },
+      "model": "tinynet",
+      "operation": "tl_rerun",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 4.293528226902708,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 400.98046875,
+            "final_uss_mb": 428.56640625,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 713.60546875,
+            "uss_delta_mb_memory_pass": 27.5859375
+          },
+          "metadata": {
+            "rerun_policy": "steady_state"
+          },
+          "model": "tinynet",
+          "operation": "tl_rerun",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support UntypedStorage; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support RemovableHandle; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 7.122802166966721,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {
+            "rerun_policy": "steady_state"
+          },
+          "model": "tinynet",
+          "operation": "tl_rerun",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support UntypedStorage; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n/home/jtaylor/projects/torchlens/torchlens/backends/torch/wrappers.py:955: UserWarning: TorchLens intervention-ready output traversal does not support RemovableHandle; falling back to BFS without stable output paths.\n  output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]\n",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 2.773555868770927,
+            "mean_ms": 57.38264812156558,
+            "median_ms": 49.44387834984809,
+            "p5_ms": 47.608713374938816,
+            "p95_ms": 114.29830634733635,
+            "sample_count": 50,
+            "samples_ms": [
+              54.87572797574103,
+              61.634279089048505,
+              57.392755057662725,
+              157.38705592229962,
+              48.305603209882975,
+              47.85274411551654,
+              51.08403507620096,
+              49.87264494411647,
+              49.23843313008547,
+              46.07810196466744,
+              50.006140023469925,
+              49.58076402544975,
+              51.98269011452794,
+              49.95661205612123,
+              48.33983210846782,
+              48.67263208143413,
+              48.01020002923906,
+              48.988062189891934,
+              49.05760707333684,
+              52.24239989183843,
+              48.68706106208265,
+              49.32252480648458,
+              49.00070815347135,
+              48.51126600988209,
+              50.39665405638516,
+              49.99884497374296,
+              172.60763398371637,
+              54.92547596804798,
+              49.91002194583416,
+              48.13126614317298,
+              49.736350076273084,
+              51.918898010626435,
+              48.25885803438723,
+              51.857765996828675,
+              48.31109079532325,
+              47.69885400310159,
+              51.09443096444011,
+              50.045572919771075,
+              48.364106100052595,
+              47.744879964739084,
+              48.30243205651641,
+              48.257613088935614,
+              49.5652318932116,
+              48.73318085446954,
+              48.80725312978029,
+              51.27592198550701,
+              47.26758995093405,
+              50.920824985951185,
+              47.53496195189655,
+              191.38681213371456
+            ],
+            "stdev_ms": 30.024963254166693
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "fastlog module-boundary metadata",
+      "metadata": {},
+      "model": "tinynet",
+      "operation": "fastlog_module",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.612464599078521,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 400.48828125,
+            "final_uss_mb": 407.359375,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 692.02734375,
+            "uss_delta_mb_memory_pass": 6.87109375
+          },
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "fastlog_module",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 4.720065486850217,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {},
+          "model": "tinynet",
+          "operation": "fastlog_module",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 3.1259426032193005,
+            "mean_ms": 21.285769497044384,
+            "median_ms": 15.680309501476586,
+            "p5_ms": 13.297073100693524,
+            "p95_ms": 39.01490379357708,
+            "sample_count": 50,
+            "samples_ms": [
+              14.853301923722029,
+              17.95455999672413,
+              14.928225195035338,
+              14.839448034763336,
+              15.559783205389977,
+              14.773380011320114,
+              15.22459601983428,
+              15.606669941917062,
+              14.746334170922637,
+              14.945052098482847,
+              15.615457203239202,
+              14.854013919830322,
+              14.903381001204252,
+              15.801070956513286,
+              14.79808590374887,
+              15.204793075099587,
+              15.65789501182735,
+              14.909109100699425,
+              15.908599132671952,
+              102.87432000041008,
+              29.25366908311844,
+              17.973618814721704,
+              32.22707798704505,
+              42.39455494098365,
+              34.88421905785799,
+              17.768339021131396,
+              15.891107963398099,
+              18.78431485965848,
+              17.624874133616686,
+              19.733223831281066,
+              15.702723991125822,
+              128.0066550243646,
+              18.765483982861042,
+              19.164105877280235,
+              16.166908899322152,
+              13.63372290506959,
+              14.176791068166494,
+              20.088101038709283,
+              17.01442408375442,
+              13.6538150254637,
+              13.822864973917603,
+              12.98389513976872,
+              13.581989100202918,
+              13.990907929837704,
+              12.718257028609514,
+              13.063960010185838,
+              15.874118078500032,
+              18.811602145433426,
+              16.04455104097724,
+              16.530521912500262
+            ],
+            "stdev_ms": 20.373764281372704
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "tl.save fresh tlspec path",
+      "metadata": {
+        "serialized_file_size_bytes": 4096
+      },
+      "model": "tinynet",
+      "operation": "aux_save",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.9973813539836556,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 390.43359375,
+            "final_uss_mb": 391.5234375,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 687.36328125,
+            "uss_delta_mb_memory_pass": 1.08984375
+          },
+          "metadata": {
+            "serialized_file_size_bytes": 4096
+          },
+          "model": "tinynet",
+          "operation": "aux_save",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 5.4605185920372605,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {
+            "serialized_file_size_bytes": 4096
+          },
+          "model": "tinynet",
+          "operation": "aux_save",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 4.967630375176668,
+            "mean_ms": 31.00049113854766,
+            "median_ms": 29.013828607276082,
+            "p5_ms": 27.4584979750216,
+            "p95_ms": 39.796998340170816,
+            "sample_count": 50,
+            "samples_ms": [
+              31.533377012237906,
+              29.38978187739849,
+              34.51537201181054,
+              31.283685006201267,
+              44.76994089782238,
+              28.69652397930622,
+              36.039793165400624,
+              32.86140179261565,
+              35.545669961720705,
+              41.25910997390747,
+              28.710306156426668,
+              30.55764501914382,
+              54.15943521074951,
+              35.351902013644576,
+              38.00997301004827,
+              31.519531039521098,
+              28.1658919993788,
+              27.726694010198116,
+              31.063376925885677,
+              28.242592001333833,
+              29.92714522406459,
+              27.471575886011124,
+              27.457984164357185,
+              27.471237117424607,
+              28.76090514473617,
+              28.563452186062932,
+              27.58034598082304,
+              27.686630142852664,
+              27.48019597493112,
+              27.506974060088396,
+              31.676665879786015,
+              34.1758350841701,
+              27.649311814457178,
+              28.203583089634776,
+              29.74954596720636,
+              27.94614084996283,
+              27.309868950396776,
+              27.577900094911456,
+              27.494926005601883,
+              27.459125965833664,
+              33.332946011796594,
+              29.266752069815993,
+              30.961979879066348,
+              29.644092079252005,
+              33.49200286902487,
+              27.57473406381905,
+              27.556977001950145,
+              33.986422000452876,
+              28.293949086219072,
+              27.363349217921495
+            ],
+            "stdev_ms": 5.067914387517218
+          }
+        }
+      },
+      "status": "ok"
+    },
+    {
+      "device": "cpu",
+      "label": "tl.load saved fixture",
+      "metadata": {
+        "serialized_file_size_bytes": 4096
+      },
+      "model": "tinynet",
+      "operation": "aux_load",
+      "passes": {
+        "memory": {
+          "device": "cpu",
+          "elapsed_s": 3.6566603151150048,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "memory": {
+            "baseline_uss_mb": 400.37890625,
+            "final_uss_mb": 410.08203125,
+            "memory_run_count": 10,
+            "process_high_water_rss_mb": 697.18359375,
+            "uss_delta_mb_memory_pass": 9.703125
+          },
+          "metadata": {
+            "serialized_file_size_bytes": 4096
+          },
+          "model": "tinynet",
+          "operation": "aux_load",
+          "pass_type": "memory",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": ""
+        },
+        "timing": {
+          "device": "cpu",
+          "elapsed_s": 5.09814407187514,
+          "env": {
+            "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
+            "cuda": "12.8",
+            "gpu_name": null,
+            "hostname": "zmachine",
+            "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "python": "3.11.6 | packaged by conda-forge | (main, Oct  3 2023, 10:40:35) [GCC 12.3.0]",
+            "torch": "2.8.0+cu128",
+            "torchlens_git_sha": "a1df040",
+            "versions": {
+              "baukit": null,
+              "captum": "0.9.0",
+              "nnsight": "0.7.0",
+              "psutil": "5.9.5",
+              "torchlens": "2.17.0",
+              "torchvision": "0.23.0+cu128",
+              "transformer_lens": "3.2.1",
+              "transformers": "4.57.6"
+            }
+          },
+          "input_summary": "(4, 3, 32, 32)",
+          "metadata": {
+            "serialized_file_size_bytes": 4096
+          },
+          "model": "tinynet",
+          "operation": "aux_load",
+          "pass_type": "timing",
+          "returncode": 0,
+          "status": "ok",
+          "stderr_tail": "",
+          "stdout_tail": "",
+          "timing": {
+            "iqr_ms": 6.361376203130931,
+            "mean_ms": 31.587109277024865,
+            "median_ms": 30.193276004865766,
+            "p5_ms": 25.874316110275686,
+            "p95_ms": 43.4721726574935,
+            "sample_count": 50,
+            "samples_ms": [
+              32.64095005579293,
+              33.53672684170306,
+              43.04114496335387,
+              35.7131571508944,
+              26.627721032127738,
+              26.917555136606097,
+              49.924019956961274,
+              31.92903194576502,
+              25.88515100069344,
+              26.140933157876134,
+              27.093210024759173,
+              25.585626950487494,
+              25.865451199933887,
+              27.11612288840115,
+              28.831347124651074,
+              25.653152028098702,
+              26.012989226728678,
+              34.125491976737976,
+              30.39561305195093,
+              26.75283793359995,
+              27.72844908758998,
+              26.765796123072505,
+              29.24238401465118,
+              26.65039896965027,
+              27.55536395125091,
+              31.74425894394517,
+              28.53045705705881,
+              31.062565045431256,
+              33.53487583808601,
+              33.04509213194251,
+              34.08280806615949,
+              43.35042298771441,
+              43.571786023676395,
+              37.29413193650544,
+              40.506057906895876,
+              27.17193798162043,
+              29.43843393586576,
+              32.1504520252347,
+              46.2695499882102,
+              28.615490067750216,
+              27.41521201096475,
+              33.36118394508958,
+              30.804557027295232,
+              27.694304939359426,
+              36.01522115059197,
+              29.9909389577806,
+              32.89613500237465,
+              32.53872995264828,
+              30.74932098388672,
+              29.79091415181756
+            ],
+            "stdev_ms": 5.760779766979517
+          }
+        }
+      },
+      "status": "ok"
+    }
+  ],
+  "schema": "torchlens.perf_gate.v1",
+  "schema_version": 1,
+  "smoke": true,
+  "source_sha": "a1df040",
+  "status": "ok",
+  "wall_clock_s": 161.09215149492957
+}

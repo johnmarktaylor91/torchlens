@@ -155,3 +155,52 @@ kernel timing rather than activation provenance. Use TransformerLens when your w
 inside its supported transformer families and you already want its named hook points. Use Captum or
 Inseq when you want mature attribution algorithms out of the box rather than the lower-level
 activation and gradient substrate.
+
+## Provisional measured numbers (dev host)
+
+> **Provisional.** Captured on a non-canonical Linux dev host (Intel i9-9900X, CPU), TinyNet
+> smoke subset. These illustrate relative cost on tiny graphs and are **not** headline figures —
+> re-capture the full suite on the canonical bench host before quoting any speed claim. The
+> committed baseline is `benchmarks/perf_baselines/linux-cpu-provisional.json`
+> (`baseline_status: "provisional"`), which suppresses generated speed headlines.
+
+<!-- generated from TorchLens P6 perf gate JSON; do not hand-edit numbers -->
+
+Measured at SHA `a1df040` on `2026-06-14`.
+
+| Model | Device | Row | Median ms | vs raw forward | Status |
+|---|---|---|---:|---:|---|
+| tinynet | cpu | raw_forward | 0.9 | 1.00x | ok |
+| tinynet | cpu | raw_tl_import | 1.0 | 1.04x | ok |
+| tinynet | cpu | raw_global_wrapped | 0.9 | 1.01x | ok |
+| tinynet | cpu | raw_target_prepared | 0.9 | 1.02x | ok |
+| tinynet | cpu | raw_inference_mode | 1.1 | 1.25x | ok |
+| tinynet | cpu | global_wrap_dummy | 1660.7 | 1812.43x | ok |
+| tinynet | cpu | first_capture_target | 344.0 | 375.45x | ok |
+| tinynet | cpu | tl_trace | 38.8 | 42.32x | ok |
+| tinynet | cpu | tl_trace_profile | 41.0 | 44.71x | ok |
+| tinynet | cpu | tl_rerun | 49.4 | 53.96x | ok |
+| tinynet | cpu | fastlog_module | 15.7 | 17.11x | ok |
+| tinynet | cpu | aux_save | 29.0 | 31.67x | ok |
+| tinynet | cpu | aux_load | 30.2 | 32.95x | ok |
+
+(Ratios on TinyNet are dominated by fixed per-capture overhead, not steady-state cost; large
+models amortize this. `global_wrap_dummy`/`first_capture_target` include one-time wrap/prep cost.)
+
+## Re-capturing baselines (canonical host)
+
+```bash
+# Full suite on the canonical bench host (quiet machine):
+python -m benchmarks.perf_suite --rerun \
+  --out-json benchmarks/perf_baselines/<host>-<device>.json \
+  --out-md benchmarks/perf_results_<date>.md
+# Sanity self-compare:
+python -m benchmarks.perf_gate --baseline benchmarks/perf_baselines/<host>-<device>.json \
+  --current benchmarks/perf_baselines/<host>-<device>.json   # expect "passed": true
+# Regenerate the docs table:
+python -m benchmarks.generate_perf_numbers benchmarks/perf_baselines/<host>-<device>.json \
+  --out docs/_perf_numbers_provisional.md
+```
+
+On the canonical host, drop the `-provisional` filename suffix and remove the `baseline_status`
+key so generated speed headlines are emitted.
