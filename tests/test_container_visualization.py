@@ -39,6 +39,40 @@ class MixedShapeTupleModel(nn.Module):
         return x + 1, torch.stack((x, x))
 
 
+class DictInputModel(nn.Module):
+    """Consume a two-leaf dictionary input."""
+
+    def forward(self, payload: dict[str, torch.Tensor]) -> torch.Tensor:
+        """Run the model."""
+
+        return payload["a"] + payload["b"]
+
+
+class PairModule(nn.Module):
+    """Return a two-leaf dictionary for a parent module to consume."""
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Run the model."""
+
+        return {"left": x + 1, "right": x + 2}
+
+
+class MidGraphContainerModel(nn.Module):
+    """Consume leaves pulled from a submodule output container."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.pair = PairModule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        pair = self.pair(x)
+        return pair["left"] * pair["right"]
+
+
 def _trace(model: nn.Module) -> Any:
     """Trace a model with final-output structure enabled."""
 
@@ -124,6 +158,71 @@ def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> 
     )
     assert "container_final_output_0_tuple" not in inline_source
     assert "output_1pass1" in inline_source
+
+
+def test_show_containers_nodes_adds_source_and_sink_nodes(tmp_path: Path) -> None:
+    """Node mode adds boundary container nodes through overlay edges."""
+
+    trace = tl.trace(
+        DictInputModel(),
+        {"a": torch.ones(2), "b": torch.ones(2)},
+        capture_container_structure=True,
+    )
+    source = trace.draw(
+        show_containers="nodes",
+        vis_save_only=True,
+        vis_fileformat="dot",
+        vis_outpath=str(tmp_path / "nodes_input"),
+    )
+
+    assert "dict[2] (model input)" in source
+    assert "container_node_" in source
+    assert '<FONT POINT-SIZE="8">a</FONT>' in source
+    assert '<FONT POINT-SIZE="8">b</FONT>' in source
+    assert "constraint=false" in source
+
+
+def test_show_containers_nodes_adds_midgraph_member_ties(tmp_path: Path) -> None:
+    """Mid-graph containers use dashed non-constraining member-of ties."""
+
+    trace = tl.trace(
+        MidGraphContainerModel(),
+        torch.ones(2),
+        capture_container_structure=True,
+    )
+    source = trace.draw(
+        show_containers="nodes",
+        vis_save_only=True,
+        vis_fileformat="dot",
+        vis_outpath=str(tmp_path / "nodes_midgraph"),
+    )
+
+    assert "dict[2] (call output)" in source
+    assert "arrowhead=none" in source
+    assert "constraint=false" in source
+    assert "container_node_" in source
+
+
+def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> None:
+    """Node-mode rendering leaves no runtime-only state in saved traces."""
+
+    trace = tl.trace(
+        DictInputModel(),
+        {"a": torch.ones(2), "b": torch.ones(2)},
+        capture_container_structure=True,
+    )
+    trace.draw(
+        show_containers="nodes",
+        vis_save_only=True,
+        vis_fileformat="dot",
+        vis_outpath=str(tmp_path / "nodes_before_save"),
+    )
+    save_path = tmp_path / "draw_then_save.tlspec"
+    trace.save(save_path)
+    loaded = tl.load(save_path)
+
+    assert loaded.input_structure.kind == "dict"
+    assert not hasattr(loaded, "_pending_container_collapse_nodes")
 
 
 def test_dagua_graph_carries_container_semantic_attrs() -> None:

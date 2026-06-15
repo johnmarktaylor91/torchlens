@@ -51,6 +51,7 @@ patched = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
+trace.draw(show_containers="nodes")
 ```
 
 `backward_ready=True` is the public opt-in for losses built from saved outs. It keeps

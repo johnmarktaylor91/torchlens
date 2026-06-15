@@ -10,15 +10,21 @@ threshold -- fails the gate with a self-explaining message.
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
+import re
 
+import cairosvg
 import pytest
 import torch
 from torch import nn
+from PIL import Image
 
 import torchlens as tl
 import test_loop_module_rolling as demos
 from support.label_geometry import audit_gv_source
+
+_CONTAINER_FRAME_GUTTER_PX = 5
 
 # The 16 rolled demo configs the placement sweep was calibrated against:
 # the 12 committed fixtures plus 4 extra inspection models.
@@ -103,6 +109,98 @@ class _ContainerLabelModel(nn.Module):
         return {"left": x + 1, "right": x + 2}
 
 
+class _DemoModelOutput(dict[str, torch.Tensor | tuple[tuple[torch.Tensor, torch.Tensor], ...]]):
+    """Minimal HuggingFace ``ModelOutput`` stand-in with a wide class name."""
+
+    def __init__(
+        self,
+        **kwargs: torch.Tensor | tuple[tuple[torch.Tensor, torch.Tensor], ...],
+    ) -> None:
+        """Create a mapping output with attribute access."""
+
+        super().__init__(kwargs)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class _HFLikeOutputModel(nn.Module):
+    """Return a nested HF-like output container with a wide node label."""
+
+    def forward(self, x: torch.Tensor) -> _DemoModelOutput:
+        """Run the model."""
+
+        return _DemoModelOutput(
+            logits=x + 1,
+            past_key_values=((x + 2, x + 3),),
+        )
+
+
+class _ThreadedCacheModel(nn.Module):
+    """Thread an unchanged cache container through repeated modules."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.layers = nn.ModuleList([_CacheLayer() for _ in range(3)])
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        past_key_values: tuple[tuple[torch.Tensor, torch.Tensor], ...],
+    ) -> tuple[torch.Tensor, tuple[tuple[torch.Tensor, torch.Tensor], ...]]:
+        """Pass the cache through multiple module boundaries."""
+
+        for layer in self.layers:
+            x, past_key_values = layer(x, past_key_values)
+        return x, past_key_values
+
+
+class _CacheLayer(nn.Module):
+    """Layer that consumes and returns an unchanged cache container."""
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        past_key_values: tuple[tuple[torch.Tensor, torch.Tensor], ...],
+    ) -> tuple[torch.Tensor, tuple[tuple[torch.Tensor, torch.Tensor], ...]]:
+        """Return ``x`` and ``past_key_values`` unchanged."""
+
+        return x + 1, past_key_values
+
+
+def _native_svg_outer_frame_min_brightness(svg_path: Path) -> dict[str, int]:
+    """Return minimum RGB brightness in the outermost SVG frame."""
+
+    svg_text = svg_path.read_text()
+    match = re.search(r'viewBox="([^"]+)"', svg_text)
+    if match is None:
+        raise AssertionError(f"{svg_path} did not include an SVG viewBox.")
+    _x0, _y0, view_width, view_height = [float(value) for value in match.group(1).split()]
+    width = round(view_width)
+    height = round(view_height)
+    png_bytes = cairosvg.svg2png(
+        bytestring=svg_text.encode(),
+        output_width=width,
+        output_height=height,
+    )
+    rgba_image = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    image = Image.new("RGB", rgba_image.size, (255, 255, 255))
+    image.paste(rgba_image, mask=rgba_image.getchannel("A"))
+    width, height = image.size
+    gutter = min(_CONTAINER_FRAME_GUTTER_PX, width // 2, height // 2)
+    edge_ranges = {
+        "left": ((x, y) for x in range(gutter) for y in range(height)),
+        "right": ((x, y) for x in range(width - gutter, width) for y in range(height)),
+        "top": ((x, y) for x in range(width) for y in range(gutter)),
+        "bottom": ((x, y) for x in range(width) for y in range(height - gutter, height)),
+    }
+    brightness: dict[str, int] = {}
+    for edge_name, pixels in edge_ranges.items():
+        brightness[edge_name] = min(min(image.getpixel((x, y))) for x, y in pixels)
+    return brightness
+
+
 def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -> None:
     """Container key labels use midpoint labels without endpoint placement attrs."""
 
@@ -122,3 +220,41 @@ def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -
     assert "labelangle=" not in gv_source
     result = audit_gv_source(gv_source)
     assert result.hard_violation_count == 0, result.describe_violations("container_labels")
+
+
+@pytest.mark.parametrize(
+    ("name", "model", "args"),
+    [
+        (
+            "threaded_kv",
+            _ThreadedCacheModel(),
+            (
+                torch.tensor([3.0]),
+                tuple((torch.ones(1), torch.zeros(1)) for _ in range(2)),
+            ),
+        ),
+        ("hf_output", _HFLikeOutputModel(), torch.tensor([1.0])),
+    ],
+)
+def test_container_nodes_have_native_svg_frame_margin(
+    name: str,
+    model: nn.Module,
+    args: object,
+    tmp_path: Path,
+) -> None:
+    """Container-node labels do not put ink on the native SVG frame."""
+
+    trace = tl.trace(
+        model,
+        args,
+        capture_container_structure=True,
+    )
+    trace.draw(
+        show_containers="nodes",
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_outpath=str(tmp_path / name),
+    )
+
+    edge_brightness = _native_svg_outer_frame_min_brightness(tmp_path / f"{name}.svg")
+    assert edge_brightness == {"left": 255, "right": 255, "top": 255, "bottom": 255}

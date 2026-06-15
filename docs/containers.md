@@ -51,6 +51,20 @@ site = trace.resolve_sites(tl.output_at(("past_key_values", 0, 1))).first()
 
 The selector matches TorchLens typed paths for dict keys, HuggingFace `ModelOutput` keys, namedtuple/dataclass fields, and tuple/list indices.
 
+## Visualization
+
+Container visualization is opt-in so default graph output remains unchanged.
+
+```python
+trace.draw(show_containers="nodes")
+```
+
+`show_containers="nodes"` renders one collapsed container node labeled with the container type and role, such as `dict[3] (model input)` or `CausalLMOutputWithPast (model output)`. Model-input containers fan out from that node to their input leaves; model-output leaves fan into a sink node. Field, key, or index labels appear on the relevant edges.
+
+For mid-graph containers, TorchLens does not route tensor dataflow through the container node. The key label stays on the real producer-to-consumer edge, and a light dashed arrowless member-of tie associates producer ops with the collapsed container node. Single-owner module clusters and large homogeneous-container collapse still apply as visual enhancers.
+
+Existing modes are unchanged: `False`, `"labels"`, `"cluster"`, `"collapsed"`, and `"auto"` keep their prior rendering behavior.
+
 ## Custom Containers
 
 Register proprietary containers with `tl.register_container(type, flatten, unflatten)`.

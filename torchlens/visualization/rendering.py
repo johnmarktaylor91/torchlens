@@ -69,6 +69,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 from ..ir.container import (
+    ContainerSpec,
     DataclassField,
     DictKey,
     HFKey,
@@ -76,6 +77,7 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from ..ir.container_registry import ContainerRecord, ContainerSnapshot, Role
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from ..data_classes.op import Op
@@ -128,7 +130,7 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
 
 BaseGraphNode = Union["Op", "Layer"]
-ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto"]
+ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"]
 
 
 @dataclass
@@ -673,6 +675,41 @@ class ContainerClusterSpec:
 
 
 @dataclass(frozen=True)
+class ContainerOverlayEdge:
+    """Container node or association edge emitted outside dataflow lists.
+
+    Parameters
+    ----------
+    tail_name:
+        Graphviz tail node name.
+    head_name:
+        Graphviz head node name.
+    attrs:
+        Graphviz edge attributes.
+    """
+
+    tail_name: str
+    head_name: str
+    attrs: dict[str, str]
+
+
+@dataclass(frozen=True)
+class ContainerOverlayNode:
+    """Container node emitted outside dataflow node construction.
+
+    Parameters
+    ----------
+    args:
+        Graphviz node arguments.
+    owner_key:
+        Module cluster key for local placement, or ``None`` for top-level.
+    """
+
+    args: dict[str, str]
+    owner_key: str | None
+
+
+@dataclass(frozen=True)
 class PlainLayout:
     """Subset of ``dot -Tplain`` layout data needed by the verifier.
 
@@ -807,7 +844,9 @@ def draw(
             the default render. ``"labels"`` adds midpoint key/index labels on
             container leaf edges. ``"cluster"`` also clusters single-owner
             containers. ``"collapsed"`` and ``"auto"`` collapse large
-            homogeneous containers to one summary node.
+            homogeneous containers to one summary node. ``"nodes"`` adds
+            collapsed labeled container nodes for source/sink boundaries and
+            dashed member-of ties for mid-graph output containers.
         container_max_inline: Maximum homogeneous container leaves to inline in
             ``"collapsed"``/``"auto"`` modes.
 
@@ -1108,7 +1147,24 @@ def draw(
     for node_args in getattr(self, "_pending_container_collapse_nodes", []):
         dot.node(**node_args)
 
-    if show_containers == "cluster":
+    container_overlay_edges: list[ContainerOverlayEdge] = []
+    if show_containers == "nodes" and vis_mode == "unrolled":
+        dot.graph_attr.update({"pad": "0.20"})
+        container_overlay_nodes, container_overlay_edges = _container_nodes_and_overlay_edges(
+            self,
+            collapsed_container_nodes,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+        )
+        for overlay_node in container_overlay_nodes:
+            if overlay_node.owner_key is None:
+                dot.node(**overlay_node.args)
+            else:
+                module_cluster_dict[overlay_node.owner_key].setdefault("nodes", []).append(
+                    overlay_node.args
+                )
+
+    if show_containers in {"cluster", "nodes"}:
         container_clusters = _container_clusters_for_graphviz(
             self,
             entries_to_plot,
@@ -1151,6 +1207,12 @@ def draw(
         overrides,
         top_level_sibling_rank_groups,
     )
+    for overlay_edge in container_overlay_edges:
+        dot.edge(
+            tail_name=overlay_edge.tail_name,
+            head_name=overlay_edge.head_name,
+            **overlay_edge.attrs,
+        )
     if show_legend:
         _add_legend_to_graphviz(dot, theme)
     # A code panel is composed side by side (separate render) when the output
@@ -2805,7 +2867,7 @@ def _collapsed_container_leaf_nodes(
 ) -> dict[str, str]:
     """Return leaf-to-summary node names hidden by homogeneous collapse."""
 
-    if show_containers not in {"collapsed", "auto"} or vis_mode != "unrolled":
+    if show_containers not in {"collapsed", "auto", "nodes"} or vis_mode != "unrolled":
         return {}
     hidden: dict[str, str] = {}
     for leaves in _container_leaf_groups(entries_to_plot, vis_mode=vis_mode).values():
@@ -2855,6 +2917,516 @@ def _add_collapsed_container_node(
             "ordering": "out",
         }
     )
+
+
+def _container_nodes_and_overlay_edges(
+    trace: "Trace",
+    collapsed_container_nodes: Mapping[str, str],
+    *,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]:
+    """Return render-only container nodes and non-dataflow overlay edges.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose registry-backed containers should be rendered.
+    collapsed_container_nodes:
+        Mapping from rendered leaf node names to collapsed summary node names.
+    vis_call_depth:
+        Maximum module nesting levels to show before collapsed-module summaries.
+    collapse_fn:
+        Optional custom module-collapse predicate.
+
+    Returns
+    -------
+    tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]
+        Node argument dictionaries and overlay edge specs. The edge specs are
+        intentionally separate from real dataflow edge queues.
+    """
+
+    nodes_by_name: dict[str, ContainerOverlayNode] = {}
+    edges: list[ContainerOverlayEdge] = []
+    edge_keys: set[tuple[str, str, str, str]] = set()
+    records = getattr(trace, "_containers", {})
+    for record in records.values():
+        if not isinstance(record, ContainerRecord):
+            continue
+        node_name = _container_record_node_name(record)
+        selected_snapshot: ContainerSnapshot | None = None
+        for snapshot in record.snapshots:
+            if snapshot.role not in {Role.MODEL_INPUT, Role.MODEL_OUTPUT, Role.CALL_OUTPUT}:
+                continue
+            if selected_snapshot is None:
+                selected_snapshot = snapshot
+                owner_key = _container_record_owner_key(
+                    trace,
+                    record,
+                    vis_call_depth=vis_call_depth,
+                    collapse_fn=collapse_fn,
+                )
+                nodes_by_name.setdefault(
+                    node_name,
+                    ContainerOverlayNode(
+                        args=_container_record_node_args(record, snapshot, node_name),
+                        owner_key=owner_key,
+                    ),
+                )
+            if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}:
+                _append_boundary_container_edges(
+                    trace,
+                    snapshot,
+                    node_name,
+                    collapsed_container_nodes,
+                    edge_keys,
+                    edges,
+                )
+            elif snapshot.role == Role.CALL_OUTPUT:
+                _append_member_of_container_edges(
+                    trace,
+                    snapshot,
+                    node_name,
+                    collapsed_container_nodes,
+                    edge_keys,
+                    edges,
+                )
+    return list(nodes_by_name.values()), edges
+
+
+def _container_record_owner_key(
+    trace: "Trace",
+    record: ContainerRecord,
+    *,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+) -> str | None:
+    """Return a single module owner for a call-output container record.
+
+    Parameters
+    ----------
+    trace:
+        Trace used for resolving occurrence producer labels.
+    record:
+        Container registry record.
+    vis_call_depth:
+        Maximum module nesting levels to show before collapsed-module summaries.
+    collapse_fn:
+        Optional custom module-collapse predicate.
+
+    Returns
+    -------
+    str | None
+        Owner module-cluster key, or ``None`` when the record is a boundary
+        container or its leaves do not share one module owner.
+    """
+
+    if any(snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT} for snapshot in record.snapshots):
+        return None
+    owners: set[str | int] = set()
+    for snapshot in record.snapshots:
+        if snapshot.role != Role.CALL_OUTPUT:
+            continue
+        for occurrence in snapshot.leaf_occurrences:
+            op = _op_for_occurrence_label(trace, occurrence.producer_op_label)
+            if op is None:
+                continue
+            owners.add(
+                _owner_module_key_for_node(
+                    trace,
+                    op,
+                    vis_mode="unrolled",
+                    vis_call_depth=vis_call_depth,
+                    collapse_fn=collapse_fn,
+                )
+            )
+    if len(owners) != 1:
+        return None
+    owner = next(iter(owners))
+    return cast(str, owner) if owner != -1 else None
+
+
+def _append_boundary_container_edges(
+    trace: "Trace",
+    snapshot: ContainerSnapshot,
+    node_name: str,
+    collapsed_container_nodes: Mapping[str, str],
+    edge_keys: set[tuple[str, str, str, str]],
+    edges: list[ContainerOverlayEdge],
+) -> None:
+    """Append source or sink container-node overlay edges.
+
+    Parameters
+    ----------
+    trace:
+        Trace used for resolving occurrence producer labels.
+    snapshot:
+        Boundary snapshot whose leaves should connect to the container node.
+    node_name:
+        Rendered container node name.
+    collapsed_container_nodes:
+        Mapping from rendered leaf node names to collapsed summary node names.
+    edge_keys:
+        Overlay-only dedupe keys.
+    edges:
+        Mutable overlay edge sink.
+    """
+
+    for occurrence in snapshot.leaf_occurrences:
+        leaf_node = _render_node_name_for_occurrence(trace, occurrence.producer_op_label)
+        if leaf_node is None and snapshot.role == Role.MODEL_OUTPUT:
+            leaf_node = _render_output_node_name_for_path(trace, occurrence.path)
+        if leaf_node is None:
+            continue
+        leaf_node = collapsed_container_nodes.get(leaf_node, leaf_node)
+        label = _container_path_leaf_label(occurrence.path)
+        attrs = _container_boundary_edge_attrs(label)
+        if snapshot.role == Role.MODEL_INPUT:
+            _append_container_overlay_edge(
+                edge_keys,
+                edges,
+                namespace="container-source",
+                tail_name=node_name,
+                head_name=leaf_node,
+                attrs=attrs,
+            )
+        elif snapshot.role == Role.MODEL_OUTPUT:
+            _append_container_overlay_edge(
+                edge_keys,
+                edges,
+                namespace="container-sink",
+                tail_name=leaf_node,
+                head_name=node_name,
+                attrs=attrs,
+            )
+
+
+def _append_member_of_container_edges(
+    trace: "Trace",
+    snapshot: ContainerSnapshot,
+    node_name: str,
+    collapsed_container_nodes: Mapping[str, str],
+    edge_keys: set[tuple[str, str, str, str]],
+    edges: list[ContainerOverlayEdge],
+) -> None:
+    """Append dashed producer-to-container grouping ties for mid-graph outputs.
+
+    Parameters
+    ----------
+    trace:
+        Trace used for resolving occurrence producer labels.
+    snapshot:
+        Call-output snapshot whose producers should be associated to a
+        render-only container node.
+    node_name:
+        Rendered container node name.
+    collapsed_container_nodes:
+        Mapping from rendered leaf node names to collapsed summary node names.
+    edge_keys:
+        Overlay-only dedupe keys.
+    edges:
+        Mutable overlay edge sink.
+    """
+
+    for occurrence in snapshot.leaf_occurrences:
+        producer_node = _render_node_name_for_occurrence(trace, occurrence.producer_op_label)
+        if producer_node is None:
+            continue
+        producer_node = collapsed_container_nodes.get(producer_node, producer_node)
+        _append_container_overlay_edge(
+            edge_keys,
+            edges,
+            namespace="container-member",
+            tail_name=producer_node,
+            head_name=node_name,
+            attrs=_container_member_edge_attrs(),
+        )
+
+
+def _append_container_overlay_edge(
+    edge_keys: set[tuple[str, str, str, str]],
+    edges: list[ContainerOverlayEdge],
+    *,
+    namespace: str,
+    tail_name: str,
+    head_name: str,
+    attrs: dict[str, str],
+) -> None:
+    """Append one deduplicated overlay edge in an isolated namespace.
+
+    Parameters
+    ----------
+    edge_keys:
+        Overlay-only dedupe keys.
+    edges:
+        Mutable overlay edge sink.
+    namespace:
+        Logical edge type. This keeps overlay dedupe separate from real
+        dataflow ``edges_used`` keys.
+    tail_name:
+        Graphviz tail node name.
+    head_name:
+        Graphviz head node name.
+    attrs:
+        Graphviz edge attributes.
+    """
+
+    key = (namespace, tail_name, head_name, attrs.get("label", ""))
+    if key in edge_keys:
+        return
+    edge_keys.add(key)
+    edges.append(ContainerOverlayEdge(tail_name=tail_name, head_name=head_name, attrs=attrs))
+
+
+def _container_record_node_name(record: ContainerRecord) -> str:
+    """Return a stable Graphviz node name for one rendered container record.
+
+    Parameters
+    ----------
+    record:
+        Container registry record.
+
+    Returns
+    -------
+    str
+        Graphviz node identifier.
+    """
+
+    return f"container_node_{record.ordinal}"
+
+
+def _container_record_node_args(
+    record: ContainerRecord,
+    snapshot: ContainerSnapshot,
+    node_name: str,
+) -> dict[str, str]:
+    """Return Graphviz node args for a collapsed labeled container node.
+
+    Parameters
+    ----------
+    record:
+        Container registry record.
+    snapshot:
+        Snapshot being rendered.
+    node_name:
+        Graphviz node identifier.
+
+    Returns
+    -------
+    dict[str, str]
+        Node attributes.
+    """
+
+    return {
+        "name": node_name,
+        "label": render_lines_to_html([_container_record_label(record, snapshot)]),
+        "shape": "box",
+        "style": "filled,dashed",
+        "fillcolor": "white",
+        "color": "#777777",
+        "fontcolor": "black",
+        "ordering": "out",
+        "group": f"container_record_{record.ordinal}",
+        "fixedsize": "false",
+        "margin": "0.22,0.11",
+    }
+
+
+def _container_record_label(record: ContainerRecord, snapshot: ContainerSnapshot) -> str:
+    """Return the visible type-and-role label for a container node.
+
+    Parameters
+    ----------
+    record:
+        Container registry record.
+    snapshot:
+        Snapshot being rendered.
+
+    Returns
+    -------
+    str
+        Label such as ``"dict[3] (model input)"``.
+    """
+
+    role = snapshot.role.value.replace("_", " ")
+    return f"{_container_spec_label(snapshot.spec, fallback=record.object_kind)} ({role})"
+
+
+def _container_spec_label(spec: ContainerSpec, *, fallback: str) -> str:
+    """Return a concise container type label.
+
+    Parameters
+    ----------
+    spec:
+        Captured container spec.
+    fallback:
+        Portable object kind used if the spec lacks type details.
+
+    Returns
+    -------
+    str
+        Human-readable container type and immediate arity.
+    """
+
+    if spec.type_qualname:
+        return spec.type_qualname
+    if spec.kind in {"dict", "tuple", "list"} and spec.length is not None:
+        return f"{spec.kind}[{spec.length}]"
+    if spec.length is not None:
+        return f"{spec.kind}[{spec.length}]"
+    return fallback.rsplit(".", 1)[-1]
+
+
+def _container_boundary_edge_attrs(label: str | None) -> dict[str, str]:
+    """Return Graphviz attrs for source/sink container-node edges.
+
+    Parameters
+    ----------
+    label:
+        Optional key/index label for the pulled-out field.
+
+    Returns
+    -------
+    dict[str, str]
+        Edge attributes for a boundary container overlay edge.
+    """
+
+    attrs = {
+        "color": "#777777",
+        "fontcolor": "#555555",
+        "style": "solid",
+        "arrowsize": ".6",
+        "labelfontsize": "8",
+        "constraint": "false",
+    }
+    if label is not None:
+        attrs["label"] = _html_container_edge_label(label)
+    return attrs
+
+
+def _container_member_edge_attrs() -> dict[str, str]:
+    """Return Graphviz attrs for a mid-graph member-of tie.
+
+    Returns
+    -------
+    dict[str, str]
+        Arrowless, non-constraining association edge attributes.
+    """
+
+    return {
+        "color": "#999999",
+        "fontcolor": "#777777",
+        "style": "dashed",
+        "arrowhead": "none",
+        "arrowsize": ".6",
+        "constraint": "false",
+    }
+
+
+def _render_node_name_for_occurrence(trace: "Trace", label: str | None) -> str | None:
+    """Return the rendered Graphviz node name for a container leaf occurrence.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ops should be searched.
+    label:
+        Final or raw producer op label.
+
+    Returns
+    -------
+    str | None
+        Rendered unrolled Graphviz node name, or ``None`` if unresolved.
+    """
+
+    if label is None:
+        return None
+    op = _op_for_occurrence_label(trace, label)
+    if op is not None:
+        return op.label.replace(":", "pass")
+    return None
+
+
+def _op_for_occurrence_label(trace: "Trace", label: str | None) -> Op | None:
+    """Return the Op identified by a container occurrence producer label.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ops should be searched.
+    label:
+        Final or raw producer op label.
+
+    Returns
+    -------
+    Op | None
+        Matching operation, or ``None`` when unresolved.
+    """
+
+    if label is None:
+        return None
+    if label in trace.ops:
+        return trace.ops[label]
+    for op in trace.ops:
+        if (
+            getattr(op, "layer_label_raw", None) == label
+            or getattr(op, "_layer_label_raw", None) == label
+        ):
+            return op
+    return None
+
+
+def _render_output_node_name_for_path(
+    trace: "Trace",
+    path: tuple[OutputPathComponent, ...],
+) -> str | None:
+    """Return the rendered final-output node matching a container path.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose output layers should be searched.
+    path:
+        Captured container leaf path.
+
+    Returns
+    -------
+    str | None
+        Rendered output node name, or ``None`` if no output leaf matches.
+    """
+
+    output_labels = set(getattr(trace, "output_layers", ()) or ())
+    for op in trace.ops:
+        if getattr(op, "layer_label", None) not in output_labels:
+            continue
+        if tuple(getattr(op, "container_path", ()) or ()) == path:
+            return op.label.replace(":", "pass")
+    for output_label in getattr(trace, "output_layers", ()) or ():
+        output_op = trace.layer_dict_all_keys.get(output_label)
+        if output_op is None:
+            continue
+        if tuple(getattr(output_op, "container_path", ()) or ()) == path:
+            return output_op.label.replace(":", "pass")
+    return None
+
+
+def _container_path_leaf_label(path: tuple[OutputPathComponent, ...]) -> str | None:
+    """Return the visible label for the final component of a container path.
+
+    Parameters
+    ----------
+    path:
+        Captured container path.
+
+    Returns
+    -------
+    str | None
+        Final key/index/field label, or ``None`` for root leaves.
+    """
+
+    if not path:
+        return None
+    return _container_component_role(path[-1])
 
 
 def _collapsed_container_node_name(group_id: str) -> str:
@@ -5369,6 +5941,13 @@ def _add_edges_for_node(
             edge_dict["label"] = edge_label
         if show_containers:
             container_label = _container_edge_label(metadata_base)
+            if (
+                container_label is None
+                and show_containers == "nodes"
+                and not _op_is_model_input_container_leaf(parent_node)
+                and not _op_is_model_output_container_leaf(parent_node)
+            ):
+                container_label = _container_edge_label(_base_node_for_metadata(parent_node))
             if container_label is not None and "label" not in edge_dict:
                 edge_dict["label"] = _html_container_edge_label(container_label)
 
@@ -6167,6 +6746,88 @@ def _container_edge_label(node: BaseGraphNode | None) -> str | None:
     if not path:
         return None
     return _container_component_role(path[-1])
+
+
+def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
+    """Return whether ``node`` is a model-input container leaf.
+
+    Parameters
+    ----------
+    node:
+        Candidate render node.
+
+    Returns
+    -------
+    bool
+        ``True`` when the node is an input leaf that already receives a
+        container-node source edge in ``show_containers="nodes"`` mode.
+    """
+
+    if not isinstance(node, Op):
+        return False
+    trace = getattr(node, "source_trace", None)
+    if trace is None:
+        return False
+    for record in getattr(trace, "_containers", {}).values():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if snapshot.role != Role.MODEL_INPUT:
+                continue
+            for occurrence in snapshot.leaf_occurrences:
+                if _occurrence_matches_op(trace, occurrence.producer_op_label, node):
+                    return True
+    return False
+
+
+def _op_is_model_output_container_leaf(node: GraphNode) -> bool:
+    """Return whether ``node`` is a final model-output container leaf.
+
+    Parameters
+    ----------
+    node:
+        Candidate render node.
+
+    Returns
+    -------
+    bool
+        ``True`` when a sink container-node edge should carry its key label.
+    """
+
+    if not isinstance(node, Op):
+        return False
+    trace = getattr(node, "source_trace", None)
+    if trace is None:
+        return False
+    return getattr(node, "layer_label", None) in set(getattr(trace, "output_layers", ()) or ())
+
+
+def _occurrence_matches_op(trace: "Trace", label: str | None, op: Op) -> bool:
+    """Return whether a container occurrence producer label resolves to ``op``.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing ``op``.
+    label:
+        Final or raw producer label from a container occurrence.
+    op:
+        Candidate operation.
+
+    Returns
+    -------
+    bool
+        ``True`` if the label identifies ``op``.
+    """
+
+    if label is None:
+        return False
+    if label in trace.ops and trace.ops[label] is op:
+        return True
+    return (
+        getattr(op, "layer_label_raw", None) == label
+        or getattr(op, "_layer_label_raw", None) == label
+    )
 
 
 def _html_container_edge_label(text: str) -> str:
