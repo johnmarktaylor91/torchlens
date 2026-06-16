@@ -290,10 +290,13 @@ def save(
                 )
                 continue
             if isinstance(decision, FailReason):
-                raise TorchLensIOError(
+                error_text = (
                     "Unsupported tensor for bundle save at "
                     f"{blob_spec.label} ({blob_spec.kind}): {decision.text}"
                 )
+                if blob_spec.logical_backend != "torch":
+                    raise BackendPayloadUnsupportedError(error_text)
+                raise TorchLensIOError(error_text)
             unsupported_tensors.append(
                 {"label": blob_spec.label, "kind": blob_spec.kind, "reason": decision.text}
             )
@@ -335,6 +338,11 @@ def save(
         if backup_path is not None:
             _remove_path(backup_path)
     except TorchLensIOError:
+        _mark_partial(tmp_path)
+        if backup_path is not None and not bundle_path.exists() and backup_path.exists():
+            _restore_backup(backup_path, bundle_path)
+        raise
+    except BackendPayloadUnsupportedError:
         _mark_partial(tmp_path)
         if backup_path is not None and not bundle_path.exists() and backup_path.exists():
             _restore_backup(backup_path, bundle_path)
@@ -739,10 +747,48 @@ def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
             raise TorchLensIOError("Torch manifest schema v2 requires non-empty torch_version.")
         return
 
+    _preflight_schema_v2_runtime(manifest, backend_name=backend_name)
     payload_policy = manifest["payload_policy"]
     materializes = bool(payload_policy.get("materialization_supported", False))
     if materializes:
         _preflight_schema_v2_payload_codecs(manifest, backend_name=backend_name)
+
+
+def _preflight_schema_v2_runtime(
+    manifest: dict[str, Any],
+    *,
+    backend_name: str,
+) -> None:
+    """Fail closed for schema-v2 TensorFlow runtime fingerprint mismatches."""
+
+    from ..backends import BackendRuntimeCompatibilityError
+
+    runtime = manifest["backend_runtime"]
+    spec = get_backend_spec(backend_name)
+    expected_runtime_name = spec.serialization_policy.runtime_name or backend_name
+    runtime_name = runtime.get("name")
+    if runtime_name != expected_runtime_name:
+        raise BackendRuntimeCompatibilityError(
+            f"Manifest backend runtime name {runtime_name!r} does not match expected "
+            f"{expected_runtime_name!r} for backend {backend_name!r}."
+        )
+    if expected_runtime_name != "tf":
+        return
+
+    try:
+        import tensorflow as tf
+    except ImportError as exc:
+        raise BackendRuntimeCompatibilityError(
+            "Portable TensorFlow trace loading requires the tensorflow runtime."
+        ) from exc
+
+    saved_version = runtime.get("version")
+    current_version = str(getattr(tf, "__version__", ""))
+    if saved_version != current_version:
+        raise BackendRuntimeCompatibilityError(
+            "Manifest TensorFlow runtime version "
+            f"{saved_version!r} does not match installed tensorflow {current_version!r}."
+        )
 
 
 def _preflight_schema_v2_payload_codecs(

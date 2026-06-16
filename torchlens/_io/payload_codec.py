@@ -678,6 +678,153 @@ class PaddlePayloadCodec:
         return _unsupported_array_dtype_reason(array)
 
 
+class TFPayloadCodec:
+    """Payload codec for dense TensorFlow eager tensors."""
+
+    backend_name = "tf"
+    codec_name = "numpy_safetensors_v1"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether ``value`` looks like a TensorFlow payload."""
+
+        if isinstance(value, (np.ndarray, np.generic)):
+            return True
+        value_type = type(value)
+        module_name = value_type.__module__
+        if not module_name.startswith("tensorflow"):
+            return False
+        return hasattr(value, "dtype") or value_type.__name__ in {
+            "RaggedTensor",
+            "SparseTensor",
+            "CompositeTensor",
+        }
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Validate that a TensorFlow tensor can be copied to dense host storage."""
+
+        reason = self._unsupported_reason(value)
+        if reason is None:
+            return Ok()
+        if strict:
+            return FailReason(reason)
+        return SkipReason(reason)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Copy a TensorFlow eager tensor to host NumPy storage."""
+
+        if not self.can_encode(value):
+            raise TypeError(f"tf codec cannot encode {type(value).__name__}.")
+        reason = self._unsupported_reason(value)
+        if reason is not None:
+            raise TypeError(reason)
+
+        logical_dtype = _tf_logical_dtype(value)
+        logical_device = str(getattr(value, "device", "unknown"))
+        try:
+            array = _tf_payload_to_numpy(value)
+        except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
+            raise TypeError(f"TensorFlow tensor could not be copied to host: {exc}") from exc
+        if logical_dtype == "tf.bfloat16":
+            array = array.view(np.uint16)
+        _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
+        return EncodedArray(
+            array=np.ascontiguousarray(array),
+            logical_dtype=logical_dtype,
+            logical_device=logical_device,
+            codec_metadata=_json_ready_mapping(
+                {
+                    "logical_shape": [int(dim) for dim in array.shape],
+                    "source_type": type(value).__name__,
+                    "tf_logical_dtype": logical_dtype,
+                    "tf_logical_device": logical_device,
+                    "tf_bfloat16_transport_bits": logical_dtype == "tf.bfloat16",
+                }
+            ),
+        )
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
+    ) -> Any:
+        """Rebuild a TensorFlow eager tensor from host NumPy storage."""
+
+        del payload_hints, strict_runtime
+        from ..backends.registry import BackendRuntimeCompatibilityError
+
+        try:
+            import tensorflow as tf
+        except ImportError as exc:
+            raise BackendRuntimeCompatibilityError(
+                "Portable TensorFlow payload materialization requires the tensorflow runtime."
+            ) from exc
+
+        logical_dtype = str(_entry_field(entry, "logical_dtype") or array.dtype)
+        dtype = _resolve_tf_dtype(tf, logical_dtype)
+        if dtype is None:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable TensorFlow payload dtype {logical_dtype!r} is not supported by "
+                "the installed tensorflow runtime."
+            )
+
+        try:
+            with _tf_device_context(tf, map_location):
+                if logical_dtype == "tf.bfloat16":
+                    transport = tf.convert_to_tensor(
+                        np.ascontiguousarray(array),
+                        dtype=tf.uint16,
+                    )
+                    return tf.bitcast(transport, dtype)
+                return tf.convert_to_tensor(np.ascontiguousarray(array), dtype=dtype)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable TensorFlow payload could not be materialized: {exc}"
+            ) from exc
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return v2 manifest vocabulary for a TensorFlow payload."""
+
+        return _manifest_fields(
+            logical_backend=self.backend_name,
+            codec=self.codec_name,
+            value=value,
+            encoded=encoded,
+        )
+
+    def _unsupported_reason(self, value: Any) -> str | None:
+        """Return the first TensorFlow codec incompatibility reason, if any."""
+
+        if not self.can_encode(value):
+            return f"tf codec cannot encode {type(value).__name__}"
+        if isinstance(value, (np.ndarray, np.generic)):
+            array = np.asarray(value)
+            logical_dtype = _tf_logical_dtype(value)
+            if logical_dtype not in _TF_SUPPORTED_LOGICAL_DTYPES:
+                return f"TensorFlow dtype {logical_dtype} is not supported by the payload codec"
+            if logical_dtype == "tf.bfloat16":
+                return None
+            return _unsupported_array_dtype_reason(array)
+        value_type_name = type(value).__name__
+        if value_type_name in {"RaggedTensor", "SparseTensor", "CompositeTensor"}:
+            return f"TensorFlow {value_type_name} payloads are not dense eager tensors"
+        if not hasattr(value, "numpy"):
+            return f"TensorFlow {value_type_name} payloads are not eager tensor values"
+        logical_dtype = _tf_logical_dtype(value)
+        if logical_dtype not in _TF_SUPPORTED_LOGICAL_DTYPES:
+            return f"TensorFlow dtype {logical_dtype} is not supported by the payload codec"
+        try:
+            array = _tf_payload_to_numpy(value)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            return f"TensorFlow tensor could not be copied to host: {exc}"
+        if logical_dtype == "tf.bfloat16":
+            return None
+        return _unsupported_array_dtype_reason(array)
+
+
 class NullPayloadCodec:
     """Payload codec for backends without materialization support this round."""
 
@@ -725,6 +872,7 @@ _CODECS: dict[str, PayloadCodec] = {
     "jax": JaxPayloadCodec(),
     "mlx": MlxPayloadCodec(),
     "paddle": PaddlePayloadCodec(),
+    "tf": TFPayloadCodec(),
     "tinygrad": TinygradPayloadCodec(),
 }
 _TORCH_BACKEND_NAME = "torch"
@@ -1324,6 +1472,105 @@ def _resolve_paddle_place(paddle_module: Any, place_name: Any) -> Any | None:
             except ValueError:
                 return None
     return None
+
+
+_TF_SUPPORTED_LOGICAL_DTYPES = frozenset(
+    {
+        "tf.bool",
+        "tf.int8",
+        "tf.int16",
+        "tf.int32",
+        "tf.int64",
+        "tf.uint8",
+        "tf.uint16",
+        "tf.uint32",
+        "tf.uint64",
+        "tf.float16",
+        "tf.bfloat16",
+        "tf.float32",
+        "tf.float64",
+    }
+)
+
+
+def _tf_logical_dtype(value: Any) -> str:
+    """Return a stable TensorFlow logical dtype string for ``value``."""
+
+    if isinstance(value, (np.ndarray, np.generic)):
+        array_dtype = np.asarray(value).dtype
+        if str(array_dtype) == "bfloat16":
+            return "tf.bfloat16"
+        return f"tf.{array_dtype.name}"
+    dtype = getattr(value, "dtype", None)
+    dtype_name = getattr(dtype, "name", None)
+    if isinstance(dtype_name, str) and dtype_name:
+        return f"tf.{dtype_name}"
+    dtype_text = str(dtype)
+    if dtype_text.startswith("<dtype: '") and dtype_text.endswith("'>"):
+        normalized = dtype_text.removeprefix("<dtype: '").removesuffix("'>")
+        return f"tf.{normalized}"
+    if dtype_text.startswith("tf."):
+        return dtype_text
+    return f"tf.{dtype_text}"
+
+
+def _tf_payload_to_numpy(value: Any) -> np.ndarray:
+    """Return a TensorFlow payload as a NumPy array."""
+
+    if isinstance(value, (np.ndarray, np.generic)):
+        return np.asarray(value)
+    return np.asarray(value.numpy())
+
+
+def _resolve_tf_dtype(tf_module: Any, dtype_name: str) -> Any | None:
+    """Resolve a TensorFlow dtype object from a manifest dtype string."""
+
+    candidate_names = [dtype_name]
+    if dtype_name.startswith("tf."):
+        candidate_names.append(dtype_name.rsplit(".", maxsplit=1)[-1])
+    if dtype_name.startswith("<dtype: '") and dtype_name.endswith("'>"):
+        candidate_names.append(dtype_name.removeprefix("<dtype: '").removesuffix("'>"))
+    for candidate_name in candidate_names:
+        dtype = getattr(tf_module, candidate_name, None)
+        if dtype is not None:
+            return dtype
+    try:
+        return tf_module.as_dtype(dtype_name)
+    except (TypeError, ValueError):
+        return None
+
+
+class _TFDeviceContext:
+    """Tiny context-manager wrapper for optional TensorFlow device placement."""
+
+    def __init__(self, tf_module: Any, device_name: Any) -> None:
+        """Initialize the optional TensorFlow device context."""
+
+        self._tf = tf_module
+        self._device_name = device_name
+        self._context: Any | None = None
+
+    def __enter__(self) -> None:
+        """Enter a TensorFlow device context when one was requested."""
+
+        if self._device_name in (None, "", "unknown"):
+            return None
+        self._context = self._tf.device(str(self._device_name))
+        self._context.__enter__()
+        return None
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool:
+        """Exit the TensorFlow device context when one was opened."""
+
+        if self._context is not None:
+            return bool(self._context.__exit__(exc_type, exc, traceback))
+        return False
+
+
+def _tf_device_context(tf_module: Any, device_name: Any) -> _TFDeviceContext:
+    """Return an optional TensorFlow device-placement context manager."""
+
+    return _TFDeviceContext(tf_module, device_name)
 
 
 def _device_string(value: Any) -> str:
