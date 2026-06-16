@@ -168,7 +168,19 @@ def test_paddle_validation_metadata_invariants_pass_on_valid_trace() -> None:
     assert check_metadata_invariants(trace) is True
 
 
-def test_paddle_validation_same_object_static_snapshot_guard_is_p6_todo() -> None:
-    """Document that same-object no-op inventory coverage belongs to P6."""
+def test_paddle_validation_same_object_static_snapshot_guard_fires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Simulate a same-object no-op inventory gap and require static coverage to fail."""
 
-    pytest.skip("TODO(P6): static inventory snapshot guards same-object no-op coverage.")
+    patched_tensor_methods = paddle_wrappers._TENSOR_CORE_METHODS - {"astype", "reshape"}
+    monkeypatch.setattr(paddle_wrappers, "_TENSOR_CORE_METHODS", patched_tensor_methods)
+    registry = paddle_wrappers._PaddleWrapperRegistry()
+    registry.wrap(object())
+    try:
+        inventory = registry.inventory()
+    finally:
+        registry.unwrap()
+
+    with pytest.raises(AssertionError):
+        assert {"tensor.astype", "tensor.reshape"} <= set(inventory.wrapped)
