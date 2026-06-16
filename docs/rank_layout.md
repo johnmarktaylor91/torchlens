@@ -16,6 +16,11 @@ num_nodes + sum(rank_span for edges with rank_span > 12)
 The rank layout is selected above 20,000 cost units. Local 5k-node chains stay on `dot`;
 hub-like graphs with a small number of long edges switch to rank.
 
+The render graph is occurrence-aware for repeated argument uses. If one parent tensor feeds
+multiple argument slots of the same child, such as `x + x` or `torch.cat([x, x])`, TorchLens
+draws one arrow per slot. Commutative ops keep those parallel arrows unlabeled; non-commutative
+ops label each arrow with its argument slot.
+
 ## Requirements
 
 - Graphviz installed for final DOT/SVG/PDF rendering.

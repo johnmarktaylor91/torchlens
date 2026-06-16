@@ -598,10 +598,17 @@ class RenderEdge:
     metadata_child:
         Original first child edge to use for labels and override callbacks. ``None``
         means multiple skipped paths disagreed, so optional labels are dropped.
+    occurrence_key:
+        Stable key for the specific parent-to-child argument occurrence represented
+        by this rendered edge.
+    argument_label:
+        Optional per-occurrence argument label for non-commutative child ops.
     """
 
     target: GraphNode
     metadata_child: Optional[GraphNode]
+    occurrence_key: tuple[Any, ...]
+    argument_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -628,6 +635,9 @@ class CapturedForwardEdge:
         Child render node.
     module_key:
         Cluster key where the real edge is emitted, or ``-1`` for top level.
+    occurrence_key:
+        Stable key for the rendered edge occurrence. Parallel same-parent edges
+        have distinct keys but the same rendered endpoints.
     """
 
     source_label: str
@@ -639,6 +649,7 @@ class CapturedForwardEdge:
     source_node: GraphNode
     target_node: GraphNode
     module_key: str | int
+    occurrence_key: tuple[Any, ...]
 
 
 @dataclass(frozen=True)
@@ -1107,7 +1118,7 @@ def draw(
     # Edge deduplication: (tail_name, head_name) pairs already added.
     # Critical when collapsed modules cause many layers to map to the same
     # node name -- without this, we'd get duplicate edges.
-    edges_used: Set[tuple[str, str]] = set()
+    edges_used: Set[tuple[str, str, tuple[Any, ...]]] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
     self._pending_container_collapse_nodes = []
     container_clusters: list[ContainerClusterSpec] = []
@@ -1967,7 +1978,7 @@ def render_combined_graph(
         show_buffer_layers=show_buffer_layers,
         skip_fn=None,
     )
-    edges_used: Set[tuple[str, str]] = set()
+    edges_used: Set[tuple[str, str, tuple[Any, ...]]] = set()
     collapsed_modules: Set[str] = set()
     for node in entries_to_plot.values():
         if node.layer_label in skipped_labels:
@@ -4012,6 +4023,163 @@ def _simplify_boundary_labels(
     only_boundary.display_label = fallback_label
 
 
+def _arg_path_key(arg_path: Iterable[Any]) -> tuple[Any, ...]:
+    """Return a hashable primitive key for an edge-use argument path.
+
+    Parameters
+    ----------
+    arg_path:
+        Edge-use path components.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Primitive key preserving the recorded path order.
+    """
+
+    key: list[Any] = []
+    for component in arg_path:
+        if isinstance(component, TupleIndex):
+            key.append(("tuple", component.index))
+        elif isinstance(component, DictKey):
+            key.append(("dict", component.key))
+        elif isinstance(component, NamedField):
+            key.append(("field", component.name))
+        elif isinstance(component, HFKey):
+            key.append(("hf", component.key))
+        elif isinstance(component, DataclassField):
+            key.append(("dataclass", component.name))
+        elif isinstance(component, OutputPathComponent):
+            key.append((component.__class__.__name__, repr(component)))
+        else:
+            key.append(component)
+    return tuple(key)
+
+
+def _arg_path_label_value(arg_path: Iterable[Any]) -> str:
+    """Return the display value for an edge-use argument path.
+
+    Parameters
+    ----------
+    arg_path:
+        Edge-use path components.
+
+    Returns
+    -------
+    str
+        Compact label suffix such as ``"0"`` or ``"(0, 1)"``.
+    """
+
+    values: list[Any] = []
+    for component in arg_path:
+        if isinstance(component, TupleIndex):
+            values.append(component.index)
+        elif isinstance(component, DictKey):
+            values.append(component.key)
+        elif isinstance(component, NamedField):
+            values.append(component.name)
+        elif isinstance(component, HFKey):
+            values.append(component.key)
+        elif isinstance(component, DataclassField):
+            values.append(component.name)
+        else:
+            values.append(component)
+    if len(values) == 1:
+        return str(values[0])
+    return str(tuple(values))
+
+
+def _edge_use_argument_label(edge_use: Any) -> str:
+    """Return the argument label for one recorded edge use.
+
+    Parameters
+    ----------
+    edge_use:
+        Edge-use record carrying ``arg_kind`` and ``arg_path`` attributes.
+
+    Returns
+    -------
+    str
+        Label text matching existing argument-edge wording.
+    """
+
+    prefix = "arg" if edge_use.arg_kind == "positional" else "kwarg"
+    return f"{prefix} {_arg_path_label_value(edge_use.arg_path)}"
+
+
+def _render_edge_occurrences(
+    parent_node: GraphNode,
+    child_node: GraphNode,
+) -> tuple[tuple[tuple[Any, ...], str | None], ...]:
+    """Return rendered occurrences for a parent-child edge.
+
+    Parameters
+    ----------
+    parent_node:
+        Rendered source node.
+    child_node:
+        Rendered target node.
+
+    Returns
+    -------
+    tuple[tuple[tuple[Any, ...], str | None], ...]
+        ``(occurrence_key, argument_label)`` pairs. Repeated same-parent argument
+        uses yield multiple pairs; ordinary edges yield one pair.
+    """
+
+    parent_layer_label = parent_node.layer_label
+    child_layer_label = child_node.layer_label
+    parent_render_label = _render_node_label(parent_node, "unrolled")
+    child_render_label = _render_node_label(child_node, "unrolled")
+    if isinstance(child_node, Op):
+        matches = [
+            edge_use
+            for edge_use in child_node.edge_uses
+            if (
+                edge_use.parent_label == parent_layer_label
+                and edge_use.child_label == child_layer_label
+            )
+        ]
+        if matches:
+            return tuple(
+                (
+                    (
+                        "edge_use",
+                        edge_use.parent_label,
+                        edge_use.child_label,
+                        edge_use.arg_kind,
+                        _arg_path_key(edge_use.arg_path),
+                        edge_use.child_func_call_id,
+                        index,
+                    ),
+                    _edge_use_argument_label(edge_use),
+                )
+                for index, edge_use in enumerate(matches)
+            )
+
+    occurrences: list[tuple[tuple[Any, ...], str | None]] = []
+    positions = getattr(child_node, "parent_arg_positions", None)
+    if isinstance(positions, Mapping):
+        for arg_type in ("args", "kwargs"):
+            arg_positions = positions.get(arg_type, {})
+            if not isinstance(arg_positions, Mapping):
+                continue
+            for arg_loc, arg_label in arg_positions.items():
+                if arg_label != parent_layer_label:
+                    continue
+                prefix = "arg" if arg_type == "args" else "kwarg"
+                occurrence_key = (
+                    "parent_arg_position",
+                    child_layer_label,
+                    arg_type,
+                    repr(arg_loc),
+                )
+                occurrences.append((occurrence_key, f"{prefix} {arg_loc}"))
+    if occurrences:
+        return tuple(occurrences)
+    return ((("edge", parent_render_label, child_render_label), None),)
+
+
 def _expand_edges_through_skipped(
     trace: "Trace",
     parent_node: GraphNode,
@@ -4041,7 +4209,7 @@ def _expand_edges_through_skipped(
     """
 
     visible_entries_by_layer = {node.layer_label: node for node in visible_entries.values()}
-    by_target: dict[str, RenderEdge] = {}
+    by_target: dict[tuple[str, tuple[Any, ...]], RenderEdge] = {}
     for child_label in parent_node.children:
         child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
         if child_node is None and vis_mode == "unrolled":
@@ -4064,11 +4232,22 @@ def _expand_edges_through_skipped(
         for target_node in reached:
             first_child = child_node
             target_label = _render_node_label(target_node, vis_mode)
-            existing = by_target.get(target_label)
-            if existing is None:
-                by_target[target_label] = RenderEdge(target_node, first_child)
-            elif existing.metadata_child is not first_child:
-                by_target[target_label] = RenderEdge(target_node, None)
+            if target_node is first_child:
+                occurrences = _render_edge_occurrences(parent_node, first_child)
+            else:
+                occurrences = ((("skipped", parent_label, target_label), None),)
+            for occurrence_key, argument_label in occurrences:
+                map_key = (target_label, occurrence_key)
+                existing = by_target.get(map_key)
+                if existing is None:
+                    by_target[map_key] = RenderEdge(
+                        target_node,
+                        first_child,
+                        occurrence_key,
+                        argument_label,
+                    )
+                elif existing.metadata_child is not first_child:
+                    by_target[map_key] = RenderEdge(target_node, None, occurrence_key, None)
     return list(by_target.values())
 
 
@@ -4145,7 +4324,7 @@ def _add_node_to_graphviz(
     node: GraphNode,
     graphviz_graph: graphviz.Digraph,
     module_edge_dict: Dict[str, Any],
-    edges_used: Set[tuple[str, str]],
+    edges_used: Set[tuple[str, str, tuple[Any, ...]]],
     vis_mode: str,
     collapsed_modules: Set[str],
     vis_call_depth: int = 1000,
@@ -6128,7 +6307,7 @@ def _add_edges_for_node(
     vis_call_depth: int,
     node_color: str,
     module_edge_dict: Dict[str, Any],
-    edges_used: Set[tuple[str, str]],
+    edges_used: Set[tuple[str, str, tuple[Any, ...]]],
     graphviz_graph: graphviz.Digraph,
     vis_mode: str = "unrolled",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
@@ -6168,7 +6347,7 @@ def _add_edges_for_node(
         vis_call_depth: How many levels of module nesting to show.
         node_color: Color of the node.
         module_edge_dict: Dict mapping each cluster to its edges.
-        edges_used: Set of (tail, head) pairs already added.
+        edges_used: Set of (tail, head, occurrence) triples already added.
         graphviz_graph: The graphviz graph object.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
         show_buffer_layers: Buffer visibility mode.
@@ -6177,7 +6356,9 @@ def _add_edges_for_node(
     if edge_map is None:
         render_edges = [
             RenderEdge(
-                target=_get_node_by_label(self, child_layer_label, vis_mode), metadata_child=None
+                target=_get_node_by_label(self, child_layer_label, vis_mode),
+                metadata_child=None,
+                occurrence_key=("edge", parent_node.layer_label, child_layer_label),
             )
             for child_layer_label in parent_node.children
         ]
@@ -6270,8 +6451,9 @@ def _add_edges_for_node(
             and parent_node.layer_label in intervention_site_labels
         ):
             hook_name = _intervention_hook_node_name(parent_node.layer_label)
-            if (tail_name, hook_name) not in edges_used:
-                edges_used.add((tail_name, hook_name))
+            hook_key = ("intervention_hook", parent_node.layer_label)
+            if (tail_name, hook_name, hook_key) not in edges_used:
+                edges_used.add((tail_name, hook_name, hook_key))
                 graphviz_graph.edge(
                     tail_name=tail_name,
                     head_name=hook_name,
@@ -6291,7 +6473,7 @@ def _add_edges_for_node(
         ):
             continue
 
-        dedupe_key = (tail_name, head_name)
+        dedupe_key = (tail_name, head_name, render_edge.occurrence_key)
         if dedupe_key in edges_used:
             continue
         edges_used.add(dedupe_key)
@@ -6376,6 +6558,7 @@ def _add_edges_for_node(
                 _base_node_for_metadata(metadata_child),
                 edge_dict,
                 show_buffer_layers,
+                render_edge.argument_label,
             )
 
         for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
@@ -6437,6 +6620,7 @@ def _add_edges_for_node(
                     source_node=parent_node,
                     target_node=child_node,
                     module_key=edge_module_key,
+                    occurrence_key=render_edge.occurrence_key,
                 )
             )
 
@@ -6945,6 +7129,7 @@ def _label_node_arguments_if_needed(
     child_node: Union["Op", "Layer"],
     edge_dict: Dict[str, Any],
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
+    occurrence_argument_label: str | None = None,
 ) -> None:
     """Add argument position labels to an edge when the child has multiple non-commutative parents.
 
@@ -6964,15 +7149,20 @@ def _label_node_arguments_if_needed(
         edge_dict: Mutable dict of edge attributes; ``"headlabel"`` or ``"xlabel"``
             may be added.
         show_buffer_layers: Buffer visibility mode (affects parent count).
+        occurrence_argument_label: Optional single argument label for one repeated
+            edge-use occurrence.
     """
     if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers):
         return
 
-    arg_labels = []
-    for arg_type in ["args", "kwargs"]:
-        for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
-            if parent_node.layer_label == arg_label:
-                arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
+    if occurrence_argument_label is not None:
+        arg_labels = [occurrence_argument_label]
+    else:
+        arg_labels = []
+        for arg_type in ["args", "kwargs"]:
+            for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
+                if parent_node.layer_label == arg_label:
+                    arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
     arg_labels = "<br/>".join(arg_labels)  # type: ignore[assignment]
     if not arg_labels:

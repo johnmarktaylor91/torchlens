@@ -387,6 +387,7 @@ def render_rank_layout(
         FROZEN_PARAMS_BG_COLOR,
         DEFAULT_BG_COLOR,
         COMMUTE_FUNCS,
+        _render_node_label,
     )
     from .._render_utils import compute_module_penwidth
     from ..modes import COLLAPSED_MODE_REGISTRY
@@ -407,7 +408,7 @@ def render_rank_layout(
     # Edge data: list of dicts with tail_name, head_name, color, style, ...
     all_edges: list[dict[str, Any]] = []
     collapsed_set: set[str] = set()
-    edges_used: set[tuple[str, str]] = set()
+    edges_used: set[tuple[str, str, tuple[Any, ...]]] = set()
 
     def _module_keys_for_node(node: Any, is_collapsed_mod: bool) -> list[str]:
         """Get module hierarchy keys for a node."""
@@ -564,7 +565,7 @@ def render_rank_layout(
             _assign_to_hierarchy(graph_node_label, mod_keys, node.has_input_ancestor)
 
         # ── Collect edges (this node -> skip-filtered children) ──
-        for render_edge in (edge_map or {}).get(node.layer_label, []):
+        for render_edge in (edge_map or {}).get(_render_node_label(node, vis_mode), []):
             child_node = render_edge.target
             metadata_child = render_edge.metadata_child
             if child_node.is_buffer and not show_buffer_layers:
@@ -604,11 +605,12 @@ def render_rank_layout(
                 if p_mods[:vis_call_depth] == c_mods[:vis_call_depth]:
                     continue
 
-            if (tail_name, head_name) in edges_used:
+            dedupe_key = (tail_name, head_name, render_edge.occurrence_key)
+            if dedupe_key in edges_used:
                 continue
             if tail_name == head_name and metadata_child is not child_node:
                 continue
-            edges_used.add((tail_name, head_name))
+            edges_used.add(dedupe_key)
 
             edge_style = "solid" if node.has_input_ancestor else "dashed"
             edge = {
@@ -625,7 +627,14 @@ def render_rank_layout(
                 and metadata_child is not None
                 and metadata_child.layer_type not in COMMUTE_FUNCS
             ):
-                _add_arg_label(node, metadata_child, edge, trace, show_buffer_layers)
+                _add_arg_label(
+                    node,
+                    metadata_child,
+                    edge,
+                    trace,
+                    show_buffer_layers,
+                    render_edge.argument_label,
+                )
 
             for k, v in (overrides.edge or {}).items():
                 if callable(v):
@@ -819,6 +828,7 @@ def _add_arg_label(
     edge_dict: dict[str, Any],
     trace: Any,
     show_buffer_layers: bool,
+    occurrence_argument_label: str | None = None,
 ) -> None:
     """Add argument position labels to an edge when the child has multiple parents.
 
@@ -841,11 +851,14 @@ def _add_arg_label(
     if num_parents <= 1:
         return
 
-    arg_labels = []
-    for arg_type in ["args", "kwargs"]:
-        for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
-            if parent_node.layer_label == arg_label:
-                arg_labels.append(f"{arg_type[:-1]} {arg_loc}")
+    if occurrence_argument_label is not None:
+        arg_labels = [occurrence_argument_label]
+    else:
+        arg_labels = []
+        for arg_type in ["args", "kwargs"]:
+            for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
+                if parent_node.layer_label == arg_label:
+                    arg_labels.append(f"{arg_type[:-1]} {arg_loc}")
 
     if arg_labels:
         label_str = "<br/>".join(arg_labels)
