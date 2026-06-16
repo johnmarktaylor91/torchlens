@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v2.20.1 (2026-06-16)
+
+### Bug Fixes
+
+- **compat**: Import Self from typing_extensions for Python 3.10
+  ([`efd6ed8`](https://github.com/johnmarktaylor91/torchlens/commit/efd6ed8dc41c1c855bc2dddb3dc589aae7152dbf))
+
+torchlens/ir/predicate.py and torchlens/quantities.py imported `Self` from `typing`, which only
+  exists on Python 3.11+. The CI smoke matrix tests py3.10 (requires-python is >=3.9), so `import
+  torchlens` raised ImportError there (green locally only because the dev env is py3.11). Import
+  `Self` from `typing_extensions` (works on all supported versions) and declare
+  typing_extensions>=4.0 as a dependency (it was already present transitively via torch). No
+  behavior change. py3.11 smoke green; fixes the py3.10 CI job.
+
+
 ## v2.20.0 (2026-06-16)
 
 
