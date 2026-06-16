@@ -62,6 +62,7 @@ TARGET_ALL = [
     "scale",
     "splice_module",
     "steer",
+    "sweep",
     "swap_with",
     "zero_ablate",
     "when",
@@ -103,7 +104,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_66() -> None:
+def test_all_size_exactly_67() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -118,10 +119,10 @@ def test_all_size_exactly_66() -> None:
     Backend-completion sharded payload hints add `JaxPayloadLoadHint` and
     `PayloadLoadHints` = 62. Container value-core adds `Container`,
     `output_at`, and `register_container` = 65. Container-completion P3 adds
-    `input_at` = 66.
+    `input_at` = 66. Eclectic Unit G adds `sweep` = 67.
     """
 
-    assert len(torchlens.__all__) == 66
+    assert len(torchlens.__all__) == 67
     assert torchlens.__all__ == TARGET_ALL
 
 
@@ -147,3 +148,14 @@ def test_submodules_have_all() -> None:
             submodule = importlib.import_module(module_name)
         assert hasattr(submodule, "__all__"), module_name
         assert len(submodule.__all__) >= 0
+
+
+def test_attribution_submodule_namespace_is_exposed_without_top_level_pollution() -> None:
+    """``tl.attribution`` should resolve without exporting attribution functions."""
+
+    submodule = importlib.import_module("torchlens.attribution")
+
+    assert torchlens.attribution is submodule
+    assert hasattr(torchlens.attribution, "saliency")
+    assert "attribution" not in torchlens.__all__
+    assert "saliency" not in torchlens.__all__

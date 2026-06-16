@@ -22,6 +22,7 @@ from torch import nn as _nn
 __version__ = "2.22.0"
 
 from . import (
+    attribution,
     bridge,
     compat,
     debug,
@@ -92,6 +93,7 @@ from .intervention import (  # type: ignore[no-redef]
     when,
     zero_ablate,
 )
+from .intervention.sweep import sweep
 from .ir.container import register_container
 from .user_funcs import (
     decide_recording_of_batch,
@@ -883,6 +885,7 @@ __all__ = [
     "scale",
     "splice_module",
     "steer",
+    "sweep",
     "swap_with",
     "zero_ablate",
     "when",
