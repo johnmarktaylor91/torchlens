@@ -47,7 +47,7 @@ jobs:
 
       - name: Install torchlens (with test extras)
         run: |
-          uv pip install --system -e ".[dev]"
+          uv pip install --system -e ".[dev,tabular]"
 
       - name: Run smoke tests
         run: |
@@ -73,7 +73,7 @@ jobs:
       - name: Install torchlens and notebook runner
         run: |
           uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -e ".[dev]"
+          uv pip install --system -e ".[dev,tabular]"
           uv pip install --system papermill nbformat ipykernel
 
       - name: Check Total Audit coverage manifest delta
