@@ -748,6 +748,19 @@ class ModuleCall:
             child = trace.module_calls[child_label]
             yield from child.walk_descendants(include_self=True)
 
+    @property
+    def call_tree(self) -> "ModuleCall":
+        """Return this ModuleCall as the root of its nested call tree.
+
+        Returns
+        -------
+        ModuleCall
+            This call, whose ``call_children`` labels link to child
+            ``ModuleCall`` nodes in the owning Trace.
+        """
+
+        return self
+
     def show_call_tree(
         self,
         max_depth: int | None = None,
@@ -1765,6 +1778,25 @@ class Module:
 
         for call in self.calls.values():
             yield from call.walk_descendants(include_self=False)
+
+    @property
+    def call_tree(self) -> "ModuleCall | None":
+        """Return this Module's single ModuleCall as a nested call-tree root.
+
+        Returns
+        -------
+        ModuleCall | None
+            Sole call for this Module, or ``None`` if the Module was never
+            called.
+
+        Raises
+        ------
+        AttributeError
+            If this Module was invoked multiple times; select a specific call
+            from ``module.calls`` or ``module.ops`` in that case.
+        """
+
+        return cast("ModuleCall | None", self._single_pass_or_error("call_tree"))
 
     def show_call_tree(
         self,

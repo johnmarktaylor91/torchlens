@@ -4916,6 +4916,19 @@ class Trace(CapturedRun):
                 return cast("ModuleCall", call)
         raise RuntimeError("Trace has no root ModuleCall")
 
+    @property
+    def call_tree(self) -> "ModuleCall":
+        """Return the root ModuleCall for the nested dynamic call tree.
+
+        Returns
+        -------
+        ModuleCall
+            Top-level call whose ``call_children`` labels form the nested
+            ModuleCall tree displayed by ``show_call_tree``.
+        """
+
+        return self._root_call()
+
     def walk_calls(self) -> Iterator["ModuleCall"]:
         """Yield every ModuleCall in call-tree depth-first order.
 
@@ -5460,6 +5473,18 @@ class Trace(CapturedRun):
     @property
     def num_buffer_write_ops(self) -> int:
         """Number of buffer Ops that record registered-buffer write events."""
+
+        return len(self.buffer_write_ops)
+
+    @property
+    def num_buffer_source_ops(self) -> int:
+        """Number of buffer source Ops that read registered buffers."""
+
+        return len(self.buffer_read_ops)
+
+    @property
+    def num_buffer_sink_ops(self) -> int:
+        """Number of buffer sink Ops that record registered-buffer writes."""
 
         return len(self.buffer_write_ops)
 

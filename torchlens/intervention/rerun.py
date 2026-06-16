@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import torch
 from torch import nn
@@ -931,7 +931,7 @@ def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) 
     return 1
 
 
-def _rerun_save_scope(log: "Trace") -> tuple[str | None, Any | None, int, str]:
+def _rerun_save_scope(log: "Trace") -> tuple[str | list[int] | None, Any | None, int, str]:
     """Return capture save settings that mirror the original trace scope.
 
     Parameters
@@ -941,7 +941,7 @@ def _rerun_save_scope(log: "Trace") -> tuple[str | None, Any | None, int, str]:
 
     Returns
     -------
-    tuple[str | None, Any | None, int, str]
+    tuple[str | list[int] | None, Any | None, int, str]
         ``layers_to_save``, optional save predicate, predicate lookback, and
         lookback payload policy for the fresh rerun capture.
     """
@@ -958,7 +958,36 @@ def _rerun_save_scope(log: "Trace") -> tuple[str | None, Any | None, int, str]:
             )
     if getattr(log, "num_saved_ops", 0) == 0:
         return None, None, 0, "metadata_only"
-    return "all", None, 0, "metadata_only"
+    layer_nums = getattr(log, "_layer_nums_to_save", "all")
+    if layer_nums == "all":
+        return "all", None, 0, "metadata_only"
+    selected_indices = {int(raw_index) for raw_index in layer_nums}
+    return "all", _make_raw_index_save_predicate(selected_indices), 0, "metadata_only"
+
+
+def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:
+    """Build a predicate that mirrors a static raw-index save subset.
+
+    Parameters
+    ----------
+    selected_indices:
+        Raw operation indices selected by the original capture.
+
+    Returns
+    -------
+    Callable[[Any], bool]
+        Predicate returning ``True`` for matching capture contexts.
+    """
+
+    def keep_selected_raw_index(ctx: Any) -> bool:
+        """Return whether a predicate context matches the selected raw indices."""
+
+        raw_index = getattr(ctx, "raw_index", None)
+        if raw_index is None:
+            raw_index = getattr(ctx, "event_index", None)
+        return raw_index in selected_indices
+
+    return keep_selected_raw_index
 
 
 def _build_ledger_record(

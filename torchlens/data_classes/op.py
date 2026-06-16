@@ -2029,6 +2029,52 @@ class Op:
         """Ignore cleanup deletion for derived input Op access."""
 
     @property
+    def buffer_source_ops(self) -> "OpAccessor":
+        """Accessor over buffer source Ops that feed this Op."""
+
+        from .layer import OpAccessor
+
+        trace = self._source_trace_or_error()
+        source_ops = {}
+        for parent_index, parent_label in enumerate(self.parents, start=1):
+            try:
+                parent = trace.ops[parent_label]
+            except KeyError:
+                if parent_label not in trace.layer_dict_all_keys:
+                    continue
+                parent = trace.layer_dict_all_keys[parent_label]
+            if parent.is_buffer and parent.buffer_write_kind is None:
+                source_ops[parent_index] = parent
+        return OpAccessor(source_ops)
+
+    @buffer_source_ops.deleter
+    def buffer_source_ops(self) -> None:
+        """Ignore cleanup deletion for derived buffer source Op access."""
+
+    @property
+    def buffer_sink_ops(self) -> "OpAccessor":
+        """Accessor over buffer sink Ops directly consuming this Op."""
+
+        from .layer import OpAccessor
+
+        trace = self._source_trace_or_error()
+        sink_ops = {}
+        for child_index, child_label in enumerate(self.children, start=1):
+            try:
+                child = trace.ops[child_label]
+            except KeyError:
+                if child_label not in trace.layer_dict_all_keys:
+                    continue
+                child = trace.layer_dict_all_keys[child_label]
+            if child.is_buffer and child.buffer_write_kind is not None:
+                sink_ops[child_index] = child
+        return OpAccessor(sink_ops)
+
+    @buffer_sink_ops.deleter
+    def buffer_sink_ops(self) -> None:
+        """Ignore cleanup deletion for derived buffer sink Op access."""
+
+    @property
     def input_activations(self) -> tuple[torch.Tensor | None, ...]:
         """Saved parent activations consumed by this Op, as references.
 

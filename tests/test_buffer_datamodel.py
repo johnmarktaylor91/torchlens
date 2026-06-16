@@ -291,10 +291,38 @@ def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
     assert trace.buffer_write_ops == expected_write_ops
     assert trace.num_buffer_read_ops == len(trace.buffer_read_ops)
     assert trace.num_buffer_write_ops == len(trace.buffer_write_ops)
+    assert trace.num_buffer_source_ops == len(trace.buffer_read_ops)
+    assert trace.num_buffer_sink_ops == len(trace.buffer_write_ops)
     assert set(trace.buffer_read_ops).isdisjoint(trace.buffer_write_ops)
     assert set(trace.buffer_read_ops) | set(trace.buffer_write_ops) == set(all_buffer_ops)
     assert {trace[op_label].layer_label for op_label in all_buffer_ops} == set(trace.buffer_layers)
     assert trace.num_buffer_layers == len(trace.buffer_layers) == len(all_buffer_ops)
+
+
+def _assert_op_level_buffer_accessors(trace: tl.Trace) -> None:
+    """Assert Op-side buffer_source_ops/buffer_sink_ops resolve (LIVE traces only).
+
+    Op-level resolved accessors need a live source Trace, so this is skipped for
+    traces loaded from disk (their Ops are intentionally detached).
+    """
+
+    for op in trace.compute_ops:
+        expected_sources = [
+            trace[parent_label].label
+            for parent_label in op.parents
+            if trace[parent_label].is_buffer and trace[parent_label].buffer_write_kind is None
+        ]
+        expected_sinks = [
+            trace[child_label].label
+            for child_label in op.children
+            if trace[child_label].is_buffer and trace[child_label].buffer_write_kind is not None
+        ]
+        # OpAccessor iterates call-index keys (like op.input_ops); .get(key) resolves the Op
+        # (int __getitem__ is 0-based list position, not the sparse parent-index key).
+        source_ops = op.buffer_source_ops
+        sink_ops = op.buffer_sink_ops
+        assert [source_ops.get(k).label for k in source_ops] == expected_sources
+        assert [sink_ops.get(k).label for k in sink_ops] == expected_sinks
 
 
 def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
@@ -303,6 +331,7 @@ def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
     trace = tl.trace(DualRoleInplace(), torch.ones(2), save_arg_values=True)
 
     _assert_buffer_op_accessors_partition_buffer_ops(trace)
+    _assert_op_level_buffer_accessors(trace)
     assert trace.buffer_read_ops
     assert trace.buffer_write_ops
 
@@ -326,6 +355,8 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
     assert loaded.buffer_write_ops == trace.buffer_write_ops
     assert loaded.num_buffer_read_ops == trace.num_buffer_read_ops
     assert loaded.num_buffer_write_ops == trace.num_buffer_write_ops
+    assert loaded.num_buffer_source_ops == trace.num_buffer_source_ops
+    assert loaded.num_buffer_sink_ops == trace.num_buffer_sink_ops
 
 
 def test_reassignment_double_count_is_exact() -> None:
