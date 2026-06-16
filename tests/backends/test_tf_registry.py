@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import types
 from typing import Any
@@ -11,6 +10,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from conftest import tensorflow_backend_modules
 from torchlens.backends import (
     BackendMismatchError,
     BackendUnsupportedError,
@@ -21,7 +21,15 @@ from torchlens.backends.default_specs import _tf_can_handle
 from torchlens.backends.tf import capabilities as tf_capabilities
 from torchlens.backends.tf import TFBackend
 
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
+
+pytestmark = [
+    pytest.mark.tf_backend,
+    pytest.mark.skipif(
+        _TF_BACKEND_SKIP_REASON is not None,
+        reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
+    ),
+]
 
 
 def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
@@ -70,7 +78,6 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
 def test_tf_detector_and_resolution_accept_tf_module_and_tensor_leaf() -> None:
     """TensorFlow detector accepts tf.Module and callable TensorFlow tensor inputs."""
 
-    tf = pytest.importorskip("tensorflow")
     spec = get_backend_spec("tf")
 
     class _TFModule(tf.Module):
@@ -93,8 +100,6 @@ def test_tf_detector_and_resolution_accept_tf_module_and_tensor_leaf() -> None:
 def test_tf_detector_accepts_keras_on_tensorflow() -> None:
     """Keras 3 models route to TensorFlow when Keras is on its TensorFlow backend."""
 
-    tf = pytest.importorskip("tensorflow")
-    keras = pytest.importorskip("keras")
     if keras.backend.backend() != "tensorflow":
         pytest.skip("Keras is not configured for the TensorFlow backend")
 
@@ -107,8 +112,6 @@ def test_tf_detector_accepts_keras_on_tensorflow() -> None:
 @pytest.mark.tf_backend
 def test_tf_detector_rejects_foreign_leaves_and_torch_modules() -> None:
     """TensorFlow detector rejects torch modules and any foreign tensor input leaves."""
-
-    tf = pytest.importorskip("tensorflow")
 
     class _TFModule(tf.Module):
         """Small TensorFlow module for foreign-leaf tests."""
@@ -163,8 +166,6 @@ def test_tf_detector_reports_non_tf_keras_backend_mismatch(
 def test_tf_capture_trace_routes_to_eager_capture() -> None:
     """Public trace dispatch reaches TFBackend and returns a TensorFlow trace."""
 
-    tf = pytest.importorskip("tensorflow")
-
     class _TFModule(tf.Module):
         """Small TensorFlow module for dispatch tests."""
 
@@ -182,8 +183,6 @@ def test_tf_capture_trace_routes_to_eager_capture() -> None:
 @pytest.mark.tf_backend
 def test_tf_mode_selection_normalizes_eager_model_training_and_mask_kwargs() -> None:
     """TFBackend normalizes concrete inputs and selects eager mode for direct calls."""
-
-    tf = pytest.importorskip("tensorflow")
 
     class _TFModule(tf.Module):
         """Small TensorFlow module for mode-selection tests."""
@@ -218,9 +217,6 @@ def test_tf_mode_selection_normalizes_eager_model_training_and_mask_kwargs() -> 
 def test_tf_mode_selection_detects_tf_function_and_compiled_call() -> None:
     """TFBackend routes tf.function entries and compiled Model.call to graph-only mode."""
 
-    tf = pytest.importorskip("tensorflow")
-    keras = pytest.importorskip("keras")
-
     fn_plan = TFBackend().normalize_call(model=tf.function(lambda x: x + 1), input_args=tf.ones(1))
     assert fn_plan.mode == "graph_only"
     assert "tf.function" in fn_plan.reason
@@ -244,9 +240,6 @@ def test_tf_mode_selection_detects_tf_function_and_compiled_call() -> None:
 @pytest.mark.tf_backend
 def test_tf_mode_selection_detects_predict_and_saved_model_signatures() -> None:
     """TFBackend routes predict and SavedModel-like entries to graph-only mode."""
-
-    tf = pytest.importorskip("tensorflow")
-    keras = pytest.importorskip("keras")
 
     model = keras.Sequential([keras.layers.Dense(1)])
     model(tf.ones((1, 2)))

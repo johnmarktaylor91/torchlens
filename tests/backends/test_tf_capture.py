@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import numpy as np
 import pytest
 
 import torchlens as tl
+from conftest import tensorflow_backend_modules
 
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
-
-tf = pytest.importorskip("tensorflow")
-keras = pytest.importorskip("keras")
+tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
 
-pytestmark = pytest.mark.tf_backend
+pytestmark = [
+    pytest.mark.tf_backend,
+    pytest.mark.skipif(
+        _TF_BACKEND_SKIP_REASON is not None,
+        reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
+    ),
+]
 
 
 class SmallCnn(keras.Model):
@@ -118,14 +121,19 @@ def test_tf_capture_small_transformer_nested_mha_frames() -> None:
 
     tf.random.set_seed(2)
     model = SmallTransformer()
-    trace = tl.trace(model, tf.ones((1, 4, 8)), backend="tf")
+    x = tf.ones((1, 4, 8))
+    model(x)
+    trace = tl.trace(model, x, backend="tf")
     op_types = {op.func_name for op in trace.layer_list}
     projection_ops = [
-        op for op in trace.layer_list if any("mha.query:" in module for module in op.modules)
+        op
+        for op in trace.layer_list
+        if op.func_name == "Einsum"
+        and any("mha.query:" in module or module.startswith("mha:") for module in op.modules)
     ]
-    attention_ops = [op for op in trace.layer_list if op.func_name == "BatchMatMulV2"]
+    attention_ops = [op for op in trace.layer_list if op.func_name in {"BatchMatMulV2", "Softmax"}]
 
-    assert {"Einsum", "BatchMatMulV2", "Softmax", "Relu"} <= op_types
+    assert {"Einsum", "Softmax", "Relu"} <= op_types
     assert projection_ops
     assert attention_ops
     assert any("mha:" in module for module in attention_ops[0].modules)

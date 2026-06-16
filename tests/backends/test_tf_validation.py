@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import replace
 from typing import Any
 
 import pytest
 
 import torchlens as tl
+from conftest import tensorflow_backend_modules
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tf.validation import replay_allowlist
 from torchlens.validation.status import ValidationReplayStatus
 
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
-
-tf = pytest.importorskip("tensorflow")
-keras = pytest.importorskip("keras")
+tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
 
-pytestmark = pytest.mark.tf_backend
+pytestmark = [
+    pytest.mark.tf_backend,
+    pytest.mark.skipif(
+        _TF_BACKEND_SKIP_REASON is not None,
+        reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
+    ),
+]
 
 
 class SmallCnn(keras.Model):

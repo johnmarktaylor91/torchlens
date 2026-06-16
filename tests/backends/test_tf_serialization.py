@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
 
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+from conftest import tensorflow_backend_modules
 
 pytest.importorskip("safetensors")
-tf = pytest.importorskip("tensorflow")
+tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
+del keras
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends import (  # noqa: E402
@@ -23,7 +23,13 @@ from torchlens.backends import (  # noqa: E402
 from torchlens.validation import validate_tlspec  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
 
-pytestmark = pytest.mark.tf_backend
+pytestmark = [
+    pytest.mark.tf_backend,
+    pytest.mark.skipif(
+        _TF_BACKEND_SKIP_REASON is not None,
+        reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
+    ),
+]
 
 
 def _identity_trace(value: Any) -> tl.Trace:
