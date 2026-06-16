@@ -1511,60 +1511,69 @@ def patch_detached_references() -> None:
     if not mapping:
         return
 
-    for mod_key in new_keys:
-        _state._crawled_module_keys.add(mod_key)
-        if (
-            mod_key.startswith(("torch.", "numpy.", "pytest", "pluggy", "setuptools"))
-            or ".dist-info" in mod_key
-        ):
-            continue
-        mod = sys.modules.get(mod_key)
-        if mod is None:
-            continue
-        # Skip torchlens internals — we don't want to patch our own references.
-        if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
-            continue
-
-        try:
-            mod_dict = vars(mod)
-        except TypeError:
-            continue
-
-        for attr_name, attr_val in list(mod_dict.items()):
-            # Level 1: module-level references (e.g. ``from torch import cos``)
-            if id(attr_val) in mapping:
-                try:
-                    mod_dict[attr_name] = mapping[id(attr_val)]
-                except (TypeError, KeyError):
-                    pass
+    crawled_class_ids: set[int] = set()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for mod_key in new_keys:
+            _state._crawled_module_keys.add(mod_key)
+            if (
+                mod_key.startswith(("torch.", "numpy.", "pytest", "pluggy", "setuptools"))
+                or ".dist-info" in mod_key
+            ):
+                continue
+            mod = sys.modules.get(mod_key)
+            if mod is None:
+                continue
+            # Skip torchlens internals — we don't want to patch our own references.
+            if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
                 continue
 
-            # Level 2: class-level attributes that hold torch function references
             try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    is_type = isinstance(attr_val, type)
-            except Exception:
-                is_type = False
-            if is_type:
-                try:
-                    cls_dict = vars(attr_val)
-                except TypeError:
-                    continue
-                for cls_attr_name, cls_attr_val in list(cls_dict.items()):
-                    if id(cls_attr_val) in mapping:
-                        try:
-                            setattr(attr_val, cls_attr_name, mapping[id(cls_attr_val)])
-                        except (AttributeError, TypeError):
-                            pass
+                mod_dict = vars(mod)
+            except TypeError:
+                continue
 
-            # Level 3: function default arguments (e.g. ``def f(act=torch.relu)``)
-            try:
-                is_callable = callable(attr_val) and not is_type
-            except Exception:
-                is_callable = False
-            if is_callable:
-                _patch_function_defaults(attr_val, mapping)
+            for attr_name, attr_val in list(mod_dict.items()):
+                # Level 1: module-level references (e.g. ``from torch import cos``)
+                if id(attr_val) in mapping:
+                    try:
+                        mod_dict[attr_name] = mapping[id(attr_val)]
+                    except (TypeError, KeyError):
+                        pass
+                    continue
+
+                # Level 2: class-level attributes that hold torch function references
+                attr_type = type(attr_val)
+                if issubclass(attr_type, type):
+                    try:
+                        is_type = isinstance(attr_val, type)
+                    except Exception:
+                        is_type = False
+                else:
+                    is_type = False
+                if is_type:
+                    cls_id = id(attr_val)
+                    if cls_id in crawled_class_ids:
+                        continue
+                    crawled_class_ids.add(cls_id)
+                    try:
+                        cls_dict = vars(attr_val)
+                    except TypeError:
+                        continue
+                    for cls_attr_name, cls_attr_val in list(cls_dict.items()):
+                        if id(cls_attr_val) in mapping:
+                            try:
+                                setattr(attr_val, cls_attr_name, mapping[id(cls_attr_val)])
+                            except (AttributeError, TypeError):
+                                pass
+
+                # Level 3: function default arguments (e.g. ``def f(act=torch.relu)``)
+                try:
+                    is_callable = callable(attr_val) and not is_type
+                except Exception:
+                    is_callable = False
+                if is_callable:
+                    _patch_function_defaults(attr_val, mapping)
 
 
 def clear_patch_detached_references_cache() -> None:
