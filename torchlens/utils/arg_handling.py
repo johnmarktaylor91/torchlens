@@ -13,7 +13,30 @@ from typing import Any, Optional, cast
 import torch
 from torch import nn
 
-from .tensor_utils import _clone_tensor_payload
+from .tensor_utils import _clone_tensor_payload, _copy_tensor_payload
+
+
+def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
+    """Clone a forward-input tensor without preserving ``nn.Parameter`` type.
+
+    Parameters
+    ----------
+    arg
+        Forward input tensor or parameter to clone.
+
+    Returns
+    -------
+    torch.Tensor
+        Plain tensor clone for model input replay. Parameter inputs intentionally
+        become tensors so input provenance wins over Python wrapper type.
+    """
+
+    if isinstance(arg, torch.nn.Parameter):
+        from .._state import pause_logging
+
+        with pause_logging():
+            return _copy_tensor_payload(arg, detach_tensor=False, save_mode="copy")
+    return cast(torch.Tensor, _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy"))
 
 
 def copy_arg_tree(arg: Any) -> Any:
@@ -48,7 +71,7 @@ def copy_arg_tree(arg: Any) -> Any:
         by reference.
     """
     if isinstance(arg, torch.Tensor):
-        return _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy")
+        return _clone_input_tensor_payload(arg)
     elif isinstance(arg, defaultdict):
         # defaultdict(factory, {k: v, ...}) — preserve the default_factory (#127).
         # A plain dict() constructor would lose default_factory.

@@ -10,7 +10,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation as tl_validation
-from torchlens.backends.torch._tl import TorchLensTLCollisionError
+from torchlens.intervention.types import ParentRef
 
 
 class _TinyStimulusModel(nn.Module):
@@ -151,6 +151,19 @@ def _first_non_boundary_op(trace: tl.Trace) -> Any:
     return next(op for op in trace.layer_list if not op.is_input and not op.is_output)
 
 
+def _assert_input_parent_edge(trace: tl.Trace) -> None:
+    """Assert that the first input feeds at least one captured child op.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace.
+    """
+
+    input_label = trace.input_layers[0]
+    assert any(input_label in op.parents for op in trace.layer_list if not op.is_input)
+
+
 def test_plain_requires_grad_leaf_input_links_and_backprops_to_original() -> None:
     """Case A works and propagates gradients to the caller's tensor."""
 
@@ -161,39 +174,33 @@ def test_plain_requires_grad_leaf_input_links_and_backprops_to_original() -> Non
     trace.log_backward(trace[trace.output_layers[0]].out)
 
     input_label = trace.input_layers[0]
-    first_op = _first_non_boundary_op(trace)
-
-    assert input_label in first_op.parents
+    _assert_input_parent_edge(trace)
     assert trace[input_label].grad is not None
     assert x.grad is not None
     assert tl_validation.validate_forward_pass(model, x)
 
 
-def test_same_device_parameter_input_currently_crashes_trace() -> None:
-    """Case B currently crashes on CPU before a trace can be built."""
+def test_same_device_parameter_input_traces_as_input_parent() -> None:
+    """Case B traces on CPU with the parameter stimulus represented as an input."""
 
     model = _TinyStimulusModel()
     z = _parameter_stimulus()
 
-    with pytest.raises(TorchLensTLCollisionError, match="Expected ParamMeta"):
-        tl.trace(model, z)
+    trace = tl.trace(model, z)
+
+    _assert_input_parent_edge(trace)
+    assert len(trace.params) == 1
 
 
-def test_same_device_parameter_input_currently_crashes_validation() -> None:
-    """Case B currently crashes validation with the same metadata collision."""
+def test_same_device_parameter_input_passes_validation() -> None:
+    """Case B passes forward validation without any metadata-collision exemption."""
 
     model = _TinyStimulusModel()
     z = _parameter_stimulus()
 
-    with pytest.raises(TorchLensTLCollisionError, match="Expected ParamMeta"):
-        tl_validation.validate_forward_pass(model, z)
+    assert tl_validation.validate_forward_pass(model, z)
 
 
-@pytest.mark.xfail(
-    raises=TorchLensTLCollisionError,
-    strict=True,
-    reason="Parameter input clone keeps nn.Parameter type and collides TensorMeta with ParamMeta.",
-)
 def test_parameter_input_links_and_backprops_to_original_after_fix() -> None:
     """Case B should become an input parent and backpropagate to the caller's parameter."""
 
@@ -204,80 +211,69 @@ def test_parameter_input_links_and_backprops_to_original_after_fix() -> None:
     trace.log_backward(trace[trace.output_layers[0]].out)
 
     input_label = trace.input_layers[0]
-    first_op = _first_non_boundary_op(trace)
-
-    assert input_label in first_op.parents
+    _assert_input_parent_edge(trace)
     assert trace[input_label].grad is not None
     assert z.grad is not None
     assert tl_validation.validate_forward_pass(model, z)
 
 
-@pytest.mark.xfail(
-    raises=TorchLensTLCollisionError,
-    strict=True,
-    reason="Registered parameter fed as input currently hits the same TensorMeta/ParamMeta crash.",
-)
-def test_registered_model_parameter_fed_as_input_currently_broken() -> None:
-    """Case C currently crashes before dual-role metadata can be inspected."""
+def test_parameter_input_replay_template_uses_parent_ref() -> None:
+    """Replay templates classify a parameter stimulus input as a parent reference."""
+
+    model = _TinyStimulusModel()
+    z = _parameter_stimulus()
+
+    trace = tl.trace(model, z, intervention_ready=True)
+    first_op = _first_non_boundary_op(trace)
+
+    assert first_op.args_template is not None
+    assert isinstance(first_op.args_template.args[0], ParentRef)
+    assert first_op.args_template.args[0].parent_label == trace.input_layers[0]
+
+
+def test_registered_model_parameter_fed_as_input_traces() -> None:
+    """Case C traces when a registered parameter is also passed as input."""
 
     model = _TinyStimulusModel()
     model.stimulus = _parameter_stimulus()
 
     trace = tl.trace(model, model.stimulus)
 
-    assert trace.input_layers
+    _assert_input_parent_edge(trace)
 
 
-@pytest.mark.xfail(
-    raises=TorchLensTLCollisionError,
-    strict=True,
-    reason="Fanout parameter inputs crash at first consumption before parent edges are recorded.",
-)
-def test_parameter_input_fanout_currently_broken() -> None:
-    """A parameter input consumed by two ops currently crashes on CPU."""
+def test_parameter_input_fanout_links_to_each_consuming_op() -> None:
+    """A parameter input consumed by two ops links to both child branches."""
 
     trace = tl.trace(_FanoutStimulusModel(), _parameter_stimulus())
 
-    assert trace.input_layers
+    input_label = trace.input_layers[0]
+    children = [op for op in trace.layer_list if input_label in op.parents]
+    assert {child.func_name for child in children} >= {"relu", "sigmoid"}
 
 
-@pytest.mark.xfail(
-    raises=TorchLensTLCollisionError,
-    strict=True,
-    reason="Nested parameter inputs are cloned as Parameters and crash at consumption.",
-)
-def test_nested_parameter_input_currently_broken() -> None:
-    """A shallow container holding a parameter input currently crashes on CPU."""
+def test_nested_parameter_input_links_to_child_op() -> None:
+    """A shallow container holding a parameter input traces as a normal input."""
 
     trace = tl.trace(_NestedStimulusModel(), [_parameter_stimulus()])
 
-    assert trace.input_layers
+    _assert_input_parent_edge(trace)
 
 
-@pytest.mark.xfail(
-    raises=TorchLensTLCollisionError,
-    strict=True,
-    reason="Inference-only capture still labels a Parameter input before param classification.",
-)
-def test_inference_only_parameter_input_currently_broken() -> None:
-    """inference_only=True does not avoid the current parameter-input crash."""
+def test_inference_only_parameter_input_traces() -> None:
+    """inference_only=True traces a parameter stimulus as a normal input."""
 
     trace = tl.trace(_TinyStimulusModel(), _parameter_stimulus(), inference_only=True)
 
-    assert trace.input_layers
+    _assert_input_parent_edge(trace)
 
 
-@pytest.mark.xfail(
-    raises=TorchLensTLCollisionError,
-    strict=True,
-    reason="backward_ready capture still clones the Parameter input as a detached Parameter leaf.",
-)
-def test_backward_ready_parameter_input_currently_broken() -> None:
-    """backward_ready=True does not avoid the current parameter-input crash."""
+def test_backward_ready_parameter_input_traces() -> None:
+    """backward_ready=True traces a parameter stimulus as a normal input."""
 
     trace = tl.trace(_TinyStimulusModel(), _parameter_stimulus(), backward_ready=True)
 
-    assert trace.input_layers
+    _assert_input_parent_edge(trace)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="Cross-device check requires CUDA.")
