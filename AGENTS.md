@@ -52,6 +52,10 @@ trace_from_recording = recording.to_trace()
 ```
 
 ## Conventions
+- **This repo is PUBLIC; internal notes stay private.** Never commit `.research/` or
+  `.project-context/` (except `architecture.md` / `state_of_torchlens.md`) — they are
+  gitignored and a `no-internal-notes` pre-commit hook hard-fails on them. Never `git add -f`
+  to bypass. See CLAUDE.md "Internal notes stay PRIVATE (LOCKED)".
 - Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
   non-release changes; never use major-bump markers casually.
 - TorchLens host-object metadata lives under `obj._tl`; sub-fields are snake_case and

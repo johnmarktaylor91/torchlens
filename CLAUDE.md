@@ -134,6 +134,23 @@ The glossary is the **canonical** API spec (vault `brain/projects/torchlens/repo
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
 - After a rename/conformance sprint: re-file the updated glossary to the vault (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
 
+## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
+
+`johnmarktaylor91/torchlens` is a **public** GitHub repo. Internal planning, riffing, sprint
+specs, adversarial reviews, STATE/SUMMARY files, and the working task tracker are **JMT's eyes
+only** and must NEVER be committed.
+
+- **Private (gitignored, never commit):** all of `.research/`, and `.project-context/` EXCEPT the
+  two whitelisted curated docs. The agent task tracker `.project-context/todos.md` and the
+  agent-facing `.project-context/torchlens_glossary.md` (canonical lives in the vault) are private.
+- **Public (the only tracked `.project-context/` files):** `architecture.md`,
+  `state_of_torchlens.md`. The user-facing glossary, when it ships, is `docs/reference/glossary.md`
+  — a separate, curated artifact, NOT the agent copy.
+- **Enforcement:** `.gitignore` excludes them and a `no-internal-notes` pre-commit hook
+  (`.pre-commit-config.yaml`) HARD-FAILS any commit that stages a private path. Never `git add -f`
+  to bypass it; never `git rm` the local files (they are your working notes). Long-form
+  human-readable reports go to the Obsidian vault, not the repo.
+
 ## Testing Tiers
 
 ```bash

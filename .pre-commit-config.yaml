@@ -35,3 +35,11 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         always_run: true
+      - id: no-internal-notes
+        name: Internal planning notes must stay private
+        entry: >-
+          BLOCKED: internal planning/notes must NOT be committed to this PUBLIC repo.
+          .research/ and .project-context/ (except architecture.md and state_of_torchlens.md)
+          are gitignored on purpose. Do not `git add -f` them. To untrack, use `git rm --cached`.
+        language: fail
+        files: '^\.research/|^\.project-context/(?!(architecture|state_of_torchlens)\.md$)'
