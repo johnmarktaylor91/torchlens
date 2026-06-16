@@ -66,7 +66,7 @@ from .._io import (
 from .._errors import MutatedReferenceError, TorchLensPostfuncError
 from .._trace_state import TraceState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
-from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+from ..constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER, RAW_LABEL_SUFFIX
 from ..intervention.types import EdgeUseRecord, LAYER_PASS_LOG_FIELD_FORK_POLICY
 from ..ir.refs import DeviceRef, DtypeRef
 from ..intervention.errors import DirectActivationWriteWarning
@@ -154,6 +154,9 @@ _OP_PROPERTY_BACKED_FIELD_NAMES = frozenset(
         "input_memory",
         "num_inputs",
         "is_in_conditional_body",
+        "is_internally_initialized",
+        "raw_label",
+        ARG_EXPRESSIONS_FIELD,
     }
 )
 _OP_DYNAMIC_SLOT_NAMES = (
@@ -166,6 +169,7 @@ _OP_DYNAMIC_SLOT_NAMES = (
     "_pending_transformed_grad_blob_id",
     "_grad_records",
     "_facets_cache",
+    "_arg_expressions_cache",
     "_is_in_conditional_body",
     "_construction_done",
 )
@@ -851,6 +855,7 @@ class Op:
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_label_raw": FieldPolicy.KEEP,
         "_layer_label_raw": FieldPolicy.KEEP,
+        "raw_label": FieldPolicy.DROP,
         "step_index": FieldPolicy.KEEP,
         "raw_index": FieldPolicy.KEEP,
         "ordinal_index": FieldPolicy.KEEP,
@@ -921,6 +926,7 @@ class Op:
         "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "var_names": FieldPolicy.KEEP,
+        ARG_EXPRESSIONS_FIELD: FieldPolicy.DROP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -994,6 +1000,7 @@ class Op:
         "buffer_replay_validated": FieldPolicy.KEEP,
         "buffer_source_func_name": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
+        "is_internally_initialized": FieldPolicy.DROP,
         "has_internal_source_ancestor": FieldPolicy.KEEP,
         "internal_source_parents": FieldPolicy.KEEP,
         "internal_source_ancestors": FieldPolicy.KEEP,
@@ -1032,6 +1039,7 @@ class Op:
         "out_ref": FieldPolicy.DROP,
         "grad_ref": FieldPolicy.DROP,
         "_grad_records": FieldPolicy.BLOB_RECURSIVE,
+        "_arg_expressions_cache": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
         "_pending_grad_blob_id": FieldPolicy.DROP,
@@ -1205,6 +1213,9 @@ class Op:
             "input_dtypes",
             "input_memory",
             "num_inputs",
+            "raw_label",
+            ARG_EXPRESSIONS_FIELD,
+            "is_internally_initialized",
         ):
             if derived_field not in fields_dict:
                 fields_dict[derived_field] = None
@@ -2585,6 +2596,93 @@ class Op:
         except AttributeError:
             pass
 
+    @property
+    def raw_label(self) -> str:
+        """Return the public raw ordinal label without the raw-label suffix.
+
+        Returns
+        -------
+        str
+            Realtime ordinal identity for this op before equivalent-op grouping.
+        """
+
+        label = self._label_raw
+        if isinstance(label, str) and label.endswith(RAW_LABEL_SUFFIX):
+            return label[: -len(RAW_LABEL_SUFFIX)]
+        return str(label)
+
+    @raw_label.setter
+    def raw_label(self, value: Any) -> None:
+        """Accept compatibility writes for the computed raw label."""
+
+        if value not in {None, self.raw_label}:
+            raise ValueError(
+                f"raw_label is derived from _label_raw and cannot be set to {value!r}."
+            )
+
+    @property
+    def arg_expressions(self) -> list[str]:
+        """Return source expressions used for this op's call arguments.
+
+        Returns
+        -------
+        list[str]
+            Argument expressions resolved lazily from the captured call-site AST.
+            Ambiguous or unavailable source returns an empty list.
+        """
+
+        cached = self._slot("_arg_expressions_cache")
+        if cached is not None:
+            return cast(list[str], cached)
+        from ..postprocess.ast_branches import resolve_arg_expressions
+
+        resolved = resolve_arg_expressions(self.code_context, self.func_name)
+        object.__setattr__(self, "_arg_expressions_cache", resolved)
+        return resolved
+
+    @arg_expressions.setter
+    def arg_expressions(self, value: Any) -> None:
+        """Set or clear the lazy argument-expression cache."""
+
+        if value is None:
+            try:
+                object.__delattr__(self, "_arg_expressions_cache")
+            except AttributeError:
+                pass
+            return
+        object.__setattr__(self, "_arg_expressions_cache", list(value))
+
+    @arg_expressions.deleter
+    def arg_expressions(self) -> None:
+        """Drop the cached argument-expression parse result."""
+
+        try:
+            object.__delattr__(self, "_arg_expressions_cache")
+        except AttributeError:
+            pass
+
+    @property
+    def is_internally_initialized(self) -> bool:
+        """Return whether this op is an internally initialized source op.
+
+        Returns
+        -------
+        bool
+            Alias of ``is_internal_source`` for tabular compatibility.
+        """
+
+        return bool(self.is_internal_source)
+
+    @is_internally_initialized.setter
+    def is_internally_initialized(self, value: Any) -> None:
+        """Accept compatibility writes for the computed internal-source alias."""
+
+        if value is not None and bool(value) != bool(self.is_internal_source):
+            raise ValueError(
+                "is_internally_initialized is derived from is_internal_source and "
+                f"cannot be set to {value!r}."
+            )
+
     # ********************************************
     # ************* Logging Functions ************
     # ********************************************
@@ -3066,6 +3164,15 @@ class Op:
             ) from e
 
         row = {field_name: getattr(self, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER}
+        row["is_internally_initialized"] = bool(row["is_internally_initialized"])
+        for field_name in (
+            "min_distance_from_input",
+            "max_distance_from_input",
+            "min_distance_to_output",
+            "max_distance_to_output",
+        ):
+            if row[field_name] is not None:
+                row[field_name] = float(row[field_name])
         return pd.DataFrame([row], columns=LAYER_PASS_LOG_FIELD_ORDER)
 
     # ********************************************

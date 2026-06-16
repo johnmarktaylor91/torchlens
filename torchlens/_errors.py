@@ -13,3 +13,7 @@ class MutatedReferenceError(CaptureError, RuntimeError):
 
 class PostTraceParamUnavailable(CaptureError, RuntimeError):
     """Raised when a released Param cannot re-fetch its live model parameter."""
+
+
+class AmbiguousOpLookupError(ValueError):
+    """Raised when a bare Op lookup matches multiple pass-qualified Ops."""

@@ -30,6 +30,10 @@ from torch.overrides import get_ignored_functions, get_testing_overrides
 # Each list defines the complete, ordered set of fields for its data class.
 # The order here controls display order in __repr__ and similar outputs.
 
+RAW_LABEL_SUFFIX = "_raw"
+RAW_LABEL_FIELD = "raw_label"
+ARG_EXPRESSIONS_FIELD = "arg_expressions"
+
 MODEL_LOG_FIELD_ORDER = [
     # General info
     "trace_label",
@@ -238,6 +242,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     # General info
     "_label_raw",
     "_layer_label_raw",
+    RAW_LABEL_FIELD,
     "step_index",
     "raw_index",
     "ordinal_index",
@@ -311,6 +316,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "func_qualname",
     "code_context",
     "var_names",
+    ARG_EXPRESSIONS_FIELD,
     "func_duration",
     "flops_forward",
     "flops_backward",
@@ -388,6 +394,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "buffer_replay_validated",
     "buffer_source_func_name",
     "is_internal_source",
+    "is_internally_initialized",
     "has_internal_source_ancestor",
     "internal_source_parents",
     "internal_source_ancestors",

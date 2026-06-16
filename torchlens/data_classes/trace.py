@@ -112,6 +112,7 @@ from ..intervention.types import (
 from ..types import ActivationPostfunc, GradientPostfunc
 from ..utils.tensor_utils import SaveMode
 from ..quantities import Bytes, Duration, Flops, Macs, as_duration
+from .._errors import AmbiguousOpLookupError
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -1032,15 +1033,45 @@ class TraceOpAccessor(Accessor[Op]):
             Mapping from parent Layer label to number of Op passes.
         """
 
-        op_lookup: OrderedDict[str, Op] = OrderedDict((op.label, op) for op in ops)
+        op_lookup: OrderedDict[str, Op] = OrderedDict()
+        self._raw_index_lookup: dict[int, Op] = {}
+        for op in ops:
+            op_lookup[op.label] = op
+            self._raw_index_lookup[op.raw_index] = op
         super().__init__(op_lookup, item_list=list(ops))
         self._layer_num_calls = dict(layer_num_calls)
+
+    def by_raw_index(self, raw_index: int) -> Op:
+        """Return an Op by its realtime raw capture index.
+
+        Parameters
+        ----------
+        raw_index:
+            One-based raw capture index stored on the Op.
+
+        Returns
+        -------
+        Op
+            Matching operation record.
+        """
+
+        try:
+            return self._raw_index_lookup[raw_index]
+        except KeyError as exc:
+            raise KeyError(f"Op raw_index {raw_index} not found.") from exc
+
+    def _resolve_pass_qualified(self, key: str) -> Op | None:
+        """Resolve pass-qualified Op labels without returning parent Layers."""
+
+        if key in self._dict:
+            return self._dict[key]
+        return None
 
     def _resolve_substring(self, key: str) -> Op | None:
         """Resolve exact long/short Op labels or unique bare parent labels."""
 
         for op in self._list:
-            if key in {op.label, op.label_short}:
+            if key in {op.label, op.label_short, op._label_raw, op.raw_label}:
                 return op
             if self._layer_num_calls.get(op.layer_label, 0) == 1 and key in {
                 op.layer_label,
@@ -1052,9 +1083,12 @@ class TraceOpAccessor(Accessor[Op]):
             return parent_matches[0]
         if len(parent_matches) > 1:
             parent_label = parent_matches[0].layer_label
-            raise ValueError(
+            qualified = ", ".join(op.label for op in parent_matches[:10])
+            suffix = "..." if len(parent_matches) > 10 else ""
+            raise AmbiguousOpLookupError(
                 f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
-                "integer position or a pass-qualified Op label."
+                "integer position or a pass-qualified Op label such as "
+                f"{qualified}{suffix}."
             )
         return None
 
@@ -4752,7 +4786,7 @@ class Trace(CapturedRun):
         return self.param_logs
 
     @property
-    def ops(self) -> Accessor[Op]:
+    def ops(self) -> TraceOpAccessor:
         """Access per-invocation Op records by label or index."""
 
         cache_key = len(self.layer_list)

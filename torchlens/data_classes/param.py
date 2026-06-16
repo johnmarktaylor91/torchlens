@@ -684,6 +684,18 @@ class ParamAccessor(Accessor["Param"]):
             raise KeyError(f"Ambiguous short name '{key}' — use full address")
         return None
 
+    def _resolve_pass_qualified(self, key: str) -> "Param | None":
+        """Resolve pass-qualified notation to the parent Param."""
+
+        base, _, pass_str = key.rpartition(":")
+        try:
+            int(pass_str)
+        except ValueError:
+            return None
+        if base in self._dict:
+            return self._dict[base]
+        return self._resolve_substring(base)
+
     def __contains__(self, key: object) -> bool:
         """Check membership by full address, short name, or integer index (#84)."""
         try:

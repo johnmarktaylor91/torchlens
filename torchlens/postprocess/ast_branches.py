@@ -518,6 +518,34 @@ def resolve_var_names(code_context: List[FuncCallLocation], func_name: Optional[
     return []
 
 
+def resolve_arg_expressions(
+    code_context: List[FuncCallLocation], func_name: Optional[str]
+) -> list[str]:
+    """Resolve source expressions for a captured operation's call arguments.
+
+    Parameters
+    ----------
+    code_context:
+        Runtime call stack, ordered shallowest-to-deepest.
+    func_name:
+        Captured function name used to disambiguate line-only matches when
+        column offsets are unavailable.
+
+    Returns
+    -------
+    list[str]
+        Source expressions for positional args and keyword args, or an empty
+        list when source, call matching, or argument extraction is unavailable
+        or ambiguous.
+    """
+
+    for frame in reversed(code_context):
+        arg_expressions = _resolve_frame_arg_expressions(frame, func_name)
+        if arg_expressions:
+            return arg_expressions
+    return []
+
+
 def invalidate_cache(filename: Optional[str] = None) -> None:
     """Invalidate cached AST indexes.
 
@@ -576,6 +604,80 @@ def _resolve_frame_var_names(frame: FuncCallLocation, func_name: Optional[str]) 
     if len(resolved) == 1:
         return resolved[0]
     return []
+
+
+def _resolve_frame_arg_expressions(frame: FuncCallLocation, func_name: Optional[str]) -> list[str]:
+    """Resolve call argument expressions for one captured frame.
+
+    Parameters
+    ----------
+    frame:
+        Runtime call-site metadata for the operation.
+    func_name:
+        Captured function name used to disambiguate line-only matches.
+
+    Returns
+    -------
+    list[str]
+        Argument expressions, or an empty list when resolution fails closed.
+    """
+
+    if frame.file.startswith("<") or frame.file.endswith(">"):
+        return []
+
+    source = _read_source_file(frame.file)
+    if source is None:
+        return []
+
+    file_index = get_file_index(frame.file)
+    if file_index is None:
+        return []
+
+    scope = file_index.resolve_scope(
+        code_firstlineno=frame.code_firstlineno,
+        func_name=frame.func_name,
+        func_qualname=frame.func_qualname,
+    )
+    if scope is None:
+        return []
+
+    candidates = _find_candidate_calls(scope.node, frame.line_number, frame.col_offset, func_name)
+    if len(candidates) != 1:
+        return []
+    return _call_arg_expressions(candidates[0], source)
+
+
+def _call_arg_expressions(call_node: ast.Call, source: str) -> list[str]:
+    """Return source expressions for a matched call's arguments.
+
+    Parameters
+    ----------
+    call_node:
+        AST call matched to the captured operation.
+    source:
+        Source text containing ``call_node``.
+
+    Returns
+    -------
+    list[str]
+        Positional argument expressions followed by keyword expressions.
+    """
+
+    expressions: list[str] = []
+    for arg_node in call_node.args:
+        segment = ast.get_source_segment(source, arg_node)
+        if segment is None:
+            return []
+        expressions.append(segment.strip())
+    for keyword in call_node.keywords:
+        value_segment = ast.get_source_segment(source, keyword.value)
+        if value_segment is None:
+            return []
+        if keyword.arg is None:
+            expressions.append(f"**{value_segment.strip()}")
+        else:
+            expressions.append(f"{keyword.arg}={value_segment.strip()}")
+    return expressions
 
 
 def _find_candidate_calls(
@@ -1520,4 +1622,5 @@ __all__ = [
     "classify_bool",
     "get_file_index",
     "invalidate_cache",
+    "resolve_arg_expressions",
 ]

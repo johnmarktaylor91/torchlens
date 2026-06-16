@@ -35,6 +35,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 from .._deprecations import MISSING
+from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
@@ -117,18 +118,18 @@ class OpAccessor(Accessor["Op"]):
             if key in {
                 only_op.layer_label,
                 only_op.layer_label_short,
-                only_op.layer_label,
-                only_op.layer_label_short,
+                only_op._label_raw,
+                only_op.raw_label,
             }:
                 return only_op
         for op_log in self._dict.values():
             if key in {
                 op_log.layer_label,
                 op_log.label,
-                op_log.layer_label,
                 op_log.layer_label_short,
                 op_log.label_short,
-                op_log.layer_label_short,
+                op_log._label_raw,
+                op_log.raw_label,
             }:
                 return op_log
         parent_matches = [
@@ -138,10 +139,12 @@ class OpAccessor(Accessor["Op"]):
         ]
         if len(parent_matches) > 1:
             parent_label = parent_matches[0].layer_label
-            raise ValueError(
+            qualified = ", ".join(op_log.label for op_log in parent_matches[:10])
+            suffix = "..." if len(parent_matches) > 10 else ""
+            raise AmbiguousOpLookupError(
                 f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
                 "integer position or a pass-qualified label like "
-                f"'{parent_label}:1'."
+                f"'{parent_label}:1'. Available Op labels: {qualified}{suffix}."
             )
         return None
 

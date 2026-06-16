@@ -698,6 +698,8 @@ def _add_lookup_keys_for_layer_entry(
     """
     # The "default" keys: including the pass if multiple ops, excluding if one pass.
     lookup_keys_for_tensor = [
+        layer_entry._label_raw,
+        layer_entry.raw_label,
         layer_entry.layer_label,
         layer_entry.layer_label_short,
         layer_entry.label,
@@ -706,6 +708,12 @@ def _add_lookup_keys_for_layer_entry(
         tensor_index - num_tensors_to_keep,
     ]
     layer_entry.ordinal_index = tensor_index
+    primary_label_keys = {
+        layer_entry.layer_label,
+        layer_entry.layer_label_short,
+        layer_entry.label,
+        layer_entry.label_short,
+    }
 
     # Relabel the module ops if this pass built module metadata:
     if self.capture_mode in {"exhaustive", "predicate"}:
@@ -747,6 +755,9 @@ def _add_lookup_keys_for_layer_entry(
     layer_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
+            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
+            self.layer_dict_all_keys[lookup_key] = layer_entry
+        elif lookup_key in primary_label_keys:
             self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
             self.layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
