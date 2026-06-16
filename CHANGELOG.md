@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v2.20.2 (2026-06-16)
+
+### Bug Fixes
+
+- **deps**: Declare pillow as a dependency (eager import-time use)
+  ([`bb2f423`](https://github.com/johnmarktaylor91/torchlens/commit/bb2f4235db1f8ffe8124c84b0dc855e33a5217d7))
+
+torchlens.__init__ eagerly imports the viz and repgeom packages, which import PIL
+  (Image/ImageDraw/ImageFont) at module load for node images, input montages, and MDS/feature-map
+  thumbnails. So Pillow is a hard import-time dependency, but it was undeclared — `import torchlens`
+  raised ModuleNotFoundError: No module named 'PIL' on the CI smoke env (py3.10/3.11), green locally
+  only because the dev env already has Pillow. Declare pillow>=9.
+
+
 ## v2.20.1 (2026-06-16)
 
 ### Bug Fixes
