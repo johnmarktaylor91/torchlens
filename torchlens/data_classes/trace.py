@@ -341,6 +341,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "capture_tensor_grad_hooks": True,
     "save_grads": None,
     "inference_only": False,
+    "chunked_forward": False,
     "is_appended": False,
     "relationship_evidence": {},
     "replay_frontier": {},
@@ -1381,6 +1382,7 @@ class Trace(CapturedRun):
     replay_frontier: dict[str, torch.Tensor]
     backward_ready: bool
     inference_only: bool
+    chunked_forward: bool
     profile_enabled: bool
     save_arg_templates: bool
     op_equivalence_classes: Dict[str, set[str]]
@@ -1459,6 +1461,7 @@ class Trace(CapturedRun):
         "detach_saved_activations": FieldPolicy.KEEP,
         "backward_ready": FieldPolicy.DROP,
         "inference_only": FieldPolicy.KEEP,
+        "chunked_forward": FieldPolicy.KEEP,
         "module_filter": FieldPolicy.DROP,
         "emit_nvtx": FieldPolicy.KEEP,
         "raise_on_nan": FieldPolicy.KEEP,
@@ -1676,6 +1679,7 @@ class Trace(CapturedRun):
         verbose: bool = False,
         backward_ready: bool = False,
         inference_only: bool = False,
+        chunked_forward: bool = False,
         module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
         facet_registry_snapshot: Any | None = None,
@@ -1719,6 +1723,7 @@ class Trace(CapturedRun):
             backward_ready: Session-time flag for training-compatible out retention.
                 Portable bundle load restores the default ``False`` value.
             inference_only: Whether the forward was captured under ``torch.no_grad()``.
+            chunked_forward: Whether the trace was assembled from forward chunks.
             emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
             facet_registry_snapshot: Immutable facet recipe snapshot captured for
                 this trace.
@@ -1806,6 +1811,7 @@ class Trace(CapturedRun):
         self.detach_saved_activations = detach_saved_activations
         self.backward_ready = backward_ready
         self.inference_only = inference_only
+        self.chunked_forward = chunked_forward
         self.module_filter = module_filter
         self.emit_nvtx = emit_nvtx
         self.facet_registry_snapshot = facet_registry_snapshot
@@ -3795,6 +3801,7 @@ class Trace(CapturedRun):
                 "_source_model_ref": None,
                 "backward_ready": False,
                 "inference_only": False,
+                "chunked_forward": False,
                 "module_filter": None,
                 "raise_on_nan": False,
                 "keep_orphans": False,
@@ -3851,6 +3858,8 @@ class Trace(CapturedRun):
             state["backward_ready"] = False
         if state["inference_only"] is None:
             state["inference_only"] = False
+        if state["chunked_forward"] is None:
+            state["chunked_forward"] = False
         for field_name in (
             "setup_duration",
             "forward_duration",
@@ -4173,6 +4182,7 @@ class Trace(CapturedRun):
             "save_raw_output",
             "has_gradients",
             "random_seed",
+            "chunked_forward",
             "input_object_id",
             "input_signature_hash",
             "graph_shape_hash",
@@ -6594,6 +6604,8 @@ class Trace(CapturedRun):
         x: Any = None,
         *,
         append: bool | MissingType = MISSING,
+        chunk_size: int | None | MissingType = MISSING,
+        chunk_paths: Any | None = None,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
         transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
@@ -6611,6 +6623,11 @@ class Trace(CapturedRun):
             is treated as the new user input.
         append:
             If true, append a compatible chunk along batch dimension 0.
+        chunk_size:
+            If supplied, split positional tensor input into chunks of this size,
+            rerun the first chunk normally, then append remaining chunks.
+        chunk_paths:
+            Optional explicit tensor leaf paths to split.
         strict:
             Whether graph-shape divergence should raise instead of warn.
         transform:
@@ -6642,7 +6659,12 @@ class Trace(CapturedRun):
                     "This Trace does not retain a live model reference. Pass the model as "
                     "`trace.rerun(model, input)`."
                 )
-        replay_options = merge_replay_options(replay=replay, append=append, strict=strict)
+        replay_options = merge_replay_options(
+            replay=replay,
+            append=append,
+            chunk_size=chunk_size,
+            strict=strict,
+        )
         if isinstance(model, nn.Module):
             transformed_input = self._apply_rerun_transform(user_input, transform=transform)
 
@@ -6654,6 +6676,7 @@ class Trace(CapturedRun):
             rerun_model,
             transformed_input,
             replay=replay_options,
+            chunk_paths=chunk_paths,
             output_transform=resolved_output_transform,
         )
         # Atomic swap rebuilds Trace state; restore raw_input to the new

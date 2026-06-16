@@ -39,6 +39,7 @@ from tqdm import tqdm
 
 from ._deprecations import MISSING, MissingType, resolve_renamed_kwarg, warn_deprecated_alias
 from ._errors import TorchLensPostfuncError
+from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
 from ._input_coerce import _coerce_input_args
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
@@ -72,6 +73,7 @@ from .options import (
     StreamingOptions,
     VisualizationOptions,
     merge_capture_options,
+    ReplayOptions,
     merge_save_options,
     merge_streaming_options,
     merge_visualization_options,
@@ -89,6 +91,7 @@ from .visualization.code_panel import (
     make_weak_model_ref,
 )
 from .intervention.errors import InterventionReadyConflictError
+from .intervention.errors import ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
@@ -1709,6 +1712,8 @@ def trace(
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
     capture_output_structure: bool | MissingType = MISSING,
+    chunk_size: int | None = None,
+    chunk_paths: Iterable[Any] | None = None,
     backend: BackendName | None = None,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
@@ -1847,6 +1852,11 @@ def trace(
         inference_only: If True, run the user forward under ``torch.no_grad()``.
             This skips autograd graph construction and cannot be combined with
             backward-related capture.
+        chunk_size: If supplied, split a positional tensor input into forward
+            chunks of this size along dimension 0 and append them into one
+            in-memory ``Trace``. Forward-only and torch-only.
+        chunk_paths: Optional explicit tensor leaf paths to split when multiple
+            batched tensor leaves are present.
         name: Optional user-facing name for the returned ``Trace``. When omitted,
             TorchLens uses a process-local counter based on the model class name after
             stripping common HuggingFace suffixes. The counter is not thread-safe; it
@@ -1908,16 +1918,23 @@ def trace(
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
     public_trace_kwargs.pop("capture_output_structure")
+    if chunk_paths is not None and chunk_size is None:
+        raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
     if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
         raise BackendUnsupportedError(
             "jax_static_argnums is only supported with backend='jax'; grad_options is "
             "only supported with backend='jax', backend='mlx', or backend='tinygrad'."
+        )
+    if chunk_size is not None and backend is not None and str(backend) != "torch":
+        raise BackendUnsupportedError(
+            "chunk_size capture is currently supported only by backend='torch'."
         )
     explicit_backend_spec = (
         None if backend is None else resolve_backend_spec(backend, model, input_args, input_kwargs)
     )
     if (
         backend is None
+        and chunk_size is None
         and transform is MISSING
         and (capture is None or not capture.is_field_explicit("transform"))
     ):
@@ -1994,6 +2011,10 @@ def trace(
     resolved_spec = explicit_backend_spec or resolve_backend_spec(
         backend, model, input_args, input_kwargs
     )
+    if chunk_size is not None and str(resolved_spec.name) != "torch":
+        raise BackendUnsupportedError(
+            "chunk_size capture is currently supported only by backend='torch'."
+        )
     _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
     return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
 
@@ -2068,6 +2089,8 @@ def _trace_torch_model(
         | MissingType
     ) = MISSING,
     capture_output_structure: bool | MissingType = MISSING,
+    chunk_size: int | None = None,
+    chunk_paths: Iterable[Any] | None = None,
 ) -> Trace:
     """Run the registry-owned torch trace implementation.
 
@@ -2196,6 +2219,9 @@ def _trace_torch_model(
         keep_outs_in_memory=keep_outs_in_memory,
         out_sink=out_sink,
     )
+    normalized_chunk_size = normalize_chunk_size(chunk_size)
+    if chunk_paths is not None and normalized_chunk_size is None:
+        raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
     layers_to_save = capture_options.layers_to_save
     save_raw_input_policy = capture_options.save_raw_input
     batch_render_policy = capture_options.batch_render
@@ -2296,6 +2322,21 @@ def _trace_torch_model(
         inference_only=inference_only_value,
         inference_only_conflicts=tuple(inference_only_conflicts),
     )
+    chunk_plan = None
+    if normalized_chunk_size is not None:
+        _validate_chunked_forward_capture(
+            input_kwargs=input_kwargs,
+            backward_ready=train_mode_value,
+            save_grads=should_save_grads,
+            hooks=hooks,
+            intervene=intervene,
+            streaming=streaming_options,
+        )
+        chunk_plan = plan_chunks(
+            input_args,
+            chunk_size=normalized_chunk_size,
+            chunk_paths=chunk_paths,
+        )
 
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
@@ -2353,6 +2394,8 @@ def _trace_torch_model(
             "recurrence_detection": recurrence_detection,
             "backward_ready": train_mode_value,
             "inference_only": inference_only_value,
+            "chunk_size": normalized_chunk_size,
+            "chunk_paths": normalize_chunk_paths(chunk_paths),
             "capture_container_structure": capture_container_structure,
             "output_transform": repr(output_transform_value),
             "output_style": output_style_value,
@@ -2398,6 +2441,111 @@ def _trace_torch_model(
             "storage=to_disk(...) gradient streaming is only supported with save_grads=True "
             "release. Capture all grads and filter post-hoc with torchlens.save(...)."
         )
+    if (
+        chunk_plan is not None
+        and normalized_chunk_size is not None
+        and normalized_chunk_size < chunk_plan.total_size
+    ):
+        chunks = iter_chunked_inputs(input_args, chunk_plan)
+        trace = _trace_torch_model(
+            model=model,
+            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
+            input_kwargs=None,
+            layers_to_save=layers_to_save,
+            transform=None,
+            save_raw_input=save_raw_input_policy,
+            batch_render=batch_render_policy,
+            output_transform=output_transform_value,
+            output_style=output_style_value,
+            output_head=output_head_value,
+            save_raw_output=save_raw_output_policy,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            activation_transform=activation_transform,
+            grad_transform=grad_transform,
+            save_raw_activations=save_raw_activations,
+            save_raw_gradients=save_raw_gradients,
+            save_mode=cast(SaveMode, save_mode_value),
+            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
+            mark_layer_depths=MISSING,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_grads=save_grads_policy,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            reconstruction_ready=MISSING,
+            random_seed=random_seed,
+            num_context_lines=MISSING,
+            optimizer=optimizer,
+            save_outs_to=MISSING,
+            keep_outs_in_memory=MISSING,
+            out_sink=MISSING,
+            intervention_ready=intervention_ready,
+            capture_container_structure=capture_container_structure,
+            hooks=None,
+            unwrap_when_done=False,
+            verbose=verbose,
+            source_context_lines=source_context_lines,
+            compute_input_output_distances=compute_input_output_distances,
+            recurrence_detection=recurrence_detection,
+            capture=None,
+            save=save,
+            intervene=None,
+            halt=halt,
+            lookback=lookback,
+            lookback_payload_policy=lookback_payload_policy,
+            storage=None,
+            streaming=None,
+            backward_ready=train_mode_value,
+            inference_only=inference_only_value,
+            name=log_name,
+            cache=False,
+            cache_dir=cache_dir_value,
+            module_filter=module_filter_value,
+            stop_after=MISSING,
+            raise_on_nan=raise_on_nan_value,
+            profile=profile_enabled,
+            jax_control_flow=capture_options.jax_control_flow,
+            jax_max_control_flow_unroll=capture_options.jax_max_control_flow_unroll,
+            module_identity_mode=capture_options.module_identity_mode,
+            payload_policy=capture_options.payload_policy,
+            save_preview=capture_options.save_preview,
+            recipes=facet_recipes,
+            capture_output_structure=MISSING,
+            chunk_size=None,
+            chunk_paths=None,
+        )
+        initial_chunk_size = min(normalized_chunk_size, chunk_plan.total_size)
+        initial_record = {
+            "engine": "trace",
+            "append": False,
+            "chunk_size": initial_chunk_size,
+            "total_batch_size": chunk_plan.total_size,
+            "append_sequence_id": 0,
+            "chunk_paths": normalize_chunk_paths(chunk_paths),
+        }
+        for chunk in chunks[1:]:
+            trace.rerun(model, chunk, replay=ReplayOptions(append=True), transform=False)
+        trace.append_history = [initial_record, *trace.append_history]
+        trace.chunked_forward = True
+        trace.last_run = dict(trace.last_run or {})
+        trace.last_run["chunk_size"] = normalized_chunk_size
+        trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths)
+        trace.profile_enabled = profile_enabled
+        if layer_visualizers_value:
+            _render_layer_visualizers(trace, layer_visualizers_value)
+        if unwrap_when_done:
+            from .backends.torch.wrappers import unwrap_torch
+
+            unwrap_torch()
+        if cache_path is not None and cache_key is not None:
+            trace.capture_cache_hit = False
+            trace.capture_cache_key = cache_key
+            trace.capture_cache_path = str(cache_path)
+            _prepare_log_for_capture_cache(trace)
+            with cache_path.open("wb") as file:
+                pickle.dump(trace, file)
+        return trace
 
     if not uses_two_pass:
         # --- SINGLE-PASS path ---
@@ -2597,6 +2745,56 @@ def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:
     """
 
     return coerced is not original and _contains_auto_coercible_raw_input(original)
+
+
+def _validate_chunked_forward_capture(
+    *,
+    input_kwargs: dict[Any, Any] | None,
+    backward_ready: bool,
+    save_grads: bool,
+    hooks: Any | None,
+    intervene: InterventionPredicate | None,
+    streaming: StreamingOptions,
+) -> None:
+    """Reject unsupported ``trace(chunk_size=...)`` option combinations.
+
+    Parameters
+    ----------
+    input_kwargs:
+        Keyword inputs supplied to ``trace`` after preprocessing.
+    backward_ready:
+        Resolved training-compatible capture flag.
+    save_grads:
+        Whether gradient capture is enabled.
+    hooks:
+        Public live hook plan supplied to this capture.
+    intervene:
+        Public predicate intervention supplied to this capture.
+    streaming:
+        Resolved streaming options.
+
+    Raises
+    ------
+    ChunkedForwardConfigError
+        If chunked forward capture cannot compose with the requested options.
+    """
+
+    if input_kwargs:
+        raise ChunkedForwardConfigError(
+            "chunk_size capture is positional-input only in v1; keyword inputs are unsupported."
+        )
+    if backward_ready:
+        raise ChunkedForwardConfigError("chunk_size cannot be combined with backward_ready=True.")
+    if save_grads:
+        raise ChunkedForwardConfigError("chunk_size cannot be combined with save_grads.")
+    if hooks is not None:
+        raise ChunkedForwardConfigError("chunk_size cannot be combined with hooks=.")
+    if intervene is not None:
+        raise ChunkedForwardConfigError("chunk_size cannot be combined with intervene=.")
+    if streaming.bundle_path is not None or streaming.out_callback is not None:
+        raise ChunkedForwardConfigError(
+            "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."
+        )
 
 
 def _contains_auto_coercible_raw_input(value: Any) -> bool:

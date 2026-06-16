@@ -240,6 +240,7 @@ _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "hooks": "hooks",
     "differentiable": "differentiable",
     "append": "append",
+    "chunk_size": "chunk_size",
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "engine": "engine",
@@ -1370,7 +1371,8 @@ class ReplayOptions:
     append:
         Whether rerun appends a compatible batch chunk.
     chunk_size:
-        Future explicit append chunk size; currently inert.
+        Forward chunk size for rerun chunking sugar. Splits positional input
+        along dimension 0 and appends compatible chunks.
     is_appended:
         Future append-state override; currently inert.
     device_override:

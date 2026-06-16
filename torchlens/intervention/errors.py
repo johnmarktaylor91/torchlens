@@ -198,6 +198,14 @@ class AppendBatchDependenceError(ValidationError, ValueError):
     """
 
 
+class BatchChunkInputAmbiguityError(ConfigurationError, ValueError):
+    """Raised when ``chunk_size`` cannot infer which input leaf is batched."""
+
+
+class ChunkedForwardConfigError(ConfigurationError, ValueError):
+    """Raised when chunked forward capture is requested with unsupported options."""
+
+
 class AppendStateValidationWarning(TorchLensInterventionWarning):
     """Warning for validators that skip fresh checks on stacked appended traces."""
 
@@ -301,9 +309,11 @@ __all__ = [
     "AppendMismatchError",
     "AxisAmbiguityError",
     "BaselineUndeterminedError",
+    "BatchChunkInputAmbiguityError",
     "BatchNormTrainModeWarning",
     "BundleMemberError",
     "BundleRelationshipError",
+    "ChunkedForwardConfigError",
     "ControlFlowDivergenceError",
     "ControlFlowDivergenceWarning",
     "DeadParentError",

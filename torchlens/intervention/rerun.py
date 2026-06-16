@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from .._deprecations import MISSING, MissingType
+from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
@@ -18,6 +19,7 @@ from .errors import (
     AppendMismatchError,
     AppendStreamingNotSupportedError,
     BatchNormTrainModeWarning,
+    ChunkedForwardConfigError,
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
     DirectActivationWriteWarning,
@@ -36,6 +38,8 @@ def rerun(
     x: Any = None,
     *,
     append: bool | MissingType = MISSING,
+    chunk_size: int | None | MissingType = MISSING,
+    chunk_paths: Any | None = None,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
     output_transform: Any | None = None,
@@ -59,6 +63,12 @@ def rerun(
     append:
         If true, capture ``x`` as a compatible chunk and append saved tensors
         along batch dimension 0 instead of replacing the run state.
+    chunk_size:
+        If supplied, split positional tensor input into chunks of this size,
+        rerun the first chunk normally, then append remaining chunks.
+    chunk_paths:
+        Optional explicit tensor leaf paths to split when multiple batched
+        tensor leaves are present.
     strict:
         If true, graph-shape divergence raises ``ControlFlowDivergenceError``.
         If false, divergence emits ``ControlFlowDivergenceWarning`` and the
@@ -73,7 +83,26 @@ def rerun(
         The same ``log`` object after atomic run-state replacement.
     """
 
-    replay_options = merge_replay_options(replay=replay, append=append, strict=strict)
+    replay_options = merge_replay_options(
+        replay=replay,
+        append=append,
+        chunk_size=chunk_size,
+        strict=strict,
+    )
+    if replay_options.chunk_size is not None:
+        if replay_options.append:
+            raise ChunkedForwardConfigError(
+                "rerun(chunk_size=...) cannot be combined with append=True."
+            )
+        return _chunked_rerun(
+            log,
+            model,
+            x,
+            chunk_size=replay_options.chunk_size,
+            chunk_paths=chunk_paths,
+            strict=replay_options.strict,
+            output_transform=output_transform,
+        )
     if replay_options.append:
         return _append_rerun(log, model, x, strict=replay_options.strict)
     _preflight(log, model, x)
@@ -139,6 +168,104 @@ def rerun(
     log._has_direct_writes = False
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
     return log
+
+
+def _chunked_rerun(
+    log: "Trace",
+    model: nn.Module,
+    x: Any,
+    *,
+    chunk_size: int,
+    chunk_paths: Any | None,
+    strict: bool,
+    output_transform: Any | None,
+) -> "Trace":
+    """Rerun a trace by splitting one model-ready input tree into chunks.
+
+    Parameters
+    ----------
+    log:
+        Trace to mutate.
+    model:
+        Model to execute.
+    x:
+        Model-ready positional input tree.
+    chunk_size:
+        Maximum leading-dimension chunk size.
+    chunk_paths:
+        Optional explicit tensor leaf paths to split.
+    strict:
+        Whether graph-shape divergence should raise for the first rerun.
+    output_transform:
+        Optional output transform to mirror for fresh captures.
+
+    Returns
+    -------
+    Trace
+        Mutated trace after chunked rerun.
+    """
+
+    _preflight(log, model, x)
+    model = _unwrap_model_for_chunk_plan(model)
+    x = _coerce_input_args(model, x)
+    plan = plan_chunks(x, chunk_size=chunk_size, chunk_paths=chunk_paths)
+    if chunk_size >= plan.total_size:
+        return rerun(
+            log,
+            model,
+            x,
+            replay=ReplayOptions(append=False, strict=strict),
+            output_transform=output_transform,
+        )
+    chunks = iter_chunked_inputs(x, plan)
+    result = rerun(
+        log,
+        model,
+        chunks[0],
+        replay=ReplayOptions(append=False, strict=strict),
+        output_transform=output_transform,
+    )
+    initial_record = {
+        "engine": "rerun",
+        "append": False,
+        "chunk_size": min(chunk_size, plan.total_size),
+        "total_batch_size": plan.total_size,
+        "append_sequence_id": 0,
+        "chunk_paths": normalize_chunk_paths(chunk_paths),
+    }
+    for chunk in chunks[1:]:
+        result = rerun(
+            result,
+            model,
+            chunk,
+            replay=ReplayOptions(append=True, strict=strict),
+            output_transform=output_transform,
+        )
+    result.append_history = [initial_record, *result.append_history]
+    result.chunked_forward = True
+    result.last_run = dict(result.last_run or {})
+    result.last_run["chunk_size"] = chunk_size
+    result.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths)
+    return result
+
+
+def _unwrap_model_for_chunk_plan(model: nn.Module) -> nn.Module:
+    """Return the model shape used by rerun capture for input coercion.
+
+    Parameters
+    ----------
+    model:
+        Candidate rerun model.
+
+    Returns
+    -------
+    nn.Module
+        DataParallel-unwrapped model when applicable.
+    """
+
+    if isinstance(model, nn.DataParallel):
+        return model.module
+    return model
 
 
 def _append_rerun(

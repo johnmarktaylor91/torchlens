@@ -45,6 +45,11 @@ _INFERENCE_ONLY_BACKWARD_ERROR = (
     "graph was discarded during capture. Re-capture without inference_only (optionally with "
     "backward_ready=True) to enable deferred backward."
 )
+_CHUNKED_FORWARD_BACKWARD_ERROR = (
+    "Cannot run log_backward on a trace captured with chunk_size: chunked forward capture "
+    "concatenates forward payloads across independent sub-batches and does not retain a "
+    "single full-batch autograd graph. Re-capture without chunk_size to enable deferred backward."
+)
 
 
 def _ensure_not_inference_only_backward(trace: Any) -> None:
@@ -63,6 +68,24 @@ def _ensure_not_inference_only_backward(trace: Any) -> None:
 
     if getattr(trace, "inference_only", False):
         raise ConfigurationError(_INFERENCE_ONLY_BACKWARD_ERROR)
+
+
+def _ensure_not_chunked_forward_backward(trace: Any) -> None:
+    """Reject deferred backward capture for chunked-forward traces.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving backward metadata.
+
+    Raises
+    ------
+    ConfigurationError
+        If the trace was captured with ``chunk_size``.
+    """
+
+    if getattr(trace, "chunked_forward", False):
+        raise ConfigurationError(_CHUNKED_FORWARD_BACKWARD_ERROR)
 
 
 def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
@@ -2072,6 +2095,7 @@ def _run_backward_with_capture(
     from ...intervention.hooks import normalize_hooks_from_spec
 
     _ensure_not_inference_only_backward(trace)
+    _ensure_not_chunked_forward_backward(trace)
     previous_trace = _state._active_trace
     previous_plan = _state._active_hook_plan
     previous_spec = _state._active_intervention_spec
@@ -2413,6 +2437,7 @@ def log_backward(
         The same Trace, for chaining.
     """
     _ensure_not_inference_only_backward(self)
+    _ensure_not_chunked_forward_backward(self)
     backward_call_context = _capture_backward_call_context(self)
     _ensure_layer_grad_hooks(self)
 

@@ -71,6 +71,7 @@ MODEL_LOG_FIELD_ORDER = [
     "output_device",
     "backward_ready",
     "inference_only",
+    "chunked_forward",
     "module_filter",
     "emit_nvtx",
     "raise_on_nan",

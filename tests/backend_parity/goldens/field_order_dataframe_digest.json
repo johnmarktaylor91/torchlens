@@ -190,6 +190,7 @@
       "output_device",
       "backward_ready",
       "inference_only",
+      "chunked_forward",
       "module_filter",
       "emit_nvtx",
       "raise_on_nan",
@@ -933,6 +934,7 @@
       "capture_mode",
       "capture_start_time",
       "capture_tensor_grad_hooks",
+      "chunked_forward",
       "class_docstring",
       "class_source_file",
       "class_source_line",
@@ -1066,13 +1068,13 @@
     ]
   },
   "sha256_chunks": [
-    "aa01b4b8",
-    "8861a86f",
-    "3327e309",
-    "107c4284",
-    "dde0e701",
-    "d324ebe5",
-    "d14b0a7e",
-    "c95ed590"
+    "27f07409",
+    "7416a72a",
+    "ab44f20e",
+    "84c704cf",
+    "b5b3ea83",
+    "f6a596a8",
+    "b9305748",
+    "ca1937dd"
   ]
 }

@@ -81,6 +81,7 @@ assert gelu_site.out.shape == (2, 4)
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure; disk I/O becomes part of capture cost. |
 | Gradients | `save_grads=False` unless needed | Backward-ready captures preserve more state and hooks. |
 | Forward-only autograd | `inference_only=True` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. |
+| Forward chunking | `chunk_size=N` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
 
 ### Phase timing buckets
@@ -90,6 +91,48 @@ assert gelu_site.out.shape == (2, 4)
 `postprocess:Step N: ...`, matching the numbered postprocess pipeline. Graphviz rendering records
 `render:graphviz:forward`, `render:graphviz:backward`, or `render:graphviz:combined` when those
 render entrypoints run.
+
+## Chunked forward capture
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.Sequential(nn.Linear(1024, 1024), nn.ReLU()).eval()
+x = torch.randn(128, 1024)
+
+trace = tl.trace(model, x, chunk_size=16, save=tl.func("relu"))
+
+assert trace.find_sites(tl.func("relu")).first().out.shape[0] == 128
+```
+
+`chunk_size=` is forward-only sugar over a first `trace(...)` followed by
+`rerun(..., append=True)` for later chunks. It splits selected positional tensor leaves along
+dimension 0, executes one sub-batch at a time, and returns one accumulated in-memory `Trace`.
+
+The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
+`backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
+`storage=tl.to_disk(...)` or `save_outs_to`. Loaded or live chunked traces also reject
+`log_backward()` because they do not retain one full-batch autograd graph.
+
+Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
+containers (`list`, `tuple`, `dict`, or `namedtuple`). If there are several candidates, pass
+explicit paths:
+
+```python
+trace = tl.trace(model, (tokens, attention_mask), chunk_size=8, chunk_paths=["0", "1"])
+```
+
+Unlisted leaves are passed unchanged to every chunk, which is useful for shared masks or bias
+tables. The memory contract is forward-pass peak only: final saved activations are concatenated
+and retained according to `save=`, and preprocessing still sees the full batch if `transform=`
+materializes it. Disk-backed chunk accumulation is a future item.
+
+For activation extraction without a `Trace`, use `tl.batched_extract(...)`; that path returns
+tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` covers the remaining
+"dataloader wrapper" case for stacked multi-pass trace capture.
 
 ## Windowed and disk-backed capture
 
