@@ -248,6 +248,7 @@ def _add_output_layers(
             source_loading_enabled=self.save_code_context,
             disable_col_offset=False,
         )
+        new_output_node.var_names = []
         new_output_node.func_duration = Duration(0)
         new_output_node.func_rng_states = (
             log_current_rng_states(torch_only=True) if self.save_rng_states else {}

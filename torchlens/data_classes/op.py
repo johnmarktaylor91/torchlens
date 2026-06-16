@@ -134,6 +134,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "args_template": None,
     "kwargs_template": None,
     "_edge_uses": [],
+    "var_names": [],
     "is_orphan": False,
     "_address_normalized": None,
     "_construction_done": True,
@@ -918,6 +919,7 @@ class Op:
         "func_name": FieldPolicy.KEEP,
         "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
+        "var_names": FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -1297,6 +1299,7 @@ class Op:
         self.func_name = fields_dict["func_name"]
         self.func_qualname = fields_dict["func_qualname"]
         self.code_context: List["FuncCallLocation"] = fields_dict["code_context"]
+        self.var_names: list[str] = fields_dict["var_names"]
         self.func_duration = as_duration(fields_dict["func_duration"])
         self.flops_forward = as_flops(fields_dict["flops_forward"])
         self.flops_backward = as_flops(fields_dict["flops_backward"])

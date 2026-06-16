@@ -47,6 +47,7 @@
       "func_call_id",
       "func_name",
       "func_qualname",
+      "var_names",
       "func_duration",
       "flops_forward",
       "flops_backward",
@@ -404,6 +405,7 @@
       "func_name",
       "func_qualname",
       "code_context",
+      "var_names",
       "func_duration",
       "flops_forward",
       "flops_backward",
@@ -697,6 +699,7 @@
       "type",
       "type_index",
       "unattributed_tensor_args",
+      "var_names",
       "visualizer_path"
     ],
     "stable_rows": [
@@ -1063,13 +1066,13 @@
     ]
   },
   "sha256_chunks": [
-    "4a408870",
-    "94aeeb13",
-    "33b6a645",
-    "efa124fe",
-    "bb557ff0",
-    "4159ffb1",
-    "f93c472b",
-    "74e11bf5"
+    "aa01b4b8",
+    "8861a86f",
+    "3327e309",
+    "107c4284",
+    "dde0e701",
+    "d324ebe5",
+    "d14b0a7e",
+    "c95ed590"
   ]
 }

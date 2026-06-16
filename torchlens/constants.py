@@ -306,6 +306,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "func_name",
     "func_qualname",
     "code_context",
+    "var_names",
     "func_duration",
     "flops_forward",
     "flops_backward",

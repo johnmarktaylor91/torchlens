@@ -2141,6 +2141,7 @@ def _build_shared_fields_dict(
         disable_col_offset=False,
         context_cache=code_context_cache,
     )
+    fields_dict["var_names"] = []
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state

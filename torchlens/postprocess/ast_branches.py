@@ -245,6 +245,8 @@ class FileIndex:
         Flattened list of conditionals found across all scopes.
     bool_consumers:
         Flattened list of all boolean consumers found across all scopes.
+    parent_map:
+        Parent links for every node in ``module``.
     """
 
     filename: str
@@ -253,6 +255,7 @@ class FileIndex:
     scopes: List[ScopeEntry]
     conditionals: List[ConditionalRecord]
     bool_consumers: List[BoolConsumer]
+    parent_map: Dict[ast.AST, ast.AST]
 
     def resolve_scope(
         self, code_firstlineno: int, func_name: str, func_qualname: Optional[str]
@@ -346,6 +349,7 @@ def get_file_index(filename: str) -> Optional[FileIndex]:
         scopes=scopes,
         conditionals=conditionals,
         bool_consumers=bool_consumers,
+        parent_map=parent_map,
     )
     _file_cache[filename] = file_index
     return file_index
@@ -445,6 +449,31 @@ def attribute_op(code_context: List[FuncCallLocation]) -> List[Tuple[Conditional
     return branch_stack
 
 
+def resolve_var_names(code_context: List[FuncCallLocation], func_name: Optional[str]) -> list[str]:
+    """Resolve assignment target names for the captured operation call site.
+
+    Parameters
+    ----------
+    code_context:
+        Runtime call stack, ordered shallowest-to-deepest.
+    func_name:
+        Captured function name used to disambiguate line-only matches when
+        column offsets are unavailable.
+
+    Returns
+    -------
+    list[str]
+        Source variable names bound by the matched call, or an empty list when
+        source, call matching, or target extraction is unavailable or ambiguous.
+    """
+
+    for frame in reversed(code_context):
+        var_names = _resolve_frame_var_names(frame, func_name)
+        if var_names:
+            return var_names
+    return []
+
+
 def invalidate_cache(filename: Optional[str] = None) -> None:
     """Invalidate cached AST indexes.
 
@@ -459,6 +488,251 @@ def invalidate_cache(filename: Optional[str] = None) -> None:
         _file_cache.clear()
     else:
         _file_cache.pop(filename, None)
+
+
+def _resolve_frame_var_names(frame: FuncCallLocation, func_name: Optional[str]) -> list[str]:
+    """Resolve assignment target names for one captured frame.
+
+    Parameters
+    ----------
+    frame:
+        Runtime call-site metadata for the operation.
+    func_name:
+        Captured function name used to disambiguate line-only matches.
+
+    Returns
+    -------
+    list[str]
+        Assignment target names, or an empty list when resolution fails closed.
+    """
+
+    if not frame.source_loading_enabled:
+        return []
+    if frame.file.startswith("<") or frame.file.endswith(">"):
+        return []
+
+    file_index = get_file_index(frame.file)
+    if file_index is None:
+        return []
+
+    scope = file_index.resolve_scope(
+        code_firstlineno=frame.code_firstlineno,
+        func_name=frame.func_name,
+        func_qualname=frame.func_qualname,
+    )
+    if scope is None:
+        return []
+
+    candidates = _find_candidate_calls(scope.node, frame.line_number, frame.col_offset, func_name)
+    resolved = [
+        target_names
+        for call_node in candidates
+        if (target_names := _assignment_target_names(call_node, file_index.parent_map))
+    ]
+    if len(resolved) == 1:
+        return resolved[0]
+    return []
+
+
+def _find_candidate_calls(
+    scope_node: FunctionNode, line: int, col: Optional[int], func_name: Optional[str]
+) -> list[ast.Call]:
+    """Find candidate calls matching a runtime source location.
+
+    Parameters
+    ----------
+    scope_node:
+        Function scope containing the runtime frame.
+    line:
+        Source line number for the operation.
+    col:
+        Source column offset for the operation, or ``None`` for line-only
+        matching.
+    func_name:
+        Captured function name used to disambiguate line-only matches.
+
+    Returns
+    -------
+    list[ast.Call]
+        Candidate call nodes, sorted innermost first for point matches.
+    """
+
+    matches = [
+        node
+        for node in ast.walk(scope_node)
+        if isinstance(node, ast.Call)
+        and _call_name_matches(node, func_name)
+        and (
+            _range_contains_line(_node_span(node), line)
+            if col is None
+            else _range_contains_point(_node_span(node), line, col)
+        )
+    ]
+    if not matches:
+        return []
+
+    matches.sort(key=lambda node: _source_range_width(_node_span(node)))
+    if len(matches) > 1 and _node_span(matches[0]) == _node_span(matches[1]):
+        return []
+    return matches
+
+
+def _call_name_matches(call_node: ast.Call, func_name: Optional[str]) -> bool:
+    """Return whether an AST call can represent a captured function name.
+
+    Parameters
+    ----------
+    call_node:
+        Candidate call node.
+    func_name:
+        Captured runtime function name.
+
+    Returns
+    -------
+    bool
+        ``True`` when the AST call's visible name matches ``func_name``.
+    """
+
+    if func_name is None:
+        return True
+    visible_name: Optional[str]
+    if isinstance(call_node.func, ast.Name):
+        visible_name = call_node.func.id
+    elif isinstance(call_node.func, ast.Attribute):
+        visible_name = call_node.func.attr
+    else:
+        visible_name = None
+    return visible_name == func_name
+
+
+def _source_range_width(span: SourceRange) -> tuple[int, int]:
+    """Return a sortable width for a source range.
+
+    Parameters
+    ----------
+    span:
+        Source range ``(start_line, start_col, end_line, end_col)``.
+
+    Returns
+    -------
+    tuple[int, int]
+        Line and column extent, with smaller ranges sorting first.
+    """
+
+    return (span[2] - span[0], span[3] - span[1])
+
+
+def _assignment_target_names(call_node: ast.Call, parent_map: Dict[ast.AST, ast.AST]) -> list[str]:
+    """Return assignment target names for a matched direct call expression.
+
+    Parameters
+    ----------
+    call_node:
+        AST call matched to the captured operation.
+    parent_map:
+        Parent links for the containing file.
+
+    Returns
+    -------
+    list[str]
+        Target names, or an empty list for inline, ambiguous, or unsupported
+        assignment forms.
+    """
+
+    if _has_disallowed_call_ancestor(call_node, parent_map):
+        return []
+
+    parent = parent_map.get(call_node)
+    if isinstance(parent, ast.Assign) and parent.value is call_node:
+        return _flatten_assign_targets(parent.targets)
+    if isinstance(parent, ast.AnnAssign) and parent.value is call_node:
+        return _flatten_assign_targets([parent.target])
+    if isinstance(parent, ast.NamedExpr) and parent.value is call_node:
+        return _flatten_assign_targets([parent.target])
+    return []
+
+
+def _has_disallowed_call_ancestor(call_node: ast.Call, parent_map: Dict[ast.AST, ast.AST]) -> bool:
+    """Return whether a call sits inside a source form that must fail closed.
+
+    Parameters
+    ----------
+    call_node:
+        AST call matched to the captured operation.
+    parent_map:
+        Parent links for the containing file.
+
+    Returns
+    -------
+    bool
+        ``True`` for comprehensions and augmented assignments.
+    """
+
+    current: ast.AST = call_node
+    while current in parent_map:
+        current = parent_map[current]
+        if isinstance(
+            current,
+            (
+                ast.ListComp,
+                ast.SetComp,
+                ast.DictComp,
+                ast.GeneratorExp,
+                ast.AugAssign,
+            ),
+        ):
+            return True
+    return False
+
+
+def _flatten_assign_targets(targets: Sequence[ast.expr]) -> list[str]:
+    """Flatten supported assignment targets into variable names.
+
+    Parameters
+    ----------
+    targets:
+        Assignment targets to inspect.
+
+    Returns
+    -------
+    list[str]
+        Name targets in source order, or an empty list when any target is not a
+        bare name or a statically visible tuple/list of bare names.
+    """
+
+    names: list[str] = []
+    for target in targets:
+        target_names = _target_names(target)
+        if not target_names:
+            return []
+        names.extend(target_names)
+    return names
+
+
+def _target_names(target: ast.expr) -> list[str]:
+    """Return names for one supported assignment target.
+
+    Parameters
+    ----------
+    target:
+        Assignment target to inspect.
+
+    Returns
+    -------
+    list[str]
+        Names in this target, or an empty list for unsupported target forms.
+    """
+
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[str] = []
+        for element in target.elts:
+            if not isinstance(element, ast.Name):
+                return []
+            names.append(element.id)
+        return names
+    return []
 
 
 def _read_source_file(filename: str) -> Optional[str]:

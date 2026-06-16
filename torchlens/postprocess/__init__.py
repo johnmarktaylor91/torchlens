@@ -75,6 +75,7 @@ from .loop_grouping_adapter import (
     group_recurrent_nodes,
 )
 from ._materialize import materialize_from_events
+from .ast_branches import resolve_var_names
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -117,6 +118,27 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         UserWarning,
         stacklevel=2,
     )
+
+
+def _populate_var_names(self: "Trace") -> None:
+    """Populate source assignment names for captured operation call sites.
+
+    Parameters
+    ----------
+    self:
+        Trace being postprocessed.
+    """
+
+    if not getattr(self, "save_code_context", False):
+        return
+    for op in getattr(self, "layer_list", ()):
+        if getattr(op, "type", None) == "output":
+            op.var_names = []
+            continue
+        op.var_names = resolve_var_names(
+            getattr(op, "code_context", []) or [],
+            getattr(op, "func_name", None),
+        )
 
 
 def _drop_transient_capture_state(self: "Trace") -> None:
@@ -301,6 +323,10 @@ def postprocess(
     with _vtimed(self, "  Step 11: Build lookup keys"):
         _build_lookup_keys_and_finalize_retained_layers(self)
         _warn_unattributed_tensor_args(self)
+
+    # Step 11.5: Populate source assignment names from full-file AST context.
+    with _vtimed(self, "  Step 11.5: Populate source var names"):
+        _populate_var_names(self)
 
     # Step 12: Undecorate all saved tensors and remove saved grad_fns.
     with _vtimed(self, "  Step 12: Undecorate tensors"):

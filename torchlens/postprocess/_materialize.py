@@ -407,6 +407,7 @@ def _fields_from_event(
             "func_name": function.func_name,
             "func_qualname": function.func_qualname,
             "code_context": list(function.code_context),
+            "var_names": [],
             "func_duration": function.func_duration or 0,
             "flops_forward": function.flops_forward or 0,
             "flops_backward": function.flops_backward or 0,
