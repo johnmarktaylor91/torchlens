@@ -1,6 +1,22 @@
 # CHANGELOG
 
 
+## v2.21.2 (2026-06-16)
+
+### Bug Fixes
+
+- **pre-commit**: Scope no-internal-notes guard to commit stage
+  ([`f629d4a`](https://github.com/johnmarktaylor91/torchlens/commit/f629d4aca9d9c0fb152071685655921519bf1ae0))
+
+### Chores
+
+- **gitignore**: Ignore benchmark perf-cell scratch
+  ([`a9137ca`](https://github.com/johnmarktaylor91/torchlens/commit/a9137ca0494dcf96e5500bc15f1ca552fd1bd174))
+
+- **repo**: Keep internal planning notes private (untrack + pre-commit guard + policy docs)
+  ([`8f74a25`](https://github.com/johnmarktaylor91/torchlens/commit/8f74a25b944154ea27fc1857ce62b570b91549ac))
+
+
 ## v2.21.1 (2026-06-16)
 
 ### Bug Fixes
