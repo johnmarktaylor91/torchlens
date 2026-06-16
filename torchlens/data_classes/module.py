@@ -1500,6 +1500,31 @@ class Module:
 
         return self._source_trace
 
+    @property
+    def handle(self) -> torch.nn.Module | None:
+        """Return the live ``nn.Module`` from the source model when reachable.
+
+        Returns
+        -------
+        torch.nn.Module | None
+            Live module object, or ``None`` when the source model/address is
+            unavailable. This computed runtime handle is not portable.
+        """
+
+        trace = self._source_trace
+        source_ref = getattr(trace, "_source_model_ref", None) if trace is not None else None
+        if source_ref is None:
+            return None
+        model = source_ref()
+        if model is None:
+            return None
+        if self.address in {"", "self"}:
+            return model
+        try:
+            return model.get_submodule(self.address)
+        except (AttributeError, KeyError):
+            return None
+
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()

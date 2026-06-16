@@ -377,6 +377,35 @@ class GradFn:
         return trace[self.op_label]
 
     @property
+    def handle(self) -> Any | None:
+        """Return the live autograd object when retained by the owning trace.
+
+        Returns
+        -------
+        Any | None
+            Live autograd ``grad_fn`` object whose id matches
+            ``grad_fn_object_id``, or ``None`` when unavailable. This computed
+            runtime handle is not portable.
+        """
+
+        trace = self.source_trace
+        if trace is not None:
+            for grad_fn_handle in getattr(trace, "_backward_gradfn_refs", None) or ():
+                if id(grad_fn_handle) == self.grad_fn_object_id:
+                    return grad_fn_handle
+
+        try:
+            op = self.op
+        except Exception:
+            op = None
+        if op is None:
+            return None
+        grad_fn_handle = getattr(op, "grad_fn_handle", None)
+        if grad_fn_handle is not None and id(grad_fn_handle) == self.grad_fn_object_id:
+            return grad_fn_handle
+        return None
+
+    @property
     def num_calls(self) -> int:
         """Number of times this grad_fn_handle has executed during captured backward ops."""
         return len(self.calls)

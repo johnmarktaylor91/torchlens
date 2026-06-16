@@ -305,6 +305,23 @@ class Param:
         return self._resolve_live_param()
 
     @property
+    def handle(self) -> torch.nn.Parameter | None:
+        """Return the live model parameter when reachable without caching it.
+
+        Returns
+        -------
+        torch.nn.Parameter | None
+            Live parameter object, or ``None`` when the source model or
+            parameter address is unavailable. This computed runtime handle is
+            not portable and does not repopulate ``_param_ref``.
+        """
+
+        try:
+            return self._peek_live_param(cache=False)
+        except PostTraceParamUnavailable:
+            return None
+
+    @property
     def grads(self) -> GradientRecordAccessor:
         """Per-pass accumulating gradient increments observed for this parameter."""
 
@@ -366,8 +383,13 @@ class Param:
             self._grad_dtype = grad.dtype
             self._grad_memory = Bytes(grad.nelement() * grad.element_size())
 
-    def _resolve_live_param(self) -> torch.nn.Parameter | None:
+    def _peek_live_param(self, *, cache: bool) -> torch.nn.Parameter | None:
         """Resolve the live parameter after post-trace reference release.
+
+        Parameters
+        ----------
+        cache:
+            Whether to cache a source-model read-through in ``_param_ref``.
 
         Returns
         -------
@@ -411,8 +433,27 @@ class Param:
                 f"Parameter '{self.address}' is no longer registered on the source model."
             ) from exc
 
-        self._param_ref = param
+        if cache:
+            self._param_ref = param
         return param
+
+    def _resolve_live_param(self) -> torch.nn.Parameter | None:
+        """Resolve and cache the live parameter when reachable.
+
+        Returns
+        -------
+        torch.nn.Parameter | None
+            Live parameter if available; ``None`` when no source trace/model
+            weakref exists, such as after portable deserialization.
+
+        Raises
+        ------
+        PostTraceParamUnavailable
+            If this Param released its direct reference and the source model
+            weakref is now dead, or the parameter address is no longer present.
+        """
+
+        return self._peek_live_param(cache=True)
 
     @property
     def has_grad(self) -> bool:

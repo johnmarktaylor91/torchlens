@@ -55,6 +55,9 @@ layer.ops             # dict[int, Op]
 - Buffer graph nodes are plain `Op` records with `is_buffer=True`; `Buffer` is the
   persistent address-level entity exposed by `Trace.buffers` and owns versions.
 - `GradFn` and `GradFnCall` are populated by backward capture and rendered separately.
+- Provisional `.handle` accessors on `Param`, `Buffer`, `Module`, and `GradFn` return
+  the live torch/autograd object or `None`; they are computed, non-portable, and not
+  dataframe fields. `Param.handle` is the non-caching counterpart to `Param.value`.
 
 ## Cleanup
 `cleanup.py` removes backrefs, parameter refs, saved outs, conditional edges, and

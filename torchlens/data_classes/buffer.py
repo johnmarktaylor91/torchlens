@@ -85,6 +85,29 @@ class Buffer:
         return self.source_trace
 
     @property
+    def handle(self) -> Any | None:
+        """Return the live registered buffer tensor when reachable.
+
+        Returns
+        -------
+        Any | None
+            Live torch buffer object from the source model, or ``None`` when
+            this computed runtime handle is unavailable or non-portable.
+        """
+
+        trace = self.source_trace
+        source_ref = getattr(trace, "_source_model_ref", None) if trace is not None else None
+        if source_ref is None:
+            return None
+        model = source_ref()
+        if model is None:
+            return None
+        try:
+            return dict(model.named_buffers()).get(self.address)
+        except Exception:
+            return None
+
+    @property
     def name(self) -> str:
         """Buffer name, the final component of ``address``."""
 
