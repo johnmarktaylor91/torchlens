@@ -42,4 +42,7 @@ repos:
           .research/ and .project-context/ (except architecture.md and state_of_torchlens.md)
           are gitignored on purpose. Do not `git add -f` them. To untrack, use `git rm --cached`.
         language: fail
+        # commit stage only: catches `git add` of a private path. At pre-push the same matcher
+        # would fire on DELETIONS of these paths (e.g. the commit that untracks them), so scope here.
+        stages: [pre-commit]
         files: '^\.research/|^\.project-context/(?!(architecture|state_of_torchlens)\.md$)'
