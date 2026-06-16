@@ -1,6 +1,126 @@
 # CHANGELOG
 
 
+## v2.21.0 (2026-06-16)
+
+### Continuous Integration
+
+- **tests**: Install tabular extra in smoke + notebook jobs
+  ([`9510b68`](https://github.com/johnmarktaylor91/torchlens/commit/9510b68b141441c08e9b26acf6a2d0c80b2c7c9f))
+
+The smoke and notebook-audit CI jobs installed `.[dev]` (despite the step being named "with test
+  extras"), which lacks pandas — so a pandas-using smoke test (site-table to_pandas feature) failed
+  at runtime even after the collection importorskip fixes. Install `.[dev,tabular]` so
+  pandas/pyarrow are present. ci-only change; no release.
+
+### Documentation
+
+- **backends**: Paddlepaddle backend lockstep docs + pyproject extra/marker [paddle P7]
+  ([`1cedfc0`](https://github.com/johnmarktaylor91/torchlens/commit/1cedfc0f31923c53e8abc855a340d6e59165fd63))
+
+Final phase. pyproject: paddle extra (paddlepaddle>=3.3,<3.4) + backend_paddle pytest marker (clears
+  the unknown-marker warning). Paddle added in lockstep to every backend listing: README quickstart,
+  docs/backends.md, LIMITATIONS (dygraph-only preview; in-place/RNG/scalar rejected; same-object
+  alias annotations; dynamic-tripwire+static-inventory coverage; eval-mode composites allowed,
+  training/stochastic denied), backward.md (derived-grad preview != true backward), glossary backend
+  matrix + tl.backends.paddle.GradOptions + array_payloads/bf16 note, state_of_torchlens,
+  CLAUDE/AGENTS, audit notebook README, and the artifact-2 kwarg/backward matrix (paddle column).
+  Backend roster is now four non-torch: mlx/jax/tinygrad/paddle.
+
+- **tracker**: Record Sprint C node-visual review-day items
+  ([`6e1bde9`](https://github.com/johnmarktaylor91/torchlens/commit/6e1bde9ce7e8ebf21d60faa7926f730ea2407635))
+
+### Features
+
+- **backends**: Non-vacuous paddle validation tripwire (coverage oracle + replay + perturbation)
+  [paddle P3]
+  ([`1cc75f6`](https://github.com/johnmarktaylor91/torchlens/commit/1cc75f62bc06fab05a7da2197771ae50bd8ab534))
+
+The keystone phase (4-round dual-lab reviewed). validation.py + PaddleBackend.validate_trace/
+  validate_entry implement a REAL tripwire shaped like tinygrad/jax (not MLX's unsupported stub):
+  (1) coverage oracle over PaddleOpCapture records — FAIL on any unlabeled tensor input leaf to a
+  non-factory op + conservation (every consumed non-input saved tensor must have a producing op);
+  (2) check_metadata_invariants; (3) replay each saved op by rebuilding its exact call from the arg
+  template (never live-arg fallback) + parent perturbation; (4) ValidationReplayStatus counts, live
+  pass requires >=1 non-factory replayed op; loaded payload-stripped -> unavailable, never True.
+  Adversary suite proves non-vacuity: unwrapped-intermediate gap FAILS, dropped edge FAILS,
+  corrupted output FAILS, scalar-escape raises at capture, healthy MLP passes. Never weakens a check
+  or synthesizes a pass. (same-object static-snapshot adversary -> P6.)
+
+- **backends**: Paddle .tlspec serialization (PaddlePayloadCodec + runtime fingerprint) [paddle P5]
+  ([`17397f3`](https://github.com/johnmarktaylor91/torchlens/commit/17397f32a0743fd5d68c4b5f4a4493acab590484))
+
+Real PaddlePayloadCodec (array_payloads/safetensors, peer parity, payload_materialization=True)
+  registered in _CODECS. bf16 handled explicitly: paddle bfloat16.numpy() is uint16 transport, so
+  the codec records logical_dtype='paddle.bfloat16' + transport metadata and reconstructs a paddle
+  bf16 tensor on load (no silent uint16 corruption); paddle dtype/place resolvers. Patched
+  _TlSpecWriter._backend_runtime backend-neutrally to read the real fingerprint
+  (backend_runtime_version/_config/_device_summary) instead of the '0.0.metadata' placeholder; added
+  backend_runtime_config/_device_summary as Trace fields (FieldPolicy.KEEP) parallel to the existing
+  backend_runtime_version, with paddle runtime-only fields FieldPolicy.DROP. Regenerated ONLY
+  field_order_dataframe_digest.json (intentional field addition; 22 byte-identity tripwire gates
+  unchanged + passing). 9 codec tests (incl bf16 bit-exact round-trip) pass; no
+  torch/mlx/jax/tinygrad serialization regression.
+
+- **backends**: Paddle T1 derived-grad preview (paddle.grad + tap-observer intermediates) [paddle
+  P4]
+  ([`1f90087`](https://github.com/johnmarktaylor91/torchlens/commit/1f900875541543472d6fba310cd862ec5cb6c89e))
+
+GradOptions + _attach_derived_grads. Leaf input/param grads via paddle.grad over a second forward
+  under pause_logging with stop_gradient flipped (paddle defaults True); re-run output must match
+  the captured output or grads are refused. Intermediate (opt-in) path installs the
+  paddle_tap_observer to record REPLAY-TIME intermediates (the captured-pass tensors aren't in the
+  AD graph) and matches them back to trace ops by the stable wrapper-call ordinal + parent labels +
+  module stack; duplicate match groups attach nothing (two same-shape relus stay disambiguated);
+  exact-only, allow_unused None -> skip; max_intermediate_grads cap raises. has_backward_pass stays
+  False; grads live only in derived_grads/intermediate_derived_grads, never backward_pass_logs.
+  stop_gradient + .grad snapshotted/restored on success and exception. 9 tests pass.
+
+- **backends**: Paddlepaddle dygraph op-wrapping capture + PaddleOpCapture coverage record [paddle
+  P2]
+  ([`4bdcede`](https://github.com/johnmarktaylor91/torchlens/commit/4bdcedeba10e1beb7354f34faabf266629e3e903))
+
+Real eager capture for the paddle backend (mirrors the MLX template). Reflective op-wrapping over
+  paddle.*/F.*/Tensor methods+dunders (tensor-method surface is primary — paddle x+y/@ go through
+  C++ dispatch, not the functional namespace), recursion-guarded (_paddle_capture_depth). Each op
+  emits an OpEvent AND a PaddleOpCapture coverage record (full arg template with per-leaf
+  labeled/unlabeled markers) for the P3 tripwire. Label-preserving same-object aliases
+  (astype(x.dtype) etc. preserve the producer label + record an annotation, NOT a producer node — no
+  fan-out mis-parenting). Wrap-and-raise deny classes: in-place/__setitem__, RNG, and depth-gated
+  tensor->scalar escapes (std/var wrapped + exempt at depth>0; user float(x.sum()) raises).
+  Forward-hook module containment (with_kwargs). Dygraph guard rejects static/PIR. Reuses shared
+  materialize_from_events; never synthesizes placeholder ops. 14 tests pass; import stays
+  paddle-lazy. validate_trace still stubbed (P3).
+
+- **backends**: Register PaddlePaddle backend spec + capabilities skeleton [paddle P1]
+  ([`6e0c5f4`](https://github.com/johnmarktaylor91/torchlens/commit/6e0c5f459e12e636097b158d371a4855ea3538f8))
+
+M3 phase 1 of the converged paddle-backend spec (4-round dual-lab reviewed). Registers the 'paddle'
+  BackendSpec (alias 'paddlepaddle', priority 40) in default_specs with a lazy-import
+  _paddle_can_handle detector (disjoint from torch/mlx/jax/tinygrad), honest BackendCapabilities
+  (backward_capture=False, validation_replay=True, intermediate_derived_grads=True,
+  payload_materialization=True, array_payloads/safetensors), and PADDLE_TRACE_OPTIONS + option
+  policies. capture/validate dispatch to a PaddleBackend stub that raises typed
+  BackendUnsupportedError until P2/P3 (never a metadata-only True). grad_options error text includes
+  paddle. import torchlens stays paddle-lazy. Technical preview.
+
+### Testing
+
+- **backends**: Paddle wrap-inventory snapshot (static coverage guard) + same-object adversary
+  [paddle P6]
+  ([`096be9b`](https://github.com/johnmarktaylor91/torchlens/commit/096be9beed5b958624db9d273ae5d7f6c9f54e58))
+
+The static half of the two-guard coverage model. test_paddle_wrap_inventory.py pins the
+  deterministic _PaddleWrapperRegistry inventory (116 wrapped + 257 denied op names) as a
+  correctness gate: a paddle release that adds/moves/removes an op fails the snapshot and forces a
+  maintainer to classify it. Explicitly asserts the load-bearing memberships (std/var wrapped for
+  the depth-gated escape exemption; same-object no-op APIs in the alias class; __setitem__/
+  copy_/RNG/tensor-escape in the deny class). The same-object static-snapshot adversary (deferred
+  from P3) now fires: removing Tensor.astype/reshape from the wrap surface fails the inventory
+  snapshot, documenting that the dynamic tripwire alone cannot catch a totally-unwrapped same-object
+  no-op. Full paddle suite runs clean combined (44 tests, no state leak).
+
+
 ## v2.20.3 (2026-06-16)
 
 ### Bug Fixes
