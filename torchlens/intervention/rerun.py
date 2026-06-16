@@ -931,7 +931,7 @@ def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) 
     return 1
 
 
-def _rerun_save_scope(log: "Trace") -> tuple[str | list[int] | None, Any | None, int, str]:
+def _rerun_save_scope(log: "Trace") -> tuple[str | list[int | str] | None, Any | None, int, str]:
     """Return capture save settings that mirror the original trace scope.
 
     Parameters
@@ -941,7 +941,7 @@ def _rerun_save_scope(log: "Trace") -> tuple[str | list[int] | None, Any | None,
 
     Returns
     -------
-    tuple[str | list[int] | None, Any | None, int, str]
+    tuple[str | list[int | str] | None, Any | None, int, str]
         ``layers_to_save``, optional save predicate, predicate lookback, and
         lookback payload policy for the fresh rerun capture.
     """

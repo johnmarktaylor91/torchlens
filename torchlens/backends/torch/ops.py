@@ -2714,6 +2714,44 @@ def log_function_output_tensors_fast(
                 self.save_arg_values,
                 self.activation_transform,
             )
+            # Output layers are identity wrappers whose out come
+            # from their parent.  Propagate the parent's saved out to
+            # any child that is an output layer so postprocess_fast can find it.
+            for child_layer in orig_layer_entry.children:
+                if child_layer in self.output_layers:
+                    child_output = self[child_layer]
+                    if (
+                        orig_layer_entry.has_out_variations
+                        and child_layer in orig_layer_entry.out_versions_by_child
+                    ):
+                        # out_versions_by_child already has transform applied.
+                        tensor_to_save = orig_layer_entry.out_versions_by_child[child_layer]
+                        child_output._internal_set("out", safe_copy(tensor_to_save))
+                    else:
+                        child_output._internal_set("out", safe_copy(out))
+                        if self.activation_transform is not None:
+                            # pause_logging prevents activation_transform from
+                            # triggering decorated torch ops that would be logged.
+                            with pause_logging():
+                                child_output._internal_set(
+                                    "transformed_out",
+                                    self.activation_transform(child_output.out),
+                                )
+                            if not getattr(self, "save_raw_activations", True):
+                                child_output._internal_set("out", None)
+                    child_output.has_saved_activation = True
+                    if self.save_arg_values:
+                        child_output.has_saved_args = True
+                        child_output._internal_set("saved_args", [safe_copy(child_output.out)])
+                        child_output._internal_set("saved_kwargs", {})
+                    if child_output.out is not None:
+                        child_output.activation_memory = Bytes(
+                            get_memory_amount_from_metadata(
+                                child_output.out,
+                                tuple(child_output.out.shape),
+                                child_output.out.dtype,
+                            )
+                        )
 
         # Update lightweight metadata that may vary across inputs
         # (shape can differ for dynamic-shape models that still share graph structure).
