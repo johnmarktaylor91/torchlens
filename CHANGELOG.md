@@ -1,6 +1,25 @@
 # CHANGELOG
 
 
+## v2.20.3 (2026-06-16)
+
+### Bug Fixes
+
+- **tests**: Importorskip optional deps for smoke collection
+  ([`c14bba9`](https://github.com/johnmarktaylor91/torchlens/commit/c14bba9397bdf1c38e9b9fe0e0a9eede48f297f4))
+
+pytest collects (imports) every test module, so bare module-level imports of optional deps not
+  present in the minimal CI smoke env (`.[dev]`) broke collection and failed the whole Tests
+  workflow. Guard them with pytest.importorskip (mirroring the existing mlx pattern) so the modules
+  skip cleanly when the dep is absent and collect everywhere: - pandas (8 files: test_io_pandas,
+  test_exports, test_record_export, test_io_export, test_io_integration, test_conditional_branches,
+  test_conditional_integration, test_conditional_lifecycle) - cairosvg (test_label_geometry) -
+  torchvision (visualization/test_sibling_ordering)
+
+Surfaced for the first time by pushing the long-unpushed branch (CI never ran on it; local dev env
+  has every dep). collect-only clean; smoke green; ruff clean. No test logic changed.
+
+
 ## v2.20.2 (2026-06-16)
 
 ### Bug Fixes

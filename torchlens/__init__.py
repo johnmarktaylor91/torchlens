@@ -19,7 +19,7 @@ from typing import Any
 import torch as _torch
 from torch import nn as _nn
 
-__version__ = "2.20.2"
+__version__ = "2.20.3"
 
 from . import (
     bridge,
