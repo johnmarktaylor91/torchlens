@@ -17,6 +17,7 @@ from __future__ import annotations
 import ast
 import os
 import tokenize
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Optional, Sequence, Tuple, TypeAlias, cast
 
@@ -28,7 +29,8 @@ LineSpan: TypeAlias = Tuple[int, int]
 FunctionNode: TypeAlias = ast.FunctionDef | ast.AsyncFunctionDef
 
 _BRANCH_CONSUMER_KINDS = {"if_test", "elif_test", "ifexp"}
-_file_cache: Dict[str, "FileIndex"] = {}
+_FILE_CACHE_MAX_SIZE = 256
+_file_cache: OrderedDict[str, "FileIndex"] = OrderedDict()
 
 
 @dataclass(frozen=True)
@@ -314,7 +316,7 @@ def get_file_index(filename: str) -> Optional[FileIndex]:
     except OSError:
         return None
 
-    cached = _file_cache.get(filename)
+    cached = _get_cached_file_index(filename)
     if cached is not None and cached.mtime_ns == mtime_ns:
         return cached
 
@@ -351,8 +353,50 @@ def get_file_index(filename: str) -> Optional[FileIndex]:
         bool_consumers=bool_consumers,
         parent_map=parent_map,
     )
-    _file_cache[filename] = file_index
+    _set_cached_file_index(filename, file_index)
     return file_index
+
+
+def _get_cached_file_index(filename: str) -> Optional[FileIndex]:
+    """Return a cached file index and mark it as recently used.
+
+    Parameters
+    ----------
+    filename:
+        Source filename to look up.
+
+    Returns
+    -------
+    Optional[FileIndex]
+        Cached index for ``filename``, or ``None`` when absent.
+    """
+
+    cached = _file_cache.get(filename)
+    if cached is not None:
+        _file_cache.move_to_end(filename)
+    return cached
+
+
+def _set_cached_file_index(filename: str, file_index: FileIndex) -> None:
+    """Store a file index and evict least-recently-used entries beyond the cap.
+
+    Parameters
+    ----------
+    filename:
+        Source filename for the index.
+    file_index:
+        Parsed index to cache.
+
+    Returns
+    -------
+    None
+        Mutates the module-level cache in place.
+    """
+
+    _file_cache[filename] = file_index
+    _file_cache.move_to_end(filename)
+    while len(_file_cache) > _FILE_CACHE_MAX_SIZE:
+        _file_cache.popitem(last=False)
 
 
 def classify_bool(filename: str, line: int, col: Optional[int] = None) -> BoolClassification:

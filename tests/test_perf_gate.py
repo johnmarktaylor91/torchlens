@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections import OrderedDict, deque
+from pathlib import Path
 
 import pytest
 import torch
@@ -17,7 +18,9 @@ from benchmarks.perf_suite import (
     _validate_baseline_status_args,
 )
 from torchlens.backends.torch.model_prep import _traverse_model_modules
+from torchlens.postprocess import ast_branches
 from torchlens.postprocess.loop_detection import FrontierNodes, _pop_frontier_node
+from torchlens.utils.tensor_utils import get_memory_amount
 
 
 def _row(
@@ -90,6 +93,74 @@ def _payload(rows: list[dict[str, object]]) -> dict[str, object]:
             "rows": rows,
         }
     )
+
+
+def _write_perf_source(tmp_path: Path, index: int) -> Path:
+    """Write a distinct Python source file for AST cache tests.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary directory for generated source files.
+    index:
+        Distinct numeric suffix and return value.
+
+    Returns
+    -------
+    Path
+        Path to the generated source file.
+    """
+
+    path = tmp_path / f"perf_cache_{index}.py"
+    path.write_text(f"def forward():\n    return {index}\n", encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    ("dtype", "shape"),
+    [
+        (torch.bfloat16, (2, 3)),
+        (torch.float32, (4, 5)),
+        (torch.float64, (1, 2, 3)),
+        (torch.int8, (7,)),
+    ],
+)
+def test_get_memory_amount_matches_tensor_method_byte_count(
+    dtype: torch.dtype, shape: tuple[int, ...]
+) -> None:
+    """Tensor memory accounting matches direct Tensor method byte counts."""
+
+    tensor = torch.ones(shape, dtype=dtype)
+    expected = int(tensor.nelement() * tensor.element_size())
+
+    assert get_memory_amount(tensor) == expected
+
+
+def test_ast_file_cache_respects_lru_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """AST file cache evicts least-recently-used entries beyond the configured cap."""
+
+    cap = 3
+    ast_branches.invalidate_cache()
+    monkeypatch.setattr(ast_branches, "_FILE_CACHE_MAX_SIZE", cap)
+    paths = [_write_perf_source(tmp_path, index) for index in range(cap + 2)]
+
+    try:
+        first_index = ast_branches.get_file_index(str(paths[0]))
+        assert first_index is not None
+
+        for path in paths[1:cap]:
+            assert ast_branches.get_file_index(str(path)) is not None
+
+        assert ast_branches.get_file_index(str(paths[0])) is first_index
+
+        for path in paths[cap:]:
+            assert ast_branches.get_file_index(str(path)) is not None
+
+        assert len(ast_branches._file_cache) <= cap
+        assert str(paths[0]) in ast_branches._file_cache
+        assert str(paths[1]) not in ast_branches._file_cache
+    finally:
+        ast_branches.invalidate_cache()
 
 
 def test_perf_gate_compare_passes_within_tolerance() -> None:

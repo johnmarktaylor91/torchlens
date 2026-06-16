@@ -16,7 +16,7 @@ to wrapped versions.
 
 import copy
 from math import prod
-from typing import Any, Literal, Optional, cast
+from typing import Any, Callable, Literal, Optional, cast
 
 import numpy as np
 import torch
@@ -47,6 +47,8 @@ _DTYPE_FLOAT_TOLERANCES: dict[torch.dtype, tuple[float, float]] = {
 # because CUDA availability cannot change at runtime.  Avoids repeated
 # calls into the CUDA runtime (which involve driver queries).
 _cuda_available: Optional[bool] = None
+
+_TensorSizeMethod = Callable[[torch.Tensor], int]
 
 
 def _is_cuda_available() -> bool:
@@ -259,13 +261,50 @@ def safe_to(obj: Any, device: str) -> Any:
         return obj
 
 
+def _unwrapped_tensor_size_method(method: _TensorSizeMethod) -> _TensorSizeMethod:
+    """Return the undecorated implementation for a Tensor size method.
+
+    Parameters
+    ----------
+    method:
+        Tensor method descriptor or TorchLens wrapper to resolve.
+
+    Returns
+    -------
+    _TensorSizeMethod
+        Original method when TorchLens has decorated it, otherwise ``method``.
+    """
+
+    from .. import _state
+
+    return cast(_TensorSizeMethod, _state._decorated_to_orig.get(id(method), method))
+
+
+def _dense_tensor_memory_amount(t: torch.Tensor) -> int:
+    """Return dense tensor bytes without entering the logging toggle machinery.
+
+    Parameters
+    ----------
+    t:
+        Dense tensor to measure.
+
+    Returns
+    -------
+    int
+        Number of bytes represented by ``t.nelement() * t.element_size()``.
+    """
+
+    nelement = _unwrapped_tensor_size_method(torch.Tensor.nelement)
+    element_size = _unwrapped_tensor_size_method(torch.Tensor.element_size)
+    return int(nelement(t) * element_size(t))
+
+
 def get_memory_amount(t: torch.Tensor) -> int:
     """Return the memory footprint of a tensor in bytes.
 
-    ``pause_logging()`` is required because ``.nelement()`` and
-    ``.element_size()`` are decorated tensor custom_methods.  Without pausing,
-    calling them during active logging would trigger the logging pipeline
-    recursively (infinite loop).
+    Tensor size methods are called through their unwrapped implementations when
+    TorchLens has decorated them, avoiding logging recursion without toggling
+    global logging state for each tensor.
 
     Meta tensors have no storage and return 0.  Sparse tensors report only
     the size of their non-zero values.
@@ -276,16 +315,14 @@ def get_memory_amount(t: torch.Tensor) -> int:
     Returns:
         Size in bytes, or 0 on failure / meta tensors.
     """
-    from .._state import pause_logging
 
     try:
-        with pause_logging():
-            if t.device.type == "meta":
-                return 0
-            if t.is_sparse:
-                # Sparse tensors: only the values storage counts.
-                return t._values().nelement() * t._values().element_size()
-            return t.nelement() * t.element_size()
+        if t.device.type == "meta":
+            return 0
+        if t.is_sparse:
+            # Sparse tensors: only the values storage counts.
+            return _dense_tensor_memory_amount(t._values())
+        return _dense_tensor_memory_amount(t)
     except Exception:
         return 0
 

@@ -500,9 +500,6 @@ def pause_logging() -> Iterator[None]:
     Typical callers:
         - ``safe_copy``: copies tensors without logging the copy op
         - ``activation_transform``: applies user post-processing without logging
-        - ``get_memory_amount``: calls ``nelement()`` / ``element_size()``
-          which are themselves decorated tensor custom_methods — without pausing,
-          they'd trigger infinite recursive logging.
     """
     global _logging_enabled
     prev = _logging_enabled  # save current state (True or False)
