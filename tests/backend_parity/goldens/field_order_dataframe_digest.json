@@ -915,6 +915,12 @@
       "_source_code_blob",
       "_source_model_ref",
       "_spec_revision",
+      "_tf_init_op_labels",
+      "_tf_op_captures",
+      "_tf_op_type_counts",
+      "_tf_source_records",
+      "_tf_unresolved_producers",
+      "_tf_validation_result",
       "_tl_backward_hooked_tensor_keys",
       "_tl_backward_triggers_disarmed",
       "_tracing_finished",
@@ -1081,13 +1087,13 @@
     ]
   },
   "sha256_chunks": [
-    "075376bc",
-    "2b030df2",
-    "4d212b5d",
-    "19897a9c",
-    "dc2b6a95",
-    "06e68ba4",
-    "3634cedd",
-    "5df93c0b"
+    "bf0f290f",
+    "968b3681",
+    "5524b8f0",
+    "4ceef68a",
+    "02db75b8",
+    "a8b8b269",
+    "3692398c",
+    "0690a6a8"
   ]
 }
