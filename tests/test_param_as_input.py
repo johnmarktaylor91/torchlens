@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -82,6 +83,28 @@ class _NestedStimulusModel(nn.Module):
         """
 
         return torch.relu(inputs[0]).sum()
+
+
+class _LoopStimulusModel(nn.Module):
+    """Model with repeated ops fed by a parameter stimulus."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a fixed recurrent op pattern.
+
+        Parameters
+        ----------
+        x:
+            Stimulus tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar model output.
+        """
+
+        for _ in range(3):
+            x = torch.relu(x + 1)
+        return x.sum()
 
 
 class _CudaElementwiseStimulusModel(nn.Module):
@@ -282,6 +305,33 @@ def test_backward_ready_parameter_input_traces() -> None:
     trace = tl.trace(_TinyStimulusModel(), _parameter_stimulus(), backward_ready=True)
 
     _assert_input_parent_edge(trace)
+
+
+def test_loop_detection_groups_recurrent_ops_with_parameter_input() -> None:
+    """Loop detection still groups repeated ops when the input is a parameter."""
+
+    trace = tl.trace(_LoopStimulusModel(), _parameter_stimulus())
+
+    add_layer = trace["add_1_1"]
+    relu_layer = trace["relu_1_2"]
+    assert add_layer.num_passes == 3
+    assert relu_layer.num_passes == 3
+    assert all(op.input_was_parameter is False for op in trace.layer_list if not op.is_input)
+    assert trace[trace.input_layers[0]].input_was_parameter is True
+
+
+def test_parameter_input_tlspec_roundtrip_preserves_metadata(tmp_path: Path) -> None:
+    """A parameter-input trace saves and loads through tlspec with metadata intact."""
+
+    bundle_path = tmp_path / "parameter_input.tlspec"
+    trace = tl.trace(_TinyStimulusModel(), _parameter_stimulus())
+
+    trace.save(bundle_path)
+    loaded = tl.load(bundle_path)
+
+    input_label = loaded.input_layers[0]
+    assert loaded[input_label].input_was_parameter is True
+    assert any(input_label in op.parents for op in loaded.layer_list if not op.is_input)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="Cross-device check requires CUDA.")

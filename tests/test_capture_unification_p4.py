@@ -14,7 +14,7 @@ import torchlens as tl
 from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 from torchlens.backends.torch.ops import _get_parent_output_version_snapshot
 from torchlens.utils.arg_handling import copy_arg_tree
-from torchlens.utils.tensor_utils import copy_tensor_payload
+from torchlens.utils.tensor_utils import _clone_tensor_payload, copy_tensor_payload
 
 
 class PartialConvRelu(nn.Module):
@@ -242,18 +242,27 @@ def test_copy_tensor_payload_tensor_zoo(save_mode: str) -> None:
 
 
 def test_copy_policies_preserve_raw_labels_and_parameters() -> None:
-    """Tensor copies preserve raw labels, and parameter copies remain parameters."""
+    """Tensor copies preserve raw labels, with input-specific parameter downgrading."""
 
     tensor = torch.randn(2, 2)
     set_tensor_label(tensor, "raw_label_for_copy")
+    parameter = nn.Parameter(torch.ones(2))
 
     payload_copy = copy_tensor_payload(tensor, save_mode="copy", detach_tensor=True)
     arg_copy = copy_arg_tree({"x": [tensor]})["x"][0]
-    parameter_copy = copy_arg_tree(nn.Parameter(torch.ones(2)))
+    input_parameter_copy = copy_arg_tree(parameter)
+    snapshot_parameter_copy = _clone_tensor_payload(
+        parameter,
+        detach_tensor=False,
+        save_mode="copy",
+    )
 
     assert get_tensor_label(payload_copy) == "raw_label_for_copy"
     assert get_tensor_label(arg_copy) == "raw_label_for_copy"
-    assert isinstance(parameter_copy, nn.Parameter)
+    assert isinstance(input_parameter_copy, torch.Tensor)
+    assert not isinstance(input_parameter_copy, nn.Parameter)
+    assert input_parameter_copy.requires_grad
+    assert isinstance(snapshot_parameter_copy, nn.Parameter)
 
 
 def test_copy_arg_tree_recurses_builtin_containers_and_preserves_custom_identity() -> None:

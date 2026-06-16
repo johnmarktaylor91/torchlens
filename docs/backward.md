@@ -42,6 +42,30 @@ belongs to a live TorchLens trace. If an engine path bypasses those wrappers, te
 implicit pass. Consecutive bypassed backwards may merge because hook events alone do not reveal a
 hard engine boundary; use TorchLens triggers for exact pass boundaries.
 
+## Backprop To The Stimulus
+
+For activation maximization, adversarial examples, and GAN inversion, the optimized stimulus can
+be either a plain leaf tensor or an `nn.Parameter` owned by an outer optimizer:
+
+```python
+z = torch.nn.Parameter(torch.randn(1, latent_dim))
+trace = tl.trace(generator, z, save_grads=True)
+
+loss = score(trace[trace.output_layers[0]].out)
+trace.log_backward(loss)
+
+optimizer.step()  # reads z.grad
+stimulus_grad = trace[trace.input_layers[0]].grad
+```
+
+TorchLens clones forward inputs before capture so it can label and move tensors without mutating
+the caller's object. The clone is not detached, so gradients still propagate back to the original
+leaf tensor or `nn.Parameter`; `x.grad` / `z.grad` is the optimizer-facing gradient. TorchLens also
+records the same input gradient on `trace[trace.input_layers[0]].grad` when gradient saving covers
+the input. If the original input was an `nn.Parameter`, the input op records
+`input_was_parameter=True`; it is still represented as an input node in the graph, not as a model
+parameter.
+
 ## Records
 
 `trace.backward_passes` is indexed positionally with Python's 0-based rules, and supports named

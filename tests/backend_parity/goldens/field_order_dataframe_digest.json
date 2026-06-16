@@ -87,6 +87,7 @@
       "children",
       "has_children",
       "is_input",
+      "input_was_parameter",
       "has_input_ancestor",
       "input_ancestors",
       "min_distance_from_input",
@@ -460,6 +461,7 @@
       "children",
       "has_children",
       "is_input",
+      "input_was_parameter",
       "has_input_ancestor",
       "input_ancestors",
       "min_distance_from_input",
@@ -611,6 +613,7 @@
       "input_ops",
       "input_shapes",
       "input_to_module_calls",
+      "input_was_parameter",
       "internal_source_ancestors",
       "internal_source_parents",
       "intervention_replaced",
@@ -1078,13 +1081,13 @@
     ]
   },
   "sha256_chunks": [
-    "591c6595",
-    "334261a1",
-    "7d1f2ad0",
-    "802ffe37",
-    "28fe2725",
-    "569617ac",
-    "f92b356e",
-    "2c6296a1"
+    "075376bc",
+    "2b030df2",
+    "4d212b5d",
+    "19897a9c",
+    "dc2b6a95",
+    "06e68ba4",
+    "3634cedd",
+    "5df93c0b"
   ]
 }
