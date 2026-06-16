@@ -157,6 +157,9 @@
       "tlspec_version",
       "_tracing_finished",
       "backend",
+      "backend_runtime_config",
+      "backend_runtime_device_summary",
+      "backend_runtime_version",
       "module_identity_mode",
       "param_source",
       "derived_grads",
@@ -878,6 +881,10 @@
       "_out_writer",
       "_output_container_specs_by_raw_label",
       "_output_transform",
+      "_paddle_alias_annotations",
+      "_paddle_capture_depth",
+      "_paddle_capture_gap_markers",
+      "_paddle_op_captures",
       "_param_log_by_pid",
       "_param_logs_by_module",
       "_phase_timings",
@@ -917,6 +924,9 @@
       "annotations",
       "append_history",
       "backend",
+      "backend_runtime_config",
+      "backend_runtime_device_summary",
+      "backend_runtime_version",
       "backward_durations",
       "backward_memory_backend",
       "backward_pass_logs",
@@ -1068,13 +1078,13 @@
     ]
   },
   "sha256_chunks": [
-    "27f07409",
-    "7416a72a",
-    "ab44f20e",
-    "84c704cf",
-    "b5b3ea83",
-    "f6a596a8",
-    "b9305748",
-    "ca1937dd"
+    "591c6595",
+    "334261a1",
+    "7d1f2ad0",
+    "802ffe37",
+    "28fe2725",
+    "569617ac",
+    "f92b356e",
+    "2c6296a1"
   ]
 }

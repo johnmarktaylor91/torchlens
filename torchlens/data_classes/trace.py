@@ -1366,6 +1366,9 @@ class Trace(CapturedRun):
             setattr(build_state, state_field, getattr(default_state, state_field))
 
     backend: BackendName
+    backend_runtime_config: dict[str, Any] | None
+    backend_runtime_device_summary: dict[str, Any] | None
+    backend_runtime_version: str | None
     module_identity_mode: Literal["torch_module", "pytree_module", "function_root", "object_module"]
     param_source: Literal["native-module", "pytree-derived", "none"]
     state: TraceState
@@ -1410,6 +1413,13 @@ class Trace(CapturedRun):
         "model_class_name": FieldPolicy.KEEP,
         "model_label": FieldPolicy.KEEP,
         "backend": FieldPolicy.KEEP,
+        "backend_runtime_config": FieldPolicy.KEEP,
+        "backend_runtime_device_summary": FieldPolicy.KEEP,
+        "backend_runtime_version": FieldPolicy.KEEP,
+        "_paddle_capture_depth": FieldPolicy.DROP,
+        "_paddle_op_captures": FieldPolicy.DROP,
+        "_paddle_alias_annotations": FieldPolicy.DROP,
+        "_paddle_capture_gap_markers": FieldPolicy.DROP,
         "module_identity_mode": FieldPolicy.KEEP,
         "param_source": FieldPolicy.KEEP,
         "derived_grads": FieldPolicy.KEEP,
@@ -1746,6 +1756,9 @@ class Trace(CapturedRun):
         self.model_class_name = model_class_name
         self.model_label = model_class_name
         self.backend: BackendName = "torch"
+        self.backend_runtime_config: dict[str, Any] | None = None
+        self.backend_runtime_device_summary: dict[str, Any] | None = None
+        self.backend_runtime_version: str | None = None
         self.module_identity_mode: Literal[
             "torch_module", "pytree_module", "function_root", "object_module"
         ] = "torch_module"

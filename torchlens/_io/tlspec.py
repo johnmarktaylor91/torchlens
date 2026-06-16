@@ -355,11 +355,17 @@ class _TlSpecWriter:
 
         spec = get_backend_spec(backend_name)
         runtime_name = spec.serialization_policy.runtime_name or backend_name
+        runtime_config = getattr(source, "backend_runtime_config", None)
+        if not isinstance(runtime_config, dict):
+            runtime_config = {}
+        device_summary = getattr(source, "backend_runtime_device_summary", None)
+        if not isinstance(device_summary, dict):
+            device_summary = {}
         return {
             "name": runtime_name,
             "version": str(getattr(source, "backend_runtime_version", "0.0.metadata")),
-            "runtime_config": {},
-            "device_summary": {},
+            "runtime_config": runtime_config,
+            "device_summary": device_summary,
             "compat_policy": {"policy": "metadata-only"},
         }
 

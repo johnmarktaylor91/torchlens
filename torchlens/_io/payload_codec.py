@@ -562,6 +562,122 @@ class MlxPayloadCodec:
         return _unsupported_array_dtype_reason(array)
 
 
+class PaddlePayloadCodec:
+    """Payload codec for dense Paddle tensors."""
+
+    backend_name = "paddle"
+    codec_name = "numpy_safetensors_v1"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether ``value`` looks like a Paddle tensor."""
+
+        value_type = type(value)
+        return value_type.__module__.startswith("paddle") and hasattr(value, "dtype")
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Validate that a Paddle tensor can be copied to dense host storage."""
+
+        reason = self._unsupported_reason(value)
+        if reason is None:
+            return Ok()
+        if strict:
+            return FailReason(reason)
+        return SkipReason(reason)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Copy a Paddle tensor to host NumPy storage."""
+
+        if not self.can_encode(value):
+            raise TypeError(f"paddle codec cannot encode {type(value).__name__}.")
+        logical_dtype = str(getattr(value, "dtype", "unknown"))
+        logical_device = str(getattr(value, "place", "unknown"))
+        try:
+            array = np.asarray(value.numpy())
+        except (TypeError, ValueError, RuntimeError) as exc:
+            raise TypeError(f"Paddle tensor could not be copied to host: {exc}") from exc
+        _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
+        return EncodedArray(
+            array=np.ascontiguousarray(array),
+            logical_dtype=logical_dtype,
+            logical_device=logical_device,
+            codec_metadata=_json_ready_mapping(
+                {
+                    "logical_shape": [int(dim) for dim in array.shape],
+                    "source_type": type(value).__name__,
+                    "paddle_logical_dtype": logical_dtype,
+                    "paddle_logical_device": logical_device,
+                    "paddle_bfloat16_transport_bits": logical_dtype == "paddle.bfloat16",
+                }
+            ),
+        )
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
+    ) -> Any:
+        """Rebuild a Paddle tensor from host NumPy storage."""
+
+        del payload_hints, strict_runtime
+        from ..backends.registry import BackendRuntimeCompatibilityError
+
+        try:
+            import paddle
+        except ImportError as exc:
+            raise BackendRuntimeCompatibilityError(
+                "Portable Paddle payload materialization requires the paddle runtime."
+            ) from exc
+
+        logical_dtype = str(_entry_field(entry, "logical_dtype") or array.dtype)
+        dtype = _resolve_paddle_dtype(paddle, logical_dtype)
+        if dtype is None:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable Paddle payload dtype {logical_dtype!r} is not supported by "
+                "the installed paddle runtime."
+            )
+
+        place = _resolve_paddle_place(paddle, map_location)
+        if place is None:
+            place = _resolve_paddle_place(paddle, _entry_field(entry, "logical_device"))
+        try:
+            if logical_dtype == "paddle.bfloat16":
+                value = paddle.to_tensor(np.ascontiguousarray(array), place=place)
+                return value if str(value.dtype) == logical_dtype else value.view(dtype)
+            return paddle.to_tensor(np.ascontiguousarray(array), dtype=dtype, place=place)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable Paddle payload could not be materialized: {exc}"
+            ) from exc
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return v2 manifest vocabulary for a Paddle payload."""
+
+        return _manifest_fields(
+            logical_backend=self.backend_name,
+            codec=self.codec_name,
+            value=value,
+            encoded=encoded,
+        )
+
+    def _unsupported_reason(self, value: Any) -> str | None:
+        """Return the first Paddle codec incompatibility reason, if any."""
+
+        if not self.can_encode(value):
+            return f"paddle codec cannot encode {type(value).__name__}"
+        dtype = getattr(value, "dtype", None)
+        if dtype is not None and _dtype_string_is_object_like(str(dtype)):
+            return f"object/string dtype {dtype} is not supported by the payload codec"
+        try:
+            array = np.asarray(value.numpy())
+        except (TypeError, ValueError, RuntimeError) as exc:
+            return f"Paddle tensor could not be copied to host: {exc}"
+        return _unsupported_array_dtype_reason(array)
+
+
 class NullPayloadCodec:
     """Payload codec for backends without materialization support this round."""
 
@@ -608,6 +724,7 @@ _CODECS: dict[str, PayloadCodec] = {
     "torch": TorchPayloadCodec(),
     "jax": JaxPayloadCodec(),
     "mlx": MlxPayloadCodec(),
+    "paddle": PaddlePayloadCodec(),
     "tinygrad": TinygradPayloadCodec(),
 }
 _TORCH_BACKEND_NAME = "torch"
@@ -1160,6 +1277,52 @@ def _resolve_mlx_device(mx_module: Any, map_location: Any) -> Any | None:
         if device_type_value is None or device is None:
             return None
         return mx_module.Device(device_type_value)
+    return None
+
+
+def _resolve_paddle_dtype(paddle_module: Any, dtype_name: str) -> Any | None:
+    """Resolve a Paddle dtype object from a manifest dtype string."""
+
+    candidate_names = [dtype_name]
+    if dtype_name.startswith("paddle."):
+        candidate_names.append(dtype_name.rsplit(".", maxsplit=1)[-1])
+    if dtype_name == "bool":
+        candidate_names.append("bool")
+    for candidate_name in candidate_names:
+        dtype = getattr(paddle_module, candidate_name, None)
+        if dtype is not None:
+            return dtype
+    return None
+
+
+def _resolve_paddle_place(paddle_module: Any, place_name: Any) -> Any | None:
+    """Resolve a Paddle place object from manifest or map-location text."""
+
+    if place_name is None:
+        return None
+    base_place = getattr(paddle_module, "Place", None)
+    if base_place is not None and isinstance(place_name, base_place):
+        return place_name
+    if not isinstance(place_name, str):
+        return None
+    requested = place_name.lower()
+    if requested in {"", "unknown"}:
+        return None
+    if requested in {"cpu", "place(cpu)"}:
+        return paddle_module.CPUPlace()
+    if requested in {"gpu", "cuda", "place(gpu)", "place(cuda)"}:
+        cuda_place = getattr(paddle_module, "CUDAPlace", None)
+        if cuda_place is not None:
+            return cuda_place(0)
+    for prefix in ("gpu:", "cuda:"):
+        if requested.startswith(prefix):
+            cuda_place = getattr(paddle_module, "CUDAPlace", None)
+            if cuda_place is None:
+                return None
+            try:
+                return cuda_place(int(requested.split(":", maxsplit=1)[1]))
+            except ValueError:
+                return None
     return None
 
 

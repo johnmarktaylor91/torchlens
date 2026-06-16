@@ -375,8 +375,9 @@ class PaddleBackend:
         trace._paddle_op_captures = []
         trace._paddle_alias_annotations = []
         trace._paddle_capture_gap_markers = []
-        trace.backend_runtime_config = {"version": str(getattr(self.paddle, "__version__", ""))}
-        trace._device_summary = {}
+        trace.backend_runtime_version = str(getattr(self.paddle, "__version__", ""))
+        trace.backend_runtime_config = {"version": trace.backend_runtime_version}
+        trace.backend_runtime_device_summary = {}
         trace._pre_forward_rng_states = None
         setattr(
             trace,
