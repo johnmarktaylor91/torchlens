@@ -27,9 +27,11 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
 def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
     """TensorFlow default spec is registered without importing TensorFlow."""
 
-    assert "tensorflow" not in sys.modules
+    tensorflow_preimported = "tensorflow" in sys.modules
 
     spec = get_backend_spec("tf")
+    if not tensorflow_preimported:
+        assert "tensorflow" not in sys.modules
     assert get_backend_spec("tensorflow") is spec
     assert spec.name == "tf"
     assert spec.priority == 50
@@ -158,8 +160,8 @@ def test_tf_detector_reports_non_tf_keras_backend_mismatch(
 
 
 @pytest.mark.tf_backend
-def test_tf_capture_trace_routes_to_p1_eager_boundary() -> None:
-    """Public trace dispatch reaches TFBackend and stops at the P2 eager boundary."""
+def test_tf_capture_trace_routes_to_eager_capture() -> None:
+    """Public trace dispatch reaches TFBackend and returns a TensorFlow trace."""
 
     tf = pytest.importorskip("tensorflow")
 
@@ -171,8 +173,10 @@ def test_tf_capture_trace_routes_to_p1_eager_boundary() -> None:
 
             return x + 1
 
-    with pytest.raises(BackendUnsupportedError, match="tf eager capture lands in P2"):
-        tl.trace(_TFModule(), tf.constant([1.0]), backend="tf")
+    trace = tl.trace(_TFModule(), tf.constant([1.0]), backend="tf")
+
+    assert trace.backend == "tf"
+    assert trace.num_ops == 1
 
 
 @pytest.mark.tf_backend
