@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 
 from torchlens import validate_forward_pass, validate_saved_outs, Trace, trace as trace_fn
+import torchlens.user_funcs as user_funcs
 from torchlens import check_metadata_invariants, MetadataInvariantError
 from torchlens.intervention.types import DictKey
 from torchlens.validation import validate_saved_outs as validate_from_subpkg
@@ -256,7 +257,6 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
         def __init__(self) -> None:
             super().__init__()
             self.register_buffer("buf", torch.zeros(3))
-            self.handle = object()
 
         def __getstate__(self) -> dict[str, object]:
             """Make deepcopy fail like modules holding uncopyable resources."""
@@ -270,6 +270,131 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback validation restores non-registered attr mutations before logging."""
+
+    original_deepcopy = user_funcs.copy.deepcopy
+
+    def fail_module_deepcopy(value: object) -> object:
+        """Fail only model deepcopy so the validation fallback path is exercised."""
+
+        if isinstance(value, nn.Module):
+            raise TypeError("forced module deepcopy failure")
+        return original_deepcopy(value)
+
+    class StepCounterModel(nn.Module):
+        """Model whose output depends on a plain Python step counter."""
+
+        def __init__(self) -> None:
+            """Initialize mutable plain state."""
+
+            super().__init__()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Increment plain state and use it in the output."""
+
+            self.step += 1
+            return x + float(self.step)
+
+    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert validate_forward_pass(StepCounterModel(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback plain-attr restore does not hide genuine logged-output breaks."""
+
+    original_deepcopy = user_funcs.copy.deepcopy
+    original_run = user_funcs._run_model_and_save_specified_outs
+
+    def fail_module_deepcopy(value: object) -> object:
+        """Fail only model deepcopy so the validation fallback path is exercised."""
+
+        if isinstance(value, nn.Module):
+            raise TypeError("forced module deepcopy failure")
+        return original_deepcopy(value)
+
+    def corrupt_logged_output(*args: object, **kwargs: object) -> Trace:
+        """Corrupt the captured output to simulate a real capture break."""
+
+        trace = original_run(*args, **kwargs)
+        output_layer = trace[trace.output_layers[0]]
+        output_layer.out = cast(torch.Tensor, output_layer.out) + 1.0
+        return trace
+
+    class StepCounterModel(nn.Module):
+        """Model whose fallback path would false-alarm without plain restore."""
+
+        def __init__(self) -> None:
+            """Initialize mutable plain state."""
+
+            super().__init__()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Increment plain state and use it in the output."""
+
+            self.step += 1
+            return x + float(self.step)
+
+    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", corrupt_logged_output)
+
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert validate_forward_pass(StepCounterModel(), torch.randn(3)) is False
+
+
+def test_validate_forward_pass_deepcopy_fallback_restore_failure_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback validation fails loudly if plain attr restore itself fails."""
+
+    original_deepcopy = user_funcs.copy.deepcopy
+
+    def fail_module_deepcopy(value: object) -> object:
+        """Fail only model deepcopy so the validation fallback path is exercised."""
+
+        if isinstance(value, nn.Module):
+            raise TypeError("forced module deepcopy failure")
+        return original_deepcopy(value)
+
+    class RestoreBlockedModel(nn.Module):
+        """Model that refuses normal assignment during the restore step."""
+
+        def __init__(self) -> None:
+            """Initialize mutable plain state and restore guard."""
+
+            super().__init__()
+            self._block_step_restore = False
+            self.step = 0
+            self._block_step_restore = True
+
+        def __setattr__(self, name: str, value: object) -> None:
+            """Block ``step`` assignment once validation tries to restore it."""
+
+            if name == "step" and getattr(self, "_block_step_restore", False):
+                raise RuntimeError("step restore blocked")
+            super().__setattr__(name, value)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Mutate ``step`` without using normal assignment."""
+
+            object.__setattr__(self, "step", self.step + 1)
+            return x + float(self.step)
+
+    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        with pytest.raises(RuntimeError, match="could not restore plain attribute"):
+            validate_forward_pass(RestoreBlockedModel(), torch.randn(3))
 
 
 def test_validation_tripwire_still_fails_on_wrong_output() -> None:

@@ -1357,6 +1357,8 @@ def _render_graph_only_svg(engine: str, source_path: str, timeout: int) -> str:
 
 _SVG_IMAGE_TAG_RE = re.compile(r"<image\b(?P<attrs>[^>]*)>", re.IGNORECASE)
 _SVG_ATTR_RE = re.compile(r"""(?P<name>[\w:.-]+)\s*=\s*(?P<quote>["'])(?P<value>.*?)(?P=quote)""")
+_SVG_ROOT_RE = re.compile(r"<svg\b(?P<attrs>[^>]*)>", re.IGNORECASE | re.DOTALL)
+_SVG_VIEWBOX_RE = re.compile(r"""viewBox=(?P<quote>["'])(?P<value>[^"']+)(?P=quote)""")
 
 
 def _inline_svg_file_local_images(svg_path: str) -> None:
@@ -1374,6 +1376,56 @@ def _inline_svg_file_local_images(svg_path: str) -> None:
     if inlined_svg != svg_text:
         with open(svg_path, "w", encoding="utf-8") as svg_file:
             svg_file.write(inlined_svg)
+
+
+def _normalize_svg_root_viewbox(svg_text: str) -> str:
+    """Shift a root SVG with a negative origin onto a positive page.
+
+    Parameters
+    ----------
+    svg_text:
+        SVG text to normalize.
+
+    Returns
+    -------
+    str
+        SVG text whose root viewBox starts at ``0 0``. The drawn region is
+        translated by the opposite offset so PDF/PNG rasterizers do not place
+        large Graphviz layouts outside the page.
+    """
+
+    root_match = _SVG_ROOT_RE.search(svg_text)
+    if root_match is None:
+        return svg_text
+    attrs = root_match.group("attrs")
+    viewbox_match = _SVG_VIEWBOX_RE.search(attrs)
+    if viewbox_match is None:
+        return svg_text
+    try:
+        min_x, min_y, width, height = (
+            float(part) for part in viewbox_match.group("value").replace(",", " ").split()
+        )
+    except ValueError:
+        return svg_text
+    if min_x == 0.0 and min_y == 0.0:
+        return svg_text
+
+    normalized_viewbox = f'viewBox="0 0 {width:.2f} {height:.2f}"'
+    new_attrs = attrs[: viewbox_match.start()] + normalized_viewbox + attrs[viewbox_match.end() :]
+    inner_start = root_match.end()
+    inner_end = svg_text.rfind("</svg>")
+    if inner_end == -1:
+        return svg_text
+    translate_x = -min_x
+    translate_y = -min_y
+    return (
+        svg_text[: root_match.start()]
+        + f"<svg{new_attrs}>"
+        + f'<g transform="translate({translate_x:.2f} {translate_y:.2f})">'
+        + svg_text[inner_start:inner_end]
+        + "</g>"
+        + svg_text[inner_end:]
+    )
 
 
 def _inline_svg_local_images(svg_text: str) -> str:
@@ -1591,8 +1643,10 @@ def _write_composed_code_panel(
     so vectors are preserved.
     """
 
-    graph_svg = _render_graph_only_svg(engine, source_path, timeout)
-    combined_svg = compose_graph_with_code_panel(graph_svg, source_text)
+    graph_svg = _normalize_svg_root_viewbox(_render_graph_only_svg(engine, source_path, timeout))
+    combined_svg = _normalize_svg_root_viewbox(
+        compose_graph_with_code_panel(graph_svg, source_text)
+    )
     if file_format == "svg":
         with open(rendered_path, "w", encoding="utf-8") as svg_file:
             svg_file.write(combined_svg)

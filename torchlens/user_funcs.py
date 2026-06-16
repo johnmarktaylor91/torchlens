@@ -510,9 +510,279 @@ def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.
 
 
 _VALIDATION_DEEPCOPY_WARNING_TYPES: set[type[nn.Module]] = set()
+_PLAIN_ATTR_IGNORED_NAMES = frozenset({"_parameters", "_buffers", "_modules"})
+_PLAIN_ATTR_MAX_CONTAINER_ITEMS = 128
+_PLAIN_ATTR_MAX_TENSOR_NUMEL = 4096
 
 
-def _model_for_ground_truth_validation(model: nn.Module) -> nn.Module:
+def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
+    """Return a value snapshot for a plain module-tree attribute.
+
+    Parameters
+    ----------
+    value:
+        Attribute value to snapshot.
+    attr_path:
+        Human-readable module/attribute path for diagnostics.
+
+    Returns
+    -------
+    Any
+        Detached value snapshot that can later be compared and restored.
+
+    Raises
+    ------
+    RuntimeError
+        If the value is not small and value-comparable enough for the fallback
+        validation restore. External objects remain unsupported in this path.
+    """
+
+    if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
+        return value
+    if isinstance(value, torch.Tensor):
+        if value.numel() > _PLAIN_ATTR_MAX_TENSOR_NUMEL:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot snapshot plain "
+                f"attribute '{attr_path}' because its tensor value has {value.numel()} "
+                "elements. Non-registered large mutable state is unsupported."
+            )
+        return value.detach().clone()
+    if isinstance(value, list):
+        if len(value) > _PLAIN_ATTR_MAX_CONTAINER_ITEMS:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot snapshot plain "
+                f"attribute '{attr_path}' because its list has {len(value)} items."
+            )
+        return [
+            _snapshot_plain_attr_value(item, f"{attr_path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, tuple):
+        if len(value) > _PLAIN_ATTR_MAX_CONTAINER_ITEMS:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot snapshot plain "
+                f"attribute '{attr_path}' because its tuple has {len(value)} items."
+            )
+        return tuple(
+            _snapshot_plain_attr_value(item, f"{attr_path}[{index}]")
+            for index, item in enumerate(value)
+        )
+    if isinstance(value, dict):
+        if len(value) > _PLAIN_ATTR_MAX_CONTAINER_ITEMS:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot snapshot plain "
+                f"attribute '{attr_path}' because its dict has {len(value)} items."
+            )
+        snapshot = {}
+        for key, item in value.items():
+            try:
+                key_snapshot = _snapshot_plain_attr_value(key, f"{attr_path}.<key>")
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    "TorchLens validation deepcopy fallback cannot snapshot plain "
+                    f"attribute '{attr_path}' because one of its dict keys is unsupported."
+                ) from exc
+            try:
+                hash(key_snapshot)
+            except TypeError as exc:
+                raise RuntimeError(
+                    "TorchLens validation deepcopy fallback cannot snapshot plain "
+                    f"attribute '{attr_path}' because one of its dict keys is unhashable "
+                    "after snapshotting."
+                ) from exc
+            snapshot[key_snapshot] = _snapshot_plain_attr_value(item, f"{attr_path}[{key!r}]")
+        return snapshot
+    if isinstance(value, (set, frozenset)):
+        if len(value) > _PLAIN_ATTR_MAX_CONTAINER_ITEMS:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot snapshot plain "
+                f"attribute '{attr_path}' because its set has {len(value)} items."
+            )
+        snapshot_items = [_snapshot_plain_attr_value(item, f"{attr_path}.<item>") for item in value]
+        try:
+            return type(value)(snapshot_items)
+        except TypeError as exc:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot snapshot plain "
+                f"attribute '{attr_path}' because its set items are not hashable."
+            ) from exc
+    raise RuntimeError(
+        "TorchLens validation deepcopy fallback cannot snapshot plain "
+        f"attribute '{attr_path}' of type {type(value).__name__}. Non-registered "
+        "external objects and other opaque mutable state are unsupported."
+    )
+
+
+def _plain_attr_values_equal(left: Any, right: Any, attr_path: str) -> bool:
+    """Return whether two snapshotted plain-attribute values are equal by value.
+
+    Parameters
+    ----------
+    left:
+        First value.
+    right:
+        Second value.
+    attr_path:
+        Human-readable module/attribute path for diagnostics.
+
+    Returns
+    -------
+    bool
+        True when values match.
+
+    Raises
+    ------
+    RuntimeError
+        If the values cannot be compared without ambiguity.
+    """
+
+    if isinstance(left, torch.Tensor) or isinstance(right, torch.Tensor):
+        if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
+            return False
+        return bool(torch.equal(left, right))
+    if isinstance(left, list) or isinstance(right, list):
+        if not isinstance(left, list) or not isinstance(right, list) or len(left) != len(right):
+            return False
+        return all(
+            _plain_attr_values_equal(left_item, right_item, f"{attr_path}[{index}]")
+            for index, (left_item, right_item) in enumerate(zip(left, right))
+        )
+    if isinstance(left, tuple) or isinstance(right, tuple):
+        if not isinstance(left, tuple) or not isinstance(right, tuple) or len(left) != len(right):
+            return False
+        return all(
+            _plain_attr_values_equal(left_item, right_item, f"{attr_path}[{index}]")
+            for index, (left_item, right_item) in enumerate(zip(left, right))
+        )
+    if isinstance(left, dict) or isinstance(right, dict):
+        if not isinstance(left, dict) or not isinstance(right, dict) or left.keys() != right.keys():
+            return False
+        return all(
+            _plain_attr_values_equal(left[key], right[key], f"{attr_path}[{key!r}]") for key in left
+        )
+    if isinstance(left, (set, frozenset)) or isinstance(right, (set, frozenset)):
+        try:
+            return bool(left == right)
+        except Exception as exc:
+            raise RuntimeError(
+                "TorchLens validation deepcopy fallback cannot compare plain "
+                f"attribute '{attr_path}' by value."
+            ) from exc
+    try:
+        result = left == right
+    except Exception as exc:
+        raise RuntimeError(
+            "TorchLens validation deepcopy fallback cannot compare plain "
+            f"attribute '{attr_path}' by value."
+        ) from exc
+    if isinstance(result, bool):
+        return result
+    raise RuntimeError(
+        "TorchLens validation deepcopy fallback cannot compare plain "
+        f"attribute '{attr_path}' because equality returned {type(result).__name__}."
+    )
+
+
+def _module_plain_attr_names(module: nn.Module) -> set[str]:
+    """Return plain attribute names to snapshot for a module.
+
+    Parameters
+    ----------
+    module:
+        Module whose non-registered attributes should be inspected.
+
+    Returns
+    -------
+    set[str]
+        Attribute names excluding registered parameter, buffer, and child
+        module storage.
+    """
+
+    return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
+
+
+class _ModuleTreePlainAttrSnapshot:
+    """Snapshot of small value-comparable plain attributes in a module tree."""
+
+    def __init__(self, model: nn.Module) -> None:
+        """Capture a model's plain module-tree attributes.
+
+        Parameters
+        ----------
+        model:
+            Model whose ``modules()`` tree should be snapshotted.
+        """
+
+        self._entries: list[tuple[nn.Module, str, str, Any]] = []
+        self._module_attr_names: dict[int, tuple[nn.Module, set[str], str]] = {}
+        module_counts: dict[str, int] = {}
+        for module in model.modules():
+            module_type = type(module).__name__
+            module_index = module_counts.get(module_type, 0)
+            module_counts[module_type] = module_index + 1
+            module_path = f"{module_type}[{module_index}]"
+            attr_names = _module_plain_attr_names(module)
+            self._module_attr_names[id(module)] = (module, attr_names, module_path)
+            for name in sorted(attr_names):
+                attr_path = f"{module_path}.{name}"
+                self._entries.append(
+                    (
+                        module,
+                        name,
+                        attr_path,
+                        _snapshot_plain_attr_value(getattr(module, name), attr_path),
+                    )
+                )
+
+    def restore_changed_attrs(self) -> None:
+        """Restore attributes whose values changed since the snapshot.
+
+        Raises
+        ------
+        RuntimeError
+            If any attribute cannot be compared, assigned, deleted, or verified
+            after restoration.
+        """
+
+        for module, original_names, module_path in self._module_attr_names.values():
+            added_names = _module_plain_attr_names(module) - original_names
+            for name in sorted(added_names):
+                try:
+                    delattr(module, name)
+                except Exception as exc:
+                    raise RuntimeError(
+                        "TorchLens validation deepcopy fallback could not remove "
+                        f"new plain attribute '{module_path}.{name}' before the logged run."
+                    ) from exc
+        for module, name, attr_path, snapshot in self._entries:
+            try:
+                current_snapshot = _snapshot_plain_attr_value(getattr(module, name), attr_path)
+            except AttributeError:
+                current_snapshot = None
+                changed = True
+            else:
+                changed = not _plain_attr_values_equal(current_snapshot, snapshot, attr_path)
+            if not changed:
+                continue
+            restore_value = _snapshot_plain_attr_value(snapshot, attr_path)
+            try:
+                setattr(module, name, restore_value)
+            except Exception as exc:
+                raise RuntimeError(
+                    "TorchLens validation deepcopy fallback could not restore plain "
+                    f"attribute '{attr_path}' before the logged run."
+                ) from exc
+            restored_snapshot = _snapshot_plain_attr_value(getattr(module, name), attr_path)
+            if not _plain_attr_values_equal(restored_snapshot, snapshot, attr_path):
+                raise RuntimeError(
+                    "TorchLens validation deepcopy fallback restored plain "
+                    f"attribute '{attr_path}', but verification by value failed."
+                )
+
+
+def _model_for_ground_truth_validation(
+    model: nn.Module,
+) -> tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None]:
     """Return an isolated model for the validation ground-truth run.
 
     Parameters
@@ -522,13 +792,14 @@ def _model_for_ground_truth_validation(model: nn.Module) -> nn.Module:
 
     Returns
     -------
-    nn.Module
-        A deep copy when possible; otherwise the original model with the
-        historical state_dict restore fallback preserved.
+    tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None]
+        A deep copy and no plain-attribute snapshot when possible; otherwise
+        the original model plus a snapshot used to restore non-registered
+        mutable state before the logged run.
     """
 
     try:
-        return copy.deepcopy(model)
+        return copy.deepcopy(model), None
     except Exception:
         model_type = type(model)
         if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
@@ -540,7 +811,7 @@ def _model_for_ground_truth_validation(model: nn.Module) -> nn.Module:
                 RuntimeWarning,
                 stacklevel=3,
             )
-        return model
+        return model, _ModuleTreePlainAttrSnapshot(model)
 
 
 def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
@@ -3928,7 +4199,7 @@ def _validate_forward_pass_torch(
     trace: Trace | None = None
     outs_are_valid = False
     try:
-        ground_truth_model = _model_for_ground_truth_validation(model)
+        ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
         ground_truth_output_all = get_vars_of_type_from_obj(
             ground_truth_model(*input_args_copy, **input_kwargs_copy),
             torch.Tensor,
@@ -3954,6 +4225,8 @@ def _validate_forward_pass_torch(
             ground_truth_output_tensors.append(entry[0].detach().clone())
             addresses_used.append(entry[1])
         model.load_state_dict(state_dict)
+        if plain_attr_snapshot is not None:
+            plain_attr_snapshot.restore_changed_attrs()
 
         # Step 2: Run the model *through* TorchLens, saving all outs.
         # save_arg_values=True is essential - the replay needs each function's
@@ -3978,6 +4251,8 @@ def _validate_forward_pass_torch(
         outs_are_valid = validation_result if isinstance(validation_result, bool) else False
     finally:
         model.load_state_dict(state_dict)
+        if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
+            plain_attr_snapshot.restore_changed_attrs()
         if trace is not None:
             trace.cleanup()
     return outs_are_valid

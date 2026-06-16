@@ -29,6 +29,23 @@ class _TinyRenderModel(nn.Module):
         return torch.relu(self.linear(x)).sum()
 
 
+class _LargeChainRenderModel(nn.Module):
+    """Model with enough repeated ops to exercise large PDF page geometry."""
+
+    def __init__(self, width: int = 4, depth: int = 48) -> None:
+        """Initialize a deterministic linear chain."""
+
+        super().__init__()
+        self.layers = nn.ModuleList(nn.Linear(width, width) for _ in range(depth))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the chain with one activation per layer."""
+
+        for layer in self.layers:
+            x = torch.relu(layer(x))
+        return x
+
+
 @pytest.fixture
 def forward_trace() -> Trace:
     """Return a tiny forward Trace."""
@@ -220,3 +237,39 @@ def test_combined_called_process_error_raises_typed_error(
             vis_save_only=True,
             vis_fileformat="svg",
         )
+
+
+def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> None:
+    """Large composed PDF renders graph contents inside the page bounds."""
+
+    fitz = pytest.importorskip("fitz")
+    model = _LargeChainRenderModel().eval()
+    trace = tl.trace(model, torch.randn(1, 4))
+    pdf_path = tmp_path / "large_composed.pdf"
+    try:
+        trace.draw(
+            vis_outpath=str(pdf_path.with_suffix("")),
+            vis_save_only=True,
+            vis_fileformat="pdf",
+            code_panel=lambda _model: "def forward(self, x):\n    return x",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    document = fitz.open(pdf_path)
+    try:
+        page = document[0]
+        page_rect = page.rect
+        content_rect = fitz.Rect()
+        for block in page.get_text("blocks"):
+            content_rect |= fitz.Rect(block[:4])
+        for drawing in page.get_drawings():
+            rect = drawing.get("rect")
+            if rect is not None:
+                content_rect |= rect
+        assert not content_rect.is_empty
+        assert page_rect.intersects(content_rect)
+        assert content_rect.get_area() > 0.01 * page_rect.get_area()
+    finally:
+        document.close()
