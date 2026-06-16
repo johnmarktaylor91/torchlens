@@ -39,7 +39,15 @@ class ValidationReplayStatus:
     replayed_node_count:
         Number of ops or regions replay-validated for a completed result.
     unverified_node_count:
-        Number of importer-owned regions excluded from per-op replay.
+        Legacy aggregate number of nodes or regions excluded from per-op
+        replay.
+    pure_unverified_node_count:
+        Number of pure value nodes that classified cleanly but were not
+        replayed, usually because no faithful backend raw-op replay is
+        available.
+    effect_region_node_count:
+        Number of effectful or stateful nodes excluded from pure per-op
+        replay.
     failed_node_count:
         Number of replay-validation failures contributing to a failed result.
     """
@@ -53,6 +61,8 @@ class ValidationReplayStatus:
     payload_load_status: str | None = None
     replayed_node_count: int = field(default=0, repr=False)
     unverified_node_count: int = field(default=0, repr=False)
+    pure_unverified_node_count: int = field(default=0, repr=False)
+    effect_region_node_count: int = field(default=0, repr=False)
     failed_node_count: int = field(default=0, repr=False)
 
     @property
@@ -101,6 +111,8 @@ class ValidationReplayStatus:
         payload_load_status: str | None = None,
         replayed_node_count: int = 0,
         unverified_node_count: int = 0,
+        pure_unverified_node_count: int = 0,
+        effect_region_node_count: int = 0,
         failed_node_count: int = 0,
     ) -> "ValidationReplayStatus":
         """Build a completed replay-validation result.
@@ -118,7 +130,13 @@ class ValidationReplayStatus:
         replayed_node_count:
             Number of ops or regions that replay-validated successfully.
         unverified_node_count:
-            Number of importer-owned regions excluded from per-op replay.
+            Legacy aggregate number of nodes or regions excluded from per-op
+            replay.
+        pure_unverified_node_count:
+            Number of pure value nodes not replayed by a backend raw-op
+            replay.
+        effect_region_node_count:
+            Number of effectful or stateful nodes excluded from pure replay.
         failed_node_count:
             Number of replay failures. Defaults to ``0`` for legacy boolean
             callers that only report aggregate pass/fail.
@@ -140,6 +158,8 @@ class ValidationReplayStatus:
             payload_load_status=payload_load_status,
             replayed_node_count=replayed_node_count,
             unverified_node_count=unverified_node_count,
+            pure_unverified_node_count=pure_unverified_node_count,
+            effect_region_node_count=effect_region_node_count,
             failed_node_count=failed_node_count,
         )
 
@@ -154,6 +174,8 @@ class ValidationReplayStatus:
         replayed_node_count: int,
         unverified_node_count: int,
         payload_load_status: str | None = None,
+        pure_unverified_node_count: int = 0,
+        effect_region_node_count: int = 0,
         failed_node_count: int = 0,
     ) -> "ValidationReplayStatus":
         """Build a partial replay-validation status for importer-owned regions.
@@ -171,9 +193,15 @@ class ValidationReplayStatus:
         replayed_node_count:
             Number of ops or regions that replay-validated successfully.
         unverified_node_count:
-            Number of importer-owned regions excluded from per-op replay.
+            Legacy aggregate number of nodes or regions excluded from per-op
+            replay.
         payload_load_status:
             Optional payload materialization status attached by ``tl.load``.
+        pure_unverified_node_count:
+            Number of pure value nodes not replayed by a backend raw-op
+            replay.
+        effect_region_node_count:
+            Number of effectful or stateful nodes excluded from pure replay.
         failed_node_count:
             Number of replay failures. Must be zero for an unverified result.
 
@@ -194,6 +222,8 @@ class ValidationReplayStatus:
             payload_load_status=payload_load_status,
             replayed_node_count=replayed_node_count,
             unverified_node_count=unverified_node_count,
+            pure_unverified_node_count=pure_unverified_node_count,
+            effect_region_node_count=effect_region_node_count,
             failed_node_count=failed_node_count,
         )
 
@@ -205,6 +235,8 @@ class ValidationReplayStatus:
         source: ValidationReplaySource,
         replayed_node_count: int,
         unverified_node_count: int,
+        pure_unverified_node_count: int = 0,
+        effect_region_node_count: int = 0,
         failed_node_count: int = 0,
         payload_load_status: str | None = None,
     ) -> "ValidationReplayStatus":
@@ -219,7 +251,14 @@ class ValidationReplayStatus:
         replayed_node_count:
             Number of ops or regions that replay-validated successfully.
         unverified_node_count:
-            Number of importer-owned regions excluded from per-op replay.
+            Legacy aggregate number of nodes or regions excluded from per-op
+            replay. When separate pure/effect counts are supplied, this is
+            treated as an additional legacy/importer-region bucket.
+        pure_unverified_node_count:
+            Number of pure value nodes not replayed by a backend raw-op
+            replay.
+        effect_region_node_count:
+            Number of effectful or stateful nodes excluded from pure replay.
         failed_node_count:
             Number of replay failures.
         payload_load_status:
@@ -233,6 +272,9 @@ class ValidationReplayStatus:
             ``passed``.
         """
 
+        total_unverified_count = (
+            unverified_node_count + pure_unverified_node_count + effect_region_node_count
+        )
         if failed_node_count:
             return cls.result(
                 passed=False,
@@ -240,22 +282,32 @@ class ValidationReplayStatus:
                 source=source,
                 payload_load_status=payload_load_status,
                 replayed_node_count=replayed_node_count,
-                unverified_node_count=unverified_node_count,
+                unverified_node_count=total_unverified_count,
+                pure_unverified_node_count=pure_unverified_node_count,
+                effect_region_node_count=effect_region_node_count,
                 failed_node_count=failed_node_count,
             )
-        if unverified_node_count:
+        if total_unverified_count:
             return cls.unverified(
                 backend=backend,
                 source=source,
-                reason="region_not_per_op_replayable",
+                reason=(
+                    "node_not_per_op_replayable"
+                    if pure_unverified_node_count or effect_region_node_count
+                    else "region_not_per_op_replayable"
+                ),
                 message=(
                     "Replay validation partially verified this trace: "
                     f"{replayed_node_count} nodes replayed, "
-                    f"{unverified_node_count} importer-owned regions unverified, "
+                    f"{pure_unverified_node_count} pure nodes unverified, "
+                    f"{effect_region_node_count} effect regions unverified, "
+                    f"{unverified_node_count} legacy regions unverified, "
                     "0 failures."
                 ),
                 replayed_node_count=replayed_node_count,
-                unverified_node_count=unverified_node_count,
+                unverified_node_count=total_unverified_count,
+                pure_unverified_node_count=pure_unverified_node_count,
+                effect_region_node_count=effect_region_node_count,
                 payload_load_status=payload_load_status,
             )
         return cls.result(
@@ -265,6 +317,8 @@ class ValidationReplayStatus:
             payload_load_status=payload_load_status,
             replayed_node_count=replayed_node_count,
             unverified_node_count=unverified_node_count,
+            pure_unverified_node_count=pure_unverified_node_count,
+            effect_region_node_count=effect_region_node_count,
             failed_node_count=0,
         )
 

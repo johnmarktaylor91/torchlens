@@ -227,6 +227,7 @@ class TFBackend:
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
         trace._tf_op_type_counts = result.op_type_counts
+        trace._tf_op_captures = result.op_captures
         _mark_outputs(trace, result.output, session.producer_by_ref)
         _reject_collapsed_graph_capture(result.op_type_counts)
         materialize_from_events(trace, trace.capture_events)
@@ -235,8 +236,8 @@ class TFBackend:
         self._finish_trace(trace, module_tree)
         return trace
 
-    def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
-        """Normalize a validation entry and report P1 unsupported status.
+    def validate_entry(self, *args: Any, **kwargs: Any) -> Any:
+        """Capture and validate a TensorFlow entry.
 
         Parameters
         ----------
@@ -245,16 +246,15 @@ class TFBackend:
 
         Returns
         -------
-        bool
-            Never returns in P1.
+        Any
+            Boolean pass/fail status or an explicit unverified replay status.
         """
 
         trace = self.capture_trace(*args, **kwargs)
-        result = self.validate_trace(trace)
-        return bool(result)
+        return self.validate_trace(trace)
 
     def validate_trace(self, *args: Any, **kwargs: Any) -> Any:
-        """Report P1 unsupported status for trace replay validation.
+        """Validate a TensorFlow trace with the non-vacuous replay tripwire.
 
         Parameters
         ----------
@@ -264,11 +264,38 @@ class TFBackend:
         Returns
         -------
         Any
-            Never returns in P1.
+            ``True`` or ``False`` for passed/failed validation, or an explicit
+            unverified status when replay coverage is partial.
         """
 
-        del args, kwargs
-        return True
+        from .validation import validate_tf_trace
+
+        trace = args[0] if args else kwargs["trace"]
+        status = trace.validation_replay_status
+        if not status.available:
+            setattr(trace, "_validation_replay_status", status)
+            return status
+        try:
+            if kwargs.get("validate_metadata", True):
+                from ...validation.invariants import check_metadata_invariants
+
+                check_metadata_invariants(trace)
+            status_result = validate_tf_trace(
+                trace,
+                validate_metadata=bool(kwargs.get("validate_metadata", True)),
+            )
+        except Exception:
+            from ...validation.status import ValidationReplayStatus
+
+            status_result = ValidationReplayStatus.result(
+                passed=False,
+                backend=self.name,
+                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
+                payload_load_status=getattr(trace, "payload_load_status", None),
+                failed_node_count=1,
+            )
+            setattr(trace, "_validation_replay_status", status_result)
+        return status_result if status_result.state == "unverified" else status_result.passed
 
     def _new_trace(
         self,

@@ -84,6 +84,63 @@ class TFUnresolvedProducer:
 
 
 @dataclass(frozen=True)
+class TFInputCapture:
+    """Recorded TensorFlow callback input slot.
+
+    Parameters
+    ----------
+    input_index
+        Positional callback input index.
+    producer_label_raw
+        Raw label of a prior callback output, when the input is produced by a
+        captured op.
+    source_kind
+        Typed source kind when the input is a registered source.
+    source_label_raw
+        Raw source label when a source event was materialized.
+    tensor
+        Live TensorFlow tensor observed in the callback input slot.
+    ref_key
+        Stable eager tensor reference key.
+    """
+
+    input_index: int
+    producer_label_raw: str | None
+    source_kind: str | None
+    source_label_raw: str | None
+    tensor: Any
+    ref_key: object | None
+
+
+@dataclass(frozen=True)
+class TFOpCapture:
+    """Recorded TensorFlow callback output used by replay validation.
+
+    Parameters
+    ----------
+    label_raw
+        Raw TorchLens label for this callback output.
+    op_type
+        Normalized TensorFlow op type.
+    attrs
+        Raw TensorFlow callback attributes normalized into a mapping.
+    output_index
+        Output index within the callback invocation.
+    inputs
+        Recorded callback input slots.
+    output_tensor
+        Live TensorFlow output tensor for this output slot.
+    """
+
+    label_raw: str
+    op_type: str
+    attrs: dict[str, Any]
+    output_index: int
+    inputs: tuple[TFInputCapture, ...]
+    output_tensor: Any
+
+
+@dataclass(frozen=True)
 class TFCaptureResult:
     """Result of one TensorFlow eager capture.
 
@@ -101,6 +158,8 @@ class TFCaptureResult:
         Captured initializer/variable-creation op labels.
     op_type_counts
         Captured op histogram.
+    op_captures
+        Per-output callback records used by replay validation.
     """
 
     output: Any
@@ -109,6 +168,7 @@ class TFCaptureResult:
     unresolved_producers: tuple[TFUnresolvedProducer, ...]
     init_op_labels: tuple[str, ...]
     op_type_counts: dict[str, int]
+    op_captures: tuple[TFOpCapture, ...]
 
 
 class TFEagerCaptureSession:
@@ -160,6 +220,7 @@ class TFEagerCaptureSession:
         self.unresolved_producers: list[TFUnresolvedProducer] = []
         self.init_op_labels: list[str] = []
         self.op_type_counts: Counter[str] = Counter()
+        self.op_captures: list[TFOpCapture] = []
         self._source_label_by_ref: dict[object, str] = {}
 
     def run(self) -> TFCaptureResult:
@@ -204,6 +265,7 @@ class TFEagerCaptureSession:
             unresolved_producers=tuple(self.unresolved_producers),
             init_op_labels=tuple(self.init_op_labels),
             op_type_counts=dict(self.op_type_counts),
+            op_captures=tuple(self.op_captures),
         )
 
     def _callback(
@@ -243,7 +305,7 @@ class TFEagerCaptureSession:
             return
         op_type_text = _normalize_op_type(op_type)
         self.op_type_counts[op_type_text] += 1
-        parents, parent_positions, edge_uses = self._parents_for_inputs(
+        parents, parent_positions, edge_uses, input_captures = self._parents_for_inputs(
             op_type_text=op_type_text,
             inputs=inputs,
         )
@@ -279,6 +341,16 @@ class TFEagerCaptureSession:
                 record_context=record_context,
             )
             self.events.append(event)
+            self.op_captures.append(
+                TFOpCapture(
+                    label_raw=label.label_raw,
+                    op_type=op_type_text,
+                    attrs=_attrs_to_raw_dict(attrs),
+                    output_index=output_index,
+                    inputs=input_captures,
+                    output_tensor=output,
+                )
+            )
             ref_key = _tensor_ref_key(output)
             if ref_key is not None:
                 self.producer_by_ref[ref_key] = label.label_raw
@@ -552,7 +624,12 @@ class TFEagerCaptureSession:
         *,
         op_type_text: str,
         inputs: tuple[Any, ...],
-    ) -> tuple[tuple[ParentEdge, ...], dict[str, dict[Any, str]], tuple[object, ...]]:
+    ) -> tuple[
+        tuple[ParentEdge, ...],
+        dict[str, dict[Any, str]],
+        tuple[object, ...],
+        tuple[TFInputCapture, ...],
+    ]:
         """Resolve parent edges and source records for callback inputs.
 
         Parameters
@@ -564,13 +641,15 @@ class TFEagerCaptureSession:
 
         Returns
         -------
-        tuple[tuple[ParentEdge, ...], dict[str, dict[Any, str]], tuple[object, ...]]
-            Parent edges, parent position maps, and edge-use records.
+        tuple
+            Parent edges, parent position maps, edge-use records, and
+            per-input replay capture records.
         """
 
         edges: list[ParentEdge] = []
         arg_positions: dict[Any, str] = {}
         edge_uses: list[object] = []
+        input_captures: list[TFInputCapture] = []
         seen: set[tuple[str, int]] = set()
         for index, input_tensor in enumerate(inputs):
             if not _is_tf_tensor(input_tensor, self.tf):
@@ -579,19 +658,39 @@ class TFEagerCaptureSession:
             if ref_key is None:
                 continue
             parent_label = self.producer_by_ref.get(ref_key)
+            source: TFSourceRecord | None = self.source_by_ref.get(ref_key)
+            if (
+                source is not None
+                and source.label_raw is not None
+                and parent_label == source.label_raw
+            ):
+                parent_label = source.label_raw
             if parent_label is None:
                 source = self._source_for_tensor(ref_key, input_tensor, op_type_text)
                 parent_label = source.label_raw
-            if parent_label is None:
-                consumer = f"{op_type_text.lower()}_pending"
-                self.unresolved_producers.append(
-                    TFUnresolvedProducer(
-                        consumer_label_raw=consumer,
-                        consumer_op_type=op_type_text,
-                        input_index=index,
-                        ref_key=ref_key,
-                    )
+            source_label = source.label_raw if source is not None else None
+            is_source_input = source is not None and parent_label == source_label
+            input_captures.append(
+                TFInputCapture(
+                    input_index=index,
+                    producer_label_raw=None if is_source_input else parent_label,
+                    source_kind=None if source is None else source.kind,
+                    source_label_raw=source_label if is_source_input else None,
+                    tensor=input_tensor,
+                    ref_key=ref_key,
                 )
+            )
+            if parent_label is None:
+                if source is None:
+                    consumer = f"{op_type_text.lower()}_pending"
+                    self.unresolved_producers.append(
+                        TFUnresolvedProducer(
+                            consumer_label_raw=consumer,
+                            consumer_op_type=op_type_text,
+                            input_index=index,
+                            ref_key=ref_key,
+                        )
+                    )
                 continue
             key = (parent_label, index)
             if key in seen:
@@ -600,7 +699,12 @@ class TFEagerCaptureSession:
             edges.append(ParentEdge(parent_label, index, "arg"))
             arg_positions[index] = parent_label
             edge_uses.append((parent_label, index, "arg"))
-        return tuple(edges), {"args": arg_positions, "kwargs": {}}, tuple(edge_uses)
+        return (
+            tuple(edges),
+            {"args": arg_positions, "kwargs": {}},
+            tuple(edge_uses),
+            tuple(input_captures),
+        )
 
     def _source_for_tensor(
         self,
@@ -888,6 +992,35 @@ def _attrs_to_public_dict(attrs: tuple[Any, ...] | dict[str, Any]) -> dict[str, 
     return {}
 
 
+def _attrs_to_raw_dict(attrs: tuple[Any, ...] | dict[str, Any]) -> dict[str, Any]:
+    """Convert TensorFlow callback attrs into a raw replay mapping.
+
+    Parameters
+    ----------
+    attrs
+        Raw callback attrs.
+
+    Returns
+    -------
+    dict[str, Any]
+        Attribute mapping preserving runtime values for raw-op replay.
+    """
+
+    if isinstance(attrs, dict):
+        return {str(key): value for key, value in attrs.items()}
+    if isinstance(attrs, tuple):
+        result: dict[str, Any] = {}
+        iterator = iter(attrs)
+        for key in iterator:
+            try:
+                value = next(iterator)
+            except StopIteration:
+                break
+            result[str(key)] = value
+        return result
+    return {}
+
+
 def _snapshot_tensor(tensor: Any) -> object | None:
     """Snapshot a TensorFlow eager tensor without issuing TensorFlow ops.
 
@@ -910,7 +1043,7 @@ def _snapshot_tensor(tensor: Any) -> object | None:
         return None
     try:
         value = numpy_method()
-    except (TypeError, ValueError):
+    except Exception:
         return None
     if isinstance(value, np.ndarray):
         return value.copy()
