@@ -883,6 +883,30 @@ class ToPandasConditionalModel(nn.Module):
         return y
 
 
+class PublicIfElseArmModel(nn.Module):
+    """Model used to verify public conditional arm fired statuses."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a simple if/else forward pass.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Branch-selected tensor.
+        """
+
+        if x.mean() > 0:
+            y = torch.relu(x)
+        else:
+            y = torch.sigmoid(x)
+        return y
+
+
 def _log_model(
     model: nn.Module,
     x: torch.Tensor,
@@ -1187,6 +1211,26 @@ def test_multiline_predicate_model_tracks_one_if_chain_event() -> None:
     assert all(layer.conditional_context_kind == "if_test" for layer in bool_layers)
     assert all(layer.is_terminal_conditional_bool is True for layer in bool_layers)
     assert relu_layer.conditional_branch_stack == [(event.id, "then")]
+
+
+def test_public_conditionals_materialize_else_arm_fired_status() -> None:
+    """Public conditional records expose fired ELSE and unfired THEN arms."""
+    then_trace = _log_model(PublicIfElseArmModel(), torch.ones(2, 2))
+    else_trace = _log_model(PublicIfElseArmModel(), -torch.ones(2, 2))
+
+    then_conditional = then_trace.conditionals[0]
+    else_conditional = else_trace.conditionals[0]
+
+    assert then_conditional.fired_arm_kind == "then"
+    assert [(arm.kind, arm.fired) for arm in then_conditional.arms] == [
+        ("then", True),
+        ("else", False),
+    ]
+    assert else_conditional.fired_arm_kind == "else"
+    assert [(arm.kind, arm.fired) for arm in else_conditional.arms] == [
+        ("then", False),
+        ("else", True),
+    ]
 
 
 def test_branch_uses_only_parameter_model_records_parameter_entry_edge() -> None:
