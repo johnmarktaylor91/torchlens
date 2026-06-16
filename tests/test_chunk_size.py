@@ -10,7 +10,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
+from torchlens.backends import (
+    BackendCapabilities,
+    BackendSpec,
+    BackendUnsupportedError,
+    register_backend_spec,
+    unregister_backend_spec,
+)
 from torchlens.intervention.errors import BatchChunkInputAmbiguityError, ChunkedForwardConfigError
 
 
@@ -152,6 +158,18 @@ def test_chunk_size_shape_and_remainder() -> None:
     assert trace.chunked_forward is True
 
 
+def test_chunk_size_with_save_predicate_appends_saved_payloads_only() -> None:
+    """Chunked predicate-save capture should append saved matching payloads."""
+
+    model = DeterministicToy().eval()
+    trace = tl.trace(model, _toy_inputs(), chunk_size=4, save=tl.func("relu"))
+
+    relu = trace.find_sites(tl.func("relu")).first()
+    assert relu.out.shape[0] == 10
+    with pytest.raises(ValueError, match="was not saved"):
+        _ = trace["input_1"].out
+
+
 def test_explicit_path_keeps_shared_matrix_unsplit() -> None:
     """Explicit chunk paths split only selected leaves."""
 
@@ -225,8 +243,72 @@ def test_chunk_size_guarded_combinations(tmp_path: Path) -> None:
         tl.trace(model, x, chunk_size=4, storage=tl.to_disk(tmp_path / "chunked.tlspec"))
     with pytest.raises(ChunkedForwardConfigError, match="keyword"):
         tl.trace(KwargToy().eval(), x, input_kwargs={"bias": torch.ones_like(x)}, chunk_size=4)
-    with pytest.raises(BackendUnsupportedError, match="backend='torch'"):
+    with pytest.raises(BackendUnsupportedError, match="chunk_size"):
         tl.trace(model, x, chunk_size=4, backend="jax")
+
+
+def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
+    """A non-torch backend should accept omitted chunking options."""
+
+    class FakeChunkModel:
+        """Marker model for fake chunk capability tests."""
+
+    def can_handle(
+        model: object,
+        input_args: object,
+        input_kwargs: dict[Any, Any] | None,
+    ) -> bool:
+        """Return whether the fake backend accepts this model."""
+
+        del input_args, input_kwargs
+        return isinstance(model, FakeChunkModel)
+
+    def capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
+        """Return a small trace relabeled as the fake backend."""
+
+        assert "chunk_size" not in kwargs
+        assert "chunk_paths" not in kwargs
+        del args, kwargs
+        trace = tl.trace(DeterministicToy().eval(), _toy_inputs()[:1], backend="torch")
+        trace.backend = "chunk_fake"
+        return trace
+
+    def validate_entry(*args: Any, **kwargs: Any) -> bool:
+        """Return a fake validation-entry result."""
+
+        del args, kwargs
+        return True
+
+    def validate_trace(*args: Any, **kwargs: Any) -> bool:
+        """Return a fake trace-validation result."""
+
+        del args, kwargs
+        return True
+
+    register_backend_spec(
+        BackendSpec(
+            name="chunk_fake",
+            can_handle=can_handle,
+            capture_trace=capture_trace,
+            validate_entry=validate_entry,
+            validate_trace=validate_trace,
+            capabilities=BackendCapabilities(
+                backward_capture=False,
+                validation_replay=False,
+                fastlog=False,
+                interventions=False,
+                rng_replay=False,
+                payload_materialization=False,
+                streaming=False,
+            ),
+        )
+    )
+    try:
+        trace = tl.trace(FakeChunkModel(), object(), backend="chunk_fake")
+    finally:
+        unregister_backend_spec("chunk_fake")
+
+    assert trace.backend == "chunk_fake"
 
 
 def test_log_backward_rejects_chunked_forward() -> None:

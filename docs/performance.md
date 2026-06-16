@@ -122,6 +122,20 @@ containers (`list`, `tuple`, `dict`, or `namedtuple`). If there are several cand
 explicit paths:
 
 ```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+class MaskedModel(nn.Module):
+    def forward(self, tokens, attention_mask):
+        return (tokens * attention_mask).sum(dim=-1)
+
+
+model = MaskedModel().eval()
+tokens = torch.randn(64, 16)
+attention_mask = torch.ones(64, 16)
+
 trace = tl.trace(model, (tokens, attention_mask), chunk_size=8, chunk_paths=["0", "1"])
 ```
 

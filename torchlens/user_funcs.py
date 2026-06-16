@@ -53,7 +53,13 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from .backends import BackendName, BackendSpec, BackendUnsupportedError, resolve_backend_spec
+from .backends import (
+    BackendName,
+    BackendSpec,
+    BackendUnsupportedError,
+    get_backend_spec,
+    resolve_backend_spec,
+)
 from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .backends.torch._tl import get_tensor_label
@@ -90,7 +96,7 @@ from .visualization.code_panel import (
     capture_model_source_code,
     make_weak_model_ref,
 )
-from .intervention.errors import InterventionReadyConflictError
+from .intervention.errors import AppendMismatchError, InterventionReadyConflictError
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .intervention.hooks import normalize_hook_plan
@@ -1712,8 +1718,8 @@ def trace(
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
     capture_output_structure: bool | MissingType = MISSING,
-    chunk_size: int | None = None,
-    chunk_paths: Iterable[Any] | None = None,
+    chunk_size: int | None | MissingType = MISSING,
+    chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
@@ -1918,23 +1924,21 @@ def trace(
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
     public_trace_kwargs.pop("capture_output_structure")
-    if chunk_paths is not None and chunk_size is None:
+    if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
         raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
     if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
         raise BackendUnsupportedError(
             "jax_static_argnums is only supported with backend='jax'; grad_options is "
             "only supported with backend='jax', backend='mlx', or backend='tinygrad'."
         )
-    if chunk_size is not None and backend is not None and str(backend) != "torch":
-        raise BackendUnsupportedError(
-            "chunk_size capture is currently supported only by backend='torch'."
-        )
-    explicit_backend_spec = (
-        None if backend is None else resolve_backend_spec(backend, model, input_args, input_kwargs)
-    )
+    explicit_backend_spec = None
+    if backend is not None:
+        explicit_backend_spec = get_backend_spec(str(backend))
+        _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
+        explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
     if (
         backend is None
-        and chunk_size is None
+        and chunk_size in (MISSING, None)
         and transform is MISSING
         and (capture is None or not capture.is_field_explicit("transform"))
     ):
@@ -2011,10 +2015,6 @@ def trace(
     resolved_spec = explicit_backend_spec or resolve_backend_spec(
         backend, model, input_args, input_kwargs
     )
-    if chunk_size is not None and str(resolved_spec.name) != "torch":
-        raise BackendUnsupportedError(
-            "chunk_size capture is currently supported only by backend='torch'."
-        )
     _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
     return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
 
@@ -2089,8 +2089,8 @@ def _trace_torch_model(
         | MissingType
     ) = MISSING,
     capture_output_structure: bool | MissingType = MISSING,
-    chunk_size: int | None = None,
-    chunk_paths: Iterable[Any] | None = None,
+    chunk_size: int | None | MissingType = MISSING,
+    chunk_paths: Iterable[Any] | None | MissingType = MISSING,
 ) -> Trace:
     """Run the registry-owned torch trace implementation.
 
@@ -2219,8 +2219,10 @@ def _trace_torch_model(
         keep_outs_in_memory=keep_outs_in_memory,
         out_sink=out_sink,
     )
-    normalized_chunk_size = normalize_chunk_size(chunk_size)
-    if chunk_paths is not None and normalized_chunk_size is None:
+    chunk_size_value = None if isinstance(chunk_size, MissingType) else chunk_size
+    chunk_paths_value = None if isinstance(chunk_paths, MissingType) else chunk_paths
+    normalized_chunk_size = normalize_chunk_size(chunk_size_value)
+    if chunk_paths_value is not None and normalized_chunk_size is None:
         raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
     layers_to_save = capture_options.layers_to_save
     save_raw_input_policy = capture_options.save_raw_input
@@ -2335,7 +2337,7 @@ def _trace_torch_model(
         chunk_plan = plan_chunks(
             input_args,
             chunk_size=normalized_chunk_size,
-            chunk_paths=chunk_paths,
+            chunk_paths=chunk_paths_value,
         )
 
     if type(layers_to_save) is str:
@@ -2395,7 +2397,7 @@ def _trace_torch_model(
             "backward_ready": train_mode_value,
             "inference_only": inference_only_value,
             "chunk_size": normalized_chunk_size,
-            "chunk_paths": normalize_chunk_paths(chunk_paths),
+            "chunk_paths": normalize_chunk_paths(chunk_paths_value),
             "capture_container_structure": capture_container_structure,
             "output_transform": repr(output_transform_value),
             "output_style": output_style_value,
@@ -2522,15 +2524,97 @@ def _trace_torch_model(
             "chunk_size": initial_chunk_size,
             "total_batch_size": chunk_plan.total_size,
             "append_sequence_id": 0,
-            "chunk_paths": normalize_chunk_paths(chunk_paths),
+            "chunk_paths": normalize_chunk_paths(chunk_paths_value),
         }
-        for chunk in chunks[1:]:
-            trace.rerun(model, chunk, replay=ReplayOptions(append=True), transform=False)
+        for chunk_index, chunk in enumerate(chunks[1:], start=1):
+            if save_predicate is None:
+                trace.rerun(model, chunk, replay=ReplayOptions(append=True), transform=False)
+                continue
+            new_trace = _trace_torch_model(
+                model=model,
+                input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
+                input_kwargs=None,
+                layers_to_save=layers_to_save,
+                transform=None,
+                save_raw_input=save_raw_input_policy,
+                batch_render=batch_render_policy,
+                output_transform=output_transform_value,
+                output_style=output_style_value,
+                output_head=output_head_value,
+                save_raw_output=save_raw_output_policy,
+                keep_orphans=keep_orphans,
+                output_device=output_device,
+                activation_transform=activation_transform,
+                grad_transform=grad_transform,
+                save_raw_activations=save_raw_activations,
+                save_raw_gradients=save_raw_gradients,
+                save_mode=cast(SaveMode, save_mode_value),
+                capture_tensor_grad_hooks=capture_tensor_grad_hooks,
+                mark_layer_depths=MISSING,
+                detach_saved_activations=detach_saved_activations,
+                save_arg_values=save_arg_values,
+                save_grads=save_grads_policy,
+                save_code_context=save_code_context,
+                save_rng_states=save_rng_states,
+                reconstruction_ready=MISSING,
+                random_seed=random_seed,
+                num_context_lines=MISSING,
+                optimizer=optimizer,
+                save_outs_to=MISSING,
+                keep_outs_in_memory=MISSING,
+                out_sink=MISSING,
+                intervention_ready=intervention_ready,
+                capture_container_structure=capture_container_structure,
+                hooks=None,
+                unwrap_when_done=False,
+                verbose=verbose,
+                source_context_lines=source_context_lines,
+                compute_input_output_distances=compute_input_output_distances,
+                recurrence_detection=recurrence_detection,
+                capture=None,
+                save=save,
+                intervene=None,
+                halt=halt,
+                lookback=lookback,
+                lookback_payload_policy=lookback_payload_policy,
+                storage=None,
+                streaming=None,
+                backward_ready=train_mode_value,
+                inference_only=inference_only_value,
+                name=log_name,
+                cache=False,
+                cache_dir=cache_dir_value,
+                module_filter=module_filter_value,
+                stop_after=MISSING,
+                raise_on_nan=raise_on_nan_value,
+                profile=profile_enabled,
+                jax_control_flow=capture_options.jax_control_flow,
+                jax_max_control_flow_unroll=capture_options.jax_max_control_flow_unroll,
+                module_identity_mode=capture_options.module_identity_mode,
+                payload_policy=capture_options.payload_policy,
+                save_preview=capture_options.save_preview,
+                recipes=facet_recipes,
+                capture_output_structure=MISSING,
+                chunk_size=None,
+                chunk_paths=None,
+            )
+            appended_chunk_size = min(
+                normalized_chunk_size,
+                chunk_plan.total_size - (chunk_index * normalized_chunk_size),
+            )
+            _append_chunk_trace_state(
+                trace,
+                new_trace,
+                chunk_size=appended_chunk_size,
+                total_batch_size=chunk_plan.total_size,
+                append_sequence_id=chunk_index,
+                chunk_paths=normalize_chunk_paths(chunk_paths_value),
+            )
         trace.append_history = [initial_record, *trace.append_history]
         trace.chunked_forward = True
         trace.last_run = dict(trace.last_run or {})
         trace.last_run["chunk_size"] = normalized_chunk_size
-        trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths)
+        trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths_value)
         trace.profile_enabled = profile_enabled
         if layer_visualizers_value:
             _render_layer_visualizers(trace, layer_visualizers_value)
@@ -2795,6 +2879,122 @@ def _validate_chunked_forward_capture(
         raise ChunkedForwardConfigError(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."
         )
+
+
+def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None:
+    """Validate chunk append compatibility without reading unsaved payloads.
+
+    Parameters
+    ----------
+    old_trace:
+        Existing accumulated trace.
+    new_trace:
+        Freshly captured chunk trace.
+
+    Returns
+    -------
+    None
+        Raises when graph metadata is incompatible.
+    """
+
+    old_hash = getattr(old_trace, "graph_shape_hash", None)
+    new_hash = getattr(new_trace, "graph_shape_hash", None)
+    if old_hash != new_hash:
+        raise AppendMismatchError("graph shape changed")
+
+    old_labels = tuple(layer._layer_label_raw for layer in old_trace.layer_list)
+    new_labels = tuple(layer._layer_label_raw for layer in new_trace.layer_list)
+    if old_labels != new_labels:
+        raise AppendMismatchError("topology or site labels changed")
+
+
+def _append_chunk_trace_state(
+    trace: Trace,
+    new_trace: Trace,
+    *,
+    chunk_size: int,
+    total_batch_size: int,
+    append_sequence_id: int,
+    chunk_paths: tuple[str, ...] | None,
+) -> None:
+    """Append a chunk trace while preserving predicate-save public behavior.
+
+    Parameters
+    ----------
+    trace:
+        Existing accumulated trace to mutate.
+    new_trace:
+        Freshly captured chunk trace to append.
+    chunk_size:
+        Leading batch size for the appended chunk.
+    total_batch_size:
+        Total batch size across all chunks.
+    append_sequence_id:
+        One-based append sequence identifier.
+    chunk_paths:
+        Normalized public chunk paths.
+
+    Returns
+    -------
+    None
+        ``trace`` is updated in place.
+    """
+
+    _validate_chunk_append_candidate(trace, new_trace)
+    started_at = time.monotonic()
+    old_hash = getattr(trace, "graph_shape_hash", None)
+    new_hash = getattr(new_trace, "graph_shape_hash", None)
+    old_predicate_options = getattr(trace, "_predicate_save_options", MISSING)
+    new_predicate_options = getattr(new_trace, "_predicate_save_options", MISSING)
+    try:
+        trace._predicate_save_options = None
+        new_trace._predicate_save_options = None
+        trace.append_state_from(new_trace)
+    finally:
+        if old_predicate_options is MISSING:
+            trace.__dict__.pop("_predicate_save_options", None)
+        else:
+            trace._predicate_save_options = old_predicate_options
+        if new_predicate_options is MISSING:
+            new_trace.__dict__.pop("_predicate_save_options", None)
+        else:
+            new_trace._predicate_save_options = new_predicate_options
+
+    trace.is_appended = True
+    trace._append_sequence_id = append_sequence_id
+    trace.state = TraceState.APPENDED
+    trace._has_direct_writes = False
+    trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
+    duration_s = time.monotonic() - started_at
+    trace.last_run = {
+        "engine": "append",
+        "timestamp": time.monotonic(),
+        "started_at": started_at,
+        "duration_s": duration_s,
+        "spec_revision": getattr(trace, "_spec_revision", 0),
+        "append": True,
+        "strict": False,
+        "hooks": 0,
+        "chunk_size": chunk_size,
+        "total_batch_size": total_batch_size,
+        "append_sequence_id": append_sequence_id,
+        "old_graph_shape_hash": old_hash,
+        "new_graph_shape_hash": new_hash,
+        "chunk_paths": chunk_paths,
+    }
+    trace.append_history.append(dict(trace.last_run))
+    trace._record_operation(
+        "append",
+        engine="append",
+        started_at=started_at,
+        duration_s=duration_s,
+        hook_count=0,
+        chunk_size=chunk_size,
+        total_batch_size=total_batch_size,
+        append_sequence_id=append_sequence_id,
+        old_graph_shape_hash=old_hash,
+        new_graph_shape_hash=new_hash,
+    )
 
 
 def _contains_auto_coercible_raw_input(value: Any) -> bool:
