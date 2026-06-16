@@ -8,7 +8,7 @@ from typing import Any, Callable, Literal, TypeAlias
 from ._protocol import CaptureBackend
 
 
-BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "fake"] | str
+BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "tf", "fake"] | str
 CanHandleFn: TypeAlias = Callable[[object, object, dict[Any, Any] | None], bool]
 CaptureTraceFn: TypeAlias = Callable[..., Any]
 ValidateEntryFn: TypeAlias = Callable[..., bool]
@@ -64,6 +64,9 @@ TINYGRAD_TRACE_OPTIONS: tuple[str, ...] = ("module_identity_mode", "grad_options
 
 PADDLE_TRACE_OPTIONS: tuple[str, ...] = ("module_identity_mode", "grad_options")
 """Trace options implemented by the Paddle preview backend."""
+
+TF_TRACE_OPTIONS: tuple[str, ...] = ("module_identity_mode",)
+"""Trace options implemented by the TensorFlow preview backend."""
 
 
 class BackendRegistryError(ValueError):

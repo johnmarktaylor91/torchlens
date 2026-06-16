@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import Any, cast
 
 import torch
@@ -11,12 +11,14 @@ from torch import nn
 from ._protocol import CaptureBackend
 from .registry import (
     BackendCapabilities,
+    BackendMismatchError,
     BackendSpec,
     BackendUnsupportedError,
     JAX_TRACE_OPTIONS,
     MLX_TRACE_OPTIONS,
     PADDLE_TRACE_OPTIONS,
     SerializationPolicy,
+    TF_TRACE_OPTIONS,
     TINYGRAD_TRACE_OPTIONS,
     TORCH_TRACE_OPTIONS,
     register_backend_spec,
@@ -237,6 +239,59 @@ def _paddle_can_handle(
     )
 
 
+def _tf_can_handle(
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+) -> bool:
+    """Return whether the TensorFlow spec can handle the public call.
+
+    Parameters
+    ----------
+    model:
+        Candidate callable.
+    input_args:
+        Positional inputs.
+    input_kwargs:
+        Keyword inputs.
+
+    Returns
+    -------
+    bool
+        ``True`` when TensorFlow/Keras are installed, Keras is using the
+        TensorFlow backend, no foreign tensor leaves are present, and the model
+        or inputs identify a TensorFlow capture entry.
+    """
+
+    if isinstance(model, nn.Module):
+        return False
+    try:
+        import keras
+        import tensorflow as tf
+    except ImportError:
+        return False
+
+    active_keras_backend = str(keras.backend.backend())
+    if active_keras_backend != "tensorflow":
+        if _is_keras_object(model):
+            raise BackendMismatchError(
+                "backend='tf' requires keras.backend.backend() == 'tensorflow'; "
+                f"active keras backend is {active_keras_backend!r}."
+            )
+        return False
+    if _contains_foreign_tensor(input_args) or _contains_foreign_tensor(input_kwargs):
+        return False
+    if isinstance(model, tf.Module):
+        return True
+    if _is_tf_concrete_function(model, tf):
+        return True
+    if hasattr(model, "get_concrete_function"):
+        return True
+    if _has_saved_model_signatures(model):
+        return True
+    return callable(model) and _contains_tf_tensor(input_args, input_kwargs, tf)
+
+
 def _contains_paddle_tensor(input_args: object, input_kwargs: object, paddle: object) -> bool:
     """Return whether public inputs contain at least one Paddle tensor leaf.
 
@@ -259,6 +314,126 @@ def _contains_paddle_tensor(input_args: object, input_kwargs: object, paddle: ob
     return any(isinstance(leaf, tensor_type) for leaf in _simple_leaves(input_args)) or any(
         isinstance(leaf, tensor_type) for leaf in _simple_leaves(input_kwargs)
     )
+
+
+def _contains_tf_tensor(input_args: object, input_kwargs: object, tf: object) -> bool:
+    """Return whether public inputs contain at least one TensorFlow tensor leaf.
+
+    Parameters
+    ----------
+    input_args:
+        Positional public inputs.
+    input_kwargs:
+        Keyword public inputs.
+    tf:
+        Imported ``tensorflow`` module.
+
+    Returns
+    -------
+    bool
+        True when a TensorFlow tensor or variable leaf is present.
+    """
+
+    tensor_type = getattr(tf, "Tensor")
+    variable_type = getattr(tf, "Variable")
+    return any(
+        isinstance(leaf, tensor_type) or isinstance(leaf, variable_type)
+        for leaf in (*_simple_leaves(input_args), *_simple_leaves(input_kwargs))
+    )
+
+
+def _contains_foreign_tensor(value: object) -> bool:
+    """Return whether nested public inputs contain non-TF tensor leaves.
+
+    Parameters
+    ----------
+    value:
+        Candidate public input tree.
+
+    Returns
+    -------
+    bool
+        True for torch, JAX, or Paddle tensor leaves.
+    """
+
+    return any(_is_foreign_tensor_leaf(leaf) for leaf in _simple_leaves(value))
+
+
+def _is_foreign_tensor_leaf(leaf: object) -> bool:
+    """Return whether a leaf belongs to a non-TensorFlow tensor runtime.
+
+    Parameters
+    ----------
+    leaf:
+        Candidate public input leaf.
+
+    Returns
+    -------
+    bool
+        True for torch, JAX, or Paddle tensor leaves.
+    """
+
+    if isinstance(leaf, torch.Tensor):
+        return True
+    leaf_type = type(leaf)
+    module_name = leaf_type.__module__.split(".", maxsplit=1)[0]
+    return module_name in {"jax", "jaxlib", "paddle"}
+
+
+def _is_keras_object(value: object) -> bool:
+    """Return whether ``value`` appears to come from standalone Keras.
+
+    Parameters
+    ----------
+    value:
+        Candidate object.
+
+    Returns
+    -------
+    bool
+        True when the type module is a Keras module.
+    """
+
+    return type(value).__module__.split(".", maxsplit=1)[0] == "keras"
+
+
+def _is_tf_concrete_function(value: object, tf: object) -> bool:
+    """Return whether ``value`` is a TensorFlow ``ConcreteFunction``.
+
+    Parameters
+    ----------
+    value:
+        Candidate object.
+    tf:
+        Imported ``tensorflow`` module.
+
+    Returns
+    -------
+    bool
+        True for TensorFlow concrete functions.
+    """
+
+    tf_runtime = cast(Any, tf)
+    concrete_function_type = getattr(tf_runtime.types.experimental, "ConcreteFunction", None)
+    return bool(concrete_function_type is not None and isinstance(value, concrete_function_type))
+
+
+def _has_saved_model_signatures(value: object) -> bool:
+    """Return whether ``value`` looks like a loaded SavedModel object.
+
+    Parameters
+    ----------
+    value:
+        Candidate object.
+
+    Returns
+    -------
+    bool
+        True when a non-empty ``signatures`` mapping is present.
+    """
+
+    signatures = getattr(value, "signatures", None)
+    return isinstance(signatures, Mapping) and bool(signatures)
 
 
 def _simple_leaves(value: object) -> tuple[object, ...]:
@@ -391,6 +566,25 @@ def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
     return PaddleBackend().capture_trace(*args, **kwargs)
 
 
+def _tf_capture_trace(*args: Any, **kwargs: Any) -> Any:
+    """Dispatch to the TensorFlow backend preview shell.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public ``trace`` arguments.
+
+    Returns
+    -------
+    Any
+        Captured trace once the TensorFlow capture phase lands.
+    """
+
+    from .tf import TFBackend
+
+    return TFBackend().capture_trace(*args, **kwargs)
+
+
 def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
     """Dispatch to the current torch validation entry.
 
@@ -485,6 +679,25 @@ def _paddle_validate_entry(*args: Any, **kwargs: Any) -> bool:
     return PaddleBackend().validate_entry(*args, **kwargs)
 
 
+def _tf_validate_entry(*args: Any, **kwargs: Any) -> bool:
+    """Dispatch to TensorFlow model/input validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public validation arguments.
+
+    Returns
+    -------
+    bool
+        Validation result once the TensorFlow validation phase lands.
+    """
+
+    from .tf import TFBackend
+
+    return TFBackend().validate_entry(*args, **kwargs)
+
+
 def _torch_validate_trace(*args: Any, **kwargs: Any) -> bool:
     """Dispatch to the current torch trace validation implementation.
 
@@ -577,6 +790,25 @@ def _paddle_validate_trace(*args: Any, **kwargs: Any) -> Any:
     from .paddle import PaddleBackend
 
     return PaddleBackend().validate_trace(*args, **kwargs)
+
+
+def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
+    """Dispatch to TensorFlow trace replay validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Trace validation arguments.
+
+    Returns
+    -------
+    Any
+        Validation result once the TensorFlow validation phase lands.
+    """
+
+    from .tf import TFBackend
+
+    return TFBackend().validate_trace(*args, **kwargs)
 
 
 def _paddle_capture_backend() -> CaptureBackend:
@@ -757,6 +989,39 @@ def register_default_backend_specs() -> None:
                 runtime_name="paddle",
             ),
             priority=40,
+            coercible=False,
+        ),
+        replace=True,
+    )
+    register_backend_spec(
+        BackendSpec(
+            name="tf",
+            aliases=("tensorflow",),
+            can_handle=_tf_can_handle,
+            capture_trace=_tf_capture_trace,
+            validate_entry=_tf_validate_entry,
+            validate_trace=_tf_validate_trace,
+            capabilities=BackendCapabilities(
+                backward_capture=False,
+                validation_replay=True,
+                fastlog=False,
+                interventions=False,
+                rng_replay=False,
+                payload_materialization=True,
+                streaming=False,
+                intermediate_derived_grads=False,
+                input_container_structure="paths_only",
+                output_container_structure="paths_only",
+                module_identity_modes=("function_root", "object_module"),
+                trace_options=TF_TRACE_OPTIONS,
+            ),
+            serialization_policy=SerializationPolicy(
+                payload_policy="array_payloads",
+                body_format="safetensors",
+                manifest_schema_versions=(2,),
+                runtime_name="tf",
+            ),
+            priority=50,
             coercible=False,
         ),
         replace=True,
