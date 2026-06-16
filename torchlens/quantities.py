@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar
+
+from typing_extensions import Self
 
 
 class Quantity(ABC):

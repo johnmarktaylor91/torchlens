@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Self
+from typing import Any, Literal
+
+from typing_extensions import Self
 
 from .refs import DeviceRef, DtypeRef
 

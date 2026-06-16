@@ -33,6 +33,8 @@ dependencies = [
     "safetensors>=0.4",
     "tqdm",
     "graphviz",
+    # typing_extensions.Self is used for Python 3.9/3.10 (typing.Self is 3.11+).
+    "typing_extensions>=4.0",
 ]
 
 [project.optional-dependencies]
