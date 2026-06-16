@@ -1,6 +1,35 @@
 # CHANGELOG
 
 
+## v2.21.1 (2026-06-16)
+
+### Bug Fixes
+
+- **capture**: Clone parameter inputs as tensors
+  ([`506d6fa`](https://github.com/johnmarktaylor91/torchlens/commit/506d6fa68dc5c32ded57f310f9e9b43a5e9aa461))
+
+- **capture**: Record parameter input metadata
+  ([`233463c`](https://github.com/johnmarktaylor91/torchlens/commit/233463c4b3aa1420ca7cf02e9a385ccfd488421f))
+
+### Continuous Integration
+
+- **pre-commit**: Exclude perf baselines from large-file check
+  ([`6ec9356`](https://github.com/johnmarktaylor91/torchlens/commit/6ec93567a8a86ffb29e8666d0df945f7268ee809))
+
+### Documentation
+
+- **perf**: Canonical baseline + measured numbers
+  ([`540c83b`](https://github.com/johnmarktaylor91/torchlens/commit/540c83bcedd7aa7a2697620eaa219b79ae2364a9))
+
+### Testing
+
+- **capture**: Characterize parameter inputs
+  ([`887ced4`](https://github.com/johnmarktaylor91/torchlens/commit/887ced452358c430c97f63991f620ac3074b77f0))
+
+- **capture**: Cover parameter input persistence
+  ([`99541ad`](https://github.com/johnmarktaylor91/torchlens/commit/99541ad0dd51d87717126aa2f5c3626967351cff))
+
+
 ## v2.21.0 (2026-06-16)
 
 ### Continuous Integration
