@@ -114,5 +114,6 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
         assert hasattr(layer, "container_path")
         assert hasattr(layer, "interventions")
         assert hasattr(layer, "_edge_uses")
-        assert not hasattr(layer, "edge_uses")
+        assert hasattr(layer, "edge_uses")
+        assert isinstance(layer.edge_uses, tuple)
         assert layer._construction_done is True

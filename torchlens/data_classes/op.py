@@ -67,7 +67,7 @@ from .._errors import MutatedReferenceError, TorchLensPostfuncError
 from .._trace_state import TraceState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
-from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
+from ..intervention.types import EdgeUseRecord, LAYER_PASS_LOG_FIELD_FORK_POLICY
 from ..ir.refs import DeviceRef, DtypeRef
 from ..intervention.errors import DirectActivationWriteWarning
 from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
@@ -1876,6 +1876,19 @@ class Op:
         """Number of distinct child Ops fed by this Op."""
 
         return len(self.children)
+
+    @property
+    def edge_uses(self) -> tuple[EdgeUseRecord, ...]:
+        """Per-edge parent-use records captured for this Op.
+
+        Returns
+        -------
+        tuple[EdgeUseRecord, ...]
+            Immutable view of the stored edge-use records, including repeated
+            same-parent uses in separate argument slots.
+        """
+
+        return tuple(self._slot("_edge_uses") or ())
 
     @property
     def siblings(self) -> list[str]:
