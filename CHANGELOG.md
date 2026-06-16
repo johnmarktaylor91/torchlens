@@ -1,6 +1,46 @@
 # CHANGELOG
 
 
+## v2.22.0 (2026-06-16)
+
+### Documentation
+
+- **backends**: Tensorflow backend lockstep docs + pyproject extra/marker + examples [tf P6]
+  ([`27b952e`](https://github.com/johnmarktaylor91/torchlens/commit/27b952ea567020539ab77e3616c38ba3f399d60e))
+
+### Features
+
+- **backends**: Non-vacuous TensorFlow validation tripwire (classification + self-consistency oracle
+  + per-op replay + perturbation + 3-way accounting) [tf P4]
+  ([`ad4c52b`](https://github.com/johnmarktaylor91/torchlens/commit/ad4c52b576a16089c4dcaf03da0ca0a58aeac927))
+
+- **backends**: Register TensorFlow backend spec + capabilities + lazy package scaffold [tf P1]
+  ([`4f72108`](https://github.com/johnmarktaylor91/torchlens/commit/4f72108c2c4c9fb19b9f58deb5a393b5e8850c66))
+
+- **backends**: Tensorflow .tlspec serialization (TFPayloadCodec bf16-correct + runtime fingerprint)
+  [tf P5]
+  ([`e643259`](https://github.com/johnmarktaylor91/torchlens/commit/e643259f4a76476da5673cdc867ab5a7a2bc2b8e))
+
+- **backends**: Tensorflow eager op_callbacks capture (warm boundary + ref-lineage + module stack)
+  -> Trace [tf P2]
+  ([`0b99334`](https://github.com/johnmarktaylor91/torchlens/commit/0b99334d6b0cdebb56ac5ca39b109bfa5d953e52))
+
+- **backends**: Tensorflow selective save= predicate surface + value caps + access [tf P3]
+  ([`790c802`](https://github.com/johnmarktaylor91/torchlens/commit/790c802ba1129e5f934f7800957f9c58e1388172))
+
+- **backends**: Tensorflow static graph-only fallback (FuncGraph walk + inline-then-prune) for
+  SavedModel/compiled [tf P7]
+  ([`3abab13`](https://github.com/johnmarktaylor91/torchlens/commit/3abab131d86a72577f6529105d3fd1850e5b2eb5))
+
+### Testing
+
+- **backends**: Regenerate field-order golden for TF runtime DROP fields [tf]
+  ([`f2c91a1`](https://github.com/johnmarktaylor91/torchlens/commit/f2c91a1b804808b51653deb2a9648f8920e4ffdc))
+
+- **backends**: Scope TF tests to CPU + Keras-3 (no CUDA env leak, no tripwire weakening) [tf fix]
+  ([`a37fb33`](https://github.com/johnmarktaylor91/torchlens/commit/a37fb33a2bfcbe056e9d77d20565070d137679d1))
+
+
 ## v2.21.2 (2026-06-16)
 
 ### Bug Fixes
