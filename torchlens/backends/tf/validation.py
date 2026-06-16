@@ -88,6 +88,7 @@ _VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
 _STRUCTURAL_VALUE_OPS = frozenset({"Shape", "Size", "Rank", "StridedSlice"})
 _ANNOTATION_OPS = frozenset({"Identity", "StopGradient"})
 _PURE_RESOURCE_READ_OPS = frozenset({"ReadVariableOp"})
+_SOURCE_OPS = frozenset({"Const", "Placeholder"})
 _EFFECT_DENIED_OPS = frozenset(
     {
         "Assert",
@@ -100,7 +101,10 @@ _EFFECT_DENIED_OPS = frozenset(
         "StatefulPartitionedCall",
     }
 )
-_CONTROL_REGION_OPS = frozenset({"If", "StatelessIf", "While", "StatelessWhile"})
+_CONTROL_REGION_OPS = frozenset(
+    {"If", "StatelessIf", "While", "StatelessWhile", "Case", "Switch", "Merge"}
+    | {"StatefulPartitionedCall"}
+)
 
 
 @dataclass(frozen=True)
@@ -325,6 +329,43 @@ def _validate_classification(
             failures.append(f"unclassified_op:{label}:{op_type}")
             continue
         classes[label] = op_class
+    _propagate_control_region_classes(ops_by_label=ops_by_label, classes=classes)
+
+
+def _propagate_control_region_classes(
+    *,
+    ops_by_label: Mapping[str, Any],
+    classes: dict[str, TFOpClass],
+) -> None:
+    """Mark ops downstream of control regions as unverified regions.
+
+    Parameters
+    ----------
+    ops_by_label
+        Materialized ops keyed by raw and public labels.
+    classes
+        Mutable class mapping to update.
+
+    Returns
+    -------
+    None
+        Mutates ``classes`` in place.
+    """
+
+    changed = True
+    while changed:
+        changed = False
+        region_labels = {
+            label for label, op_class in classes.items() if op_class == "control-region"
+        }
+        for label, op in ops_by_label.items():
+            if label != getattr(op, "_label_raw", None):
+                continue
+            if classes.get(label) in {"source", "control-region"}:
+                continue
+            if any(parent in region_labels for parent in getattr(op, "parents", ())):
+                classes[label] = "control-region"
+                changed = True
 
 
 def _classify_op(op: Any) -> TFOpClass | None:
@@ -344,13 +385,17 @@ def _classify_op(op: Any) -> TFOpClass | None:
     op_type = str(getattr(op, "func_name", ""))
     if bool(getattr(op, "is_input", False)) or op_type == "input":
         return "source"
+    if op_type in _SOURCE_OPS:
+        return "source"
     if op_type in _PURE_RESOURCE_READ_OPS:
         return "pure-resource-read"
     if op_type in _STRUCTURAL_VALUE_OPS:
         return "structural-value"
     if op_type in _ANNOTATION_OPS:
         return "annotation"
-    if op_type.startswith("__inference_") or op_type in _CONTROL_REGION_OPS:
+    if op_type.startswith("__inference_") or op_type.startswith("region:"):
+        return "control-region"
+    if op_type in _CONTROL_REGION_OPS:
         return "control-region"
     if op_type in _EFFECT_DENIED_OPS:
         return "effect-denied"

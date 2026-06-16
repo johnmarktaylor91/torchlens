@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
@@ -24,6 +24,7 @@ from ...quantities import Duration
 from .._selective_save import reject_selector_outside_kinds
 from .._options import default_if_missing
 from ..registry import BackendUnsupportedError
+from .funcgraph import capture_static_funcgraph
 from .modules import TFModuleTree, discover_tf_module_tree, tf_param_logs
 from .op_callback_capture import TFEagerCaptureSession, warm_up_tf_callable
 
@@ -164,11 +165,70 @@ class TFBackend:
             save_raw_activations=save_raw_activations,
         )
         plan = self.normalize_call(model=model, input_args=input_args, input_kwargs=input_kwargs)
-        if plan.mode == "graph_only":
-            raise NotImplementedError(
-                f"tf static graph capture lands in P7; selected graph-only mode: {plan.reason}."
-            )
         tf = self._import_tensorflow()
+        if plan.mode == "graph_only":
+            trace = self._new_trace(
+                model=model,
+                output_device=output_device,
+                activation_transform=activation_transform,
+                save_raw_activations=save_raw_activations,
+                detach_saved_activations=detach_saved_activations,
+                save_grads=save_grads,
+                random_seed=random_seed,
+                num_context_lines=num_context_lines,
+                save_arg_values=save_arg_values,
+                save_code_context=save_code_context,
+                save_rng_states=save_rng_states,
+                recurrence_detection=recurrence_detection,
+                verbose=verbose,
+                backward_ready=backward_ready,
+                name=name,
+                module_filter=module_filter,
+                transform=transform,
+                raw_input=raw_input,
+                save_raw_input=save_raw_input,
+                batch_render=batch_render,
+                output_transform=output_transform,
+                save_raw_output=save_raw_output,
+                layer_visualizers=layer_visualizers,
+                save_visualizations=save_visualizations,
+                tf=tf,
+            )
+            trace.capture_events = CaptureEvents()
+            trace.capture_start_time = time.time()
+            static_result = capture_static_funcgraph(
+                tf=tf,
+                model=model,
+                callable_obj=plan.callable_obj,
+                args=plan.args,
+                kwargs=plan.call_kwargs,
+                save_predicate=save_predicate,
+            )
+            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace.raw_output = (
+                output_transform(static_result.output) if callable(output_transform) else None
+            )
+            trace.capture_events = static_result.events
+            trace._tf_source_records = static_result.source_records
+            trace._tf_unresolved_producers = static_result.unresolved_producers
+            trace._tf_init_op_labels = static_result.init_op_labels
+            trace._tf_op_type_counts = static_result.op_type_counts
+            trace._tf_op_captures = static_result.op_captures
+            trace._tf_static_region_labels = static_result.region_captures
+            trace._tf_static_fallback_error = static_result.fallback_error
+            if static_result.region_captures:
+                from ...validation.status import (
+                    REGION_REPLAY_IMPORTER_PROVENANCE,
+                    REGION_REPLAY_PROVENANCE_KEY,
+                )
+
+                trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
+            _mark_static_outputs(trace, static_result.output_label_raws)
+            materialize_from_events(trace, trace.capture_events)
+            delattr(trace, "capture_events")
+            self._attach_param_logs(trace, None)
+            self._finish_trace(trace, None)
+            return trace
         module_tree = discover_tf_module_tree(model, tf)
         use_object_module = _resolve_tf_module_identity_mode(module_identity_mode, module_tree)
         _ensure_built_or_warmable(model)
@@ -587,6 +647,9 @@ class TFBackend:
             Callable forward entry.
         """
 
+        signatures = getattr(model, "signatures", None)
+        if isinstance(signatures, Mapping) and signatures:
+            return signatures.get("serving_default") or next(iter(signatures.values()))
         if not callable(model):
             raise BackendUnsupportedError("TensorFlow backend requires a callable capture entry.")
         return model
@@ -656,6 +719,9 @@ class TFBackend:
             return "graph_only", "loaded SavedModel signatures require FuncGraph capture"
         if self._is_tf_function(callable_obj, tf):
             return "graph_only", "callable is a tf.function or ConcreteFunction"
+        call_dunder = getattr(model, "__call__", None)
+        if call_dunder is not None and self._is_tf_function(call_dunder, tf):
+            return "graph_only", "__call__ is a tf.function or ConcreteFunction"
         call_attr = getattr(model, "call", None)
         if call_attr is not None and self._is_tf_function(call_attr, tf):
             return "graph_only", "Model.call is a tf.function or ConcreteFunction"
@@ -960,6 +1026,37 @@ def _mark_outputs(trace: Trace, output: object, producer_by_ref: Mapping[object,
         if label is None:
             continue
         trace.output_layers.append(label)
+        event = trace.capture_events.op_event_by_label_raw.get(label)
+        if event is None:
+            continue
+        updated = replace(event, is_output_parent=True)
+        trace.capture_events.op_event_by_label_raw[label] = updated
+        for index, candidate in enumerate(trace.capture_events.op_events):
+            if candidate.label_raw == label:
+                trace.capture_events.op_events[index] = updated
+                trace.capture_events.live_index.replace(updated)
+                break
+
+
+def _mark_static_outputs(trace: Trace, output_label_raws: Sequence[str]) -> None:
+    """Mark final output-parent operations for static TensorFlow capture.
+
+    Parameters
+    ----------
+    trace
+        Trace with capture events.
+    output_label_raws
+        Raw labels corresponding to static graph outputs.
+
+    Returns
+    -------
+    None
+        Mutates output-layer event flags.
+    """
+
+    for label in output_label_raws:
+        if label not in trace.output_layers:
+            trace.output_layers.append(label)
         event = trace.capture_events.op_event_by_label_raw.get(label)
         if event is None:
             continue
