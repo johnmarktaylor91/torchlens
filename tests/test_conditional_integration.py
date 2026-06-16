@@ -11,20 +11,21 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Sequence
 
-import pandas as pd
 import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.backends.torch.ops as output_tensors
-import torchlens.backends.torch.sources as source_tensors
-import torchlens.postprocess.ast_branches as ast_branches
-import torchlens.postprocess.graph_traversal as graph_traversal
-import torchlens.utils.introspection as introspection
-from torchlens import trace as trace_fn
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import ConditionalEvent, Trace
+pd = pytest.importorskip("pandas")
+
+import torchlens.backends.torch.ops as output_tensors  # noqa: E402
+import torchlens.backends.torch.sources as source_tensors  # noqa: E402
+import torchlens.postprocess.ast_branches as ast_branches  # noqa: E402
+import torchlens.postprocess.graph_traversal as graph_traversal  # noqa: E402
+import torchlens.utils.introspection as introspection  # noqa: E402
+from torchlens import trace as trace_fn  # noqa: E402
+from torchlens.data_classes.layer import Layer  # noqa: E402
+from torchlens.data_classes.op import Op  # noqa: E402
+from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
 
 
 class NestedIfThenIfModel(nn.Module):

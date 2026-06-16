@@ -7,13 +7,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
 import torch
 import torch.nn as nn
 
-import torchlens as tl
-from torchlens import trace as trace_fn
+pd = pytest.importorskip("pandas")
+
+import torchlens as tl  # noqa: E402
+from torchlens import trace as trace_fn  # noqa: E402
 
 PARQUET_IMPORT_ERROR = (
     "Parquet export requires pyarrow. Install with: pip install torchlens[tabular]"

@@ -7,12 +7,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
+pd = pytest.importorskip("pandas")
+
+import torchlens as tl  # noqa: E402
 
 
 class _Tracker:

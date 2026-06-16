@@ -14,15 +14,16 @@ import io
 from pathlib import Path
 import re
 
-import cairosvg
 import pytest
 import torch
 from torch import nn
 from PIL import Image
 
-import torchlens as tl
-import test_loop_module_rolling as demos
-from support.label_geometry import audit_gv_source
+cairosvg = pytest.importorskip("cairosvg")
+
+import torchlens as tl  # noqa: E402
+import test_loop_module_rolling as demos  # noqa: E402
+from support.label_geometry import audit_gv_source  # noqa: E402
 
 _CONTAINER_FRAME_GUTTER_PX = 5
 

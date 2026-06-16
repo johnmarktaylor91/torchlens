@@ -3,17 +3,18 @@
 from types import SimpleNamespace
 from typing import Dict, Iterator, List, Optional
 
-import pandas as pd
 import pytest
 import torch
-import torchlens as tl
 import torch.nn as nn
 
-from torchlens import trace as trace_fn
-from torchlens._deprecations import _WARNED_DEPRECATIONS
-from torchlens.data_classes.cleanup import _remove_log_entry_references
-from torchlens.data_classes.trace import ConditionalEvent, Trace
-from torchlens.postprocess.labeling import (
+pd = pytest.importorskip("pandas")
+
+import torchlens as tl  # noqa: E402
+from torchlens import trace as trace_fn  # noqa: E402
+from torchlens._deprecations import _WARNED_DEPRECATIONS  # noqa: E402
+from torchlens.data_classes.cleanup import _remove_log_entry_references  # noqa: E402
+from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
+from torchlens.postprocess.labeling import (  # noqa: E402
     _rename_model_history_layer_names,
     _replace_layer_names_for_layer_entry,
 )

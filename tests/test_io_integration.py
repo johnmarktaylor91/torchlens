@@ -6,17 +6,17 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
 import torch
 from torch import nn
 
+pd = pytest.importorskip("pandas")
 pytest.importorskip("safetensors")
 
-import torchlens as tl
-from torchlens import load, trace as trace_fn, rehydrate_nested, save
-from torchlens._io import BlobRef
-from torchlens.data_classes.trace import Trace
+import torchlens as tl  # noqa: E402
+from torchlens import load, trace as trace_fn, rehydrate_nested, save  # noqa: E402
+from torchlens._io import BlobRef  # noqa: E402
+from torchlens.data_classes.trace import Trace  # noqa: E402
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 

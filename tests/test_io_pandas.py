@@ -4,22 +4,23 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
 import torch
 import torch.nn as nn
 
-import torchlens as tl
-from torchlens import trace as trace_fn
-from torchlens.constants import (
+pd = pytest.importorskip("pandas")
+
+import torchlens as tl  # noqa: E402
+from torchlens import trace as trace_fn  # noqa: E402
+from torchlens.constants import (  # noqa: E402
     BUFFER_LOG_FIELD_ORDER,
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes._summary import format_call_arg
-from torchlens.data_classes.buffer import BufferAccessor
-from torchlens.data_classes.module import ModuleCall
-from torchlens.data_classes.param import ParamAccessor
+from torchlens.data_classes._summary import format_call_arg  # noqa: E402
+from torchlens.data_classes.buffer import BufferAccessor  # noqa: E402
+from torchlens.data_classes.module import ModuleCall  # noqa: E402
+from torchlens.data_classes.param import ParamAccessor  # noqa: E402
 
 
 class _SummaryBlock(nn.Module):

@@ -12,28 +12,29 @@ import tempfile
 from dataclasses import replace
 from typing import Callable, Sequence
 
-import pandas as pd
 import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.backends.torch.ops as output_tensors
-import torchlens.backends.torch.sources as source_tensors
-import torchlens.postprocess.ast_branches as ast_branches
-import torchlens.postprocess.graph_traversal as graph_traversal
-import torchlens.utils.introspection as introspection
-from example_models import TorchWhereModel
-from test_conditional_multipass import (
+pd = pytest.importorskip("pandas")
+
+import torchlens.backends.torch.ops as output_tensors  # noqa: E402
+import torchlens.backends.torch.sources as source_tensors  # noqa: E402
+import torchlens.postprocess.ast_branches as ast_branches  # noqa: E402
+import torchlens.postprocess.graph_traversal as graph_traversal  # noqa: E402
+import torchlens.utils.introspection as introspection  # noqa: E402
+from example_models import TorchWhereModel  # noqa: E402
+from test_conditional_multipass import (  # noqa: E402
     AlternatingRecurrentIfModel,
     LoopedIfAlternatingModel,
     RolledMixedArmModel,
 )
-from test_conditional_rendering import BranchEntryWithArgLabelModel
-from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel
-from torchlens import check_metadata_invariants, trace as trace_fn
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import ConditionalEvent, Trace
+from test_conditional_rendering import BranchEntryWithArgLabelModel  # noqa: E402
+from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel  # noqa: E402
+from torchlens import check_metadata_invariants, trace as trace_fn  # noqa: E402
+from torchlens.data_classes.layer import Layer  # noqa: E402
+from torchlens.data_classes.op import Op  # noqa: E402
+from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
