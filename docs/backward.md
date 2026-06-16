@@ -6,8 +6,8 @@ to a runtime-only sidecar diary, then projected into `BackwardPass`, `GradFn`, `
 per-op gradient records. Saved `.tlspec` files persist the projections and tensor blobs, not the
 live diary.
 
-Backend status: torch is the only true-backward capture backend in this checkout. MLX declares
-backward capture unsupported. JAX, tinygrad, and Paddle expose derived-gradient previews:
+Backend status: torch is the only true-backward capture backend in this checkout. MLX and
+TensorFlow declare backward capture unsupported. JAX, tinygrad, and Paddle expose derived-gradient previews:
 leaf gradients from a second backend AD execution over declared leaves, not
 `GradFn`/`GradFnCall` records or live backward hooks. Real non-torch backward graphs remain
 research.
@@ -195,8 +195,10 @@ Paddle exposes `trace.derived_grads`, populated by `tl.backends.paddle.GradOptio
 second guarded Paddle AD pass over module params and selected inputs, and can optionally expose
 exact saved-op records through `trace.intermediate_derived_grads` plus read-only
 `op.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
-capture. `trace.log_backward(...)`, `trace.backward_passes`, `trace.saved_grad_ops`, and
-`op.grads` raise on JAX, MLX, tinygrad, and Paddle traces.
+capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
+TF traces are forward eager-capture records only. `trace.log_backward(...)`,
+`trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
+Paddle, and TensorFlow traces.
 
 Future follow-ups are filed for real per-fire timing via prehooks and better implicit-boundary
 detection. Current `GradFnCall` timing is a single hook timestamp, and implicit passes are closed

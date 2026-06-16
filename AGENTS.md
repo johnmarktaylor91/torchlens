@@ -32,6 +32,7 @@ Common unified capture patterns:
 
 ```python
 torch_trace = tl.trace(model, x, backend="torch")
+tf_trace = tl.trace(tf_model, tf_x, backend="tf")
 relu_trace = tl.trace(model, x, save=tl.func("relu"))
 windowed = tl.trace(
     model,
@@ -108,6 +109,10 @@ pytest tests/ -m "not slow" -x --tb=short
 14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
     `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
     glossary, FIELD_ORDER, and serialization compatibility gates together.
+15. TensorFlow `backend="tf"` / `backend="tensorflow"` targets Keras 3 on TF>=2.16 with
+    `keras.backend.backend() == "tensorflow"`. Eager `op_callbacks` capture is the shipped primary
+    path; graph-only FuncGraph fallback is the static-mode design; interventions, true backward
+    capture, and T1 derived gradients are deferred.
 
 ## Known Gotchas
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`

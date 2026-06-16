@@ -57,6 +57,7 @@ Use `backend=` only when the backend is intentionally part of the test or exampl
 
 ```python
 torch_trace = tl.trace(model, x, backend="torch")
+tf_trace = tl.trace(tf_model, tf_x, backend="tf")
 assert torch_trace.backend == "torch"
 ```
 
@@ -79,6 +80,12 @@ print(tl.compat.report(model, x).to_markdown())
   errors. Public backend-neutral metadata lives on `Trace.backend`, `Trace.module_identity_mode`,
   `Trace.param_source`, and record fields such as `dtype_ref`, `device_ref`,
   `backend_address`, and `resolver_status`.
+- TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
+  preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
+  with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
+  op-level records, and Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the
+  static-mode design; interventions, true backward capture, and T1 derived gradients remain
+  deferred like sibling preview gaps.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest

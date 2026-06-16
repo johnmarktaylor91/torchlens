@@ -7,9 +7,10 @@ selected records and can materialize a `Trace` later.
 
 Backend note: these timings and sparse-recording examples are torch-oriented. `tl.record()` /
 fastlog is torch-only in the backend-v1 registry. Non-torch preview backends may have different
-capture costs; JAX, tinygrad, and Paddle `.tlspec` saves materialize forward/derived arrays but loaded
-traces cannot replay-validate stripped runtime captures. Paddle preview capture has its own
-dygraph/eager replay and static-inventory audit costs.
+capture costs; JAX, tinygrad, Paddle, and TensorFlow `.tlspec` saves materialize array payloads but
+loaded traces cannot replay-validate stripped runtime captures. Paddle preview capture has its own
+dygraph/eager replay and static-inventory audit costs; TensorFlow preview capture runs live eager
+`op_callbacks` plus self-consistency and per-op replay/perturbation accounting.
 
 ## Decision tree
 
@@ -180,7 +181,7 @@ Use disk-backed storage for selected payloads that are too large or numerous to 
 Portable `.tlspec/` bundles store manifest data plus tensor sidecars when the backend supports
 materialized payloads; executable Python callables are not portable. Backend-aware manifest schema
 v2 adds `backend`, `backend_runtime`, nullable torch-specific fields, and `payload_policy`.
-JAX, tinygrad, and Paddle preview bundles materialize forward/derived array payloads; loaded traces
+JAX, tinygrad, Paddle, and TensorFlow preview bundles materialize array payloads; loaded traces
 still report replay validation as unavailable because portable save strips runtime replay captures.
 
 ## Intervention cost

@@ -134,8 +134,9 @@ manifests. `io.detect_tlspec_format()` distinguishes unified and legacy formats.
 loadable. Unified manifests currently support manifest schema v1 for torch writes and schema v2
 for backend-aware validation/loading preflight. Schema v2 adds `backend`, `backend_runtime`,
 nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX, tinygrad,
-MLX, and Paddle use `payload_policy="array_payloads"` to materialize non-torch array payloads while
-staying narrower than torch's full payload contract; MLX and Paddle cover saved forward arrays. Fully
+MLX, Paddle, and TensorFlow use `payload_policy="array_payloads"` to materialize non-torch array
+payloads while staying narrower than torch's full payload contract; MLX, Paddle, and TensorFlow
+cover saved forward arrays. Fully
 addressable JAX sharded arrays save as
 assembled host values; `jax_sharding_*` codec metadata is audit-only and is not used to recreate
 mesh or partition topology on load.
@@ -172,7 +173,20 @@ inventory snapshot, `.tlspec` array payload materialization through the Paddle c
 `tl.backends.paddle.GradOptions` for leaf and capped intermediate derived gradients. Paddle bf16
 payloads record logical dtype metadata because NumPy transports them as `uint16`. It is not true
 backward capture: Paddle traces keep `has_backward_pass=False`, and backward graph accessors raise.
-JAX, tinygrad, MLX, and Paddle static-label `save=` selectors are applied after full
+
+TensorFlow P6 exposes a Keras-3 / TF>=2.16 eager technical-preview backend through explicit
+`backend="tf"` or `backend="tensorflow"` when `keras.backend.backend() == "tensorflow"`. The
+primary shipped mechanism is live eager `op_callbacks` capture around the real forward, giving real
+values, real taken-branch control flow, op-level records, source/ref lineage, and Keras/`tf.Module`
+module stacks. The dual-mechanism design reserves graph-only FuncGraph walk/prune fallback for
+compiled `Model.call`, `tf.function`, SavedModel-style, and `.predict()` entries; current P6 builds
+detect those graph-only entries and fail closed until that fallback lands. TF validation uses
+callback self-consistency, per-op `tf.raw_ops` replay, parent perturbation, and
+`ValidationReplayStatus` replayed / pure-unverified / effect-region counts. TF `.tlspec` saves
+dense numeric/bool forward arrays through the TensorFlow codec, including logical `tf.bfloat16`
+metadata. Interventions, true backward capture, and T1/intermediate derived gradients are deferred.
+
+JAX, tinygrad, MLX, Paddle, and TensorFlow static-label `save=` selectors are applied after full
 graph finalization; unsaved ops keep labels, shapes, dtype/device refs, edges, and module
 metadata, but public `out`/`out_ref` payloads are dropped and saved counters/blobs are recomputed.
 Value-dependent `save=` predicates, `followed_by`/`preceded_by` window selectors, intervention,
@@ -191,10 +205,10 @@ metadata-only.
 
 Loaded non-torch traces are payload-materialized but not replay-validation-capable. Portable save
 strips runtime-only replay captures (`jax_equation_captures`, `tinygrad_uop_captures`, and
-`paddle_op_captures`), and MLX
+`paddle_op_captures`, plus TF op-callback captures), and MLX
 has no replay-validation implementation, so `Trace.validation_replay_status` reports
 `state="unavailable"` with reason `"loaded_trace_runtime_capture_stripped"` for loaded JAX,
-tinygrad, MLX, and Paddle traces. Live JAX/tinygrad/Paddle traces still run real replay and parent-perturbation
+tinygrad, MLX, Paddle, and TensorFlow traces. Live JAX/tinygrad/Paddle/TF traces still run real replay and parent-perturbation
 validation, including selectively saved traces via runtime-only hidden replay payloads that do not
 survive portable save. `Trace.payload_load_status` records load materialization outcomes such as
 `"loaded_device_best_effort"`, `"audit_only"`, and `"audit_only_missing_runtime"`.

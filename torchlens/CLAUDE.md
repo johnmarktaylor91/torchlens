@@ -2,7 +2,7 @@
 
 ## What This Is
 TorchLens extracts outs and metadata from backend-resolved captures. PyTorch eager capture is the
-stable default; MLX, JAX, tinygrad, and Paddle are technical-preview backends. `import torchlens`
+stable default; MLX, JAX, tinygrad, Paddle, and TensorFlow are technical-preview backends. `import torchlens`
 exposes the public API and compatibility shims, but torch wrapping is lazy: the first torch capture
 prepares the model and calls `wrap_torch()` from `decoration/`.
 
@@ -14,7 +14,7 @@ import torchlens
   |- imports submodule namespaces: fastlog, bridge, compat, export, options, report, stats, viz
   |
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
-  |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle backend
+  |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend
   |- decoration/model_prep.py  - ensure torch is wrapped, prepare modules/buffers/params
   |- capture/trace.py          - run forward pass with active logging
   |- capture/output_tensors.py - build Op records
@@ -38,6 +38,7 @@ Common unified capture examples:
 ```python
 relu_trace = tl.trace(model, x, save=tl.func("relu"))
 paddle_trace = tl.trace(paddle_model, paddle_x, backend="paddle")
+tf_trace = tl.trace(tf_model, tf_x, backend="tf")
 windowed = tl.trace(
     model,
     x,
@@ -162,7 +163,8 @@ module-containment-refactor).
 `manifest.json` plus safetensors blobs; public schema validation lives in `validation/__init__.py`.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
-`uint16`.
+`uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward
+arrays and preserve `tf.bfloat16` logical dtype metadata.
 Intervention specs can be saved at audit, executable-with-callables, or portable levels.
 
 ### Appliances

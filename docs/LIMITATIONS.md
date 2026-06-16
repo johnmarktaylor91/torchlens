@@ -21,7 +21,7 @@ original analysis.
 
 Backend note: `backend=None` preserves current PyTorch eager capture and MLX
 module auto-routing. Explicit `backend="torch"`, `backend="jax"`,
-`backend="tinygrad"`, and `backend="paddle"` are supported; unknown,
+`backend="tinygrad"`, `backend="paddle"`, and `backend="tf"` / `backend="tensorflow"` are supported; unknown,
 ambiguous, or mismatched backend selections fail before capture with typed
 backend registry errors. MLX remains a
 technical preview with limited capabilities, static-label save support for
@@ -47,13 +47,21 @@ composites are allowed as coarse boundary nodes. Same-object no-ops are captured
 as alias annotations. Paddle coverage is guarded by live dynamic replay/perturbation
 tripwires plus a static wrapped/denied inventory snapshot, so audit caveats remain
 for APIs outside the pinned inventory.
-JAX, tinygrad, MLX, and Paddle support static-label `save=` selectors after full
+TensorFlow is a Keras-3 / TF>=2.16 eager technical preview selected with `backend="tf"` or
+`backend="tensorflow"` when `keras.backend.backend() == "tensorflow"`. Its primary mechanism is
+live eager `op_callbacks` capture with real values, real taken-branch control flow, op-level
+records, and Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the static-mode
+design for compiled or SavedModel-style entries; current P6 builds detect those entries and fail
+closed until that fallback lands.
+JAX, tinygrad, MLX, Paddle, and TensorFlow support static-label `save=` selectors after full
 graph capture. MLX supports `tl.func`, `tl.label`, `tl.module`,
 `tl.in_module`, `tl.contains`, and boolean composites of those. Value-dependent
 save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
 replay-validate because portable save strips or lacks runtime replay captures; inspect
 `trace.validation_replay_status` for the explicit unavailable status.
+TensorFlow validation reports replayed, pure-unverified, and effect-region counts; `unverified`
+means partial validation, not a pass.
 JAX importer-owned regions for over-cap `lax.scan`, over-cap `lax.while_loop`, and forward
 `custom_vjp_call` report `trace.validation_replay_status.state == "unverified"` after replayable
 ops and region seam checks pass. Treat that as partial validation, not as a pass; `bool(status)`

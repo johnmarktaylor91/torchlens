@@ -27,9 +27,9 @@
 
 Backend status: PyTorch is the full-feature backend and the default
 (`tl.trace(..., backend=None)`). TorchLens 2.x also ships **technical-preview
-backends for MLX, JAX, tinygrad, and Paddle** behind one `CaptureBackend`
+backends for MLX, JAX, tinygrad, Paddle, and TensorFlow** behind one `CaptureBackend`
 protocol - select with `backend="jax"` / `backend="tinygrad"` /
-`backend="mlx"` / `backend="paddle"`. Unsupported or mismatched selections
+`backend="mlx"` / `backend="paddle"` / `backend="tf"`. Unsupported or mismatched selections
 raise typed backend errors, and `tl.validate(..., backend=...)` follows the
 same resolution path. See
 [What's new in 2.x](#whats-new-in-2x) for the capability matrix.
@@ -90,15 +90,15 @@ PyTorch-only. TorchLens captures eager-mode execution through a small backend
 protocol, so the same trace/inspect/validate workflow now runs on other
 frameworks:
 
-| Capability | PyTorch | JAX (preview) | tinygrad (preview) | MLX (preview) | Paddle (preview) |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Forward capture + graph/metadata | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | object `object_module`; raw `function_root` | object `object_module`; raw `function_root` |
-| Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited | dygraph/eager Python only |
-| Static-label `save=` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward/derived arrays | forward/derived arrays |
-| Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived |
-| Interventions / halt / fastlog | ✅ | — | — | — | — |
+| Capability | PyTorch | JAX (preview) | tinygrad (preview) | MLX (preview) | Paddle (preview) | TensorFlow (preview) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Forward capture + graph/metadata | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | object `object_module`; raw `function_root` | object `object_module`; raw `function_root` | Keras/`tf.Module` `object_module`; raw `function_root` |
+| Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited | dygraph/eager Python only | eager Python control flow |
+| Static-label `save=` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward/derived arrays | forward/derived arrays | forward arrays |
+| Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | deferred |
+| Interventions / halt / fastlog | ✅ | — | — | — | — | — |
 
 The JAX backend is **jaxpr-first**: it captures the lowered jaxpr, so any
 spelling (operators, array methods, `jnp`/`lax` calls) is captured by
@@ -117,7 +117,13 @@ Paddle is a dygraph/eager technical preview through `backend="paddle"` and
 `tl.backends.paddle.GradOptions`; it rejects in-place mutation, RNG, user-level
 tensor-to-Python scalar escapes, active stochastic/training composites, and true
 backward capture. Same-object no-ops are captured as alias annotations rather
-than value-copying ops. JAX/tinygrad/MLX/Paddle portable saves use
+than value-copying ops. TensorFlow is a Keras-3 / TF>=2.16 technical preview
+through `backend="tf"` or `backend="tensorflow"`. Its primary path is live eager
+`op_callbacks` capture with real values, real taken-branch control flow, op-level
+records, and Keras/`tf.Module` module stacks when `keras.backend.backend() ==
+"tensorflow"`. Graph-only FuncGraph fallback is the static-mode design for compiled
+or SavedModel-style entries; interventions, true backward capture, and T1 derived
+gradients are deferred like the sibling preview gaps. JAX/tinygrad/MLX/Paddle/TF portable saves use
 `payload_policy="array_payloads"` and loaded traces report replay as unavailable
 rather than as a false pass. PyTorch remains the full-feature backend: true
 backward capture, value-dependent predicates, `intervene=`, `halt=`, and fastlog
@@ -147,11 +153,13 @@ log = tl.trace(torch_model, x)                  # PyTorch (default)
 log = tl.trace(jax_fn,  inputs, backend="jax")       # JAX preview
 log = tl.trace(tg_fn,   inputs, backend="tinygrad")  # tinygrad preview
 log = tl.trace(paddle_model, x, backend="paddle")     # Paddle preview
+log = tl.trace(tf_model, x, backend="tf")             # TensorFlow preview
 ```
 
-(JAX/tinygrad capture pure functions; MLX and Paddle gradients run second
-guarded AD passes over module params and selected inputs. Gradient options,
-audit caveats, and exact calling conventions are documented per backend in
+(`backend="tf"` / `backend="tensorflow"` capture eager TensorFlow forwards; JAX/tinygrad capture
+pure functions; MLX and Paddle gradients run second guarded AD passes over module params and
+selected inputs; TensorFlow gradients are deferred. Gradient options, audit caveats, and exact
+calling conventions are documented per backend in
 [`docs/`](docs/).)
 
 **Backward-pass capture.** Capture the backward graph the same way you capture

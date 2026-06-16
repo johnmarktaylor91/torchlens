@@ -35,6 +35,12 @@ derived gradients are requested with
 matches through `Trace.intermediate_derived_grads` and `Op.derived_grad`. Paddle capture is
 dygraph/eager only; in-place mutation, RNG, tensor-derived Python scalar escapes, and active
 stochastic/training composites are denied in the preview.
+TensorFlow uses `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16 preview when
+`keras.backend.backend() == "tensorflow"`. Eager `op_callbacks` capture is the primary shipped
+mechanism and records real values, real taken-branch control flow, op-level records, and
+Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the static-mode design for
+compiled/SavedModel-style entries; interventions, true backward capture, and T1/intermediate
+derived gradients are deferred.
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
 arrays by value. `jax_named_sharding` metadata is a reconstructible JSON-primitive contract,
 but default load stays value-only; explicit re-sharding goes through `PayloadLoadHints` /
@@ -192,7 +198,7 @@ assert graph is not None
 - Do not use deprecated `layers_to_save`, `vis_mode`, `hooks`, or `keep_op` spellings in new code
   unless you are intentionally testing compatibility.
 - Do not assume unsaved payloads can be read later. Re-trace with a wider `save=` predicate or use
-  torch `tl.record(...).to_trace()` with the records you need. JAX/tinygrad/Paddle `.tlspec` saves
+  torch `tl.record(...).to_trace()` with the records you need. JAX/tinygrad/Paddle/TF `.tlspec` saves
   materialize array payloads, but loaded traces cannot replay-validate stripped runtime captures;
   check `trace.validation_replay_status` (`ValidationReplayStatus`) and
   `trace.payload_load_status`.

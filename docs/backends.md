@@ -3,7 +3,8 @@
 TorchLens resolves capture through `BackendSpec`. `backend=None` keeps the stable PyTorch eager
 default and existing MLX module auto-routing; explicit `backend="jax"` enables the JAX functional
 preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explicit
-`backend="paddle"` enables the Paddle dygraph/eager preview.
+`backend="paddle"` enables the Paddle dygraph/eager preview. Explicit `backend="tf"` or
+`backend="tensorflow"` enables the TensorFlow eager preview.
 
 ## Capability Matrix
 
@@ -14,6 +15,7 @@ preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explici
 | `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `paddle` | Preview dygraph/eager capture | Live replay/perturbation plus static inventory guard | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
+| `tf` | Preview eager op-callback capture; graph-only FuncGraph fallback planned | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | Deferred |
 
 ## Public Option Spine
 
@@ -22,7 +24,7 @@ implementations land. Torch accepts these options as inert cache-key inputs so t
 unchanged. JAX now implements the control-flow policy knobs for `lax.scan`, `lax.cond`, and
 `lax.while_loop`, and raw `function_root` JAX captures transparently inline pure nested `jax.jit`
 calls before applying that control-flow policy. Nested JIT calls with closed constants, effects,
-donated inputs, or explicit shardings remain rejected. tinygrad, Paddle, and
+donated inputs, or explicit shardings remain rejected. tinygrad, Paddle, TensorFlow, and
 unimplemented option families reject explicit use with `BackendUnsupportedError` until the matching
 backend phase implements the capability.
 
@@ -32,9 +34,9 @@ Declared future options:
 |---|---|
 | `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan`/`cond`/`while_loop` support `unroll` or `reject`; `region` forces supported scan/while/custom-VJP-forward regions |
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
-| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad, MLX, and Paddle support raw `function_root` and callable object `object_module` |
-| `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX/Paddle use `array_payloads` |
-| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX/Paddle support static-label `save=` |
+| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad, MLX, Paddle, and TensorFlow support raw `function_root` and callable object `object_module` |
+| `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX/Paddle/TF use `array_payloads` |
+| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX/Paddle/TF support static-label `save=` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -43,21 +45,68 @@ mirrors, cache keys, docs, and tests changing together.
 
 PyTorch eager capture can evaluate a predicate while a concrete tensor value is flowing through
 the wrapped operation, then mutate that value or halt capture at the matching frontier. JAX,
-tinygrad, and Paddle do not expose the same point in the current TorchLens preview backends. JAX
+tinygrad, Paddle, and TensorFlow do not expose the same point in the current TorchLens preview backends. JAX
 first builds a jaxpr over tracers and TorchLens labels are finalized after interpretation; a
 low-level primitive interpreter can replace a primitive by position, but that is not the public
 static-label `intervene=`/`halt=` contract. tinygrad builds a lazy UOp graph and concrete values
 appear only after `Tensor.realize()`/`Tensor.item()`, with no stable public API for replacing one
 internal UOp and rebuilding all descendants. Paddle preview capture is eager but denies live
 predicate-time mutation/halt while its op inventory and alias guards are still preview-scoped.
+TensorFlow eager `op_callbacks` are read-only in the supported Keras-3 / TF>=2.16 runtime, so
+interventions require a later writable monkeypatch layer.
 
 For that reason, non-torch backends support static-label `save=` only. Value-dependent `save=`,
 `intervene=`, and `halt=` are rejected with typed backend errors instead of false partial traces or
-validation passes. Live JAX/tinygrad/Paddle selective-save traces still run real replay validation
+validation passes. Live JAX/tinygrad/Paddle/TF selective-save traces still run real replay validation
 through runtime-only hidden payloads; loaded traces report replay unavailable when those runtime
 captures were stripped. MLX supports static-label `save=` for `tl.func`, `tl.label`, `tl.module`,
 `tl.in_module`, `tl.contains`, and boolean composites of those; MLX validation is currently
 unsupported.
+
+## TensorFlow Preview
+
+Install the optional runtime with `torchlens[tf]` or `torchlens[tensorflow]`; the preview targets
+Keras 3 on TensorFlow `>=2.16` and requires `keras.backend.backend() == "tensorflow"` for Keras
+models. Use explicit backend selection:
+
+```python
+import tensorflow as tf
+import torchlens as tl
+
+model = tf.keras.Sequential(
+    [
+        tf.keras.layers.Dense(4, activation="relu"),
+        tf.keras.layers.Dense(2),
+    ]
+)
+x = tf.ones((1, 3), dtype=tf.float32)
+trace = tl.trace(model, x, backend="tf")
+print(trace.summary())
+```
+
+The TensorFlow backend is designed around two mechanisms. The shipped primary path is eager live
+capture: TorchLens runs the real `model(*args, **kwargs)` forward under
+`tensorflow.python.framework.op_callbacks`, records each eager op with real values and real
+taken-branch control flow, and snapshots Keras/`tf.Module` call-stack frames for
+`module_identity_mode="object_module"` when discovery succeeds. Raw callables can use the root-only
+`function_root` mode. Graph-only entries such as compiled `Model.call`, `tf.function` roots,
+SavedModel-style signatures, and `.predict()` are detected separately; the FuncGraph walk/prune
+fallback is the planned static-mode path, and current P6 builds fail closed rather than producing a
+partial graph-only trace.
+
+Static-label `save=` selectors are applied after full graph finalization, with unsaved ops retaining
+metadata and dropping public payloads. TensorFlow validation is non-vacuous but scoped to the
+preview: callback self-consistency catches unresolved producers, pure allowlisted ops replay through
+`tf.raw_ops` with parent perturbation, and the replay status reports replayed, pure-unverified, and
+effect-region counts. A status of `unverified` is partial validation, not a pass.
+
+TensorFlow `.tlspec` support uses `payload_policy="array_payloads"` for dense numeric/bool forward
+payloads. `bfloat16` records logical dtype metadata because NumPy transports it as `uint16`; string,
+resource, variant, and composite payloads fail closed.
+
+TensorFlow interventions, `halt=`, true backward capture, fastlog/`tl.record()`, streaming, and
+T1/intermediate derived gradients are deferred. These surfaces raise typed backend errors instead of
+silently producing partial traces.
 
 ## MLX Preview
 

@@ -4,7 +4,7 @@ TorchLens defaults favor complete metadata and debuggability. For high-throughpu
 smallest capture surface that answers your question.
 
 Backend note: these defaults describe torch capture. `tl.record()`/fastlog is torch-only in
-backend v1. JAX, tinygrad, and Paddle preview `.tlspec` payloads materialize forward/derived
+backend v1. JAX, tinygrad, Paddle, and TensorFlow preview `.tlspec` payloads materialize
 arrays, but loaded traces report replay validation as unavailable because runtime replay captures
 are stripped.
 
