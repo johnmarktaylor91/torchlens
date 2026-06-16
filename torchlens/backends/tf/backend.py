@@ -17,9 +17,11 @@ from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import ParamAccessor
 from ...data_classes.trace import Trace, _init_module_hierarchy_data
 from ...ir.buffer import CaptureEvents
+from ...intervention.selectors import BaseSelector
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_module_logs, _build_root_module_log
 from ...quantities import Duration
+from .._selective_save import reject_selector_outside_kinds
 from .._options import default_if_missing
 from ..registry import BackendUnsupportedError
 from .modules import TFModuleTree, discover_tf_module_tree, tf_param_logs
@@ -27,6 +29,9 @@ from .op_callback_capture import TFEagerCaptureSession, warm_up_tf_callable
 
 
 TFExecutionMode = Literal["eager", "graph_only"]
+_TF_STATIC_SAVE_SELECTOR_KINDS = frozenset(
+    {"label", "func", "module", "output", "contains", "in_module", "and", "or", "not"}
+)
 
 
 @dataclass(frozen=True)
@@ -139,6 +144,7 @@ class TFBackend:
         layer_visualizers = default_if_missing(layer_visualizers, None)
         save_visualizations = default_if_missing(save_visualizations, False)
         module_identity_mode = default_if_missing(module_identity_mode, None)
+        save_predicate = _pop_tf_save_predicate(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
         _reject_unsupported_options(
             layers_to_save=layers_to_save,
@@ -204,6 +210,7 @@ class TFBackend:
             kwargs=plan.call_kwargs,
             module_tree=module_tree,
             save_payloads=True,
+            save_predicate=save_predicate,
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
@@ -733,6 +740,37 @@ def _reject_extra_kwargs(kwargs: dict[str, Any]) -> None:
         raise BackendUnsupportedError(
             f"tf backend preview does not support runtime-mutation or stop-early options: {names}."
         )
+
+
+def _pop_tf_save_predicate(kwargs: dict[str, Any]) -> BaseSelector | None:
+    """Return the TF ``save=`` selector from backend extra kwargs.
+
+    Parameters
+    ----------
+    kwargs
+        Extra public kwargs forwarded to the TensorFlow backend.
+
+    Returns
+    -------
+    BaseSelector | None
+        Static selector to evaluate at op-callback time, or ``None`` for save-all.
+    """
+
+    save_value = kwargs.pop("save", None)
+    if save_value in (None, "all"):
+        return None
+    if not isinstance(save_value, BaseSelector):
+        raise BackendUnsupportedError(
+            "tf backend supports trace(save=...) for static selectors such as tl.func, "
+            "tl.label, tl.in_module, tl.contains, and boolean composites; use save='all' "
+            "or omit save to retain every payload."
+        )
+    reject_selector_outside_kinds(
+        save_value,
+        allowed=_TF_STATIC_SAVE_SELECTOR_KINDS,
+        backend_name="tf",
+    )
+    return save_value
 
 
 def _reject_unsupported_options(

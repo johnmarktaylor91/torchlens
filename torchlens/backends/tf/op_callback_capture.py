@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
+from ...fastlog.types import CaptureSpec
 from ...ir.buffer import CaptureEvents
 from ...ir.events import (
     ArgTemplateRef,
@@ -17,7 +18,8 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.refs import TensorRef
+from ...ir.predicate import RecordContext
+from ...ir.refs import DeviceRef, DtypeRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ..registry import BackendUnsupportedError
 from .modules import TFModuleTree, patched_tf_module_stack
@@ -121,6 +123,7 @@ class TFEagerCaptureSession:
         kwargs: dict[str, Any],
         module_tree: TFModuleTree | None,
         save_payloads: bool = True,
+        save_predicate: Callable[[Any], Any] | None = None,
     ) -> None:
         """Initialize a TensorFlow eager capture session.
 
@@ -138,6 +141,8 @@ class TFEagerCaptureSession:
             Discovered module tree, if object attribution is active.
         save_payloads
             Whether op output values should be snapshotted.
+        save_predicate
+            Optional static selector used to decide which op payloads are saved.
         """
 
         self.tf = tf
@@ -146,6 +151,7 @@ class TFEagerCaptureSession:
         self.kwargs = kwargs
         self.module_tree = module_tree
         self.save_payloads = save_payloads
+        self.save_predicate = save_predicate
         self.events = CaptureEvents()
         self.module_stack: list[ModuleFrame] = []
         self.producer_by_ref: dict[object, str] = {}
@@ -246,10 +252,18 @@ class TFEagerCaptureSession:
             return
         labels = self.events.reserve_label_block(op_type_text.lower(), len(output_tensors))
         for output_index, (label, output) in enumerate(zip(labels, output_tensors, strict=True)):
+            record_context = self._record_context(
+                label=label,
+                op_type_text=op_type_text,
+                output=output,
+                output_index=output_index,
+                parents=parents,
+            )
+            save_payload = self._should_save_payload(record_context)
             tensor_ref = self._tensor_ref(
                 tensor=output,
                 label_raw=label.label_raw,
-                save_payload=self.save_payloads,
+                save_payload=save_payload,
             )
             event = self._event_for_output(
                 op_type_text=op_type_text,
@@ -261,6 +275,8 @@ class TFEagerCaptureSession:
                 parents=parents,
                 parent_positions=parent_positions,
                 edge_uses=edge_uses,
+                save_payload=save_payload,
+                record_context=record_context,
             )
             self.events.append(event)
             ref_key = _tensor_ref_key(output)
@@ -281,6 +297,8 @@ class TFEagerCaptureSession:
         parents: tuple[ParentEdge, ...],
         parent_positions: dict[str, dict[Any, str]],
         edge_uses: tuple[object, ...],
+        save_payload: bool,
+        record_context: RecordContext,
     ) -> OpEvent:
         """Build one TorchLens ``OpEvent`` for a TensorFlow callback output.
 
@@ -304,6 +322,10 @@ class TFEagerCaptureSession:
             Parent argument-position mapping.
         edge_uses
             Edge-use records.
+        save_payload
+            Whether this output payload was selected for snapshotting.
+        record_context
+            Predicate context used for save selection.
 
         Returns
         -------
@@ -392,7 +414,7 @@ class TFEagerCaptureSession:
             ),
             policy=CapturePolicy(
                 must_keep_topology=True,
-                save_payload=self.save_payloads,
+                save_payload=save_payload,
                 requires_isolation=False,
                 save_args=False,
                 save_code=False,
@@ -400,7 +422,7 @@ class TFEagerCaptureSession:
                 save_grad=False,
                 stream=False,
             ),
-            predicate_matched=True,
+            predicate_matched=save_payload,
             pass_index=1,
             grad_fn_class_qualname=None,
             grad_fn_handle=None,
@@ -425,7 +447,105 @@ class TFEagerCaptureSession:
             intervention_replaced=False,
             fire_results=(),
             intervention_template_ref=None,
+            record_context=record_context,
+            capture_spec=CaptureSpec(save_out=save_payload, save_metadata=True),
         )
+
+    def _record_context(
+        self,
+        *,
+        label: Any,
+        op_type_text: str,
+        output: Any,
+        output_index: int,
+        parents: tuple[ParentEdge, ...],
+    ) -> RecordContext:
+        """Build a static selector context for one TensorFlow output.
+
+        Parameters
+        ----------
+        label
+            Reserved TorchLens label metadata.
+        op_type_text
+            Normalized TensorFlow op type.
+        output
+            TensorFlow eager output tensor.
+        output_index
+            Index within the callback outputs.
+        parents
+            Parent producer edges.
+
+        Returns
+        -------
+        RecordContext
+            Context accepted by unified ``save=`` selectors.
+        """
+
+        module_frames = tuple(
+            {
+                "address": frame.address,
+                "module_type": frame.module_type,
+                "pass_index": frame.call_index,
+            }
+            for frame in self.module_stack
+        )
+        return RecordContext(
+            kind="op",
+            label=label.label,
+            raw_label=label.label_raw,
+            pass_index=1,
+            event_index=label.raw_index,
+            step_index=label.raw_index,
+            layer_type=label.layer_type,
+            type_index=label.type_index,
+            raw_index=label.raw_index,
+            func_name=op_type_text,
+            address=None,
+            module_type=None,
+            module_pass_index=None,
+            module_stack=module_frames,
+            recent_events=(),
+            recent_ops=(),
+            parent_labels=tuple(parent.parent_label_raw for parent in parents),
+            input_output_address=None,
+            shape=_shape_tuple(output),
+            dtype=DtypeRef(backend="tf", name=str(getattr(output, "dtype", ""))),
+            tensor_device=DeviceRef(backend="tf", name=str(getattr(output, "device", ""))),
+            tensor_requires_grad=None,
+            output_index=output_index,
+            is_bottom_level_func=True,
+            time_since_pass_start=0.0,
+            sample_id=None,
+            label_raw=label.label_raw,
+            label_prefix=label.layer_type,
+            func_call_id=label.raw_index,
+            parent_labels_raw=tuple(parent.parent_label_raw for parent in parents),
+            is_output_parent=False,
+            backend_requires_isolation=False,
+            is_scalar_bool=_shape_tuple(output) == ()
+            and "bool" in str(getattr(output, "dtype", "")),
+            bool_value=None,
+        )
+
+    def _should_save_payload(self, record_context: RecordContext) -> bool:
+        """Return whether a TensorFlow op output should be snapshotted.
+
+        Parameters
+        ----------
+        record_context
+            Static selector context for the op output.
+
+        Returns
+        -------
+        bool
+            Whether the callback should retain a NumPy payload.
+        """
+
+        if not self.save_payloads:
+            return False
+        if self.save_predicate is None:
+            return True
+        return bool(self.save_predicate(record_context))
 
     def _parents_for_inputs(
         self,

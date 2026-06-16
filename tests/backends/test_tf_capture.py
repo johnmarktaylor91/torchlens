@@ -146,3 +146,130 @@ def test_tf_capture_raw_tf_module_class_level_stack() -> None:
     assert matmul.modules == ["self:1"]
     assert getattr(trace, "_tf_init_op_labels", ()) == ()
     assert np.allclose(trace[matmul.label].out, np.array([[5.0]], dtype=np.float32))
+
+
+def test_tf_save_func_selector_only_materializes_matching_payloads() -> None:
+    """Save only TensorFlow relu outputs with the unified predicate surface."""
+
+    def chain(x: Any) -> Any:
+        """Return a chain with one relu and later metadata-only ops."""
+
+        y = tf.nn.relu(x - tf.constant([1.0, 2.0]))
+        return y * tf.constant([3.0, 4.0])
+
+    trace = tl.trace(chain, tf.constant([2.0, 3.0]), backend="tf", save=tl.func("relu"))
+    relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
+    unsaved_ops = [
+        op for op in trace.layer_list if not op.is_input and op.func_name not in {"Relu"}
+    ]
+
+    assert relu_ops
+    assert all(op.out is not None and op.has_saved_activation for op in relu_ops)
+    assert unsaved_ops
+    assert all(op.out is None and not op.has_saved_activation for op in unsaved_ops)
+
+
+def test_tf_save_in_module_selector_only_materializes_module_payloads() -> None:
+    """Save only ops contained inside a selected Keras module."""
+
+    tf.random.set_seed(3)
+    model = SmallCnn()
+    trace = tl.trace(model, tf.ones((1, 8, 8, 1)), backend="tf", save=tl.in_module("conv"))
+    conv_ops = [
+        op for op in trace.layer_list if any(module.startswith("conv:") for module in op.modules)
+    ]
+    outside_ops = [
+        op
+        for op in trace.layer_list
+        if not op.is_input and not any(module.startswith("conv:") for module in op.modules)
+    ]
+
+    assert conv_ops
+    assert all(op.out is not None and op.has_saved_activation for op in conv_ops)
+    assert outside_ops
+    assert all(op.out is None and not op.has_saved_activation for op in outside_ops)
+
+
+def test_tf_save_composed_selector_materializes_intersection() -> None:
+    """Support boolean-composed static selectors for TensorFlow save=."""
+
+    tf.random.set_seed(4)
+    model = SmallCnn()
+    predicate = tl.in_module("conv") & tl.func("relu")
+    trace = tl.trace(model, tf.ones((1, 8, 8, 1)), backend="tf", save=predicate)
+    saved_ops = [op for op in trace.layer_list if op.has_saved_activation and not op.is_input]
+
+    assert saved_ops
+    assert {op.func_name for op in saved_ops} == {"Relu"}
+    assert all(any(module.startswith("conv:") for module in op.modules) for op in saved_ops)
+
+
+def test_tf_save_all_and_default_materialize_all_op_payloads() -> None:
+    """Explicit save='all' and default capture both save every non-source op payload."""
+
+    def chain(x: Any) -> Any:
+        """Return two eager ops."""
+
+        return tf.nn.relu(x) + tf.constant([1.0, 2.0])
+
+    default_trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf")
+    explicit_trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf", save="all")
+
+    for trace in (default_trace, explicit_trace):
+        ops = [op for op in trace.layer_list if not op.is_input]
+        assert ops
+        assert all(op.out is not None and op.has_saved_activation for op in ops)
+
+
+def test_tf_value_size_cap_skips_large_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid snapshotting selected TensorFlow values above the callback byte cap."""
+
+    from torchlens.backends.tf import op_callback_capture
+
+    monkeypatch.setattr(op_callback_capture, "_MAX_SNAPSHOT_BYTES", 8)
+
+    def chain(x: Any) -> Any:
+        """Return an over-cap eager op output."""
+
+        return x + tf.ones((4,), dtype=tf.float32)
+
+    trace = tl.trace(chain, tf.ones((4,), dtype=tf.float32), backend="tf")
+    add = next(op for op in trace.layer_list if op.func_name == "AddV2")
+
+    assert add.out is None
+    assert not add.has_saved_activation
+    assert tuple(add.shape) == (4,)
+    assert "float32" in str(add.dtype)
+
+
+def test_tf_trace_access_summary_smoke() -> None:
+    """Exercise standard user-facing access helpers on a TensorFlow trace."""
+
+    def chain(x: Any) -> Any:
+        """Return a small eager op chain."""
+
+        return tf.nn.relu(x) + tf.constant([1.0, 2.0])
+
+    trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf")
+    relu = next(op for op in trace.layer_list if op.func_name == "Relu")
+
+    assert trace[relu.label] is relu
+    assert trace["relu"] is relu
+    assert trace[0] is trace.layer_list[0]
+    assert relu.out is not None
+    assert isinstance(trace.summary(), str)
+
+
+def test_tf_trace_to_pandas_smoke() -> None:
+    """Exercise TensorFlow trace pandas export when the optional dependency exists."""
+
+    pytest.importorskip("pandas")
+
+    def chain(x: Any) -> Any:
+        """Return a small eager op chain."""
+
+        return tf.nn.relu(x) + tf.constant([1.0, 2.0])
+
+    trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf")
+
+    assert not trace.to_pandas().empty
