@@ -35,6 +35,10 @@ dependencies = [
     "graphviz",
     # typing_extensions.Self is used for Python 3.9/3.10 (typing.Self is 3.11+).
     "typing_extensions>=4.0",
+    # Pillow is imported at module load by the viz / repgeom image-rendering
+    # surfaces (node images, input montages, MDS/feature-map thumbnails), which
+    # torchlens.__init__ imports eagerly, so it is a hard import-time dependency.
+    "pillow>=9",
 ]
 
 [project.optional-dependencies]
