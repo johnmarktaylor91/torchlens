@@ -171,3 +171,6 @@ notebooks/*.svg
 /bundle_diff.svg
 /glossary_appendix*.tex
 notebooks/audit/_artifacts/
+
+# Perf-suite per-cell scratch (incremental run state; committed baselines live in perf_baselines/)
+benchmarks/.perf_cells/
