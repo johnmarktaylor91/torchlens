@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import traceback
 from os.path import join as opj
+from pathlib import Path
 
 import pytest
 import torch
@@ -1532,6 +1533,68 @@ class _SimpleLinear(nn.Module):
 
 
 class TestVisualizationBugfixes:
+    def test_successful_render_removes_dot_source(self, tmp_path: Path) -> None:
+        """Successful forward rendering should remove the intermediate DOT source."""
+
+        if shutil.which("dot") is None:
+            pytest.skip("graphviz dot executable not available")
+
+        model = nn.Identity()
+        log = trace_fn(model, torch.randn(2, 3))
+        outpath = tmp_path / "identity_render"
+        try:
+            log.draw(
+                vis_save_only=True,
+                vis_outpath=str(outpath),
+                vis_fileformat="pdf",
+            )
+
+            assert outpath.with_suffix(".pdf").exists()
+            # Success removes the intermediate DOT source (saved at vis_outpath itself).
+            assert not outpath.exists()
+        finally:
+            log.cleanup()
+
+    def test_failed_render_keeps_dot_source(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Failed forward rendering keeps the DOT source so the error hint is truthful."""
+
+        from torchlens.visualization.rendering import GraphvizRenderError
+
+        def _raise_dot_failure(
+            cmd: list[str],
+            timeout: int,
+            check: bool,
+            capture_output: bool,
+        ) -> subprocess.CompletedProcess[bytes]:
+            """Raise a Graphviz process failure after the DOT source is written."""
+
+            raise subprocess.CalledProcessError(
+                returncode=1,
+                cmd=cmd,
+                stderr=b"forced graphviz failure",
+            )
+
+        model = nn.Identity()
+        log = trace_fn(model, torch.randn(2, 3))
+        outpath = tmp_path / "identity_render_failure"
+        monkeypatch.setattr(subprocess, "run", _raise_dot_failure)
+        try:
+            with pytest.raises(GraphvizRenderError):
+                log.draw(
+                    vis_save_only=True,
+                    vis_outpath=str(outpath),
+                    vis_fileformat="pdf",
+                )
+
+            # On failure the DOT source (saved at vis_outpath) is KEPT for debugging,
+            # so the error's "DOT source was saved to ..." hint points to a real file.
+            assert outpath.exists()
+            assert not outpath.with_suffix(".pdf").exists()
+        finally:
+            log.cleanup()
+
     def test_vis_call_depth_0(self):
         """vis_call_depth=0 should not crash."""
         model = _SimpleLinear()

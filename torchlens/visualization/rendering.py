@@ -1301,6 +1301,10 @@ def draw(
             if not vis_save_only:
                 _view_rendered_file(rendered_path)
             _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
+            # Success: remove the intermediate DOT source. On FAILURE we keep it so
+            # the error's "DOT source was saved to ..." hint points to a real file.
+            if os.path.exists(source_path):
+                os.remove(source_path)
         except subprocess.TimeoutExpired as e:
             _raise_graphviz_timeout(
                 "forward graph",
@@ -1311,11 +1315,6 @@ def draw(
             )
         except subprocess.CalledProcessError as e:
             _raise_graphviz_failure("forward graph", source_path, e)
-        finally:
-            import os
-
-            if os.path.exists(source_path):
-                os.remove(source_path)
     if return_graph:
         return dot
     return final_source
@@ -1844,6 +1843,10 @@ def render_backward_graph(
             if not vis_save_only:
                 _view_rendered_file(rendered_path)
             _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
+            # Success: remove the intermediate DOT source. On FAILURE we keep it so
+            # the error's "DOT source was saved to ..." hint points to a real file.
+            if os.path.exists(source_path):
+                os.remove(source_path)
         except subprocess.TimeoutExpired as e:
             _raise_graphviz_timeout(
                 "backward graph",
@@ -1854,11 +1857,6 @@ def render_backward_graph(
             )
         except subprocess.CalledProcessError as e:
             _raise_graphviz_failure("backward graph", source_path, e)
-        finally:
-            import os
-
-            if os.path.exists(source_path):
-                os.remove(source_path)
     return cast(str, dot.source)
 
 
