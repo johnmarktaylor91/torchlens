@@ -28,6 +28,13 @@ the raw-output honesty guard passes. MLX intermediate derived gradients are requ
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`; the same AD replay installs
 custom-VJP taps through the MLX wrappers, then exposes only exact grouped-signature matches whose
 replacement-gradient and perturbation oracle passes.
+Paddle leaf gradients use `tl.backends.paddle.GradOptions`; they run a second guarded Paddle AD
+pass and expose `Trace.derived_grads` without setting `has_backward_pass`. Paddle intermediate
+derived gradients are requested with
+`GradOptions(intermediate_grads=True, max_intermediate_grads=...)` and expose only exact replay
+matches through `Trace.intermediate_derived_grads` and `Op.derived_grad`. Paddle capture is
+dygraph/eager only; in-place mutation, RNG, tensor-derived Python scalar escapes, and active
+stochastic/training composites are denied in the preview.
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
 arrays by value. `jax_named_sharding` metadata is a reconstructible JSON-primitive contract,
 but default load stays value-only; explicit re-sharding goes through `PayloadLoadHints` /
@@ -185,7 +192,7 @@ assert graph is not None
 - Do not use deprecated `layers_to_save`, `vis_mode`, `hooks`, or `keep_op` spellings in new code
   unless you are intentionally testing compatibility.
 - Do not assume unsaved payloads can be read later. Re-trace with a wider `save=` predicate or use
-  torch `tl.record(...).to_trace()` with the records you need. JAX/tinygrad `.tlspec` saves
+  torch `tl.record(...).to_trace()` with the records you need. JAX/tinygrad/Paddle `.tlspec` saves
   materialize array payloads, but loaded traces cannot replay-validate stripped runtime captures;
   check `trace.validation_replay_status` (`ValidationReplayStatus`) and
   `trace.payload_load_status`.

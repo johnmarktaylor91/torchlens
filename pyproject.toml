@@ -56,6 +56,7 @@ lightning = ["lightning~=2.4"]
 wandb = ["wandb>=0.16"]
 mlx = ["mlx>=0.26,<0.27"]
 tinygrad = ["tinygrad>=0.13,<0.14"]
+paddle = ["paddlepaddle>=3.3,<3.4"]
 hf = ["transformers~=4.45", "timm~=1.0"]
 gradcam = ["pytorch-grad-cam~=1.5"]
 shap = ["shap~=0.46"]
@@ -127,6 +128,7 @@ markers = [
     "backend_parity: marks active backend substrate parity gates",
     "backend_jax: marks tests that require the optional JAX backend runtime",
     "backend_tinygrad: marks tests that require the optional tinygrad backend runtime",
+    "backend_paddle: marks tests that require the optional paddle backend runtime",
 ]
 addopts = "-m 'not rare'"
 filterwarnings = [

@@ -4,8 +4,9 @@ This folder contains the complete user-facing audit series for checking the majo
 
 Backend status: this audit series is torch-first unless a row says otherwise. Existing save/load
 examples demonstrate materialized torch payloads; non-torch preview `.tlspec` bundles may be
-audit-only or metadata-only. Fastlog/`tl.record()` and true backward capture are torch-only in the
-backend-v1 registry.
+audit-only or metadata-only. JAX, tinygrad, MLX, and Paddle previews are covered by backend-specific
+tests/docs rather than this torch-first notebook series. Fastlog/`tl.record()` and true backward
+capture are torch-only in the backend-v1 registry.
 
 | Notebook | Runnable | Complete | Known gaps | Focus |
 |---|---|---|---|---|

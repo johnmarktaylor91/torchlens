@@ -133,9 +133,9 @@ manifests. `io.detect_tlspec_format()` distinguishes unified and legacy formats.
 `validation.validate_tlspec()` validates unified manifests only; older 2.16 formats remain
 loadable. Unified manifests currently support manifest schema v1 for torch writes and schema v2
 for backend-aware validation/loading preflight. Schema v2 adds `backend`, `backend_runtime`,
-nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX, tinygrad, and
-MLX use `payload_policy="array_payloads"` to materialize non-torch array payloads while staying
-narrower than torch's full payload contract; MLX currently covers saved forward arrays. Fully
+nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX, tinygrad,
+MLX, and Paddle use `payload_policy="array_payloads"` to materialize non-torch array payloads while
+staying narrower than torch's full payload contract; MLX and Paddle cover saved forward arrays. Fully
 addressable JAX sharded arrays save as
 assembled host values; `jax_sharding_*` codec metadata is audit-only and is not used to recreate
 mesh or partition topology on load.
@@ -163,7 +163,16 @@ derived gradients require `DEV=PYTHON` realized-copy payloads. The module mode i
 `function_root`, `Trace.param_source` is `"none"`, `.tlspec` save/load materializes array
 payloads through the tinygrad codec, and
 `tl.backends.tinygrad.GradOptions` populates leaf-level `trace.derived_grads` without enabling
-true backward capture. JAX, tinygrad, and MLX static-label `save=` selectors are applied after full
+true backward capture.
+
+Paddle M3 exposes a dygraph/eager technical-preview backend through explicit
+`backend="paddle"` and the optional `paddlepaddle>=3.3,<3.4` runtime. It supports object-module
+and function-root captures, live replay/perturbation validation plus a static wrapped/denied
+inventory snapshot, `.tlspec` array payload materialization through the Paddle codec, and
+`tl.backends.paddle.GradOptions` for leaf and capped intermediate derived gradients. Paddle bf16
+payloads record logical dtype metadata because NumPy transports them as `uint16`. It is not true
+backward capture: Paddle traces keep `has_backward_pass=False`, and backward graph accessors raise.
+JAX, tinygrad, MLX, and Paddle static-label `save=` selectors are applied after full
 graph finalization; unsaved ops keep labels, shapes, dtype/device refs, edges, and module
 metadata, but public `out`/`out_ref` payloads are dropped and saved counters/blobs are recomputed.
 Value-dependent `save=` predicates, `followed_by`/`preceded_by` window selectors, intervention,
@@ -181,10 +190,11 @@ Portable MLX saves use `payload_policy="array_payloads"` and round-trip saved fo
 metadata-only.
 
 Loaded non-torch traces are payload-materialized but not replay-validation-capable. Portable save
-strips runtime-only replay captures (`jax_equation_captures` and `tinygrad_uop_captures`), and MLX
+strips runtime-only replay captures (`jax_equation_captures`, `tinygrad_uop_captures`, and
+`paddle_op_captures`), and MLX
 has no replay-validation implementation, so `Trace.validation_replay_status` reports
 `state="unavailable"` with reason `"loaded_trace_runtime_capture_stripped"` for loaded JAX,
-tinygrad, and MLX traces. Live JAX/tinygrad traces still run real replay and parent-perturbation
+tinygrad, MLX, and Paddle traces. Live JAX/tinygrad/Paddle traces still run real replay and parent-perturbation
 validation, including selectively saved traces via runtime-only hidden replay payloads that do not
 survive portable save. `Trace.payload_load_status` records load materialization outcomes such as
 `"loaded_device_best_effort"`, `"audit_only"`, and `"audit_only_missing_runtime"`.

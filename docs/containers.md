@@ -91,6 +91,7 @@ Backends declare honest `input_container_structure` and `output_container_struct
 - `jax`: `paths_only` for input and output builtin pytrees; custom pytrees are not reconstructable
 - `tinygrad`: `paths_only` for input and output
 - `mlx`: `none` for input and output
+- `paddle`: `paths_only` for input and output
 
 If an op has only path metadata and no full `container_spec`, `op.container` may return a path-only view with `reconstructable=False`. Backends with the role-appropriate capability set to `none` return no container view. TorchLens never promotes path-only metadata into a false reconstructable view.
 

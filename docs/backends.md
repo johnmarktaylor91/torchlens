@@ -2,7 +2,8 @@
 
 TorchLens resolves capture through `BackendSpec`. `backend=None` keeps the stable PyTorch eager
 default and existing MLX module auto-routing; explicit `backend="jax"` enables the JAX functional
-preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
+preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explicit
+`backend="paddle"` enables the Paddle dygraph/eager preview.
 
 ## Capability Matrix
 
@@ -12,6 +13,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | `mlx` | Technical preview | Unsupported | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
+| `paddle` | Preview dygraph/eager capture | Live replay/perturbation plus static inventory guard | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
 ## Public Option Spine
 
@@ -20,7 +22,7 @@ implementations land. Torch accepts these options as inert cache-key inputs so t
 unchanged. JAX now implements the control-flow policy knobs for `lax.scan`, `lax.cond`, and
 `lax.while_loop`, and raw `function_root` JAX captures transparently inline pure nested `jax.jit`
 calls before applying that control-flow policy. Nested JIT calls with closed constants, effects,
-donated inputs, or explicit shardings remain rejected. tinygrad and
+donated inputs, or explicit shardings remain rejected. tinygrad, Paddle, and
 unimplemented option families reject explicit use with `BackendUnsupportedError` until the matching
 backend phase implements the capability.
 
@@ -30,9 +32,9 @@ Declared future options:
 |---|---|
 | `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan`/`cond`/`while_loop` support `unroll` or `reject`; `region` forces supported scan/while/custom-VJP-forward regions |
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
-| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad and MLX support raw `function_root` and callable object `object_module` |
-| `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX use `array_payloads` |
-| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX support static-label `save=` |
+| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad, MLX, and Paddle support raw `function_root` and callable object `object_module` |
+| `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX/Paddle use `array_payloads` |
+| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX/Paddle support static-label `save=` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -40,19 +42,20 @@ mirrors, cache keys, docs, and tests changing together.
 ## Predicate Control and Mutation
 
 PyTorch eager capture can evaluate a predicate while a concrete tensor value is flowing through
-the wrapped operation, then mutate that value or halt capture at the matching frontier. JAX and
-tinygrad do not expose the same point in the current TorchLens preview backends. JAX first builds a
-jaxpr over tracers and TorchLens labels are finalized after interpretation; a low-level primitive
-interpreter can replace a primitive by position, but that is not the public static-label
-`intervene=`/`halt=` contract. tinygrad builds a lazy UOp graph and concrete values appear only
-after `Tensor.realize()`/`Tensor.item()`, with no stable public API for replacing one internal UOp
-and rebuilding all descendants.
+the wrapped operation, then mutate that value or halt capture at the matching frontier. JAX,
+tinygrad, and Paddle do not expose the same point in the current TorchLens preview backends. JAX
+first builds a jaxpr over tracers and TorchLens labels are finalized after interpretation; a
+low-level primitive interpreter can replace a primitive by position, but that is not the public
+static-label `intervene=`/`halt=` contract. tinygrad builds a lazy UOp graph and concrete values
+appear only after `Tensor.realize()`/`Tensor.item()`, with no stable public API for replacing one
+internal UOp and rebuilding all descendants. Paddle preview capture is eager but denies live
+predicate-time mutation/halt while its op inventory and alias guards are still preview-scoped.
 
 For that reason, non-torch backends support static-label `save=` only. Value-dependent `save=`,
 `intervene=`, and `halt=` are rejected with typed backend errors instead of false partial traces or
-validation passes. Live JAX/tinygrad selective-save traces still run real replay validation through
-runtime-only hidden payloads; loaded traces report replay unavailable when those runtime captures
-were stripped. MLX supports static-label `save=` for `tl.func`, `tl.label`, `tl.module`,
+validation passes. Live JAX/tinygrad/Paddle selective-save traces still run real replay validation
+through runtime-only hidden payloads; loaded traces report replay unavailable when those runtime
+captures were stripped. MLX supports static-label `save=` for `tl.func`, `tl.label`, `tl.module`,
 `tl.in_module`, `tl.contains`, and boolean composites of those; MLX validation is currently
 unsupported.
 
@@ -107,6 +110,57 @@ materialize forward and derived array payloads and load them back as `mlx.core.a
 MLX runtime is installed; loaded MLX traces still report replay validation as unavailable rather than
 as a pass.
 
+## Paddle Preview
+
+Install the optional runtime with `torchlens[paddle]`; the preview is pinned to
+`paddlepaddle>=3.3,<3.4`. Paddle capture is dygraph/eager only:
+
+```python
+import paddle
+import paddle.nn as nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))
+x = paddle.ones([1, 3], dtype="float32")
+trace = tl.trace(model, x, backend="paddle")
+```
+
+Paddle module roots default to object module hierarchy when TorchLens can inspect the
+`paddle.nn.Layer` tree, with `function_root` available for raw callables. Static-label `save=`
+selectors are applied after full graph capture; value-dependent predicates, `intervene=`, `halt=`,
+streaming, `save_grads=`, `backward_ready=True`, and `tl.record(backend="paddle")` are rejected.
+
+Paddle validation is a live preview guard, not a completeness proof for arbitrary Paddle releases.
+Each wrapped op emits an independent capture record, replay reconstructs argument templates and
+perturbs parents, and a static inventory snapshot pins the wrapped/denied op surface. The preview
+rejects in-place mutation, RNG, user-level tensor-derived Python scalar/control escapes, and active
+stochastic/training composites. Deterministic eval-mode composites are allowed as coarse boundary
+nodes. Same-object no-ops, such as an operation that returns the exact input tensor object, are
+recorded as alias annotations rather than cloned value-producing ops.
+
+Paddle leaf gradients are a derived-gradient preview, not true backward capture:
+
+```python
+grad_options = tl.backends.paddle.GradOptions(
+    loss_fn=lambda output: paddle.sum(output * output),
+    input_grad_argnums=(0,),
+)
+trace = tl.trace(model, x, backend="paddle", grad_options=grad_options)
+trace.derived_grads["inputs.0"]
+```
+
+Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to request exact saved-op
+intermediate derived gradients from a second guarded Paddle AD replay. Only unambiguous
+`status == "exact"` records reach `trace.intermediate_derived_grads` and read-only
+`op.derived_grad`; `has_backward_pass` remains `False`, and true-backward surfaces still raise.
+
+Paddle `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
+forward and derived array payloads and load them back as `paddle.Tensor` values when Paddle is
+installed. Paddle `bfloat16` payloads record the logical dtype because NumPy transports them as
+`uint16`; load restores the logical Paddle dtype.
+
+## JAX Preview
+
 JAX preview traces accept raw callables shaped like `fn(params, *inputs)`. Parameter records are
 derived from the first pytree argument, so `Trace.param_source` is `"pytree-derived"` when tensor
 leaves are present and `"none"` otherwise. Raw callables use `module_identity_mode="function_root"`
@@ -119,16 +173,6 @@ owners from path-keyed pytree/state leaves. B2a strict mode rejects
 `jax.jit`/`pjit`/`shard_map`, `lax.cond`, `lax.scan`, `lax.while_loop`, remat/custom-VJP, callback
 effects, and NNX state rebinding inside attributed modules; move those transforms outside the module
 or capture a raw `function_root` callable until widened attribution lands.
-
-tinygrad raw callables use `module_identity_mode="function_root"`. Callable object graphs with
-discoverable tinygrad module attributes default to `module_identity_mode="object_module"`; pass
-`module_identity_mode="function_root"` to force the older root-only surface. Discovery walks object
-attributes for callable children that own `Tensor` attributes or are known `tinygrad.nn.*` layer
-objects, records shared children under the first address with later aliases, and attributes UOps from
-the live module stack observed at construction time. If tinygrad reuses an existing UOp identity, the
-UOp keeps its first observed module attribution rather than being duplicated for a later call.
-
-## JAX Preview
 
 Use explicit backend selection:
 
@@ -211,6 +255,15 @@ inspection, and is not a validation pass.
 Install the optional runtime with `torchlens[tinygrad]`; the preview is pinned to the
 `tinygrad>=0.13,<0.14` series and currently accepts `tinygrad==0.13.0` at runtime. For live
 payload validation and derived gradients, run with `DEV=PYTHON`.
+
+tinygrad raw callables use `module_identity_mode="function_root"`. Callable object graphs with
+discoverable tinygrad module attributes default to `module_identity_mode="object_module"`; pass
+`module_identity_mode="function_root"` to force the older root-only surface. Discovery walks object
+attributes for callable children that own `Tensor` attributes or are known `tinygrad.nn.*` layer
+objects, records shared children under the first address with later aliases, and attributes UOps
+from the live module stack observed at construction time. If tinygrad reuses an existing UOp
+identity, the UOp keeps its first observed module attribution rather than being duplicated for a
+later call.
 
 ```python
 from tinygrad import Tensor

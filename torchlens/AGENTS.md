@@ -33,6 +33,7 @@ Unified capture examples:
 
 ```python
 relu_trace = tl.trace(model, x, save=tl.func("relu"))
+paddle_trace = tl.trace(paddle_model, paddle_x, backend="paddle")
 windowed = tl.trace(
     model,
     x,
@@ -93,6 +94,11 @@ from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 `record(keep_op=...)` and `record(keep_module=...)` are deprecated compatibility aliases for
 `record(save=...)`. `layers_to_save=[...]` still exists as the final-label two-pass path; an
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.
+
+Current 2.x backend surface: torch eager is the stable default; MLX, JAX, tinygrad, and Paddle are
+technical previews behind `BackendSpec`. Paddle M3 is dygraph/eager only, uses
+`tl.backends.paddle.GradOptions` for derived-gradient previews, materializes `.tlspec` array
+payloads through the Paddle codec, and does not provide true backward capture.
 
 ## Constants as Ordering Spec
 FIELD_ORDER tuples define canonical serialized and display field sets. When adding a field,

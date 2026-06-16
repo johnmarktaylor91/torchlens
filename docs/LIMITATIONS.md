@@ -20,9 +20,10 @@ catalog](https://github.com/johnmarktaylor91/torchlens/pull/143) for the
 original analysis.
 
 Backend note: `backend=None` preserves current PyTorch eager capture and MLX
-module auto-routing. Explicit `backend="torch"`, `backend="jax"`, and
-`backend="tinygrad"` are supported; unknown, ambiguous, or mismatched backend
-selections fail before capture with typed backend registry errors. MLX remains a
+module auto-routing. Explicit `backend="torch"`, `backend="jax"`,
+`backend="tinygrad"`, and `backend="paddle"` are supported; unknown,
+ambiguous, or mismatched backend selections fail before capture with typed
+backend registry errors. MLX remains a
 technical preview with limited capabilities, static-label save support for
 `tl.func`/`tl.label`/`tl.module`/`tl.in_module`/`tl.contains`, object-module
 hierarchy for `mlx.nn.Module` roots, materialized `.tlspec` forward and derived array
@@ -38,8 +39,16 @@ tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.1
 series; live validation and derived gradients require `DEV=PYTHON`; raw callables use
 `function_root`, callable objects use `object_module` hierarchy with parameter records
 when discoverable, portable saves materialize `.tlspec` array payloads, and capture
-rejects mid-capture realization/mutation/TinyJit. JAX, tinygrad, and MLX support static-label `save=`
-selectors after full graph capture. MLX supports `tl.func`, `tl.label`, `tl.module`,
+rejects mid-capture realization/mutation/TinyJit.
+Paddle is a dygraph/eager technical preview pinned to `paddlepaddle>=3.3,<3.4`.
+It rejects in-place mutation, RNG, user-level tensor-derived Python scalar/control
+escapes, and active stochastic/training composites; deterministic eval-mode
+composites are allowed as coarse boundary nodes. Same-object no-ops are captured
+as alias annotations. Paddle coverage is guarded by live dynamic replay/perturbation
+tripwires plus a static wrapped/denied inventory snapshot, so audit caveats remain
+for APIs outside the pinned inventory.
+JAX, tinygrad, MLX, and Paddle support static-label `save=` selectors after full
+graph capture. MLX supports `tl.func`, `tl.label`, `tl.module`,
 `tl.in_module`, `tl.contains`, and boolean composites of those. Value-dependent
 save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
