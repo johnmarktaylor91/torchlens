@@ -666,7 +666,13 @@ class CaptureOptions:
     save_preview:
         Declared preview flag for future ``save=`` semantics.
     emit_nvtx:
-        Placeholder toggle for future NVTX ranges; currently inert.
+        Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
+        ranges around each logged operation. NVTX markers are visible in NVIDIA
+        Nsight Systems and Nsight Compute timelines. The default is ``False``;
+        enabling it can add small per-op overhead. The option applies to full
+        ``tl.trace`` capture and is preserved through ``tl.record``-style
+        options, although sparse recording may only expose ranges for operations
+        it actually logs.
     raise_on_nan:
         Whether capture should stop at the first NaN or Inf tensor.
 

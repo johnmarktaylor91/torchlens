@@ -40,6 +40,7 @@ import inspect
 import sys
 import time
 import types
+import weakref
 import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -76,6 +77,9 @@ from .sources import log_source_tensor
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
+
+
+_PATCHED_MODEL_INSTANCES: weakref.WeakSet[Any] = weakref.WeakSet()
 
 
 # ---------------------------------------------------------------------------
@@ -1076,6 +1080,74 @@ def get_arg_names(orig_func: Callable[..., Any], func_name: str) -> None:
     _state._arg_names[storage_key] = argnames  # type: ignore[assignment]
 
 
+def _is_jit_incompatible_dtype_annotation(annotation: Any) -> bool:
+    """Return whether an annotation is the JIT-incompatible ``DType`` marker.
+
+    Parameters
+    ----------
+    annotation:
+        Annotation object or string copied onto a decorated wrapper.
+
+    Returns
+    -------
+    bool
+        Whether the annotation names a ``DType`` type that TorchScript cannot parse.
+    """
+
+    if annotation == "DType":
+        return True
+    if getattr(annotation, "__name__", None) == "DType":
+        return True
+    return "DType" in repr(annotation)
+
+
+def _sanitize_jit_wrapper_annotations(func: Callable[..., Any]) -> None:
+    """Replace wrapper annotations that TorchScript cannot parse.
+
+    Parameters
+    ----------
+    func:
+        Decorated function being registered as a JIT builtin.
+    """
+
+    annotations = getattr(func, "__annotations__", None)
+    if not isinstance(annotations, dict):
+        return
+
+    sanitized_annotations = dict(annotations)
+    changed = False
+    for key, annotation in sanitized_annotations.items():
+        if _is_jit_incompatible_dtype_annotation(annotation):
+            sanitized_annotations[key] = int
+            changed = True
+    if changed:
+        func.__annotations__ = sanitized_annotations
+
+
+def _register_jit_builtin_wrappers() -> None:
+    """Register decorated torch wrappers in TorchScript's builtin table."""
+
+    try:
+        import torch.jit._builtins as _jit_builtins
+
+        builtin_table = cast(Any, _jit_builtins._builtin_table)
+        for orig_id, decorated_func in _state._orig_to_decorated.items():
+            builtin_name = builtin_table.get(orig_id)
+            if builtin_name is not None:
+                if callable(decorated_func):
+                    _sanitize_jit_wrapper_annotations(decorated_func)
+                builtin_table[id(decorated_func)] = builtin_name
+                # For properties, also register getter/setter/deleter individually
+                # since JIT may call them directly.
+                if isinstance(decorated_func, property):
+                    for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
+                        if accessor is not None:
+                            _sanitize_jit_wrapper_annotations(accessor)
+                            builtin_table[id(accessor)] = builtin_name
+    except (ImportError, AttributeError):
+        pass  # JIT internals may change across PyTorch versions
+
+
 # ---------------------------------------------------------------------------
 # One-time decoration at import time
 # ---------------------------------------------------------------------------
@@ -1210,22 +1282,7 @@ def decorate_all_once() -> None:
     # torch.jit._builtins._builtin_table maps id(func) -> ATen op name.
     # We must register our wrappers so JIT recognizes them as the same ops.
     # Without this, torch.jit.script fails on any code using wrapped functions.
-    try:
-        import torch.jit._builtins as _jit_builtins
-
-        for orig_id, decorated_func in _state._orig_to_decorated.items():
-            builtin_table = cast(Any, _jit_builtins._builtin_table)
-            builtin_name = builtin_table.get(orig_id)
-            if builtin_name is not None:
-                builtin_table[id(decorated_func)] = builtin_name
-                # For properties, also register getter/setter/deleter individually
-                # since JIT may call them directly.
-                if isinstance(decorated_func, property):
-                    for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
-                        if accessor is not None:
-                            builtin_table[id(accessor)] = builtin_name
-    except (ImportError, AttributeError):
-        pass  # JIT internals may change across PyTorch versions
+    _register_jit_builtin_wrappers()
 
     # ---- DeviceContext bypass setup ----
     # Collect names of factory functions (zeros, ones, empty, etc.) that accept
@@ -1329,6 +1386,7 @@ def unwrap_torch() -> None:
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
+        _PATCHED_MODEL_INSTANCES.clear()
         return
 
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
@@ -1383,6 +1441,7 @@ def unwrap_torch() -> None:
 
     _replace_detached_references(_state._decorated_to_orig)
     _state._is_decorated = False
+    _PATCHED_MODEL_INSTANCES.clear()
 
     # Restoring Tensor.__getitem__ doesn't clear the stale sq_item slot.
     _fix_tensor_sequence_slot()
@@ -1643,6 +1702,11 @@ def patch_model_instance(model: Any) -> None:
     mapping = _state._orig_to_decorated
     if not mapping:
         return
+    try:
+        if model in _PATCHED_MODEL_INSTANCES:
+            return
+    except TypeError:
+        pass
 
     for module in model.modules():
         try:
@@ -1658,3 +1722,7 @@ def patch_model_instance(model: Any) -> None:
                     mod_dict[attr_name] = decorated_func
                 except (TypeError, KeyError):
                     pass
+    try:
+        _PATCHED_MODEL_INSTANCES.add(model)
+    except TypeError:
+        pass
