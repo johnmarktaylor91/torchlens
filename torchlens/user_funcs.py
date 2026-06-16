@@ -1582,7 +1582,7 @@ def _unsupported_trace_option_message(option_name: str, backend_name: str) -> st
     if option_name == "grad_options":
         return (
             "grad_options is only supported with backend='jax', backend='mlx', "
-            "or backend='tinygrad'."
+            "backend='tinygrad', or backend='paddle'."
         )
     if option_name in {"jax_control_flow", "jax_max_control_flow_unroll"}:
         return (
@@ -1929,7 +1929,8 @@ def trace(
     if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
         raise BackendUnsupportedError(
             "jax_static_argnums is only supported with backend='jax'; grad_options is "
-            "only supported with backend='jax', backend='mlx', or backend='tinygrad'."
+            "only supported with backend='jax', backend='mlx', backend='tinygrad', "
+            "or backend='paddle'."
         )
     explicit_backend_spec = None
     if backend is not None:

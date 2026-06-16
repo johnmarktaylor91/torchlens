@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -15,6 +15,7 @@ from .registry import (
     BackendUnsupportedError,
     JAX_TRACE_OPTIONS,
     MLX_TRACE_OPTIONS,
+    PADDLE_TRACE_OPTIONS,
     SerializationPolicy,
     TINYGRAD_TRACE_OPTIONS,
     TORCH_TRACE_OPTIONS,
@@ -200,6 +201,66 @@ def _tinygrad_can_handle(
     return any(isinstance(leaf, Tensor) for leaf in _simple_leaves(input_args))
 
 
+def _paddle_can_handle(
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+) -> bool:
+    """Return whether the Paddle spec can handle the public call.
+
+    Parameters
+    ----------
+    model:
+        Candidate callable.
+    input_args:
+        Positional inputs.
+    input_kwargs:
+        Keyword inputs.
+
+    Returns
+    -------
+    bool
+        ``True`` when Paddle is installed, ``model`` is callable, and either the
+        model is a ``paddle.nn.Layer`` or an input leaf is a Paddle tensor.
+    """
+
+    if not callable(model) or isinstance(model, nn.Module):
+        return False
+    try:
+        import paddle
+    except ImportError:
+        return False
+    return isinstance(model, paddle.nn.Layer) or _contains_paddle_tensor(
+        input_args,
+        input_kwargs,
+        paddle,
+    )
+
+
+def _contains_paddle_tensor(input_args: object, input_kwargs: object, paddle: object) -> bool:
+    """Return whether public inputs contain at least one Paddle tensor leaf.
+
+    Parameters
+    ----------
+    input_args:
+        Positional public inputs.
+    input_kwargs:
+        Keyword public inputs.
+    paddle:
+        Imported ``paddle`` module.
+
+    Returns
+    -------
+    bool
+        True when a Paddle tensor leaf is present.
+    """
+
+    tensor_type = getattr(paddle, "Tensor")
+    return any(isinstance(leaf, tensor_type) for leaf in _simple_leaves(input_args)) or any(
+        isinstance(leaf, tensor_type) for leaf in _simple_leaves(input_kwargs)
+    )
+
+
 def _simple_leaves(value: object) -> tuple[object, ...]:
     """Return leaves from simple Python containers.
 
@@ -311,6 +372,25 @@ def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
     return TinygradBackend().capture_trace(*args, **kwargs)
 
 
+def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
+    """Dispatch to the Paddle backend preview shell.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public ``trace`` arguments.
+
+    Returns
+    -------
+    Any
+        Captured trace once the Paddle capture phase lands.
+    """
+
+    from .paddle import PaddleBackend
+
+    return PaddleBackend().capture_trace(*args, **kwargs)
+
+
 def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
     """Dispatch to the current torch validation entry.
 
@@ -386,6 +466,25 @@ def _tinygrad_validate_entry(*args: Any, **kwargs: Any) -> bool:
     return TinygradBackend().validate_entry(*args, **kwargs)
 
 
+def _paddle_validate_entry(*args: Any, **kwargs: Any) -> bool:
+    """Dispatch to Paddle model/input validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public validation arguments.
+
+    Returns
+    -------
+    bool
+        Validation result once the Paddle validation phase lands.
+    """
+
+    from .paddle import PaddleBackend
+
+    return PaddleBackend().validate_entry(*args, **kwargs)
+
+
 def _torch_validate_trace(*args: Any, **kwargs: Any) -> bool:
     """Dispatch to the current torch trace validation implementation.
 
@@ -459,6 +558,39 @@ def _tinygrad_validate_trace(*args: Any, **kwargs: Any) -> Any:
     from .tinygrad import TinygradBackend
 
     return TinygradBackend().validate_trace(*args, **kwargs)
+
+
+def _paddle_validate_trace(*args: Any, **kwargs: Any) -> Any:
+    """Dispatch to Paddle trace replay validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Trace validation arguments.
+
+    Returns
+    -------
+    Any
+        Validation result once the Paddle validation phase lands.
+    """
+
+    from .paddle import PaddleBackend
+
+    return PaddleBackend().validate_trace(*args, **kwargs)
+
+
+def _paddle_capture_backend() -> CaptureBackend:
+    """Return the Paddle Protocol adapter shell.
+
+    Returns
+    -------
+    CaptureBackend
+        Paddle capture backend once the Protocol adapter phase lands.
+    """
+
+    from .paddle import PaddleBackend
+
+    return cast(CaptureBackend, PaddleBackend())
 
 
 def register_default_backend_specs() -> None:
@@ -592,6 +724,40 @@ def register_default_backend_specs() -> None:
                 runtime_name="tinygrad",
             ),
             priority=30,
+        ),
+        replace=True,
+    )
+    register_backend_spec(
+        BackendSpec(
+            name="paddle",
+            aliases=("paddlepaddle",),
+            can_handle=_paddle_can_handle,
+            capture_trace=_paddle_capture_trace,
+            validate_entry=_paddle_validate_entry,
+            validate_trace=_paddle_validate_trace,
+            capabilities=BackendCapabilities(
+                backward_capture=False,
+                validation_replay=True,
+                fastlog=False,
+                interventions=False,
+                rng_replay=False,
+                payload_materialization=True,
+                streaming=False,
+                intermediate_derived_grads=True,
+                input_container_structure="paths_only",
+                output_container_structure="paths_only",
+                module_identity_modes=("function_root", "object_module"),
+                trace_options=PADDLE_TRACE_OPTIONS,
+            ),
+            capture_backend=_paddle_capture_backend,
+            serialization_policy=SerializationPolicy(
+                payload_policy="array_payloads",
+                body_format="safetensors",
+                manifest_schema_versions=(2,),
+                runtime_name="paddle",
+            ),
+            priority=40,
+            coercible=False,
         ),
         replace=True,
     )

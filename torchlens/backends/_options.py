@@ -113,6 +113,24 @@ TINYGRAD_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 """Extra public-kwarg rejection policy for the tinygrad preview backend."""
 
 
+PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
+    runtime_option_names=frozenset(),
+    runtime_message=(
+        "paddle backend preview does not support runtime-mutation or stop-early "
+        "options: {names}. Static-label save= selectors are supported as "
+        "post-finalization payload filters, but trace(intervene=...) and "
+        "trace(halt=...) need predicate-time concrete values and a way to replace or "
+        "truncate Paddle dygraph descendants before execution completes, which Paddle "
+        "does not expose through a stable TorchLens surface. Use an unfiltered "
+        "tl.trace(..., backend='paddle') call, static-label save= selectors, or the "
+        "PyTorch backend for intervention, halt, streaming, and value-dependent predicates."
+    ),
+    fallback_message="",
+    always_runtime=True,
+)
+"""Extra public-kwarg rejection policy for the Paddle preview backend."""
+
+
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="JAX",
     input_kwargs_message=(
@@ -202,6 +220,37 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     ),
 )
 """Unsupported public trace-option policy for the tinygrad preview backend."""
+
+
+PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
+    backend_name="paddle",
+    input_kwargs_message="paddle backend preview supports positional args only.",
+    full_save_message="paddle backend preview is full-save only; save shaping is unsupported.",
+    rejected_truthy_messages={
+        name: (f"paddle backend preview does not support {name}; full-save forward capture only.")
+        for name in (
+            "activation_transform",
+            "detach_saved_activations",
+            "save_grads",
+            "save_arg_values",
+            "save_code_context",
+            "save_rng_states",
+            "backward_ready",
+            "module_filter",
+            "transform",
+            "layer_visualizers",
+            "save_visualizations",
+        )
+    },
+    output_device_message="paddle backend preview only supports output_device='same'.",
+    save_raw_activations_false_message=(
+        "paddle backend preview is full-save only; save_raw_activations=False is unsupported."
+    ),
+    save_window_message=(
+        "paddle backend preview is full-save only; save-window shaping is unsupported."
+    ),
+)
+"""Unsupported public trace-option policy for the Paddle preview backend."""
 
 
 MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(

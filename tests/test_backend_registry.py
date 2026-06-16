@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ast
+import builtins
 import inspect
 from pathlib import Path
+import sys
 from typing import Any
 
 import pytest
@@ -21,11 +23,14 @@ from torchlens.backends import (
     SerializationPolicy,
     get_backend_spec,
     register_backend_spec,
+    resolve_backend_spec,
     unregister_backend_spec,
 )
 from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
+from torchlens.backends.paddle import capabilities as paddle_capabilities
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
+from torchlens.backends.default_specs import _paddle_can_handle
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -218,6 +223,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
 
     jax_spec = get_backend_spec("jax")
     mlx_spec = get_backend_spec("mlx")
+    paddle_spec = get_backend_spec("paddle")
     tinygrad_spec = get_backend_spec("tinygrad")
 
     assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
@@ -307,6 +313,134 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     )
     assert tinygrad_spec.serialization_policy.payload_policy == tinygrad_capabilities.payload_policy
 
+    assert (
+        paddle_spec.capabilities.backward_capture == paddle_capabilities.supports_backward_capture
+    )
+    assert (
+        paddle_spec.capabilities.validation_replay == paddle_capabilities.supports_validation_replay
+    )
+    assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
+    assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention
+    assert (
+        paddle_spec.capabilities.intermediate_derived_grads
+        == paddle_capabilities.supports_intermediate_derived_grads
+    )
+    assert paddle_spec.capabilities.rng_replay == paddle_capabilities.supports_rng_replay
+    assert (
+        paddle_spec.capabilities.payload_materialization
+        == paddle_capabilities.supports_payload_materialization
+    )
+    assert (
+        paddle_spec.capabilities.module_identity_modes == paddle_capabilities.module_identity_modes
+    )
+    assert paddle_spec.capabilities.trace_options == paddle_capabilities.trace_options
+    assert (
+        paddle_spec.capabilities.input_container_structure
+        == paddle_capabilities.input_container_structure
+    )
+    assert (
+        paddle_spec.capabilities.output_container_structure
+        == paddle_capabilities.output_container_structure
+    )
+    assert paddle_spec.serialization_policy.payload_policy == paddle_capabilities.payload_policy
+
+
+def test_paddle_backend_registered_with_alias_and_priority() -> None:
+    """Paddle default spec is registered with its alias and phase priority."""
+
+    spec = get_backend_spec("paddle")
+    assert spec.name == "paddle"
+    assert get_backend_spec("paddlepaddle") is spec
+    assert spec.priority == 40
+    assert get_backend_spec("torch").priority == 0
+    assert get_backend_spec("mlx").priority == 10
+    assert get_backend_spec("jax").priority == 20
+    assert get_backend_spec("tinygrad").priority == 30
+
+
+def test_paddle_detector_returns_false_without_paddle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Paddle detector fails closed when Paddle cannot be imported."""
+
+    original_import = builtins.__import__
+    had_paddle = "paddle" in sys.modules
+
+    def _raise_for_paddle(
+        name: str,
+        globals: dict[str, Any] | None = None,
+        locals: dict[str, Any] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> Any:
+        """Raise ``ImportError`` for Paddle and delegate all other imports."""
+
+        if name == "paddle":
+            raise ImportError("simulated missing paddle")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raise_for_paddle)
+
+    assert not _paddle_can_handle(lambda x: x, object(), None)
+    assert not _paddle_can_handle(_TinyModel(), torch.ones(1), None)
+    if not had_paddle:
+        assert "paddle" not in sys.modules
+
+
+def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
+    """Paddle detector accepts Paddle layers and nested Paddle tensor inputs."""
+
+    paddle = pytest.importorskip("paddle")
+
+    class _PaddleLayer(paddle.nn.Layer):
+        """Small Paddle layer for backend routing tests."""
+
+        def forward(self, x: Any) -> Any:
+            """Return the input unchanged."""
+
+            return x
+
+    tensor = paddle.to_tensor([1.0])
+    assert _paddle_can_handle(_PaddleLayer(), tensor, None)
+    assert _paddle_can_handle(lambda x: x, {"nested": [tensor]}, None)
+    assert not _paddle_can_handle(_TinyModel(), torch.ones(1), None)
+
+
+def test_explicit_paddle_backend_resolves_to_spec() -> None:
+    """Explicit Paddle backend and alias resolve to the Paddle spec."""
+
+    paddle = pytest.importorskip("paddle")
+
+    class _PaddleLayer(paddle.nn.Layer):
+        """Small Paddle layer for explicit resolution tests."""
+
+        def forward(self, x: Any) -> Any:
+            """Return the input unchanged."""
+
+            return x
+
+    x = paddle.to_tensor([1.0])
+    spec = get_backend_spec("paddle")
+    assert resolve_backend_spec("paddle", _PaddleLayer(), x) is spec
+    assert resolve_backend_spec("paddlepaddle", _PaddleLayer(), x) is spec
+
+
+def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
+    """Paddle preview rejects unsupported options with canonical typed errors."""
+
+    paddle = pytest.importorskip("paddle")
+
+    class _PaddleLayer(paddle.nn.Layer):
+        """Small Paddle layer for unsupported-option routing tests."""
+
+        def forward(self, x: Any) -> Any:
+            """Return the input unchanged."""
+
+            return x
+
+    with pytest.raises(BackendUnsupportedError):
+        tl.trace(_PaddleLayer(), paddle.to_tensor([1.0]), backend="paddle", backward_ready=True)
+
 
 def test_public_trace_dispatches_through_backend_spec() -> None:
     """Public ``trace`` dispatch stays owned by the backend spec."""
@@ -327,8 +461,10 @@ def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
     allowed_files = {
         project_root / "torchlens" / "_io" / "bundle.py",
         project_root / "torchlens" / "_io" / "tlspec.py",
+        project_root / "torchlens" / "data_classes" / "trace.py",
+        project_root / "torchlens" / "repgeom" / "__init__.py",
     }
-    backend_literals = {"torch", "mlx", "jax", "tinygrad", "fake"}
+    backend_literals = {"torch", "mlx", "jax", "tinygrad", "paddle", "fake"}
     offenders: list[str] = []
 
     for source_path in sorted((project_root / "torchlens").rglob("*.py")):
