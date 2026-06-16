@@ -19,7 +19,12 @@ from ...ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, 
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_kwargs
+from ...utils.arg_handling import (
+    INPUT_WAS_PARAMETER_ATTR,
+    normalize_input_args,
+    safe_copy_args,
+    safe_copy_kwargs,
+)
 from ...utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
@@ -249,6 +254,8 @@ class TorchBackend:
                 input_args[arg_idx] = list(arg)
             for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
                 moved_tensor = tensor.to(model_device)
+                if bool(getattr(tensor, INPUT_WAS_PARAMETER_ATTR, False)):
+                    setattr(moved_tensor, INPUT_WAS_PARAMETER_ATTR, True)
                 input_arg_tensors[arg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
                 if not addr_full:
                     input_args[arg_idx] = moved_tensor
@@ -262,6 +269,8 @@ class TorchBackend:
         for kwarg_idx, (key, val) in enumerate(input_kwargs.items()):
             for tensor_idx, (tensor, addr, addr_full) in enumerate(input_kwarg_tensors[kwarg_idx]):
                 moved_tensor = tensor.to(model_device)
+                if bool(getattr(tensor, INPUT_WAS_PARAMETER_ATTR, False)):
+                    setattr(moved_tensor, INPUT_WAS_PARAMETER_ATTR, True)
                 input_kwarg_tensors[kwarg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
                 if not addr_full:
                     input_kwargs[key] = moved_tensor

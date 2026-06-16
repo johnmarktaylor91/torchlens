@@ -225,6 +225,7 @@ class Layer:
         "equivalence_class": FieldPolicy.KEEP,
         "equivalent_ops": FieldPolicy.KEEP,
         "is_input": FieldPolicy.KEEP,
+        "input_was_parameter": FieldPolicy.KEEP,
         "is_output": FieldPolicy.KEEP,
         "is_final_output": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
@@ -352,6 +353,7 @@ class Layer:
 
         # Special flags
         self.is_input = first_pass.is_input
+        self.input_was_parameter = first_pass.input_was_parameter
         self.is_output = first_pass.is_output
         self.is_final_output = first_pass.is_final_output
         self.is_buffer = first_pass.is_buffer

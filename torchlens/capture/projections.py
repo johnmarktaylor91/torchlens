@@ -854,6 +854,7 @@ def _event_live_field(trace: "Trace", event: OpEvent, name: str) -> Any:
         "children": list(trace.capture_events.live_index.children(event.label_raw)),
         "has_children": bool(trace.capture_events.live_index.children(event.label_raw)),
         "is_input": event.kind == "source" and event.layer_type == "input",
+        "input_was_parameter": event.input_was_parameter,
         "has_input_ancestor": bool(event.input_ancestors),
         "input_ancestors": set(event.input_ancestors),
         "is_output": False,

@@ -458,6 +458,7 @@ def _fields_from_event(
             "children": children,
             "has_children": bool(children),
             "is_input": event.kind == "source" and event.layer_type == "input",
+            "input_was_parameter": event.input_was_parameter,
             "has_input_ancestor": bool(event.input_ancestors),
             "input_ancestors": set(event.input_ancestors),
             "min_distance_from_input": None,

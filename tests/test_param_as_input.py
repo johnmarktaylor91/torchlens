@@ -175,6 +175,7 @@ def test_plain_requires_grad_leaf_input_links_and_backprops_to_original() -> Non
 
     input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)
+    assert trace[input_label].input_was_parameter is False
     assert trace[input_label].grad is not None
     assert x.grad is not None
     assert tl_validation.validate_forward_pass(model, x)
@@ -188,7 +189,9 @@ def test_same_device_parameter_input_traces_as_input_parent() -> None:
 
     trace = tl.trace(model, z)
 
+    input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)
+    assert trace[input_label].input_was_parameter is True
     assert len(trace.params) == 1
 
 
@@ -212,6 +215,7 @@ def test_parameter_input_links_and_backprops_to_original_after_fix() -> None:
 
     input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)
+    assert trace[input_label].input_was_parameter is True
     assert trace[input_label].grad is not None
     assert z.grad is not None
     assert tl_validation.validate_forward_pass(model, z)
@@ -239,7 +243,9 @@ def test_registered_model_parameter_fed_as_input_traces() -> None:
 
     trace = tl.trace(model, model.stimulus)
 
+    input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)
+    assert trace[input_label].input_was_parameter is True
 
 
 def test_parameter_input_fanout_links_to_each_consuming_op() -> None:
@@ -257,7 +263,9 @@ def test_nested_parameter_input_links_to_child_op() -> None:
 
     trace = tl.trace(_NestedStimulusModel(), [_parameter_stimulus()])
 
+    input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)
+    assert trace[input_label].input_was_parameter is True
 
 
 def test_inference_only_parameter_input_traces() -> None:
@@ -287,3 +295,4 @@ def test_cross_device_parameter_input_matches_plain_tensor_path_if_cuda_availabl
 
     input_label = trace.input_layers[0]
     assert any(input_label in op.parents for op in trace.layer_list if not op.is_input)
+    assert trace[input_label].input_was_parameter is True

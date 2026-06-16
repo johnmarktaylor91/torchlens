@@ -119,6 +119,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "device_ref": None,
     "backend_address": None,
     "resolver_status": "resolved",
+    "input_was_parameter": False,
     "transformed_activation_memory": None,
     "visualizer_path": None,
     "transformed_grad": None,
@@ -970,6 +971,7 @@ class Op:
         "children": FieldPolicy.KEEP,
         "has_children": FieldPolicy.KEEP,
         "is_input": FieldPolicy.KEEP,
+        "input_was_parameter": FieldPolicy.KEEP,
         "has_input_ancestor": FieldPolicy.KEEP,
         "input_ancestors": FieldPolicy.KEEP,
         "min_distance_from_input": FieldPolicy.KEEP,
@@ -1361,6 +1363,7 @@ class Op:
         self.children = fields_dict["children"]
         self.has_children = fields_dict["has_children"]
         self.is_input = fields_dict["is_input"]
+        self.input_was_parameter = fields_dict["input_was_parameter"]
         self.has_input_ancestor = fields_dict["has_input_ancestor"]
         self.input_ancestors = fields_dict["input_ancestors"]
         self.min_distance_from_input = fields_dict["min_distance_from_input"]

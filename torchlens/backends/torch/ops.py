@@ -613,6 +613,7 @@ def _op_event_from_log(
         is_bottom_level=True,
         is_scalar_bool=fields_dict["is_scalar_bool"],
         bool_value=fields_dict["bool_value"],
+        input_was_parameter=bool(fields_dict.get("input_was_parameter", False)),
         intervention_fired=bool(fire_results),
         intervention_replaced=fields_dict["intervention_replaced"],
         fire_results=fire_results,
@@ -1937,6 +1938,7 @@ def _build_graph_relationship_fields(
     fields_dict["children"] = []
     fields_dict["has_children"] = False
     fields_dict["is_input"] = False
+    fields_dict["input_was_parameter"] = False
     fields_dict["has_input_ancestor"] = len(input_ancestors) > 0
     fields_dict["input_ancestors"] = input_ancestors
     fields_dict["min_distance_from_input"] = None

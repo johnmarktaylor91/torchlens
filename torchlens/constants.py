@@ -365,6 +365,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "children",
     "has_children",
     "is_input",
+    "input_was_parameter",
     "has_input_ancestor",
     "input_ancestors",
     "min_distance_from_input",
@@ -504,6 +505,7 @@ LAYER_LOG_FIELD_ORDER = [
     "equivalent_ops",
     # Special flags
     "is_input",
+    "input_was_parameter",
     "is_output",
     "is_final_output",
     "is_buffer",

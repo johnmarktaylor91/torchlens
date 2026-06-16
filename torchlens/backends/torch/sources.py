@@ -45,6 +45,7 @@ from ...capture.projections import (
     get_active_recording_state,
 )
 from ...fastlog.types import ActivationRecord, CaptureSpec
+from ...utils.arg_handling import INPUT_WAS_PARAMETER_ATTR
 from ...utils.introspection import _get_code_context
 from ...utils.rng import log_current_rng_states
 from ...utils.tensor_utils import get_memory_amount_from_metadata
@@ -243,6 +244,7 @@ def log_source_tensor_exhaustive(
     # Buffers are internally initialized (no input ancestry).
     if source == "input":
         is_input = True
+        input_was_parameter = bool(getattr(t, INPUT_WAS_PARAMETER_ATTR, False))
         has_input_ancestor = True
         io_role = extra_addr
         is_buffer = False
@@ -257,6 +259,7 @@ def log_source_tensor_exhaustive(
         equivalence_class = f"input_{'_'.join(tuple(str(s) for s in t.shape))}_{str(t.dtype)}"
     elif source == "buffer":
         is_input = False
+        input_was_parameter = False
         has_input_ancestor = False
         io_role = None
         is_buffer = True
@@ -396,6 +399,7 @@ def log_source_tensor_exhaustive(
         "children": [],
         "has_children": False,
         "is_input": is_input,
+        "input_was_parameter": input_was_parameter,
         "has_input_ancestor": has_input_ancestor,
         "input_ancestors": input_ancestors,
         "min_distance_from_input": None,

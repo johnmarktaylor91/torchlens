@@ -15,6 +15,8 @@ from torch import nn
 
 from .tensor_utils import _clone_tensor_payload, _copy_tensor_payload
 
+INPUT_WAS_PARAMETER_ATTR = "_torchlens_input_was_parameter"
+
 
 def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
     """Clone a forward-input tensor without preserving ``nn.Parameter`` type.
@@ -35,7 +37,9 @@ def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
         from .._state import pause_logging
 
         with pause_logging():
-            return _copy_tensor_payload(arg, detach_tensor=False, save_mode="copy")
+            cloned = _copy_tensor_payload(arg, detach_tensor=False, save_mode="copy")
+        setattr(cloned, INPUT_WAS_PARAMETER_ATTR, True)
+        return cloned
     return cast(torch.Tensor, _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy"))
 
 
