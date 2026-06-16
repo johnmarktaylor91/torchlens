@@ -33,6 +33,7 @@ from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_module_logs, _build_root_module_log
 from ...quantities import Duration
+from ...validation.status import ValidationReplayStatus, ValidationReplaySource
 from .._options import PADDLE_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from .model_prep import (
     PaddleModuleTree,
@@ -332,16 +333,151 @@ class PaddleBackend:
             unwrap_paddle()
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
-        """Raise the P2 validation placeholder error."""
+        """Capture then validate a Paddle forward pass.
 
-        del args, kwargs
-        raise BackendUnsupportedError("Paddle backend validation is not yet implemented.")
+        Parameters
+        ----------
+        *args, **kwargs
+            Public validation arguments forwarded to ``capture_trace``.
 
-    def validate_trace(self, *args: Any, **kwargs: Any) -> bool:
-        """Raise the P2 trace validation placeholder error."""
+        Returns
+        -------
+        bool
+            True when live replay validation passes.
+        """
 
-        del args, kwargs
-        raise BackendUnsupportedError("Paddle backend trace validation is not yet implemented.")
+        validate_metadata = bool(kwargs.pop("validate_metadata", True))
+        trace = self.capture_trace(*args, **kwargs)
+        result = self.validate_trace(trace, validate_metadata=validate_metadata)
+        if isinstance(result, ValidationReplayStatus):
+            return result.passed
+        return result
+
+    def validate_trace(
+        self,
+        trace: Trace,
+        *_args: Any,
+        **kwargs: Any,
+    ) -> bool | ValidationReplayStatus:
+        """Validate a Paddle trace with coverage oracle, replay, and perturbation.
+
+        Parameters
+        ----------
+        trace
+            Paddle trace to validate.
+        *_args
+            Ignored compatibility arguments.
+        **kwargs
+            Compatibility keyword arguments. ``validate_metadata`` controls
+            whether backend-neutral invariant checks run.
+
+        Returns
+        -------
+        bool or ValidationReplayStatus
+            True for a verified live pass, False for a verified live failure,
+            or an explicit unavailable status for loaded payload-stripped traces.
+        """
+
+        status = trace.validation_replay_status
+        if not status.available or _paddle_loaded_replay_unavailable(trace):
+            status_result = ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+                backend=self.name,
+                payload_load_status=getattr(trace, "payload_load_status", None),
+            )
+            setattr(trace, "_validation_replay_status", status_result)
+            return status_result
+        replayed_count = 0
+        failed_count = 0
+        try:
+            from ...validation.invariants import check_metadata_invariants
+            from ...validation.status import count_importer_region_annotations
+            from .validation import _coverage_oracle
+
+            if not _coverage_oracle(trace):
+                failed_count = 1
+            elif kwargs.get("validate_metadata", True) and not check_metadata_invariants(trace):
+                failed_count = 1
+            else:
+                replayed_count, failed_count = self._validate_paddle_captures(trace)
+            if failed_count == 0 and replayed_count < 1:
+                failed_count = 1
+            status_result = ValidationReplayStatus.from_replay_counts(
+                backend=self.name,
+                source=_validation_source(trace),
+                replayed_node_count=replayed_count,
+                unverified_node_count=(
+                    count_importer_region_annotations(trace) if failed_count == 0 else 0
+                ),
+                failed_node_count=failed_count,
+                payload_load_status=getattr(trace, "payload_load_status", None),
+            )
+        except Exception:
+            status_result = ValidationReplayStatus.result(
+                passed=False,
+                backend=self.name,
+                source=_validation_source(trace),
+                payload_load_status=getattr(trace, "payload_load_status", None),
+                replayed_node_count=replayed_count,
+                failed_node_count=max(1, failed_count),
+            )
+        setattr(trace, "_validation_replay_status", status_result)
+        return status_result if status_result.state == "unverified" else status_result.passed
+
+    def _validate_paddle_captures(self, trace: Trace) -> tuple[int, int]:
+        """Replay and perturb Paddle captures against saved trace payloads.
+
+        Parameters
+        ----------
+        trace
+            Paddle trace to validate.
+
+        Returns
+        -------
+        tuple[int, int]
+            Replayed and failed node counts.
+        """
+
+        from .validation import (
+            _parent_perturbations_change_output,
+            _payloads_close,
+            _rebuild_inputs,
+            _coverage_oracle,
+        )
+
+        if not _coverage_oracle(trace):
+            return 0, 1
+        ops_by_label = _ops_by_label(trace)
+        replayed_count = 0
+        failed_count = 0
+        for capture in tuple(getattr(trace, "_paddle_op_captures", ())):
+            if _paddle_capture_is_factory_or_source(capture):
+                continue
+            op = ops_by_label.get(getattr(capture, "label_raw", ""))
+            if op is None or bool(getattr(op, "is_input", False)):
+                failed_count += 1
+                continue
+            try:
+                rebuilt = _rebuild_inputs(capture, ops_by_label)
+                if not rebuilt.ok:
+                    failed_count += 1
+                    continue
+                with _state.pause_logging(), self.paddle.no_grad():
+                    replayed = capture.func(*rebuilt.args, **rebuilt.kwargs)
+                replayed_output = _value_at_path(
+                    replayed,
+                    _first_output_path(capture),
+                )
+                saved_output = op.out
+                if saved_output is None or not _payloads_close(replayed_output, saved_output):
+                    failed_count += 1
+                    continue
+                if not _parent_perturbations_change_output(self, capture, ops_by_label):
+                    failed_count += 1
+                    continue
+                replayed_count += 1
+            except Exception:
+                failed_count += 1
+        return replayed_count, failed_count
 
     def emit_paddle_operation(
         self,
@@ -1269,6 +1405,141 @@ def _nbytes(value: object) -> int | None:
         return int(value.numel()) * int(value.element_size())  # type: ignore[attr-defined]
     except (AttributeError, TypeError, ValueError):
         return None
+
+
+def _paddle_loaded_replay_unavailable(trace: Trace) -> bool:
+    """Return whether a loaded Paddle trace lacks live replay artifacts.
+
+    Parameters
+    ----------
+    trace
+        Trace being validated.
+
+    Returns
+    -------
+    bool
+        True when replay must report unavailable instead of a pass/fail bool.
+    """
+
+    if not bool(getattr(trace, "_loaded_from_bundle", False)):
+        return False
+    if not bool(getattr(trace, "_paddle_op_captures", ())):
+        return True
+    return str(getattr(trace, "payload_load_status", "")).startswith("audit_only")
+
+
+def _validation_source(trace: Trace) -> ValidationReplaySource:
+    """Return the validation source label for ``trace``.
+
+    Parameters
+    ----------
+    trace
+        Trace being validated.
+
+    Returns
+    -------
+    ValidationReplaySource
+        ``"loaded"`` for bundle-loaded traces, otherwise ``"live"``.
+    """
+
+    return "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
+
+
+def _ops_by_label(trace: Trace) -> dict[str, Any]:
+    """Return trace operations keyed by raw, layer, and pass labels.
+
+    Parameters
+    ----------
+    trace
+        Materialized TorchLens trace.
+
+    Returns
+    -------
+    dict[str, Any]
+        Operations keyed by known labels.
+    """
+
+    result: dict[str, Any] = {}
+    for op in getattr(trace, "layer_list", ()):
+        for label in (
+            getattr(op, "_label_raw", None),
+            getattr(op, "layer_label", None),
+            getattr(op, "label", None),
+        ):
+            if isinstance(label, str):
+                result[label] = op
+    return result
+
+
+def _paddle_capture_is_factory_or_source(capture: Any) -> bool:
+    """Return whether a Paddle capture is an allowlisted zero-parent source.
+
+    Parameters
+    ----------
+    capture
+        Paddle operation capture record.
+
+    Returns
+    -------
+    bool
+        True for explicit factory/source operations.
+    """
+
+    base_name = str(getattr(capture, "op_name", "")).rsplit(".", 1)[-1]
+    return base_name in {
+        "arange",
+        "eye",
+        "full",
+        "full_like",
+        "linspace",
+        "ones",
+        "ones_like",
+        "to_tensor",
+        "zeros",
+        "zeros_like",
+    }
+
+
+def _first_output_path(capture: Any) -> tuple[Any, ...]:
+    """Return the first tensor output path for a Paddle capture.
+
+    Parameters
+    ----------
+    capture
+        Paddle operation capture record.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        First output leaf path, or empty path for scalar tensor outputs.
+    """
+
+    paths = tuple(getattr(capture, "output_leaf_paths", ()))
+    if not paths:
+        return ()
+    return tuple(paths[0])
+
+
+def _value_at_path(value: Any, path: tuple[Any, ...]) -> Any:
+    """Return ``value`` indexed by a nested container path.
+
+    Parameters
+    ----------
+    value
+        Root value.
+    path
+        Container path.
+
+    Returns
+    -------
+    Any
+        Nested value.
+    """
+
+    result = value
+    for part in path:
+        result = result[part]
+    return result
 
 
 def _default_if_missing(value: Any, default: Any) -> Any:
