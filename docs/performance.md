@@ -215,36 +215,37 @@ inside its supported transformer families and you already want its named hook po
 Inseq when you want mature attribution algorithms out of the box rather than the lower-level
 activation and gradient substrate.
 
-## Provisional measured numbers (dev host)
+## Measured numbers (canonical bench host)
 
-> **Provisional.** Captured on a non-canonical Linux dev host (Intel i9-9900X, CPU), TinyNet
-> smoke subset. These illustrate relative cost on tiny graphs and are **not** headline figures —
-> re-capture the full suite on the canonical bench host before quoting any speed claim. The
-> committed baseline is `benchmarks/perf_baselines/linux-cpu-provisional.json`
-> (`baseline_status: "provisional"`), which suppresses generated speed headlines.
+Measured on the canonical bench host (`zmachine`, Intel i9-9900X) at SHA `712a4e5` on
+`2026-06-16`, from a full non-smoke run (`baseline_status: "canonical"`). The complete 196-row
+table (CPU + CUDA, every model and row) lives in
+[`docs/_perf_numbers.md`](_perf_numbers.md) and the raw baseline in
+`benchmarks/perf_baselines/linux-cpu.json`.
 
-<!-- generated from TorchLens P6 perf gate JSON; do not hand-edit numbers -->
+**Headline: with fastlog capture and an early halt at ~25% depth, capture runs _faster than the
+raw forward pass itself_ — `fastlog_halt_25` is 0.84x raw forward on ResNet-18 (CPU) and 0.83x on
+GPT-2 (HookedTransformer, CPU).** You only pay for the layers you actually reach.
 
-Measured at SHA `a1df040` on `2026-06-14`.
+Representative CPU rows ("vs raw" = multiple of the raw forward pass):
 
-| Model | Device | Row | Median ms | vs raw forward | Status |
-|---|---|---|---:|---:|---|
-| tinynet | cpu | raw_forward | 0.9 | 1.00x | ok |
-| tinynet | cpu | raw_tl_import | 1.0 | 1.04x | ok |
-| tinynet | cpu | raw_global_wrapped | 0.9 | 1.01x | ok |
-| tinynet | cpu | raw_target_prepared | 0.9 | 1.02x | ok |
-| tinynet | cpu | raw_inference_mode | 1.1 | 1.25x | ok |
-| tinynet | cpu | global_wrap_dummy | 1660.7 | 1812.43x | ok |
-| tinynet | cpu | first_capture_target | 344.0 | 375.45x | ok |
-| tinynet | cpu | tl_trace | 38.8 | 42.32x | ok |
-| tinynet | cpu | tl_trace_profile | 41.0 | 44.71x | ok |
-| tinynet | cpu | tl_rerun | 49.4 | 53.96x | ok |
-| tinynet | cpu | fastlog_module | 15.7 | 17.11x | ok |
-| tinynet | cpu | aux_save | 29.0 | 31.67x | ok |
-| tinynet | cpu | aux_load | 30.2 | 32.95x | ok |
+| Model | Row | Median ms | vs raw forward |
+|---|---|---:|---:|
+| resnet18 | raw_forward | 72.2 | 1.00x |
+| resnet18 | tl_trace (full capture) | 994.6 | 13.78x |
+| resnet18 | fastlog_zero (predicate false) | 157.5 | 2.18x |
+| resnet18 | fastlog_halt_25 | 60.8 | **0.84x** |
+| gpt2_hf | raw_forward | 130.4 | 1.00x |
+| gpt2_hf | tl_trace (full capture) | 1927.0 | 14.77x |
+| gpt2_hf | fastlog_zero (predicate false) | 506.0 | 3.88x |
+| gpt2_hf | fastlog_halt_25 | 134.7 | 1.03x |
+| gpt2_hooked | raw_forward | 343.4 | 1.00x |
+| gpt2_hooked | tl_trace (full capture) | 5048.5 | 14.70x |
+| gpt2_hooked | fastlog_halt_25 | 283.6 | **0.83x** |
 
-(Ratios on TinyNet are dominated by fixed per-capture overhead, not steady-state cost; large
-models amortize this. `global_wrap_dummy`/`first_capture_target` include one-time wrap/prep cost.)
+(Full exhaustive capture (`tl_trace`) costs ~14x the forward and amortizes on large models; the
+`fastlog_*` rows show selective / early-exit capture, where halting at 25% depth drops below the
+raw-forward cost. TinyNet ratios are dominated by fixed per-capture overhead — see the full table.)
 
 ## Re-capturing baselines (canonical host)
 
