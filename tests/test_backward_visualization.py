@@ -7,6 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import VisualizationOptions
+from torchlens.visualization import show_model_graph
 from torchlens.visualization.rendering import GRADIENT_ARROW_COLOR
 
 
@@ -235,12 +237,13 @@ def test_draw_backward_top_level_function(tmp_path: Path) -> None:
     """The top-level ``tl.draw_backward`` helper renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = tl.draw_backward(
-        trace,
-        vis_outpath=str(tmp_path / "top_level"),
-        vis_save_only=True,
-        vis_fileformat="svg",
-    )
+    with pytest.warns(DeprecationWarning, match="draw_backward"):
+        dot = tl.draw_backward(
+            trace,
+            vis_outpath=str(tmp_path / "top_level"),
+            vis_save_only=True,
+            vis_fileformat="svg",
+        )
 
     assert "addmm_back" in dot
 
@@ -266,12 +269,15 @@ def test_forward_graph_unchanged(tmp_path: Path) -> None:
     before = tmp_path / "forward_before"
     after = tmp_path / "forward_after"
 
-    tl.show_model_graph(
+    show_model_graph(
         model,
         x,
-        vis_outpath=str(before),
-        vis_save_only=True,
-        vis_fileformat="dot",
+        visualization=VisualizationOptions(
+            view="unrolled",
+            container_path=str(before),
+            save_only=True,
+            file_format="dot",
+        ),
     )
     trace = _log_backward_model(model, x)
     trace.draw_backward(
@@ -279,12 +285,15 @@ def test_forward_graph_unchanged(tmp_path: Path) -> None:
         vis_save_only=True,
         vis_fileformat="svg",
     )
-    tl.show_model_graph(
+    show_model_graph(
         model,
         x,
-        vis_outpath=str(after),
-        vis_save_only=True,
-        vis_fileformat="dot",
+        visualization=VisualizationOptions(
+            view="unrolled",
+            container_path=str(after),
+            save_only=True,
+            file_format="dot",
+        ),
     )
 
     assert (tmp_path / "forward_before.dot").read_text() == (

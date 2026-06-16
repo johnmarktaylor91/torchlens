@@ -14,6 +14,7 @@ from torchlens.backends.torch.ops import _get_autograd_saved_stats_for_tensor
 from torchlens.data_classes.layer import Layer
 from torchlens.data_classes.op import Op
 from torchlens.data_classes.trace import Trace
+from torchlens.options import CaptureOptions
 
 
 class TinySequentialModel(nn.Module):
@@ -60,7 +61,7 @@ def _log_sequential(requires_grad: bool = True) -> Trace:
     torch.manual_seed(0)
     model = TinySequentialModel()
     x = torch.randn(4, 10, requires_grad=requires_grad)
-    return tl.trace(model, x, layers_to_save="all", random_seed=0)
+    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", random_seed=0))
 
 
 def _non_source_ops(trace: Trace) -> list[Op]:

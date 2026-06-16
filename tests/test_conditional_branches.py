@@ -9,6 +9,7 @@ import linecache
 import pickle
 import sys
 import tempfile
+import warnings
 from dataclasses import replace
 from typing import Callable, Sequence
 
@@ -31,10 +32,12 @@ from test_conditional_multipass import (  # noqa: E402
 )
 from test_conditional_rendering import BranchEntryWithArgLabelModel  # noqa: E402
 from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel  # noqa: E402
-from torchlens import check_metadata_invariants, trace as trace_fn  # noqa: E402
+from torchlens import trace as trace_fn  # noqa: E402
+from torchlens.validation import check_metadata_invariants  # noqa: E402
 from torchlens.data_classes.layer import Layer  # noqa: E402
 from torchlens.data_classes.op import Op  # noqa: E402
 from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
+from torchlens.options import CaptureOptions  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -988,8 +991,10 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        save_code_context=save_code_context,
-        layers_to_save=layers_to_save,
+        capture=CaptureOptions(
+            layers_to_save=layers_to_save,
+            save_code_context=save_code_context,
+        ),
     )
 
 
@@ -1153,15 +1158,17 @@ def _collect_model_conditional_labels(trace: Trace) -> set[str]:
     for parent_label, child_label in trace.conditional_branch_edges:
         referenced_labels.add(parent_label)
         referenced_labels.add(child_label)
-    for parent_label, child_label in trace.conditional_then_entry_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
-    for _, _, parent_label, child_label in trace.conditional_elif_entry_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
-    for _, parent_label, child_label in trace.conditional_else_entry_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", ".*conditional_.*_entry_edges.*", DeprecationWarning)
+        for parent_label, child_label in trace.conditional_then_entry_edges:
+            referenced_labels.add(parent_label)
+            referenced_labels.add(child_label)
+        for _, _, parent_label, child_label in trace.conditional_elif_entry_edges:
+            referenced_labels.add(parent_label)
+            referenced_labels.add(child_label)
+        for _, parent_label, child_label in trace.conditional_else_entry_edges:
+            referenced_labels.add(parent_label)
+            referenced_labels.add(child_label)
     for edge_list in trace.conditional_arm_entry_edges.values():
         for parent_label, child_label in edge_list:
             referenced_labels.add(parent_label)
@@ -1182,9 +1189,11 @@ def _assert_branchless_log(trace: Trace) -> None:
     assert trace.conditional_records == []
     assert trace.conditional_branch_edges == []
     assert trace.conditional_arm_entry_edges == {}
-    assert trace.conditional_then_entry_edges == []
-    assert trace.conditional_elif_entry_edges == []
-    assert trace.conditional_else_entry_edges == []
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", ".*conditional_.*_entry_edges.*", DeprecationWarning)
+        assert trace.conditional_then_entry_edges == []
+        assert trace.conditional_elif_entry_edges == []
+        assert trace.conditional_else_entry_edges == []
 
 
 def _assert_derived_views_consistent(trace: Trace) -> None:
@@ -1214,9 +1223,11 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
         for parent_label, child_label in edge_list
     ]
 
-    assert trace.conditional_then_entry_edges == expected_then_edges
-    assert trace.conditional_elif_entry_edges == expected_elif_edges
-    assert trace.conditional_else_entry_edges == expected_else_edges
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", ".*conditional_.*_entry_edges.*", DeprecationWarning)
+        assert trace.conditional_then_entry_edges == expected_then_edges
+        assert trace.conditional_elif_entry_edges == expected_elif_edges
+        assert trace.conditional_else_entry_edges == expected_else_edges
 
     for call_indexs in trace.conditional_edge_call_indices.values():
         assert call_indexs == sorted(call_indexs)

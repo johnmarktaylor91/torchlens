@@ -72,9 +72,10 @@ def _as_recording(
 def test_halt_basic_halts_recording() -> None:
     """A predicate halt preserves records captured before the halt point."""
 
-    recording = _as_recording(
-        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
-    )
+    with pytest.warns(DeprecationWarning, match="record\\(keep_op="):
+        recording = _as_recording(
+            tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+        )
 
     assert recording.halted is True
     assert recording.halt_reason == "stop"

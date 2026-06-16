@@ -11,9 +11,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import validate_forward_pass, validate_saved_outs, Trace, trace as trace_fn
+from torchlens import Trace, trace as trace_fn
+from torchlens.validation import validate_forward_pass, validate_saved_outs
 import torchlens.user_funcs as user_funcs
-from torchlens import check_metadata_invariants, MetadataInvariantError
+from torchlens.errors import MetadataInvariantError
+from torchlens.validation import check_metadata_invariants
 from torchlens.intervention.types import DictKey
 from torchlens.validation import validate_saved_outs as validate_from_subpkg
 from torchlens.validation.exemptions import (

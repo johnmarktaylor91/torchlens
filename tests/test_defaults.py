@@ -207,7 +207,8 @@ def test_show_model_graph_defaults_are_stable(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    tl.show_model_graph(_TinyModel(), _tiny_input())
+    with pytest.warns(DeprecationWarning, match="show_model_graph"):
+        tl.show_model_graph(_TinyModel(), _tiny_input())
 
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
@@ -226,12 +227,13 @@ def test_show_model_graph_accepts_explicit_opt_in_overrides(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    tl.show_model_graph(
-        _TinyModel(),
-        _tiny_input(),
-        recurrence_detection=False,
-        visualization=VisualizationOptions(mode="rolled"),
-    )
+    with pytest.warns(DeprecationWarning, match="show_model_graph"):
+        tl.show_model_graph(
+            _TinyModel(),
+            _tiny_input(),
+            recurrence_detection=False,
+            visualization=VisualizationOptions(mode="rolled"),
+        )
 
     assert captured_calls[-1]["recurrence_detection"] is False
     assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "rolled"
@@ -296,12 +298,13 @@ def test_validate_forward_pass_uses_validation_overrides(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.validate_forward_pass(
-        _TinyModel(),
-        _tiny_input(),
-        random_seed=123,
-        validate_metadata=False,
-    )
+    with pytest.warns(DeprecationWarning, match="validate_forward_pass"):
+        result = tl.validate_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            random_seed=123,
+            validate_metadata=False,
+        )
 
     assert result is True
     assert captured_calls[-1]["layers_to_save"] == "all"

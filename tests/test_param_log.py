@@ -9,7 +9,9 @@ import torch.nn as nn
 
 import example_models
 from conftest import VIS_OUTPUT_DIR
-from torchlens import Param, trace as trace_fn, show_model_graph
+from torchlens import trace as trace_fn
+from torchlens.types import Param
+from torchlens.visualization import show_model_graph
 from torchlens.data_classes import ParamAccessor
 
 

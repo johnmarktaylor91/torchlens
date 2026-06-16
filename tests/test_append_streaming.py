@@ -10,6 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import AppendStreamingNotSupportedError
+from torchlens.options import CaptureOptions, ReplayOptions, StreamingOptions
 
 
 class _StreamingAppendModel(nn.Module):
@@ -46,14 +47,16 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
+        capture=CaptureOptions(
+            layers_to_save="all",
+            save_grads=True,
+            intervention_ready=True,
+        ),
         storage=tl.to_disk(tmp_path / "streaming_bundle.tl"),
-        layers_to_save="all",
-        save_grads=True,
-        intervention_ready=True,
     )
 
     with pytest.raises(AppendStreamingNotSupportedError, match="bundle_path streaming"):
-        trace.rerun(model, torch.randn(1, 3), append=True)
+        trace.rerun(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
 
 def test_append_rerun_on_callback_streaming_trace_raises() -> None:
@@ -78,14 +81,13 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
-        out_sink=_sink,
-        layers_to_save="all",
-        intervention_ready=True,
+        capture=CaptureOptions(layers_to_save="all", intervention_ready=True),
+        streaming=StreamingOptions(out_callback=_sink),
     )
 
     assert received
     with pytest.raises(AppendStreamingNotSupportedError, match="out_callback streaming"):
-        trace.rerun(model, torch.randn(1, 3), append=True)
+        trace.rerun(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
 
 def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:

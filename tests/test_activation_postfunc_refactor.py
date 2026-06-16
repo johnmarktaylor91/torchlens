@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions, SaveOptions, StreamingOptions
 
 
 class _TinyModel(nn.Module):
@@ -46,7 +47,7 @@ def test_activation_transform_keeps_raw_tensor_and_transformed_metadata() -> Non
     """Activation transform stores raw and transformed tensors separately."""
 
     x = torch.randn(2, 4)
-    trace = tl.trace(_TinyModel(), x, activation_transform=lambda t: t.mean())
+    trace = tl.trace(_TinyModel(), x, save=SaveOptions(activation_transform=lambda t: t.mean()))
     layer = _first_transformed_layer(trace)
 
     assert layer.tensor is layer.out
@@ -75,8 +76,10 @@ def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
-        activation_transform=lambda t: t.mean(),
-        save_raw_activations=False,
+        save=SaveOptions(
+            activation_transform=lambda t: t.mean(),
+            save_raw_activations=False,
+        ),
     )
     layer = _first_transformed_layer(trace)
 
@@ -94,8 +97,8 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        save_grads="all",
-        grad_transform=lambda t: t.mean(),
+        capture=CaptureOptions(save_grads="all"),
+        save=SaveOptions(grad_transform=lambda t: t.mean()),
     )
     trace.log_backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
@@ -116,9 +119,11 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        save_grads="all",
-        grad_transform=lambda t: t.mean(),
-        save_raw_gradients=False,
+        capture=CaptureOptions(save_grads="all"),
+        save=SaveOptions(
+            grad_transform=lambda t: t.mean(),
+            save_raw_gradients=False,
+        ),
     )
     trace.log_backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
@@ -137,8 +142,8 @@ def test_train_mode_activation_transform_detach_rejected() -> None:
         tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
-            backward_ready=True,
-            activation_transform=lambda t: t.detach(),
+            capture=CaptureOptions(backward_ready=True),
+            save=SaveOptions(activation_transform=lambda t: t.detach()),
         )
 
 
@@ -149,8 +154,8 @@ def test_train_mode_activation_transform_int_rejected() -> None:
         tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
-            backward_ready=True,
-            activation_transform=lambda t: t.to(torch.int64),
+            capture=CaptureOptions(backward_ready=True),
+            save=SaveOptions(activation_transform=lambda t: t.to(torch.int64)),
         )
 
 
@@ -160,8 +165,8 @@ def test_train_mode_activation_transform_connected_ops() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        backward_ready=True,
-        activation_transform=lambda t: t * 2,
+        capture=CaptureOptions(backward_ready=True),
+        save=SaveOptions(activation_transform=lambda t: t * 2),
     )
 
     assert _first_transformed_layer(trace).transformed_out.grad_fn is not None
@@ -176,7 +181,7 @@ def test_transform_error_has_context_and_cause() -> None:
         raise ValueError("sentinel")
 
     with pytest.raises(tl.TorchLensPostfuncError) as exc_info:
-        tl.trace(_TinyModel(), torch.randn(2, 4), activation_transform=_raise)
+        tl.trace(_TinyModel(), torch.randn(2, 4), save=SaveOptions(activation_transform=_raise))
 
     message = str(exc_info.value)
     assert "activation_transform raised" in message
@@ -191,7 +196,9 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     """Portable save/load preserves transformed out fields."""
 
     bundle_path = tmp_path / "transform_bundle.tl"
-    trace = tl.trace(_TinyModel(), torch.randn(2, 4), activation_transform=torch.mean)
+    trace = tl.trace(
+        _TinyModel(), torch.randn(2, 4), save=SaveOptions(activation_transform=torch.mean)
+    )
     layer = _first_transformed_layer(trace)
 
     tl.save(trace, bundle_path)
@@ -207,7 +214,8 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
 def test_transform_type_aliases_exported() -> None:
     """Activation and grad transform aliases are importable from torchlens."""
 
-    from torchlens import ActivationPostfunc, GradientPostfunc
+    with pytest.warns(DeprecationWarning):
+        from torchlens import ActivationPostfunc, GradientPostfunc
 
     assert ActivationPostfunc is not None
     assert GradientPostfunc is not None
@@ -220,9 +228,9 @@ def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
-        activation_transform=torch.mean,
-        save_outs_to=bundle_path,
-        layers_to_save="all",
+        capture=CaptureOptions(layers_to_save="all"),
+        save=SaveOptions(activation_transform=torch.mean),
+        streaming=StreamingOptions(bundle_path=bundle_path),
     )
     layer = _first_transformed_layer(trace)
     restored = tl.load(bundle_path)

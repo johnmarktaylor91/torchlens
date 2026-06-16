@@ -12,6 +12,7 @@ import torchlens.validation as tl_validation
 import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
 from torchlens.data_classes.grad_fn import GradFn
+from torchlens.options import CaptureOptions, SaveOptions
 
 
 class _TinyBackwardModel(nn.Module):
@@ -148,8 +149,7 @@ def _logged_model(
     trace = tl.trace(
         model,
         x,
-        layers_to_save=layers_to_save,
-        save_grads=save_grads,
+        capture=CaptureOptions(layers_to_save=layers_to_save, save_grads=save_grads),
     )
     return model, x, trace
 
@@ -239,7 +239,7 @@ def test_save_grads_true_captures_all_grads() -> None:
     """save_grads=True captures all gradients independent of layers_to_save."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save=["relu"], save_grads=True)
+    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["relu"], save_grads=True))
     trace.log_backward(_output_loss(trace))
     assert trace.saved_grad_ops
     assert any("relu" in label for label in trace.saved_grad_ops.keys())
@@ -268,7 +268,7 @@ def test_auto_train_mode_conflict_with_explicit_false() -> None:
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     with pytest.raises(ValueError, match="requires backward_ready=True"):
-        tl.trace(model, x, save_grads="all", backward_ready=False)
+        tl.trace(model, x, capture=CaptureOptions(save_grads="all", backward_ready=False))
 
 
 @pytest.mark.smoke
@@ -279,8 +279,8 @@ def test_grad_transform_applied() -> None:
     trace = tl.trace(
         model,
         x,
-        save_grads="all",
-        grad_transform=lambda grad: torch.zeros_like(grad),
+        capture=CaptureOptions(save_grads="all"),
+        save=SaveOptions(grad_transform=lambda grad: torch.zeros_like(grad)),
     )
     trace.log_backward(_output_loss(trace))
     assert all(
@@ -322,7 +322,7 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     """Custom autograd.Function grad_fns are captured and flagged."""
     model = _CustomModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
     trace.log_backward(_output_loss(trace))
     assert any(grad_fn_handle.is_custom for grad_fn_handle in trace.grad_fn_logs.values())
 
@@ -332,17 +332,20 @@ def test_implicit_hook_firing_preserved() -> None:
     """Calling backward outside log_backward still populates Layer grads."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, save_grads=True)
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
     _output_loss(trace).backward()
     assert trace.saved_grad_ops
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings("ignore:`layers_to_save` is deprecated:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore:`random_seed` is deprecated:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore:`save_grads` is deprecated:DeprecationWarning")
 def test_validate_backward_pass_correct() -> None:
     """validate_backward_pass returns True for correct capture."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert tl.validate_backward_pass(model, x)
+    assert tl_validation.validate_backward_pass(model, x)
 
 
 def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
@@ -380,8 +383,8 @@ def test_validate_backward_random_seed_deterministic() -> None:
     torch.manual_seed(0)
     model = _DropoutBackwardModel().train()
     x = torch.randn(6, 3, requires_grad=True)
-    first = tl.validate_backward_pass(model, x, random_seed=42)
-    second = tl.validate_backward_pass(model, x, random_seed=42)
+    first = tl_validation.validate_backward_pass(model, x, random_seed=42)
+    second = tl_validation.validate_backward_pass(model, x, random_seed=42)
     assert first is True
     assert second is first
 
@@ -395,7 +398,7 @@ def test_validate_backward_state_dict_restored_between_passes() -> None:
     running_mean = model.bn.running_mean.detach().clone()
     running_var = model.bn.running_var.detach().clone()
 
-    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
 
     assert torch.equal(model.bn.running_mean, running_mean)
     assert torch.equal(model.bn.running_var, running_var)
@@ -416,7 +419,7 @@ def test_validate_backward_zero_grad_between_passes() -> None:
         original_zero_grad(set_to_none=set_to_none)
 
     model.zero_grad = MethodType(counted_zero_grad, model)
-    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
     assert calls == [True, True, True]
 
 
@@ -426,7 +429,7 @@ def test_validate_backward_dropout_train_mode_reproducible() -> None:
     torch.manual_seed(0)
     model = _DropoutBackwardModel().train()
     x = torch.randn(6, 3, requires_grad=True)
-    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
 
 
 def test_validate_backward_batchnorm_train_mode_state_restored() -> None:
@@ -438,7 +441,7 @@ def test_validate_backward_batchnorm_train_mode_state_restored() -> None:
     running_mean = model.bn.running_mean.detach().clone()
     running_var = model.bn.running_var.detach().clone()
 
-    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
     assert torch.equal(model.bn.running_mean, running_mean)
     assert torch.equal(model.bn.running_var, running_var)
 
@@ -450,7 +453,7 @@ def test_validate_backward_train_mode_audit() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     for training in (True, False):
         model.train(training)
-        assert tl.validate_backward_pass(model, x, random_seed=42)
+        assert tl_validation.validate_backward_pass(model, x, random_seed=42)
         assert model.training is training
 
 
@@ -460,7 +463,7 @@ def test_validate_backward_multipass_weight_tied() -> None:
     torch.manual_seed(0)
     model = _WeightTiedModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
 
 
 def test_validate_backward_custom_autograd_function() -> None:
@@ -469,7 +472,7 @@ def test_validate_backward_custom_autograd_function() -> None:
     torch.manual_seed(0)
     model = _CustomParamModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
 
 
 def test_validate_backward_hygiene_data_parallel() -> None:
@@ -496,7 +499,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     torch.manual_seed(0)
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace1 = tl.trace(model, x, save_grads="all", random_seed=42)
+    trace1 = tl.trace(model, x, capture=CaptureOptions(save_grads="all", random_seed=42))
     trace1.log_backward(_output_loss(trace1))
     labels1 = {
         grad_fn_handle.label
@@ -505,7 +508,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     }
     trace1.cleanup()
 
-    trace2 = tl.trace(model, x, save_grads="all", random_seed=42)
+    trace2 = tl.trace(model, x, capture=CaptureOptions(save_grads="all", random_seed=42))
     trace2.log_backward(_output_loss(trace2))
     labels2 = {
         grad_fn_handle.label
@@ -518,11 +521,14 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings("ignore:`layers_to_save` is deprecated:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore:`random_seed` is deprecated:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore:`save_grads` is deprecated:DeprecationWarning")
 def test_validate_backward_pass_perturbed() -> None:
     """validate_backward_pass returns False after perturbation sanity check."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert not tl.validate_backward_pass(model, x, perturb_saved_grads=True)
+    assert not tl_validation.validate_backward_pass(model, x, perturb_saved_grads=True)
 
 
 @pytest.mark.smoke

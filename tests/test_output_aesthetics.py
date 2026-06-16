@@ -31,7 +31,8 @@ from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
 import torch.nn as nn
 
 import example_models
-from torchlens import func, trace as trace_fn, show_model_graph
+from torchlens import func, trace as trace_fn
+from torchlens.visualization import show_model_graph
 
 # ---------------------------------------------------------------------------
 # Report helpers

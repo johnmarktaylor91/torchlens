@@ -14,7 +14,9 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import TorchLensPostfuncError, cleanup_tmp, trace as trace_fn
+from torchlens import trace as trace_fn
+from torchlens.errors import TorchLensPostfuncError
+from torchlens.io import cleanup_tmp
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.trace import Trace

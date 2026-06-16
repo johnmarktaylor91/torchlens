@@ -14,7 +14,8 @@ pd = pytest.importorskip("pandas")
 pytest.importorskip("safetensors")
 
 import torchlens as tl  # noqa: E402
-from torchlens import load, trace as trace_fn, rehydrate_nested, save  # noqa: E402
+from torchlens import load, trace as trace_fn, save  # noqa: E402
+from torchlens.io import rehydrate_nested  # noqa: E402
 from torchlens._io import BlobRef  # noqa: E402
 from torchlens.data_classes.trace import Trace  # noqa: E402
 

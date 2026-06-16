@@ -11,7 +11,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import MetadataInvariantError, check_metadata_invariants, trace as trace_fn
+from torchlens import trace as trace_fn
+from torchlens.errors import MetadataInvariantError
+from torchlens.validation import check_metadata_invariants
 from torchlens.data_classes.layer import Layer
 from torchlens.data_classes.op import Op
 from torchlens.data_classes.trace import ConditionalEvent, Trace

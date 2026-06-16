@@ -13,7 +13,8 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, trace as trace_fn, rehydrate_nested, save
+from torchlens import load, trace as trace_fn, save
+from torchlens.io import rehydrate_nested
 from torchlens._io import BlobRef, TorchLensIOError
 from torchlens.data_classes.trace import Trace
 

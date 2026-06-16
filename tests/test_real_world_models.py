@@ -25,7 +25,8 @@ torchvision = pytest.importorskip("torchvision")
 from conftest import VIS_OUTPUT_DIR  # noqa: E402
 
 import example_models  # noqa: E402
-from torchlens import show_model_graph, validate_forward_pass  # noqa: E402
+from torchlens.validation import validate_forward_pass  # noqa: E402
+from torchlens.visualization import show_model_graph  # noqa: E402
 
 
 # =============================================================================

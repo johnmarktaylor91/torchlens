@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import NodeSpec
+from torchlens.experimental.dagua import NodeSpec
 from torchlens.data_classes.layer import Layer
 
 

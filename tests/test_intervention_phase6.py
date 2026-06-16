@@ -10,7 +10,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import TraceState
+from torchlens.io import TraceState
 from torchlens.intervention.errors import ControlFlowDivergenceWarning, ReplayPreconditionError
 from torchlens.intervention.replay import cone_of_effect
 

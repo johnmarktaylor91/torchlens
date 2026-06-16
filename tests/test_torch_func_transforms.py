@@ -11,6 +11,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import _state
 from torchlens import Recording, Trace
+from torchlens.validation import validate_forward_pass
 from torchlens.backends.torch.wrappers import wrap_torch
 
 
@@ -661,7 +662,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
     assert transform.has_saved_activation is True
     assert isinstance(transform.out, torch.Tensor)
     assert torch.equal(transform.out, x > 0)
-    assert tl.validate_forward_pass(VmapMaskModel().eval(), x) is True
+    assert validate_forward_pass(VmapMaskModel().eval(), x) is True
 
     predicate_log = tl.trace(VmapMaskModel().eval(), x, save=tl.func_transform("vmap"))
     assert [op.label for op in predicate_log.transforms] == ["vmap_1_1:1"]

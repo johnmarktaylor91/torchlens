@@ -1437,7 +1437,7 @@ class TestConditionalBranchDetection:
 
     def test_if_label_in_visualization(self):
         """Rendered graph contains 'IF' edge label."""
-        from torchlens import show_model_graph
+        from torchlens.visualization import show_model_graph
         import tempfile
         import os
 
@@ -1485,7 +1485,7 @@ class TestConditionalBranchDetection:
 
     def test_rolled_graph_conditional_edges(self):
         """Rolled view preserves IF/THEN labels."""
-        from torchlens import show_model_graph
+        from torchlens.visualization import show_model_graph
         import tempfile
         import os
 

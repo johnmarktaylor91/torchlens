@@ -5,7 +5,8 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens import MetadataInvariantError, check_metadata_invariants
+from torchlens.errors import MetadataInvariantError
+from torchlens.validation import check_metadata_invariants
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import ParentRef, TupleIndex
 from torchlens.validation.invariants import check_func_call_id_invariant

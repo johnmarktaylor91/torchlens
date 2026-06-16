@@ -21,7 +21,8 @@ import torch.nn as nn
 from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR
 
 import example_models
-from torchlens import trace as trace_fn, validate_forward_pass
+from torchlens import trace as trace_fn
+from torchlens.validation import validate_forward_pass
 from torchlens.validation.invariants import MetadataInvariantError
 
 

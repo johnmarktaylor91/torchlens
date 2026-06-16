@@ -13,7 +13,8 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import Trace, cleanup_tmp, load, trace as trace_fn, save
+from torchlens import Trace, load, trace as trace_fn, save
+from torchlens.io import cleanup_tmp
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.trace import ResolvedPostprocessing

@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 
 import example_models
-from torchlens import Module, ModuleCall, trace as trace_fn
+from torchlens import trace as trace_fn
+from torchlens.types import Module, ModuleCall
 from torchlens.data_classes import ModuleAccessor, ParamAccessor
 
 

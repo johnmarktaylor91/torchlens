@@ -11,7 +11,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import trace as trace_fn, check_metadata_invariants
+from torchlens import trace as trace_fn
+from torchlens.validation import check_metadata_invariants
 
 
 # =============================================================================
