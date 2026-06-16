@@ -4110,6 +4110,7 @@ def _edge_use_argument_label(edge_use: Any) -> str:
 def _render_edge_occurrences(
     parent_node: GraphNode,
     child_node: GraphNode,
+    vis_mode: str,
 ) -> tuple[tuple[tuple[Any, ...], str | None], ...]:
     """Return rendered occurrences for a parent-child edge.
 
@@ -4119,6 +4120,9 @@ def _render_edge_occurrences(
         Rendered source node.
     child_node:
         Rendered target node.
+    vis_mode:
+        ``"unrolled"`` emits one edge per repeated argument occurrence.
+        ``"rolled"`` keeps a single aggregate edge between rolled endpoints.
 
     Returns
     -------
@@ -4129,6 +4133,11 @@ def _render_edge_occurrences(
 
     parent_layer_label = parent_node.layer_label
     child_layer_label = child_node.layer_label
+    parent_render_label = _render_node_label(parent_node, vis_mode)
+    child_render_label = _render_node_label(child_node, vis_mode)
+    if vis_mode == "rolled":
+        return ((("edge", parent_render_label, child_render_label), None),)
+
     parent_render_label = _render_node_label(parent_node, "unrolled")
     child_render_label = _render_node_label(child_node, "unrolled")
     if isinstance(child_node, Op):
@@ -4233,7 +4242,7 @@ def _expand_edges_through_skipped(
             first_child = child_node
             target_label = _render_node_label(target_node, vis_mode)
             if target_node is first_child:
-                occurrences = _render_edge_occurrences(parent_node, first_child)
+                occurrences = _render_edge_occurrences(parent_node, first_child, vis_mode)
             else:
                 occurrences = ((("skipped", parent_label, target_label), None),)
             for occurrence_key, argument_label in occurrences:
