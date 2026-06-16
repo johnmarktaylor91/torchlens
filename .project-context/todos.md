@@ -17,6 +17,25 @@ Items marked "pending P6 measurement" are blocked only on the benchmark-numbers 
 - **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~3 correctness/capture bugs (RNG-MULTI-GPU [hardware-blocked], ARG-KWARGS-MISSING audit residue, JIT/GPTBigCode, DOT-empty-PDF) — ELK-IF-THEN / ELK-EDGE-LABEL-DEDUP now MOOT (ELK retired); open GC-* refs (GC-1/9 fixed by perf sprint), open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
 - **Big/strategic features (~17):** JAX + tinygrad backend adapters — **SHIPPED 2026-06-13 as technical PREVIEWS** (v2.19.0): backend registry + neutral substrate (M0), JAX jaxpr-first capture + real validation tripwire + derived-grad preview (M1), tinygrad UOp capture + validation + bracketed grads (M2); MLX shipped 2026-06-06. PREVIEW FOLLOW-UPS (now the open backend work): JAX module adapters (Equinox first; Flax NNX separate spike), JAX T1 per-op grads (research — needs cost-model spike), tinygrad T1, jaxpr importer (uncovered/operator/control-flow/stochastic functions), non-torch payload serialization codec, predicate capture on non-torch backends, TransformProxy boundary nodes, `capture/trace.py` general backend-injection refactor. Other strategic: `to_dataframe` + creative-metadata tiers, attribution methods, tensor-slicing recipes + slice-intervention (`op.outs` retired — folded into anonymous facets), input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
 
+## Sprint C node-visual toolkit — REVIEW-DAY items (JMT-reserved, 2026-06-15)
+
+Sprint C SHIPPED to local `capture-unification` (6 commits `5ac9f291..5d216f37`, NOT pushed; not-slow 3030/0;
+no new Trace field; default byte-identity preserved). PIL-only node-visual render toolkit (`tl.viz.render_heatmap/
+render_lineplot/render_image_scatter`) + RDM (C1) + feature-map (C2) + scree (C3) + MDS-adoption (C0b). Spec +
+state: `.research/semantic-io/sprintC_{SPEC,build_STATE}.md`; memory `sprint_c_node_visual_toolkit_shipped.md`.
+Open for JMT before any push / glossary update:
+
+- [ ] **Finalize provisional names** (then update vault glossary in lockstep): `render_heatmap` / `render_lineplot`
+  / `render_image_scatter`; `rdm` / `rdm_evolution` / `rdm_node_spec`; `feature_map_evolution` /
+  `feature_map_node_spec`; `scree` / `effective_dimensionality` / `scree_evolution` / `scree_node_spec`.
+- [ ] **Viz nit (lineplot):** legend slightly overlaps the cumulative-variance curve plateau on the scree plot
+  (all legible). Options: nudge legend down a few px, or add a faint legend background box in `render_lineplot`.
+- [ ] **Viz nit (C2 feature-map):** default overlay alpha = 0.55 reads a touch heavy over the stimulus thumbnail
+  (Opus reviewer: blend correct + both layers visible, just muted). Consider lightening the default alpha.
+- [ ] **C2 selection API confirm:** `channels=None|indices|"top"`, `reduce=mean|max`, cap defaults
+  (`max_stimuli`/`max_channels`), overlay-vs-raw — confirm at review.
+- [ ] Push decision: nothing pushed; awaiting explicit JMT approval.
+
 ## Architectural endpoint (JMT 2026-05-15)
 
 > "Configurable capture + postprocess + output, all on one substrate. Pay only for what you use."
@@ -1857,6 +1876,36 @@ Each category alone would be a differentiator. TL has all three because the meta
 **Killer demos for the docs:** #1 from each tier roughly — Tier 1 `to_dataframe()` (power-user gateway drug), Tier 1 computational receipt (first-impressions delight), Tier 2 audit/compare (production-engineering pitch), Tier 3 architecture-pattern extractor (strategic-moat play).
 
 ## Improvements (Nice-to-Have)
+
+### PaddlePaddle backend — China-market wedge (idea raised 2026-06-15, POST-LAUNCH 2.x)
+
+**Idea (JMT):** add PaddlePaddle (Baidu) as a capture backend to reach the Chinese ML market / build
+international marketshare. No Western interp tool (TransformerLens / Captum / nnsight) supports Paddle, so
+"interpretability for Paddle / ERNIE / PaddleOCR" is a wedge nobody else offers — on-thesis with the
+"eager capture across any tensor framework" backend-adapter story.
+
+**Architectural fit — strong (the most natural next FULL backend).** Paddle's dynamic-graph (dygraph)
+imperative mode is the DEFAULT (verified 2026-06-15), with `paddle.nn.Layer` (≈ nn.Module) + eager
+autograd. Same archetype as torch/MLX (eager, value-present-at-capture, hookable) — NOT a lazy/traced
+archetype like the JAX/tinygrad previews. So it could be a FULL backend (interventions / halt / real
+backward), not metadata-only. The `CaptureBackend` protocol + capability-epoch registry is built for this.
+
+**Effort reality — NOT the ~200-LOC preview adapter.** A full backend needs its own op-interception layer
+(wrap `paddle.*` dispatch — C++ like torch), grad capture, AND a validation/replay oracle (the tripwire
+needs Paddle-side replay). Meaningful fraction of the torch-backend effort + a 5th-framework maintenance
+treadmill (Paddle API churns).
+
+**Market reality — the backend is the EASY half; distribution is the lever.** Chinese ML community lives on
+Gitee (not GitHub), Baidu AI Studio, Zhihu/WeChat, Chinese-language docs, domestic hardware (Ascend). A
+Paddle backend in an English GitHub package does NOT capture the market alone — needs localization + Gitee
+mirror + zh docs + AI Studio notebooks + domestic community presence (a go-to-market project, separate from
+the code). X2Paddle (torch/TF/ONNX→Paddle) exists for interop.
+
+**Recommendation:** POST-2.0 strategic bet, NOT pre-launch. De-risk: start a PREVIEW-tier spike (structure +
+metadata, like MLX/JAX previews) to prove the wedge cheaply, expand to full (intervene/backward) only on a
+demand signal (a Chinese interp researcher asking, an ERNIE/PaddleOCR use case) OR a deliberate
+China-market decision that scopes the distribution work alongside. Don't build a maintenance-heavy backend
+on spec. Pairs with: the single-substrate / backend-adapter endpoint (see "Architectural endpoint").
 
 ### Cross-model layer alignment for RSA-style ops (raised 2026-04-29)
 
