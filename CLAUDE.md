@@ -4,7 +4,7 @@ TorchLens logs backend-resolved execution into a `Trace`. The stable default is 
 eager capture: run a normal forward pass, record operation metadata and activations, then
 inspect the result. Torch function wrapping is lazy in 2.x: `import torchlens` keeps torch
 clean, and the first torch capture calls `wrap_torch()` through model preparation. The
-wrappers then stay installed until an explicit `torchlens.decoration.unwrap_torch()`.
+wrappers then stay installed until an explicit `torchlens.backends.torch.unwrap_torch()`.
 
 ## Install
 

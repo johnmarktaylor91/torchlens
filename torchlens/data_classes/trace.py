@@ -1774,7 +1774,9 @@ class Trace(CapturedRun):
                 Portable bundle load restores the default ``False`` value.
             inference_only: Whether the forward was captured under ``torch.no_grad()``.
             chunked_forward: Whether the trace was assembled from forward chunks.
-            emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
+            emit_nvtx: Whether decorated torch operations should emit NVTX ranges
+                around captured torch calls. This is a profiling aid for CUDA/Nsight
+                workflows and does not change graph construction or saved payloads.
             facet_registry_snapshot: Immutable facet recipe snapshot captured for
                 this trace.
             transform: Optional callable used to convert raw user input into

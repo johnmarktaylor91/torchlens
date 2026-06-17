@@ -4,7 +4,7 @@
 TorchLens extracts outs and metadata from backend-resolved captures. PyTorch eager capture is the
 stable default; MLX, JAX, tinygrad, Paddle, and TensorFlow are technical-preview backends. `import torchlens`
 exposes the public API and compatibility shims, but torch wrapping is lazy: the first torch capture
-prepares the model and calls `wrap_torch()` from `decoration/`.
+prepares the model and calls `wrap_torch()` from `backends/torch/`.
 
 ## Architecture Overview
 
@@ -15,7 +15,7 @@ import torchlens
   |
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend
-  |- decoration/model_prep.py  - ensure torch is wrapped, prepare modules/buffers/params
+  |- backends/torch/model_prep.py - ensure torch is wrapped, prepare modules/buffers/params
   |- capture/trace.py          - run forward pass with active logging
   |- capture/output_tensors.py - build Op records
   |- postprocess/              - current 20-step graph cleanup/finalization pipeline
@@ -122,7 +122,7 @@ exclusive with backward-related capture because it discards the autograd graph.
 ## Subpackages
 - `capture/` - real-time forward and backward operation logging.
 - `data_classes/` - `Trace`, `Layer`, `Op`, module/param/buffer/grad logs.
-- `decoration/` - lazy torch function wrapping, explicit wrap/unwrap, module prep.
+- `backends/torch/` - torch function wrapping, explicit wrap/unwrap, module prep.
 - `fastlog/` - sparse predicate recording with RAM/disk storage and recovery.
 - `postprocess/` - graph cleanup, conditionals, loop detection, labeling, finalization.
 - `validation/` - forward replay, backward validation, metadata invariants, `.tlspec` schema checks.
@@ -145,7 +145,7 @@ exclusive with backward-related capture because it discards the autograd graph.
 
 ### Module Containment
 Module containment is captured via a wrap-forward stack helper at
-`decoration/_module_stack.py`. Both fastlog and exhaustive modes share the helper. Each
+`backends/torch/module_stack.py`. Both fastlog and exhaustive modes share the helper. Each
 captured op snapshots the stack at op-creation time; downstream postprocess only appends
 the canonical module-path suffix to `equivalence_class` for loop detection. This replaces
 the older tensor-entry/exit thread-replay system removed in v2.18 (sprint

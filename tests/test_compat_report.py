@@ -255,7 +255,7 @@ def test_report_detects_known_scope_and_broken_rows() -> None:
     fsdp_report = report(FullyShardedDataParallel(), torch.randn(2, 4))
     tied_report = report(TiedEmbeddingModel(), torch.tensor([1, 2, 3]))
 
-    assert data_parallel_report.row("data_parallel").status == "known_broken"
+    assert data_parallel_report.row("data_parallel").status == "pass"
     assert fsdp_report.row("fsdp").status == "scope"
     assert tied_report.row("tied_parameters").detected is True
     assert tied_report.row("tied_parameters").status == "pass"

@@ -19,7 +19,7 @@ Key entry points:
 - Sparse capture: `tl.record(model, x, save=...)` is torch-only in backend v1; it returns
   `Recording`, and `Recording.to_trace()` materializes full graph structure with explicit
   errors for unsaved payload reads.
-- Lazy decoration: `torchlens/decoration/model_prep.py:_ensure_model_prepared()` calls
+- Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and `patch_detached_references()`
 - Forward-pass orchestration: `torchlens/capture/trace.py`
 - Postprocess: `torchlens/postprocess/__init__.py` current 20-step pipeline

@@ -51,7 +51,7 @@ on the measured fixtures.
 
 ## Public surface map
 
-`torchlens.__all__` currently exposes 60 names. Group them by job:
+`torchlens.__all__` currently exposes 89 names. Group them by job:
 
 | Job | Names |
 | --- | --- |

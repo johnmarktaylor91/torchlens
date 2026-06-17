@@ -86,7 +86,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/_io/` | Portable bundle internals, manifests, lazy refs, streaming writer | `.tlspec` and save/load implementation |
 | `torchlens/io/` | Public I/O/admin helpers | `inspect_tlspec`, `detect_tlspec_format`, moved admin APIs |
 | `torchlens/capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
-| `torchlens/decoration/` | Lazy wrapping and model preparation | Torch namespace lifecycle, module wrappers |
+| `torchlens/backends/torch/` | Lazy torch wrapping and model preparation | Torch namespace lifecycle, module wrappers |
 | `torchlens/postprocess/` | 20-step graph cleanup/finalization | Labels, loops, conditionals, modules, streaming finalization |
 | `torchlens/data_classes/` | `Trace`, `Layer`, `Op`, module/param/buffer/grad records | User-visible capture data structures |
 | `torchlens/validation/` | Forward/backward replay, invariants, `.tlspec` schema | Correctness checks |
@@ -109,7 +109,7 @@ validation, and core data-class names for the current 2.x surface.
 ## Key Concepts
 
 ### Toggle Architecture
-Torch wrapping is lazy. `decoration/model_prep.py:_ensure_model_prepared()` calls
+Torch wrapping is lazy. `backends/torch/model_prep.py:_ensure_model_prepared()` calls
 `wrap_torch()` before a logging session. Once installed, wrappers stay in place and check
 `_state._logging_enabled`; logging-off calls take the original PyTorch path. `active_logging()`
 enables capture for one forward pass, and `pause_logging()` protects TorchLens internal tensor
@@ -274,7 +274,7 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Question | Start here |
 |----------|------------|
 | Where is the logging toggle? | `torchlens/_state.py` |
-| Where does wrapping happen? | `torchlens/decoration/torch_funcs.py`, `torchlens/decoration/model_prep.py` |
+| Where does wrapping happen? | `torchlens/backends/torch/wrappers.py`, `torchlens/backends/torch/model_prep.py` |
 | Where is the main forward capture? | `torchlens/capture/trace.py` |
 | Where are raw operation records built? | `torchlens/capture/output_tensors.py` |
 | Where are inputs/buffers logged? | `torchlens/capture/source_tensors.py` |

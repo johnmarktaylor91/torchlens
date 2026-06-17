@@ -82,7 +82,7 @@ If you hit a case we haven't listed, please
 | **`torch.export.ExportedProgram`** | `RuntimeError` at entry | Log the source `nn.Module` before exporting |
 | **`FullyShardedDataParallel` (FSDP)** | `RuntimeError` at entry | Log a rank-local unsharded copy of the inner module |
 | **`DistributedDataParallel` (DDP)** | Automatically unwrapped via `.module` | — (just works) |
-| **`nn.DataParallel`** | Reported as `known_broken` by `tl.compat.report` | Log `model.module` directly from one process/thread |
+| **`nn.DataParallel`** | Automatically unwrapped via `.module` | Log `model.module` directly if threaded replica capture is needed |
 | **Meta tensor inputs / meta-init model** | `UnsupportedTensorVariantError` | Materialise the model on a real device (`model.to("cpu")`) first |
 | **Sparse tensor inputs** | `UnsupportedTensorVariantError` | Pass dense tensors; densify sparse inputs with `.to_dense()` |
 | **Symbolic-shape (`SymInt`) inputs** | `UnsupportedTensorVariantError` | Pass tensors with concrete integer shapes |

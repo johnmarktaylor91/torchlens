@@ -606,10 +606,10 @@ def _data_parallel_row(model: nn.Module) -> CompatRow:
     """
 
     detected = isinstance(model, nn.DataParallel)
-    status: Status = "known_broken" if detected else "pass"
+    status: Status = "pass"
     details = (
-        "nn.DataParallel detected. TorchLens' process-global capture state is incompatible "
-        "with threaded replica execution; unwrap model.module before logging."
+        "nn.DataParallel detected. TorchLens unwraps .module for rank-local single-process "
+        "capture; threaded replica internals are not expanded."
         if detected
         else "nn.DataParallel not detected."
     )
@@ -617,10 +617,12 @@ def _data_parallel_row(model: nn.Module) -> CompatRow:
         "data_parallel",
         "nn.DataParallel",
         status,
-        "error" if detected else "ok",
+        "info" if detected else "ok",
         detected,
         details,
-        "Call torchlens.trace(model.module, x)." if detected else "",
+        "Call torchlens.trace(model.module, x) if you need to bypass the wrapper explicitly."
+        if detected
+        else "",
     )
 
 
