@@ -1,6 +1,71 @@
 # CHANGELOG
 
 
+## v2.24.1 (2026-06-17)
+
+### Continuous Integration
+
+- Drop obsolete total_audit CI (job + nightly workflow + coverage scripts)
+  ([`82205d8`](https://github.com/johnmarktaylor91/torchlens/commit/82205d826894c8efb2c95f60fec923da5f60b6ad))
+
+The total_audit notebook series was removed in favor of notebooks/audit/; its CI job referenced
+  deleted notebooks (incl. ones that never existed), failing every run. Keep the real smoke job.
+  Scrub the dead-script references in scripts/AGENTS.md + state_of_torchlens.md.
+
+### Documentation
+
+- **state**: Conform capture/intervention vocab to the shipped glossary renames
+  ([`71ddae9`](https://github.com/johnmarktaylor91/torchlens/commit/71ddae9414bc763d1d85e118a6310a3cb4e14162))
+
+peek->pluck, batched_extract->extract_dataset, replay->push, replay_from->push_from, rerun->run, and
+  add the `record`/Recording entry -- matching the v2.24 public API (old names remain as deprecated
+  aliases).
+
+### Performance Improvements
+
+- **capture**: Skip non-container leaf types in tensor discovery (~29% faster)
+  ([`95dc123`](https://github.com/johnmarktaylor91/torchlens/commit/95dc12371b42339a8d5fd53f010dbbc9be15c33a))
+
+get_vars_of_type_from_obj was the #1 capture hot spot (~45% of resnet18 capture): it
+  attribute-crawled (dir() + getattr over every attribute) every non-tensor item that reached it,
+  including values that cannot hold a tensor. Profiling showed `None` alone was ~66% of those
+  crawls, with torch device/storage another ~33%.
+
+- Add _NON_CONTAINER_LEAF_TYPES (primitives plus None, torch device/dtype/Size/ UntypedStorage) and
+  use it in the three leaf-skip checks, so these are skipped instead of crawled. - Skip building the
+  discarded per-item address strings/paths when return_addresses is False (the default, ~94% of
+  callers) via a track_addresses flag.
+
+resnet18 capture 1030ms -> 736ms median; get_vars cumtime 5.0s -> 0.65s. The found-tensor set is
+  unchanged (the skipped types cannot contain tensors). Full not-slow gate green apart from
+  pre-existing failures.
+
+### Refactoring
+
+- **capture**: Store module/param metadata in identity-keyed registries
+  ([`c6542fb`](https://github.com/johnmarktaylor91/torchlens/commit/c6542fb592fa736579a88ceaf729776940103c2d))
+
+Move ModuleMeta/ParamMeta storage off user-owned module/param objects (where it was a `._tl`
+  attribute that polluted state_dict / serialization / introspection and wrote an attribute onto
+  nn.Parameter tensors) into process-wide WeakIdKeyDictionary registries in backends/torch/_tl.py.
+  Tensors and decorated callables (TorchLens-owned) keep the attribute path. The get/set/ensure API
+  is unchanged.
+
+WeakIdKeyDictionary (not stdlib WeakKeyDictionary) is required: nn.Parameter is a tensor whose
+  elementwise __eq__ breaks ref-based dict keying; the id-keyed variant is tensor-safe and
+  auto-removes dead entries via weakrefs (no manual finalizers, no id-reuse hazard).
+
+Also fix _module_address_from_meta (buffer_writes.py), which read the metadata via getattr(module,
+  "_tl", None) -- the string form that bypassed the API. After the refactor modules have no _tl
+  attribute, so it returned "" and buffers were addressed without their module prefix, making
+  BatchNorm running-mean updates reconcile as "unjournaled". It now uses get_module_meta().
+
+Tests: narrow test_wrong_kind_meta (the foreign-_tl collision is vacuous for registry-backed
+  params/modules; assert registry independence instead) and add a registry-invariants test (no _tl
+  attr on user objects, registry-absence after clear, deepcopy does not carry meta, GC drops dead
+  keys). Full not-slow gate green apart from pre-existing failures.
+
+
 ## v2.24.0 (2026-06-17)
 
 ### Chores
