@@ -26,7 +26,8 @@
         "0",
         "input.x",
         "input_1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -44,7 +45,9 @@
         "randn_1",
         "randn_1:1",
         "randn_1_1",
-        "randn_1_1:1"
+        "randn_1_1:1",
+        "randn_1_2",
+        "randn_1_2_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -62,7 +65,9 @@
         "add_1",
         "add_1:1",
         "add_1_2",
-        "add_1_2:1"
+        "add_1_2:1",
+        "add_1_3",
+        "add_1_3_raw"
       ],
       "module": "child:1",
       "module_call_depth": 1,
@@ -86,7 +91,9 @@
         "linear_1",
         "linear_1:1",
         "linear_1_3",
-        "linear_1_3:1"
+        "linear_1_3:1",
+        "linear_1_4",
+        "linear_1_4_raw"
       ],
       "module": "child.proj:1",
       "module_call_depth": 2,
@@ -116,7 +123,8 @@
         "child:1",
         "output",
         "output_1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -290,8 +298,10 @@
         "input.x",
         "input_1",
         "input_1",
+        "input_1",
         "input_1:1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -325,7 +335,9 @@
         "randn_1",
         "randn_1:1",
         "randn_1_1",
-        "randn_1_1:1"
+        "randn_1_1:1",
+        "randn_1_2",
+        "randn_1_2_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -359,7 +371,9 @@
         "add_1",
         "add_1:1",
         "add_1_2",
-        "add_1_2:1"
+        "add_1_2:1",
+        "add_1_3",
+        "add_1_3_raw"
       ],
       "module": "child:1",
       "module_entry_arg_keys": {
@@ -397,7 +411,9 @@
         "linear_1",
         "linear_1:1",
         "linear_1_3",
-        "linear_1_3:1"
+        "linear_1_3:1",
+        "linear_1_4",
+        "linear_1_4_raw"
       ],
       "module": "child.proj:1",
       "module_entry_arg_keys": {},
@@ -438,8 +454,10 @@
         "output",
         "output_1",
         "output_1",
+        "output_1",
         "output_1:1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},

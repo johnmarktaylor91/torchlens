@@ -26,7 +26,8 @@
         "0",
         "input.x",
         "input_1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -48,7 +49,9 @@
         "linear_1",
         "linear_1:1",
         "linear_1_1",
-        "linear_1_1:1"
+        "linear_1_1:1",
+        "linear_1_2",
+        "linear_1_2_raw"
       ],
       "module": "inner.left:1",
       "module_call_depth": 2,
@@ -79,7 +82,9 @@
         "linear_2",
         "linear_2:1",
         "linear_2_2",
-        "linear_2_2:1"
+        "linear_2_2:1",
+        "linear_2_3",
+        "linear_2_3_raw"
       ],
       "module": "inner.right:1",
       "module_call_depth": 2,
@@ -106,7 +111,9 @@
         "add_1",
         "add_1:1",
         "add_1_3",
-        "add_1_3:1"
+        "add_1_3:1",
+        "add_1_4",
+        "add_1_4_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -123,7 +130,8 @@
         "4",
         "output",
         "output_1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -333,8 +341,10 @@
         "input.x",
         "input_1",
         "input_1",
+        "input_1",
         "input_1:1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -376,7 +386,9 @@
         "linear_1",
         "linear_1:1",
         "linear_1_1",
-        "linear_1_1:1"
+        "linear_1_1:1",
+        "linear_1_2",
+        "linear_1_2_raw"
       ],
       "module": "inner.left:1",
       "module_entry_arg_keys": {},
@@ -417,7 +429,9 @@
         "linear_2",
         "linear_2:1",
         "linear_2_2",
-        "linear_2_2:1"
+        "linear_2_2:1",
+        "linear_2_3",
+        "linear_2_3_raw"
       ],
       "module": "inner.right:1",
       "module_entry_arg_keys": {},
@@ -454,7 +468,9 @@
         "add_1",
         "add_1:1",
         "add_1_3",
-        "add_1_3:1"
+        "add_1_3:1",
+        "add_1_4",
+        "add_1_4_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},
@@ -482,8 +498,10 @@
         "output",
         "output_1",
         "output_1",
+        "output_1",
         "output_1:1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},

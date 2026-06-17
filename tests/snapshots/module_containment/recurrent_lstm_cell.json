@@ -34,7 +34,8 @@
         "0",
         "input.x",
         "input_1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -52,7 +53,9 @@
         "newzeros_1",
         "newzeros_1:1",
         "newzeros_1_1",
-        "newzeros_1_1:1"
+        "newzeros_1_1:1",
+        "newzeros_1_2",
+        "newzeros_1_2_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -70,7 +73,9 @@
         "newzeros_2",
         "newzeros_2:1",
         "newzeros_2_2",
-        "newzeros_2_2:1"
+        "newzeros_2_2:1",
+        "newzeros_2_3",
+        "newzeros_2_3_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -111,7 +116,19 @@
         "lstmcell_1_3:3",
         "lstmcell_1_3:4",
         "lstmcell_1_3:5",
-        "lstmcell_1_3:6"
+        "lstmcell_1_3:6",
+        "lstmcell_1_4",
+        "lstmcell_1_4_raw",
+        "lstmcell_2_5",
+        "lstmcell_2_5_raw",
+        "lstmcell_3_6",
+        "lstmcell_3_6_raw",
+        "lstmcell_4_7",
+        "lstmcell_4_7_raw",
+        "lstmcell_5_8",
+        "lstmcell_5_8_raw",
+        "lstmcell_6_9",
+        "lstmcell_6_9_raw"
       ],
       "module": "cell:1",
       "module_call_depth": 1,
@@ -134,6 +151,8 @@
         "9",
         "linear_1",
         "linear_1:1",
+        "linear_1_10",
+        "linear_1_10_raw",
         "linear_1_4",
         "linear_1_4:1",
         "readout",
@@ -161,6 +180,7 @@
         "output",
         "output_1",
         "output_1:1",
+        "output_1_raw",
         "readout",
         "readout:1"
       ],
@@ -381,8 +401,10 @@
         "input.x",
         "input_1",
         "input_1",
+        "input_1",
         "input_1:1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -422,7 +444,9 @@
         "newzeros_1",
         "newzeros_1:1",
         "newzeros_1_1",
-        "newzeros_1_1:1"
+        "newzeros_1_1:1",
+        "newzeros_1_2",
+        "newzeros_1_2_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},
@@ -452,7 +476,9 @@
         "newzeros_2",
         "newzeros_2:1",
         "newzeros_2_2",
-        "newzeros_2_2:1"
+        "newzeros_2_2:1",
+        "newzeros_2_3",
+        "newzeros_2_3_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},
@@ -483,7 +509,9 @@
         "lstmcell_1",
         "lstmcell_1:1",
         "lstmcell_1_3",
-        "lstmcell_1_3:1"
+        "lstmcell_1_3:1",
+        "lstmcell_1_4",
+        "lstmcell_1_4_raw"
       ],
       "module": "cell:1",
       "module_entry_arg_keys": {},
@@ -520,7 +548,9 @@
         "lstmcell_1",
         "lstmcell_1:2",
         "lstmcell_1_3",
-        "lstmcell_1_3:2"
+        "lstmcell_1_3:2",
+        "lstmcell_2_5",
+        "lstmcell_2_5_raw"
       ],
       "module": "cell:1",
       "module_entry_arg_keys": {},
@@ -557,7 +587,9 @@
         "lstmcell_1",
         "lstmcell_1:3",
         "lstmcell_1_3",
-        "lstmcell_1_3:3"
+        "lstmcell_1_3:3",
+        "lstmcell_3_6",
+        "lstmcell_3_6_raw"
       ],
       "module": "cell:2",
       "module_entry_arg_keys": {},
@@ -594,7 +626,9 @@
         "lstmcell_1",
         "lstmcell_1:4",
         "lstmcell_1_3",
-        "lstmcell_1_3:4"
+        "lstmcell_1_3:4",
+        "lstmcell_4_7",
+        "lstmcell_4_7_raw"
       ],
       "module": "cell:2",
       "module_entry_arg_keys": {},
@@ -631,7 +665,9 @@
         "lstmcell_1",
         "lstmcell_1:5",
         "lstmcell_1_3",
-        "lstmcell_1_3:5"
+        "lstmcell_1_3:5",
+        "lstmcell_5_8",
+        "lstmcell_5_8_raw"
       ],
       "module": "cell:3",
       "module_entry_arg_keys": {
@@ -670,7 +706,9 @@
         "lstmcell_1",
         "lstmcell_1:6",
         "lstmcell_1_3",
-        "lstmcell_1_3:6"
+        "lstmcell_1_3:6",
+        "lstmcell_6_9",
+        "lstmcell_6_9_raw"
       ],
       "module": "cell:3",
       "module_entry_arg_keys": {},
@@ -703,6 +741,8 @@
         "9",
         "linear_1",
         "linear_1:1",
+        "linear_1_10",
+        "linear_1_10_raw",
         "linear_1_4",
         "linear_1_4:1",
         "readout",
@@ -740,8 +780,10 @@
         "output",
         "output_1",
         "output_1",
+        "output_1",
         "output_1:1",
         "output_1:1",
+        "output_1_raw",
         "readout",
         "readout:1"
       ],

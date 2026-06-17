@@ -24,7 +24,8 @@
         "0",
         "input.x",
         "input_1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -47,6 +48,10 @@
         "linear_1_1",
         "linear_1_1:1",
         "linear_1_1:2",
+        "linear_1_2",
+        "linear_1_2_raw",
+        "linear_2_3",
+        "linear_2_3_raw",
         "shared:1",
         "shared:2"
       ],
@@ -72,7 +77,9 @@
         "add_1",
         "add_1:1",
         "add_1_2",
-        "add_1_2:1"
+        "add_1_2:1",
+        "add_1_4",
+        "add_1_4_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -89,7 +96,8 @@
         "4",
         "output",
         "output_1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -228,8 +236,10 @@
         "input.x",
         "input_1",
         "input_1",
+        "input_1",
         "input_1:1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -265,6 +275,8 @@
         "linear_1:1",
         "linear_1_1",
         "linear_1_1:1",
+        "linear_1_2",
+        "linear_1_2_raw",
         "shared:1"
       ],
       "module": "shared:1",
@@ -300,6 +312,8 @@
         "linear_1:2",
         "linear_1_1",
         "linear_1_1:2",
+        "linear_2_3",
+        "linear_2_3_raw",
         "shared:2"
       ],
       "module": "shared:2",
@@ -334,7 +348,9 @@
         "add_1",
         "add_1:1",
         "add_1_2",
-        "add_1_2:1"
+        "add_1_2:1",
+        "add_1_4",
+        "add_1_4_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},
@@ -362,8 +378,10 @@
         "output",
         "output_1",
         "output_1",
+        "output_1",
         "output_1:1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},

@@ -68,7 +68,8 @@
         "0",
         "input.x",
         "input_1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -87,6 +88,8 @@
         "conv2d_1:1",
         "conv2d_1_1",
         "conv2d_1_1:1",
+        "conv2d_1_2",
+        "conv2d_1_2_raw",
         "first.0",
         "first.0:1"
       ],
@@ -112,6 +115,7 @@
         "2",
         "buffer_1",
         "buffer_1:1",
+        "buffer_1_raw",
         "first.1.num_batches_tracked:1"
       ],
       "module": "first.1:1",
@@ -133,7 +137,9 @@
         "add_1",
         "add_1:1",
         "add_1_2",
-        "add_1_2:1"
+        "add_1_2:1",
+        "add_1_4",
+        "add_1_4_raw"
       ],
       "module": "first.1:1",
       "module_call_depth": 2,
@@ -153,6 +159,7 @@
         "4",
         "buffer_2",
         "buffer_2:1",
+        "buffer_2_raw",
         "first.1.num_batches_tracked:2"
       ],
       "module": "first.1:1",
@@ -173,6 +180,7 @@
         "5",
         "buffer_3",
         "buffer_3:1",
+        "buffer_3_raw",
         "first.1.running_mean:1"
       ],
       "module": "first.1:1",
@@ -193,6 +201,7 @@
         "6",
         "buffer_4",
         "buffer_4:1",
+        "buffer_4_raw",
         "first.1.running_var:1"
       ],
       "module": "first.1:1",
@@ -213,6 +222,7 @@
         "7",
         "buffer_5",
         "buffer_5:1",
+        "buffer_5_raw",
         "second.1.running_mean:1"
       ],
       "module": "first.1:1",
@@ -233,6 +243,7 @@
         "8",
         "buffer_6",
         "buffer_6:1",
+        "buffer_6_raw",
         "second.1.running_var:1"
       ],
       "module": "first.1:1",
@@ -253,6 +264,7 @@
         "9",
         "buffer_7",
         "buffer_7:1",
+        "buffer_7_raw",
         "second.1.num_batches_tracked:1"
       ],
       "module": "first.1:1",
@@ -273,6 +285,8 @@
         "10",
         "batchnorm_1",
         "batchnorm_1:1",
+        "batchnorm_1_11",
+        "batchnorm_1_11_raw",
         "batchnorm_1_3",
         "batchnorm_1_3:1",
         "first.1",
@@ -300,6 +314,7 @@
         "11",
         "buffer_8",
         "buffer_8:1",
+        "buffer_8_raw",
         "first.1.running_mean:2"
       ],
       "module": "first.1:1",
@@ -320,6 +335,7 @@
         "12",
         "buffer_9",
         "buffer_9:1",
+        "buffer_9_raw",
         "first.1.running_var:2"
       ],
       "module": "first.1:1",
@@ -344,6 +360,8 @@
         "first:1",
         "relu_1",
         "relu_1:1",
+        "relu_1_14",
+        "relu_1_14_raw",
         "relu_1_4",
         "relu_1_4:1"
       ],
@@ -371,6 +389,8 @@
         "14",
         "conv2d_2",
         "conv2d_2:1",
+        "conv2d_2_15",
+        "conv2d_2_15_raw",
         "conv2d_2_5",
         "conv2d_2_5:1",
         "second.0",
@@ -398,6 +418,8 @@
         "15",
         "add_2",
         "add_2:1",
+        "add_2_16",
+        "add_2_16_raw",
         "add_2_6",
         "add_2_6:1"
       ],
@@ -419,6 +441,7 @@
         "16",
         "buffer_10",
         "buffer_10:1",
+        "buffer_10_raw",
         "second.1.num_batches_tracked:2"
       ],
       "module": "second.1:1",
@@ -439,6 +462,8 @@
         "17",
         "batchnorm_2",
         "batchnorm_2:1",
+        "batchnorm_2_18",
+        "batchnorm_2_18_raw",
         "batchnorm_2_7",
         "batchnorm_2_7:1",
         "second",
@@ -470,6 +495,7 @@
         "18",
         "buffer_11",
         "buffer_11:1",
+        "buffer_11_raw",
         "second.1.running_mean:2"
       ],
       "module": "second.1:1",
@@ -490,6 +516,7 @@
         "19",
         "buffer_12",
         "buffer_12:1",
+        "buffer_12_raw",
         "second.1.running_var:2"
       ],
       "module": "second.1:1",
@@ -510,6 +537,8 @@
         "20",
         "add_3",
         "add_3:1",
+        "add_3_21",
+        "add_3_21_raw",
         "add_3_8",
         "add_3_8:1"
       ],
@@ -530,6 +559,8 @@
         "out_relu:1",
         "relu_2",
         "relu_2:1",
+        "relu_2_22",
+        "relu_2_22_raw",
         "relu_2_9",
         "relu_2_9:1"
       ],
@@ -556,7 +587,8 @@
         "out_relu:1",
         "output",
         "output_1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_call_depth": 0,
@@ -1090,8 +1122,10 @@
         "input.x",
         "input_1",
         "input_1",
+        "input_1",
         "input_1:1",
-        "input_1:1"
+        "input_1:1",
+        "input_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {
@@ -1129,6 +1163,8 @@
         "conv2d_1:1",
         "conv2d_1_1",
         "conv2d_1_1:1",
+        "conv2d_1_2",
+        "conv2d_1_2_raw",
         "first.0",
         "first.0:1"
       ],
@@ -1168,8 +1204,10 @@
         "2",
         "buffer_1",
         "buffer_1",
+        "buffer_1",
         "buffer_1:1",
         "buffer_1:1",
+        "buffer_1_raw",
         "first.1.num_batches_tracked:1"
       ],
       "module": "first.1:1",
@@ -1201,7 +1239,9 @@
         "add_1",
         "add_1:1",
         "add_1_2",
-        "add_1_2:1"
+        "add_1_2:1",
+        "add_1_4",
+        "add_1_4_raw"
       ],
       "module": "first.1:1",
       "module_entry_arg_keys": {},
@@ -1231,8 +1271,10 @@
         "4",
         "buffer_2",
         "buffer_2",
+        "buffer_2",
         "buffer_2:1",
         "buffer_2:1",
+        "buffer_2_raw",
         "first.1.num_batches_tracked:2"
       ],
       "module": "first.1:1",
@@ -1263,8 +1305,10 @@
         "5",
         "buffer_3",
         "buffer_3",
+        "buffer_3",
         "buffer_3:1",
         "buffer_3:1",
+        "buffer_3_raw",
         "first.1.running_mean:1"
       ],
       "module": "first.1:1",
@@ -1295,8 +1339,10 @@
         "6",
         "buffer_4",
         "buffer_4",
+        "buffer_4",
         "buffer_4:1",
         "buffer_4:1",
+        "buffer_4_raw",
         "first.1.running_var:1"
       ],
       "module": "first.1:1",
@@ -1327,8 +1373,10 @@
         "7",
         "buffer_5",
         "buffer_5",
+        "buffer_5",
         "buffer_5:1",
         "buffer_5:1",
+        "buffer_5_raw",
         "second.1.running_mean:1"
       ],
       "module": "first.1:1",
@@ -1359,8 +1407,10 @@
         "8",
         "buffer_6",
         "buffer_6",
+        "buffer_6",
         "buffer_6:1",
         "buffer_6:1",
+        "buffer_6_raw",
         "second.1.running_var:1"
       ],
       "module": "first.1:1",
@@ -1391,8 +1441,10 @@
         "9",
         "buffer_7",
         "buffer_7",
+        "buffer_7",
         "buffer_7:1",
         "buffer_7:1",
+        "buffer_7_raw",
         "second.1.num_batches_tracked:1"
       ],
       "module": "first.1:1",
@@ -1425,6 +1477,8 @@
         "10",
         "batchnorm_1",
         "batchnorm_1:1",
+        "batchnorm_1_11",
+        "batchnorm_1_11_raw",
         "batchnorm_1_3",
         "batchnorm_1_3:1",
         "first.1",
@@ -1466,8 +1520,10 @@
         "11",
         "buffer_8",
         "buffer_8",
+        "buffer_8",
         "buffer_8:1",
         "buffer_8:1",
+        "buffer_8_raw",
         "first.1.running_mean:2"
       ],
       "module": "first.1:1",
@@ -1498,8 +1554,10 @@
         "12",
         "buffer_9",
         "buffer_9",
+        "buffer_9",
         "buffer_9:1",
         "buffer_9:1",
+        "buffer_9_raw",
         "first.1.running_var:2"
       ],
       "module": "first.1:1",
@@ -1537,6 +1595,8 @@
         "first:1",
         "relu_1",
         "relu_1:1",
+        "relu_1_14",
+        "relu_1_14_raw",
         "relu_1_4",
         "relu_1_4:1"
       ],
@@ -1583,6 +1643,8 @@
         "14",
         "conv2d_2",
         "conv2d_2:1",
+        "conv2d_2_15",
+        "conv2d_2_15_raw",
         "conv2d_2_5",
         "conv2d_2_5:1",
         "second.0",
@@ -1624,6 +1686,8 @@
         "15",
         "add_2",
         "add_2:1",
+        "add_2_16",
+        "add_2_16_raw",
         "add_2_6",
         "add_2_6:1"
       ],
@@ -1655,8 +1719,10 @@
         "16",
         "buffer_10",
         "buffer_10",
+        "buffer_10",
         "buffer_10:1",
         "buffer_10:1",
+        "buffer_10_raw",
         "second.1.num_batches_tracked:2"
       ],
       "module": "second.1:1",
@@ -1687,6 +1753,8 @@
         "17",
         "batchnorm_2",
         "batchnorm_2:1",
+        "batchnorm_2_18",
+        "batchnorm_2_18_raw",
         "batchnorm_2_7",
         "batchnorm_2_7:1",
         "second",
@@ -1728,8 +1796,10 @@
         "18",
         "buffer_11",
         "buffer_11",
+        "buffer_11",
         "buffer_11:1",
         "buffer_11:1",
+        "buffer_11_raw",
         "second.1.running_mean:2"
       ],
       "module": "second.1:1",
@@ -1760,8 +1830,10 @@
         "19",
         "buffer_12",
         "buffer_12",
+        "buffer_12",
         "buffer_12:1",
         "buffer_12:1",
+        "buffer_12_raw",
         "second.1.running_var:2"
       ],
       "module": "second.1:1",
@@ -1794,6 +1866,8 @@
         "20",
         "add_3",
         "add_3:1",
+        "add_3_21",
+        "add_3_21_raw",
         "add_3_8",
         "add_3_8:1"
       ],
@@ -1828,6 +1902,8 @@
         "out_relu:1",
         "relu_2",
         "relu_2:1",
+        "relu_2_22",
+        "relu_2_22_raw",
         "relu_2_9",
         "relu_2_9:1"
       ],
@@ -1865,8 +1941,10 @@
         "output",
         "output_1",
         "output_1",
+        "output_1",
         "output_1:1",
-        "output_1:1"
+        "output_1:1",
+        "output_1_raw"
       ],
       "module": null,
       "module_entry_arg_keys": {},

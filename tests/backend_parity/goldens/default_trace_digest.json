@@ -63,8 +63,10 @@
           "input.x",
           "input_1",
           "input_1",
+          "input_1",
           "input_1:1",
-          "input_1:1"
+          "input_1:1",
+          "input_1_raw"
         ],
         "module_address": null,
         "module_pass": null,
@@ -104,7 +106,9 @@
           "linear_1",
           "linear_1:1",
           "linear_1_1",
-          "linear_1_1:1"
+          "linear_1_1:1",
+          "linear_1_2",
+          "linear_1_2_raw"
         ],
         "module_address": null,
         "module_pass": null,
@@ -145,7 +149,9 @@
           "relu_1",
           "relu_1:1",
           "relu_1_2",
-          "relu_1_2:1"
+          "relu_1_2:1",
+          "relu_1_3",
+          "relu_1_3_raw"
         ],
         "module_address": null,
         "module_pass": null,
@@ -189,7 +195,9 @@
           "linear_2",
           "linear_2:1",
           "linear_2_3",
-          "linear_2_3:1"
+          "linear_2_3:1",
+          "linear_2_4",
+          "linear_2_4_raw"
         ],
         "module_address": null,
         "module_pass": null,
@@ -230,8 +238,10 @@
           "output",
           "output_1",
           "output_1",
+          "output_1",
           "output_1:1",
-          "output_1:1"
+          "output_1:1",
+          "output_1_raw"
         ],
         "module_address": null,
         "module_pass": null,
@@ -258,13 +268,13 @@
     "param_source": "native-module"
   },
   "sha256_chunks": [
-    "d4fdd6f7",
-    "c3a3e182",
-    "4e33e1bf",
-    "9e3a8036",
-    "0abe68d8",
-    "99367775",
-    "2a04860a",
-    "e7635559"
+    "4367500a",
+    "1adf79ee",
+    "dc6eb4a9",
+    "783cac89",
+    "fddcf488",
+    "662170fe",
+    "a54576c4",
+    "6e2643b2"
   ]
 }
