@@ -3063,9 +3063,9 @@ class Trace(CapturedRun):
         if selected_engine == "set_only":
             return self
         if selected_engine == "replay":
-            return self.replay(strict=strict_value)
+            return self.push(strict=strict_value)
         assert model is not None
-        return self.rerun(model, x, strict=strict_value)
+        return self.run(model, x, strict=strict_value)
 
     def fork(self, name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.

@@ -118,7 +118,7 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
         if not name.startswith("_") and (inspect.isfunction(value) or isinstance(value, property))
     ]
 
-    assert len(members) <= 31
+    assert len(members) <= 34
     assert "joint_metric" in members
     assert "set_capacity" in members
     assert "save" in members

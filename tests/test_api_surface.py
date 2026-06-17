@@ -11,17 +11,24 @@ TARGET_ALL = [
     "trace",
     "fastlog",
     "facets",
+    "record",
+    "Recording",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "load",
     "save",
     "do",
+    "push",
+    "push_from",
     "replay",
     "replay_from",
     "rerun",
+    "run",
     "bundle",
+    "pluck",
     "peek",
     "extract",
+    "extract_dataset",
     "batched_extract",
     "validate",
     "Trace",
@@ -41,6 +48,8 @@ TARGET_ALL = [
     "followed_by",
     "grad_fn",
     "intervening",
+    "without_op",
+    "regex",
     "module",
     "output",
     "output_at",
@@ -61,6 +70,7 @@ TARGET_ALL = [
     "resample_ablate",
     "scale",
     "splice_module",
+    "span",
     "steer",
     "sweep",
     "swap_with",
@@ -74,7 +84,6 @@ TARGET_ALL = [
     "grad_zero",
     "tap",
     "record_span",
-    "sites",
 ]
 
 CANONICAL_SUBMODULES = [
@@ -104,7 +113,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_67() -> None:
+def test_all_size_exactly_76() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -120,9 +129,12 @@ def test_all_size_exactly_67() -> None:
     `PayloadLoadHints` = 62. Container value-core adds `Container`,
     `output_at`, and `register_container` = 65. Container-completion P3 adds
     `input_at` = 66. Eclectic Unit G adds `sweep` = 67.
+    Glossary-conform-v11 DO-NOW renames: adds `record`, `Recording`, `push`,
+    `push_from`, `run`, `pluck`, `extract_dataset`, `without_op`, `regex`,
+    `span`; removes `sites` = 76.
     """
 
-    assert len(torchlens.__all__) == 67
+    assert len(torchlens.__all__) == 76
     assert torchlens.__all__ == TARGET_ALL
 
 

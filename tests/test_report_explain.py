@@ -64,12 +64,15 @@ def test_report_namespace_is_not_top_level_all() -> None:
     Backend-completion sharded payload hints added two public dataclasses.
     The Container value-core added ``Container`` / ``output_at`` /
     ``register_container`` (= 65); container-completion added ``input_at`` (= 66).
+    Glossary-conform-v11 DO-NOW renames added ``record``, ``Recording``,
+    ``push``, ``push_from``, ``run``, ``pluck``, ``extract_dataset``,
+    ``without_op``, ``regex``, ``span``; removed ``sites`` (= 76).
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 66
+    assert len(tl.__all__) == 76
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:
