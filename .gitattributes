@@ -1,5 +1,8 @@
 *.ipynb filter=nbstripout
 *.ipynb diff=ipynb
+# Audit notebooks are a REVIEW artifact: keep executed outputs in git so they render
+# (with reprs/summaries inline) directly on GitHub. Exempt from nbstripout output-stripping.
+notebooks/audit/*.ipynb -filter
 .research/docs-plan-megasprint_PLAN.md filter=lfs diff=lfs merge=lfs -text
 .research/docs-plan-megasprint_PLAN_v33.md filter=lfs diff=lfs merge=lfs -text
 .research/docs-plan-megasprint_PLAN_v34.md filter=lfs diff=lfs merge=lfs -text
