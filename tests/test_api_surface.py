@@ -33,10 +33,12 @@ TARGET_ALL = [
     "batched_extract",
     "validate",
     "AmbiguousOpLookupError",
+    "ReentrantTraceError",
     "Trace",
     "Layer",
     "Container",
     "Op",
+    "ModelHistory",
     "Quantity",
     "Bytes",
     "Duration",
@@ -86,6 +88,15 @@ TARGET_ALL = [
     "grad_zero",
     "tap",
     "record_span",
+    "log_forward_pass",
+    "get_model_activations",
+    "validate_model_activations",
+    "validate_saved_activations",
+    "render_graph",
+    "render_model_graph",
+    "draw_model_graph",
+    "get_model_structure",
+    "show_model_structure",
 ]
 
 CANONICAL_SUBMODULES = [
@@ -115,7 +126,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_78() -> None:
+def test_all_size_exactly_89() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -134,10 +145,11 @@ def test_all_size_exactly_78() -> None:
     Glossary-conform-v11 DO-NOW renames: adds `record`, `Recording`, `push`,
     `push_from`, `run`, `pluck`, `extract_dataset`, `without_op`, `regex`,
     `span`; removes `sites` = 76. Internal sprint 2 adds `export` and
-    `AmbiguousOpLookupError` = 78.
+    `AmbiguousOpLookupError` = 78. Tech-debt sprint adds
+    `ReentrantTraceError` and ten paper-era compatibility shims = 89.
     """
 
-    assert len(torchlens.__all__) == 78
+    assert len(torchlens.__all__) == 89
     assert torchlens.__all__ == TARGET_ALL
 
 
