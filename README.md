@@ -353,31 +353,31 @@ has 650+ graphs across 44 architecture families.
 
 | GoogLeNet (inception + buffer edges) | Stable Diffusion (U-Net denoiser) | CLIP (vision + language towers) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/googlenet.jpg" width="280"> | <img src="images/menagerie/stable_diffusion.png" width="180"> | <img src="images/menagerie/clip.jpg" width="160"> |
+| <img src="images/menagerie/googlenet.jpg" height="200"> | <img src="images/menagerie/stable_diffusion.png" height="200"> | <img src="images/menagerie/clip.jpg" height="200"> |
 
 **State-Space + Recurrence**
 
 | Mamba (selective SSM) | Recurrent Gemma (linear recurrence) | Whisper (audio encoder-decoder) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/mamba.jpg" width="220"> | <img src="images/menagerie/recurrent_gemma.jpg" width="220"> | <img src="images/menagerie/whisper.jpg" width="140"> |
+| <img src="images/menagerie/mamba.jpg" height="200"> | <img src="images/menagerie/recurrent_gemma.jpg" height="200"> | <img src="images/menagerie/whisper.jpg" height="200"> |
 
 **Mixture-of-Experts + Generative**
 
 | Mixtral (sparse MoE) | Hierarchical VAE | Perceiver |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/mixtral.jpg" width="220"> | <img src="images/menagerie/hierarchical_vae.png" width="200"> | <img src="images/menagerie/perceiver.jpg" width="180"> |
+| <img src="images/menagerie/mixtral.jpg" height="200"> | <img src="images/menagerie/hierarchical_vae.png" height="200"> | <img src="images/menagerie/perceiver.jpg" height="200"> |
 
 **Graph Networks + Exotic**
 
 | DimeNet (molecular GNN) | CORnet-S (visual cortex, unrolled) | LLaMA (decoder-only LLM) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/dimenet.png" width="360"> | <img src="images/menagerie/cornet_s.png" width="260"> | <img src="images/menagerie/llama.jpg" width="200"> |
+| <img src="images/menagerie/dimenet.png" height="200"> | <img src="images/menagerie/cornet_s.png" height="200"> | <img src="images/menagerie/llama.jpg" height="200"> |
 
 **Reinforcement Learning + Quantum ML + Scale**
 
 | Decision Transformer (offline RL) | Quantum ML circuit | 3,000-node graph (SFDP layout) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/decision_transformer.jpg" width="180"> | <img src="images/menagerie/qml.png" width="260"> | <img src="images/menagerie/large_graph_3k.jpg" width="400"> |
+| <img src="images/menagerie/decision_transformer.jpg" height="200"> | <img src="images/menagerie/qml.png" height="200"> | <img src="images/menagerie/large_graph_3k.jpg" height="200"> |
 
 
 ## Compatibility
