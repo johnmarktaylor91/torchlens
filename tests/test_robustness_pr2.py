@@ -191,10 +191,12 @@ def test_quantized_model_emits_warning_but_still_logs() -> None:
     x = torch.randn(2, 4)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
+        deterministic = torch.are_deterministic_algorithms_enabled()
+        torch.use_deterministic_algorithms(False)
         try:
-            tl.trace(model, x, layers_to_save="none")
-        except Exception:  # noqa: BLE001 — quantized support is partial
-            pass
+            log = tl.trace(model, x, layers_to_save="all")
+        finally:
+            torch.use_deterministic_algorithms(deterministic)
 
     quant_warnings = [
         w
@@ -202,6 +204,9 @@ def test_quantized_model_emits_warning_but_still_logs() -> None:
         if issubclass(w.category, UserWarning) and "quantized" in str(w.message).lower()
     ]
     assert quant_warnings, "Expected a UserWarning mentioning quantized submodules"
+    quantized_ops = [op for op in log.ops if op.func_name.startswith("quantized_")]
+    assert quantized_ops
+    assert sum(op.flops_forward or 0 for op in quantized_ops) > 0
 
 
 # ---------------------------------------------------------------------------

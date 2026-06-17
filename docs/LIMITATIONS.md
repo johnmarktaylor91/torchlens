@@ -86,7 +86,7 @@ If you hit a case we haven't listed, please
 | **Meta tensor inputs / meta-init model** | `UnsupportedTensorVariantError` | Materialise the model on a real device (`model.to("cpu")`) first |
 | **Sparse tensor inputs** | `UnsupportedTensorVariantError` | Pass dense tensors; densify sparse inputs with `.to_dense()` |
 | **Symbolic-shape (`SymInt`) inputs** | `UnsupportedTensorVariantError` | Pass tensors with concrete integer shapes |
-| **Quantized (`torch.ao.quantization`) model** | `UserWarning`; logging continues | Treat FLOPs in the log as approximate / wrong |
+| **Quantized (`torch.ao.quantization`) model** | `UserWarning`; logging continues | Treat FLOPs as estimates; common Linear/Conv outputs are counted |
 | **`torch.func.vmap` / `grad` / `jacfwd`** | `UserWarning` per collapsed boundary; inner ops skipped | Log the pre-vmap module separately, or accept an incomplete log |
 | **Multi-process spawn / `DataLoader` workers** | `RuntimeError` if called from a worker | Log in the main process |
 | **Tensor subclasses with custom `__torch_function__`** | May work; limited metadata fidelity | Log with a plain `torch.Tensor` input if possible |
@@ -173,8 +173,8 @@ Detected by walking ``model.modules()`` and matching against
 ``torch.ao.quantization`` / ``torch.nn.quantized`` module name prefixes.
 The log is generally usable but:
 
-- FLOPs counts are **wrong** for quantized ops (the FLOPs table assumes
-  standard floating dtypes).
+- FLOPs counts are estimated for common quantized Linear/Conv module outputs;
+  uncommon quantized kernels may still be uncounted.
 - Activation dtype handling in ``safe_copy`` falls back to CPU + float32
   when the quantized clone rejects ``memory_format``.
 

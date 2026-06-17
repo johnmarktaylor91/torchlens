@@ -263,8 +263,8 @@ def check_model_and_input_variants(
     if _model_has_quantized_modules(model):
         warnings.warn(
             "TorchLens detected quantized submodules. Activation capture "
-            "generally works, but FLOPs counts are not computed correctly for "
-            "quantized ops and out dtype handling is best-effort. "
+            "generally works, but FLOPs counts are estimated only for common "
+            "quantized Linear/Conv module outputs and out dtype handling is best-effort. "
             f"{_docs_pointer()}",
             UserWarning,
             stacklevel=3,

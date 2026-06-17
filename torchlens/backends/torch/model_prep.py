@@ -23,9 +23,10 @@ fast mode, it skips entry/exit tracking entirely but still handles
 ``nn.Identity`` and pass-through detection via ``torch.identity``.
 """
 
+import copy
 import inspect
 import itertools
-import copy
+import math
 import time
 import warnings
 from collections.abc import Callable
@@ -158,6 +159,132 @@ def _module_type(module: nn.Module) -> str:
     """
     meta = get_module_meta(module)
     return type(module).__name__ if meta is None or meta.module_type is None else meta.module_type
+
+
+_QUANTIZED_MODULE_PREFIXES = (
+    "torch.ao.nn.quantized",
+    "torch.nn.quantized",
+    "torch.ao.nn.intrinsic.quantized",
+)
+
+
+def _is_quantized_module(module: nn.Module) -> bool:
+    """Return whether ``module`` is a PyTorch quantized module.
+
+    Parameters
+    ----------
+    module:
+        Module to inspect.
+
+    Returns
+    -------
+    bool
+        Whether the module class is from a known PyTorch quantized namespace.
+    """
+
+    module_name = type(module).__module__
+    return module_name.startswith(_QUANTIZED_MODULE_PREFIXES)
+
+
+def _first_tensor_shape(value: Any) -> tuple[int, ...] | None:
+    """Return the shape of the first tensor found in ``value``.
+
+    Parameters
+    ----------
+    value:
+        Object tree to search.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        First tensor shape, or ``None`` when no tensor is present.
+    """
+
+    tensors = get_vars_of_type_from_obj(value, torch.Tensor, search_depth=5)
+    if not tensors:
+        return None
+    return tuple(tensors[0].shape)
+
+
+def _quantized_module_bias_present(module: nn.Module) -> bool:
+    """Return whether a quantized module appears to have a bias term.
+
+    Parameters
+    ----------
+    module:
+        Quantized module to inspect.
+
+    Returns
+    -------
+    bool
+        Whether the module exposes a non-``None`` bias.
+    """
+
+    bias = getattr(module, "bias", None)
+    if callable(bias):
+        try:
+            return bias() is not None
+        except Exception:
+            return False
+    return bias is not None
+
+
+def _estimate_quantized_module_forward_flops(
+    module: nn.Module,
+    output_shape: tuple[int, ...],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> int | None:
+    """Estimate FLOPs for common quantized modules logged as internal sources.
+
+    Parameters
+    ----------
+    module:
+        Module that produced the unwrapped quantized output.
+    output_shape:
+        Shape of the module output tensor.
+    args:
+        Positional module-forward arguments.
+    kwargs:
+        Keyword module-forward arguments.
+
+    Returns
+    -------
+    int | None
+        Estimated forward FLOPs for recognized quantized Linear/Conv modules,
+        otherwise ``None``.
+    """
+
+    if not _is_quantized_module(module):
+        return None
+    input_shape = _first_tensor_shape((args, kwargs))
+    if input_shape is None:
+        return None
+    out_numel = int(math.prod(output_shape)) if output_shape else 1
+    module_kind = _module_type(module).lower()
+    bias_flops = out_numel if _quantized_module_bias_present(module) else 0
+    if "linear" in module_kind:
+        in_features = getattr(module, "in_features", None)
+        out_features = getattr(module, "out_features", None)
+        if not isinstance(in_features, int) or not isinstance(out_features, int):
+            return None
+        batch = out_numel // out_features if out_features > 0 else 0
+        return 2 * batch * in_features * out_features + bias_flops
+    if "conv" in module_kind:
+        in_channels = getattr(module, "in_channels", None)
+        groups = getattr(module, "groups", 1)
+        kernel_size = getattr(module, "kernel_size", None)
+        if not isinstance(in_channels, int) or not isinstance(groups, int):
+            return None
+        if isinstance(kernel_size, int):
+            kernel_numel = kernel_size
+        elif isinstance(kernel_size, tuple) and all(isinstance(v, int) for v in kernel_size):
+            kernel_numel = int(math.prod(kernel_size))
+        else:
+            return None
+        channels_per_group = in_channels // groups if groups > 0 else in_channels
+        return 2 * out_numel * channels_per_group * kernel_numel + bias_flops
+    return None
 
 
 def _traverse_model_modules(
@@ -1160,6 +1287,15 @@ def _ensure_module_output_tensor_logged(
     module_call_index = trace._mod_call_index[id(module)]
     modules = [(address, module_call_index)] if address else []
     equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
+    module_args, module_kwargs = trace._module_forward_args.get(
+        (address, module_call_index), ((), {})
+    )
+    quantized_flops_forward = _estimate_quantized_module_forward_flops(
+        module,
+        tuple(tensor.shape),
+        module_args,
+        module_kwargs,
+    )
     root_ancestors: set[str] = set()
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
@@ -1234,11 +1370,17 @@ def _ensure_module_output_tensor_logged(
             "transformed_gradient_memory": None,
             "func": None,
             "func_call_id": None,
-            "func_name": "none" if is_internal_source else "intervention_replacement",
+            "func_name": (
+                f"quantized_{_module_type(module).lower()}"
+                if is_internal_source and quantized_flops_forward is not None
+                else "none"
+                if is_internal_source
+                else "intervention_replacement"
+            ),
             "func_qualname": None,
             "code_context": [],
             "func_duration": 0,
-            "flops_forward": 0,
+            "flops_forward": quantized_flops_forward or 0,
             "flops_backward": 0,
             "func_rng_states": {},
             "func_autocast_state": {},
