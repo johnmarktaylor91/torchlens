@@ -45,7 +45,7 @@ from .stats import aggregate
 from .data_classes.layer import Layer
 from .data_classes.container import Container
 from .data_classes.op import Op
-from ._errors import AmbiguousOpLookupError
+from ._errors import AmbiguousOpLookupError, ReentrantTraceError
 from .data_classes.trace import Trace
 from .fastlog import Recording, record
 from .intervention import (  # type: ignore[no-redef]
@@ -914,6 +914,7 @@ __all__ = [
     "batched_extract",
     "validate",
     "AmbiguousOpLookupError",
+    "ReentrantTraceError",
     "Trace",
     "Layer",
     "Container",

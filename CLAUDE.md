@@ -69,7 +69,7 @@ print(tl.compat.report(model, x).to_markdown())
 
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 78 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 79 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved

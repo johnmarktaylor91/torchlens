@@ -444,6 +444,10 @@ all module attributes."""
 # ---------------------------------------------------------------------------
 
 
+class ReentrantTraceError(RuntimeError):
+    """Raised when a TorchLens trace is started while another trace is active."""
+
+
 @contextmanager
 def active_logging(trace: "Trace") -> Iterator[None]:
     """Activate logging for the duration of a forward pass.
@@ -458,15 +462,19 @@ def active_logging(trace: "Trace") -> Iterator[None]:
 
     This context manager is NOT nestable.  Only one forward pass may be logged
     at a time (single-threaded design).  Entering a second ``active_logging``
-    while another is already active raises ``RuntimeError`` — silently
+    while another is already active raises ``ReentrantTraceError`` — silently
     corrupting the outer log (overwriting ``_active_trace`` and then
     clearing it on inner exit) is worse than failing loudly.
     """
     global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_counter
     if _logging_enabled or _active_trace is not None or _hook_reentrancy_depth > 0:
-        raise RuntimeError(
+        active_model = getattr(_active_trace, "model_label", None)
+        if active_model is None:
+            active_model = getattr(_active_trace, "model_class_name", None)
+        active_model_text = f" for active model {active_model!r}" if active_model else ""
+        raise ReentrantTraceError(
             "torchlens.trace / active_logging is not re-entrant: "
-            "another forward pass is already being logged. Nested logging "
+            f"another forward pass{active_model_text} is already being logged. Nested logging "
             "would silently corrupt the outer Trace. If you need to log a "
             "model's forward pass from inside another trace call "
             "(e.g., a custom activation_transform), finish the outer capture "

@@ -1,5 +1,6 @@
 """Shared TorchLens exception types."""
 
+from ._state import ReentrantTraceError
 from .errors._base import CaptureError
 
 
