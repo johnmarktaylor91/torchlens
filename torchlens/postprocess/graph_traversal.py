@@ -318,9 +318,11 @@ def _add_output_layers(
         new_output_node.unattributed_tensor_args = ()
 
         # Fix layer equivalence information:
+        new_output_node.pass_index = 1
+        new_output_node.num_passes = 1
         new_output_node.recurrent_ops = []
         equiv_type = (
-            f"output_{'_'.join(tuple(str(s) for s in new_output_node.shape))}_"
+            f"output_{i + 1}_{'_'.join(tuple(str(s) for s in new_output_node.shape))}_"
             f"{str(new_output_node.dtype)}"
         )
         new_output_node.equivalence_class = equiv_type

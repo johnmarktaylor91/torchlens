@@ -67,12 +67,14 @@ def test_report_namespace_is_not_top_level_all() -> None:
     Glossary-conform-v11 DO-NOW renames added ``record``, ``Recording``,
     ``push``, ``push_from``, ``run``, ``pluck``, ``extract_dataset``,
     ``without_op``, ``regex``, ``span``; removed ``sites`` (= 76).
+    Internal sprint 2 Phase B added ``export`` and ``AmbiguousOpLookupError``
+    (= 78).
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 76
+    assert len(tl.__all__) == 78
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:

@@ -309,6 +309,68 @@ def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
         assert validate_forward_pass(StepCounterModel(), torch.randn(3)) is True
 
 
+def test_validate_forward_pass_deepcopy_fallback_tracks_function_attrs_by_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback validation accepts function attrs and detects reassignment by identity."""
+
+    original_deepcopy = user_funcs.copy.deepcopy
+
+    def fail_module_deepcopy(value: object) -> object:
+        """Fail only model deepcopy so the validation fallback path is exercised."""
+
+        if isinstance(value, nn.Module):
+            raise TypeError("forced module deepcopy failure")
+        return original_deepcopy(value)
+
+    def identity_forward(module: nn.Module, x: torch.Tensor) -> torch.Tensor:
+        """Return the module output for a function-typed plain attribute."""
+
+        del module
+        return x + 1
+
+    class FunctionAttrModel(nn.Module):
+        """Model with a plain function attribute that deepcopy fallback snapshots."""
+
+        def __init__(self) -> None:
+            """Initialize the function-typed plain attribute."""
+
+            super().__init__()
+            self.forward_impl = identity_forward
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the function-typed plain attribute."""
+
+            return self.forward_impl(self, x)
+
+    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert validate_forward_pass(FunctionAttrModel(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_preserves_distinct_recurrent_output_labels() -> None:
+    """Multi-output recurrent producers should validate against distinct outputs."""
+
+    class SharedHeadTuple(nn.Module):
+        """Return multiple outputs produced by repeated calls to one module."""
+
+        def __init__(self) -> None:
+            """Initialize the shared head."""
+
+            super().__init__()
+            self.head = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            """Run the shared head twice and return both tensors."""
+
+            first = self.head(x)
+            second = self.head(x + 1)
+            return first, second
+
+    assert validate_forward_pass(SharedHeadTuple(), torch.randn(2, 3)) is True
+
+
 def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

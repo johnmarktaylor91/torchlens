@@ -20,6 +20,7 @@ two-pass path (save specific layers).
 
 import collections.abc
 import copy
+import dataclasses
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ import random
 import re
 import tempfile
 import time
+import types
 import warnings
 from collections import OrderedDict
 from pathlib import Path
@@ -515,6 +517,50 @@ _PLAIN_ATTR_MAX_CONTAINER_ITEMS = 128
 _PLAIN_ATTR_MAX_TENSOR_NUMEL = 4096
 
 
+@dataclasses.dataclass(frozen=True)
+class _PlainAttrIdentitySnapshot:
+    """Identity snapshot for opaque but identity-stable plain attributes.
+
+    Parameters
+    ----------
+    value:
+        Original object to restore if the plain attribute is reassigned.
+    value_type_name:
+        Human-readable type name for diagnostics.
+    """
+
+    value: Any
+    value_type_name: str
+
+
+def _is_identity_stable_plain_attr(value: Any) -> bool:
+    """Return whether a plain attr should be tracked by object identity.
+
+    Parameters
+    ----------
+    value:
+        Attribute value to classify.
+
+    Returns
+    -------
+    bool
+        True for callable/type/module objects whose mutation signal is
+        reassignment rather than value drift.
+    """
+
+    return isinstance(
+        value,
+        (
+            types.FunctionType,
+            types.MethodType,
+            types.BuiltinFunctionType,
+            types.BuiltinMethodType,
+            type,
+            nn.Module,
+        ),
+    ) or callable(value)
+
+
 def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
     """Return a value snapshot for a plain module-tree attribute.
 
@@ -537,8 +583,12 @@ def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
         validation restore. External objects remain unsupported in this path.
     """
 
+    if isinstance(value, _PlainAttrIdentitySnapshot):
+        return value
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
         return value
+    if _is_identity_stable_plain_attr(value):
+        return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
     if isinstance(value, torch.Tensor):
         if value.numel() > _PLAIN_ATTR_MAX_TENSOR_NUMEL:
             raise RuntimeError(
@@ -636,6 +686,14 @@ def _plain_attr_values_equal(left: Any, right: Any, attr_path: str) -> bool:
         If the values cannot be compared without ambiguity.
     """
 
+    if isinstance(left, _PlainAttrIdentitySnapshot) or isinstance(
+        right, _PlainAttrIdentitySnapshot
+    ):
+        if not isinstance(left, _PlainAttrIdentitySnapshot) or not isinstance(
+            right, _PlainAttrIdentitySnapshot
+        ):
+            return False
+        return left.value is right.value
     if isinstance(left, torch.Tensor) or isinstance(right, torch.Tensor):
         if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
             return False
@@ -681,6 +739,25 @@ def _plain_attr_values_equal(left: Any, right: Any, attr_path: str) -> bool:
         "TorchLens validation deepcopy fallback cannot compare plain "
         f"attribute '{attr_path}' because equality returned {type(result).__name__}."
     )
+
+
+def _plain_attr_restore_value(snapshot: Any) -> Any:
+    """Return the assignable value represented by a plain-attribute snapshot.
+
+    Parameters
+    ----------
+    snapshot:
+        Snapshot produced by :func:`_snapshot_plain_attr_value`.
+
+    Returns
+    -------
+    Any
+        Value to assign back to the module attribute.
+    """
+
+    if isinstance(snapshot, _PlainAttrIdentitySnapshot):
+        return snapshot.value
+    return _snapshot_plain_attr_value(snapshot, "<snapshot>")
 
 
 def _module_plain_attr_names(module: nn.Module) -> set[str]:
@@ -764,7 +841,7 @@ class _ModuleTreePlainAttrSnapshot:
                 changed = not _plain_attr_values_equal(current_snapshot, snapshot, attr_path)
             if not changed:
                 continue
-            restore_value = _snapshot_plain_attr_value(snapshot, attr_path)
+            restore_value = _plain_attr_restore_value(snapshot)
             try:
                 setattr(module, name, restore_value)
             except Exception as exc:

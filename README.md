@@ -38,7 +38,7 @@ log.draw()                    # PDF of the computational graph
   [50-minute gallery](examples/50min/README.md)
 - [Performance guide](docs/performance.md) |
   [AI-agent quick reference](docs/for-ai-agents.md) |
-  [Limitations](LIMITATIONS.md) |
+  [Limitations](docs/LIMITATIONS.md) |
   [Migration tables](docs/migration/)
 
 
