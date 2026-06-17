@@ -17,9 +17,10 @@ validation, and core data-class names for the current 2.x surface.
 ### Capture and Extraction
 - `trace` - backend-resolved capture returning `Trace`; `torchlens.user_funcs.trace`.
 - `fastlog` - torch-only sparse predicate-recording namespace; `torchlens.fastlog`.
-- `peek` - capture one layer activation by label/query; `torchlens.__init__.peek`.
+- `record` - torch-only sparse predicate recorder returning `Recording`; `torchlens.fastlog._record_one_shot.record`.
+- `pluck` - capture one layer activation by label/query; `torchlens.__init__.pluck` (deprecated alias: `peek`).
 - `extract` - extract one or more layer activations; `torchlens.__init__.extract`.
-- `batched_extract` - batched extraction helper over an iterable; `torchlens.__init__.batched_extract`.
+- `extract_dataset` - batched extraction helper over an iterable; `torchlens.__init__.extract_dataset` (deprecated alias: `batched_extract`).
 
 ### Save and Load
 - `save` - save `Trace`, `Bundle`, or related object to portable format; `torchlens._io.bundle.save`.
@@ -37,9 +38,9 @@ validation, and core data-class names for the current 2.x surface.
 - `Bundle` - named collection of logs/specs with multi-trace helpers; `torchlens.intervention.bundle.Bundle`.
 - `bundle` - convenience constructor for `Bundle`; `torchlens.__init__.bundle`.
 - `do` - runtime intervention execution helper; `torchlens.intervention.runtime.do`.
-- `replay` - replay an intervention/log/spec; `torchlens.intervention.replay.replay`.
-- `replay_from` - replay from a source object; `torchlens.intervention.replay.replay_from`.
-- `rerun` - rerun a model with interventions; `torchlens.intervention.rerun.rerun`.
+- `push` - push an intervention/log/spec; `torchlens.intervention.replay.push` (deprecated alias: `replay`).
+- `push_from` - push from a source object; `torchlens.intervention.replay.push_from` (deprecated alias: `replay_from`).
+- `run` - run a model with interventions; `torchlens.intervention.rerun.run` (deprecated alias: `rerun`).
 
 ### Selectors and Site Discovery
 - `label` - selector by layer label; `torchlens.intervention.selectors.label`.
@@ -48,7 +49,9 @@ validation, and core data-class names for the current 2.x surface.
 - `contains` - selector combinator for contained text/metadata; `torchlens.intervention.selectors.contains`.
 - `where` - predicate selector; `torchlens.intervention.selectors.where`.
 - `in_module` - selector constrained to module scope; `torchlens.intervention.selectors.in_module`.
-- `sites` - build/inspect site collections; `torchlens.intervention.sites.sites`.
+- `regex` - selector by regular-expression match on labels; `torchlens.intervention.selectors.regex`.
+- `without_op` - selector that excludes a matched op; `torchlens.intervention.selectors.without_op`.
+- Site discovery is via `Trace.find_sites(...)`; the old top-level `sites()`/`SiteCollection`/`SiteSpec` were removed from the public API.
 
 ### Intervention Helper Transforms
 - `clamp` - clamp activation values; `torchlens.intervention.helpers.clamp`.
@@ -68,18 +71,18 @@ validation, and core data-class names for the current 2.x surface.
 
 ### Observers
 - `tap` - create a tap observer for a site; `torchlens.observers.tap`.
-- `record_span` - context manager for user span records during capture; `torchlens.observers.record_span`.
+- `span` - context manager for user span records during capture; `torchlens.observers.span` (deprecated alias: `record_span`).
 
 ## Subpackage Map
 
 | Path | What lives there | Why look there |
 |------|------------------|----------------|
-| `torchlens/__init__.py` | Top-level exports, shims, `peek`, `extract`, `batched_extract` | Public API shape and compatibility moves |
+| `torchlens/__init__.py` | Top-level exports, shims, `pluck`, `extract`, `extract_dataset` | Public API shape and compatibility moves |
 | `torchlens/_state.py` | Logging toggle, active log, wrapper maps, prepared model registry | Global state and decoration invariants |
 | `torchlens/constants.py` | FIELD_ORDER tuples, torch function discovery | Field additions and wrapper coverage |
 | `torchlens/user_funcs.py` | Capture, summary, graph display, validation entry points | Main user workflows |
 | `torchlens/options.py` | Capture/save/vis/replay/intervention/streaming options | Flat kwarg to grouped option behavior |
-| `torchlens/observers.py` | `tap`, `record_span`, active span storage | User instrumentation during capture |
+| `torchlens/observers.py` | `tap`, `span`, active span storage | User instrumentation during capture |
 | `torchlens/_io/` | Portable bundle internals, manifests, lazy refs, streaming writer | `.tlspec` and save/load implementation |
 | `torchlens/io/` | Public I/O/admin helpers | `inspect_tlspec`, `detect_tlspec_format`, moved admin APIs |
 | `torchlens/capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
