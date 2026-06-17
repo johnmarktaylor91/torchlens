@@ -37,7 +37,18 @@ def test_ram_only_roundtrip_records_in_memory() -> None:
     assert recording.bundle_path is None
     assert recording.recovered is False
     assert len(recording) > 0
+    assert recording.n_records == len(recording)
     assert any(record.ram_payload is not None for record in recording)
+
+
+def test_lazy_recording_n_records_is_current_before_records_access() -> None:
+    """A fresh lazy Recording reports retained records before direct records access."""
+
+    recording = tl.record(TinyModel(), torch.ones(1, 3), save=tl.func("linear"))
+
+    assert object.__getattribute__(recording, "_records_built") is False
+    assert recording.n_records == 1
+    assert object.__getattribute__(recording, "_records_built") is True
 
 
 def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
@@ -57,6 +68,7 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
     assert (bundle_path / "metadata.json").exists()
     assert loaded.recovered is False
     assert len(loaded) == len(recording)
+    assert loaded.n_records == len(recording)
     assert loaded.records[0].metadata["blob_id"] == recording.records[0].metadata["blob_id"]
 
 

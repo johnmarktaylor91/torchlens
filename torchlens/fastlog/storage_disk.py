@@ -410,7 +410,6 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
 
     metadata = {
         "n_ops": recording.n_ops,
-        "n_records": len(recording.records),
         "start_times": recording.start_times,
         "end_times": recording.end_times,
         "predicate_failure_overflow_count": recording.predicate_failure_overflow_count,

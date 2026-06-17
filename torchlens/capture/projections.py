@@ -133,7 +133,6 @@ def _empty_recording(options: "RecordingOptions") -> Recording:
             else Path(options.streaming.bundle_path)
         ),
         n_ops=0,
-        n_records=0,
         start_times=[],
         end_times=[],
         predicate_failures=[],
@@ -206,7 +205,6 @@ class RecordingState:
         """Append a retained out record and update indexes."""
 
         self.storage_backend.append(record)
-        object.__setattr__(self.recording, "n_records", len(self.recording.records))
 
     def resolve_storage(
         self,

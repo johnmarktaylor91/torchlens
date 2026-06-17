@@ -45,7 +45,6 @@ def _empty_recording(history_size: int) -> Recording:
         by_address={},
         bundle_path=None,
         n_ops=1,
-        n_records=0,
         start_times=[],
         end_times=[],
         predicate_failures=[],

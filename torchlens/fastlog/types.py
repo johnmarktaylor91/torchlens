@@ -283,7 +283,6 @@ class Recording(CapturedRun):
     by_address: dict[str, list[int]]
     bundle_path: Path | None
     n_ops: int
-    n_records: int
     start_times: list[float]
     end_times: list[float]
     predicate_failures: list[PredicateFailure]
@@ -348,9 +347,15 @@ class Recording(CapturedRun):
             list(getattr(session, "output_tensor_addresses", [])),
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
-        object.__setattr__(base, "_records_built", bool(base.records))
+        object.__setattr__(base, "_records_built", bool(object.__getattribute__(base, "records")))
         object.__setattr__(base, "_recording_trace", None)
         return base
+
+    @property
+    def n_records(self) -> int:
+        """Return the current number of retained activation records."""
+
+        return len(self.records)
 
     def _ensure_records(self) -> None:
         """Populate retained records from CaptureEvents on first record access."""
@@ -381,7 +386,6 @@ class Recording(CapturedRun):
                     )
                 if record.ctx.address is not None:
                     self.by_address.setdefault(record.ctx.address, []).append(index)
-        object.__setattr__(self, "n_records", len(records))
         object.__setattr__(self, "_records_built", True)
 
     @property

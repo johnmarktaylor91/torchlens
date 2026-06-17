@@ -26,7 +26,7 @@ def _copy_record_with_metadata(
 def _replace_recording_records(recording: Recording, records: list[ActivationRecord]) -> Recording:
     """Return a recording copy with a new records list and count."""
 
-    return replace(recording, records=records, n_records=len(records))
+    return replace(recording, records=records)
 
 
 def add_module_path_strings(recording: Recording) -> Recording:
