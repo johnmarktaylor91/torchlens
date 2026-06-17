@@ -1,6 +1,159 @@
 # CHANGELOG
 
 
+## v2.23.0 (2026-06-17)
+
+### Bug Fixes
+
+- **capture): restore fast-pass child-version propagation (NOT redundant); fix(types**: Rerun
+  save-scope annotation
+  ([`7c4e145`](https://github.com/johnmarktaylor91/torchlens/commit/7c4e145a8e307497fdaa077fa61fb8da064082f0))
+
+Revert the Unit-E 'fast-pass inline redundancy' removal: the inline propagation of the parent's out
+  to output-layer children (incl. per-child out_versions_by_child) is load-bearing, not dead.
+  Without it, fast-refresh + save_new_outs on inplace/alias models fails validate_forward_pass
+  (test_capture_unification_p5). postprocess_fast does NOT fully rebuild those child versions. (E's
+  DOT-cleanup is unaffected.)
+
+Widen _rerun_save_scope return type to list[int | str] to match _run_model_and_save_specified_outs.
+
+- **jit**: Sanitize DType hints so torch.jit.script works on wrapped ops; guard patch_model_instance
+  ([`341cfe5`](https://github.com/johnmarktaylor91/torchlens/commit/341cfe5d73c1dc09ca43ee22ca0cd80a47979002))
+
+JIT: decorated wrappers registered in torch.jit._builtins._builtin_table carried a DType annotation
+  TorchScript can't parse, breaking torch.jit.script on GPTBigCode-style attention. Sanitize DType
+  annotations to int immediately before builtin registration (property accessors too);
+  registration/id mapping preserved (test_jit_compat).
+
+PERF-39: patch_model_instance re-walked every module's instance attrs on every session. Add a
+  _PATCHED_MODEL_INSTANCES WeakSet guard (skip already-patched models), cleared on unwrap_torch so
+  rewrap re-patches.
+
+docs: correct the emit_nvtx docstring (it is implemented via torch.cuda.nvtx, not inert) and explain
+  NVTX/Nsight for non-CUDA users.
+
+- **viz**: Keep DOT source on render failure; drop dead fast-pass output propagation
+  ([`630c315`](https://github.com/johnmarktaylor91/torchlens/commit/630c31532b1a52809e5367591cdb57d9994ad8b3))
+
+Visualization: graphviz DOT source (saved at vis_outpath) is now removed only on successful render.
+  On failure (forward + backward paths) it is KEPT, so the error's 'DOT source was saved to ...'
+  hint points to a real file for debugging. Tests corrected to assert the real source path (was
+  vacuously checking a .dot suffix).
+
+Capture: removed the fast-pass inline output-layer propagation in log_function_output_tensors_fast —
+  postprocess_fast already copies output-layer payloads from parent ops, so the inline work was dead
+  and redundant. No change to captured output (fast-pass parity test added).
+
+### Features
+
+- **api**: Op buffer source/sink accessors, call_tree accessor, leaner Trace.rerun
+  ([`624f85d`](https://github.com/johnmarktaylor91/torchlens/commit/624f85dd760173a767f22e5dfc2ee80ffa6cc612))
+
+- Op.buffer_source_ops / buffer_sink_ops + Trace.num_buffer_source_ops / num_buffer_sink_ops,
+  paralleling the existing buffer_layers / internal source-sink accessors (computed; no new
+  persisted fields, so schema-audit unaffected). - call_tree: structured ModuleCall-rooted tree
+  accessor on Trace/Module/ModuleCall (data counterpart to the display-only show_call_tree). -
+  Leaner Trace.rerun: _rerun_save_scope no longer widens any non-empty saved subset to 'all'; it
+  mirrors the original save subset via a raw-index save predicate, so rerun stops re-saving
+  opted-out layers.
+
+- **api**: Public raw labels, strict-type accessors, op.arg_expressions, to_pandas conversions
+  ([`5de656b`](https://github.com/johnmarktaylor91/torchlens/commit/5de656b741a9093ac31e79367be3dce49dbf063d))
+
+- Raw-label promotion: public Op.raw_label (realtime ordinal identity prior to equivalent-op
+  grouping; computed from _label_raw, name behind RAW_LABEL_* constants) + raw-label lookup keys +
+  TraceOpAccessor.by_raw_index(). Computed fields registered FieldPolicy.DROP (not persisted). -
+  Strict-type accessors: trace.layers[X] always returns Layer, trace.ops[X] always Op; bare
+  multi-pass Op lookup raises AmbiguousOpLookupError(ValueError) (backward-compatible). Logic in
+  per-subclass overrides, not the shared accessor base. - op.arg_expressions: lazy per-arg call-site
+  expressions parsed from the already-stored code_context AST (zero capture cost, no new
+  dependency); degrades gracefully on multi-call lines. - to_pandas: add is_internally_initialized +
+  min/max distance conversions.
+
+NOTE: Fork-1 multi-exit bare-alias collision fix DEFERRED (#11) — its highest-raw-index heuristic
+  treated BatchNorm buffer-update ops as module exits, breaking module_layer_containment; needs an
+  approach review.
+
+- **intervention**: Add tl.sweep (value sweep -> Bundle of traces); expose tl.attribution
+  ([`5569d01`](https://github.com/johnmarktaylor91/torchlens/commit/5569d01bd182092ca6292b0f4fee6f8fd684c924))
+
+tl.sweep(param, values, ...) reruns the forward once per swept value with a replacement intervention
+  at the target site and returns a Bundle (one trace per value), as a sibling to
+  zero_ablate/mean_ablate/steer/noise/scale. Public name is isolated behind
+  intervention.sweep.SWEEP_NAME for a trivial future rename.
+
+Expose the existing torchlens/attribution/ module as the tl.attribution submodule namespace (import
+  only; not added to top-level __all__).
+
+- **validation): detect-restore non-registered mutable state on deepcopy fallback; fix(viz**:
+  Large-graph blank-PDF bbox
+  ([`c7303a8`](https://github.com/johnmarktaylor91/torchlens/commit/c7303a8f22f333f6164e9d482510f66bf1000da7))
+
+Validation: on the deepcopy-FAILURE fallback of _model_for_ground_truth_validation only (happy-path
+  deepcopy unchanged, RuntimeWarning kept), snapshot + restore the model's non-registered
+  module-tree attributes (value-diff) between the ground-truth and logged runs, removing false
+  validation alarms for models that mutate plain attrs in forward(). Tripwire-safe:
+  un-snapshotable/un-restorable state FAILS LOUD (raises, never silent pass); out-of-tree
+  globals/external objects remain unsupported by design. Tested both directions (false-alarm gone;
+  genuine capture break still fails; restore failure raises).
+
+Viz: normalize negative SVG root viewBox origins before composed PDF/PNG conversion so large
+  Graphviz layouts no longer render to a visually-blank page.
+
+### Performance Improvements
+
+- **capture**: Bypass pause_logging in get_memory_amount; bound AST file cache (LRU)
+  ([`08dca26`](https://github.com/johnmarktaylor91/torchlens/commit/08dca260d57c121977b80bbff67c512dddb1916f))
+
+PERF-29: get_memory_amount resolves the unwrapped nelement/element_size via
+  _state._decorated_to_orig and calls them directly, avoiding a pause_logging() enter/exit per
+  tensor at scale. Meta/sparse handling unchanged; dtype byte-count parity covered by tests.
+
+Bound postprocess/ast_branches._file_cache to a 256-entry LRU (OrderedDict) so long-lived processes
+  parsing many source files don't accumulate ASTs unbounded; invalidate_cache() behavior preserved.
+
+- **capture**: Speed up patch_detached_references crawl ~3x (coverage-preserving)
+  ([`71cd6a2`](https://github.com/johnmarktaylor91/torchlens/commit/71cd6a2e8e091e9f58f1e69912b3500a95b6b07f))
+
+First-capture cold-start dominated by warnings.catch_warnings() entered per attribute (~254K times)
+  plus redundant class re-walks. Three coverage-preserving opts: - hoist catch_warnings() to wrap
+  the whole crawl once (headline ~3.2x), - cheap issubclass(type(x), type) pre-check before
+  isinstance (keeps custom metaclasses), - dedup Level-2 vars(cls) walks by id(cls).
+
+Patched-ref set is byte-identical (no scoping/heuristic skips). New adversarial coverage regression
+  test plants module-level, class-attr, and function-default 'from torch import' refs in a non-torch
+  module and asserts all three are rewritten to the decorated wrappers.
+
+### Testing
+
+- Consume intentional deprecation-alias warnings in shim tests
+  ([`0c1792f`](https://github.com/johnmarktaylor91/torchlens/commit/0c1792fa1682f942cf2abeda7040ede0947e5ef1))
+
+Wrap deprecated-alias calls in pytest.warns(DeprecationWarning) (or scope filterwarnings) in the
+  backward-compat shim tests, and migrate incidental non-shim tests to the canonical grouped
+  option/API names. No production code changed; no global deprecation filter (new deprecations still
+  surface). Smoke warning count ~halved (131 -> 66); broader not-slow noise reduced similarly.
+
+- **capture**: Regression tests for #93 fast-pass out_versions_by_child + ELSE arm detection
+  ([`203fd21`](https://github.com/johnmarktaylor91/torchlens/commit/203fd21d8d8b48f00b1bb2caef9fe4bdc4465446))
+
+#93 (no production change needed): fast selective save repopulates out_versions_by_child via
+  fast-path child-version tracking when save_arg_values=True; the save_arg_values=False path fails
+  loud (explicit ValueError on validate) rather than silently losing per-child variations. Tests pin
+  both behaviors.
+
+ELSE: confirm conditional records materialize both THEN and ELSE arms with correct fired status
+  across inputs (already built; regression test added).
+
+- **goldens**: Re-snapshot module-containment + backend-parity goldens for raw-label promotion
+  ([`d0b9bc7`](https://github.com/johnmarktaylor91/torchlens/commit/d0b9bc711abf8d3ab4946664978425b7cd11fed9))
+
+Unit B added public raw labels as lookup keys (op._label_raw / raw_label) and the raw_label /
+  arg_expressions / is_internally_initialized fields. Verified the golden diffs are EXCLUSIVELY
+  added raw-label lookup keys, new field names in field-order, and recomputed digests — no
+  structural/containment/value changes (confirmed by diff).
+
+
 ## v2.22.0 (2026-06-16)
 
 ### Documentation
