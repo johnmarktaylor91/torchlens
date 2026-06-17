@@ -9,6 +9,7 @@ import torchlens
 
 TARGET_ALL = [
     "trace",
+    "export",
     "fastlog",
     "facets",
     "record",
@@ -31,6 +32,7 @@ TARGET_ALL = [
     "extract_dataset",
     "batched_extract",
     "validate",
+    "AmbiguousOpLookupError",
     "Trace",
     "Layer",
     "Container",
@@ -113,7 +115,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_76() -> None:
+def test_all_size_exactly_78() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -131,11 +133,19 @@ def test_all_size_exactly_76() -> None:
     `input_at` = 66. Eclectic Unit G adds `sweep` = 67.
     Glossary-conform-v11 DO-NOW renames: adds `record`, `Recording`, `push`,
     `push_from`, `run`, `pluck`, `extract_dataset`, `without_op`, `regex`,
-    `span`; removes `sites` = 76.
+    `span`; removes `sites` = 76. Internal sprint 2 adds `export` and
+    `AmbiguousOpLookupError` = 78.
     """
 
-    assert len(torchlens.__all__) == 76
+    assert len(torchlens.__all__) == 78
     assert torchlens.__all__ == TARGET_ALL
+
+
+def test_phase_b_exports_are_top_level_importable() -> None:
+    """Phase B public names should resolve from the top-level namespace."""
+
+    assert torchlens.export is importlib.import_module("torchlens.export")
+    assert torchlens.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
 
 
 def test_all_target_names_importable() -> None:
