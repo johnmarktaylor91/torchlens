@@ -1565,7 +1565,9 @@ class Bundle:
         """
 
         values = list(value) if self._is_list_like(value) else [value]
-        return [self._coerce_member_name(item) for item in values]
+        # _is_list_like narrows the runtime type (sequence -> its elements, scalar -> [value]),
+        # but mypy can't follow that helper, so assert the element type the narrowing guarantees.
+        return [self._coerce_member_name(cast("str | Trace", item)) for item in values]
 
     def _coerce_member_name(self, value: str | "Trace") -> str:
         """Resolve one Bundle member reference to a member name.
