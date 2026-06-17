@@ -16,10 +16,9 @@ see executed output you review the generated artifacts (not the notebooks on Git
 3. Any cell marked **⚠️ GAP** is a surface that errored or felt awkward — those are the
    action items.
 
-> If you'd rather review the executed notebooks directly on GitHub (outputs inline), add
-> `notebooks/audit/*.ipynb -filter` to `.gitattributes` to exempt this folder from
-> `nbstripout` and re-commit. Trade-off: text outputs land in git (small, all notebooks are
-> 22-67 KB) but re-execution produces noisier diffs.
+> The committed `.ipynb` are output-stripped by the repo's `nbstripout` filter (a deliberate
+> convention), so the executed **HTML exports are the canonical output-review surface** — not
+> the notebooks as they appear on GitHub. Regenerate the exports with the step in `CLAUDE.md`.
 
 ## Coverage matrix
 
