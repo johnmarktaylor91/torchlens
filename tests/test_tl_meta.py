@@ -215,7 +215,9 @@ def test_foreign_tl_raises_for_read_helpers_and_is_tracked() -> None:
 
 @pytest.mark.smoke
 def test_wrong_kind_meta_raises_on_kind_specific_helpers() -> None:
-    """Kind-specific helpers should reject another TorchLens metadata subclass."""
+    """Attribute-backed helpers (tensors/callables) reject another TorchLens
+    metadata subclass; registry-backed helpers (params/modules) ignore a foreign
+    ``._tl`` since they no longer use the attribute."""
     t = torch.ones(1)
     t._tl = ParamMeta()
     with pytest.raises(TorchLensTLCollisionError):
@@ -223,19 +225,24 @@ def test_wrong_kind_meta_raises_on_kind_specific_helpers() -> None:
     with pytest.raises(TorchLensTLCollisionError):
         set_buffer_address(t, "buf")
 
+    # Parameters and modules are REGISTRY-backed: TorchLens no longer reads or
+    # writes their ``._tl`` attribute, so a foreign ``._tl`` does not collide --
+    # the kind-specific helpers succeed (storing in the identity-keyed registry)
+    # and the foreign attribute is left untouched. (Tripwire: if these start
+    # raising again, the param/module storage has regressed to the attribute.)
     p = nn.Parameter(torch.ones(1))
     p._tl = TensorMeta()
-    with pytest.raises(TorchLensTLCollisionError):
-        set_param_meta(p, barcode="abc", address="w", requires_grad_before=True)
-    with pytest.raises(TorchLensTLCollisionError):
-        increment_param_call_index(p)
-    with pytest.raises(TorchLensTLCollisionError):
-        restore_param_requires_grad(p)
+    set_param_meta(p, barcode="abc", address="w", requires_grad_before=True)
+    assert get_param_meta(p).param_barcode == "abc"
+    assert increment_param_call_index(p) == 1
+    restore_param_requires_grad(p)
+    assert isinstance(p._tl, TensorMeta)  # foreign attribute preserved
 
     module = nn.Linear(1, 1)
     module._tl = TensorMeta()
-    with pytest.raises(TorchLensTLCollisionError):
-        set_module_meta(module, address="", module_type="Linear")
+    set_module_meta(module, address="m", module_type="Linear")
+    assert get_module_meta(module).address == "m"
+    assert isinstance(module._tl, TensorMeta)  # foreign attribute preserved
 
     _plain_function._tl = TensorMeta()
     with pytest.raises(TorchLensTLCollisionError):
@@ -243,3 +250,43 @@ def test_wrong_kind_meta_raises_on_kind_specific_helpers() -> None:
     with pytest.raises(TorchLensTLCollisionError):
         is_decorated_function(_plain_function)
     clear_meta(_plain_function)
+
+
+def test_module_param_metadata_is_registry_backed_not_attribute() -> None:
+    """Module/param metadata lives in identity-keyed registries: the user objects
+    carry no ``._tl`` attribute, clearing removes the REGISTRY entry, deepcopy does
+    not carry the metadata, and GC of a dead key drops its entry (no id reuse)."""
+    import copy
+    import gc
+
+    from torchlens.backends.torch._tl import _MODULE_REGISTRY
+
+    m = nn.Linear(2, 2)
+    set_module_meta(m, address="enc.lin", module_type="Linear")
+    set_param_meta(m.weight, barcode="bc", address="enc.lin.weight", requires_grad_before=True)
+
+    # cleanliness: no ``._tl`` attribute leaked onto the user objects
+    assert not hasattr(m, "_tl")
+    assert not hasattr(m.weight, "_tl")
+    assert is_tracked(m) and is_tracked(m.weight)
+
+    # deepcopy does not carry the metadata (fresh objects, absent from the registry)
+    mc = copy.deepcopy(m)
+    assert get_module_meta(mc) is None
+    assert get_param_meta(mc.weight) is None
+
+    # clearing removes the REGISTRY entry, not merely an attribute
+    restore_param_requires_grad(m.weight)
+    clear_meta(m.weight)
+    clear_meta(m)
+    assert get_param_meta(m.weight) is None
+    assert get_module_meta(m) is None
+    assert not is_tracked(m) and not is_tracked(m.weight)
+
+    # GC of a dead module drops its registry entry (guards against id reuse)
+    transient = nn.ReLU()
+    set_module_meta(transient, address="t", module_type="ReLU")
+    n_before = len(_MODULE_REGISTRY)
+    del transient
+    gc.collect()
+    assert len(_MODULE_REGISTRY) < n_before

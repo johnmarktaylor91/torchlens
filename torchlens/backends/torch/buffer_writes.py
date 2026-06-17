@@ -12,7 +12,7 @@ from torch import nn
 from ... import _state
 from ...ir import BufferWriteEvent
 from ...utils.tensor_utils import safe_copy
-from ._tl import get_buffer_address, get_tensor_label, set_buffer_address
+from ._tl import get_buffer_address, get_module_meta, get_tensor_label, set_buffer_address
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
@@ -451,7 +451,7 @@ def _iter_modules_with_addresses(model: nn.Module) -> list[tuple[str, nn.Module]
 def _module_address_from_meta(module: nn.Module) -> str:
     """Return the TorchLens module address stored during model prep."""
 
-    meta = getattr(module, "_tl", None)
+    meta = get_module_meta(module)
     address = getattr(meta, "address", None)
     if address in {None, "self"}:
         return ""

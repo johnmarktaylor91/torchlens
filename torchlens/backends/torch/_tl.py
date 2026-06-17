@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace as dataclass_replace
 from typing import Any, Iterable, List, Optional, cast
 
+from torch import nn
+from torch.utils.weak import WeakIdKeyDictionary
+
 __all__ = [
     "TorchLensMeta",
     "TensorMeta",
@@ -83,6 +86,32 @@ class TorchLensTLCollisionError(AttributeError):
     """Raised when an existing ``._tl`` is foreign or the wrong metadata kind."""
 
 
+# --------------------------------------------------------------------------- #
+# Identity-keyed registries for USER-OWNED objects (modules + parameters).
+#
+# Modules and parameters are the user's objects; tagging them with a ``._tl``
+# attribute pollutes them (state_dict / serialization / introspection leakage)
+# and, for parameters, writes an attribute onto an ``nn.Parameter`` tensor. We
+# instead store their TorchLens metadata in process-wide identity-keyed weak
+# registries, leaving the user objects untouched. TorchLens-OWNED objects
+# (plain activation tensors -> ``TensorMeta``; decorated callables ->
+# ``DecorationTag``) keep using the ``._tl`` attribute -- no pollution concern,
+# and that path is hot.
+#
+# ``WeakIdKeyDictionary`` (not stdlib ``WeakKeyDictionary``) is REQUIRED for the
+# parameter registry: ``nn.Parameter`` is a tensor whose ``__eq__`` is
+# elementwise, which breaks ``WeakKeyDictionary``'s internal ref equality. The
+# id-keyed variant keys by object identity, is tensor-safe, and auto-removes
+# dead entries via weakrefs (no manual finalizers, no id-reuse hazard). Entry
+# lifetime == key-object lifetime, identical to the former attribute. Modules'
+# metadata is permanent/cross-session; a process-wide registry preserves that.
+# --------------------------------------------------------------------------- #
+# Values are ModuleMeta / ParamMeta respectively (WeakIdKeyDictionary is not
+# typing-subscriptable, so the value type is documented rather than annotated).
+_MODULE_REGISTRY: "WeakIdKeyDictionary" = WeakIdKeyDictionary()
+_PARAM_REGISTRY: "WeakIdKeyDictionary" = WeakIdKeyDictionary()
+
+
 def get(obj: Any) -> Optional[TorchLensMeta]:
     """Return TorchLens metadata attached to an object.
 
@@ -124,6 +153,10 @@ def is_tracked(obj: Any) -> bool:
     bool
         True when TorchLens metadata is present.
     """
+    if isinstance(obj, nn.Module):
+        return obj in _MODULE_REGISTRY
+    if isinstance(obj, nn.Parameter):
+        return obj in _PARAM_REGISTRY
     return get(obj) is not None
 
 
@@ -137,15 +170,25 @@ def clear_meta(obj: Any) -> None:
 
     Notes
     -----
-    Foreign ``._tl`` values are preserved.
+    Foreign ``._tl`` values are preserved. Module/parameter metadata lives in the
+    identity-keyed registries and is removed there.
     """
     existing = getattr(obj, "_tl", None)
-    if existing is None or not isinstance(existing, TorchLensMeta):
+    if isinstance(existing, TorchLensMeta):
+        # TorchLens-owned tensor/callable: metadata is on the attribute.
+        try:
+            delattr(obj, "_tl")
+        except AttributeError:
+            pass
         return
-    try:
-        delattr(obj, "_tl")
-    except AttributeError:
-        pass
+    # No TorchLens attribute (any foreign ``_tl`` is left untouched). Registry-stored
+    # module/param metadata, if any, is removed here. ``isinstance(_, nn.Parameter)``
+    # is the expensive check, so it is reached only for attribute-less non-module
+    # objects -- never the hot plain-tensor cleanup path.
+    if isinstance(obj, nn.Module):
+        _MODULE_REGISTRY.pop(obj, None)
+    elif isinstance(obj, nn.Parameter):
+        _PARAM_REGISTRY.pop(obj, None)
 
 
 def get_tensor_meta(t: Any) -> Optional[TensorMeta]:
@@ -321,14 +364,7 @@ def get_param_meta(p: Any) -> Optional[ParamMeta]:
     Optional[ParamMeta]
         Parameter metadata if present.
     """
-    meta = get(p)
-    if meta is None:
-        return None
-    if not isinstance(meta, ParamMeta):
-        raise TorchLensTLCollisionError(
-            f"Expected ParamMeta on {type(p).__name__}, found {type(meta).__name__}"
-        )
-    return meta
+    return _PARAM_REGISTRY.get(p)
 
 
 def _ensure_param_meta(p: Any) -> ParamMeta:
@@ -344,10 +380,10 @@ def _ensure_param_meta(p: Any) -> ParamMeta:
     ParamMeta
         Parameter metadata namespace.
     """
-    meta = get_param_meta(p)
+    meta = _PARAM_REGISTRY.get(p)
     if meta is None:
         meta = ParamMeta()
-        p._tl = meta
+        _PARAM_REGISTRY[p] = meta
     return meta
 
 
@@ -416,14 +452,7 @@ def get_module_meta(m: Any) -> Optional[ModuleMeta]:
     Optional[ModuleMeta]
         Module metadata if present.
     """
-    meta = get(m)
-    if meta is None:
-        return None
-    if not isinstance(meta, ModuleMeta):
-        raise TorchLensTLCollisionError(
-            f"Expected ModuleMeta on {type(m).__name__}, found {type(meta).__name__}"
-        )
-    return meta
+    return _MODULE_REGISTRY.get(m)
 
 
 def _ensure_module_meta(m: Any) -> ModuleMeta:
@@ -439,10 +468,10 @@ def _ensure_module_meta(m: Any) -> ModuleMeta:
     ModuleMeta
         Module metadata namespace.
     """
-    meta = get_module_meta(m)
+    meta = _MODULE_REGISTRY.get(m)
     if meta is None:
         meta = ModuleMeta()
-        m._tl = meta
+        _MODULE_REGISTRY[m] = meta
     return meta
 
 
