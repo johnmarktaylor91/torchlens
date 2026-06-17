@@ -1,6 +1,25 @@
 # CHANGELOG
 
 
+## v2.25.0 (2026-06-17)
+
+### Bug Fixes
+
+- **fastlog**: Derive recording record count
+  ([`f3ffa37`](https://github.com/johnmarktaylor91/torchlens/commit/f3ffa370b0067c8917a0f222d036d9f66d05757c))
+
+- **intervention**: Correct projection and repr output
+  ([`caf080d`](https://github.com/johnmarktaylor91/torchlens/commit/caf080da106e84d4aa2873271a35dd6717195bba))
+
+- **validation**: Repair multi-output and fallback snapshots
+  ([`0dac4d0`](https://github.com/johnmarktaylor91/torchlens/commit/0dac4d007f1967a88d39428c2af80851bb4dd5f3))
+
+### Features
+
+- **api**: Expose export and ambiguous lookup error
+  ([`a4952c8`](https://github.com/johnmarktaylor91/torchlens/commit/a4952c87eb5a0a3abf130f709224dc3ce00a0a58))
+
+
 ## v2.24.1 (2026-06-17)
 
 ### Continuous Integration
