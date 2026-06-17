@@ -1,6 +1,96 @@
 # CHANGELOG
 
 
+## v2.24.0 (2026-06-17)
+
+### Chores
+
+- **audit**: Revert nbstripout exemption (keep repo convention)
+  ([`cefcc82`](https://github.com/johnmarktaylor91/torchlens/commit/cefcc820a3a4529f6bb767053fe37b81741e3c02))
+
+nbstripout strips committed notebook outputs by design; the -filter override didn't take cleanly.
+  Review the audit via the executed HTML exports (notebooks/audit/_exports/, regenerate per
+  CLAUDE.md) instead.
+
+### Documentation
+
+- Conform notebooks to glossary-v11 API + curated model-visualization gallery
+  ([`b631f48`](https://github.com/johnmarktaylor91/torchlens/commit/b631f4873e3cdecb2c0623d59ee2b542d78dad0b))
+
+- Full modern README overhaul (conformed API)
+  ([`f118ab9`](https://github.com/johnmarktaylor91/torchlens/commit/f118ab927619d99d4d02d0f253a7bd766b5defff))
+
+Rewrite on the current tl.trace/Trace surface (legacy log_forward_pass/model_history/
+  vis_opt/.activation removed). New hero + 700-models and 180+/550+ metadata-field stats; six-pillar
+  scope tour with run-verified examples; cleaned stale links (CoLab->in-repo tutorial, Drive share
+  link, cerbrec https); dropped stale Planned Features.
+
+- **audit**: Add HuggingFace notebook (14) + commit executed outputs (nbstripout exempt)
+  ([`ddd2dd2`](https://github.com/johnmarktaylor91/torchlens/commit/ddd2dd2601dfecd2f4b7ee8ee85621e8a549307f))
+
+- **audit**: Correct review-surface note (HTML exports, not the -filter trick)
+  ([`0b9fc4f`](https://github.com/johnmarktaylor91/torchlens/commit/0b9fc4fde15406570d6630166a9207605665a33d))
+
+- **audit**: Coverage notebooks 01-13 + visual-pack generator
+  ([`5443718`](https://github.com/johnmarktaylor91/torchlens/commit/5443718c4c64342e304a424f94e9a175017f61f3))
+
+Scoped ruff per-file-ignore (E402) for notebooks/audit/*.ipynb (shim-before-import is mandated by
+  the audit CLAUDE.md recipe). Notebook 11 image previews stripped (graphs live in the visual pack);
+  notebook 05 blob-index sha256 truncated in-code so regeneration stays detect-secrets-clean.
+
+- **audit**: Fix NB00 trace[int] claim, close coverage holes, README matrix
+  ([`8509646`](https://github.com/johnmarktaylor91/torchlens/commit/85096465f612f8e8ddf372e385de61a99603a1f6))
+
+- **audit**: Foundation -- model zoo, template notebook 00, README/CLAUDE recipe
+  ([`599ce40`](https://github.com/johnmarktaylor91/torchlens/commit/599ce401e327d8d300805df0994071a88825cc99))
+
+Clear old audit notebooks (14 + _artifacts) and total_audit/. Replace with: -
+  notebooks/audit/_models.py: 18-model verified zoo (all tl.trace OK) -
+  notebooks/audit/00_setup_and_first_capture.ipynb: executed-green template covering tl.trace, Trace
+  repr/str, summary() levels, label accessors, trace[label]/[int], Op.out,
+  trace.layers/.ops/.modules/.params, tl.peek - notebooks/audit/README.md: human coverage matrix (00
+  filled, 01-14 pending) - notebooks/audit/CLAUDE.md: maintenance recipe for future agents -
+  notebooks/audit/.gitignore: ignores _exports/, visual/_pages/, visual_audit.pdf
+
+### Features
+
+- **api**: Glossary-conform-v11 — DO-NOW renames with deprecation aliases
+  ([`da1328d`](https://github.com/johnmarktaylor91/torchlens/commit/da1328de2917504942c5a08b7004b3bf6037ffc4))
+
+Implements all DO-NOW renames from the v11 glossary freeze review:
+
+Top-level / method renames (old names kept as deprecated aliases): - rerun -> run (Trace.run,
+  Bundle.run, intervention.run) - replay -> push (Trace.push, Bundle.push, intervention.push) -
+  replay_from -> push_from (Trace.push_from, intervention.push_from) - peek -> pluck (tl.pluck) -
+  batched_extract -> extract_dataset (tl.extract_dataset) - record_span -> span (tl.span,
+  observers.span)
+
+Selector renames (old names kept as deprecated aliases): - intervening -> without_op
+  (intervention.without_op) - new: regex selector (no prior "matches" existed to alias)
+
+sweep param rename: - param -> at (positional; param= accepted as deprecated kwarg)
+
+Expose in __all__: - record, Recording now in torchlens.__all__
+
+Cut from public export: - sites(), SiteCollection, SiteSpec removed from torchlens.__all__ and
+  torchlens.intervention.__all__; test_sites.py updated to use internal path
+
+Also: RegexSelector class + re.search matching; resolver/hooks updated for without_op, regex,
+  push/push_from, run
+
+### Testing
+
+- **api**: Update golden counts + trace.do() for glossary-conform-v11
+  ([`4e5f26d`](https://github.com/johnmarktaylor91/torchlens/commit/4e5f26d6c7c3ee117d0fb40ce6458c4136b44554))
+
+- test_api_surface.py: TARGET_ALL updated to 76 entries (removed `sites`; added record, Recording,
+  push, push_from, run, pluck, extract_dataset, without_op, regex, span); test renamed to
+  test_all_size_exactly_76. - test_report_explain.py: __all__ count 66 -> 76 with inline changelog.
+  - test_bundle_methods.py: budget bumped <= 31 -> <= 34 for push/run additions. - trace.do():
+  dispatch calls updated to push()/run() to avoid spurious DeprecationWarning on internal code
+  paths.
+
+
 ## v2.23.0 (2026-06-17)
 
 ### Bug Fixes
