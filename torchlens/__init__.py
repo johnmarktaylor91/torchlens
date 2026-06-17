@@ -269,7 +269,8 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
                 return args[0].draw(*args[1:], **kwargs)
             return _moved_show_model_graph(*args, **kwargs)
         if name in {"get_model_structure", "show_model_structure"}:
-            structure_trace = _trace(*args, layers_to_save=None, **kwargs)
+            kwargs.setdefault("layers_to_save", None)
+            structure_trace = _trace(*args, **kwargs)
             return structure_trace.modules
         if name == "get_model_activations":
             return extract(*args, **kwargs)

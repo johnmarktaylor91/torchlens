@@ -92,7 +92,13 @@ _KNOWN_TORCH_FREE_PREFIXES = (
     "pydot",
     "sympy",
 )
-_LEGACY_DETACHED_SKIP_PREFIXES = ("torch.", "numpy.", "pytest", "pluggy", "setuptools")
+_LEGACY_DETACHED_SKIP_PREFIXES: tuple[str, ...] = (
+    "torch.",
+    "numpy.",
+    "pytest",
+    "pluggy",
+    "setuptools",
+)
 _STDLIB_PATHS = tuple(
     path
     for path in (
