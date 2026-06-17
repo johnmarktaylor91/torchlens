@@ -149,6 +149,29 @@ def _get_col_offset(frame: FrameType) -> Optional[int]:
     return offset_map.get(frame.f_lasti)
 
 
+# Shared sentinel for "address not tracked". Used only when return_addresses is
+# False (the common case), where the address lists are discarded -- never mutated.
+_EMPTY_PATH: _AddressPath = []
+
+# Leaf types that cannot contain tensors -- never worth expanding/attribute-crawling.
+# Beyond the obvious primitives, ``None``, torch ``device``/``dtype``/``Size`` and
+# storage were the dominant wasted attribute-crawls in capture profiling (``None``
+# alone was ~66% of them). Built once (membership test, hot path).
+_NON_CONTAINER_LEAF_TYPES: tuple[type, ...] = (
+    str,
+    int,
+    float,
+    bool,
+    bytes,
+    np.ndarray,
+    type(None),
+    torch.device,
+    torch.dtype,
+    torch.Size,
+    torch.UntypedStorage,
+)
+
+
 def get_vars_of_type_from_obj(
     obj: Any,
     which_type: type[Any],
@@ -204,6 +227,7 @@ def get_vars_of_type_from_obj(
                 found_ids,
                 subclass_exceptions,
                 allow_repeats,
+                return_addresses,
             )
 
     if return_addresses:
@@ -297,9 +321,11 @@ def _search_stack_for_tensors_and_params(
             tensors.append(item)
             found_ids.add(id(item))
             continue
-        if item_class in [str, int, float, bool, np.ndarray]:
+        if item_class in _NON_CONTAINER_LEAF_TYPES:
             continue
-        _extend_search_stack_from_item(item, address, address_full, next_stack)
+        # This traversal collects only the objects (not addresses), so skip
+        # address construction.
+        _extend_search_stack_from_item(item, address, address_full, next_stack, False)
     return next_stack
 
 
@@ -312,6 +338,7 @@ def _search_stack_for_vars_of_type(
     found_ids: set[int],
     subclass_exceptions: list[type[Any]],
     allow_repeats: bool,
+    track_addresses: bool,
 ) -> list[_SearchEntry]:
     """Process one BFS depth level: classify items, collect matches, build next level.
 
@@ -354,11 +381,11 @@ def _search_stack_for_vars_of_type(
             found_addresses_full.append(address_full)
             found_ids.add(id(item))
             continue
-        # Leaf primitives and numpy arrays can't contain tensors — skip.
-        if item_class in [str, int, float, bool, np.ndarray]:
+        # Leaf types that can't contain tensors — skip.
+        if item_class in _NON_CONTAINER_LEAF_TYPES:
             continue
         # Non-leaf, non-match — expand into next depth level.
-        _extend_search_stack_from_item(item, address, address_full, next_stack)
+        _extend_search_stack_from_item(item, address, address_full, next_stack, track_addresses)
     return next_stack
 
 
@@ -367,6 +394,7 @@ def _extend_search_stack_from_item(
     address: Any,
     address_full: _AddressPath,
     next_stack: list[_SearchEntry],
+    track_addresses: bool,
 ) -> None:
     """Expand a single non-leaf item's children onto ``next_stack``.
 
@@ -388,7 +416,9 @@ def _extend_search_stack_from_item(
 
     # --- Sequence containers (list, tuple, set) ---
     if type(item) in [list, tuple, set]:
-        if address == "":
+        if not track_addresses:
+            next_stack.extend((x, "", _EMPTY_PATH) for x in item)
+        elif address == "":
             next_stack.extend(
                 [(x, f"{i}", address_full + [("ind", i)]) for i, x in enumerate(item)]
             )
@@ -399,7 +429,9 @@ def _extend_search_stack_from_item(
 
     # --- Dict containers (including OrderedDict, defaultdict, etc.) ---
     if issubclass(type(item), dict):
-        if address == "":
+        if not track_addresses:
+            next_stack.extend((val, "", _EMPTY_PATH) for val in item.values())
+        elif address == "":
             next_stack.extend(
                 [(val, key, address_full + [("ind", key)]) for key, val in item.items()]
             )
@@ -437,14 +469,16 @@ def _extend_search_stack_from_item(
             # property that raises, etc.) — skip gracefully.
             continue
         attr_cls = type(attr)
-        # Leaf primitives — can't contain tensors.
-        if attr_cls in [str, int, float, bool, np.ndarray]:
+        # Leaf types — can't contain tensors.
+        if attr_cls in _NON_CONTAINER_LEAF_TYPES:
             continue
         # Skip callables (custom_methods, functions) UNLESS they're nn.Modules,
         # which are callable but may hold tensor attributes.
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
-        if address == "":
+        if not track_addresses:
+            next_stack.append((attr, "", _EMPTY_PATH))
+        elif address == "":
             next_stack.append((attr, attr_name.strip("_"), address_full + [("attr", attr_name)]))
         else:
             next_stack.append(
