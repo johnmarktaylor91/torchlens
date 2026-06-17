@@ -54,14 +54,14 @@ if TYPE_CHECKING:
     from .selectors import SelectorLike
 
 
-def replay(
+def push(
     log: "Trace",
     *,
     strict: bool | MissingType = MISSING,
     hooks: dict[Any, Any] | None | MissingType = MISSING,
     replay: ReplayOptions | None = None,
 ) -> "Trace":
-    """Replay the saved DAG cone affected by hooks.
+    """Push the edit downstream through the recorded graph (DAG replay).
 
     Parameters
     ----------
@@ -85,7 +85,7 @@ def replay(
     hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
     origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
     if not origins:
-        raise ReplayPreconditionError("replay requires at least one hook target in Phase 6")
+        raise ReplayPreconditionError("push requires at least one hook target in Phase 6")
     if replay_options.differentiable:
         return _run_differentiable_replay(
             log,
@@ -103,14 +103,40 @@ def replay(
     )
 
 
-def replay_from(
+def replay(
+    log: "Trace",
+    *,
+    strict: bool | MissingType = MISSING,
+    hooks: dict[Any, Any] | None | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
+) -> "Trace":
+    """Deprecated alias for :func:`push`.
+
+    Parameters
+    ----------
+    log, strict, hooks, replay:
+        Forwarded unchanged to :func:`push`.
+
+    Returns
+    -------
+    Trace
+        The same model log, mutated in place.
+    """
+
+    from .._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("replay", "push")
+    return push(log, strict=strict, hooks=hooks, replay=replay)
+
+
+def push_from(
     log: "Trace",
     site: "SelectorLike | str | Op",
     *,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
 ) -> "Trace":
-    """Replay the downstream cone from a pre-mutated site.
+    """Push downstream from a pre-mutated site.
 
     Parameters
     ----------
@@ -137,6 +163,32 @@ def replay_from(
     return _run_replay(
         log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
     )
+
+
+def replay_from(
+    log: "Trace",
+    site: "SelectorLike | str | Op",
+    *,
+    strict: bool | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
+) -> "Trace":
+    """Deprecated alias for :func:`push_from`.
+
+    Parameters
+    ----------
+    log, site, strict, replay:
+        Forwarded unchanged to :func:`push_from`.
+
+    Returns
+    -------
+    Trace
+        The same model log, mutated in place.
+    """
+
+    from .._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("replay_from", "push_from")
+    return push_from(log, site, strict=strict, replay=replay)
 
 
 def _run_differentiable_replay(
@@ -1381,6 +1433,8 @@ def _is_dataclass_instance(value: Any) -> bool:
 
 __all__ = [
     "cone_of_effect",
+    "push",
+    "push_from",
     "replay",
     "replay_from",
     "_reconstruct_args_from_template",

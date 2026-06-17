@@ -80,17 +80,22 @@ from .intervention import (  # type: ignore[no-redef]
     preceded_by,
     project_off,
     project_onto,
+    push,
+    push_from,
+    regex,
     replace_with,
     replay,
     replay_from,
     rerun,
     resample_ablate,
+    run,
     scale,
     splice_module,
     steer,
     swap_with,
     where,
     when,
+    without_op,
     zero_ablate,
 )
 from .intervention.sweep import sweep
@@ -113,10 +118,10 @@ from .validation import (
     validate_saved_outs as _moved_validate_saved_outs,
 )
 from .io import load_intervention_spec as _moved_load_intervention_spec
-from .observers import record_span, tap
+from .observers import record_span, span, tap
 from .options import CaptureOptions as _CaptureOptions
 from .options import to_disk
-from .intervention.sites import sites
+from .intervention.sites import sites as _sites_private
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
 from .validation.consolidated import validate
 
@@ -362,7 +367,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     return [str(label)]
 
 
-def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -> _torch.Tensor:
+def pluck(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -> _torch.Tensor:
     """Return the saved out for one layer.
 
     Parameters
@@ -373,8 +378,9 @@ def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -
         Positional input argument or argument container for ``model.forward``.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
+        Resolves strictly to one result; ambiguous lookups raise ``ValueError``.
     stop_after:
-        Experimental stop-early site. Currently validated for ``peek`` and
+        Experimental stop-early site. Currently validated for ``pluck`` and
         captured via the normal safe full-forward path.
 
     Returns
@@ -397,6 +403,26 @@ def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -
         capture=_CaptureOptions(layers_to_save=[layer]),
     )
     return _out_from_log(trace, layer)
+
+
+def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -> _torch.Tensor:
+    """Deprecated alias for :func:`pluck`.
+
+    Parameters
+    ----------
+    model, x, layer, stop_after:
+        Forwarded unchanged to :func:`pluck`.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved out for the requested layer.
+    """
+
+    from ._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("peek", "pluck")
+    return pluck(model, x, layer, stop_after)
 
 
 def extract(
@@ -554,7 +580,7 @@ def _merge_batch_outputs(
         accumulator.setdefault(layer_name, []).append(stored.detach().cpu())
 
 
-def batched_extract(
+def extract_dataset(
     model: _nn.Module,
     stimuli: Any,
     layers: _Iterable[str] | _Mapping[str, str],
@@ -564,7 +590,7 @@ def batched_extract(
     transform: _Callable[[_torch.Tensor], _torch.Tensor] | None = None,
     progress: bool = True,
 ) -> dict[str, _torch.Tensor] | list[_Path]:
-    """Extract outs from an iterable stimulus set in batches.
+    """Extract outs from an iterable dataset in batches.
 
     Parameters
     ----------
@@ -634,6 +660,37 @@ def batched_extract(
     if container_path is not None:
         return container_paths
     return {label: _torch.cat(tensors, dim=0) for label, tensors in in_memory.items()}
+
+
+def batched_extract(
+    model: _nn.Module,
+    stimuli: Any,
+    layers: _Iterable[str] | _Mapping[str, str],
+    batch_size: int = 32,
+    device: _torch.device | str | None = None,
+    output_dir: str | _Path | None = None,
+    transform: _Callable[[_torch.Tensor], _torch.Tensor] | None = None,
+    progress: bool = True,
+) -> dict[str, _torch.Tensor] | list[_Path]:
+    """Deprecated alias for :func:`extract_dataset`.
+
+    Parameters
+    ----------
+    model, stimuli, layers, batch_size, device, output_dir, transform, progress:
+        Forwarded unchanged to :func:`extract_dataset`.
+
+    Returns
+    -------
+    dict[str, torch.Tensor] | list[pathlib.Path]
+        In-memory concatenated outs, or written batch paths.
+    """
+
+    from ._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("batched_extract", "extract_dataset")
+    return extract_dataset(
+        model, stimuli, layers, batch_size, device, output_dir, transform, progress
+    )
 
 
 @_functools.wraps(_moved_validate_forward_pass)
@@ -834,17 +891,24 @@ __all__ = [
     "trace",
     "fastlog",
     "facets",
+    "record",
+    "Recording",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "load",
     "save",
     "do",
+    "push",
+    "push_from",
     "replay",
     "replay_from",
     "rerun",
+    "run",
     "bundle",
+    "pluck",
     "peek",
     "extract",
+    "extract_dataset",
     "batched_extract",
     "validate",
     "Trace",
@@ -864,6 +928,8 @@ __all__ = [
     "followed_by",
     "grad_fn",
     "intervening",
+    "without_op",
+    "regex",
     "module",
     "output",
     "output_at",
@@ -884,6 +950,7 @@ __all__ = [
     "resample_ablate",
     "scale",
     "splice_module",
+    "span",
     "steer",
     "sweep",
     "swap_with",
@@ -897,5 +964,4 @@ __all__ = [
     "grad_zero",
     "tap",
     "record_span",
-    "sites",
 ]

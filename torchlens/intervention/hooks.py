@@ -621,7 +621,7 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         Selector equivalent to the target spec.
     """
 
-    from .selectors import contains, func, grad_fn, intervening, label, module, where
+    from .selectors import contains, func, grad_fn, intervening, label, module, where, without_op
 
     if target.selector_kind == "label":
         return label(str(target.selector_value))
@@ -655,8 +655,8 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
             label=payload.get("grad_fn_label_pattern"),
             is_custom=payload.get("is_custom"),
         )
-    if target.selector_kind == "intervening":
-        return intervening()
+    if target.selector_kind in {"intervening", "without_op"}:
+        return without_op()
     if target.selector_kind == "label":
         return label(str(target.selector_value))
     if target.selector_kind == "not":

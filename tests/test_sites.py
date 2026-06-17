@@ -5,13 +5,13 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens.intervention.sites import SiteCollection
+from torchlens.intervention.sites import SiteCollection, sites as _sites
 
 
 def test_sites_builds_structured_sweep() -> None:
-    """``tl.sites`` should compose layer, op, and mode sweep dimensions."""
+    """``sites()`` should compose layer, op, and mode sweep dimensions."""
 
-    collection = tl.sites("encoder.layer", ops=["relu", "add"], modes=["clean", "corrupt"])
+    collection = _sites("encoder.layer", ops=["relu", "add"], modes=["clean", "corrupt"])
 
     assert isinstance(collection, SiteCollection)
     assert len(collection) == 4
@@ -48,7 +48,7 @@ def test_sites_can_expand_to_hook_pairs() -> None:
         return out
 
     handle = log.attach_hooks(
-        tl.sites("relu", ops=["relu"], modes=["observe"]),
+        _sites("relu", ops=["relu"], modes=["observe"]),
         hook_fn,
         confirm_mutation=True,
     )

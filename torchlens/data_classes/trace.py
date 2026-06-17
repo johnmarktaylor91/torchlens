@@ -6455,19 +6455,19 @@ class Trace(CapturedRun):
             return ValidationReplayStatus.unavailable_unsupported(backend=backend)
         return ValidationReplayStatus.available_live(backend=backend)
 
-    def replay(
+    def push(
         self,
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
         differentiable: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
     ) -> "Trace":
-        """Replay the saved DAG cone affected by hooks.
+        """Push the edit downstream through the recorded graph (DAG replay).
 
         Parameters
         ----------
         strict:
-            Whether replay divergence warnings should raise.
+            Whether divergence warnings should raise.
         hooks:
             Optional mapping from selector-like targets to hook callables.
         differentiable:
@@ -6487,17 +6487,42 @@ class Trace(CapturedRun):
             differentiable=differentiable,
         )
 
-        from ..intervention.replay import replay as _impl
+        from ..intervention.replay import push as _impl
 
         return _impl(self, replay=replay_options)
 
-    def replay_from(
+    def replay(
+        self,
+        strict: bool | MissingType = MISSING,
+        hooks: dict[Any, Any] | None | MissingType = MISSING,
+        differentiable: bool | MissingType = MISSING,
+        replay: ReplayOptions | None = None,
+    ) -> "Trace":
+        """Deprecated alias for :meth:`push`.
+
+        Parameters
+        ----------
+        strict, hooks, differentiable, replay:
+            Forwarded unchanged to :meth:`push`.
+
+        Returns
+        -------
+        Trace
+            This model log, mutated in place.
+        """
+
+        from .._deprecations import warn_deprecated_alias
+
+        warn_deprecated_alias("Trace.replay", "Trace.push")
+        return self.push(strict=strict, hooks=hooks, differentiable=differentiable, replay=replay)
+
+    def push_from(
         self,
         site: Any,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
     ) -> "Trace":
-        """Replay downstream from a pre-mutated site.
+        """Push downstream from a pre-mutated site.
 
         Parameters
         ----------
@@ -6505,7 +6530,7 @@ class Trace(CapturedRun):
             Layer pass or selector resolving to one origin. The origin's
             current out is preserved and used as the override.
         strict:
-            Whether replay divergence warnings should raise.
+            Whether divergence warnings should raise.
 
         Returns
         -------
@@ -6515,9 +6540,33 @@ class Trace(CapturedRun):
 
         replay_options = merge_replay_options(replay=replay, strict=strict)
 
-        from ..intervention.replay import replay_from as _impl
+        from ..intervention.replay import push_from as _impl
 
         return _impl(self, site, replay=replay_options)
+
+    def replay_from(
+        self,
+        site: Any,
+        strict: bool | MissingType = MISSING,
+        replay: ReplayOptions | None = None,
+    ) -> "Trace":
+        """Deprecated alias for :meth:`push_from`.
+
+        Parameters
+        ----------
+        site, strict, replay:
+            Forwarded unchanged to :meth:`push_from`.
+
+        Returns
+        -------
+        Trace
+            This model log, mutated in place.
+        """
+
+        from .._deprecations import warn_deprecated_alias
+
+        warn_deprecated_alias("Trace.replay_from", "Trace.push_from")
+        return self.push_from(site, strict=strict, replay=replay)
 
     def decode_output(self, top_n: int | None = None) -> Any:
         """Return captured decoded output rows when available.
@@ -6676,7 +6725,7 @@ class Trace(CapturedRun):
             for row in item_rows
         )
 
-    def rerun(
+    def run(
         self,
         model: Any = None,
         x: Any = None,
@@ -6703,17 +6752,17 @@ class Trace(CapturedRun):
             If true, append a compatible chunk along batch dimension 0.
         chunk_size:
             If supplied, split positional tensor input into chunks of this size,
-            rerun the first chunk normally, then append remaining chunks.
+            run the first chunk normally, then append remaining chunks.
         chunk_paths:
             Optional explicit tensor leaf paths to split.
         strict:
             Whether graph-shape divergence should raise instead of warn.
         transform:
             Stored-transform sentinel, ``False`` to bypass, or explicit input
-            transform callable for this rerun.
+            transform callable for this run.
         output_transform:
             Stored-transform sentinel, ``False`` to bypass, or explicit output
-            transform callable for this rerun.
+            transform callable for this run.
 
         Returns
         -------
@@ -6721,21 +6770,21 @@ class Trace(CapturedRun):
             This model log, mutated in place after a validated atomic swap.
         """
 
-        rerun_model: nn.Module | None
+        run_model: nn.Module | None
         if isinstance(model, nn.Module):
-            rerun_model = model
+            run_model = model
             user_input = x
         else:
             source_ref = getattr(self, "_source_model_ref", None)
             user_input = model
             if x is not None:
-                raise TypeError("Pass either rerun(model, x) or rerun(new_user_input), not both.")
+                raise TypeError("Pass either run(model, x) or run(new_user_input), not both.")
             transformed_input = self._apply_rerun_transform(user_input, transform=transform)
-            rerun_model = source_ref() if source_ref is not None else None
-            if rerun_model is None:
+            run_model = source_ref() if source_ref is not None else None
+            if run_model is None:
                 raise RuntimeError(
                     "This Trace does not retain a live model reference. Pass the model as "
-                    "`trace.rerun(model, input)`."
+                    "`trace.run(model, input)`."
                 )
         replay_options = merge_replay_options(
             replay=replay,
@@ -6746,12 +6795,12 @@ class Trace(CapturedRun):
         if isinstance(model, nn.Module):
             transformed_input = self._apply_rerun_transform(user_input, transform=transform)
 
-        from ..intervention.rerun import rerun as _impl
+        from ..intervention.rerun import run as _impl
 
         resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
         result = _impl(
             self,
-            rerun_model,
+            run_model,
             transformed_input,
             replay=replay_options,
             chunk_paths=chunk_paths,
@@ -6762,6 +6811,47 @@ class Trace(CapturedRun):
         # current input rather than the prior trace's.
         result.raw_input = user_input
         return result
+
+    def rerun(
+        self,
+        model: Any = None,
+        x: Any = None,
+        *,
+        append: bool | MissingType = MISSING,
+        chunk_size: int | None | MissingType = MISSING,
+        chunk_paths: Any | None = None,
+        strict: bool | MissingType = MISSING,
+        replay: ReplayOptions | None = None,
+        transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+    ) -> "Trace":
+        """Deprecated alias for :meth:`run`.
+
+        Parameters
+        ----------
+        model, x, append, chunk_size, chunk_paths, strict, replay, transform, output_transform:
+            Forwarded unchanged to :meth:`run`.
+
+        Returns
+        -------
+        Trace
+            This model log, mutated in place after a validated atomic swap.
+        """
+
+        from .._deprecations import warn_deprecated_alias
+
+        warn_deprecated_alias("Trace.rerun", "Trace.run")
+        return self.run(
+            model,
+            x,
+            append=append,
+            chunk_size=chunk_size,
+            chunk_paths=chunk_paths,
+            strict=strict,
+            replay=replay,
+            transform=transform,
+            output_transform=output_transform,
+        )
 
     def _apply_rerun_transform(
         self,

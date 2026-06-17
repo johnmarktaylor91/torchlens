@@ -1078,8 +1078,8 @@ class Bundle:
             member.attach_hooks(*args, **kwargs)
         return self
 
-    def replay(self, **kwargs: Any) -> "Bundle":
-        """Replay all member logs.
+    def push(self, **kwargs: Any) -> "Bundle":
+        """Push the edit downstream through all member logs.
 
         Returns
         -------
@@ -1088,11 +1088,25 @@ class Bundle:
         """
 
         for member in self._members.values():
-            member.replay(**kwargs)
+            member.push(**kwargs)
         return self
 
-    def rerun(self, model: "nn.Module", x: Any = None, **kwargs: Any) -> "Bundle":
-        """Rerun all member logs with a supplied model and input.
+    def replay(self, **kwargs: Any) -> "Bundle":
+        """Deprecated alias for :meth:`push`.
+
+        Returns
+        -------
+        Bundle
+            This bundle.
+        """
+
+        from .._deprecations import warn_deprecated_alias
+
+        warn_deprecated_alias("Bundle.replay", "Bundle.push")
+        return self.push(**kwargs)
+
+    def run(self, model: "nn.Module", x: Any = None, **kwargs: Any) -> "Bundle":
+        """Run all member logs with a supplied model and input.
 
         Parameters
         ----------
@@ -1108,8 +1122,29 @@ class Bundle:
         """
 
         for member in self._members.values():
-            member.rerun(model, x, **kwargs)
+            member.run(model, x, **kwargs)
         return self
+
+    def rerun(self, model: "nn.Module", x: Any = None, **kwargs: Any) -> "Bundle":
+        """Deprecated alias for :meth:`run`.
+
+        Parameters
+        ----------
+        model:
+            Model forwarded to each member.
+        x:
+            Forward input.
+
+        Returns
+        -------
+        Bundle
+            This bundle.
+        """
+
+        from .._deprecations import warn_deprecated_alias
+
+        warn_deprecated_alias("Bundle.rerun", "Bundle.run")
+        return self.run(model, x, **kwargs)
 
     def apply(self, fn: Callable[["Trace"], Any]) -> dict[str, Any]:
         """Apply a function independently to each member.

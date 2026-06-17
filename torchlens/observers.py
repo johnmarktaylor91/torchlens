@@ -216,7 +216,7 @@ def tap(
 
 
 @contextmanager
-def record_span(
+def span(
     name: str,
     *,
     direction: Literal["forward", "backward", "both"] = "both",
@@ -238,19 +238,52 @@ def record_span(
 
     if direction not in {"forward", "backward", "both"}:
         raise ValueError("direction must be 'forward', 'backward', or 'both'.")
-    span = {"name": str(name), "direction": direction, "start": time.monotonic(), "end": None}
-    _state._active_record_spans.append(span)
+    span_record = {
+        "name": str(name),
+        "direction": direction,
+        "start": time.monotonic(),
+        "end": None,
+    }
+    _state._active_record_spans.append(span_record)
     trace = _state._active_trace
     if trace is not None:
-        trace.observer_spans.append(span)
+        trace.observer_spans.append(span_record)
     try:
-        yield span
+        yield span_record
     finally:
-        span["end"] = time.monotonic()
-        if _state._active_record_spans and _state._active_record_spans[-1] is span:
+        span_record["end"] = time.monotonic()
+        if _state._active_record_spans and _state._active_record_spans[-1] is span_record:
             _state._active_record_spans.pop()
-        elif span in _state._active_record_spans:
-            _state._active_record_spans.remove(span)
+        elif span_record in _state._active_record_spans:
+            _state._active_record_spans.remove(span_record)
+
+
+@contextmanager
+def record_span(
+    name: str,
+    *,
+    direction: Literal["forward", "backward", "both"] = "both",
+) -> Iterator[dict[str, Any]]:
+    """Deprecated alias for :func:`span`.
+
+    Parameters
+    ----------
+    name:
+        Span name.
+    direction:
+        Direction scope metadata for this span.
+
+    Yields
+    ------
+    dict[str, Any]
+        Mutable span metadata record.
+    """
+
+    from ._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("record_span", "span")
+    with span(name, direction=direction) as s:
+        yield s
 
 
 def active_span_records() -> list[dict[str, Any]]:
@@ -265,4 +298,4 @@ def active_span_records() -> list[dict[str, Any]]:
     return list(_state._active_record_spans)
 
 
-__all__ = ["TapObserver", "TapRecord", "active_span_records", "record_span", "tap"]
+__all__ = ["TapObserver", "TapRecord", "active_span_records", "record_span", "span", "tap"]

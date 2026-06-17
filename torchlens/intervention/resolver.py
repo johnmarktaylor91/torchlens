@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 else:
     Site: TypeAlias = Any
 DIRECTION_AGNOSTIC_KINDS = frozenset(
-    {"label", "in_module", "module", "contains", "predicate", "func_transform"}
+    {"label", "in_module", "module", "contains", "regex", "predicate", "func_transform"}
 )
 
 
@@ -509,11 +509,13 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "contains":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
+    if kind == "regex":
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "in_module":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "predicate":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
-    if kind in {"grad_fn", "grad_fn_handle", "intervening", "label"}:
+    if kind in {"grad_fn", "grad_fn_handle", "intervening", "without_op", "label"}:
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
 
     raise SiteResolutionError(f"Unsupported selector kind {kind!r}.")
@@ -614,6 +616,10 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
         return _module_output_matches(site, str(value))
     if kind == "contains":
         return str(value).lower() in str(site.layer_label).lower()
+    if kind == "regex":
+        import re as _re
+
+        return _re.search(str(value), str(site.layer_label)) is not None
     if kind == "in_module":
         return bool(in_module(site, str(value)))
     if kind == "predicate":
@@ -698,7 +704,7 @@ def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
         Whether the selector matches.
     """
 
-    if kind == "intervening":
+    if kind in {"intervening", "without_op"}:
         return not site.has_op
     if kind == "label":
         return site.label == str(value)
@@ -921,6 +927,7 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         module,
         output,
         where,
+        without_op,
     )
 
     if kind == "label":
@@ -961,8 +968,8 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
             label=payload.get("grad_fn_label_pattern"),
             is_custom=payload.get("is_custom"),
         )
-    if kind == "intervening":
-        return intervening()
+    if kind in {"intervening", "without_op"}:
+        return without_op()
     if kind == "label":
         return label(str(value))
     if kind == "not":

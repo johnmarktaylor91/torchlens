@@ -55,9 +55,9 @@ from .hooks import (
     normalize_hook_plan,
 )
 from .handles import HookHandle
-from .replay import replay, replay_from
+from .replay import push, push_from, replay, replay_from
 from .resolver import SiteTable, resolve_sites
-from .rerun import rerun
+from .rerun import run, rerun
 from .runtime import do
 from .save import (
     SaveLevel,
@@ -86,9 +86,11 @@ from .selectors import (
     output,
     output_at,
     preceded_by,
+    regex,
     where,
+    without_op,
 )
-from .sites import SiteCollection, SiteSpec, sites
+from .sites import SiteCollection, SiteSpec, sites as _sites_private
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -221,9 +223,6 @@ __all__ = [
     "SpecMutationError",
     "SpecPortabilityError",
     "SiteTable",
-    "SiteCollection",
-    "SiteSpec",
-    "sites",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
     "SuperLayer",
@@ -266,6 +265,7 @@ __all__ = [
     "in_module",
     "intervening",
     "label",
+    "regex",
     "load_intervention_spec",
     "make_hook_context",
     "mean_ablate",
@@ -281,9 +281,12 @@ __all__ = [
     "project_off",
     "project_onto",
     "replace_with",
+    "push",
+    "push_from",
     "replay",
     "replay_from",
     "rerun",
+    "run",
     "resample_ablate",
     "relative_l1_scalar",
     "relative_l2",
@@ -296,6 +299,7 @@ __all__ = [
     "swap_with",
     "where",
     "when",
+    "without_op",
     "UnclassifiedSelectorError",
     "zero_ablate",
     "rebuild_container_from_spec",

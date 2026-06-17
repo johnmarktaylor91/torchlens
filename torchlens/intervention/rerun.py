@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from .hooks import NormalizedHookEntry
 
 
-def rerun(
+def run(
     log: "Trace",
     model: nn.Module,
     x: Any = None,
@@ -44,19 +44,19 @@ def rerun(
     replay: ReplayOptions | None = None,
     output_transform: Any | None = None,
 ) -> "Trace":
-    """Full-forward rerun with the active intervention spec from ``log``.
+    """Full-forward run with the active intervention spec from ``log``.
 
     Re-executes ``model`` through TorchLens decorated wrappers with the current
     intervention spec installed in runtime context. A fresh ``Trace`` is
     built off to the side, validated, then atomically swapped into ``log``.
-    Concurrent reads during rerun are unsupported; no lock is taken.
+    Concurrent reads during run are unsupported; no lock is taken.
 
     Parameters
     ----------
     log:
         Trace to update in place after the fresh run validates.
     model:
-        Model to execute through the rerun engine.
+        Model to execute through the run engine.
     x:
         Forward input. Phase 7 does not retain strong references to original
         inputs, so ``None`` raises and callers must pass the input explicitly.
@@ -65,7 +65,7 @@ def rerun(
         along batch dimension 0 instead of replacing the run state.
     chunk_size:
         If supplied, split positional tensor input into chunks of this size,
-        rerun the first chunk normally, then append remaining chunks.
+        run the first chunk normally, then append remaining chunks.
     chunk_paths:
         Optional explicit tensor leaf paths to split when multiple batched
         tensor leaves are present.
@@ -210,7 +210,7 @@ def _chunked_rerun(
     x = _coerce_input_args(model, x)
     plan = plan_chunks(x, chunk_size=chunk_size, chunk_paths=chunk_paths)
     if chunk_size >= plan.total_size:
-        return rerun(
+        return run(
             log,
             model,
             x,
@@ -218,7 +218,7 @@ def _chunked_rerun(
             output_transform=output_transform,
         )
     chunks = iter_chunked_inputs(x, plan)
-    result = rerun(
+    result = run(
         log,
         model,
         chunks[0],
@@ -234,7 +234,7 @@ def _chunked_rerun(
         "chunk_paths": normalize_chunk_paths(chunk_paths),
     }
     for chunk in chunks[1:]:
-        result = rerun(
+        result = run(
             result,
             model,
             chunk,
@@ -1050,4 +1050,45 @@ def _build_ledger_record(
     }
 
 
-__all__ = ["rerun"]
+def rerun(
+    log: "Trace",
+    model: nn.Module,
+    x: Any = None,
+    *,
+    append: bool | MissingType = MISSING,
+    chunk_size: int | None | MissingType = MISSING,
+    chunk_paths: Any | None = None,
+    strict: bool | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
+    output_transform: Any | None = None,
+) -> "Trace":
+    """Deprecated alias for :func:`run`.
+
+    Parameters
+    ----------
+    log, model, x, append, chunk_size, chunk_paths, strict, replay, output_transform:
+        Forwarded unchanged to :func:`run`.
+
+    Returns
+    -------
+    Trace
+        The same ``log`` object after atomic run-state replacement.
+    """
+
+    from .._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("rerun", "run")
+    return run(
+        log,
+        model,
+        x,
+        append=append,
+        chunk_size=chunk_size,
+        chunk_paths=chunk_paths,
+        strict=strict,
+        replay=replay,
+        output_transform=output_transform,
+    )
+
+
+__all__ = ["rerun", "run"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import re as _re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, overload
@@ -27,6 +28,8 @@ SelectorKind: TypeAlias = Literal[
     "not",
     "grad_fn",
     "intervening",
+    "without_op",
+    "regex",
     "followed_by",
     "preceded_by",
     "label",
@@ -363,6 +366,33 @@ class ContainsSelector(BaseSelector):
         object.__setattr__(self, "selector_kind", "contains")
         object.__setattr__(self, "selector_value", substring)
         object.__setattr__(self, "substring", substring)
+
+
+@dataclass(frozen=True, repr=False)
+class RegexSelector(BaseSelector):
+    """Label regex-pattern selector.
+
+    Parameters
+    ----------
+    pattern:
+        Regular expression pattern to match against TorchLens labels.
+    """
+
+    pattern: str
+
+    def __init__(self, pattern: str) -> None:
+        """Create a label regex-pattern selector.
+
+        Parameters
+        ----------
+        pattern:
+            Regular expression pattern to match against TorchLens labels.
+        """
+
+        _re.compile(pattern)  # validate at construction time
+        object.__setattr__(self, "selector_kind", "regex")
+        object.__setattr__(self, "selector_value", pattern)
+        object.__setattr__(self, "pattern", pattern)
 
 
 @dataclass(frozen=True, repr=False)
@@ -1011,6 +1041,29 @@ def contains(substring: str) -> ContainsSelector:
     return ContainsSelector(substring)
 
 
+def regex(pattern: str) -> RegexSelector:
+    """Create a label regex-pattern selector.
+
+    Parameters
+    ----------
+    pattern:
+        Regular expression pattern to match against TorchLens labels.
+        The pattern is matched with :func:`re.search` (partial match).
+
+    Returns
+    -------
+    RegexSelector
+        Immutable selector.
+
+    Raises
+    ------
+    re.error
+        If ``pattern`` is not a valid regular expression.
+    """
+
+    return RegexSelector(pattern)
+
+
 def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> WhereSelector:
     """Create a predicate selector.
 
@@ -1056,7 +1109,7 @@ def grad_fn(
     return GradFnSelector(type, label=label, is_custom=is_custom)
 
 
-def intervening() -> InterveningSelector:
+def without_op() -> InterveningSelector:
     """Create a selector for grad_fns without a paired forward op.
 
     Returns
@@ -1065,6 +1118,21 @@ def intervening() -> InterveningSelector:
         Immutable selector.
     """
 
+    return InterveningSelector()
+
+
+def intervening() -> InterveningSelector:
+    """Deprecated alias for :func:`without_op`.
+
+    Returns
+    -------
+    InterveningSelector
+        Immutable selector.
+    """
+
+    from .._deprecations import warn_deprecated_alias
+
+    warn_deprecated_alias("intervening", "without_op")
     return InterveningSelector()
 
 
@@ -1349,6 +1417,9 @@ def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
     if kind == "contains":
         needle = str(selector.selector_value)
         return any(needle in label for label in _context_labels(ctx))
+    if kind == "regex":
+        pattern = str(selector.selector_value)
+        return any(_re.search(pattern, label) is not None for label in _context_labels(ctx))
     if kind == "func":
         value = selector.selector_value
         if isinstance(value, dict):
@@ -1536,7 +1607,7 @@ def _classify_selector_direction(
 
     if isinstance(sel, TargetSpec):
         kind = sel.selector_kind
-        if kind in {"grad_fn", "intervening", "label"}:
+        if kind in {"grad_fn", "intervening", "without_op", "label"}:
             return "backward"
         if kind in {"func", "func_transform"}:
             return "forward"
@@ -1547,6 +1618,7 @@ def _classify_selector_direction(
             "output_at",
             "input_at",
             "contains",
+            "regex",
             "predicate",
             "in_module",
             "facet",
@@ -1577,6 +1649,7 @@ def _classify_selector_direction(
             OutputPathSelector,
             InputPathSelector,
             ContainsSelector,
+            RegexSelector,
             FacetSelector,
             WhereSelector,
             InModuleSelector,
@@ -1640,6 +1713,7 @@ __all__ = [
     "OutputSelector",
     "OutputPathSelector",
     "PrecededBySelector",
+    "RegexSelector",
     "SelectorLike",
     "WhereSelector",
     "contains",
@@ -1650,10 +1724,10 @@ __all__ = [
     "grad_fn",
     "grad_input",
     "grad_output",
+    "intervening",
     "label",
     "in_module",
     "in_backward_pass",
-    "intervening",
     "head",
     "label",
     "module",
@@ -1661,5 +1735,7 @@ __all__ = [
     "output_at",
     "input_at",
     "preceded_by",
+    "regex",
     "where",
+    "without_op",
 ]
