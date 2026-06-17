@@ -97,3 +97,15 @@ def test_node_label_field_picker_limits_label_rows(tmp_path: Path) -> None:
 
     assert "linear" in dot
     assert "(1, 2)" in dot
+
+
+def test_node_label_time_field_formats_duration_once(tmp_path: Path) -> None:
+    """node_label_fields time rows should not duplicate unit suffixes."""
+
+    model = nn.Linear(4, 2)
+    log = tl.trace(model, torch.randn(1, 4))
+
+    dot = _render_dot(log, tmp_path, node_label_fields=["time"])
+
+    assert "msms" not in dot
+    assert "nsms" not in dot

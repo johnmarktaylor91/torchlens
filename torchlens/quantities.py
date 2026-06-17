@@ -130,6 +130,11 @@ class _IntQuantity(int, Quantity):
             return str(int(self))
         return str(self)
 
+    def __repr__(self) -> str:
+        """Return a unit-bearing debug representation."""
+
+        return f"{type(self).__name__}({str(self)!r})"
+
 
 class _FloatQuantity(float, Quantity):
     """Base class for float-backed unit quantities."""
@@ -235,6 +240,11 @@ class _FloatQuantity(float, Quantity):
         if format_spec == "raw":
             return str(float(self))
         return str(self)
+
+    def __repr__(self) -> str:
+        """Return a unit-bearing debug representation."""
+
+        return f"{type(self).__name__}({str(self)!r})"
 
 
 def _format_scaled(

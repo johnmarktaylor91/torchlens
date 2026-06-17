@@ -445,10 +445,14 @@ def project_onto(
             aligned = _align_direction(direction, out, feature_axis=feature_axis).to(
                 device=out.device, dtype=out.dtype
             )
-            denom = torch.sum(aligned * aligned)
-            if denom == 0:
+            if feature_axis is None:
+                reduction_dim: int | tuple[int, ...] = tuple(range(out.ndim))
+            else:
+                reduction_dim = feature_axis % out.ndim
+            denom = torch.sum(aligned * aligned, dim=reduction_dim, keepdim=True)
+            if bool(torch.any(denom == 0).item()):
                 raise HookValueError("project_onto direction has zero norm")
-            coef = torch.sum(out * aligned) / denom
+            coef = torch.sum(out * aligned, dim=reduction_dim, keepdim=True) / denom
             return aligned * coef
 
         return _hook

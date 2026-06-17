@@ -874,6 +874,11 @@ class MissingGradient:
 
         self.raise_error()
 
+    def __repr__(self) -> str:
+        """Return the missing-gradient reason in debug displays."""
+
+        return f"MissingGradient(reason={self.reason!r})"
+
 
 class Facet:
     """Lazy tensor-like runtime wrapper for a ``FacetSpec``."""
@@ -910,6 +915,14 @@ class Facet:
         """Delegate item access to the read value."""
 
         return self.value[key]
+
+    def __repr__(self) -> str:
+        """Return a concise runtime facet representation."""
+
+        return (
+            f"Facet(home_kind={self.spec.home_kind!r}, home_label={self.spec.home_label!r}, "
+            f"transforms={len(self.spec.transforms)}, value_version={self.spec.value_version!r})"
+        )
 
     @classmethod
     def __torch_function__(

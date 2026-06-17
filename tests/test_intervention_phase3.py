@@ -89,6 +89,37 @@ def test_phase3_helpers_import_and_return_specs() -> None:
 
 
 @pytest.mark.smoke
+def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
+    """Projecting onto a vector direction computes one coefficient per sample."""
+
+    out = torch.tensor(
+        [
+            [[2.0, 4.0, 0.0], [1.0, 3.0, 5.0]],
+            [[6.0, 8.0, 0.0], [7.0, 9.0, 11.0]],
+        ]
+    )
+    direction = torch.tensor([1.0, 1.0, 0.0])
+    hook = tl.project_onto(direction, feature_axis=-1)()
+
+    projected = hook(out, hook=_context())
+
+    expected = torch.tensor(
+        [
+            [[3.0, 3.0, 0.0], [2.0, 2.0, 0.0]],
+            [[7.0, 7.0, 0.0], [8.0, 8.0, 0.0]],
+        ]
+    )
+    assert torch.allclose(projected, expected)
+
+    changed = out.clone()
+    changed[1] = torch.tensor([[100.0, 102.0, 0.0], [104.0, 106.0, 108.0]])
+    changed_projected = hook(changed, hook=_context())
+
+    assert torch.allclose(changed_projected[0], expected[0])
+    assert not torch.allclose(changed_projected[1], expected[1])
+
+
+@pytest.mark.smoke
 def test_hook_context_uses_mapping_proxy_and_frozen_fields() -> None:
     """HookContext exposes metadata as snapshots rather than live logs."""
 

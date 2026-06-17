@@ -53,6 +53,7 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
     assert isinstance(value, tl.Quantity)
     assert isinstance(value, int)
     assert str(value) == "1.2 MB"
+    assert repr(tl.Bytes(32)) == "Bytes('32 B')"
     assert f"{value:raw}" == "1234567"
     assert f"{value:.2f MB}" == "1.18 MB"
     assert value + 1 == tl.Bytes(1_234_568)
@@ -76,13 +77,16 @@ def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     assert isinstance(flops, int)
     assert isinstance(macs, int)
     assert str(duration) == "1.2 ms"
+    assert repr(duration) == "Duration('1.2 ms')"
     assert str(tl.Duration(3.4)) == "3.4 s"
     assert f"{duration:raw}" == "0.0012"
     assert f"{duration:.2f ms}" == "1.20 ms"
     assert str(flops) == "1.23 GFLOPs"
+    assert repr(flops) == "Flops('1.23 GFLOPs')"
     assert f"{flops:raw}" == "1234000000"
     assert f"{flops:.1f GFLOPs}" == "1.2 GFLOPs"
     assert str(macs) == "3.4 MMACs"
+    assert repr(macs) == "Macs('3.4 MMACs')"
     assert f"{macs:.1f MMACs}" == "3.4 MMACs"
     assert duration + tl.Duration(0.001) == pytest.approx(tl.Duration(0.0022))
     assert flops + 1 == tl.Flops(1_234_000_001)

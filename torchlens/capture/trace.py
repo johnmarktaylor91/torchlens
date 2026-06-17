@@ -217,6 +217,9 @@ def save_new_outs(
         layer_log_entry.transformed_grad_dtype = None
         layer_log_entry.transformed_gradient_memory = None
         layer_log_entry.has_out_variations = False
+        # Fast capture rebuilds any needed entries during replay via
+        # _track_fast_parent_output_versions; this reset only clears stale
+        # exhaustive-pass child snapshots.
         layer_log_entry.out_versions_by_child = {}
     self._replay_arg_version_data_complete = False
 

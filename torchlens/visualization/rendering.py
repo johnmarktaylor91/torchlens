@@ -82,9 +82,10 @@ from ..ir.container import (
 )
 from ..ir.container_registry import ContainerRecord, ContainerSnapshot, Role
 from ..data_classes.internal_types import VisualizationOverrides
-from ..utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
-from ..data_classes.op import Op
 from ..data_classes.layer import Layer
+from ..data_classes.op import Op
+from ..quantities import Duration
+from ..utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from ..viz import batch_summary
 from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from ._label_format import (
@@ -6349,7 +6350,7 @@ def _compute_selected_node_lines(
         elif field_name == "flops":
             rows.append(str(getattr(layer_log, "flops_forward", 0) or 0))
         elif field_name == "time":
-            rows.append(f"{float(getattr(layer_log, 'func_duration', 0.0) or 0.0) * 1000:.3g} ms")
+            rows.append(str(Duration(float(getattr(layer_log, "func_duration", 0.0) or 0.0))))
         else:
             raise ValueError(f"Unsupported node label field: {field_name!r}.")
     return rows or compute_default_node_lines(layer_log, node_address, vis_mode)

@@ -3271,7 +3271,7 @@ class Op:
         sml = self.source_trace
         num_ops = sml.num_ops if sml is not None else "?"
         s = f"Layer {self.layer_label}{pass_str}operation {self.step_index}/{num_ops}:"
-        s += f"\n\tOutput tensor: shape={self.shape}, dype={self.dtype}, size={self.activation_memory}"
+        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
         if not self.has_saved_activation:
             s += " (not saved)"
         s += self._tensor_contents_str_helper()

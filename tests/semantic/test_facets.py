@@ -455,6 +455,8 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
     assert isinstance(missing, MissingGradient)
     assert "backward_ready=True" in missing.reason
     assert "save_grads" in missing.reason
+    assert "home_label='linear_1_1:1'" in repr(facet)
+    assert "save_grads" in repr(missing)
     with pytest.raises(RuntimeError, match="Facet gradient unavailable"):
         torch.add(missing, 1)
 

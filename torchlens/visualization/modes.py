@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Final
 import torch
 
 from .._literals import VisNodeModeLiteral
+from ..quantities import Duration
 from ..utils.display import human_readable_size
 from ._label_format import format_shape
 from .node_spec import NodeSpec
@@ -95,7 +96,7 @@ def profiling_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     lines = list(spec.lines)
     runtime = _get_optional_attr(layer_log, "func_duration")
     if isinstance(runtime, int | float):
-        lines.append(f"t={runtime * 1000:.2f}ms")
+        lines.append(f"t={Duration(float(runtime)):.2f}")
 
     memory = _get_optional_attr(layer_log, "activation_memory")
     if isinstance(memory, int | float):
@@ -220,7 +221,7 @@ def profiling_collapsed_node_mode(module_log: "Module", spec: NodeSpec) -> NodeS
 
     lines = list(spec.lines)
     if saw_runtime:
-        lines.append(f"t={runtime * 1000:.2f}ms")
+        lines.append(f"t={Duration(runtime):.2f}")
     if saw_output:
         lines.append(f"out={_compact_size(output_bytes)}")
     return spec.replace(lines=lines)

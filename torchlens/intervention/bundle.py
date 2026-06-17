@@ -228,6 +228,15 @@ class Bundle:
 
         return name in self._members
 
+    def __repr__(self) -> str:
+        """Return an informative one-line bundle representation."""
+
+        baseline = self._baseline_name if self._baseline_name is not None else "None"
+        return (
+            f"Bundle(n_members={len(self)}, names={self.names!r}, "
+            f"baseline={baseline!r}, structurally_consistent={self.is_structurally_consistent})"
+        )
+
     def __getitem__(self, name: str) -> "Trace":
         """Return a member by name.
 

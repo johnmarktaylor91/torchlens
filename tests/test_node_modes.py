@@ -64,6 +64,8 @@ def test_profiling_mode_adds_runtime(tmp_path: Path) -> None:
 
     assert "t=" in dot
     assert "ms" in dot
+    assert "msms" not in dot
+    assert "nsms" not in dot
 
 
 def test_profiling_mode_omits_missing_fields(tmp_path: Path) -> None:
