@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchlens"
-version = "2.25.0"
+version = "2.26.0"
 description = "A package for extracting activations from PyTorch models and saving portable bundles"
 readme = "README.md"
 license = "Apache-2.0"
@@ -106,6 +106,7 @@ test = [
 [project.urls]
 Homepage = "https://github.com/johnmarktaylor91/torchlens"
 Repository = "https://github.com/johnmarktaylor91/torchlens"
+
 
 
 

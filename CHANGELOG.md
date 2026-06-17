@@ -1,6 +1,58 @@
 # CHANGELOG
 
 
+## v2.26.0 (2026-06-17)
+
+### Bug Fixes
+
+- **api**: Correct legacy graph shim guidance
+  ([`cda34b4`](https://github.com/johnmarktaylor91/torchlens/commit/cda34b4b128b92a44196100c9ddd2853111370c2))
+
+- **capture**: Raise typed reentrant trace error
+  ([`b4f993d`](https://github.com/johnmarktaylor91/torchlens/commit/b4f993d7d2f3ebd026792fb46b2d769db5bc4122))
+
+- **torch**: Estimate quantized module flops
+  ([`f915995`](https://github.com/johnmarktaylor91/torchlens/commit/f91599539a2bc8a30120d4c9a88d67652c61090e))
+
+- **torch**: Record buffer data reassignment
+  ([`f3c7836`](https://github.com/johnmarktaylor91/torchlens/commit/f3c78362ec75956778abb93ed9c756f16d4db349))
+
+- **torch**: Warn on collapsed transform boundaries
+  ([`0527b38`](https://github.com/johnmarktaylor91/torchlens/commit/0527b380bd27cd18b314ae9e5f33c768dff2f6cd))
+
+### Chores
+
+- **types**: Satisfy api shim typing
+  ([`e3375c8`](https://github.com/johnmarktaylor91/torchlens/commit/e3375c87e79ea224cb7ef87000101ab8439b1f06))
+
+### Documentation
+
+- Uniform-height menagerie gallery thumbnails
+  ([`ec37cca`](https://github.com/johnmarktaylor91/torchlens/commit/ec37ccaed2c78c7aa39448416ed89d579f82b014))
+
+Thumbnails were sized by width, but graph aspect ratios span ~18x (deep nets ~1:12), so rendered
+  heights varied up to 5x within a row. Uniform height=200 makes each gallery row a clean,
+  same-height filmstrip and shrinks the overall section. Bigger gallery overhaul still to come.
+
+- **torch**: Align wrapping and DataParallel guidance
+  ([`3bdfdc0`](https://github.com/johnmarktaylor91/torchlens/commit/3bdfdc0f5deb1255d17b4469add2b15601256cff))
+
+### Features
+
+- **api**: Add legacy paper api shims
+  ([`1ec4f6c`](https://github.com/johnmarktaylor91/torchlens/commit/1ec4f6c4b4303150330539b53dd54ec4bd97647c))
+
+### Performance Improvements
+
+- **torch**: Prefilter detached reference crawl
+  ([`5c3b67b`](https://github.com/johnmarktaylor91/torchlens/commit/5c3b67bec43f3e5b687269867961e28a93af97e7))
+
+### Testing
+
+- **api**: Update public surface count
+  ([`eff5e0b`](https://github.com/johnmarktaylor91/torchlens/commit/eff5e0b445b4d58f9556db49fb6c66f8876eb7ba))
+
+
 ## v2.25.0 (2026-06-17)
 
 ### Bug Fixes
