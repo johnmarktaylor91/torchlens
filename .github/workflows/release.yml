@@ -58,12 +58,20 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: semantic-release version
 
+      # `semantic-release version` only builds dist/* when it cuts a new version.
+      # Non-releasing commits (ci/docs/chore/test/refactor pushed on their own)
+      # produce no dist/, so gate the publish steps on artifacts actually existing
+      # -- otherwise the PyPI upload fails with "FileNotFoundError: dist" and the
+      # Release job goes red even though nothing was meant to ship. When a real
+      # release IS cut, dist/* exists and both steps run normally.
       - name: Publish to PyPI
+        if: ${{ hashFiles('dist/**') != '' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: false
 
       - name: Publish to GitHub Releases
+        if: ${{ hashFiles('dist/**') != '' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: semantic-release publish
