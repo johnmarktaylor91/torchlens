@@ -1,42 +1,33 @@
-# TorchLens 2.0 Audit Notebook Series
+# TorchLens Human-Facing Audit Notebooks
 
-This folder contains the complete user-facing audit series for checking the major TorchLens 2.0 features against the current implementation. The notebooks are runnable end-to-end on CPU with tiny local PyTorch models, with guarded optional Hugging Face sections.
+Coverage-optimized notebooks that exercise EVERY human-facing surface of TorchLens.
+These are NOT beginner tutorials (see `notebooks/*.ipynb` for that) — they are a
+developer ergonomics review: does every repr/summary/accessor look clean?
 
-Backend status: this audit series is torch-first unless a row says otherwise. Existing save/load
-examples demonstrate materialized torch payloads; non-torch preview `.tlspec` bundles may be
-audit-only or metadata-only. JAX, tinygrad, MLX, Paddle, and TensorFlow previews are covered by backend-specific
-tests/docs rather than this torch-first notebook series. Fastlog/`tl.record()` and true backward
-capture are torch-only in the backend-v1 registry.
+## How to review
 
-| Notebook | Runnable | Complete | Known gaps | Focus |
-|---|---|---|---|---|
-| 00_setup_and_first_capture | Yes | Partial | `module_filter` no-op on the tiny fixture; see API Status. | Install/import sanity, `tl.trace`, the `Trace` object, `summary()`, and a first successful capture. |
-| 01_indexing_and_lookup | Yes | Yes | None called out. | Pythonic indexing, label lookup, substring/module-path lookup, and `layers`/`ops`/`modules` accessors. |
-| 02_the_data_model | Yes | Partial | Nested container paths, duplicate output labels, recurrent distances, and saved argument templates are current-build gaps. | Anatomy of `Op`, `Layer`, `Module`, `ModuleCall`, `Param`, `Buffer`, `GradFn`, and `GradFnCall` records. |
-| 03_activations_and_metadata | Yes | Partial | Recurrent non-boundary container/distance/input-summary fields are current-build gaps. | Saved activations, shapes/dtypes/activation memory, exported quantity classes, args, RNG, and code-context metadata. |
-| 04_visualization | Yes | Yes | Top-level graph wrappers are deprecated compatibility shims. | Forward graph drawing, modes, node specs, module focus, backward/combined graphs, and code-panel rendering. |
-| 05_save_and_load | Yes | Yes | Torch materialized payloads only. | `tl.save`/`tl.load`, portable `.tlspec` directory bundles, save levels, and round-trip field survival. |
-| 06_backward_and_gradients | Yes | Yes | Torch true-backward capture only. | `backward_ready`, gradient saving, `GradFn`/`GradFnCall` records, and backward validation. |
-| 07_intervention_api | Yes | Yes | `grad_fn_label` helper is not exported. | `find_sites`, selectors, forks, hooks, `do`, `set`, `replay`, and `rerun`. |
-| 08_fastlog | Yes | Yes | Torch-only; some source events are inspected through `recording_trace`, not retained records. | Predicate-selected sparse recording, `CaptureSpec`, `dry_run`, `Recorder`, `halt`, module events, and backward grad records. |
-| 09_bundles_and_cross_trace | Yes | Yes | `clear()` retains the baseline member by design. | `tl.bundle`, shared labels, Super* accessors, pairwise comparison, and bundle save/load. |
-| 10_facets | Yes | Yes | Attention q/k/v head facets are guarded when unavailable. | `tl.facets` views, custom recipes, registry discovery, and built-in attention q/k/v head facets when available. |
-| 11_huggingface_and_autorouting | Yes | Yes | Optional HF fixtures may skip with their real runtime reason. | Guarded Hugging Face text/image/multimodal tracing, bridge helpers, and `tl.autoroute.input` detector registration. |
-| 12_validation_stats_reporting | Yes | Partial | Forced forward-failure diagnostics are not surfaced for the state-mutating probe; examples use torch backend resolution. | `tl.validate` forward/backward parity, streaming `tl.aggregate` stats, and readable report/summary output. |
-| 13_tabular_export | Yes | Yes | None called out. | `to_pandas()` plus canonical `torchlens.export.csv/json/parquet` workflows for traces, records, and supported accessors. |
+1. Open `_exports/<notebook>.html` in a browser and scroll through executed output.
+2. Flip through `visual/visual_audit.pdf` to catch pixel-level rendering nits.
+3. Any cell marked **⚠️ GAP** is a surface that errored or felt awkward — those are
+   the action items.
 
-## API Status
+## Coverage matrix
 
-These notebooks execute against the current checkout, and runnable code is the source of truth for this audit series. When glossary/target names differ from the current build, the notebooks use the executable API and call out the gap instead of silently mixing names.
-
-| Topic | Glossary/target name | Current build used here |
-|---|---|---|
-| Quantity classes | `tl.Quantity`, `tl.Bytes`, `tl.Duration`, `tl.Flops`, `tl.Macs` | Exported; notebooks show the real classes and rely on quantity formatting. |
-| Activation memory naming | `activation_memory` | Migrated; examples use `activation_memory` and `str(...)`/f-strings instead of removed `*_str` display fields. |
-| Site lookup | top-level `tl.find_sites(...)` | `Trace.find_sites(...)` with top-level selector helpers such as `tl.func(...)`. |
-| Tabular export | canonical package exporters | `torchlens.export.csv/json/parquet(log, path)` are the documented file-export surface. |
-| Module filtering | `module_filter` visibly narrows saved modules/layers | Current audit fixture shows no retained-layer delta even with a false predicate; notebook 00 labels this as a gap. |
-| Container output metadata | Distinct nested output labels, paths, and multi-output markers | Notebooks 02/03 show duplicate/collapsed labels and `container_path=None` for nested members as current behavior. |
-| Distance fields | Recurrent layers expose `min_distance_from_input/output` | Rolled recurrent non-boundary layers currently report `None` in notebooks 02/03. |
-| Fastlog module/source controls | Module/source records retained directly | Module records are retained via `keep_module`; source/event-stream coverage is inspected through `Recording.recording_trace`. |
-| Validation diagnostics | Forced parity failures produce a failure/diagnostic | The state-mutating probe in notebook 12 returns success, so the notebook labels this as a diagnostic gap. |
+| Notebook | Surfaces covered | Runs green? | GAPs flagged |
+|---|---|---|---|
+| `00_setup_and_first_capture` | `tl.trace`, `Trace.__repr__`/`__str__`, `summary()` levels, `layer_labels`/`op_labels`, `trace[label]`, `Op.out`, `tl.peek` | yes | `summary()` levels appear identical on simple models; `trace[int]` returns Layer not Op (may be confusing) |
+| `01_indexing_and_lookup` | `trace[int/label/substr/module_path]`, `.layers/.ops/.modules/.params/.buffers`, `AmbiguousOpLookupError`, raw labels | pending | — |
+| `02_activations_and_metadata` | `op.out`, `.shape`, `.dtype`, `.device_ref`, `.activation_memory`, `Bytes`/`Duration`/`Flops`/`Macs`, `saved_args`, `arg_expressions`, RNG fields, `code_context` | pending | — |
+| `03_the_data_model` | `Op`, `Layer`, `Module`, `ModuleCall`, `Param`, `Buffer`, `GradFn`, `GradFnCall` — `__repr__` + `to_pandas()` + key fields | pending | — |
+| `04_extraction_surfaces` | `tl.extract`, `tl.batched_extract`, `Container`, `Container.summary()`, `to_pandas`, `output_table` | pending | — |
+| `05_save_and_load` | `tl.save`/`tl.load`, `.tlspec` bundle, save levels, round-trip, `PayloadLoadHints` | pending | — |
+| `06_backward_and_gradients` | backward trace, grad fields on `Op`, `GradFn`/`GradFnCall`, `tl.validate` backward parity, `draw_backward` smoke | pending | — |
+| `07_intervention` | `tl.sites`, selectors (`func`/`in_module`/`where`/`followed_by`/`output`/`&`/`\|`/`~`), actions (`zero_ablate`/`add`/`replace_with`/`scale`/`steer`/`mean_ablate`), `when`/`do`, `replay`/`replay_from`/`rerun`, `splice_module`, `bwd_hook`, `grad_*` | pending | — |
+| `08_bundles_and_cross_trace` | `tl.bundle`/`Bundle`, members, Super* accessors, `bundle.at`, `sweep`, pairwise diff, bundle save/load | pending | — |
+| `09_fastlog_record` | `tl.record`/`fastlog`, `Recording` repr, `to_trace`, `save=` predicate, `dry_run`, `halt`, module events | pending | — |
+| `10_facets` | `tl.facets` namespace, `facet`/`head` selectors, registry discovery, attention facets (guarded), `facet.grad` / reconstruction | pending | — |
+| `11_visualization_in_workflow` | `draw` (`vis_mode` unrolled/rolled), `node_mode` presets, `module` focus, `show_containers`, `code_panel`, `node_overlay`, `vis_theme`, `show_legend`, `draw_backward`/`draw_combined` | pending | — |
+| `12_validation_stats_reporting` | `tl.validate` (fwd/bwd/saved-out), `tl.report.explain`, `tl.tap`/`tl.record_span`, `summary` levels, `output_table` | pending | — |
+| `13_tabular_export` | `trace.to_pandas`, per-record `to_pandas`, `torchlens.export` csv/json/parquet, schema/round-trip | pending | — |
+| `14_huggingface_guarded` _(optional)_ | Guarded HF text/vision trace, bridge helpers, `tl.autoroute` (verify path) | pending | — |
+| `visual/generate_visual_pack.py` | All `draw()` options x model zoo; each render-path scenario; stapled `visual_audit.pdf` | pending | — |
