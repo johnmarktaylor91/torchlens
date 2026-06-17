@@ -236,6 +236,9 @@ class BufferWriteTracker:
                 if producer is not None and not producer.startswith("buffer_"):
                     self._record_write(address, tensor, "reassign", producer, True, None)
                     continue
+                if not object_changed and storage_changed:
+                    self._record_write(address, tensor, "data_reassign", None, value_changed, None)
+                    continue
                 raise RuntimeError(
                     "TorchLens detected an unjournaled registered-buffer change for "
                     f"'{address}'. Reassigning a buffer through '.data = tensor' is unsupported; "

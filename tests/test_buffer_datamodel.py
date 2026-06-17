@@ -181,7 +181,7 @@ class StaticReadOnly(nn.Module):
 
 
 class DataSetter(nn.Module):
-    """Unsupported ``.data = tensor`` model."""
+    """``.data = tensor`` buffer storage reassignment model."""
 
     def __init__(self) -> None:
         """Initialize the buffer."""
@@ -190,7 +190,7 @@ class DataSetter(nn.Module):
         self.register_buffer("b", torch.zeros(2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Replace the buffer storage through the unsupported data setter."""
+        """Replace the buffer storage through the data setter."""
 
         self.b.data = x + 1
         return self.b
@@ -227,6 +227,7 @@ class AliasWrite(nn.Module):
         (lambda: TwoLoops(), lambda: torch.ones(2), {"h": 4}),
         (lambda: DualRoleInplace(), lambda: torch.ones(2), {"b": 1}),
         (lambda: StaticReadOnly(), lambda: torch.ones(2), {"b": 0}),
+        (lambda: DataSetter(), lambda: torch.ones(2), {"b": 1}),
         (lambda: AliasWrite(), lambda: torch.ones(2), {"c": 1}),
         (
             lambda: nn.BatchNorm1d(3).train(),
@@ -486,8 +487,12 @@ def test_buffer_capture_preserves_gradient_flow(
         assert torch.allclose(expected[name], actual[name], atol=1e-5), name
 
 
-def test_data_setter_reconciliation_raises() -> None:
-    """Assert unsupported ``.data = tensor`` changes raise a diagnostic."""
+def test_data_setter_reconciliation_records_buffer_write() -> None:
+    """Assert ``.data = tensor`` changes are recorded as buffer writes."""
 
-    with pytest.raises(RuntimeError, match="unjournaled registered-buffer change"):
-        tl.trace(DataSetter(), torch.ones(2), save_arg_values=True)
+    trace = tl.trace(DataSetter(), torch.ones(2), save_arg_values=True)
+    writes = [trace[label] for label in trace.buffer_write_ops]
+
+    assert len(writes) == 1
+    assert writes[0].buffer_write_kind == "data_reassign"
+    assert torch.equal(writes[0].out, torch.full((2,), 2.0))

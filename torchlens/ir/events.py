@@ -282,7 +282,7 @@ class BufferEvent:
     module_stack: tuple[ModuleFrame, ...]
 
 
-BufferWriteKind = Literal["reassign", "inplace", "fused"]
+BufferWriteKind = Literal["reassign", "inplace", "fused", "data_reassign"]
 
 
 @dataclass(frozen=True, slots=True)
