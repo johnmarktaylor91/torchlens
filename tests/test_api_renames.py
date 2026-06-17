@@ -304,8 +304,12 @@ def test_paper_api_graph_shims_warn_and_redirect_trace_draw(
 
     monkeypatch.setattr(tl.Trace, "draw", fake_draw)
 
-    with pytest.warns(DeprecationWarning, match=legacy_name):
+    with pytest.warns(DeprecationWarning, match=legacy_name) as warning_records:
         shim = getattr(tl, legacy_name)
+    warning_text = str(warning_records[0].message)
+    assert "Trace.draw()" in warning_text
+    assert "show_model_graph" in warning_text
+    assert "use torchlens.draw instead" not in warning_text
     with pytest.warns(DeprecationWarning, match=legacy_name):
         result = shim(trace, vis_outpath="legacy")
 
