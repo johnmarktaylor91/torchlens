@@ -259,9 +259,6 @@ Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profil
 | `notebooks/audit/` | User-facing 2.x audit notebooks |
 | `notebooks/` | Backward, fastlog, and training tutorials |
 
-The total-audit notebooks are CI-gated through `scripts/generate_audit_coverage_manifest.py`
-and `scripts/check_audit_coverage.py`.
-
 ## Release Pipeline
 The release path uses semantic-release v9 configured in `pyproject.toml`. Version variables are
 `pyproject.toml:project.version` and `torchlens/__init__.py:__version__`. A custom parser at
