@@ -87,7 +87,7 @@ If you hit a case we haven't listed, please
 | **Sparse tensor inputs** | `UnsupportedTensorVariantError` | Pass dense tensors; densify sparse inputs with `.to_dense()` |
 | **Symbolic-shape (`SymInt`) inputs** | `UnsupportedTensorVariantError` | Pass tensors with concrete integer shapes |
 | **Quantized (`torch.ao.quantization`) model** | `UserWarning`; logging continues | Treat FLOPs in the log as approximate / wrong |
-| **`torch.func.vmap` / `grad` / `jacfwd`** | `UserWarning` once per pass; inner ops skipped | Log the pre-vmap module separately, or accept an incomplete log |
+| **`torch.func.vmap` / `grad` / `jacfwd`** | `UserWarning` per collapsed boundary; inner ops skipped | Log the pre-vmap module separately, or accept an incomplete log |
 | **Multi-process spawn / `DataLoader` workers** | `RuntimeError` if called from a worker | Log in the main process |
 | **Tensor subclasses with custom `__torch_function__`** | May work; limited metadata fidelity | Log with a plain `torch.Tensor` input if possible |
 | **Very deep module hierarchy (>1000 levels)** | May hit Python recursion limit | Flatten the hierarchy, or raise `sys.setrecursionlimit` |
@@ -185,9 +185,9 @@ TorchLens detects an active functorch transform via
 the transform (internal ops like ``safe_copy`` would crash because they
 have no vmap batching rules).
 
-A ``UserWarning`` fires once per forward pass so users know the log omits
-whatever ran inside the transform. Ops that ran **outside** the transform
-are logged normally.
+A ``UserWarning`` fires for each collapsed transform boundary so users know
+the log omits whatever ran inside the transform. Ops that ran **outside** the
+transform are logged normally.
 
 **Workaround**: log the non-vmap'd model separately if you need a full
 log.

@@ -433,6 +433,28 @@ class HFStyleMaskModel(nn.Module):
         return x.masked_fill(self._mask_rows(x), 0.0)
 
 
+class TwoVmapBoundaryModel(nn.Module):
+    """Invoke two separate vmap boundaries in one forward pass."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the sum of two separately vmapped computations.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Combined transform outputs.
+        """
+
+        first = torch.vmap(lambda row: row * 2.0)(x)
+        second = torch.vmap(lambda row: row + 1.0)(x)
+        return first + second
+
+
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -452,6 +474,25 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert vmap_ops[0].transform_fn_source is not None
     assert log.transforms == (vmap_ops[0],)
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_transform_boundary_warning_fires_for_each_collapsed_region() -> None:
+    """Every collapsed transform boundary should warn, even within one trace."""
+
+    x = torch.randn(3, 4)
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        log = tl.trace(TwoVmapBoundaryModel().eval(), x, layers_to_save="all")
+
+    boundary_warnings = [
+        record
+        for record in records
+        if issubclass(record.category, UserWarning)
+        and "captured a vmap transform as a boundary op" in str(record.message)
+    ]
+    assert len(boundary_warnings) == 2
+    assert [op.transform_kind for op in log.transforms] == ["vmap", "vmap"]
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
@@ -644,7 +685,7 @@ def test_hf_style_runtime_vmap_mask_regression() -> None:
 
     assert [op.transform_kind for op in log.transforms] == ["vmap"]
     assert log.transforms[0].parents == ["input_1"]
-    assert not any("functorch" in str(record.message).lower() for record in records)
+    assert any("functorch" in str(record.message).lower() for record in records)
     assert not any("no graph/source provenance" in str(record.message) for record in records)
 
 

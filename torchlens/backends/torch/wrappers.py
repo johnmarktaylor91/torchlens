@@ -250,6 +250,28 @@ def _is_inside_functorch_transform() -> bool:
         return False
 
 
+def _warn_transform_boundary_collapse(transform_kind: str) -> None:
+    """Warn that a transform boundary was collapsed.
+
+    Parameters
+    ----------
+    transform_kind:
+        Transform kind whose inner operations are intentionally not logged.
+    """
+
+    import warnings
+
+    warnings.warn(
+        "TorchLens captured a "
+        f"{transform_kind} transform as a boundary op. Operations that run inside "
+        "the functorch/vmap/grad/jacfwd transform are not logged. The returned "
+        "Trace will only contain the transform boundary and operations that ran "
+        "outside the transform.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
 TRANSFORM_BUILDER_SITES: tuple[tuple[str, str, str], ...] = (
     ("torch", "vmap", "vmap"),
     ("torch.func", "vmap", "vmap"),
@@ -485,6 +507,7 @@ def transform_builder_decorator(
             rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
             autocast_state = log_current_autocast_state()
             func_call_id = _state.next_func_call_id()
+            _warn_transform_boundary_collapse(transform_kind)
             with _state.pause_logging():
                 out_orig = raw_built(*call_args, **call_kwargs)
             exec_ctx = FuncExecutionContext(
@@ -575,6 +598,7 @@ def direct_transform_decorator(
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
+        _warn_transform_boundary_collapse(transform_kind)
         with _state.pause_logging():
             out_orig = direct_func(user_fn, inputs, *args, **kwargs)
         exec_ctx = FuncExecutionContext(

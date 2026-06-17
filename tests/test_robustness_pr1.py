@@ -3,7 +3,7 @@
 Covers:
     - Nested ``trace`` / ``active_logging`` must raise rather than
       silently corrupt the outer Trace.
-    - Instrumented functorch / vmap / grad transforms do not warn, while raw
+    - Instrumented functorch / vmap / grad transforms warn at the boundary, while raw
       uninstrumented transform regions retain the one-shot warning.
     - pyproject pins ``torch>=2.4`` (matching the autocast API already in use)
       and advertises Python 3.13 support.
@@ -105,7 +105,7 @@ _HAS_FUNCTORCH_VMAP = hasattr(torch, "func") and hasattr(torch.func, "vmap")
 
 @pytest.mark.skipif(not _HAS_FUNCTORCH_VMAP, reason="torch.func.vmap not available")
 def test_vmap_emits_userwarning_once_per_session() -> None:
-    """Instrumented vmap emits no functorch warning."""
+    """Instrumented vmap emits a functorch boundary warning."""
 
     class VmappedSum(nn.Module):
         """Uses vmap internally but returns a tensor from a normal (loggable) op
@@ -128,7 +128,7 @@ def test_vmap_emits_userwarning_once_per_session() -> None:
         for w in caught
         if issubclass(w.category, UserWarning) and "functorch" in str(w.message).lower()
     ]
-    assert vmap_warnings == []
+    assert len(vmap_warnings) == 1
 
 
 @pytest.mark.skipif(not _HAS_FUNCTORCH_VMAP, reason="torch.func.vmap not available")
