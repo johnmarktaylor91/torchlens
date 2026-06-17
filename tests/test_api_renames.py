@@ -206,6 +206,148 @@ def test_get_model_metadata_warns_once(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
+def test_paper_api_model_history_import_warns_and_redirects() -> None:
+    """The legacy ``ModelHistory`` name should import with a deprecation warning."""
+
+    with pytest.warns(DeprecationWarning, match="ModelHistory"):
+        from torchlens import ModelHistory
+
+    assert ModelHistory is tl.Trace
+
+
+@pytest.mark.parametrize(
+    ("legacy_name", "target_name"),
+    [
+        ("log_forward_pass", "_trace"),
+        ("get_model_activations", "extract"),
+    ],
+)
+def test_paper_api_capture_shims_warn_and_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_name: str,
+    target_name: str,
+) -> None:
+    """Legacy capture helpers should warn and delegate to their canonical target."""
+
+    sentinel = object()
+    captured: dict[str, Any] = {}
+
+    def fake_target(*args: Any, **kwargs: Any) -> object:
+        """Capture forwarded arguments and return a sentinel."""
+
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return sentinel
+
+    monkeypatch.setattr(tl, target_name, fake_target)
+
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        shim = getattr(tl, legacy_name)
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        result = shim(_TinyModel(), _tiny_input(), layers=["linear"])
+
+    assert result is sentinel
+    assert isinstance(captured["args"][0], _TinyModel)
+    assert captured["kwargs"] == {"layers": ["linear"]}
+
+
+@pytest.mark.parametrize(
+    ("legacy_name", "scope"),
+    [
+        ("validate_model_activations", "forward"),
+        ("validate_saved_activations", "saved"),
+    ],
+)
+def test_paper_api_validation_shims_warn_and_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_name: str,
+    scope: str,
+) -> None:
+    """Legacy validation helpers should call ``tl.validate`` with the right scope."""
+
+    captured: dict[str, Any] = {}
+
+    def fake_validate(*args: Any, **kwargs: Any) -> bool:
+        """Capture forwarded validation arguments."""
+
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return True
+
+    monkeypatch.setattr(tl, "validate", fake_validate)
+
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        shim = getattr(tl, legacy_name)
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        result = shim(_TinyModel(), _tiny_input())
+
+    assert result is True
+    assert captured["kwargs"]["scope"] == scope
+
+
+@pytest.mark.parametrize("legacy_name", ["render_graph", "render_model_graph", "draw_model_graph"])
+def test_paper_api_graph_shims_warn_and_redirect_trace_draw(
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_name: str,
+) -> None:
+    """Legacy graph helpers should call ``Trace.draw`` when passed a trace."""
+
+    trace = tl.Trace("tiny")
+    captured: dict[str, Any] = {}
+
+    def fake_draw(self: tl.Trace, **kwargs: Any) -> str:
+        """Capture draw kwargs and return a sentinel graph value."""
+
+        captured["self"] = self
+        captured["kwargs"] = kwargs
+        return "graph"
+
+    monkeypatch.setattr(tl.Trace, "draw", fake_draw)
+
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        shim = getattr(tl, legacy_name)
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        result = shim(trace, vis_outpath="legacy")
+
+    assert result == "graph"
+    assert captured["self"] is trace
+    assert captured["kwargs"] == {"vis_outpath": "legacy"}
+
+
+@pytest.mark.parametrize("legacy_name", ["get_model_structure", "show_model_structure"])
+def test_paper_api_structure_shims_warn_and_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_name: str,
+) -> None:
+    """Legacy structure helpers should return traced module-structure metadata."""
+
+    modules = object()
+
+    class _TraceWithModules:
+        """Minimal trace double exposing module metadata."""
+
+        def __init__(self) -> None:
+            """Initialize the trace double."""
+
+            self.modules = modules
+
+    def fake_trace(*args: Any, **kwargs: Any) -> _TraceWithModules:
+        """Return a trace double and verify metadata-only capture is requested."""
+
+        assert isinstance(args[0], _TinyModel)
+        assert kwargs["layers_to_save"] is None
+        return _TraceWithModules()
+
+    monkeypatch.setattr(tl, "_trace", fake_trace)
+
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        shim = getattr(tl, legacy_name)
+    with pytest.warns(DeprecationWarning, match=legacy_name):
+        result = shim(_TinyModel(), _tiny_input())
+
+    assert result is modules
+
+
 def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPatch) -> None:
     """The namespaced metadata helper should not emit deprecation warnings."""
 

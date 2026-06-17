@@ -184,6 +184,19 @@ _MOVED_OBJECTS = {
     "wrapped": ("torchlens.backends.torch.wrappers", "wrapped"),
 }
 
+_LEGACY_API_SHIMS = {
+    "log_forward_pass": ("trace", "trace"),
+    "get_model_activations": ("extract", "extract"),
+    "validate_model_activations": ("validate", "validate_forward"),
+    "validate_saved_activations": ("validate", "validate_saved"),
+    "render_graph": ("draw", "draw"),
+    "render_model_graph": ("draw", "draw"),
+    "draw_model_graph": ("draw", "draw"),
+    "ModelHistory": ("Trace", "class"),
+    "get_model_structure": ("structure getter", "structure"),
+    "show_model_structure": ("structure getter", "structure"),
+}
+
 
 def _warn_moved_name(name: str, new_module_path: str, new_attr: str) -> None:
     """Emit the standard top-level API move deprecation warning.
@@ -204,6 +217,68 @@ def _warn_moved_name(name: str, new_module_path: str, new_attr: str) -> None:
         DeprecationWarning,
         stacklevel=3,
     )
+
+
+def _warn_legacy_api_name(name: str, replacement: str) -> None:
+    """Emit the long-sunset warning for legacy paper-era API names.
+
+    Parameters
+    ----------
+    name:
+        Legacy top-level TorchLens name.
+    replacement:
+        Replacement API spelling.
+    """
+
+    _warnings.warn(
+        f"torchlens.{name} is deprecated; use torchlens.{replacement} instead. "
+        "The old paper-era name remains available as a compatibility shim.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
+    """Build a warning wrapper for a legacy top-level callable.
+
+    Parameters
+    ----------
+    name:
+        Legacy callable name.
+    replacement:
+        Replacement public callable name.
+
+    Returns
+    -------
+    Callable[..., Any]
+        Wrapper that warns and delegates to the replacement.
+    """
+
+    def _shim(*args: Any, **kwargs: Any) -> Any:
+        """Warn and delegate a legacy top-level API call."""
+
+        _warn_legacy_api_name(name, replacement)
+        if name == "validate_model_activations":
+            kwargs.setdefault("scope", "forward")
+            return validate(*args, **kwargs)
+        if name == "validate_saved_activations":
+            kwargs.setdefault("scope", "saved")
+            return validate(*args, **kwargs)
+        if name in {"render_graph", "render_model_graph", "draw_model_graph"}:
+            if args and isinstance(args[0], Trace):
+                return args[0].draw(*args[1:], **kwargs)
+            return _moved_show_model_graph(*args, **kwargs)
+        if name in {"get_model_structure", "show_model_structure"}:
+            structure_trace = _trace(*args, layers_to_save=None, **kwargs)
+            return structure_trace.modules
+        if name == "get_model_activations":
+            return extract(*args, **kwargs)
+        return _trace(*args, **kwargs)
+
+    _shim.__name__ = name
+    _shim.__qualname__ = name
+    _shim.__doc__ = f"Deprecated compatibility shim for :func:`torchlens.{replacement}`."
+    return _shim
 
 
 def __getattr__(name: str) -> Any:
@@ -229,6 +304,12 @@ def __getattr__(name: str) -> Any:
         module_obj = _importlib.import_module("torchlens.autoroute")
         globals()[name] = module_obj
         return module_obj
+    if name in _LEGACY_API_SHIMS:
+        replacement, shim_kind = _LEGACY_API_SHIMS[name]
+        _warn_legacy_api_name(name, replacement)
+        if shim_kind == "class":
+            return Trace
+        return _legacy_trace_alias(name, replacement)
     if name in _MOVED_OBJECTS:
         new_module_path, new_attr = _MOVED_OBJECTS[name]
         _warn_moved_name(name, new_module_path, new_attr)
@@ -919,6 +1000,7 @@ __all__ = [
     "Layer",
     "Container",
     "Op",
+    "ModelHistory",
     "Quantity",
     "Bytes",
     "Duration",
@@ -968,4 +1050,13 @@ __all__ = [
     "grad_zero",
     "tap",
     "record_span",
+    "log_forward_pass",
+    "get_model_activations",
+    "validate_model_activations",
+    "validate_saved_activations",
+    "render_graph",
+    "render_model_graph",
+    "draw_model_graph",
+    "get_model_structure",
+    "show_model_structure",
 ]
