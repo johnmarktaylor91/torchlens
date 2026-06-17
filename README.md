@@ -344,9 +344,40 @@ documented in [`docs/`](docs/).
 
 ## Gallery
 
-A menagerie of model visualizations -- image, video, audio, language,
-graph, and recurrent architectures -- lives in the
-[model visualization gallery](https://drive.google.com/drive/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb?usp=sharing).
+TorchLens visualizes any architecture -- no matter how exotic. Below is a sample
+across families. The
+[full menagerie](https://drive.google.com/drive/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb?usp=sharing)
+has 650+ graphs across 44 architecture families.
+
+**Classic CNN + Vision Transformer**
+
+| GoogLeNet (inception + buffer edges) | Stable Diffusion (U-Net denoiser) | CLIP (vision + language towers) |
+|:---:|:---:|:---:|
+| <img src="images/menagerie/googlenet.jpg" width="280"> | <img src="images/menagerie/stable_diffusion.png" width="180"> | <img src="images/menagerie/clip.jpg" width="160"> |
+
+**State-Space + Recurrence**
+
+| Mamba (selective SSM) | Recurrent Gemma (linear recurrence) | Whisper (audio encoder-decoder) |
+|:---:|:---:|:---:|
+| <img src="images/menagerie/mamba.jpg" width="220"> | <img src="images/menagerie/recurrent_gemma.jpg" width="220"> | <img src="images/menagerie/whisper.jpg" width="140"> |
+
+**Mixture-of-Experts + Generative**
+
+| Mixtral (sparse MoE) | Hierarchical VAE | Perceiver |
+|:---:|:---:|:---:|
+| <img src="images/menagerie/mixtral.jpg" width="220"> | <img src="images/menagerie/hierarchical_vae.png" width="200"> | <img src="images/menagerie/perceiver.jpg" width="180"> |
+
+**Graph Networks + Exotic**
+
+| DimeNet (molecular GNN) | CORnet-S (visual cortex, unrolled) | LLaMA (decoder-only LLM) |
+|:---:|:---:|:---:|
+| <img src="images/menagerie/dimenet.png" width="360"> | <img src="images/menagerie/cornet_s.png" width="260"> | <img src="images/menagerie/llama.jpg" width="200"> |
+
+**Reinforcement Learning + Quantum ML + Scale**
+
+| Decision Transformer (offline RL) | Quantum ML circuit | 3,000-node graph (SFDP layout) |
+|:---:|:---:|:---:|
+| <img src="images/menagerie/decision_transformer.jpg" width="180"> | <img src="images/menagerie/qml.png" width="260"> | <img src="images/menagerie/large_graph_3k.jpg" width="400"> |
 
 
 ## Compatibility
