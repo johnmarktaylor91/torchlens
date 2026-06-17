@@ -38,6 +38,7 @@ Key design decisions:
 import ctypes
 import inspect
 import sys
+import sysconfig
 import time
 import types
 import weakref
@@ -77,6 +78,29 @@ from .sources import log_source_tensor
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
+
+
+_DETACHED_REFERENCE_PATCH_POLICY = "default"
+"""Policy for detached-reference patching: ``"default"``, ``"full"``, or ``"scoped"``."""
+
+_KNOWN_TORCH_FREE_PREFIXES = (
+    "PIL",
+    "Pillow",
+    "dill",
+    "graphviz",
+    "mpmath",
+    "pydot",
+    "sympy",
+)
+_LEGACY_DETACHED_SKIP_PREFIXES = ("torch.", "numpy.", "pytest", "pluggy", "setuptools")
+_STDLIB_PATHS = tuple(
+    path
+    for path in (
+        sysconfig.get_path("stdlib"),
+        sysconfig.get_path("platstdlib"),
+    )
+    if path
+)
 
 
 _PATCHED_MODEL_INSTANCES: weakref.WeakSet[Any] = weakref.WeakSet()
@@ -1494,11 +1518,11 @@ def wrap_torch() -> None:
     _decorate_transform_builders()
     _decorate_direct_transforms()
 
-    _replace_detached_references(_state._orig_to_decorated)
     # Recreate decorated identity in case wrapper references shifted
     _state._decorated_identity = torch_func_decorator(identity, "identity")
     _state._is_decorated = True
     install_autograd_wrappers()
+    _state._crawled_module_keys.clear()
     patch_detached_references()
 
     # Re-wrapping __getitem__ pollutes sq_item again; clear it.
@@ -1532,7 +1556,7 @@ redecorate_all_globally = wrap_torch
 # ---------------------------------------------------------------------------
 
 
-def patch_detached_references() -> None:
+def patch_detached_references(full: bool = False) -> None:
     """Crawl ``sys.modules`` and replace stale references to original torch
     functions with their decorated counterparts.
 
@@ -1559,9 +1583,27 @@ def patch_detached_references() -> None:
        ``patch_model_instance()`` at ``trace`` time, since model
        instances may not exist yet when this function runs.
 
-    Incremental: uses ``_state._crawled_module_keys`` to skip already-scanned
-    modules. Called on every ``trace`` to catch lazily-imported modules.
+    The default policy preserves the Level-1 direct-reference scan for every
+    eligible module, and skips Level 2/3 only for readable Python modules whose
+    source does not contain the substring ``"torch"``. Pass ``full=True`` to
+    force the older deep scan for every module that is not in the legacy skip
+    set.
+
+    Parameters
+    ----------
+    full:
+        If True, bypass source pre-filtering and run the legacy deep crawl.
+
+    Returns
+    -------
+    None
+        Matching stale references are patched in-place.
     """
+    policy = "full" if full else _DETACHED_REFERENCE_PATCH_POLICY
+    if policy not in {"default", "full", "scoped"}:
+        raise ValueError("_DETACHED_REFERENCE_PATCH_POLICY must be 'default', 'full', or 'scoped'.")
+    if policy == "scoped":
+        policy = "default"
     new_keys = set(sys.modules.keys()) - _state._crawled_module_keys
     if not new_keys:
         return
@@ -1575,10 +1617,7 @@ def patch_detached_references() -> None:
         warnings.simplefilter("ignore")
         for mod_key in new_keys:
             _state._crawled_module_keys.add(mod_key)
-            if (
-                mod_key.startswith(("torch.", "numpy.", "pytest", "pluggy", "setuptools"))
-                or ".dist-info" in mod_key
-            ):
+            if _should_skip_detached_module_key(mod_key, policy):
                 continue
             mod = sys.modules.get(mod_key)
             if mod is None:
@@ -1592,6 +1631,7 @@ def patch_detached_references() -> None:
             except TypeError:
                 continue
 
+            should_deep_scan = _should_deep_scan_detached_module(mod, policy)
             for attr_name, attr_val in list(mod_dict.items()):
                 # Level 1: module-level references (e.g. ``from torch import cos``)
                 if id(attr_val) in mapping:
@@ -1599,6 +1639,8 @@ def patch_detached_references() -> None:
                         mod_dict[attr_name] = mapping[id(attr_val)]
                     except (TypeError, KeyError):
                         pass
+                    continue
+                if not should_deep_scan:
                     continue
 
                 # Level 2: class-level attributes that hold torch function references
@@ -1635,6 +1677,110 @@ def patch_detached_references() -> None:
                     _patch_function_defaults(attr_val, mapping)
 
 
+def _should_skip_detached_module_key(mod_key: str, policy: str) -> bool:
+    """Return whether a sys.modules key should be skipped before module lookup.
+
+    Parameters
+    ----------
+    mod_key:
+        Key from ``sys.modules``.
+    policy:
+        Detached-reference patch policy.
+
+    Returns
+    -------
+    bool
+        True if the module key is known not to need detached-reference patching.
+    """
+
+    prefixes = _LEGACY_DETACHED_SKIP_PREFIXES
+    if policy != "full":
+        prefixes = prefixes + _KNOWN_TORCH_FREE_PREFIXES
+    return mod_key.startswith(prefixes) or ".dist-info" in mod_key
+
+
+def _should_deep_scan_detached_module(mod: types.ModuleType, policy: str) -> bool:
+    """Return whether Level 2/3 detached-reference scans should run for a module.
+
+    Parameters
+    ----------
+    mod:
+        Module object being scanned.
+    policy:
+        Detached-reference patch policy.
+
+    Returns
+    -------
+    bool
+        True when class-attribute and function-default introspection should run.
+    """
+
+    if policy == "full":
+        return True
+    if _module_file_is_stdlib(mod):
+        return False
+    has_torch = _module_source_mentions_torch(mod)
+    return has_torch is not False
+
+
+def _module_file_is_stdlib(mod: types.ModuleType) -> bool:
+    """Return whether a module file lives under the Python stdlib directory.
+
+    Parameters
+    ----------
+    mod:
+        Module object to inspect.
+
+    Returns
+    -------
+    bool
+        True when ``mod.__file__`` is inside the configured stdlib paths.
+    """
+
+    mod_file = getattr(mod, "__file__", None)
+    if not isinstance(mod_file, str):
+        return False
+    for stdlib_path in _STDLIB_PATHS:
+        try:
+            if mod_file.startswith(stdlib_path):
+                return "site-packages" not in mod_file and "dist-packages" not in mod_file
+        except TypeError:
+            continue
+    return False
+
+
+def _module_source_mentions_torch(mod: types.ModuleType) -> bool | None:
+    """Return whether a module's Python source contains ``b"torch"``.
+
+    Parameters
+    ----------
+    mod:
+        Module object to inspect.
+
+    Returns
+    -------
+    bool | None
+        True if readable source contains ``b"torch"``, False if readable
+        source does not, and None when no conservative classification is
+        possible.
+    """
+
+    mod_file = getattr(mod, "__file__", None)
+    if not isinstance(mod_file, str) or not mod_file.endswith(".py"):
+        return None
+    cached = _state._detached_source_has_torch.get(mod_file)
+    if cached is not None or mod_file in _state._detached_source_has_torch:
+        return cached
+    try:
+        with open(mod_file, "rb") as source_file:
+            has_torch = b"torch" in source_file.read()
+    except OSError:
+        _state._detached_source_has_torch[mod_file] = None
+        return None
+    _state._detached_source_has_torch[mod_file] = has_torch
+    return has_torch
+
+
 def clear_patch_detached_references_cache() -> None:
     """Clear caches used by ``patch_detached_references``.
 
@@ -1646,6 +1792,7 @@ def clear_patch_detached_references_cache() -> None:
 
     _state._crawled_module_keys.clear()
     _state._dir_cache.clear()
+    _state._detached_source_has_torch.clear()
 
 
 def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:

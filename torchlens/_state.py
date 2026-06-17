@@ -391,6 +391,14 @@ _dir_cache: dict[type, list[str]] = {}
 Avoids repeated introspection of the same type's attributes during the
 recursive sys.modules crawl.
 """
+
+_detached_source_has_torch: dict[str, bool | None] = {}
+"""Module source-path cache for ``patch_detached_references``.
+
+Values are ``True`` when source contains the byte substring ``b"torch"``,
+``False`` when readable source does not, and ``None`` when source could not be
+classified and the conservative full scan should run.
+"""
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 
