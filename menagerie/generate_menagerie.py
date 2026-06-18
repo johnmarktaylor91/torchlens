@@ -36,6 +36,7 @@ MANIFEST_COLUMNS = (
     "elapsed",
     "dependency_cluster",
     "error",
+    "graph_shape_hash",
 )
 CACHE_ROOTS = (
     Path.home() / ".cache" / "huggingface" / "hub",
@@ -211,6 +212,8 @@ class RenderResult:
         Dependency cluster used for this row.
     error:
         Error or skip note.
+    graph_shape_hash:
+        TorchLens architecture hash for deduplication.
     """
 
     name: str
@@ -221,6 +224,7 @@ class RenderResult:
     elapsed: float
     dependency_cluster: str
     error: str
+    graph_shape_hash: str = ""
 
 
 def disk_free_gb(path: Path) -> float:
@@ -539,6 +543,7 @@ def append_manifest(manifest_path: Path, result: RenderResult) -> None:
                 f"{result.elapsed:.3f}",
                 result.dependency_cluster,
                 result.error,
+                result.graph_shape_hash,
             )
         )
 
@@ -1245,6 +1250,7 @@ def render_one(
                 save_rng_states=False,
                 inference_only=True,
             )
+        graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
         n_nodes = len(getattr(trace, "layer_logs", {}) or {})
         trace.draw(
             vis_outpath=str(render_stem),
@@ -1265,6 +1271,7 @@ def render_one(
             time.monotonic() - start,
             plan.cluster_key,
             device_note(device, actual_device),
+            graph_shape_hash,
         )
 
     if device == "cuda":
@@ -1340,6 +1347,7 @@ def render_result_from_payload(payload: Mapping[str, Any]) -> RenderResult:
         elapsed=float(payload["elapsed"]),
         dependency_cluster=str(payload["dependency_cluster"]),
         error=str(payload["error"]),
+        graph_shape_hash=str(payload.get("graph_shape_hash", "")),
     )
 
 

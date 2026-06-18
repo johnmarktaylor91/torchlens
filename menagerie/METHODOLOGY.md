@@ -37,6 +37,14 @@ canonical builder then:
 The normalization code is intentionally conservative. It does not erase differences in
 source zoo or constructor recipe just to force a lower row count.
 
+## Architectural Deduplication
+
+Rendered and validated manifests record `graph_shape_hash`, TorchLens's canonical
+architecture deduplication key. The hash is computed from the traced graph shape and is
+verified to be parameter-invariant, input-resolution-invariant, and batch-invariant, so
+rows with the same nonblank hash should be treated as the same architecture for dedup
+reporting even when they come from different names, zoos, or constructor recipes.
+
 ## Integrity Bug Lesson
 
 The most important lesson from the survey was that a large taxonomy can look complete

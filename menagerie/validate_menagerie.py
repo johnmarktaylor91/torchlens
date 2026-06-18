@@ -52,6 +52,7 @@ MANIFEST_COLUMNS = (
     "elapsed",
     "dependency_cluster",
     "error",
+    "graph_shape_hash",
 )
 SUMMARY_JSON = "validation_summary.json"
 REPORT_MD = "VALIDATION_REPORT.md"
@@ -81,6 +82,8 @@ class ValidationResult:
         Dependency cluster used for this row.
     error:
         Error text or skip note.
+    graph_shape_hash:
+        TorchLens architecture hash for deduplication.
     """
 
     name: str
@@ -92,6 +95,7 @@ class ValidationResult:
     elapsed: float
     dependency_cluster: str
     error: str
+    graph_shape_hash: str = ""
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -165,6 +169,7 @@ def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
                 f"{result.elapsed:.3f}",
                 result.dependency_cluster,
                 result.error.replace("\n", " | "),
+                result.graph_shape_hash,
             )
         )
 
@@ -193,6 +198,7 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         elapsed=float(payload["elapsed"]),
         dependency_cluster=str(payload["dependency_cluster"]),
         error=str(payload["error"]),
+        graph_shape_hash=str(payload.get("graph_shape_hash", "")),
     )
 
 
@@ -287,8 +293,8 @@ def _sum_float_outputs(output: Any) -> Any:
     return loss
 
 
-def _trace_n_ops(model: Any, input_tensor: Any) -> int:
-    """Trace a model once to count forward ops without rendering.
+def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int, str]:
+    """Trace a model once to count forward ops and compute its architecture hash.
 
     Parameters
     ----------
@@ -299,8 +305,8 @@ def _trace_n_ops(model: Any, input_tensor: Any) -> int:
 
     Returns
     -------
-    int
-        Number of traced ops, or zero if counting fails.
+    tuple[int, str]
+        Number of traced ops and graph-shape hash.
     """
 
     import torch
@@ -315,7 +321,9 @@ def _trace_n_ops(model: Any, input_tensor: Any) -> int:
             save_rng_states=False,
             inference_only=True,
         )
-    return int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
+    n_ops = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
+    graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
+    return n_ops, graph_shape_hash
 
 
 def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> ValidationResult:
@@ -483,9 +491,10 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
             backward_error = f"; backward={backward_result!r}"
 
         try:
-            n_ops = _trace_n_ops(attempt_model, attempt_input)
+            n_ops, graph_shape_hash = _trace_n_ops_and_hash(attempt_model, attempt_input)
         except Exception:
             n_ops = 0
+            graph_shape_hash = ""
         return ValidationResult(
             row.name,
             row.model_id,
@@ -499,6 +508,7 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 device_note(device, actual_device),
                 f"forward={forward_result!r}{backward_error}",
             ),
+            graph_shape_hash,
         )
 
     if device == "cuda":
