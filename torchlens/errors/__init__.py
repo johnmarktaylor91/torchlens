@@ -19,6 +19,7 @@ from ._base import (
 _LEGACY_EXCEPTION_PATHS = {
     "MutatedReferenceError": ("torchlens._errors", "MutatedReferenceError"),
     "PostTraceParamUnavailable": ("torchlens._errors", "PostTraceParamUnavailable"),
+    "ShapeInferenceError": ("torchlens._errors", "ShapeInferenceError"),
     "TorchLensPostfuncError": ("torchlens._errors", "TorchLensPostfuncError"),
     "TorchLensIOError": ("torchlens._io", "TorchLensIOError"),
     "UnsupportedTensorVariantError": (

@@ -2,6 +2,7 @@
 
 from ._state import ReentrantTraceError
 from .errors._base import CaptureError
+from .errors._base import ConfigurationError
 
 
 class TorchLensPostfuncError(CaptureError, RuntimeError):
@@ -18,3 +19,7 @@ class PostTraceParamUnavailable(CaptureError, RuntimeError):
 
 class AmbiguousOpLookupError(ValueError):
     """Raised when a bare Op lookup matches multiple pass-qualified Ops."""
+
+
+class ShapeInferenceError(ConfigurationError, RuntimeError):
+    """Raised when debug input-shape inference cannot produce a valid input."""
