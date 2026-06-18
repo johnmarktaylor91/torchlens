@@ -141,6 +141,14 @@ UNRENDERABLE_MARKERS = (
     ("metadata-only", "metadata_only"),
     ("catalog-only", "metadata_only"),
 )
+DEVICE_ERROR_MARKERS = (
+    "triton",
+    "cpu tensor",
+    "expected all tensors to be on the same device",
+    "cuda",
+    "must be on",
+    "device",
+)
 
 
 @dataclass(frozen=True)
@@ -336,6 +344,129 @@ def cleanup_runtime(cache_snapshots: Sequence[CacheSnapshot], tmp_dir: Path) -> 
     removed = sum(purge_new_cache_entries(snapshot) for snapshot in cache_snapshots)
     shutil.rmtree(tmp_dir, ignore_errors=True)
     return removed
+
+
+def is_device_related_error(error: BaseException) -> bool:
+    """Return whether an exception looks like a device placement failure.
+
+    Parameters
+    ----------
+    error:
+        Exception raised while running a model.
+
+    Returns
+    -------
+    bool
+        Whether the error message matches known device-related failures.
+    """
+
+    message = str(error).lower()
+    return any(marker in message for marker in DEVICE_ERROR_MARKERS)
+
+
+def move_input_to_device(value: Any, device: str) -> Any:
+    """Move nested tensor inputs to a target device.
+
+    Parameters
+    ----------
+    value:
+        Tensor, sequence, mapping, or scalar input object.
+    device:
+        Target torch device string.
+
+    Returns
+    -------
+    Any
+        Input object with tensor leaves moved to ``device``.
+    """
+
+    import torch
+
+    if isinstance(value, torch.Tensor):
+        return value.to(device)
+    if isinstance(value, tuple):
+        return tuple(move_input_to_device(item, device) for item in value)
+    if isinstance(value, list):
+        return [move_input_to_device(item, device) for item in value]
+    if isinstance(value, dict):
+        return {key: move_input_to_device(item, device) for key, item in value.items()}
+    return value
+
+
+def move_model_and_input_to_device(model: Any, input_value: Any, device: str) -> tuple[Any, Any]:
+    """Move a model and its example input to a target device.
+
+    Parameters
+    ----------
+    model:
+        Instantiated model.
+    input_value:
+        Example model input.
+    device:
+        Target torch device string.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        Moved ``(model, input_value)`` pair.
+    """
+
+    return model.to(device), move_input_to_device(input_value, device)
+
+
+def cuda_is_available() -> bool:
+    """Return whether PyTorch reports an available CUDA device.
+
+    Returns
+    -------
+    bool
+        Whether CUDA is available.
+    """
+
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def device_note(requested_device: str, actual_device: str) -> str:
+    """Build a manifest note for non-default device execution.
+
+    Parameters
+    ----------
+    requested_device:
+        CLI device mode.
+    actual_device:
+        Device used for the successful attempt.
+
+    Returns
+    -------
+    str
+        Manifest note, or an empty string for default-compatible CPU runs.
+    """
+
+    if requested_device == "cpu" and actual_device == "cpu":
+        return ""
+    return f"device={actual_device}"
+
+
+def combine_notes(*notes: str) -> str:
+    """Join non-empty manifest notes.
+
+    Parameters
+    ----------
+    *notes:
+        Candidate note strings.
+
+    Returns
+    -------
+    str
+        Combined manifest note.
+    """
+
+    return "; ".join(note for note in notes if note)
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -1012,7 +1143,9 @@ def isolated_tmp_env(tmp_dir: Path) -> Iterator[None]:
         tempfile.tempdir = None
 
 
-def render_one(row: CatalogRow, out_dir: Path, dry_run: bool, file_format: str) -> RenderResult:
+def render_one(
+    row: CatalogRow, out_dir: Path, dry_run: bool, file_format: str, device: str
+) -> RenderResult:
     """Instantiate, trace, render, and summarize one model.
 
     Parameters
@@ -1025,6 +1158,8 @@ def render_one(row: CatalogRow, out_dir: Path, dry_run: bool, file_format: str) 
         Validate only when true.
     file_format:
         TorchLens render file format.
+    device:
+        Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
 
     Returns
     -------
@@ -1082,36 +1217,74 @@ def render_one(row: CatalogRow, out_dir: Path, dry_run: bool, file_format: str) 
     model.eval()
     render_stem = model_render_stem(row, out_dir)
     render_stem.parent.mkdir(parents=True, exist_ok=True)
-    with torch.no_grad():
-        trace = tl.trace(
-            model,
-            input_tensor,
-            layers_to_save=None,
-            save=None,
-            save_rng_states=False,
-            inference_only=True,
+
+    def attempt_render(attempt_model: Any, attempt_input: Any, actual_device: str) -> RenderResult:
+        """Trace and render the model on one resolved device.
+
+        Parameters
+        ----------
+        attempt_model:
+            Model prepared for the attempt device.
+        attempt_input:
+            Example input prepared for the attempt device.
+        actual_device:
+            Device used by this attempt.
+
+        Returns
+        -------
+        RenderResult
+            Successful render result.
+        """
+
+        with torch.no_grad():
+            trace = tl.trace(
+                attempt_model,
+                attempt_input,
+                layers_to_save=None,
+                save=None,
+                save_rng_states=False,
+                inference_only=True,
+            )
+        n_nodes = len(getattr(trace, "layer_logs", {}) or {})
+        trace.draw(
+            vis_outpath=str(render_stem),
+            vis_fileformat=file_format,
+            vis_save_only=True,
+            show_legend=False,
         )
-    n_nodes = len(getattr(trace, "layer_logs", {}) or {})
-    trace.draw(
-        vis_outpath=str(render_stem),
-        vis_fileformat=file_format,
-        vis_save_only=True,
-        show_legend=False,
-    )
-    render_path = model_render_path(row, out_dir, file_format)
-    if is_featured(row):
-        link_featured_copy(row, render_path, out_dir)
-    del trace
-    return RenderResult(
-        row.name,
-        row.model_id,
-        "rendered",
-        n_nodes,
-        str(render_path),
-        time.monotonic() - start,
-        plan.cluster_key,
-        "",
-    )
+        render_path = model_render_path(row, out_dir, file_format)
+        if is_featured(row):
+            link_featured_copy(row, render_path, out_dir)
+        del trace
+        return RenderResult(
+            row.name,
+            row.model_id,
+            "rendered",
+            n_nodes,
+            str(render_path),
+            time.monotonic() - start,
+            plan.cluster_key,
+            device_note(device, actual_device),
+        )
+
+    if device == "cuda":
+        try:
+            model, input_tensor = move_model_and_input_to_device(model, input_tensor, "cuda")
+            return attempt_render(model, input_tensor, "cuda")
+        except Exception as error:
+            raise RuntimeError(f"device=cuda; {error!r}") from error
+    if device == "auto":
+        try:
+            return attempt_render(model, input_tensor, "cpu")
+        except Exception as error:
+            if not is_device_related_error(error) or not cuda_is_available():
+                raise RuntimeError(f"device=cpu; {error!r}") from error
+            try:
+                model, input_tensor = move_model_and_input_to_device(model, input_tensor, "cuda")
+                return attempt_render(model, input_tensor, "cuda")
+            except Exception as cuda_error:
+                raise RuntimeError(f"device=cuda; {cuda_error!r}") from cuda_error
+    return attempt_render(model, input_tensor, "cpu")
 
 
 def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
@@ -1175,6 +1348,7 @@ def render_with_timeout(
     out_dir: Path,
     dry_run: bool,
     file_format: str,
+    device: str,
     timeout_sec: float,
 ) -> RenderResult:
     """Run one render in an isolated child process with a timeout.
@@ -1189,6 +1363,8 @@ def render_with_timeout(
         Validate only when true.
     file_format:
         TorchLens render file format.
+    device:
+        Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
     timeout_sec:
         Maximum wall time in seconds.
 
@@ -1209,6 +1385,8 @@ def render_with_timeout(
         str(out_dir),
         "--file-format",
         file_format,
+        "--device",
+        device,
     ]
     if dry_run:
         command.append("--dry-run")
@@ -1813,6 +1991,7 @@ def run(args: argparse.Namespace) -> int:
                     out_dir,
                     args.dry_run,
                     args.file_format,
+                    args.device,
                     args.timeout_sec,
                 )
                 removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
@@ -1899,6 +2078,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-models", type=int)
     parser.add_argument("--file-format", default="svg")
+    parser.add_argument("--device", choices=("cpu", "cuda", "auto"), default="cpu")
     parser.add_argument("--timeout-sec", type=float, default=240.0)
     parser.add_argument("--install-timeout", type=float, default=600.0)
     parser.add_argument(
@@ -1934,7 +2114,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.worker_row_json:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:
-            result = render_one(row, args.out_dir.resolve(), args.dry_run, args.file_format)
+            result = render_one(
+                row, args.out_dir.resolve(), args.dry_run, args.file_format, args.device
+            )
         except Exception as error:
             plan = dependency_plan(row)
             result = RenderResult(

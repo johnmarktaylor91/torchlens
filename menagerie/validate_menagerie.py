@@ -19,20 +19,25 @@ from menagerie.generate_menagerie import (
     CACHE_ROOTS,
     assert_min_free,
     classics_example_input,
+    combine_notes,
     cleanup_runtime,
     dependency_plan,
+    device_note,
     disk_free_gb,
     group_by_dependency,
     install_dependency_plan,
     instantiate_model,
+    is_device_related_error,
     is_classics_row,
     isolated_tmp_env,
     log_event,
+    move_model_and_input_to_device,
     safe_path_part,
     select_rows,
     snapshot_cache,
     tensor_for_recipe,
     unrenderable_reason,
+    cuda_is_available,
 )
 
 
@@ -313,7 +318,7 @@ def _trace_n_ops(model: Any, input_tensor: Any) -> int:
     return int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
 
 
-def validate_one(row: CatalogRow, dry_run: bool, scope: str) -> ValidationResult:
+def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> ValidationResult:
     """Instantiate and validate one menagerie model.
 
     Parameters
@@ -324,6 +329,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str) -> ValidationResult
         Build recipe only when true.
     scope:
         Validation scope, ``"forward"`` or ``"forward+backward"``.
+    device:
+        Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
 
     Returns
     -------
@@ -373,50 +380,36 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str) -> ValidationResult
             "validated recipe",
         )
 
-    import torchlens as tl
-
     model = instantiate_model(row)
     if hasattr(model, "eval"):
         model.eval()
-    try:
-        forward_result = tl.validate_forward_pass(
-            model,
-            input_tensor,
-            validate_metadata=True,
-        )
-    except Exception as error:
-        return ValidationResult(
-            row.name,
-            row.model_id,
-            "failed:exception",
-            0,
-            False,
-            scope,
-            time.monotonic() - start,
-            plan.cluster_key,
-            f"{error!r}\n{traceback.format_exc(limit=8)}",
-        )
-    if not bool(forward_result):
-        return ValidationResult(
-            row.name,
-            row.model_id,
-            "failed:replay",
-            0,
-            False,
-            scope,
-            time.monotonic() - start,
-            plan.cluster_key,
-            repr(forward_result),
-        )
 
-    backward_error = ""
-    if scope == "forward+backward":
+    def attempt_validation(
+        attempt_model: Any, attempt_input: Any, actual_device: str
+    ) -> ValidationResult:
+        """Validate the model on one resolved device.
+
+        Parameters
+        ----------
+        attempt_model:
+            Model prepared for the attempt device.
+        attempt_input:
+            Example input prepared for the attempt device.
+        actual_device:
+            Device used by this attempt.
+
+        Returns
+        -------
+        ValidationResult
+            Validation result for this attempt.
+        """
+
+        import torchlens as tl
+
         try:
-            backward_result = tl.validate(
-                model,
-                input_tensor,
-                scope="backward",
-                loss_fn=_sum_float_outputs,
+            forward_result = tl.validate_forward_pass(
+                attempt_model,
+                attempt_input,
                 validate_metadata=True,
             )
         except Exception as error:
@@ -425,47 +418,150 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str) -> ValidationResult
                 row.model_id,
                 "failed:exception",
                 0,
-                True,
+                False,
                 scope,
                 time.monotonic() - start,
                 plan.cluster_key,
-                f"backward validation failed: {error!r}\n{traceback.format_exc(limit=8)}",
+                combine_notes(
+                    device_note(device, actual_device),
+                    f"{error!r}\n{traceback.format_exc(limit=8)}",
+                ),
             )
-        if not bool(backward_result):
+        if not bool(forward_result):
             return ValidationResult(
                 row.name,
                 row.model_id,
                 "failed:replay",
                 0,
-                True,
+                False,
                 scope,
                 time.monotonic() - start,
                 plan.cluster_key,
-                f"backward validation returned {backward_result!r}",
+                combine_notes(device_note(device, actual_device), repr(forward_result)),
             )
-        backward_error = f"; backward={backward_result!r}"
 
-    try:
-        n_ops = _trace_n_ops(model, input_tensor)
-    except Exception:
-        n_ops = 0
-    return ValidationResult(
-        row.name,
-        row.model_id,
-        "validated",
-        n_ops,
-        True,
-        scope,
-        time.monotonic() - start,
-        plan.cluster_key,
-        f"forward={forward_result!r}{backward_error}",
-    )
+        backward_error = ""
+        if scope == "forward+backward":
+            try:
+                backward_result = tl.validate(
+                    attempt_model,
+                    attempt_input,
+                    scope="backward",
+                    loss_fn=_sum_float_outputs,
+                    validate_metadata=True,
+                )
+            except Exception as error:
+                return ValidationResult(
+                    row.name,
+                    row.model_id,
+                    "failed:exception",
+                    0,
+                    True,
+                    scope,
+                    time.monotonic() - start,
+                    plan.cluster_key,
+                    combine_notes(
+                        device_note(device, actual_device),
+                        f"backward validation failed: {error!r}\n{traceback.format_exc(limit=8)}",
+                    ),
+                )
+            if not bool(backward_result):
+                return ValidationResult(
+                    row.name,
+                    row.model_id,
+                    "failed:replay",
+                    0,
+                    True,
+                    scope,
+                    time.monotonic() - start,
+                    plan.cluster_key,
+                    combine_notes(
+                        device_note(device, actual_device),
+                        f"backward validation returned {backward_result!r}",
+                    ),
+                )
+            backward_error = f"; backward={backward_result!r}"
+
+        try:
+            n_ops = _trace_n_ops(attempt_model, attempt_input)
+        except Exception:
+            n_ops = 0
+        return ValidationResult(
+            row.name,
+            row.model_id,
+            "validated",
+            n_ops,
+            True,
+            scope,
+            time.monotonic() - start,
+            plan.cluster_key,
+            combine_notes(
+                device_note(device, actual_device),
+                f"forward={forward_result!r}{backward_error}",
+            ),
+        )
+
+    if device == "cuda":
+        try:
+            model, input_tensor = move_model_and_input_to_device(model, input_tensor, "cuda")
+        except Exception as error:
+            return ValidationResult(
+                row.name,
+                row.model_id,
+                "failed:exception",
+                0,
+                False,
+                scope,
+                time.monotonic() - start,
+                plan.cluster_key,
+                f"device=cuda; {error!r}\n{traceback.format_exc(limit=8)}",
+            )
+        return attempt_validation(model, input_tensor, "cuda")
+
+    if device == "auto":
+        cpu_result = attempt_validation(model, input_tensor, "cpu")
+        if (
+            cpu_result.status == "failed:exception"
+            and is_device_related_error(RuntimeError(cpu_result.error))
+            and cuda_is_available()
+        ):
+            try:
+                model, input_tensor = move_model_and_input_to_device(model, input_tensor, "cuda")
+            except Exception as error:
+                return ValidationResult(
+                    row.name,
+                    row.model_id,
+                    "failed:exception",
+                    0,
+                    False,
+                    scope,
+                    time.monotonic() - start,
+                    plan.cluster_key,
+                    f"device=cuda; {error!r}\n{traceback.format_exc(limit=8)}",
+                )
+            return attempt_validation(model, input_tensor, "cuda")
+        if cpu_result.error:
+            return ValidationResult(
+                cpu_result.name,
+                cpu_result.model_id,
+                cpu_result.status,
+                cpu_result.n_ops,
+                cpu_result.validate_metadata_ok,
+                cpu_result.scope,
+                cpu_result.elapsed,
+                cpu_result.dependency_cluster,
+                combine_notes(device_note(device, "cpu"), cpu_result.error),
+            )
+        return cpu_result
+
+    return attempt_validation(model, input_tensor, "cpu")
 
 
 def validate_with_timeout(
     row: CatalogRow,
     dry_run: bool,
     scope: str,
+    device: str,
     timeout_sec: float,
 ) -> ValidationResult:
     """Run one validation in an isolated child process with a timeout.
@@ -478,6 +574,8 @@ def validate_with_timeout(
         Build recipe only when true.
     scope:
         Validation scope.
+    device:
+        Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
     timeout_sec:
         Maximum wall time in seconds.
 
@@ -496,6 +594,8 @@ def validate_with_timeout(
         json.dumps(row.__dict__),
         "--scope",
         scope,
+        "--device",
+        device,
     ]
     if dry_run:
         command.append("--dry-run")
@@ -759,6 +859,7 @@ def run(args: argparse.Namespace) -> int:
                     row,
                     args.dry_run,
                     args.scope,
+                    args.device,
                     args.timeout_sec,
                 )
                 removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
@@ -827,6 +928,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-cache", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-models", type=int, help=argparse.SUPPRESS)
+    parser.add_argument("--device", choices=("cpu", "cuda", "auto"), default="cpu")
     parser.add_argument("--timeout-sec", type=float, default=240.0)
     parser.add_argument("--install-timeout", type=float, default=600.0)
     parser.add_argument(
@@ -858,7 +960,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.worker_row_json:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:
-            result = validate_one(row, args.dry_run, args.scope)
+            result = validate_one(row, args.dry_run, args.scope, args.device)
         except Exception as error:
             plan = dependency_plan(row)
             result = ValidationResult(
