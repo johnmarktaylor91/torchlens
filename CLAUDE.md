@@ -16,6 +16,21 @@ pip install -e ".[test]"  # local development with test extras
 Graphviz rendering needs Graphviz (`apt install graphviz` on Debian/Ubuntu). Optional
 extras gate appliance and bridge namespaces; see `pyproject.toml` for the current list.
 
+## Model Menagerie (`menagerie/`)
+
+`menagerie/` is a browsable atlas of 10,000+ neural-net architecture families captured with TorchLens:
+a queryable catalog (`python -m menagerie.catalog stats|query|recipe`), ~300+ hand-built historical
+"classics" with no prior PyTorch implementation (`menagerie/classics/`, each trace-verified), and a
+disk-safe graph renderer (`python -m menagerie.generate_menagerie`).
+
+**To expand or update the roster** — periodically, after each conference cycle, or **whenever a more
+capable model becomes available** (a smarter auditor finds more) — use the canonical durable prompt at
+**`menagerie/DISCOVER_MODELS.md`**. It is the reusable, adversarial "hunt exhaustively for architecture
+families we missed" sweep: hostile framing, every-axis + non-English + newly-published coverage,
+strict family-not-variant discipline, and exact instructions for folding finds into the catalog or
+`classics/`. Dispatch cross-lab adversarial sub-hunters with it; seed candidates with the starter
+`python -m menagerie.discover_crawler` (recent-arXiv harvester, meant to be extended).
+
 ## Common Patterns
 
 ```python

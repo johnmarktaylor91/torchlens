@@ -6,6 +6,15 @@ captures into `Trace`, `Layer`, and `Op` objects. The stable default is PyTorch 
 capture: it lazily wraps PyTorch functions with toggle-gated wrappers on first torch
 capture, runs forward passes with the logging toggle enabled, and records operations.
 
+## Model Menagerie (`menagerie/`)
+`menagerie/` is a browsable catalog of 10,000+ neural-net architecture families captured with TorchLens:
+a queryable catalog (`python -m menagerie.catalog stats|query|recipe`), 300+ trace-verified hand-built
+historical "classics" (`menagerie/classics/`), and a disk-safe renderer (`menagerie.generate_menagerie`).
+To expand/update the roster — periodically, after a conference cycle, or whenever a stronger model ships
+— use the canonical durable adversarial prompt at **`menagerie/DISCOVER_MODELS.md`** (hostile framing,
+every-axis + non-English + newly-published coverage, family-not-variant discipline, and how to add finds
+to the catalog/`classics/`). Seed it with `python -m menagerie.discover_crawler`.
+
 ## Architecture
 See `.project-context/architecture.md` for the older full map and
 `.project-context/state_of_torchlens.md` for the current 2.x map. See subpackage
