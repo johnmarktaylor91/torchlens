@@ -1,0 +1,22 @@
+# Generated binary catalog; rebuild from tracked TSV/code.
+data/catalog.db
+# Canonical catalog is regenerated from master_catalog.tsv via `catalog build`.
+data/catalog_canonical.tsv
+
+# Bulk render outputs and transient renderer state.
+gallery/
+galleries/
+renders/
+rendered/
+history/
+featured/
+_tmp/
+manifest.tsv
+*.dot
+*.gv
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.svg
+*.pdf
