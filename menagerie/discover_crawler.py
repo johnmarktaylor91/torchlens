@@ -88,6 +88,20 @@ def load_catalog_names(catalog_tsv: Path) -> set[str]:
     return names
 
 
+def last_crawl_date() -> str | None:
+    """Read ``last_exhaustive_crawl`` (YYYY-MM-DD) from the crawl history, if present."""
+
+    import json
+
+    path = DATA_DIR / "crawl_history.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text()).get("last_exhaustive_crawl")
+    except Exception:  # noqa: BLE001 -- best-effort
+        return None
+
+
 def candidate_names(title: str) -> set[str]:
     """Extract candidate architecture names from a paper title (heuristic, noisy)."""
 
@@ -145,12 +159,14 @@ def run(args: argparse.Namespace) -> int:
 
     catalog = load_catalog_names(DATA_DIR / "catalog_canonical.tsv")
     print(f"catalog names loaded: {len(catalog)}", file=sys.stderr)
-    cutoff = None
-    if args.days:
-        # crude date cutoff string compare on YYYY-MM-DD (descending feed lets us stop early)
+    # Date window: explicit --since wins, else the last exhaustive crawl date, else --days back.
+    cutoff = args.since or last_crawl_date()
+    if cutoff is None and args.days:
         import datetime
 
         cutoff = (datetime.date.today() - datetime.timedelta(days=args.days)).isoformat()
+    if cutoff:
+        print(f"date cutoff: keeping arXiv papers on/after {cutoff}", file=sys.stderr)
 
     seen_ids: set[str] = set()
     rows: list[tuple] = []
@@ -202,7 +218,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--categories", nargs="+", default=list(DEFAULT_CATEGORIES))
     parser.add_argument(
-        "--days", type=int, default=180, help="only keep papers newer than N days (0 = no cutoff)"
+        "--since",
+        help="only keep papers on/after this YYYY-MM-DD "
+        "(default: last_exhaustive_crawl from data/crawl_history.json)",
+    )
+    parser.add_argument(
+        "--days", type=int, default=180, help="fallback window in days when no --since / crawl date"
     )
     parser.add_argument(
         "--max-per-cat", type=int, default=400, help="max arXiv entries to scan per category"

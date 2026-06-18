@@ -119,6 +119,70 @@ Rows are honestly skipped when the catalog recipe is not runnable PyTorch code, 
 JAX-native entries, web/config sketches, missing public code, or weights-gated models
 without a random-init path.
 
+## Validating Every Model
+
+`validate_menagerie.py` runs TorchLens replay validation over menagerie recipes without
+rendering graphs:
+
+```bash
+python -m menagerie.validate_menagerie \
+  --verified-only \
+  --out-dir /tmp/torchlens_menagerie_validation \
+  --no-install-deps
+```
+
+Validation is independent from rendering. It uses its own default output directory and
+append-only `validation_manifest.tsv`, then writes `validation_summary.json` and
+`VALIDATION_REPORT.md`. The renderer's `manifest.tsv` is not read or updated.
+
+The default `--scope forward` calls `torchlens.validate_forward_pass(...,
+validate_metadata=True)` for the claim that saved activations replay the forward pass
+and satisfy metadata invariants. `--scope forward+backward` additionally tries backward
+validation with a scalar loss over floating tensor outputs.
+
+Useful validation controls:
+
+```bash
+# Retry only non-validated rows in the validation manifest.
+python -m menagerie.validate_menagerie --revalidate-failed
+
+# Rebuild validation_summary.json and VALIDATION_REPORT.md from the manifest.
+python -m menagerie.validate_menagerie --report-only
+
+# Validate a tiny local sample.
+python -m menagerie.validate_menagerie \
+  --zoo classics-pytorch \
+  --subset 3 \
+  --no-install-deps \
+  --out-dir /tmp/val_smoke
+```
+
+## Cross-Environment Runs
+
+Some zoos require mutually incompatible dependency stacks, so `run_across_envs.py`
+orchestrates either rendering or validation across named conda environments. It creates
+or reuses environments named `tlmenagerie_<env>`, installs TorchLens editable plus that
+environment's zoo dependencies, and invokes the selected menagerie task with
+`--no-install-deps` into one shared output directory so the relevant manifest accumulates.
+
+The environment map is a top-level `ENV_SPECS` constant and is intentionally
+non-exhaustive. Extend it when new zoos need their own dependency island. The `core`
+environment covers common PyTorch zoos and a catch-all pass; specialized environments
+cover mmlab, recbole, paddle, detectron2, and flash-linear-attention.
+
+Dry-run is the default for safety:
+
+```bash
+python -m menagerie.run_across_envs --task validate --dry-run
+python -m menagerie.run_across_envs --task render --dry-run --out-dir /big/menagerie
+```
+
+Only `--execute` creates environments, installs packages, and runs jobs:
+
+```bash
+python -m menagerie.run_across_envs --task validate --execute
+```
+
 ## Update Flow
 
 See `DISCOVER_MODELS.md` for the recurring discovery prompt and `UPDATE_RECIPE.md` for

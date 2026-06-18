@@ -1,0 +1,28 @@
+{
+  "last_exhaustive_crawl": "2026-06-18",
+  "guidance": "New discovery sweeps should PRIORITIZE architecture families first published AFTER last_exhaustive_crawl (focus on big-conference / journal / arXiv output since that date) while remaining free to surface anything missed in ANY earlier era, language, or field. Update this file (add a crawls[] entry and bump last_exhaustive_crawl) at the end of every exhaustive sweep. See ../DISCOVER_MODELS.md for the sweep prompt.",
+  "current_totals": {
+    "distinct_models": 10742,
+    "families_normalized": 3746,
+    "hand_built_classics": 312,
+    "verified_renderable": 6127
+  },
+  "crawls": [
+    {
+      "date": "2026-06-18",
+      "type": "exhaustive multi-axis sweep + adversarial red-team",
+      "axes": [
+        "era (1940s cybernetics -> 2026 frontier)",
+        "domain (vision, NLP, speech, RL/control, graph, time-series, recommender, scientific ML, ...)",
+        "paradigm (logic/threshold, PDP/connectionist, neuro-symbolic, vector-symbolic, fuzzy, spiking, evolutionary, ...)",
+        "applied-modern (recommender/CTR/tabular, neural operators, implicit-neural-reps, neural processes)",
+        "orphan-corners (statistical-physics-of-learning, hyperbolic, photonic/memristor, DSP, EEG/BCI, ...)",
+        "adversarial missed-family hunt (cross-lab hostile auditors, non-English literature explicitly included)"
+      ],
+      "method": "Cross-lab (Claude Opus + OpenAI Codex) sweeps driven to a family-level clean-zero, then a hostile adversarial red-team that still surfaced ~150 more genuine families (folded in: 103 catalog-adds + 58 hand-built classics).",
+      "languages_covered": ["English", "Chinese", "Japanese", "Russian/Soviet", "German", "French", "Korean", "other"],
+      "result": {"distinct_models": 10742, "families_normalized": 3746, "classics_built": 312, "verified_renderable": 6127},
+      "notes": "Most comprehensive sweep to date. NEXT sweep should focus on architectures published after 2026-06-18, and ideally re-run with a more capable model (a smarter auditor finds more)."
+    }
+  ]
+}

@@ -3,6 +3,12 @@
 **This is the canonical, reusable prompt for expanding the TorchLens model menagerie.** It is meant to
 be run again and again, for the foreseeable future, to keep the roster current and complete.
 
+> **CHECK THE LAST-CRAWL DATE FIRST.** `menagerie/data/crawl_history.json` -> `last_exhaustive_crawl`
+> (human log: `menagerie/CRAWL_LOG.md`) records when the roster was last exhaustively swept. A new sweep
+> should **prioritize architecture families first published AFTER that date** — while staying free to
+> surface anything missed in any earlier era/language/field. At the end of a sweep, append a `crawls[]`
+> entry and bump `last_exhaustive_crawl`.
+
 **Run it:**
 - on a cadence (e.g. each quarter), to catch newly-published architectures;
 - after every major conference cycle (NeurIPS / ICLR / ICML / CVPR / ICCV / ECCV / ACL / EMNLP / NAACL /
