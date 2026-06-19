@@ -643,6 +643,11 @@ def _run_command_for_pattern(
         "--out-dir",
         str(out_dir),
     ]
+    if task == "render":
+        # Rows previously marked skipped:dependency_unavailable in the base env are
+        # present in the shared manifest; without this they would be treated as
+        # completed and skipped. Retry them so the freshly-installed env can render them.
+        command.append("--retry-failed")
     if pattern is not None:
         command.extend(["--zoo", pattern])
     command.extend(extra_args)

@@ -11,6 +11,7 @@ import torch
 from torchlens import _state
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import (
+    _safe_module_file,
     clear_patch_detached_references_cache,
     patch_detached_references,
     unwrap_torch,
@@ -175,6 +176,40 @@ class Holder:
         patched_ref = vars(mod.Holder)["class_level_ref"]
         assert patched_ref is _state._orig_to_decorated[id(original_relu)]
         assert is_decorated_function(patched_ref)
+    finally:
+        sys.modules.pop(mod_name, None)
+        clear_patch_detached_references_cache()
+        wrap_torch()
+
+
+def test_patch_detached_references_survives_lazy_module_file_error() -> None:
+    """A sys.modules entry whose ``__file__`` access raises must not crash the crawl.
+
+    Mirrors SpeechBrain's ``LazyModule``: its ``__getattr__`` raises ``ImportError``
+    for a missing optional dependency when ``__file__`` is probed. ``getattr`` with a
+    default only suppresses ``AttributeError``, so the crawl used to propagate the
+    ``ImportError`` and abort tracing of every SpeechBrain model.
+    """
+
+    mod_name = "_tl_adversarial_lazy_file_error"
+    sys.modules.pop(mod_name, None)
+    unwrap_torch()
+    clear_patch_detached_references_cache()
+
+    class _LazyExplodingModule(types.ModuleType):
+        """Module whose every missing attribute access raises ImportError."""
+
+        def __getattr__(self, name: str) -> Any:
+            raise ImportError(f"optional dependency missing while accessing {name!r}")
+
+    exploding = _LazyExplodingModule(mod_name)
+    sys.modules[mod_name] = exploding
+    try:
+        # The guarded accessor returns None instead of propagating the ImportError.
+        assert _safe_module_file(exploding) is None
+        wrap_torch()
+        # The full crawl must complete without raising despite the exploding module.
+        patch_detached_references(full=True)
     finally:
         sys.modules.pop(mod_name, None)
         clear_patch_detached_references_cache()
