@@ -804,5 +804,329 @@
     "post_install_check": "import torchlens; from pytorch_pretrained_biggan import BigGAN; from stylegan2_pytorch import ModelLoader",
     "status": "untested",
     "notes": "BigGAN(HF port)+StyleGAN2(lucidrains)+lukemelas wrapper. SinGAN/ConSinGAN/StyleGAN2-ADA/CycleGAN = reimplement-as-classic (no setup.py)."
+  },
+  "pykeen": {
+    "name": "pykeen",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "pykeen==1.11.1"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "pykeen"
+    ],
+    "post_install_check": "import torchlens, pykeen; from pykeen.models import TransE",
+    "status": "untested",
+    "notes": "PyKEEN knowledge-graph embedding models. Latest PyPI release observed: 1.11.1."
+  },
+  "spikingjelly": {
+    "name": "spikingjelly",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "spikingjelly==0.0.0.0.14"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "spikingjelly"
+    ],
+    "post_install_check": "import torchlens, spikingjelly; from spikingjelly.activation_based import neuron, functional",
+    "status": "untested",
+    "notes": "Stable PyPI SpikingJelly release. Catalog rows were previously verified with 0.0.0.0.14."
+  },
+  "compressai": {
+    "name": "compressai",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "compressai==1.2.8"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "compressai",
+      "bmshj2018",
+      "mbt2018",
+      "cheng2020",
+      "ssf2020",
+      "Elic2022Official",
+      "ScaleHyperpriorVbr"
+    ],
+    "post_install_check": "import torchlens, compressai; from compressai.models import ScaleHyperprior",
+    "status": "untested",
+    "notes": "CompressAI learned image-compression models. PyPI notes support Python 3.8+ and PyTorch 1.7+."
+  },
+  "e3nn": {
+    "name": "e3nn",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "e3nn==0.6.0",
+      "torch-geometric"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "e3nn"
+    ],
+    "post_install_check": "import torchlens, e3nn; from e3nn import o3; o3.Linear('1x0e', '1x0e')",
+    "status": "untested",
+    "notes": "e3nn 0.6.0 is current on PyPI and requires PyTorch >=2.2. torch-geometric is included for e3nn gate_points catalog rows."
+  },
+  "mmpose": {
+    "name": "mmpose",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "numpy<2",
+      "openmim",
+      "ftfy",
+      "regex",
+      "xtcocotools",
+      "munkres",
+      "mim:mmengine",
+      "mim:mmcv",
+      "mim:mmdet",
+      "mim:mmpose==1.3.2"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "post_install_commands": [
+      "SP=$(python -c \"import sysconfig;print(sysconfig.get_paths()['purelib'])\") && printf '%s\\n' 'try:' '    import mmcv as _m' '    if getattr(_m, \"__version__\", \"\") == \"2.2.0\": _m.__version__ = \"2.1.0\"' 'except Exception:' '    pass' > \"$SP/sitecustomize.py\""
+    ],
+    "zoo_patterns": [
+      "mmpose"
+    ],
+    "post_install_check": "import torchlens, mmengine, mmcv, mmdet, mmpose; print('mmcv', mmcv.__version__)",
+    "status": "untested",
+    "notes": "OpenMMLab pose env. Mirrors mmlab's mmcv 2.2.0->2.1.0 sitecustomize spoof even though mmpose 1.3.2 itself permits mmcv <=3.0.0."
+  },
+  "mmocr": {
+    "name": "mmocr",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "numpy<2",
+      "openmim",
+      "ftfy",
+      "regex",
+      "munkres",
+      "mim:mmengine",
+      "mim:mmcv",
+      "mim:mmdet==3.1.0",
+      "mim:mmocr==1.0.1"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "post_install_commands": [
+      "SP=$(python -c \"import sysconfig;print(sysconfig.get_paths()['purelib'])\") && printf '%s\\n' 'try:' '    import mmcv as _m' '    if getattr(_m, \"__version__\", \"\") == \"2.2.0\": _m.__version__ = \"2.1.0\"' 'except Exception:' '    pass' > \"$SP/sitecustomize.py\""
+    ],
+    "zoo_patterns": [
+      "mmocr"
+    ],
+    "post_install_check": "import torchlens, mmengine, mmcv, mmdet, mmocr; print('mmcv', mmcv.__version__, 'mmdet', mmdet.__version__)",
+    "status": "untested",
+    "notes": "OpenMMLab OCR env. MMOCR 1.0.1 requires mmcv <2.2.0 and mmdet <3.2.0, so mmdet is pinned to 3.1.0 and the mmlab mmcv version spoof is reused."
+  },
+  "openhgnn": {
+    "name": "openhgnn",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "-f",
+      "https://data.dgl.ai/wheels/torch-2.4/cu121/repo.html",
+      "dgl==2.5.0+cu121",
+      "openhgnn==0.7.0"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "openhgnn"
+    ],
+    "post_install_check": "import torchlens, dgl, openhgnn",
+    "status": "untested",
+    "notes": "OpenHGNN 0.7.0 with the same DGL torch-2.4/cu121 wheel source as the existing dgl env."
+  },
+  "thuml_tslib": {
+    "name": "thuml_tslib",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "einops==0.8.1",
+      "local-attention==1.11.2",
+      "reformer-pytorch==1.4.4",
+      "numpy<2.2",
+      "scipy",
+      "scikit-learn",
+      "pandas",
+      "matplotlib",
+      "sktime",
+      "sympy",
+      "PyWavelets",
+      "tqdm"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "post_install_commands": [
+      "rm -rf \"$CONDA_PREFIX/src/Time-Series-Library\" && git clone --depth 1 https://github.com/thuml/Time-Series-Library.git \"$CONDA_PREFIX/src/Time-Series-Library\" && SP=$(python -c \"import sysconfig;print(sysconfig.get_paths()['purelib'])\") && printf '%s\\n' \"$CONDA_PREFIX/src/Time-Series-Library\" > \"$SP/thuml_time_series_library.pth\""
+    ],
+    "zoo_patterns": [
+      "thuml/Time-Series-Library",
+      "timesnet",
+      "itransformer",
+      "timexer",
+      "fedformer",
+      "timemixer-tslib"
+    ],
+    "post_install_check": "import torchlens; from models.TimesNet import Model as TimesNet; from models.iTransformer import Model as ITransformer",
+    "status": "untested",
+    "notes": "THUML Time-Series-Library is not pip-installable: the repo has no setup.py/pyproject.toml and the PyPI 'tslib' package is unrelated. This recipe clones the repo into $CONDA_PREFIX/src and exposes it with a .pth file."
+  },
+  "detrex": {
+    "name": "detrex",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "git+https://github.com/facebookresearch/detectron2.git",
+      "git+https://github.com/IDEA-Research/detrex.git"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "detrex",
+      "anchor_detr",
+      "smca_detr",
+      "sam_detr",
+      "dn_detr",
+      "dino",
+      "group_detr",
+      "h_detr",
+      "co_detr",
+      "ddq_detr",
+      "stable_dino",
+      "align_detr",
+      "ms_detr",
+      "relation_detr",
+      "salience_detr",
+      "dac_detr",
+      "rt_detrv3",
+      "focus_detr"
+    ],
+    "post_install_check": "import torchlens, detectron2, detrex",
+    "status": "untested",
+    "notes": "detrex has no PyPI distribution, but pip can build metadata from IDEA-Research/detrex. Includes detectron2 because detrex docs install it first and detrex uses Detectron2 infrastructure."
+  },
+  "neuralforecast": {
+    "name": "neuralforecast",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "neuralforecast==3.1.9"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "neuralforecast",
+      "Nixtla/neuralforecast",
+      "pypi:neuralforecast"
+    ],
+    "post_install_check": "import torchlens, neuralforecast; from neuralforecast.models import NBEATS, NHITS, TimesNet",
+    "status": "untested",
+    "notes": "Nixtla NeuralForecast time-series models. Current PyPI release observed: 3.1.9."
+  },
+  "lightly": {
+    "name": "lightly",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "lightly==1.5.25"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "lightly"
+    ],
+    "post_install_check": "import torchlens, lightly; from lightly.models.modules import SimCLRProjectionHead",
+    "status": "untested",
+    "notes": "Lightly self-supervised learning heads. Current PyPI release observed: 1.5.25."
+  },
+  "uniformer": {
+    "name": "uniformer",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "scikit-learn",
+      "git+https://github.com/Sense-X/UniFormer.git#subdirectory=video_classification"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "Sense-X/UniFormer",
+      "uniformer"
+    ],
+    "post_install_check": "import torchlens, slowfast; from slowfast.config.defaults import get_cfg",
+    "status": "untested",
+    "notes": "Sense-X UniFormer video_classification subdirectory installs as the slowfast package via setup.py. The plain 'uniform' PyPI package is unrelated."
+  },
+  "mace": {
+    "name": "mace",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "mace-torch==0.3.16"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "mace-torch",
+      "mace_",
+      "MACE",
+      "BOTNet"
+    ],
+    "post_install_check": "import torchlens, mace, e3nn; from mace.modules import models as mace_models",
+    "status": "untested",
+    "notes": "e3nn-adjacent optional family. mace-torch 0.3.16 is pip-installable and depends on e3nn==0.4.4. torch-points3d was not selected because its current wheel metadata requires torch<2.0, numpy<1.20, and old PyG extensions."
   }
 }
