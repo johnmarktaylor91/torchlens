@@ -610,6 +610,70 @@ def append_manifest(manifest_path: Path, result: RenderResult) -> None:
         )
 
 
+_SYMBOLIC_DIMS = {
+    "B": 1,
+    "N": 8,
+    "V": 2,
+    "T": 8,
+    "L": 16,
+    "S": 16,
+    "K": 4,
+    "C": 3,
+    "H": 64,
+    "W": 64,
+    "D": 64,
+    "E": 64,
+    "G": 8,
+    "M": 8,
+    "P": 16,
+    "Q": 16,
+    "R": 16,
+    "F": 64,
+    "A": 8,
+    "X": 8,
+    "Y": 8,
+    "Z": 8,
+}
+
+
+def _parse_symbolic_multi(text: str) -> list[tuple[int, ...]]:
+    """Parse a multi-input / symbolic shape string into concrete tensor shapes.
+
+    Handles formats like ``imgs=(1,V,3,H,W); proj=(1,V,4,4); pos=(N,3)`` -- each parenthesised
+    group becomes one input tensor and symbolic dims (V, N, ...) get small concrete defaults
+    (resolved consistently across the recipe). Returns ``[]`` when nothing parseable is found.
+
+    Parameters
+    ----------
+    text:
+        Raw catalog shape string.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        One concrete shape per parenthesised group.
+    """
+
+    shapes: list[tuple[int, ...]] = []
+    for group in re.findall(r"\(([^()]*)\)", text):
+        dims: list[int] = []
+        ok = True
+        for token in group.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if token.isdigit():
+                dims.append(int(token))
+            elif re.fullmatch(r"[A-Za-z_]\w*", token):
+                dims.append(_SYMBOLIC_DIMS.get(token[0].upper(), 8))
+            else:
+                ok = False  # arithmetic / unparseable token -> skip this group
+                break
+        if ok and dims:
+            shapes.append(tuple(dims))
+    return shapes
+
+
 def parse_shape(shape: str) -> tuple[int, ...] | list[tuple[int, ...]]:
     """Parse a concrete tensor shape from the catalog.
 
@@ -625,6 +689,14 @@ def parse_shape(shape: str) -> tuple[int, ...] | list[tuple[int, ...]]:
     """
 
     shape_text = shape.strip()
+    # Multi-input / symbolic-dim recipes (`name=(1,V,3,H,W); other=(N,3)`): build one tensor per
+    # group, resolving symbolic dims to small concrete defaults. tl.trace unpacks the list as *args.
+    if ";" in shape_text or re.search(r"\([^)]*[A-Za-z]", shape_text):
+        multi = _parse_symbolic_multi(shape_text)
+        if len(multi) > 1:
+            return multi
+        if len(multi) == 1:
+            return multi[0]
     parsed_text = shape_text
     if not shape_text.startswith(("(", "[")):
         match = re.search(r"\(([0-9,\s]+)\)", shape_text)
