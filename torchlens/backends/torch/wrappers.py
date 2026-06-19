@@ -50,6 +50,15 @@ from typing import Any, TYPE_CHECKING, cast
 
 import torch
 
+# Imported into THIS module's globals so torch.jit.script can resolve the
+# torch.overrides boilerplate when it compiles a wrapped torch.nn.functional
+# Python op (e.g. softsign): jit pulls the original op's source but resolves
+# names against the wrapper's globals (this module), not torch.nn.functional's.
+# Every functional op shares the
+# ``if has_torch_function_unary(x): return handle_torch_function(...)`` preamble;
+# jit treats has_torch_function_unary as always-False, so the branch is elided.
+from torch.overrides import handle_torch_function, has_torch_function_unary  # noqa: F401
+
 from ... import _state
 from ...constants import ORIG_TORCH_FUNCS
 from ...data_classes.func_call_location import FuncCallLocation
@@ -1653,7 +1662,14 @@ def patch_detached_references(full: bool = False) -> None:
             if mod is None:
                 continue
             # Skip torchlens internals — we don't want to patch our own references.
-            if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
+            # Read __name__ defensively: lazy-import shims can raise (not just
+            # AttributeError) from __getattr__, and hasattr() only swallows
+            # AttributeError. Fall back to the sys.modules key on any failure.
+            try:
+                mod_name = mod.__name__
+            except Exception:
+                mod_name = mod_key
+            if isinstance(mod_name, str) and mod_name.startswith("torchlens"):
                 continue
 
             try:
