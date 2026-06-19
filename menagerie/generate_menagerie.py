@@ -137,10 +137,11 @@ UNRENDERABLE_MARKERS = (
     ("source-only", "source_only_recipe"),
     ("source only", "source_only_recipe"),
     ("no public code", "no_public_code"),
-    ("weights-gated", "weights_gated_no_random_init"),
-    ("gated", "weights_gated_no_random_init"),
-    ("not random-init", "no_random_init"),
-    ("not random init", "no_random_init"),
+    # NOTE: "gated"/"weights-gated"/"not random-init" markers REMOVED 2026-06-19 — the menagerie
+    # builds every model RANDOM-INIT, so gated/missing trained weights are irrelevant; those markers
+    # caught architectural terms ("gated activation", "GatedGenerator") and wrongly skipped buildable
+    # models (cornet_rt, WaveNet, Deep Kalman Filter, ...). Such rows now render or surface a real
+    # recipe bug (-> normal repair), never a fake "ceiling".
     ("metadata-only", "metadata_only"),
     ("catalog-only", "metadata_only"),
 )
