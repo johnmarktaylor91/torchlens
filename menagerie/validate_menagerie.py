@@ -318,6 +318,7 @@ def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int, str]:
     import torch
     import torchlens as tl
 
+    torch.set_num_threads(1)
     with torch.no_grad():
         trace = tl.trace(
             model,
@@ -1058,6 +1059,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Pin BLAS/OMP threads to 1 so concurrent validate workers don't oversubscribe the CPU (see generate_menagerie).
+    for _thread_var in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ.setdefault(_thread_var, "1")
     if args.worker_row_json:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:

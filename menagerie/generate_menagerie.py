@@ -1290,6 +1290,7 @@ def render_one(
     import torch
     import torchlens as tl
 
+    torch.set_num_threads(1)
     model = instantiate_model(row)
     model.eval()
     render_stem = model_render_stem(row, out_dir)
@@ -2319,6 +2320,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Pin BLAS/OMP threads to 1: many render workers run concurrently, the trace runs on GPU, and graphviz
+    # layout is single-threaded, so per-worker multi-threaded BLAS only oversubscribes the CPU. Must precede torch.
+    for _thread_var in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ.setdefault(_thread_var, "1")
     if args.worker_row_json:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:
