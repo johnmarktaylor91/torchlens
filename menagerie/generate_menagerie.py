@@ -16,12 +16,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections import Counter, defaultdict
-from contextlib import contextmanager
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any, ContextManager, Iterator, Mapping, Sequence
 
 from menagerie.catalog import CatalogRow, load_rows
 
@@ -471,6 +473,65 @@ def combine_notes(*notes: str) -> str:
     """
 
     return "; ".join(note for note in notes if note)
+
+
+def parse_vis_option_value(value: str) -> Any:
+    """Coerce a CLI ``KEY=VALUE`` value to a bool, int, float, or string.
+
+    Parameters
+    ----------
+    value:
+        Raw string value from a ``--vis-option KEY=VALUE`` argument.
+
+    Returns
+    -------
+    Any
+        Parsed scalar: ``True``/``False`` for boolean literals, an ``int`` or
+        ``float`` for numeric literals, otherwise the original string.
+    """
+
+    lowered = value.strip().lower()
+    if lowered in {"true", "yes", "on"}:
+        return True
+    if lowered in {"false", "no", "off"}:
+        return False
+    if lowered in {"none", "null"}:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
+
+
+def parse_vis_options(pairs: Sequence[str]) -> dict[str, Any]:
+    """Parse repeated ``KEY=VALUE`` strings into draw() keyword arguments.
+
+    Parameters
+    ----------
+    pairs:
+        Sequence of ``KEY=VALUE`` strings from ``--vis-option``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mapping of draw() keyword names to coerced values.
+    """
+
+    options: dict[str, Any] = {}
+    for pair in pairs:
+        if "=" not in pair:
+            raise ValueError(f"expected KEY=VALUE for --vis-option, got {pair!r}")
+        key, _, raw_value = pair.partition("=")
+        key = key.strip()
+        if not key:
+            raise ValueError(f"empty key in --vis-option {pair!r}")
+        options[key] = parse_vis_option_value(raw_value)
+    return options
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -1149,7 +1210,12 @@ def isolated_tmp_env(tmp_dir: Path) -> Iterator[None]:
 
 
 def render_one(
-    row: CatalogRow, out_dir: Path, dry_run: bool, file_format: str, device: str
+    row: CatalogRow,
+    out_dir: Path,
+    dry_run: bool,
+    file_format: str,
+    device: str,
+    vis_options: Mapping[str, Any] | None = None,
 ) -> RenderResult:
     """Instantiate, trace, render, and summarize one model.
 
@@ -1165,12 +1231,18 @@ def render_one(
         TorchLens render file format.
     device:
         Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
+    vis_options:
+        Extra keyword arguments forwarded to ``Trace.draw`` so reruns can
+        restyle the gallery. Explicit visualization defaults (legend, save-only,
+        output path, and file format) always win over passthrough values.
 
     Returns
     -------
     RenderResult
         Model result.
     """
+
+    draw_kwargs = dict(vis_options or {})
 
     start = time.monotonic()
     plan = dependency_plan(row)
@@ -1252,12 +1324,14 @@ def render_one(
             )
         graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
         n_nodes = len(getattr(trace, "layer_logs", {}) or {})
-        trace.draw(
-            vis_outpath=str(render_stem),
-            vis_fileformat=file_format,
-            vis_save_only=True,
-            show_legend=False,
-        )
+        draw_call_kwargs = {
+            "vis_save_only": True,
+            "show_legend": False,
+            **draw_kwargs,
+            "vis_outpath": str(render_stem),
+            "vis_fileformat": file_format,
+        }
+        trace.draw(**draw_call_kwargs)
         render_path = model_render_path(row, out_dir, file_format)
         if is_featured(row):
             link_featured_copy(row, render_path, out_dir)
@@ -1358,6 +1432,8 @@ def render_with_timeout(
     file_format: str,
     device: str,
     timeout_sec: float,
+    vis_options: Sequence[str] = (),
+    tmp_dir: Path | None = None,
 ) -> RenderResult:
     """Run one render in an isolated child process with a timeout.
 
@@ -1375,6 +1451,14 @@ def render_with_timeout(
         Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
     timeout_sec:
         Maximum wall time in seconds.
+    vis_options:
+        Raw ``KEY=VALUE`` strings forwarded to the worker as repeated
+        ``--vis-option`` arguments so reruns can restyle the gallery.
+    tmp_dir:
+        Optional per-model temporary directory routed to the worker via the
+        ``TMPDIR``/``TEMP``/``TMP`` environment variables. Passed through the
+        subprocess environment (not process globals) so concurrent workers each
+        get an isolated scratch directory without mutating shared state.
 
     Returns
     -------
@@ -1396,8 +1480,16 @@ def render_with_timeout(
         "--device",
         device,
     ]
+    for pair in vis_options:
+        command.extend(("--vis-option", pair))
     if dry_run:
         command.append("--dry-run")
+    child_env = None
+    if tmp_dir is not None:
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        child_env = dict(os.environ)
+        for key in ("TMPDIR", "TEMP", "TMP"):
+            child_env[key] = str(tmp_dir)
     try:
         completed = subprocess.run(
             command,
@@ -1405,6 +1497,7 @@ def render_with_timeout(
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            env=child_env,
         )
     except subprocess.TimeoutExpired:
         return RenderResult(
@@ -1938,9 +2031,9 @@ def run(args: argparse.Namespace) -> int:
     log_event("run_start", out_dir=str(out_dir), free_gb=round(start_free_gb, 3))
     assert_min_free(out_dir, args.min_free_gb)
 
-    done = completed_names(manifest_path, args.retry_failed)
+    done = set() if args.force else completed_names(manifest_path, args.retry_failed)
     rows = [row for row in selected if row.name not in done]
-    if args.only_new:
+    if args.only_new and not args.force:
         rows = [
             row
             for row in rows
@@ -1949,24 +2042,31 @@ def run(args: argparse.Namespace) -> int:
         ]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
 
-    previous_free_gb = start_free_gb
-    downward_steps = 0
-    processed = 0
+    vis_options = parse_vis_options(args.vis_option)
+    if vis_options:
+        log_event("vis_options", options={key: str(value) for key, value in vis_options.items()})
+
+    # Phase 1: install dependencies per cluster (serial -- installs mutate the
+    # shared interpreter/site-packages and must precede their rows). Clusters
+    # whose dependencies are unavailable are recorded directly to the manifest.
+    runnable: list[tuple[DependencyPlan, CatalogRow]] = []
     for plan, cluster_rows in group_by_dependency(rows):
         install_error = install_dependency_plan(plan, args)
         if install_error is not None:
             for row in cluster_rows:
-                result = RenderResult(
-                    row.name,
-                    row.model_id,
-                    "skipped:dependency_unavailable",
-                    0,
-                    "",
-                    0.0,
-                    plan.cluster_key,
-                    install_error,
+                append_manifest(
+                    manifest_path,
+                    RenderResult(
+                        row.name,
+                        row.model_id,
+                        "skipped:dependency_unavailable",
+                        0,
+                        "",
+                        0.0,
+                        plan.cluster_key,
+                        install_error,
+                    ),
                 )
-                append_manifest(manifest_path, result)
             log_event(
                 "cluster_skipped",
                 cluster=plan.cluster_key,
@@ -1974,35 +2074,89 @@ def run(args: argparse.Namespace) -> int:
                 error=install_error,
             )
             continue
+        runnable.extend((plan, row) for row in cluster_rows)
 
-        for row in cluster_rows:
-            processed += 1
-            try:
-                assert_min_free(out_dir, args.min_free_gb)
-            except RuntimeError:
-                for snapshot in run_cache_snapshots:
-                    purge_new_cache_entries(snapshot)
-                assert_min_free(out_dir, args.min_free_gb)
+    # Phase 2: render runnable rows concurrently. Each model already runs in an
+    # isolated child process (``render_with_timeout``); threads here just dispatch
+    # and await those subprocesses. The GPU semaphore caps in-flight jobs when a
+    # device that may use CUDA is selected. The main thread does ALL manifest
+    # appends and disk bookkeeping single-threaded as futures complete.
+    jobs = max(1, args.jobs)
+    use_gpu_cap = args.device in {"cuda", "auto"}
+    gpu_jobs = max(1, args.gpu_jobs)
+    effective_jobs = min(jobs, gpu_jobs) if use_gpu_cap else jobs
+    gpu_semaphore = threading.Semaphore(gpu_jobs) if use_gpu_cap else None
+
+    def process_one(plan: DependencyPlan, row: CatalogRow) -> tuple[RenderResult, int]:
+        """Render one row in a worker thread and clean up its scratch state.
+
+        Parameters
+        ----------
+        plan:
+            Dependency plan for the row's cluster.
+        row:
+            Catalog row to render.
+
+        Returns
+        -------
+        tuple[RenderResult, int]
+            Render result and the number of new cache entries removed.
+        """
+
+        cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
+        tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
+        gate: ContextManager[Any] = gpu_semaphore if gpu_semaphore is not None else nullcontext()
+        with gate:
+            result = render_with_timeout(
+                row,
+                out_dir,
+                args.dry_run,
+                args.file_format,
+                args.device,
+                args.timeout_sec,
+                vis_options=args.vis_option,
+                tmp_dir=tmp_dir,
+            )
+            removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
+        return result, removed
+
+    previous_free_gb = start_free_gb
+    downward_steps = 0
+    processed = 0
+    total = len(runnable)
+    log_event(
+        "parallel_start",
+        jobs=jobs,
+        effective_jobs=effective_jobs,
+        gpu_jobs=gpu_jobs if use_gpu_cap else None,
+        device=args.device,
+        rows=total,
+    )
+
+    if total:
+        try:
+            assert_min_free(out_dir, args.min_free_gb)
+        except RuntimeError:
+            for snapshot in run_cache_snapshots:
+                purge_new_cache_entries(snapshot)
+            assert_min_free(out_dir, args.min_free_gb)
+
+    with ThreadPoolExecutor(max_workers=effective_jobs) as executor:
+        futures: dict[Future[tuple[RenderResult, int]], tuple[DependencyPlan, CatalogRow]] = {}
+        for plan, row in runnable:
             before_free_gb = disk_free_gb(out_dir)
-            cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
-            tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
-            with isolated_tmp_env(tmp_dir):
-                log_event(
-                    "model_start",
-                    index=processed,
-                    name=row.name,
-                    cluster=plan.cluster_key,
-                    free_gb=round(before_free_gb, 3),
-                )
-                result = render_with_timeout(
-                    row,
-                    out_dir,
-                    args.dry_run,
-                    args.file_format,
-                    args.device,
-                    args.timeout_sec,
-                )
-                removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
+            log_event(
+                "model_start",
+                name=row.name,
+                cluster=plan.cluster_key,
+                free_gb=round(before_free_gb, 3),
+            )
+            futures[executor.submit(process_one, plan, row)] = (plan, row)
+
+        for future in as_completed(futures):
+            plan, row = futures[future]
+            processed += 1
+            result, removed = future.result()
             append_manifest(manifest_path, result)
             after_free_gb = disk_free_gb(out_dir)
             if after_free_gb < previous_free_gb - args.drift_tolerance_gb:
@@ -2013,13 +2167,12 @@ def run(args: argparse.Namespace) -> int:
             log_event(
                 "model_done",
                 index=processed,
+                total=total,
                 name=row.name,
                 status=result.status,
                 n_nodes=result.n_nodes,
                 cache_entries_removed=removed,
-                before_free_gb=round(before_free_gb, 3),
                 after_free_gb=round(after_free_gb, 3),
-                delta_gb=round(after_free_gb - before_free_gb, 3),
                 elapsed=round(result.elapsed, 3),
                 error=result.error,
             )
@@ -2031,6 +2184,14 @@ def run(args: argparse.Namespace) -> int:
                     current_free_gb=round(after_free_gb, 3),
                     delta_gb=round(after_free_gb - start_free_gb, 3),
                 )
+            # Periodic disk-safety check: free space should not run dry as the
+            # batch progresses, and a sustained monotonic decline aborts the run.
+            try:
+                assert_min_free(out_dir, args.min_free_gb)
+            except RuntimeError:
+                for snapshot in run_cache_snapshots:
+                    purge_new_cache_entries(snapshot)
+                assert_min_free(out_dir, args.min_free_gb)
             if downward_steps >= args.max_monotonic_down_steps:
                 raise RuntimeError(
                     "free disk is drifting downward monotonically; aborting to protect disk "
@@ -2049,6 +2210,19 @@ def run(args: argparse.Namespace) -> int:
         manifest=str(manifest_path),
     )
     return 0
+
+
+def default_jobs() -> int:
+    """Return the default concurrency level for the render/validate engines.
+
+    Returns
+    -------
+    int
+        ``min(8, os.cpu_count() - 2)`` clamped to at least one worker.
+    """
+
+    cpu_count = os.cpu_count() or 1
+    return max(1, min(8, cpu_count - 2))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2075,6 +2249,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--only-new", action="store_true", help="skip rows with rendered files")
     parser.add_argument(
         "--retry-failed", action="store_true", help="retry non-rendered manifest rows"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="re-render even when an output file already exists (overwrite); "
+        "needed to regenerate the whole gallery with new aesthetics",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=default_jobs(),
+        help="number of models to render concurrently (each in its own subprocess)",
+    )
+    parser.add_argument(
+        "--gpu-jobs",
+        type=int,
+        default=4,
+        help="max concurrent in-flight jobs when --device is cuda/auto (GPU OOM guard)",
+    )
+    parser.add_argument(
+        "--vis-option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="extra Trace.draw() keyword argument (repeatable); VALUE parsed as "
+        "bool/int/float/str, e.g. --vis-option order_siblings=True",
     )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--manifest", type=Path)
@@ -2123,7 +2323,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:
             result = render_one(
-                row, args.out_dir.resolve(), args.dry_run, args.file_format, args.device
+                row,
+                args.out_dir.resolve(),
+                args.dry_run,
+                args.file_format,
+                args.device,
+                vis_options=parse_vis_options(args.vis_option),
             )
         except Exception as error:
             plan = dependency_plan(row)

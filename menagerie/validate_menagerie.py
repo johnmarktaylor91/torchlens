@@ -5,22 +5,28 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from collections import Counter, defaultdict
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, ContextManager, Mapping, Sequence
 
 from menagerie.catalog import CatalogRow, load_rows
 from menagerie.generate_menagerie import (
     CACHE_ROOTS,
+    DependencyPlan,
     assert_min_free,
     classics_example_input,
     combine_notes,
     cleanup_runtime,
+    default_jobs,
     dependency_plan,
     device_note,
     disk_free_gb,
@@ -29,9 +35,9 @@ from menagerie.generate_menagerie import (
     instantiate_model,
     is_device_related_error,
     is_classics_row,
-    isolated_tmp_env,
     log_event,
     move_model_and_input_to_device,
+    purge_new_cache_entries,
     safe_path_part,
     select_rows,
     snapshot_cache,
@@ -573,6 +579,7 @@ def validate_with_timeout(
     scope: str,
     device: str,
     timeout_sec: float,
+    tmp_dir: Path | None = None,
 ) -> ValidationResult:
     """Run one validation in an isolated child process with a timeout.
 
@@ -588,6 +595,11 @@ def validate_with_timeout(
         Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
     timeout_sec:
         Maximum wall time in seconds.
+    tmp_dir:
+        Optional per-model temporary directory routed to the worker via the
+        ``TMPDIR``/``TEMP``/``TMP`` environment variables. Passed through the
+        subprocess environment (not process globals) so concurrent workers each
+        get an isolated scratch directory without mutating shared state.
 
     Returns
     -------
@@ -609,6 +621,12 @@ def validate_with_timeout(
     ]
     if dry_run:
         command.append("--dry-run")
+    child_env = None
+    if tmp_dir is not None:
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        child_env = dict(os.environ)
+        for key in ("TMPDIR", "TEMP", "TMP"):
+            child_env[key] = str(tmp_dir)
     try:
         completed = subprocess.run(
             command,
@@ -616,6 +634,7 @@ def validate_with_timeout(
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            env=child_env,
         )
     except subprocess.TimeoutExpired:
         return ValidationResult(
@@ -817,7 +836,10 @@ def run(args: argparse.Namespace) -> int:
     rows = [row for row in selected if row.name not in done]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
 
-    processed = 0
+    # Phase 1: install dependencies per cluster (serial -- installs mutate the
+    # shared interpreter/site-packages and must precede their rows). Clusters
+    # whose dependencies are unavailable are recorded directly to the manifest.
+    runnable: list[tuple[DependencyPlan, CatalogRow]] = []
     for plan, cluster_rows in group_by_dependency(rows):
         install_error = install_dependency_plan(plan, args)
         if install_error is not None:
@@ -843,50 +865,107 @@ def run(args: argparse.Namespace) -> int:
                 error=install_error,
             )
             continue
+        runnable.extend((plan, row) for row in cluster_rows)
 
-        for row in cluster_rows:
-            processed += 1
-            try:
-                assert_min_free(out_dir, args.min_free_gb)
-            except RuntimeError:
-                for snapshot in run_cache_snapshots:
-                    from menagerie.generate_menagerie import purge_new_cache_entries
+    # Phase 2: validate runnable rows concurrently. Each model already runs in an
+    # isolated child process (``validate_with_timeout``); threads here just
+    # dispatch and await those subprocesses. The GPU semaphore caps in-flight
+    # jobs when a device that may use CUDA is selected. The main thread does ALL
+    # manifest appends and disk bookkeeping single-threaded as futures complete.
+    jobs = max(1, args.jobs)
+    use_gpu_cap = args.device in {"cuda", "auto"}
+    gpu_jobs = max(1, args.gpu_jobs)
+    effective_jobs = min(jobs, gpu_jobs) if use_gpu_cap else jobs
+    gpu_semaphore = threading.Semaphore(gpu_jobs) if use_gpu_cap else None
 
-                    purge_new_cache_entries(snapshot)
-                assert_min_free(out_dir, args.min_free_gb)
+    def process_one(plan: DependencyPlan, row: CatalogRow) -> tuple[ValidationResult, int]:
+        """Validate one row in a worker thread and clean up its scratch state.
+
+        Parameters
+        ----------
+        plan:
+            Dependency plan for the row's cluster.
+        row:
+            Catalog row to validate.
+
+        Returns
+        -------
+        tuple[ValidationResult, int]
+            Validation result and the number of new cache entries removed.
+        """
+
+        cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
+        tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
+        gate: ContextManager[Any] = gpu_semaphore if gpu_semaphore is not None else nullcontext()
+        with gate:
+            result = validate_with_timeout(
+                row,
+                args.dry_run,
+                args.scope,
+                args.device,
+                args.timeout_sec,
+                tmp_dir=tmp_dir,
+            )
+            removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
+        return result, removed
+
+    processed = 0
+    total = len(runnable)
+    log_event(
+        "parallel_start",
+        jobs=jobs,
+        effective_jobs=effective_jobs,
+        gpu_jobs=gpu_jobs if use_gpu_cap else None,
+        device=args.device,
+        rows=total,
+    )
+
+    if total:
+        try:
+            assert_min_free(out_dir, args.min_free_gb)
+        except RuntimeError:
+            for snapshot in run_cache_snapshots:
+                purge_new_cache_entries(snapshot)
+            assert_min_free(out_dir, args.min_free_gb)
+
+    with ThreadPoolExecutor(max_workers=effective_jobs) as executor:
+        futures: dict[Future[tuple[ValidationResult, int]], tuple[DependencyPlan, CatalogRow]] = {}
+        for plan, row in runnable:
             before_free_gb = disk_free_gb(out_dir)
-            cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
-            tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
-            with isolated_tmp_env(tmp_dir):
-                log_event(
-                    "model_start",
-                    index=processed,
-                    name=row.name,
-                    cluster=plan.cluster_key,
-                    free_gb=round(before_free_gb, 3),
-                )
-                result = validate_with_timeout(
-                    row,
-                    args.dry_run,
-                    args.scope,
-                    args.device,
-                    args.timeout_sec,
-                )
-                removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
+            log_event(
+                "model_start",
+                name=row.name,
+                cluster=plan.cluster_key,
+                free_gb=round(before_free_gb, 3),
+            )
+            futures[executor.submit(process_one, plan, row)] = (plan, row)
+
+        for future in as_completed(futures):
+            plan, row = futures[future]
+            processed += 1
+            result, removed = future.result()
             append_manifest(manifest_path, result)
             after_free_gb = disk_free_gb(out_dir)
             log_event(
                 "model_done",
                 index=processed,
+                total=total,
                 name=row.name,
                 status=result.status,
                 n_ops=result.n_ops,
                 cache_entries_removed=removed,
-                before_free_gb=round(before_free_gb, 3),
                 after_free_gb=round(after_free_gb, 3),
                 elapsed=round(result.elapsed, 3),
                 error=result.error,
             )
+            # Periodic disk-safety check: free space should not run dry as the
+            # batch progresses.
+            try:
+                assert_min_free(out_dir, args.min_free_gb)
+            except RuntimeError:
+                for snapshot in run_cache_snapshots:
+                    purge_new_cache_entries(snapshot)
+                assert_min_free(out_dir, args.min_free_gb)
 
     write_reports(out_dir, manifest_path, selected)
     log_event(
@@ -928,6 +1007,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--revalidate-failed", action="store_true", help="retry non-validated manifest rows"
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=default_jobs(),
+        help="number of models to validate concurrently (each in its own subprocess)",
+    )
+    parser.add_argument(
+        "--gpu-jobs",
+        type=int,
+        default=4,
+        help="max concurrent in-flight jobs when --device is cuda/auto (GPU OOM guard)",
     )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--manifest", type=Path)
