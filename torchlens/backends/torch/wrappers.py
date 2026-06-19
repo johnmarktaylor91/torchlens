@@ -1753,6 +1753,33 @@ def _should_deep_scan_detached_module(mod: types.ModuleType, policy: str) -> boo
     return has_torch is not False
 
 
+def _safe_module_file(mod: types.ModuleType) -> str | None:
+    """Return ``mod.__file__`` as a string without triggering import side effects.
+
+    ``getattr(mod, "__file__", None)`` only suppresses ``AttributeError``, but some
+    lazy-import shims (e.g. SpeechBrain's ``LazyModule``) raise ``ImportError`` (or
+    other exceptions) from ``__getattr__`` when an optional dependency is missing.
+    The ``sys.modules`` crawl in :func:`patch_detached_references` only needs a
+    readable file path, so guard broadly and treat any failure as "no file".
+
+    Parameters
+    ----------
+    mod:
+        Module object to inspect.
+
+    Returns
+    -------
+    str | None
+        The module file path when available as a string, else ``None``.
+    """
+
+    try:
+        mod_file = getattr(mod, "__file__", None)
+    except Exception:
+        return None
+    return mod_file if isinstance(mod_file, str) else None
+
+
 def _module_file_is_stdlib(mod: types.ModuleType) -> bool:
     """Return whether a module file lives under the Python stdlib directory.
 
@@ -1767,7 +1794,7 @@ def _module_file_is_stdlib(mod: types.ModuleType) -> bool:
         True when ``mod.__file__`` is inside the configured stdlib paths.
     """
 
-    mod_file = getattr(mod, "__file__", None)
+    mod_file = _safe_module_file(mod)
     if not isinstance(mod_file, str):
         return False
     for stdlib_path in _STDLIB_PATHS:
@@ -1795,7 +1822,7 @@ def _module_source_mentions_torch(mod: types.ModuleType) -> bool | None:
         possible.
     """
 
-    mod_file = getattr(mod, "__file__", None)
+    mod_file = _safe_module_file(mod)
     if not isinstance(mod_file, str) or not mod_file.endswith(".py"):
         return None
     cached = _state._detached_source_has_torch.get(mod_file)
