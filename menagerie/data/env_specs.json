@@ -355,5 +355,182 @@
       "torchvision==0.19.1"
     ],
     "torch_index_url": "https://download.pytorch.org/whl/cu121"
+  },
+  "effdet": {
+    "name": "effdet",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "effdet==0.4.1"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "effdet",
+      "efficientdet"
+    ],
+    "post_install_check": "import torchlens, effdet",
+    "status": "untested",
+    "notes": "effdet 0.4.1 (rwightman); pulls timm/omegaconf/pycocotools (manylinux wheels). torch floor 1.12."
+  },
+  "espnet": {
+    "name": "espnet",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "espnet==202511"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "espnet",
+      "espnet2"
+    ],
+    "post_install_check": "import torchlens, espnet2",
+    "status": "untested",
+    "notes": "espnet 202511; torch>=1.11 no cap; pure-pip (no Kaldi). sentencepiece==0.2.0 pin -> isolate; never co-install w/ nemo/speechbrain."
+  },
+  "speechbrain": {
+    "name": "speechbrain",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "speechbrain==1.1.0"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "speechbrain"
+    ],
+    "post_install_check": "import torchlens, speechbrain",
+    "status": "untested",
+    "notes": "speechbrain 1.1.0; torch>=2.1 clean. k2 optional via HF wheel URL; flair plain pip. transformers>=4.30 -> isolate from nemo. (TorchLens patch_detached __file__ bug fixed in f07db5b0/39a3135f.)"
+  },
+  "basicsr": {
+    "name": "basicsr",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "basicsr-fixed==1.4.2"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "basicsr"
+    ],
+    "post_install_check": "import torchlens, basicsr",
+    "status": "untested",
+    "notes": "basicsr-fixed 1.4.2 (plain basicsr import-fails on torchvision>=0.17). Fallback: basicsr==1.4.2 + sed patch functional_tensor->functional."
+  },
+  "ppocr": {
+    "name": "ppocr",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "paddlepaddle-gpu==2.6.2",
+      "paddleseg==2.8.0",
+      "paddleclas==2.6.0",
+      "paddleocr==2.10.0"
+    ],
+    "extra_index_url": null,
+    "zoo_patterns": [
+      "ppocr",
+      "paddleocr"
+    ],
+    "post_install_check": "import torchlens, paddleocr",
+    "status": "untested",
+    "notes": "Pin paddleocr 2.10.0 (3.x needs paddlepaddle>=3.0, breaks 2.6.2). Coexists w/ paddleseg/paddleclas; watch opencv collision."
+  },
+  "ppdet": {
+    "name": "ppdet",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "paddlepaddle-gpu==2.6.2",
+      "git+https://github.com/PaddlePaddle/PaddleDetection.git@release/2.6#egg=paddledet"
+    ],
+    "extra_index_url": null,
+    "zoo_patterns": [
+      "ppdet",
+      "paddledetection",
+      "ppyolo",
+      "picodet"
+    ],
+    "post_install_check": "import torchlens, ppdet",
+    "status": "untested",
+    "notes": "git install (PyPI paddledet pins numpy<1.24+sklearn==0.0+opencv<=4.6). SEPARATE env from ppocr (opencv). import module = ppdet."
+  },
+  "dgl": {
+    "name": "dgl",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "-f",
+      "https://data.dgl.ai/wheels/torch-2.4/cu121/repo.html",
+      "dgl==2.5.0+cu121"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "dgl"
+    ],
+    "post_install_check": "import torchlens, dgl",
+    "status": "untested",
+    "notes": "DGL CUDA wheels only at data.dgl.ai/wheels/torch-2.4/cu121; use 2.5.0+cu121 (2.4.0 rejects torch 2.4.1, #7883). Pinned torch 2.4.1 (no torch>=2.5 cu121 dgl wheels)."
+  },
+  "nemo": {
+    "name": "nemo",
+    "conda_python": "3.11",
+    "torch_pin": [
+      "torch==2.4.1",
+      "torchvision==0.19.1",
+      "torchaudio==2.4.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "Cython",
+      "packaging",
+      "nemo_toolkit[asr]==2.4.0"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "nemo"
+    ],
+    "post_install_check": "import torchlens, nemo.collections.asr",
+    "status": "untested",
+    "notes": "NeMo 2.4.0 [asr] pinned torch 2.4.1 (2.7.x needs torch>=2.6). NEVER [all]. If runtime hits 2.5/2.6 APIs, bump torch 2.6 + nemo 2.7.3."
+  },
+  "lerobot": {
+    "name": "lerobot",
+    "conda_python": "3.12",
+    "torch_pin": [
+      "torch==2.7.1",
+      "torchvision==0.22.1"
+    ],
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "lerobot[smolvla,pi]==0.5.1"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "lerobot"
+    ],
+    "post_install_check": "import torchlens, lerobot",
+    "status": "untested",
+    "notes": "Python 3.12 + torch>=2.7,<2.12 (ACTPolicy/SmolVLAPolicy/Pi0). [smolvla,pi] (no [pi0] extra)."
+  },
+  "gan": {
+    "name": "gan",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "pytorch-pretrained-biggan",
+      "stylegan2-pytorch",
+      "git+https://github.com/lukemelas/pytorch-pretrained-gans"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "biggan",
+      "stylegan",
+      "stylegan2",
+      "dcgan",
+      "progan",
+      "pgan"
+    ],
+    "post_install_check": "import torchlens; from pytorch_pretrained_biggan import BigGAN; from stylegan2_pytorch import ModelLoader",
+    "status": "untested",
+    "notes": "BigGAN(HF port)+StyleGAN2(lucidrains)+lukemelas wrapper. SinGAN/ConSinGAN/StyleGAN2-ADA/CycleGAN = reimplement-as-classic (no setup.py)."
   }
 }
