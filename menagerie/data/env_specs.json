@@ -29,32 +29,39 @@
   "mmlab": {
     "name": "mmlab",
     "conda_python": "3.11",
-    "pip_packages": [
-      "openmim",
-      "mim:mmengine",
-      "mim:mmcv",
-      "mim:mmdet",
-      "mim:mmsegmentation",
-      "mim:mmpretrain",
-      "mim:mmpose"
-    ],
-    "extra_index_url": "https://download.pytorch.org/whl/cu121",
-    "zoo_patterns": [
-      "mm",
-      "openmmlab",
-      "mmdet",
-      "mmseg",
-      "mmpose",
-      "mmpretrain"
-    ],
-    "post_install_check": "import torchlens, mmengine, mmcv, mmdet, mmseg, mmpretrain, mmpose",
-    "status": "failed",
-    "notes": "Install openmim with pip, then install mim:* packages via `mim install`; mmcv pins the compatible torch stack.",
     "torch_pin": [
       "torch==2.4.1",
       "torchvision==0.19.1"
     ],
-    "torch_index_url": "https://download.pytorch.org/whl/cu121"
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "pip_packages": [
+      "numpy<2",
+      "openmim",
+      "ftfy",
+      "regex",
+      "xtcocotools",
+      "munkres",
+      "mim:mmengine",
+      "mim:mmcv",
+      "mim:mmdet",
+      "mim:mmsegmentation",
+      "mim:mmpretrain"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "post_install_commands": [
+      "SP=$(python -c \"import sysconfig;print(sysconfig.get_paths()['purelib'])\") && printf '%s\\n' 'try:' '    import mmcv as _m' '    if getattr(_m, \"__version__\", \"\") == \"2.2.0\": _m.__version__ = \"2.1.0\"' 'except Exception:' '    pass' > \"$SP/sitecustomize.py\""
+    ],
+    "zoo_patterns": [
+      "mmdet",
+      "mmsegmentation",
+      "mmseg",
+      "mmpretrain",
+      "mmcls",
+      "openmmlab"
+    ],
+    "post_install_check": "import torchlens, mmengine, mmcv, mmdet, mmseg, mmpretrain; print('mmcv', mmcv.__version__)",
+    "status": "untested",
+    "notes": "SOLVED (empirically verified): torch 2.4.1 + mmcv 2.2.0 wheel; sitecustomize spoofs mmcv.__version__->2.1.0 so mmdet/mmseg conservative <2.2.0 cap passes (2.2.0 additive-only). numpy<2 for ABI. mim installs .mim/configs the recipes reference. mmpose/mmocr need separate envs (own caps/deps). Proven: RetinaNet/FCOS/FCN/PSPNet/DeepLabV3/SegFormer/ResNet50 instantiate+trace."
   },
   "detectron2": {
     "name": "detectron2",
