@@ -909,10 +909,23 @@ def required_modules(constructor_call: str, zoo: str) -> tuple[str, ...]:
     """
 
     modules: set[str] = set()
-    for match in re.finditer(r"\b(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)", constructor_call):
-        module_name = match.group(1)
-        if not module_name[0].isupper():
-            modules.add(module_name)
+    # Parse per-statement so `from X import Y` contributes only X (the module), not Y (a symbol).
+    # The old `(?:from|import)\s+(\w+)` regex wrongly captured imported names (e.g. create_model from
+    # `from effdet import create_model`) as modules, falsely marking installed clusters as dep-missing.
+    for statement in re.split(r"[;\n]", constructor_call):
+        statement = statement.strip()
+        from_match = re.match(r"from\s+([A-Za-z_][A-Za-z0-9_.]*)", statement)
+        if from_match:
+            name = from_match.group(1).split(".")[0]
+            if not name[0].isupper():
+                modules.add(name)
+            continue
+        import_match = re.match(r"import\s+(.+)", statement)
+        if import_match:
+            for part in import_match.group(1).split(","):
+                name = part.strip().split(" as ")[0].strip().split(".")[0]
+                if name and not name[0].isupper():
+                    modules.add(name)
     dotted = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\.", constructor_call)
     if dotted and not dotted.group(1)[0].isupper():
         modules.add(dotted.group(1))
@@ -932,7 +945,18 @@ def required_modules(constructor_call: str, zoo: str) -> tuple[str, ...]:
         modules.add("segmentation_models_pytorch")
     if "ultralytics" in zoo_lower:
         modules.add("ultralytics")
-    return tuple(sorted(module for module in modules if module not in {"model", "cfg"}))
+    stdlib_or_local = {
+        "model",
+        "cfg",
+        "os",
+        "sys",
+        "math",
+        "typing",
+        "functools",
+        "collections",
+        "re",
+    }
+    return tuple(sorted(module for module in modules if module not in stdlib_or_local))
 
 
 def dependency_plan(row: CatalogRow) -> DependencyPlan:
