@@ -50,6 +50,15 @@ from typing import Any, TYPE_CHECKING, cast
 
 import torch
 
+# Imported into THIS module's globals so torch.jit.script can resolve the
+# torch.overrides boilerplate when it compiles a wrapped torch.nn.functional
+# Python op (e.g. softsign): jit pulls the original op's source but resolves
+# names against the wrapper's globals (this module), not torch.nn.functional's.
+# Every functional op shares the
+# ``if has_torch_function_unary(x): return handle_torch_function(...)`` preamble;
+# jit treats has_torch_function_unary as always-False, so the branch is elided.
+from torch.overrides import handle_torch_function, has_torch_function_unary  # noqa: F401
+
 from ... import _state
 from ...constants import ORIG_TORCH_FUNCS
 from ...data_classes.func_call_location import FuncCallLocation

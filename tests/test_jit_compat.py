@@ -118,3 +118,27 @@ def test_patch_model_instance_guard_skips_second_trace_walk(
     assert model.act is _state._orig_to_decorated[id(original_relu)]
     assert any("relu" in label.lower() for label in first_trace.layer_labels)
     assert any("relu" in label.lower() for label in second_trace.layer_labels)
+
+
+def _calls_softsign(x: torch.Tensor) -> torch.Tensor:
+    """Call a wrapped pure-Python torch.nn.functional op (not an ATen builtin)."""
+
+    return torch.nn.functional.softsign(x)
+
+
+def test_jit_script_wrapped_functional_python_op() -> None:
+    """TorchScript must compile a function calling a wrapped non-builtin functional op.
+
+    Regression: ``F.softsign`` is a pure-Python functional op absent from torch's jit
+    ``_builtin_table``, so torchlens's wrapper is not registered as a builtin. jit then
+    pulls softsign's original source but resolves names against the wrapper module's
+    globals, which previously lacked the ``torch.overrides`` boilerplate, failing with
+    ``undefined value has_torch_function_unary`` (surfaced by spikingjelly
+    ``@torch.jit.script`` surrogates in the model menagerie).
+    """
+
+    _require_torch_jit()
+
+    scripted = torch.jit.script(_calls_softsign)
+    x = torch.randn(8)
+    assert torch.allclose(scripted(x), torch.nn.functional.softsign(x))
