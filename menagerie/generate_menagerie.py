@@ -1075,7 +1075,13 @@ def unrenderable_reason(row: CatalogRow) -> str | None:
     joined = f"{row.zoo} {row.constructor_call} {row.notes}".lower()
     if "jax" in row.zoo.lower() or "jax" in row.constructor_call.lower():
         return "jax_native"
-    if "<model_config>" in row.constructor_call or "config.fromfile" in joined:
+    if "<model_config>" in row.constructor_call:
+        return "web_or_config_recipe_sketch"
+    # A real resolved OpenMMLab .mim config build -- Config.fromfile(<pkg>/.mim/configs/<real>.py) -- is a
+    # genuine buildable recipe, NOT a sketch. Only flag config.fromfile when it lacks a resolved .mim path
+    # (a placeholder / web-config sketch). Fixed 2026-06-19: the blanket flag wrongly pre-skipped 838
+    # mm-family recipes that build the real published architecture from the installed .mim config.
+    if "config.fromfile" in joined and ".mim/configs/" not in row.constructor_call.lower():
         return "web_or_config_recipe_sketch"
     for marker, reason in UNRENDERABLE_MARKERS:
         if marker in joined:
@@ -1589,6 +1595,10 @@ def select_rows(args: argparse.Namespace) -> list[CatalogRow]:
     if args.name:
         terms = [term.lower() for term in args.name]
         rows = [row for row in rows if any(term in row.name.lower() for term in terms)]
+    if getattr(args, "names_file", None):
+        with open(args.names_file) as handle:
+            wanted = {line.strip().lower() for line in handle if line.strip()}
+        rows = [row for row in rows if row.name.lower() in wanted]
     if args.model_id:
         model_ids = set(args.model_id)
         rows = [row for row in rows if row.model_id in model_ids]
@@ -2242,6 +2252,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--domain")
     parser.add_argument("--zoo")
     parser.add_argument("--name", action="append", help="case-insensitive model-name substring")
+    parser.add_argument(
+        "--names-file", help="render only models whose exact name (one per line) is in this file"
+    )
     parser.add_argument("--model-id", action="append", type=int, help="exact catalog model id")
     parser.add_argument("--verified-only", action="store_true")
     parser.add_argument("--featured-only", action="store_true")
