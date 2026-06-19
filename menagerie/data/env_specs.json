@@ -1,0 +1,175 @@
+{
+  "core": {
+    "name": "core",
+    "conda_python": "3.11",
+    "pip_packages": [],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "classics-pytorch",
+      "timm",
+      "torchvision",
+      "huggingface",
+      "transformers",
+      "diffusers",
+      "segmentation-models-pytorch",
+      "segmentation_models_pytorch",
+      "smp",
+      "pyg",
+      "torch-geometric",
+      "ultralytics",
+      "monai",
+      "open_clip",
+      "open-clip"
+    ],
+    "catch_all": true,
+    "post_install_check": "import torchlens, torch",
+    "status": "untested",
+    "notes": "Assumes the base PyTorch stack is provided by the editable TorchLens install."
+  },
+  "mmlab": {
+    "name": "mmlab",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "openmim",
+      "mim:mmengine",
+      "mim:mmcv",
+      "mim:mmdet",
+      "mim:mmsegmentation",
+      "mim:mmpretrain",
+      "mim:mmpose"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "mm",
+      "openmmlab",
+      "mmdet",
+      "mmseg",
+      "mmpose",
+      "mmpretrain"
+    ],
+    "post_install_check": "import torchlens, mmengine, mmcv, mmdet, mmseg, mmpretrain, mmpose",
+    "status": "untested",
+    "notes": "Install openmim with pip, then install mim:* packages via `mim install`; mmcv pins the compatible torch stack."
+  },
+  "detectron2": {
+    "name": "detectron2",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "git+https://github.com/facebookresearch/detectron2.git"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "detectron2"
+    ],
+    "post_install_check": "import torchlens, detectron2",
+    "status": "untested",
+    "notes": "Built from the upstream git repository against the environment torch build."
+  },
+  "recbole": {
+    "name": "recbole",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "recbole"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "recbole"
+    ],
+    "post_install_check": "import torchlens, recbole",
+    "status": "untested",
+    "notes": "RecBole recommender models."
+  },
+  "paddle": {
+    "name": "paddle",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "paddlepaddle-gpu",
+      "paddleseg",
+      "paddleclas"
+    ],
+    "extra_index_url": null,
+    "zoo_patterns": [
+      "paddle"
+    ],
+    "post_install_check": "import torchlens, paddle, paddleseg, paddleclas",
+    "status": "untested",
+    "notes": "GPU Paddle stack for PaddleSeg and PaddleClas zoos."
+  },
+  "fla": {
+    "name": "fla",
+    "conda_python": "3.11",
+    "pip_packages": [
+      "flash-linear-attention",
+      "triton"
+    ],
+    "extra_index_url": "https://download.pytorch.org/whl/cu121",
+    "zoo_patterns": [
+      "flash-linear-attention",
+      "fla"
+    ],
+    "post_install_check": "import torchlens, fla, triton",
+    "status": "working",
+    "notes": "GPU recipe; requires CUDA and Triton support.",
+    "resolved_packages": [
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@51a3ff0f99ac69eef29a9ecb642304c0713cfaa6#egg=torchlens",
+      "Jinja2==3.1.6",
+      "MarkupSafe==3.0.3",
+      "PyYAML==6.0.3",
+      "Pygments==2.20.0",
+      "annotated-doc==0.0.4",
+      "anyio==4.14.0",
+      "certifi==2026.6.17",
+      "click==8.4.1",
+      "cuda-bindings==13.3.1",
+      "cuda-pathfinder==1.5.5",
+      "cuda-toolkit==13.0.2",
+      "einops==0.8.2",
+      "filelock==3.29.4",
+      "fla-core==0.5.1",
+      "flash-linear-attention==0.5.1",
+      "fsspec==2026.6.0",
+      "graphviz==0.21",
+      "h11==0.16.0",
+      "hf-xet==1.5.1",
+      "httpcore==1.0.9",
+      "httpx==0.28.1",
+      "huggingface_hub==1.20.1",
+      "idna==3.18",
+      "markdown-it-py==4.2.0",
+      "mdurl==0.1.2",
+      "mpmath==1.3.0",
+      "networkx==3.6.1",
+      "numpy==2.4.6",
+      "nvidia-cublas==13.1.1.3",
+      "nvidia-cuda-cupti==13.0.85",
+      "nvidia-cuda-nvrtc==13.0.88",
+      "nvidia-cuda-runtime==13.0.96",
+      "nvidia-cudnn-cu13==9.20.0.48",
+      "nvidia-cufft==12.0.0.61",
+      "nvidia-cufile==1.15.1.6",
+      "nvidia-curand==10.4.0.35",
+      "nvidia-cusolver==12.0.4.66",
+      "nvidia-cusparse==12.6.3.3",
+      "nvidia-cusparselt-cu13==0.8.1",
+      "nvidia-nccl-cu13==2.29.7",
+      "nvidia-nvjitlink==13.0.88",
+      "nvidia-nvshmem-cu13==3.4.5",
+      "nvidia-nvtx==13.0.85",
+      "packaging==26.0",
+      "pillow==12.2.0",
+      "py-spy==0.4.2",
+      "regex==2026.5.9",
+      "rich==15.0.0",
+      "safetensors==0.8.0",
+      "shellingham==1.5.4",
+      "sympy==1.14.0",
+      "tokenizers==0.22.2",
+      "torch==2.12.1",
+      "tqdm==4.68.3",
+      "transformers==5.12.1",
+      "triton==3.7.1",
+      "typer==0.25.1",
+      "typing_extensions==4.15.0"
+    ]
+  }
+}

@@ -157,30 +157,48 @@ python -m menagerie.validate_menagerie \
   --out-dir /tmp/val_smoke
 ```
 
-## Cross-Environment Runs
+## Cross-environment rendering (rerun-safe)
 
 Some zoos require mutually incompatible dependency stacks, so `run_across_envs.py`
-orchestrates either rendering or validation across named conda environments. It creates
-or reuses environments named `tlmenagerie_<env>`, installs TorchLens editable plus that
-environment's zoo dependencies, and invokes the selected menagerie task with
-`--no-install-deps` into one shared output directory so the relevant manifest accumulates.
-
-The environment map is a top-level `ENV_SPECS` constant and is intentionally
-non-exhaustive. Extend it when new zoos need their own dependency island. The `core`
-environment covers common PyTorch zoos and a catch-all pass; specialized environments
-cover mmlab, recbole, paddle, detectron2, and flash-linear-attention.
-
-Dry-run is the default for safety:
+orchestrates rendering or validation across separate conda environments named
+`tlmenagerie_<env>`. The one-command dry-run for a repeatable render pass is:
 
 ```bash
-python -m menagerie.run_across_envs --task validate --dry-run
 python -m menagerie.run_across_envs --task render --dry-run --out-dir /big/menagerie
 ```
 
 Only `--execute` creates environments, installs packages, and runs jobs:
 
 ```bash
-python -m menagerie.run_across_envs --task validate --execute
+python -m menagerie.run_across_envs --task render --execute --out-dir /big/menagerie
+```
+
+Environment recipes live in `menagerie/data/env_specs.json`, not in code. Each recipe
+declares the conda Python version, ordered packages, optional extra pip index, zoo
+patterns, an import-based `post_install_check`, status, and notes. Plain `pip_packages`
+entries install with pip; `mim:<package>` entries install with `mim install` after
+`openmim` is available.
+
+The runner is idempotent. If `tlmenagerie_<env>` already exists and its
+`post_install_check` succeeds, setup is skipped and the existing environment is reused.
+If setup succeeds, `env_specs.json` is updated with `status: "working"` and captured
+`pip freeze` output so future reruns keep the resolved recipe. If setup fails, the
+recipe is marked `failed`, the per-env error is written under the output directory's
+`env_logs/`, and the runner continues to the next environment.
+
+Disk safety is checked before creating or installing an environment. The default
+threshold is `--min-free-gb 20`; an environment is skipped with a clear log message if
+free space is below the threshold. Use `--cleanup-env` to remove each
+`tlmenagerie_<env>` after its render or validation task finishes, which keeps at most
+one extra environment around at a time. The default keeps environments for faster
+reruns.
+
+To add a new dependency island, edit `menagerie/data/env_specs.json`: add a new key,
+choose `zoo_patterns` that match the catalog `zoo` field, set a conservative
+`post_install_check`, leave `status` as `untested`, then run:
+
+```bash
+python -m menagerie.run_across_envs --setup-only --envs <env> --execute
 ```
 
 ## Update Flow
