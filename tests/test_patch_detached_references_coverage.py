@@ -203,12 +203,22 @@ def test_patch_detached_references_survives_lazy_module_file_error() -> None:
             raise ImportError(f"optional dependency missing while accessing {name!r}")
 
     exploding = _LazyExplodingModule(mod_name)
+    # Force BOTH __file__ and __name__ to route through the raising __getattr__,
+    # mirroring a lazy shim that has materialized neither attribute yet.
+    exploding.__dict__.pop("__name__", None)
     sys.modules[mod_name] = exploding
     try:
         # The guarded accessor returns None instead of propagating the ImportError.
         assert _safe_module_file(exploding) is None
+        # Test precondition: __name__ access really does raise (not AttributeError).
+        name_raised = False
+        try:
+            _ = exploding.__name__
+        except ImportError:
+            name_raised = True
+        assert name_raised, "precondition: __name__ access should raise ImportError"
         wrap_torch()
-        # The full crawl must complete without raising despite the exploding module.
+        # The full crawl must complete without raising despite __file__ AND __name__ exploding.
         patch_detached_references(full=True)
     finally:
         sys.modules.pop(mod_name, None)

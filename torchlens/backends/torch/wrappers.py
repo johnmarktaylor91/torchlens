@@ -1653,7 +1653,14 @@ def patch_detached_references(full: bool = False) -> None:
             if mod is None:
                 continue
             # Skip torchlens internals — we don't want to patch our own references.
-            if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
+            # Read __name__ defensively: lazy-import shims can raise (not just
+            # AttributeError) from __getattr__, and hasattr() only swallows
+            # AttributeError. Fall back to the sys.modules key on any failure.
+            try:
+                mod_name = mod.__name__
+            except Exception:
+                mod_name = mod_key
+            if isinstance(mod_name, str) and mod_name.startswith("torchlens"):
                 continue
 
             try:
