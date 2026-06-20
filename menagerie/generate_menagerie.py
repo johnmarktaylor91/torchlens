@@ -2770,6 +2770,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         os.environ.setdefault(_thread_var, "1")
     if args.worker_row_json:
+        # Per-worker address-space backstop: a pathological model that tries to
+        # allocate a runaway amount fails its OWN worker with a clean MemoryError
+        # (-> failed:exception) instead of triggering a global OOM that the kernel
+        # resolves by SIGKILLing an innocent sibling worker. Set generously (0.8x
+        # total RAM) so normal models -- even large ones -- never false-trip; it
+        # only catches genuine runaway allocation.
+        try:
+            import resource as _resource
+
+            _total_ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            _cap = int(_total_ram * 0.8)
+            _soft, _hard = _resource.getrlimit(_resource.RLIMIT_AS)
+            _new_hard = _cap if _hard == _resource.RLIM_INFINITY else min(_cap, _hard)
+            _resource.setrlimit(_resource.RLIMIT_AS, (_cap, _new_hard))
+        except (ValueError, OSError, AttributeError):
+            pass
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:
             result = render_one(
