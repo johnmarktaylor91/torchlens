@@ -26,10 +26,14 @@ classifiers = [
 dependencies = [
     "numpy",
     "packaging",
-    # torch>=2.4 required: torch.is_autocast_enabled(device_type) and
-    # torch.get_autocast_dtype(device_type) (used in torchlens/utils/rng.py)
-    # only accept a device_type argument on torch 2.4+.
-    "torch>=2.4",
+    # torch>=2.1 supported. The only torch-2.4-specific APIs TorchLens used were
+    # torch.is_autocast_enabled(device_type) / torch.get_autocast_dtype(device_type)
+    # (the device_type argument is torch 2.4+ only); these are now routed through
+    # a backward-compatible shim (torchlens/utils/_torch_compat.py) that falls back
+    # to the legacy per-device autocast helpers on torch 2.1-2.3. Lowering the floor
+    # to 2.1 unblocks frameworks pinned to older torch (e.g. the OpenMMLab stack,
+    # which caps mmcv<2.2 -> prebuilt wheels only for torch<=2.1).
+    "torch>=2.1",
     "safetensors>=0.4",
     "tqdm",
     "graphviz",
