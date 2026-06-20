@@ -32,6 +32,56 @@ _NEATO_TIMEOUT = 120
 _DEFAULT_NODE_WIDTH = 200  # points — fallback when label isn't available
 _DEFAULT_NODE_HEIGHT = 60  # points — fallback when label isn't available
 
+# Spline edge-routing thresholds for the ``neato -n`` render path.
+#
+# neato spline routing (``-Gsplines=true``) is super-linear in the number of
+# *edge crossings* the routed layout contains.  Crossings grow with BOTH the raw
+# node count (more nodes packed in 2D -> more geometric crossings even at a low
+# logical edge/node ratio) AND with fan-out density (DenseNet concat fan-out,
+# MaxViT/ConvNeXt attention + dense conv blocks).  A graph only reaches this
+# neato path at all once its estimated layout cost already exceeds
+# ``RANK_LAYOUT_COST_THRESHOLD`` (20k), i.e. it is large or hub-heavy by
+# construction -- precisely the regime where splines choke.
+#
+# Empirically calibrated 2026-06-20 against three real failures on this path:
+#   convnextv2_huge       785 nodes / 928 edges  (ratio 1.18) -> spline TIMEOUT
+#   smp_Unet_densenet201  772 nodes / 2578 edges (ratio 3.34) -> spline TIMEOUT
+#   maxvit_xlarge_tf_512  2359 nodes / 2598 edges(ratio 1.10) -> rtree overflow
+# All three MUST degrade to straight "line" edges.  convnext shows the node
+# count alone is the dominant signal: at ~1.18 edges/node it still timed out, so
+# the node ceiling must sit below 785.
+#
+# We therefore degrade to straight ``line`` edges when EITHER the graph has many
+# nodes OR it is edge-dense.  Sparse small graphs never even reach this path
+# (they render through Graphviz ``dot``), so this only affects already-large
+# rank-layout graphs and never the common small-model case.
+_SPLINE_NODE_LIMIT = 700
+# Density gate: catch genuinely dense mid-size graphs (300-700 nodes) whose
+# fan-out blows up crossings before they hit the node ceiling.
+_SPLINE_DENSITY_RATIO = 1.5
+# Below this node count even a dense layout routes cheaply, so keep splines.
+_SPLINE_DENSITY_MIN_NODES = 300
+
+
+def _choose_spline_mode(num_nodes: int, num_edges: int) -> str:
+    """Pick the neato spline mode for a graph of the given size/density.
+
+    Returns ``"true"`` (curved spline routing — pretty, but super-linear in
+    edge crossings) for small/sparse graphs, and ``"line"`` (straight segments —
+    O(edges), robust) for large or edge-dense graphs.
+
+    A graph degrades to ``"line"`` when it has at least
+    :data:`_SPLINE_NODE_LIMIT` nodes (node count dominates crossing count), OR
+    when it is "edge-dense" — its edges-per-node ratio exceeds
+    :data:`_SPLINE_DENSITY_RATIO` and it has at least
+    :data:`_SPLINE_DENSITY_MIN_NODES` nodes.  Tiny graphs always keep splines.
+    """
+    if num_nodes >= _SPLINE_NODE_LIMIT:
+        return "line"
+    if num_nodes >= _SPLINE_DENSITY_MIN_NODES and num_edges > num_nodes * _SPLINE_DENSITY_RATIO:
+        return "line"
+    return "true"
+
 
 def _compute_topological_layout(
     node_data: dict[str, dict[str, Any]],
@@ -771,7 +821,9 @@ def render_rank_layout(
     for mod in top_modules:
         _write_cluster(mod, 0, 1)
 
-    # Edges (at top level — neato -n routes them fine)
+    # Edges (at top level — neato -n routes them fine).
+    # Capture the count BEFORE the loop mutates each edge dict (it pops keys).
+    num_edges = len(all_edges)
     for edge in all_edges:
         tail = _dot_id(edge.pop("tail_name"))
         head = _dot_id(edge.pop("head_name"))
@@ -795,24 +847,18 @@ def render_rank_layout(
 
     rendered_path = f"{vis_outpath}.{vis_fileformat}"
     num_nodes = len(node_data)
-    # Spline routing is O(n^2) — use straight lines for large graphs.
-    spline_mode = "true" if num_nodes < 1000 else "line"
-    cmd = [
-        "neato",
-        "-n",
-        f"-Gsplines={spline_mode}",
-        f"-T{vis_fileformat}",
-        "-o",
-        rendered_path,
-        source_path,
-    ]
+    # Spline routing cost is driven by edge crossings, not node count, so the
+    # heuristic keys off BOTH size and edge density (see _choose_spline_mode).
+    spline_mode = _choose_spline_mode(num_nodes, num_edges)
     render_timeout = max(_NEATO_TIMEOUT, int(num_nodes * 0.01))
     try:
-        result = subprocess.run(cmd, timeout=render_timeout, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"neato rendering failed (exit {result.returncode}):\n{result.stderr}"
-            )
+        _run_neato_with_fallbacks(
+            rendered_path=rendered_path,
+            source_path=source_path,
+            vis_fileformat=vis_fileformat,
+            spline_mode=spline_mode,
+            render_timeout=render_timeout,
+        )
         if not vis_save_only:
             _open_file_quietly(rendered_path)
     finally:
@@ -820,6 +866,149 @@ def render_rank_layout(
             os.remove(source_path)
 
     return dot_source
+
+
+# neato builds an rtree spatial index over node/label boxes during edge
+# routing; its box coordinates are 16-bit-ish and it aborts with "area too
+# large for rtree" when a box (or the whole canvas) overflows that range.
+# Very-high-resolution models (maxvit_xlarge_tf_512 @ 512px input -> 2747 nodes
+# spread across a huge pinned canvas) trip this.  ``-Gsize``/``-Gratio`` only
+# rescale the OUTPUT viewport, not the coordinates fed to the rtree, so they do
+# NOT fix it.  We instead shrink the pinned coordinates themselves so the whole
+# drawing fits inside this ceiling before re-running neato.
+_RTREE_COORD_CEILING = 28000.0
+_RTREE_POS_RE = re.compile(r'pos="(-?[\d.]+),(-?[\d.]+)!"')
+_RTREE_BB_RE = re.compile(r'bb="(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)"')
+_RTREE_DIM_RE = re.compile(r"(width|height)=([\d.]+)")
+
+
+def _rescale_dot_for_rtree(dot_source: str, ceiling: float = _RTREE_COORD_CEILING) -> str | None:
+    """Shrink pinned coordinates so the layout fits in neato's rtree range.
+
+    Scans ``pos="x,y!"`` pins for the maximum coordinate magnitude.  If it
+    already fits under ``ceiling`` returns ``None`` (no rescale needed).
+    Otherwise scales every pinned ``pos``, cluster ``bb`` box, and node
+    ``width``/``height`` (inches) by ``ceiling / max_coord`` so the geometry is
+    preserved (uniform scale) but the canvas fits.  Returns the rewritten DOT.
+    """
+    max_coord = 0.0
+    for m in _RTREE_POS_RE.finditer(dot_source):
+        max_coord = max(max_coord, abs(float(m.group(1))), abs(float(m.group(2))))
+    if max_coord <= ceiling or max_coord == 0.0:
+        return None
+    scale = ceiling / max_coord
+
+    def _scale_pos(m: re.Match) -> str:
+        return f'pos="{float(m.group(1)) * scale:.1f},{float(m.group(2)) * scale:.1f}!"'
+
+    def _scale_bb(m: re.Match) -> str:
+        vals = [float(m.group(i)) * scale for i in range(1, 5)]
+        return 'bb="' + ",".join(f"{v:.1f}" for v in vals) + '"'
+
+    def _scale_dim(m: re.Match) -> str:
+        return f"{m.group(1)}={float(m.group(2)) * scale:.4f}"
+
+    out = _RTREE_POS_RE.sub(_scale_pos, dot_source)
+    out = _RTREE_BB_RE.sub(_scale_bb, out)
+    out = _RTREE_DIM_RE.sub(_scale_dim, out)
+    return out
+
+
+def _run_neato(
+    *,
+    rendered_path: str,
+    source_path: str,
+    vis_fileformat: str,
+    spline_mode: str,
+    render_timeout: int,
+    extra_gattrs: tuple[str, ...] = (),
+) -> subprocess.CompletedProcess:
+    """Invoke ``neato -n`` once with the given spline mode and graph attrs."""
+    cmd = [
+        "neato",
+        "-n",
+        f"-Gsplines={spline_mode}",
+        *extra_gattrs,
+        f"-T{vis_fileformat}",
+        "-o",
+        rendered_path,
+        source_path,
+    ]
+    return subprocess.run(cmd, timeout=render_timeout, capture_output=True, text=True)
+
+
+def _run_neato_with_fallbacks(
+    *,
+    rendered_path: str,
+    source_path: str,
+    vis_fileformat: str,
+    spline_mode: str,
+    render_timeout: int,
+) -> None:
+    """Render with ``neato -n``, degrading gracefully on two known failures.
+
+    1. **rtree overflow** — very high-resolution models produce a layout whose
+       canvas overflows neato's spatial-index coordinate limit and it exits
+       non-zero with ``"area too large for rtree"``.  We retry once with
+       straight-line edges and the pinned coordinates uniformly down-scaled
+       (see ``_rescale_dot_for_rtree``) so the canvas fits in range.
+    2. **spline timeout** — dense graphs that slipped past the density gate can
+       still blow the timeout while routing splines.  We retry once with
+       straight-line edges (O(edges), no crossing search) before giving up.
+
+    Raises ``RuntimeError`` if the (post-fallback) render still fails, and
+    re-raises ``subprocess.TimeoutExpired`` if the straight-line retry also
+    times out.
+    """
+    try:
+        result = _run_neato(
+            rendered_path=rendered_path,
+            source_path=source_path,
+            vis_fileformat=vis_fileformat,
+            spline_mode=spline_mode,
+            render_timeout=render_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        # Spline routing blew the budget — straight lines are crossing-free and
+        # far cheaper. Retry once with "line"; let a second timeout propagate.
+        if spline_mode == "line":
+            raise
+        warnings.warn(
+            "neato spline routing timed out; retrying with straight-line edges "
+            "(-Gsplines=line). The graph is rendered with straight edges."
+        )
+        result = _run_neato(
+            rendered_path=rendered_path,
+            source_path=source_path,
+            vis_fileformat=vis_fileformat,
+            spline_mode="line",
+            render_timeout=render_timeout,
+        )
+
+    if result.returncode != 0 and "rtree" in (result.stderr or "").lower():
+        # The pinned canvas overflowed neato's rtree coordinate range. Shrink the
+        # coordinates themselves (uniform scale preserves the layout) so they fit,
+        # and retry once with straight-line edges. -Gsize/-Gratio do NOT help here
+        # because they only rescale the output viewport, not the rtree input.
+        rescaled = _rescale_dot_for_rtree(open(source_path, encoding="utf-8").read())
+        if rescaled is not None:
+            warnings.warn(
+                "neato layout exceeded the rtree coordinate limit; retrying with "
+                "straight-line edges and down-scaled pinned coordinates so the "
+                "canvas fits. Geometry is preserved (uniform scale)."
+            )
+            with open(source_path, "w", encoding="utf-8") as f:
+                f.write(rescaled)
+            result = _run_neato(
+                rendered_path=rendered_path,
+                source_path=source_path,
+                vis_fileformat=vis_fileformat,
+                spline_mode="line",
+                render_timeout=render_timeout,
+            )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"neato rendering failed (exit {result.returncode}):\n{result.stderr}")
 
 
 def _add_arg_label(

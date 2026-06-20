@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import warnings
 from collections.abc import Iterator
 from typing import Any
@@ -17,7 +18,9 @@ from torchlens.visualization._rank_layout_internal import layout as rank_layout
 from torchlens.visualization._rank_layout_internal.layout import (
     RANK_LAYOUT_COST_THRESHOLD,
     SPAN_LOCAL,
+    _choose_spline_mode,
     _compute_topological_layout,
+    _rescale_dot_for_rtree,
     compute_rank_depths,
     estimate_rank_layout_cost,
     get_node_placement_engine,
@@ -543,6 +546,97 @@ class TestRankEngineRendering:
         )
         assert "digraph" in source
         trace.cleanup()
+
+
+class TestSplineModeHeuristic:
+    """Unit tests for the neato spline-mode degradation heuristic.
+
+    Regression for the dense-graph spline-routing blowup (convnextv2_huge:
+    785 nodes but high edge density timed out at 120s under -Gsplines=true).
+    The heuristic must keep pretty splines for small/sparse graphs (the common
+    case) and degrade to straight lines for large OR edge-dense graphs.
+    """
+
+    @pytest.mark.smoke
+    def test_small_sparse_graph_keeps_splines(self) -> None:
+        """A small, sparse (sequential) graph keeps curved splines."""
+
+        # ~1.0 edges/node — a plain CNN/transformer chain.
+        assert _choose_spline_mode(num_nodes=200, num_edges=210) == "true"
+        assert _choose_spline_mode(num_nodes=50, num_edges=49) == "true"
+        # Just under the node ceiling and sparse -> still pretty.
+        assert _choose_spline_mode(num_nodes=600, num_edges=650) == "true"
+
+    @pytest.mark.smoke
+    def test_repro_models_all_degrade_to_line(self) -> None:
+        """The three real repro graphs (real node/edge counts) all use line.
+
+        Calibration anchors (2026-06-20). These MUST NOT regress to "true":
+          convnextv2_huge      785 nodes /  928 edges (node-count gate)
+          smp_Unet_densenet201 772 nodes / 2578 edges (node-count + density gate)
+          maxvit_xlarge_tf_512 2359 nodes / 2598 edges (node-count gate)
+        """
+
+        assert _choose_spline_mode(num_nodes=785, num_edges=928) == "line"
+        assert _choose_spline_mode(num_nodes=772, num_edges=2578) == "line"
+        assert _choose_spline_mode(num_nodes=2359, num_edges=2598) == "line"
+
+    @pytest.mark.smoke
+    def test_dense_midsize_graph_degrades_to_line(self) -> None:
+        """An edge-dense mid-size graph (below the node ceiling) uses line.
+
+        This guards the density gate independently of the node-count gate: a
+        DenseNet-style fan-out at ~500 nodes is too crossing-heavy for splines.
+        """
+
+        # 500 nodes, ratio 1.8 (> density ratio) -> "line".
+        assert _choose_spline_mode(num_nodes=500, num_edges=900) == "line"
+
+    @pytest.mark.smoke
+    def test_tiny_dense_graph_keeps_splines(self) -> None:
+        """A tiny graph keeps splines even when proportionally dense.
+
+        Below the density-floor node count, crossing search is cheap, so a
+        small densely-connected graph should stay pretty.
+        """
+
+        assert _choose_spline_mode(num_nodes=100, num_edges=300) == "true"
+
+
+class TestRtreeRescale:
+    """Unit tests for the rtree-overflow coordinate down-scaling mitigation.
+
+    Regression for maxvit_xlarge_tf_512: a 2747-node @512px layout overflowed
+    neato's rtree coordinate range ("area too large for rtree"). We rescale the
+    pinned coordinates so the canvas fits, preserving geometry.
+    """
+
+    @pytest.mark.smoke
+    def test_below_ceiling_returns_none(self) -> None:
+        """A layout already within range needs no rescale."""
+
+        dot = 'a [pos="100,200!" width=1.0 height=0.5]'
+        assert _rescale_dot_for_rtree(dot, ceiling=28000.0) is None
+
+    @pytest.mark.smoke
+    def test_over_ceiling_scales_uniformly(self) -> None:
+        """An over-range layout is shrunk so max coord == ceiling, preserving ratio."""
+
+        dot = 'a [pos="50000,10000!" width=2.0 height=1.0]\nsubgraph c { bb="0,0,50000,10000" }'
+        out = _rescale_dot_for_rtree(dot, ceiling=28000.0)
+        assert out is not None
+        coords = [
+            (float(m.group(1)), float(m.group(2)))
+            for m in re.finditer(r'pos="(-?[\d.]+),(-?[\d.]+)!"', out)
+        ]
+        max_coord = max(max(abs(x), abs(y)) for x, y in coords)
+        assert max_coord <= 28000.0 + 1e-3
+        # Uniform scale: the x/y ratio (5:1) is preserved.
+        x, y = coords[0]
+        assert abs(x / y - 5.0) < 1e-6
+        # bb box and node dims are scaled too.
+        assert 'bb="0.0,0.0,28000.0,5600.0"' in out
+        assert "width=1.1200" in out
 
 
 class TestDotThresholdBenchmark:
