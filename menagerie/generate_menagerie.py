@@ -1259,24 +1259,24 @@ def instantiate_model(row: CatalogRow) -> Any:
         return CLASSICS[row.name]["build"]()
 
     namespace = import_namespace(row)
-    builtins = {
-        "__import__": __import__,
-        "dict": dict,
-        "getattr": getattr,
-        "len": len,
-        "list": list,
-        "range": range,
-        "set": set,
-        "tuple": tuple,
-    }
-    globals_dict = {"__builtins__": builtins, **namespace}
+    # Recipes are our own audited catalog code, and __import__ is already permitted (so a restricted
+    # builtins set never actually sandboxed anything -- os/subprocess are reachable via import). The
+    # 8-entry whitelist silently broke ~2838 recipes that legitimately need type() class factories,
+    # `class` statements (__build_class__), setattr/super, and exec (JSON-encoded multi-line reimpls),
+    # all failing with "NameError: name 'type' is not defined". Expose the full builtins.
+    builtins = dict(vars(__import__("builtins")))
+    # __name__='__main__' so type()-built classes inherit __module__ (else torchlens trace hits
+    # AttributeError('__module__') on module-less dynamic classes -- the ignore-input wrapper pattern).
+    globals_dict = {"__builtins__": builtins, "__name__": "__main__", **namespace}
     constructor_call = row.constructor_call.strip()
     if ";" in constructor_call or constructor_call.startswith(("import ", "from ")):
-        locals_dict = dict(namespace)
-        exec(constructor_call, globals_dict, locals_dict)  # noqa: S102
+        # Single namespace (globals IS locals): recipe-level imports + names are visible inside
+        # lambdas/classes the recipe defines (separate locals left them unresolved -> "name 'nn' is
+        # not defined" when the wrapper's forward lambda ran during tracing).
+        exec(constructor_call, globals_dict)  # noqa: S102
         for output_name in ("model", "net", "module"):
-            if output_name in locals_dict:
-                return locals_dict[output_name]
+            if output_name in globals_dict:
+                return globals_dict[output_name]
         raise ValueError("statement recipe did not assign a `model`, `net`, or `module` variable")
     return eval(constructor_call, globals_dict, namespace)  # noqa: S307
 
