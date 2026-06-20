@@ -2148,7 +2148,7 @@
     ],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@04186ffcf569cadbecc92b2660e4c1cf3dfca315#egg=torchlens",
       "CoLT5-attention==0.11.1",
       "Jinja2==3.1.6",
       "Mako==1.3.12",

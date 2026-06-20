@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1594,16 +1595,31 @@ def render_with_timeout(
         child_env = dict(os.environ)
         for key in ("TMPDIR", "TEMP", "TMP"):
             child_env[key] = str(tmp_dir)
+    # Run the worker in its OWN session/process group so that on timeout we can
+    # kill the entire group. The worker spawns graphviz children (``dot`` /
+    # ``neato``) for layout; ``subprocess.run``'s timeout only kills the direct
+    # child, orphaning those grandchildren -- they then reparent to init and can
+    # run for hours on pathologically dense graphs (load runaway). ``killpg``
+    # reaps the whole tree so a rerun is always safe and self-cleaning.
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=child_env,
+        start_new_session=True,
+    )
     try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            env=child_env,
-        )
+        stdout, stderr = proc.communicate(timeout=timeout_sec)
     except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
         return RenderResult(
             row.name,
             row.model_id,
@@ -1614,6 +1630,7 @@ def render_with_timeout(
             plan.cluster_key,
             f"timed out after {timeout_sec:.1f}s",
         )
+    completed = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
         return RenderResult(
