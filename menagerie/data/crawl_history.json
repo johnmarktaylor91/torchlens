@@ -1,28 +1,59 @@
 {
-  "last_exhaustive_crawl": "2026-06-18",
-  "guidance": "New discovery sweeps should PRIORITIZE architecture families first published AFTER last_exhaustive_crawl (focus on big-conference / journal / arXiv output since that date) while remaining free to surface anything missed in ANY earlier era, language, or field. Update this file (add a crawls[] entry and bump last_exhaustive_crawl) at the end of every exhaustive sweep. See ../DISCOVER_MODELS.md for the sweep prompt and ../HARVEST_SOURCES.md for the running list of hubs/zoos/prior-art datasets to draw on (we aim to be a superset of their union). DEDUP via TorchLens graph_shape_hash (architecture fingerprint; see ../HARVEST_SOURCES.md + dedup_report.py). PRIOR-ART ALREADY HARVESTED (2026-06-18): Younger (2406.15132) and Neural Architecture Retrieval (2307.07919) were diffed and added ZERO new named families (their space is already subsumed) -> do NOT re-harvest them expecting gains; ONNX Model Zoo + GitGraph (TF1-era) + PapersWithCode added ~104 (mostly the pre-2014 / ONNX-only / bespoke-repo long tail that library-only sourcing misses). LESSON: pair library enumeration with hub + prior-art + non-library-repo harvesting; library-only sourcing is the #1 blind spot.",
-  "current_totals": {
-    "distinct_models": 10742,
-    "families_normalized": 3746,
-    "hand_built_classics": 312,
-    "verified_renderable": 6127
-  },
-  "crawls": [
-    {
-      "date": "2026-06-18",
-      "type": "exhaustive multi-axis sweep + adversarial red-team",
-      "axes": [
-        "era (1940s cybernetics -> 2026 frontier)",
-        "domain (vision, NLP, speech, RL/control, graph, time-series, recommender, scientific ML, ...)",
-        "paradigm (logic/threshold, PDP/connectionist, neuro-symbolic, vector-symbolic, fuzzy, spiking, evolutionary, ...)",
-        "applied-modern (recommender/CTR/tabular, neural operators, implicit-neural-reps, neural processes)",
-        "orphan-corners (statistical-physics-of-learning, hyperbolic, photonic/memristor, DSP, EEG/BCI, ...)",
-        "adversarial missed-family hunt (cross-lab hostile auditors, non-English literature explicitly included)"
-      ],
-      "method": "Cross-lab (Claude Opus + OpenAI Codex) sweeps driven to a family-level clean-zero, then a hostile adversarial red-team that still surfaced ~150 more genuine families (folded in: 103 catalog-adds + 58 hand-built classics).",
-      "languages_covered": ["English", "Chinese", "Japanese", "Russian/Soviet", "German", "French", "Korean", "other"],
-      "result": {"distinct_models": 10742, "families_normalized": 3746, "classics_built": 312, "verified_renderable": 6127},
-      "notes": "Most comprehensive sweep to date. NEXT sweep should focus on architectures published after 2026-06-18, and ideally re-run with a more capable model (a smarter auditor finds more)."
-    }
-  ]
+    "last_exhaustive_crawl": "2026-06-18",
+    "guidance": "New discovery sweeps should PRIORITIZE architecture families first published AFTER last_exhaustive_crawl (focus on big-conference / journal / arXiv output since that date) while remaining free to surface anything missed in ANY earlier era, language, or field. Update this file (add a crawls[] entry and bump last_exhaustive_crawl) at the end of every exhaustive sweep. See ../DISCOVER_MODELS.md for the sweep prompt and ../HARVEST_SOURCES.md for the running list of hubs/zoos/prior-art datasets to draw on (we aim to be a superset of their union). DEDUP via TorchLens graph_shape_hash (architecture fingerprint; see ../HARVEST_SOURCES.md + dedup_report.py). PRIOR-ART ALREADY HARVESTED (2026-06-18): Younger (2406.15132) and Neural Architecture Retrieval (2307.07919) were diffed and added ZERO new named families (their space is already subsumed) -> do NOT re-harvest them expecting gains; ONNX Model Zoo + GitGraph (TF1-era) + PapersWithCode added ~104 (mostly the pre-2014 / ONNX-only / bespoke-repo long tail that library-only sourcing misses). LESSON: pair library enumeration with hub + prior-art + non-library-repo harvesting; library-only sourcing is the #1 blind spot.",
+    "current_totals": {
+        "distinct_models": 10742,
+        "families_normalized": 3746,
+        "hand_built_classics": 312,
+        "verified_renderable": 6127
+    },
+    "crawls": [
+        {
+            "date": "2026-06-18",
+            "type": "exhaustive multi-axis sweep + adversarial red-team",
+            "axes": [
+                "era (1940s cybernetics -> 2026 frontier)",
+                "domain (vision, NLP, speech, RL/control, graph, time-series, recommender, scientific ML, ...)",
+                "paradigm (logic/threshold, PDP/connectionist, neuro-symbolic, vector-symbolic, fuzzy, spiking, evolutionary, ...)",
+                "applied-modern (recommender/CTR/tabular, neural operators, implicit-neural-reps, neural processes)",
+                "orphan-corners (statistical-physics-of-learning, hyperbolic, photonic/memristor, DSP, EEG/BCI, ...)",
+                "adversarial missed-family hunt (cross-lab hostile auditors, non-English literature explicitly included)"
+            ],
+            "method": "Cross-lab (Claude Opus + OpenAI Codex) sweeps driven to a family-level clean-zero, then a hostile adversarial red-team that still surfaced ~150 more genuine families (folded in: 103 catalog-adds + 58 hand-built classics).",
+            "languages_covered": [
+                "English",
+                "Chinese",
+                "Japanese",
+                "Russian/Soviet",
+                "German",
+                "French",
+                "Korean",
+                "other"
+            ],
+            "result": {
+                "distinct_models": 10742,
+                "families_normalized": 3746,
+                "classics_built": 312,
+                "verified_renderable": 6127
+            },
+            "notes": "Most comprehensive sweep to date. NEXT sweep should focus on architectures published after 2026-06-18, and ideally re-run with a more capable model (a smarter auditor finds more)."
+        },
+        {
+            "date": "2026-06-21",
+            "type": "framework-provenance + broad all-domain conference-proceedings completeness sweep (part of 100%-render sprint)",
+            "status": "in_progress",
+            "axes": [
+                "framework provenance: architectures born in pre/non-PyTorch frameworks (Caffe, Torch7/Lua, Theano/Lasagne/DyNet, MatConvNet, Chainer, CNTK, MXNet/Gluon, Neon, darknet, DL4J, PaddlePaddle-v1, TensorFlow/TF-Slim/Sonnet/Magenta)",
+                "broad all-domain conference-proceedings sweep (no topical bias): vision, NLP, generative, speech/audio, RL+control+world-models, graph/geometric, multimodal, science-ML, tabular/time-series, efficiency/NAS",
+                "venues NeurIPS/ICML/ICLR/CVPR/ICCV/ECCV/BMVC/ACL/EMNLP/NAACL/AAAI/IJCAI/SIGGRAPH/Interspeech/ICASSP/KDD, ~2012-2024"
+            ],
+            "method": "12 parallel web-enabled codex sweeps; each grep-checks the existing catalog first and reimplements only notable + genuinely-missing architectures as classics/.",
+            "result_partial": {
+                "framework_sweep_new": 28,
+                "framework_sweep_already_covered": 72,
+                "broad_domain_sweeps": "in progress"
+            },
+            "notes": "Framework-provenance axis complete: prior coverage strong (~72 already-covered), 28 genuine new (NTM, GQN, Graph Nets, Stacked Hourglass, Slot Attention, IODINE, PSGNet, MTCNN, R-FCN, waifu2x, Magenta suite, ...). Broad-domain proceedings sweeps still running; finalize totals + bump last_exhaustive_crawl to 2026-06-21 at sprint end."
+        }
+    ]
 }
