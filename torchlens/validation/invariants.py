@@ -2709,9 +2709,22 @@ def _check_module_hierarchy(ml: "Trace") -> None:
 def _check_param_xrefs(ml: "Trace") -> None:
     """Check J: Param <-> Layer <-> Module cross-references.
 
+    Precondition contract: this torch-native check asserts deep reciprocal
+    references only for parameters that are actually used by at least one
+    operation in the captured graph. Unused or skipped-module parameters may
+    legitimately have no usage lists. ``Param.num_uses_by_ops`` is the
+    pass-qualified usage source of truth for reciprocal usage checks; the
+    stored ``num_calls`` field is compatibility metadata and is not used as the
+    invariant oracle. Layer-level aggregate checks deduplicate by no-pass
+    ``layer_label`` to match the trace aggregate semantics for recurrent and
+    weight-shared parameters.
+
     Validates:
     - Param.used_by_ops labels are valid op labels.
     - Param.used_by_layers labels are valid layer labels.
+    - Used Param usage lists reciprocate through Op/Layer ``_param_logs``.
+    - ``layers_with_params`` layer membership matches Param.used_by_layers.
+    - Co-parent params are symmetric and resolve.
     - uses_params == True implies _param_logs is non-empty.
     - layers_with_params values are valid layer labels.
     """
@@ -2742,6 +2755,11 @@ def _check_param_xrefs(ml: "Trace") -> None:
         except (KeyError, IndexError):
             pass  # Module was never invoked during forward pass
 
+        if param.num_uses_by_ops == 0 and not param.used_by_layers:
+            continue
+        _check_param_usage_reciprocal_links(ml, param, name)
+        _check_param_co_parent_links(ml, param, name)
+
     # uses_params forward check
     for lpl in ml.layer_list:
         if lpl.uses_params:
@@ -2759,6 +2777,230 @@ def _check_param_xrefs(ml: "Trace") -> None:
                     name,
                     f"layers_with_params['{param_addr}'] contains '{lbl}' not in layer_labels",
                 )
+
+    _check_layers_with_params_matches_param_usage(ml, name)
+    _check_layer_param_aggregate_dedup(ml, name)
+
+
+def _check_param_usage_reciprocal_links(ml: "Trace", param: object, name: str) -> None:
+    """Check Param usage lists have reciprocal Op and Layer references.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    param:
+        Param record whose usage references should be checked.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a used operation or layer does not point back to ``param``.
+    """
+
+    address = getattr(param, "address", "<unknown>")
+    for op_label in getattr(param, "used_by_ops", ()):
+        op = ml[op_label]
+        if not _param_log_list_contains_param(getattr(op, "_param_logs", ()), param):
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' used_by_ops contains '{op_label}' but that Op does "
+                "not list the Param in _param_logs",
+            )
+    for layer_label in getattr(param, "used_by_layers", ()):
+        layer = ml.layer_logs[layer_label]
+        if not _param_log_list_contains_param(getattr(layer, "_param_logs", ()), param):
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' used_by_layers contains '{layer_label}' but that "
+                "Layer does not list the Param in _param_logs",
+            )
+
+
+def _check_param_co_parent_links(ml: "Trace", param: object, name: str) -> None:
+    """Check co-parent parameter links resolve and are symmetric.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    param:
+        Param record whose co-parent links should be checked.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a co-parent address is unresolved or not reciprocal.
+    """
+
+    address = getattr(param, "address", "<unknown>")
+    for co_parent_address in getattr(param, "co_parent_params", ()) or ():
+        co_parent = _param_by_address(ml, co_parent_address)
+        if co_parent is None:
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' co_parent_params contains unresolved {co_parent_address!r}",
+            )
+        if address not in getattr(co_parent, "co_parent_params", ()):
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' links co-parent '{co_parent_address}' but the "
+                "reverse link is missing",
+            )
+
+
+def _check_layers_with_params_matches_param_usage(ml: "Trace", name: str) -> None:
+    """Check ``layers_with_params`` matches Param usage at the layer boundary.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If trace-level layer-with-param groups drift from Param usage lists.
+    """
+
+    expected_layer_union: set[str] = set()
+    for param in ml.param_logs:
+        if getattr(param, "num_uses_by_ops", 0) == 0 and not getattr(param, "used_by_layers", ()):
+            continue
+        expected_layer_union.update(getattr(param, "used_by_layers", ()) or ())
+    actual_layer_union: set[str] = set()
+    for group_key, layer_labels in getattr(ml, "layers_with_params", {}).items():
+        for layer_label in layer_labels:
+            actual_layer_union.add(layer_label)
+            layer = ml.layer_logs[layer_label]
+            if not getattr(layer, "_param_logs", ()):
+                raise MetadataInvariantError(
+                    name,
+                    f"layers_with_params[{group_key!r}] contains '{layer_label}' but the "
+                    "Layer has no _param_logs",
+                )
+    if actual_layer_union != expected_layer_union:
+        raise MetadataInvariantError(
+            name,
+            f"layers_with_params layer union {actual_layer_union!r} does not match "
+            f"Param.used_by_layers union {expected_layer_union!r}",
+        )
+
+
+def _check_layer_param_aggregate_dedup(ml: "Trace", name: str) -> None:
+    """Check trace param aggregate counts with layer-label deduplication.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing layer and parameter metadata.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If deduplicated layer parameter aggregates drift from trace totals.
+    """
+
+    seen_layer_labels: set[str] = set()
+    total_params = 0
+    trainable_params = 0
+    frozen_params = 0
+    layers_with_params = 0
+    for layer in ml.layer_list:
+        if layer.layer_label in seen_layer_labels:
+            continue
+        seen_layer_labels.add(layer.layer_label)
+        if not getattr(layer, "_param_logs", ()):
+            continue
+        layers_with_params += 1
+        total_params += getattr(layer, "num_params", 0)
+        trainable_params += getattr(layer, "num_params_trainable", 0)
+        frozen_params += getattr(layer, "num_params_frozen", 0)
+
+    if total_params != getattr(ml, "num_params", 0):
+        raise MetadataInvariantError(
+            name,
+            f"deduped layer param total {total_params} != trace.num_params={ml.num_params}",
+        )
+    if trainable_params != getattr(ml, "num_params_trainable", 0):
+        raise MetadataInvariantError(
+            name,
+            "deduped trainable param total "
+            f"{trainable_params} != trace.num_params_trainable={ml.num_params_trainable}",
+        )
+    if frozen_params != getattr(ml, "num_params_frozen", 0):
+        raise MetadataInvariantError(
+            name,
+            f"deduped frozen param total {frozen_params} != "
+            f"trace.num_params_frozen={ml.num_params_frozen}",
+        )
+    if layers_with_params != getattr(ml, "num_layers_with_params", 0):
+        raise MetadataInvariantError(
+            name,
+            f"deduped layers_with_params count {layers_with_params} != "
+            f"trace.num_layers_with_params={ml.num_layers_with_params}",
+        )
+
+
+def _param_log_list_contains_param(param_logs: object, param: object) -> bool:
+    """Return whether a parameter log collection contains ``param`` by identity.
+
+    Parameters
+    ----------
+    param_logs:
+        Iterable of Param records.
+    param:
+        Param record to look for.
+
+    Returns
+    -------
+    bool
+        ``True`` when any log has the same address or barcode as ``param``.
+    """
+
+    address = getattr(param, "address", None)
+    barcode = getattr(param, "barcode", None)
+    return any(
+        candidate is param
+        or (
+            address is not None
+            and getattr(candidate, "address", None) == address
+            and getattr(candidate, "barcode", None) == barcode
+        )
+        for candidate in param_logs or ()
+    )
+
+
+def _param_by_address(ml: "Trace", address: str) -> object | None:
+    """Return a Param by primary or alias address.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    address:
+        Primary or alias parameter address.
+
+    Returns
+    -------
+    object | None
+        Matching Param record when present.
+    """
+
+    for param in ml.param_logs:
+        if getattr(param, "address", None) == address:
+            return param
+        if address in (getattr(param, "all_addresses", None) or ()):
+            return param
+    return None
 
 
 # ---------------------------------------------------------------------------

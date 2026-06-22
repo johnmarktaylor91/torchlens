@@ -1219,6 +1219,52 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
         log.cleanup()
 
 
+def test_param_deep_xref_rejects_missing_op_back_reference() -> None:
+    """Param usage cannot point at an Op that no longer lists that Param."""
+
+    log = _make_clean_log()
+    try:
+        param = next(param for param in log.param_logs if param.used_by_ops)
+        op = log[param.used_by_ops[0]]
+        assert any(candidate.address == param.address for candidate in op._param_logs)
+
+        op._param_logs = [
+            candidate for candidate in op._param_logs if candidate.address != param.address
+        ]
+
+        with pytest.raises(MetadataInvariantError, match="does not list the Param"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_param_deep_xref_preconditions_reach_real_trace() -> None:
+    """Param deep-xref checks inspect populated reciprocal links on a real trace."""
+
+    log = _make_clean_log()
+    try:
+        used_params = [param for param in log.param_logs if param.num_uses_by_ops > 0]
+        assert used_params
+        assert any(param.used_by_layers for param in used_params)
+        assert log.layers_with_params
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
+    """Recurrent/shared params pass with pass-qualified uses and deduped aggregates."""
+
+    log = _make_recurrent_log()
+    try:
+        recurrent_param = next(param for param in log.param_logs if param.num_uses_by_ops > 1)
+        assert recurrent_param.num_uses_by_ops == len(recurrent_param.used_by_ops)
+        assert len(recurrent_param.used_by_layers) == 1
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
 def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
     """Plain capture compute ops must retain populated func_call_id metadata."""
 
