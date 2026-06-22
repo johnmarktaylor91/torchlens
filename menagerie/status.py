@@ -207,14 +207,20 @@ def catalog_statuses(catalog_db: Path = CATALOG_DB) -> dict[str, CatalogStatus]:
         Status metadata keyed by stable model ID.
     """
 
-    jsonl_by_key = _jsonl_status_by_key()
+    rows = _catalog_rows(catalog_db)
+    has_db_status_columns = bool(rows) and {
+        "input_is_real",
+        "verification_expectation",
+        "quarantine",
+    }.issubset(set(rows[0].keys()))
+    jsonl_by_key = {} if has_db_status_columns else _jsonl_status_by_key()
     statuses: dict[str, CatalogStatus] = {}
-    for row in _catalog_rows(catalog_db):
+    for row in rows:
         key = (str(row["name"]), str(row["zoo"]), str(row["variant"]))
         source_status = jsonl_by_key.get(key)
         db_status = _status_from_db_row(row)
         notes_status = _status_from_notes(str(row["stable_id"]), str(row["notes"]))
-        if source_status is None:
+        if has_db_status_columns or source_status is None:
             statuses[str(row["stable_id"])] = _merge_status(db_status, notes_status)
             continue
         verification_expectation = source_status.verification_expectation

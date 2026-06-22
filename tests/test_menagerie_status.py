@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from menagerie.catalog import CatalogRow, write_catalog
 from menagerie.ledger import VerificationRun, append_verification_run, connect
+import menagerie.status as status_module
 from menagerie.status import build_status, main
 from menagerie.tools.distinct_report import build_distinct_report
 
@@ -190,6 +193,46 @@ def test_status_funnel_tiers_are_consistent(tmp_path: Path) -> None:
         <= status.expected_models
         <= status.total_catalog_models
     )
+
+
+def test_status_prefers_models_table_status_columns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Status reads typed flags from the models table without requiring JSONL fallback."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [
+            _row(
+                model_id=1,
+                display_index=1,
+                stable_id="m1",
+                input_is_real=False,
+                verification_expectation="deferred",
+                quarantine=True,
+            ),
+        ],
+    )
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+
+    def fail_jsonl_fallback() -> object:
+        """Raise if the compatibility JSONL fallback is unexpectedly used."""
+
+        raise AssertionError("status should read typed flags from models table")
+
+    monkeypatch.setattr(status_module, "_jsonl_status_by_key", fail_jsonl_fallback)
+
+    status = build_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+    )
+
+    assert status.expected_models == 0
+    assert status.deferred_models == 1
+    assert status.quarantined_models == 1
 
 
 def test_distinct_count_collapses_duplicate_graph_shape_hashes(tmp_path: Path) -> None:
