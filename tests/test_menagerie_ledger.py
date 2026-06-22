@@ -202,8 +202,8 @@ def test_update_and_delete_are_rejected_by_trigger(tmp_path: Path) -> None:
         conn.execute("DELETE FROM verification_runs")
 
 
-def test_current_verification_returns_latest_forward_per_recipe(tmp_path: Path) -> None:
-    """The current view keeps the latest forward row for each stable recipe."""
+def test_current_verification_returns_latest_forward_per_stable_id(tmp_path: Path) -> None:
+    """The current view keeps the latest forward row for each stable model."""
 
     conn = connect(tmp_path / "verification.db")
     append_verification_run(
@@ -286,6 +286,18 @@ def test_verified_count_requires_catalog_current_recipe_revision(tmp_path: Path)
     )
 
     assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 1
+
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-stale-rerun",
+            recipe_revision_sha256="recipe-a",
+            graph_shape_hash="shape-a-rerun",
+            finished_at="2026-06-22T00:00:03+00:00",
+        ),
+    )
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 0
 
 
 def test_concurrent_appends_from_two_threads_both_land(tmp_path: Path) -> None:

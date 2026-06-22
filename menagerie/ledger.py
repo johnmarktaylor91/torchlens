@@ -319,7 +319,7 @@ def initialize(conn: sqlite3.Connection) -> None:
             SELECT
                 verification_runs.*,
                 ROW_NUMBER() OVER (
-                    PARTITION BY stable_id, recipe_revision_sha256
+                    PARTITION BY stable_id
                     ORDER BY finished_at DESC, run_id DESC
                 ) AS rn
             FROM verification_runs
