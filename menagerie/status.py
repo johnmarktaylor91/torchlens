@@ -134,7 +134,7 @@ def _catalog_rows(catalog_db: Path) -> list[sqlite3.Row]:
         return list(
             conn.execute(
                 """
-                SELECT stable_id, name, zoo, variant, source, notes
+                SELECT *
                 FROM models
                 ORDER BY model_id
                 """
@@ -196,9 +196,10 @@ def catalog_statuses(catalog_db: Path = CATALOG_DB) -> dict[str, CatalogStatus]:
     for row in _catalog_rows(catalog_db):
         key = (str(row["name"]), str(row["zoo"]), str(row["variant"]))
         source_status = jsonl_by_key.get(key)
+        db_status = _status_from_db_row(row)
         notes_status = _status_from_notes(str(row["stable_id"]), str(row["notes"]))
         if source_status is None:
-            statuses[str(row["stable_id"])] = notes_status
+            statuses[str(row["stable_id"])] = _merge_status(db_status, notes_status)
             continue
         verification_expectation = source_status.verification_expectation
         deferred_reason = source_status.deferred_reason
@@ -213,6 +214,61 @@ def catalog_statuses(catalog_db: Path = CATALOG_DB) -> dict[str, CatalogStatus]:
             deferred_reason=deferred_reason,
         )
     return statuses
+
+
+def _status_from_db_row(row: sqlite3.Row) -> CatalogStatus:
+    """Build status metadata from catalog DB columns when present.
+
+    Parameters
+    ----------
+    row:
+        Catalog database row.
+
+    Returns
+    -------
+    CatalogStatus
+        Status metadata.
+    """
+
+    keys = set(row.keys())
+    return CatalogStatus(
+        stable_id=str(row["stable_id"]),
+        input_is_real=bool(row["input_is_real"]) if "input_is_real" in keys else True,
+        verification_expectation=(
+            str(row["verification_expectation"])
+            if "verification_expectation" in keys
+            else VerificationExpectation.forward_required.value
+        ),
+        quarantine=bool(row["quarantine"]) if "quarantine" in keys else False,
+        deferred_reason="",
+    )
+
+
+def _merge_status(primary: CatalogStatus, notes_status: CatalogStatus) -> CatalogStatus:
+    """Merge DB metadata with deferred markers recovered from notes.
+
+    Parameters
+    ----------
+    primary:
+        Primary status metadata.
+    notes_status:
+        Notes-derived fallback status.
+
+    Returns
+    -------
+    CatalogStatus
+        Merged status metadata.
+    """
+
+    if notes_status.verification_expectation != VerificationExpectation.deferred.value:
+        return primary
+    return CatalogStatus(
+        stable_id=primary.stable_id,
+        input_is_real=primary.input_is_real,
+        verification_expectation=notes_status.verification_expectation,
+        quarantine=primary.quarantine,
+        deferred_reason=notes_status.deferred_reason,
+    )
 
 
 def _status_from_notes(stable_id: str, notes: str) -> CatalogStatus:
