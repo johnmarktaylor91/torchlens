@@ -30,7 +30,7 @@ and raises ``MetadataInvariantError`` on the first failure.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Literal, cast
@@ -815,6 +815,8 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             f"1..{trace.num_backward_passes}",
         )
     valid_pass_indices = set(actual_pass_indices)
+    _check_grad_fn_topology_invariants(trace, name)
+    _check_backward_pass_domain_invariants(trace, name, valid_pass_indices)
     for pass_index, backward_pass in getattr(trace, "backward_pass_logs", {}).items():
         if backward_pass.pass_index != pass_index:
             raise MetadataInvariantError(
@@ -836,6 +838,248 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                     f"{call.call_label} references missing backward pass "
                     f"{call.backward_pass_index}",
                 )
+
+
+def _check_grad_fn_topology_invariants(trace: "Trace", name: str) -> None:
+    """Check backward GradFn relation lists for reciprocal, resolvable links.
+
+    The precondition contract is backward-capture only: callers invoke this
+    helper after proving ``trace.grad_fn_logs`` is populated. Forward-only
+    traces legitimately have no GradFn topology and are skipped by
+    ``_check_backward_graph_invariants`` before this helper is reached.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward GradFn projections.
+    name:
+        Invariant check name to use in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a GradFn relation references a missing node or lacks its reciprocal
+        back-reference.
+    """
+
+    grad_fns_by_label = {
+        grad_fn_handle.label: grad_fn_handle for grad_fn_handle in trace.grad_fn_logs.values()
+    }
+    grad_fn_ids = set(trace.grad_fn_logs)
+    for grad_fn_handle in trace.grad_fn_logs.values():
+        missing_next_ids = [
+            next_id for next_id in grad_fn_handle.next_grad_fn_ids if next_id not in grad_fn_ids
+        ]
+        if missing_next_ids:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label} has next_grad_fn_ids missing from grad_fn_logs: "
+                f"{missing_next_ids!r}",
+            )
+
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "parents",
+            "children",
+            grad_fns_by_label,
+            name,
+        )
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "children",
+            "parents",
+            grad_fns_by_label,
+            name,
+        )
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "siblings",
+            "siblings",
+            grad_fns_by_label,
+            name,
+        )
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "co_parents",
+            "co_parents",
+            grad_fns_by_label,
+            name,
+        )
+
+        for flag_name, relation_name in (
+            ("has_parents", "parents"),
+            ("has_children", "children"),
+            ("has_siblings", "siblings"),
+            ("has_co_parents", "co_parents"),
+        ):
+            if getattr(grad_fn_handle, flag_name) != bool(getattr(grad_fn_handle, relation_name)):
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label} has inconsistent {flag_name}/{relation_name}",
+                )
+
+
+def _check_grad_fn_relation_list(
+    grad_fn_handle: object,
+    relation_name: str,
+    reciprocal_name: str,
+    grad_fns_by_label: Mapping[str, object],
+    name: str,
+) -> None:
+    """Check that one GradFn relation list resolves and reciprocates.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn object whose relation list is being validated.
+    relation_name:
+        Name of the outbound relation list.
+    reciprocal_name:
+        Name of the relation list expected on each target.
+    grad_fns_by_label:
+        Mapping from GradFn label to GradFn object.
+    name:
+        Invariant check name to use in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a relation label is missing or lacks the reciprocal label.
+    """
+
+    source_label = str(getattr(grad_fn_handle, "label"))
+    related_labels = getattr(grad_fn_handle, relation_name)
+    if not isinstance(related_labels, list):
+        raise MetadataInvariantError(
+            name,
+            f"{source_label} has non-list {relation_name}: {related_labels!r}",
+        )
+    for related_label in related_labels:
+        related = grad_fns_by_label.get(related_label)
+        if related is None:
+            raise MetadataInvariantError(
+                name,
+                f"{source_label} {relation_name} references missing GradFn {related_label!r}",
+            )
+        reciprocal_labels = getattr(related, reciprocal_name)
+        if source_label not in reciprocal_labels:
+            raise MetadataInvariantError(
+                name,
+                f"{source_label} {relation_name} references {related_label!r}, but "
+                f"{related_label!r} does not list {source_label!r} in {reciprocal_name}",
+            )
+
+
+def _check_backward_pass_domain_invariants(
+    trace: "Trace",
+    name: str,
+    valid_pass_indices: set[int],
+) -> None:
+    """Check backward-pass domain fields and root coverage.
+
+    The precondition contract is backward-capture only: this helper runs only
+    after ``grad_fn_logs`` and dense ``backward_pass_logs`` have been proven
+    present. It validates projected pass records against the event-domain
+    literals used by the torch backward capture path.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward-pass projections.
+    name:
+        Invariant check name to use in raised errors.
+    valid_pass_indices:
+        Dense set of known backward pass indices.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a BackwardPass field is outside its recorded domain or references a
+        missing pass/GradFn.
+    """
+
+    valid_triggers = {
+        "autograd_backward",
+        "autograd_grad",
+        "backward",
+        "implicit",
+        "recording_backward",
+        "replay",
+    }
+    valid_statuses = {"error", "ok"}
+    global_root_ids = set(trace.backward_root_grad_fn_object_ids)
+    roots_seen_by_pass: set[int] = set()
+    backward_pass_logs = getattr(trace, "backward_pass_logs", {})
+
+    for pass_index, backward_pass in backward_pass_logs.items():
+        if backward_pass.trigger not in valid_triggers:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid trigger {backward_pass.trigger!r}",
+            )
+        if backward_pass.status not in valid_statuses:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid status {backward_pass.status!r}",
+            )
+        if backward_pass.save_grads_policy is not None and not isinstance(
+            backward_pass.save_grads_policy,
+            str,
+        ):
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid save_grads_policy "
+                f"{backward_pass.save_grads_policy!r}",
+            )
+        if backward_pass.duration is not None and float(backward_pass.duration) < 0:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has negative duration {backward_pass.duration!r}",
+            )
+        if backward_pass.peak_memory is not None and backward_pass.peak_memory < 0:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has negative peak_memory {backward_pass.peak_memory!r}",
+            )
+        coverage = backward_pass.order_attribution_coverage
+        if coverage is not None and not 0.0 <= coverage <= 1.0:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid order_attribution_coverage {coverage!r}",
+            )
+        origin_pass = backward_pass.origin_backward_pass
+        if origin_pass is not None and origin_pass not in valid_pass_indices:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} references missing origin_backward_pass "
+                f"{origin_pass!r}",
+            )
+
+        missing_root_ids = [
+            root_id
+            for root_id in backward_pass.root_grad_fn_ids
+            if root_id not in trace.grad_fn_logs
+        ]
+        if missing_root_ids:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} root_grad_fn_ids are missing from grad_fn_logs: "
+                f"{missing_root_ids!r}",
+            )
+        roots_seen_by_pass.update(backward_pass.root_grad_fn_ids)
+
+    if len(backward_pass_logs) == 1:
+        pass_index, backward_pass = next(iter(backward_pass_logs.items()))
+        if set(backward_pass.root_grad_fn_ids) != global_root_ids:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} root_grad_fn_ids do not match trace roots",
+            )
+    elif roots_seen_by_pass != global_root_ids:
+        raise MetadataInvariantError(
+            name,
+            "BackwardPass root_grad_fn_ids union does not match trace roots",
+        )
 
 
 def _layer_postdates_all_backward_triggers(trace: "Trace", layer: "Layer | Op") -> bool:
@@ -1775,12 +2019,18 @@ def _check_live_payload_metadata(
             f"{label} {payload_name} dtype metadata {dtype!r} != payload dtype {actual_dtype!r}",
         )
     actual_memory = _payload_memory(payload)
-    if actual_memory is not None and memory is not None and int(memory) != actual_memory:
-        raise MetadataInvariantError(
-            name,
-            f"{label} {payload_name} memory metadata {int(memory)!r} != payload memory "
-            f"{actual_memory!r}",
-        )
+    if actual_memory is not None and memory is not None:
+        if not isinstance(memory, int):
+            raise MetadataInvariantError(
+                name,
+                f"{label} {payload_name} memory metadata {memory!r} is not an integer",
+            )
+        if memory != actual_memory:
+            raise MetadataInvariantError(
+                name,
+                f"{label} {payload_name} memory metadata {memory!r} != payload memory "
+                f"{actual_memory!r}",
+            )
 
 
 def _payload_shape(payload: object) -> tuple[int, ...] | None:
@@ -3426,6 +3676,8 @@ def _param_log_list_contains_param(param_logs: object, param: object) -> bool:
 
     address = getattr(param, "address", None)
     barcode = getattr(param, "barcode", None)
+    if not isinstance(param_logs, Iterable):
+        return False
     return any(
         candidate is param
         or (

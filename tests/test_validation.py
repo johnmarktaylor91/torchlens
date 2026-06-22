@@ -1420,6 +1420,68 @@ def test_backward_invariants_with_intervening() -> None:
     log.cleanup()
 
 
+def test_grad_fn_topology_rejects_missing_reverse_child_link() -> None:
+    """Backward GradFn parent/child links must be bidirectional."""
+
+    log = _make_backward_log()
+    try:
+        parent = next(grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.children)
+        child = next(
+            grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.label == parent.children[0]
+        )
+        child.parents = [label for label in child.parents if label != parent.label]
+
+        with pytest.raises(MetadataInvariantError, match="does not list"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backward_pass_domain_rejects_invalid_status() -> None:
+    """BackwardPass domain fields reject values outside event enums."""
+
+    log = _make_backward_log()
+    try:
+        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass.status = "finished"
+
+        with pytest.raises(MetadataInvariantError, match="invalid status"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backward_pass_domain_rejects_root_mismatch() -> None:
+    """BackwardPass roots must agree with trace-level roots for the pass."""
+
+    log = _make_backward_log()
+    try:
+        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass.root_grad_fn_ids = []
+
+        with pytest.raises(MetadataInvariantError, match="root_grad_fn_ids do not match"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
+    """Phase-D backward checks run on a real backward-captured trace."""
+
+    log = _make_backward_log()
+    try:
+        assert log.has_backward_pass
+        assert log.grad_fn_logs
+        assert log.backward_pass_logs
+        assert any(
+            grad_fn.children or grad_fn.parents or grad_fn.next_grad_fn_ids
+            for grad_fn in log.grad_fn_logs.values()
+        )
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
 def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> None:
     """Mid-forward backward triggers exempt only later-created forward layers."""
 
