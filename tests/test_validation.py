@@ -829,12 +829,35 @@ class _MidForwardGradModel(nn.Module):
         return self.fc2(hidden + adapted_bias)
 
 
+class _BufferWriteValidationModel(nn.Module):
+    """Model with one registered buffer read and write."""
+
+    def __init__(self) -> None:
+        """Initialize the registered buffer."""
+
+        super().__init__()
+        self.register_buffer("state", torch.zeros(2))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Read, mutate, and consume a registered buffer."""
+
+        y = self.state + x
+        self.state.copy_(y)
+        return self.state * x
+
+
 def _make_clean_log() -> Trace:
     """Return a Trace with all outs and metadata for a simple FF model."""
     from torchlens import trace as trace_fn
 
     model = _SimpleFF()
     return trace_fn(model, torch.randn(2, 5), random_seed=42)
+
+
+def _make_buffer_write_log() -> Trace:
+    """Return a trace with static and write buffer versions."""
+
+    return trace_fn(_BufferWriteValidationModel(), torch.ones(2), save_arg_values=True)
 
 
 def _make_root_only_log() -> Trace:
@@ -1022,6 +1045,94 @@ def test_backend_neutral_accessor_refs_pass_healthy_torch_trace() -> None:
         assert any(getattr(record, "resolver_status", None) == "resolved" for record in records)
         assert any(getattr(record, "dtype_ref", None) is not None for record in records)
         assert any(getattr(record, "device_ref", None) is not None for record in records)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_buffer_static_version_invariant_rejects_empty_versions() -> None:
+    """Buffer static-version contract rejects an accessor entity with no versions."""
+
+    log = _make_buffer_write_log()
+    try:
+        buffer = next(iter(log.buffers))
+        assert buffer.versions
+
+        buffer.versions = []
+
+        with pytest.raises(MetadataInvariantError, match="has no version nodes"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_write_version_invariant_rejects_sparse_pass_set() -> None:
+    """Buffer write-version contract rejects non-dense buffer_pass values."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.buffer_pass == 2
+
+        write_version.buffer_pass = 3
+
+        with pytest.raises(MetadataInvariantError, match="dense as a set"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
+    """Buffer write-version contract rejects populated sources that do not resolve."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.buffer_source is not None
+
+        write_version.buffer_source = "missing_raw_label"
+
+        with pytest.raises(MetadataInvariantError, match="unresolved buffer_source"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
+    """Replay-validated contract rejects a write version without saved source args."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.buffer_source is not None
+        assert write_version.saved_args
+
+        write_version.buffer_replay_validated = True
+        write_version.saved_args = []
+
+        with pytest.raises(MetadataInvariantError, match="saved source argument"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_integrity_preconditions_reach_real_trace() -> None:
+    """Buffer integrity contracts fire on static and write versions in a real trace."""
+
+    log = _make_buffer_write_log()
+    try:
+        buffer = next(iter(log.buffers))
+        assert buffer.versions
+        assert any(version.buffer_write_kind is None for version in buffer.versions)
+        assert any(version.buffer_write_kind is not None for version in buffer.versions)
+        assert {version.buffer_pass for version in buffer.versions} == {1, 2}
+        assert any(version.buffer_source is not None for version in buffer.versions)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
