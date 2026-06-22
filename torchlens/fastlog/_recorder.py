@@ -351,6 +351,11 @@ class Recorder:
 
         if not self._entered or self._exited or self._state is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
+        if self._failed:
+            raise RecorderStateError(
+                "Recorder is in a failed state after a forward exception; "
+                "create a new Recorder for further captures."
+            )
         output = self._run_unified_capture(input_args, input_kwargs, sample_id=sample_id)
         self._next_pass_index += 1
         return output
@@ -462,7 +467,11 @@ class Recorder:
         if self._state is None or self._capture_events is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
         self._state.abort_storage(str(exc))
-        failed_events = getattr(trace, "_failed_fastlog_capture_events", trace.capture_events)
+        failed_events = getattr(trace, "_failed_fastlog_capture_events", None)
+        if failed_events is None:
+            raise RecorderStateError(
+                "failed-capture event snapshot missing; cannot build a faithful partial"
+            )
         combined_events = CaptureEvents()
         combined_events.extend(self._capture_events.op_events)
         if failed_events is not self._capture_events:

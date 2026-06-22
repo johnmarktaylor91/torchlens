@@ -12,6 +12,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as torchlens_state
 import torchlens.capture.projections as fastlog_state
+from torchlens.backends.torch.backend import TorchBackend
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.fastlog import PredicateError, RecordContext, Recorder, Recording, RecorderStateError
 
@@ -134,6 +135,11 @@ def test_successful_recording_failure_fields_default_complete() -> None:
     assert recording.error_traceback is None
     assert recording.n_ops_completed == 0
     assert recording.last_successful_op_label is None
+    assert recording.summary() == (
+        f"Recording(n_ops={recording.n_ops}, n_records={len(recording)}, "
+        f"n_grad_records={len(recording.grad_records)})"
+    )
+    assert "status=" not in recording.summary()
 
 
 def test_default_raise_preserves_original_exception() -> None:
@@ -173,6 +179,9 @@ def test_return_partial_one_shot_returns_failed_recording() -> None:
     )
 
     _assert_failed_partial(recording)
+    summary = recording.summary()
+    assert "status='partial_error'" in summary
+    assert "caveat=" in summary
 
 
 def test_return_partial_with_return_output_returns_none_output() -> None:
@@ -191,7 +200,7 @@ def test_return_partial_with_return_output_returns_none_output() -> None:
 
 
 def test_manual_recorder_log_return_partial_sets_recording() -> None:
-    """Manual Recorder.log() returns None and exposes the failed partial."""
+    """Manual Recorder.log() returns None and rejects later re-entry."""
 
     with Recorder(
         FailingAfterOps(),
@@ -200,6 +209,9 @@ def test_manual_recorder_log_return_partial_sets_recording() -> None:
     ) as recorder:
         output = recorder.log(torch.tensor(1.0))
         partial = recorder.recording
+        assert partial.failed is True
+        with pytest.raises(RecorderStateError, match="Recorder is in a failed state"):
+            recorder.log(torch.tensor(1.0))
 
     assert output is None
     _assert_failed_partial(partial)
@@ -273,6 +285,43 @@ def test_partial_build_double_fault_reraises_original(monkeypatch: pytest.Monkey
     assert not hasattr(exc_info.value, "partial_recording")
 
 
+def test_missing_failed_event_snapshot_reraises_original(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing failed-capture event snapshot re-raises the model exception."""
+
+    original_cleanup = TorchBackend.cleanup_failed_forward_session
+
+    def cleanup_without_snapshot(
+        self: TorchBackend,
+        session: object,
+        prepared_model: object,
+        exc: Exception,
+    ) -> None:
+        """Run normal cleanup, then remove the failed fastlog snapshot."""
+
+        original_cleanup(self, session, prepared_model, exc)
+        if hasattr(session, "_failed_fastlog_capture_events"):
+            delattr(session, "_failed_fastlog_capture_events")
+
+    monkeypatch.setattr(
+        TorchBackend,
+        "cleanup_failed_forward_session",
+        cleanup_without_snapshot,
+    )
+
+    with pytest.raises(RuntimeError, match="intentional forward boom") as exc_info:
+        tl.record(
+            FailingAfterOps(),
+            torch.tensor(1.0),
+            save=_save_ops,
+            on_forward_error="return_partial",
+        )
+
+    assert not isinstance(exc_info.value, RecorderStateError)
+    assert not hasattr(exc_info.value, "partial_recording")
+
+
 def test_model_error_wins_over_module_exit_predicate_error() -> None:
     """The original model exception wins over a module-exit predicate failure."""
 
@@ -297,6 +346,42 @@ def test_model_error_wins_over_module_exit_predicate_error() -> None:
     assert "child model boom" in str(recording.error_repr)
     assert recording.predicate_failures
     assert "module exit predicate boom" in recording.predicate_failures[0].traceback
+
+
+@pytest.mark.smoke
+def test_root_module_exit_halt_failure_deduplicates_partial_event_stream() -> None:
+    """Root module-exit halt failures do not duplicate partial event indexes."""
+
+    def halt(ctx: RecordContext) -> bool:
+        """Raise only for the root module-exit during model-exception unwinding."""
+
+        if ctx.kind == "module_exit" and ctx.label == "root:exit:1":
+            raise ValueError("root module exit halt boom")
+        return False
+
+    recording = tl.record(
+        FailingAfterOps(),
+        torch.tensor(1.0),
+        save=_save_ops_and_modules,
+        halt=halt,
+        on_forward_error="return_partial",
+    )
+
+    _assert_failed_partial(recording)
+    events = recording._capture_events.op_events
+    module_exit_raw_indexes = [
+        event.raw_index
+        for event in events
+        if getattr(getattr(event, "record_context", None), "kind", None) == "module_exit"
+    ]
+    root_exit_raw_indexes = [
+        event.raw_index
+        for event in events
+        if getattr(getattr(event, "record_context", None), "kind", None) == "module_exit"
+        and event.label_raw == "root:exit:1"
+    ]
+    assert root_exit_raw_indexes
+    assert len(module_exit_raw_indexes) == len(set(module_exit_raw_indexes))
 
 
 def test_multi_output_user_failure_partial_is_consistent() -> None:

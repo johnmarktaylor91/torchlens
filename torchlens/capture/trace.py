@@ -798,12 +798,16 @@ def run_and_log_inputs_through_model(
                         else:
                             state.add_predicate_failure(exit_ctx, exc)
                         if not halt_only:
-                            append_projected_event(
-                                self,
-                                exit_ctx,
-                                skipped_spec,
-                                predicate_matched=False,
-                            )
+                            if active_model_exc is None or not any(
+                                event.raw_index == exit_ctx.event_index
+                                for event in self.capture_events.op_events
+                            ):
+                                append_projected_event(
+                                    self,
+                                    exit_ctx,
+                                    skipped_spec,
+                                    predicate_matched=False,
+                                )
                     finally:
                         if not halt_only:
                             state.append_context(exit_ctx)
