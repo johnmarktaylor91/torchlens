@@ -134,6 +134,27 @@ def _classify_recipe(constructor_call: str, input_builder: InputBuilder) -> Reci
     return ExpressionRecipe(expr=constructor_call, imports=imports, input=input_builder)
 
 
+def _dtype_tokens(dtype: str) -> list[str]:
+    """Split a legacy dtype string into normalized tokens.
+
+    Parameters
+    ----------
+    dtype:
+        Legacy input dtype text.
+
+    Returns
+    -------
+    list[str]
+        Normalized dtype tokens.
+    """
+
+    return [
+        token.strip().split()[0]
+        for token in re.split(r"\s*[+/,;]\s*| and ", dtype.lower())
+        if token.strip()
+    ]
+
+
 def _dtype_for_index(dtype: str, index: int) -> str:
     """Return the dtype token for one tensor position.
 
@@ -150,16 +171,36 @@ def _dtype_for_index(dtype: str, index: int) -> str:
         Normalized dtype token.
     """
 
-    tokens = [
-        token.strip().split()[0]
-        for token in re.split(r"\s*[+/,;]\s*| and ", dtype.lower())
-        if token.strip()
-    ]
+    tokens = _dtype_tokens(dtype)
     if not tokens:
         return "float32"
     if index < len(tokens):
         return tokens[index]
     return tokens[0]
+
+
+def _dtypes_for_count(dtype: str, count: int) -> list[str]:
+    """Resolve legacy dtype text for a fixed number of tensors.
+
+    Parameters
+    ----------
+    dtype:
+        Legacy dtype text.
+    count:
+        Number of input tensors.
+
+    Returns
+    -------
+    list[str]
+        One dtype token per tensor, matching the legacy broadcast behavior.
+    """
+
+    tokens = _dtype_tokens(dtype)
+    if not tokens:
+        return ["float32"] * count
+    if len(tokens) == count:
+        return tokens
+    return [tokens[0]] * count
 
 
 def _tensor_spec(shape: Sequence[int], dtype: str, index: int = 0) -> TensorSpec:
@@ -181,6 +222,29 @@ def _tensor_spec(shape: Sequence[int], dtype: str, index: int = 0) -> TensorSpec
     """
 
     return TensorSpec(shape=tuple(int(dim) for dim in shape), dtype=_dtype_for_index(dtype, index))
+
+
+def _tensor_specs(shapes: Sequence[Sequence[int]], dtype: str) -> list[TensorSpec]:
+    """Build tensor specs with legacy multi-input dtype broadcasting.
+
+    Parameters
+    ----------
+    shapes:
+        Concrete tensor shapes.
+    dtype:
+        Legacy dtype text.
+
+    Returns
+    -------
+    list[TensorSpec]
+        One tensor spec per shape.
+    """
+
+    dtypes = _dtypes_for_count(dtype, len(shapes))
+    return [
+        TensorSpec(shape=tuple(int(dim) for dim in shape), dtype=dtypes[index])
+        for index, shape in enumerate(shapes)
+    ]
 
 
 def _builder_from_structured(shape: str, dtype: str) -> InputBuilder | None:
@@ -315,9 +379,7 @@ def _builder_from_shape(
 
     if isinstance(parsed, list):
         return (
-            MultiInput(
-                specs=[_tensor_spec(item, dtype, index) for index, item in enumerate(parsed)]
-            ),
+            MultiInput(specs=_tensor_specs(parsed, dtype)),
             True,
             None,
             not shape.strip().startswith(("[", "(")),

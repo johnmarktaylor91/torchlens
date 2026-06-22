@@ -7,7 +7,9 @@ installation, environment mutation, subprocess orchestration, or cache/device cl
 from __future__ import annotations
 
 import ast
+import importlib
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from menagerie.catalog import CatalogRow
@@ -274,6 +276,210 @@ def tensor_for_recipe(shape: str, dtype: str) -> Any:
     if isinstance(parsed_shape, list):
         return [make_tensor(item, td) for item, td in zip(parsed_shape, resolved)]
     return make_tensor(parsed_shape, resolved[0])
+
+
+def _torch_dtype(dtype: str) -> Any:
+    """Resolve a schema dtype string to a torch dtype.
+
+    Parameters
+    ----------
+    dtype:
+        Dtype token.
+
+    Returns
+    -------
+    Any
+        Torch dtype object.
+    """
+
+    import torch
+
+    dtype_map = {
+        "float16": torch.float16,
+        "float32": torch.float32,
+        "float64": torch.float64,
+        "bfloat16": torch.bfloat16,
+        "int64": torch.int64,
+        "long": torch.int64,
+        "int": torch.int32,
+        "int32": torch.int32,
+        "bool": torch.bool,
+        "uint8": torch.uint8,
+        "int8": torch.int8,
+        "int16": torch.int16,
+        "complex64": torch.complex64,
+        "complex128": torch.complex128,
+    }
+    try:
+        return dtype_map[dtype.lower()]
+    except KeyError as exc:
+        raise ValueError(f"unsupported schema dtype={dtype!r}") from exc
+
+
+def _tensor_from_spec(shape: Sequence[int | str], dtype: str) -> Any:
+    """Create a tensor from a typed tensor spec.
+
+    Parameters
+    ----------
+    shape:
+        Tensor shape from the schema.
+    dtype:
+        Dtype token from the schema.
+
+    Returns
+    -------
+    Any
+        Torch tensor.
+    """
+
+    import torch
+
+    concrete_shape = tuple(int(dim) for dim in shape)
+    torch_dtype = _torch_dtype(dtype)
+    if torch_dtype.is_floating_point or torch_dtype.is_complex:
+        return torch.randn(concrete_shape, dtype=torch_dtype)
+    return torch.zeros(concrete_shape, dtype=torch_dtype)
+
+
+def _typed_namespace(imports: Sequence[str]) -> dict[str, Any]:
+    """Build a permissive namespace for typed recipe/input evaluation.
+
+    Parameters
+    ----------
+    imports:
+        Explicit import roots declared on a typed recipe or callable input.
+
+    Returns
+    -------
+    dict[str, Any]
+        Evaluation namespace.
+    """
+
+    namespace: dict[str, Any] = {}
+    module_names = {
+        "torch",
+        "torchvision",
+        "timm",
+        "transformers",
+        "diffusers",
+        "segmentation_models_pytorch",
+        *imports,
+    }
+    for module_name in sorted(module_names):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        namespace[module_name] = module
+        if module_name == "segmentation_models_pytorch":
+            namespace["smp"] = module
+        if module_name == "transformers":
+            for attr in (
+                "AutoConfig",
+                "AutoModel",
+                "AutoModelForCausalLM",
+                "AutoModelForMaskedLM",
+                "AutoModelForSeq2SeqLM",
+                "AutoModelForAudioClassification",
+                "AutoModelForAudioFrameClassification",
+                "AutoModelForSemanticSegmentation",
+                "AutoModelForTextToSpectrogram",
+                "AutoModelForTextToWaveform",
+                "AutoModelForZeroShotImageClassification",
+                "BertConfig",
+                "GPT2Config",
+                "T5Config",
+            ):
+                if hasattr(module, attr):
+                    namespace[attr] = getattr(module, attr)
+    return namespace
+
+
+def build_input_from_record(record: Any) -> Any:
+    """Build the example input for a typed catalog record.
+
+    Parameters
+    ----------
+    record:
+        ``menagerie.schema.CatalogRecord``.
+
+    Returns
+    -------
+    Any
+        Example input object.
+    """
+
+    input_builder = record.input
+    if input_builder.kind == "tensor":
+        return _tensor_from_spec(input_builder.spec.shape, input_builder.spec.dtype)
+    if input_builder.kind == "multi":
+        values = [_tensor_from_spec(spec.shape, spec.dtype) for spec in input_builder.specs]
+        return tuple(values) if input_builder.as_tuple else values
+    if input_builder.kind == "kwargs":
+        return {
+            key: _tensor_from_spec(spec.shape, spec.dtype)
+            for key, spec in input_builder.specs.items()
+        }
+    if input_builder.kind == "none":
+        return _tensor_from_spec(input_builder.sentinel_shape, input_builder.sentinel_dtype)
+    if input_builder.kind == "callable":
+        namespace = _typed_namespace(input_builder.imports)
+        builtins = dict(vars(__import__("builtins")))
+        globals_dict = {"__builtins__": builtins, "__name__": "__main__", **namespace}
+        builder = eval(input_builder.expr, globals_dict, namespace)  # noqa: S307
+        return builder()
+    raise ValueError(f"unsupported input builder kind={input_builder.kind!r}")
+
+
+def instantiate_model_from_record(record: Any) -> Any:
+    """Instantiate a model from a typed catalog record.
+
+    Parameters
+    ----------
+    record:
+        ``menagerie.schema.CatalogRecord``.
+
+    Returns
+    -------
+    Any
+        Instantiated model.
+    """
+
+    recipe = record.recipe
+    imports = getattr(recipe, "imports", [])
+    namespace = _typed_namespace(imports)
+    builtins = dict(vars(__import__("builtins")))
+    globals_dict = {"__builtins__": builtins, "__name__": "__main__", **namespace}
+    if recipe.type in {"import-callable", "expression"}:
+        return eval(recipe.expr, globals_dict, namespace)  # noqa: S307
+    if recipe.type == "statement":
+        exec(recipe.code, globals_dict)  # noqa: S102
+    elif recipe.type == "exec-string":
+        exec(recipe.body, globals_dict)  # noqa: S102
+    else:
+        raise ValueError(f"unsupported recipe type={recipe.type!r}")
+    for output_name in (recipe.output_name, "model", "net", "module"):
+        if output_name in globals_dict:
+            return globals_dict[output_name]
+    raise ValueError("typed statement recipe did not assign a model output")
+
+
+def build_from_record(record: Any) -> tuple[Any, Any]:
+    """Build the model and example input for one typed catalog record.
+
+    Parameters
+    ----------
+    record:
+        ``menagerie.schema.CatalogRecord``.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        Instantiated model and example input.
+    """
+
+    input_value = build_input_from_record(record)
+    return instantiate_model_from_record(record), input_value
 
 
 def is_classics_row(row: CatalogRow) -> bool:
