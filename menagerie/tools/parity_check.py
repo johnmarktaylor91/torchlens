@@ -14,7 +14,14 @@ from menagerie.generate_menagerie import parse_shape, unrenderable_reason
 
 
 DEFAULT_BASELINE = Path(".research/menagerie-redesign/phase0_baseline.json")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RenderableKey = tuple[str, str, str, str, str]
+NAME_KEYED_RESUME_PATTERNS = (
+    "completed_names",
+    "row.name not in done",
+    "records.get(row.name",
+    'row["name"]: row',
+)
 
 
 def _renderable_keys(rows: Sequence[CatalogRow]) -> set[RenderableKey]:
@@ -192,6 +199,24 @@ def _check_stable_id_determinism(errors: list[str]) -> None:
         errors.append(f"stable ID assignment changed across two builds: {changed[:20]!r}")
 
 
+def _check_no_name_keyed_resume_logic(errors: list[str]) -> None:
+    """Check render and validate resume logic no longer keys coverage by name.
+
+    Parameters
+    ----------
+    errors:
+        Mutable error accumulator.
+    """
+
+    for relative_path in ("menagerie/generate_menagerie.py", "menagerie/validate_menagerie.py"):
+        source = (PROJECT_ROOT / relative_path).read_text()
+        for pattern in NAME_KEYED_RESUME_PATTERNS:
+            if pattern in source:
+                errors.append(
+                    f"{relative_path} still contains name-keyed resume pattern {pattern!r}"
+                )
+
+
 def run_parity_check(baseline_path: Path) -> int:
     """Run Phase-1a parity checks.
 
@@ -213,6 +238,7 @@ def run_parity_check(baseline_path: Path) -> int:
     _check_natural_keys(rows, errors)
     _check_renderable_floor(baseline, rows, errors)
     _check_stable_id_determinism(errors)
+    _check_no_name_keyed_resume_logic(errors)
     if errors:
         print("Phase-1a parity check failed:")
         for error in errors:
