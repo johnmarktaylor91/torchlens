@@ -18,6 +18,7 @@ PRE_REFACTOR_TORCH_SEQUENCE = (
     "backend_neutral_accessor_refs",
     "special_layer_lists",
     "graph_topology",
+    "edge_use_parent_arg_consistency",
     "op_log_fields",
     "recurrence_invariants",
     "branching_invariants",
