@@ -5,8 +5,11 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
+
 from menagerie.catalog import SOURCE_COLUMNS
 from menagerie.schema import load_jsonl
+from menagerie.tools import tsv_to_jsonl
 from menagerie.tools.tsv_to_jsonl import migrate_tsv
 
 
@@ -100,3 +103,31 @@ def test_migrate_tsv_skips_classics_and_preserves_non_classics(tmp_path: Path) -
     assert records[1].input_is_real is False
     assert deferred_records[0].verification_expectation == "deferred"
     assert deferred_records[0].deferral is not None
+
+
+def test_default_cli_does_not_clobber_canonical_jsonl(tmp_path: Path) -> None:
+    """Default migration output writes candidates without changing canonical JSONL sources."""
+
+    canonical_before = tsv_to_jsonl.CANONICAL_OUTPUT.read_bytes()
+    deferred_before = tsv_to_jsonl.CANONICAL_DEFERRED_OUTPUT.read_bytes()
+
+    exit_code = tsv_to_jsonl.main(["--stats", str(tmp_path / "stats.json")])
+
+    assert exit_code == 0
+    assert tsv_to_jsonl.CANONICAL_OUTPUT.read_bytes() == canonical_before
+    assert tsv_to_jsonl.CANONICAL_DEFERRED_OUTPUT.read_bytes() == deferred_before
+
+
+def test_migrate_tsv_refuses_canonical_output_without_flag(tmp_path: Path) -> None:
+    """The API requires an explicit canonical-write opt-in for source JSONL paths."""
+
+    source = tmp_path / "source.tsv"
+    _write_tsv(source, [])
+
+    with pytest.raises(ValueError, match="refusing to write canonical"):
+        migrate_tsv(
+            source,
+            tsv_to_jsonl.CANONICAL_OUTPUT,
+            tmp_path / "stats.json",
+            deferred_output_path=tmp_path / "deferred.jsonl",
+        )

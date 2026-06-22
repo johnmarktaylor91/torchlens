@@ -7,6 +7,7 @@ import ast
 import csv
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Sequence
@@ -33,8 +34,12 @@ from menagerie.schema import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "master_catalog.jsonl"
-DEFAULT_DEFERRED_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "deferred.jsonl"
+CANONICAL_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "master_catalog.jsonl"
+CANONICAL_DEFERRED_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "deferred.jsonl"
+DEFAULT_OUTPUT = CANONICAL_OUTPUT.with_suffix(CANONICAL_OUTPUT.suffix + ".candidate")
+DEFAULT_DEFERRED_OUTPUT = CANONICAL_DEFERRED_OUTPUT.with_suffix(
+    CANONICAL_DEFERRED_OUTPUT.suffix + ".candidate"
+)
 DEFAULT_STATS = PROJECT_ROOT / ".research" / "menagerie-redesign" / "migration_stats.json"
 CLASSICS_ZOO = "classics-pytorch"
 SOURCE_URL_RE = re.compile(r"(https?://\S+|arXiv:\s*[0-9.]+)", re.I)
@@ -522,6 +527,7 @@ def migrate_tsv(
     stats_path: Path = DEFAULT_STATS,
     *,
     deferred_output_path: Path = DEFAULT_DEFERRED_OUTPUT,
+    write_canonical: bool = False,
     write: bool = True,
 ) -> dict[str, Any]:
     """Migrate non-classics TSV rows to JSONL candidate records.
@@ -536,6 +542,8 @@ def migrate_tsv(
         Migration stats JSON path.
     deferred_output_path:
         JSONL path for honestly deferred records.
+    write_canonical:
+        Whether writing canonical JSONL source paths is explicitly allowed.
     write:
         Whether to write JSONL and stats artifacts.
 
@@ -544,6 +552,17 @@ def migrate_tsv(
     dict[str, Any]
         Migration stats.
     """
+
+    if write and not write_canonical:
+        canonical_paths = {
+            CANONICAL_OUTPUT.resolve(),
+            CANONICAL_DEFERRED_OUTPUT.resolve(),
+        }
+        requested_paths = {output_path.resolve(), deferred_output_path.resolve()}
+        if canonical_paths & requested_paths:
+            raise ValueError(
+                "refusing to write canonical menagerie JSONL sources without --write-canonical"
+            )
 
     raw_rows = _read_source_rows(source_tsv)
     classics_count = sum(row["zoo"] == CLASSICS_ZOO for row in raw_rows)
@@ -646,16 +665,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--deferred-output", type=Path, default=DEFAULT_DEFERRED_OUTPUT)
     parser.add_argument("--stats", type=Path, default=DEFAULT_STATS)
     parser.add_argument(
+        "--write-canonical",
+        action="store_true",
+        help=(
+            "write the canonical committed JSONL sources instead of .candidate files; "
+            "intended only for one-time migrations"
+        ),
+    )
+    parser.add_argument(
         "--no-write",
         action="store_true",
         help="dry-run validation only; do not write candidate JSONL or stats",
     )
     args = parser.parse_args(argv)
+    output_path = args.output
+    deferred_output_path = args.deferred_output
+    if args.write_canonical:
+        if output_path == DEFAULT_OUTPUT:
+            output_path = CANONICAL_OUTPUT
+        if deferred_output_path == DEFAULT_DEFERRED_OUTPUT:
+            deferred_output_path = CANONICAL_DEFERRED_OUTPUT
+        print(
+            "WARNING: writing canonical menagerie JSONL sources; this can overwrite "
+            "committed catalog data.",
+            file=sys.stderr,
+        )
     stats = migrate_tsv(
         args.source_tsv,
-        args.output,
+        output_path,
         args.stats,
-        deferred_output_path=args.deferred_output,
+        deferred_output_path=deferred_output_path,
+        write_canonical=args.write_canonical,
         write=not args.no_write,
     )
     print(json.dumps(stats, indent=2, sort_keys=True))
