@@ -2445,7 +2445,7 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                     raise MetadataInvariantError(
                         name,
                         f"ModuleCall '{addr}:{call_index}' ops contains "
-                        f"'{lbl}' not in layer_labels or layer_labels",
+                        f"'{lbl}' not in op_labels or layer_labels",
                     )
 
             if mpl.num_layers != len(mpl.ops):
