@@ -661,6 +661,13 @@ def _classics_source_rows() -> list[dict[str, str]]:
     for name, entry in CLASSICS.items():
         module_path = str(entry["module_path"])
         module_name = module_path.rsplit(".", maxsplit=1)[-1]
+        # Self-declaring modules expose one builder per family (e.g.
+        # ``build_zoed_n``/``build_zoed_k``); hand-manifest modules expose a
+        # single zero-arg ``build``. Recover the actual builder name from the
+        # registered build callable so the constructor_call is faithful per
+        # variant rather than always pointing at ``build()`` (which may not even
+        # exist for multi-variant modules such as espnet_speech).
+        build_name = getattr(entry["build"], "__name__", "build")
         example = entry["example_input"]()
         input_shape, input_dtype = _shape_dtype_for_input(example)
         paper = str(entry["paper"])
@@ -671,7 +678,7 @@ def _classics_source_rows() -> list[dict[str, str]]:
             {
                 "name": name,
                 "zoo": CLASSIC_ZOO,
-                "constructor_call": f"menagerie.classics.{module_name}.build()",
+                "constructor_call": f"menagerie.classics.{module_name}.{build_name}()",
                 "input_shape": input_shape,
                 "input_dtype": input_dtype,
                 "family": str(entry["family"]),

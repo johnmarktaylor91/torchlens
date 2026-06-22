@@ -56,3 +56,17 @@ compute its `graph_shape_hash`, and if it collides with an existing entry's hash
    "Adding to the database" steps; render them.
 4. Dedup the whole corpus by `graph_shape_hash` (`dedup_report.py`) to prove no repeats.
 5. Append a `crawls[]` entry + bump `last_exhaustive_crawl`; append any newly-found hubs to this file.
+
+
+## Early / non-PyTorch framework model zoos (swept 2026-06-21; diff against these in future rounds)
+The menagerie should subsume models born in the pre-convergence frameworks, even those never cleanly
+ported to PyTorch. Enumerate + diff each; reimplement notable-missing as `classics/`.
+- **Caffe Model Zoo** — github.com/BVLC/caffe/wiki/Model-Zoo (vision: detection/segmentation/pose/face).
+- **Torch7 / Lua** — the direct PyTorch ancestor; FB/DeepMind/NYU/Karpathy repos (fb.resnet.torch, dpnn,
+  element-research/rnn, neural-style, fast-neural-style, char-rnn, NeuralTalk2, Stacked-Hourglass).
+- **Theano ecosystem** — Lasagne / Lasagne-Recipes, Blocks+Fuel, Pylearn2, Keras-on-Theano, DyNet (NLP).
+- **MatConvNet** (Oxford VGG, MATLAB); **Chainer / ChainerCV** (Preferred Networks; waifu2x, style2paints).
+- **CNTK** (Microsoft Cognitive Toolkit); **MXNet / GluonCV** (Amazon/DMLC); **Neon** (Nervana/Intel).
+- **darknet** (Redmon, C — YOLO family + classifiers); **Deeplearning4j** (Java); **PaddlePaddle v1** (Baidu).
+- **TensorFlow** — TF-Slim model zoo, TF-Hub, **DeepMind Sonnet** (DNC, GQN, Relation/Graph Nets, MERLIN),
+  **Magenta** (NSynth, SketchRNN, MusicVAE, Coconet), tensor2tensor, Google-Research models.

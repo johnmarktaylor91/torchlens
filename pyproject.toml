@@ -26,10 +26,14 @@ classifiers = [
 dependencies = [
     "numpy",
     "packaging",
-    # torch>=2.4 required: torch.is_autocast_enabled(device_type) and
-    # torch.get_autocast_dtype(device_type) (used in torchlens/utils/rng.py)
-    # only accept a device_type argument on torch 2.4+.
-    "torch>=2.4",
+    # torch>=2.1 supported. The only torch-2.4-specific APIs TorchLens used were
+    # torch.is_autocast_enabled(device_type) / torch.get_autocast_dtype(device_type)
+    # (the device_type argument is torch 2.4+ only); these are now routed through
+    # a backward-compatible shim (torchlens/utils/_torch_compat.py) that falls back
+    # to the legacy per-device autocast helpers on torch 2.1-2.3. Lowering the floor
+    # to 2.1 unblocks frameworks pinned to older torch (e.g. the OpenMMLab stack,
+    # which caps mmcv<2.2 -> prebuilt wheels only for torch<=2.1).
+    "torch>=2.1",
     "safetensors>=0.4",
     "tqdm",
     "graphviz",
@@ -192,6 +196,15 @@ ignore = ["E721", "F401"]
 # importing the model zoo / torchlens, so module-level imports legitimately follow
 # code (E402). This shim is mandated by notebooks/audit/CLAUDE.md.
 "notebooks/audit/*.ipynb" = ["E402"]
+
+# menagerie/classics/ holds ~1000 faithful random-init architecture reconstructions
+# (the model atlas). They are compact reimpl *recipes*, not library code: dense one-line
+# block definitions (E702), conventional math/ML single-letter names like l/I/O for
+# layers/identity (E741), and intentional dead scaffolding vars kept for readability of
+# the reconstructed forward (F841). Enforcing these would mean editing generated forwards
+# and perturbing already-rendered architecture graphs. Real-bug lints (F821/F811/etc.)
+# stay enforced.
+"menagerie/classics/*.py" = ["E702", "E741", "F841"]
 
 # =============================================================================
 # RELEASE POLICY (locked): TorchLens stays on the 2.x family on PyPI.

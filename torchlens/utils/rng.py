@@ -28,6 +28,7 @@ from typing import Any, Dict, List, TypeVar, cast
 import numpy as np
 import torch
 
+from ._torch_compat import autocast_get_dtype, autocast_is_enabled
 from .tensor_utils import _is_cuda_available
 
 _AUTOCAST_DEVICES = ("cpu", "cuda")
@@ -164,9 +165,15 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
     state: dict[str, dict[str, Any]] = {}
     for device in _AUTOCAST_DEVICES:
         try:
+            # Routed through the version-neutral shim so TorchLens runs on
+            # torch 2.1+ (the per-device ``device_type`` argument to these
+            # query helpers is torch 2.4+ only). On torch>=2.4 the shim calls
+            # ``torch.is_autocast_enabled``/``torch.get_autocast_dtype``
+            # directly (identical behavior); on torch 2.1-2.3 it routes to the
+            # legacy per-device helpers. See utils/_torch_compat.py.
             state[device] = {
-                "enabled": torch.is_autocast_enabled(device),
-                "dtype": torch.get_autocast_dtype(device),
+                "enabled": autocast_is_enabled(device),
+                "dtype": autocast_get_dtype(device),
             }
         except (RuntimeError, TypeError):
             # Device doesn't support autocast queries (e.g. no CUDA).

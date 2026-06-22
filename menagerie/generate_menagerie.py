@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -117,6 +118,87 @@ MODULE_PACKAGE_MAP = {
     "transformers": "transformers",
     "ultralytics": "ultralytics",
 }
+# Framework module names always treated as real external dependencies even when they have no
+# MODULE_PACKAGE_MAP entry (their pip name == module name, or they are vendored framework extras).
+KNOWN_FRAMEWORK_MODULES = {
+    "timm",
+    "torch",
+    "torchvision",
+    "transformers",
+    "diffusers",
+    *MODULE_PACKAGE_MAP,
+}
+# Generic, repo-internal source-layout package names. A recipe that does
+# `from models.foo import X` / `from src.bar import Y` is importing the ORIGINAL repo's local
+# package tree, NOT a PyPI distribution. These are never pip-installable and must NOT be reported
+# as "dependency missing" (that wrongly skipped ~350 base-env-renderable rows and produced bogus
+# cluster keys like `models` (226), `src` (48), `lib` (14), ...). Recipes that genuinely need the
+# upstream source are surfaced honestly via `unrenderable_reason` as `local_source_unavailable`,
+# and self-contained recipes that merely *mention* such a name render normally.
+LOCAL_SOURCE_NAMES = {
+    "models",
+    "model",
+    "model_zoo",
+    "modeling",
+    "modelling",
+    "src",
+    "lib",
+    "libs",
+    "networks",
+    "network",
+    "net",
+    "nets",
+    "nn_modules",
+    "implementations",
+    "impl",
+    "training",
+    "train",
+    "core",
+    "architectures",
+    "architecture",
+    "arch",
+    "source",
+    "sources",
+    "types",
+    "utils",
+    "util",
+    "modules",
+    "module",
+    "backbone",
+    "backbones",
+    "layers",
+    "layer",
+    "common",
+    "components",
+    "component",
+    "scripts",
+    "script",
+    "code",
+    "main",
+    "config",
+    "configs",
+    "cfg",
+}
+# Names that are stdlib or recipe-local and never count as an external dependency.
+STDLIB_OR_LOCAL = {
+    "model",
+    "cfg",
+    "os",
+    "sys",
+    "math",
+    "typing",
+    "functools",
+    "collections",
+    "re",
+    "itertools",
+    "json",
+    "copy",
+    "abc",
+    "dataclasses",
+    "warnings",
+    "builtins",
+    "random",
+}
 ZOO_PACKAGE_HINTS = (
     (re.compile(r"torchvision", re.I), ("torchvision",)),
     (re.compile(r"\btimm\b", re.I), ("timm",)),
@@ -137,10 +219,11 @@ UNRENDERABLE_MARKERS = (
     ("source-only", "source_only_recipe"),
     ("source only", "source_only_recipe"),
     ("no public code", "no_public_code"),
-    ("weights-gated", "weights_gated_no_random_init"),
-    ("gated", "weights_gated_no_random_init"),
-    ("not random-init", "no_random_init"),
-    ("not random init", "no_random_init"),
+    # NOTE: "gated"/"weights-gated"/"not random-init" markers REMOVED 2026-06-19 — the menagerie
+    # builds every model RANDOM-INIT, so gated/missing trained weights are irrelevant; those markers
+    # caught architectural terms ("gated activation", "GatedGenerator") and wrongly skipped buildable
+    # models (cornet_rt, WaveNet, Deep Kalman Filter, ...). Such rows now render or surface a real
+    # recipe bug (-> normal repair), never a fake "ceiling".
     ("metadata-only", "metadata_only"),
     ("catalog-only", "metadata_only"),
 )
@@ -184,12 +267,17 @@ class DependencyPlan:
         Top-level import modules expected after installation.
     environment:
         Current Python environment label.
+    recipe_parse_error:
+        Non-empty when the recipe source is malformed and could not be parsed. When set, the row
+        is recorded as a clean ``recipe_error`` rather than producing a garbled cluster key from a
+        regex split of the (unparseable) recipe body.
     """
 
     cluster_key: str
     packages: tuple[str, ...]
     top_modules: tuple[str, ...]
     environment: str
+    recipe_parse_error: str = ""
 
 
 @dataclass(frozen=True)
@@ -609,6 +697,153 @@ def append_manifest(manifest_path: Path, result: RenderResult) -> None:
         )
 
 
+_SYMBOLIC_DIMS = {
+    "B": 1,
+    "N": 8,
+    "V": 2,
+    "T": 8,
+    "L": 16,
+    "S": 16,
+    "K": 4,
+    "C": 3,
+    "H": 64,
+    "W": 64,
+    "D": 64,
+    "E": 64,
+    "G": 8,
+    "M": 8,
+    "P": 16,
+    "Q": 16,
+    "R": 16,
+    "F": 64,
+    "A": 8,
+    "X": 8,
+    "Y": 8,
+    "Z": 8,
+}
+
+
+def _parse_symbolic_multi(text: str) -> list[tuple[int, ...]]:
+    """Parse a multi-input / symbolic shape string into concrete tensor shapes.
+
+    Handles formats like ``imgs=(1,V,3,H,W); proj=(1,V,4,4); pos=(N,3)`` -- each parenthesised
+    group becomes one input tensor and symbolic dims (V, N, ...) get small concrete defaults
+    (resolved consistently across the recipe). Returns ``[]`` when nothing parseable is found.
+
+    Parameters
+    ----------
+    text:
+        Raw catalog shape string.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        One concrete shape per parenthesised group.
+    """
+
+    shapes: list[tuple[int, ...]] = []
+    for group in re.findall(r"\(([^()]*)\)", text):
+        dims: list[int] = []
+        ok = True
+        for token in group.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if token.isdigit():
+                dims.append(int(token))
+            elif re.fullmatch(r"[A-Za-z_]\w*", token):
+                dims.append(_SYMBOLIC_DIMS.get(token[0].upper(), 8))
+            else:
+                ok = False  # arithmetic / unparseable token -> skip this group
+                break
+        if ok and dims:
+            shapes.append(tuple(dims))
+    return shapes
+
+
+def _split_dtype_tokens(dtype: str) -> list[str]:
+    """Split a (possibly multi-tensor) dtype string into normalized dtype tokens.
+
+    ``"float32+long"`` -> ``["float32", "long"]``; ``"float32"`` -> ``["float32"]``. Each token's
+    leading word is taken as the dtype so descriptive suffixes are dropped (``"long ids"`` ->
+    ``"long"``). Separators: ``+ / , ;`` and the literal word ``and``.
+    """
+
+    out: list[str] = []
+    for raw in re.split(r"\s*[+/,;]\s*| and ", dtype.strip()):
+        token = raw.strip().lower()
+        if token:
+            out.append(token.split()[0])
+    return out
+
+
+def _resolve_dtype_tokens(
+    tokens: list[str], n_groups: int, dtype_map: dict[str, Any]
+) -> list[Any] | None:
+    """Map dtype tokens onto ``n_groups`` tensors, broadcasting a single token to all.
+
+    Returns ``None`` when no token resolves to a known torch dtype (caller then raises).
+    """
+
+    mapped = [dtype_map.get(t) for t in tokens]
+    known = [m for m in mapped if m is not None]
+    if not known:
+        return None
+    if len(mapped) == n_groups and all(m is not None for m in mapped):
+        return mapped
+    return [known[0]] * n_groups
+
+
+def _multi_input_from_spec(shape: str, dtype_map: dict[str, Any]) -> Any:
+    """Build a multi-input structure from a JSON/python-literal recipe, or ``None``.
+
+    Engages only when ``shape`` is an object/array describing per-input ``{"shape","dtype"}``
+    entries. Returns a list (``*args`` for ``tl.trace``), a single dict-positional input, or
+    ``None`` when ``shape`` is not a structured recipe.
+
+    Accepted forms::
+
+        [{"shape": [1,3,224,224], "dtype": "float32"}, {"shape": [1,16], "dtype": "int64"}]
+        {"inputs": [ ...as above... ]}
+        {"kwargs": {"input_ids": {"shape": [1,16], "dtype": "int64"}, ...}}
+        [{"image": (3,800,1333)}]                      # detectron2 dict-positional
+    """
+
+    import json
+
+    import torch
+
+    text = shape.strip()
+    if not (text.startswith("[{") or text.startswith('{"')):
+        return None
+    try:
+        obj = json.loads(text)
+    except (ValueError, TypeError):
+        try:
+            obj = ast.literal_eval(text)  # python-literal dict-lists (single quotes, tuples)
+        except (ValueError, SyntaxError):
+            return None
+
+    def build(entry: dict[str, Any]) -> Any:
+        td = dtype_map.get(str(entry.get("dtype", "float32")).lower(), torch.float32)
+        shp = tuple(int(d) for d in entry["shape"])
+        if td.is_floating_point or td.is_complex:
+            return torch.randn(shp, dtype=td)
+        return torch.zeros(shp, dtype=td)
+
+    if isinstance(obj, dict) and "inputs" in obj:
+        return [build(e) for e in obj["inputs"]]
+    if isinstance(obj, dict) and "kwargs" in obj:
+        return {k: build(v) for k, v in obj["kwargs"].items()}
+    if isinstance(obj, list) and obj and isinstance(obj[0], dict) and "shape" in obj[0]:
+        return [build(e) for e in obj]
+    if isinstance(obj, list) and obj and isinstance(obj[0], dict):
+        return [
+            {k: build({"shape": v, "dtype": "float32"}) for k, v in entry.items()} for entry in obj
+        ]
+    return None
+
+
 def parse_shape(shape: str) -> tuple[int, ...] | list[tuple[int, ...]]:
     """Parse a concrete tensor shape from the catalog.
 
@@ -624,15 +859,44 @@ def parse_shape(shape: str) -> tuple[int, ...] | list[tuple[int, ...]]:
     """
 
     shape_text = shape.strip()
+    # Multi-input / symbolic-dim recipes (`name=(1,V,3,H,W); other=(N,3)`): build one tensor per
+    # group, resolving symbolic dims to small concrete defaults. tl.trace unpacks the list as *args.
+    if ";" in shape_text or re.search(r"\([^)]*[A-Za-z]", shape_text):
+        multi = _parse_symbolic_multi(shape_text)
+        if len(multi) > 1:
+            return multi
+        if len(multi) == 1:
+            return multi[0]
     parsed_text = shape_text
+    # Prose-suffixed concrete shapes (`(1, 3, 800, 1024) + noisy boxes (1, 300, 4)`): pull out
+    # every leading concrete ``(ints)`` group. One group -> single tensor; many -> *args list.
+    concrete_groups = re.findall(r"\(\s*\d[\d,\s]*\)", shape_text)
+    if len(concrete_groups) > 1:
+        out: list[tuple[int, ...]] = []
+        for group in concrete_groups:
+            value = ast.literal_eval(group if "," in group else group.rstrip(")") + ",)")
+            out.append(value if isinstance(value, tuple) else (value,))
+        return out
     if not shape_text.startswith(("(", "[")):
         match = re.search(r"\(([0-9,\s]+)\)", shape_text)
         if match is None:
             raise ValueError(f"expected concrete tuple shape, got {shape!r}")
         parsed_text = f"({match.group(1)})"
+    elif concrete_groups and not shape_text.endswith((")", "]")):
+        parsed_text = concrete_groups[0]  # strip a trailing prose tail after a single tuple
     parsed = ast.literal_eval(parsed_text)
     if isinstance(parsed, tuple) and all(isinstance(value, int) for value in parsed):
         return parsed
+    # Explicit tuple-of-tuples (`((1, 64), (1, 64, 4))`) is a valid multi-input encoding.
+    if (
+        isinstance(parsed, tuple)
+        and parsed
+        and all(
+            isinstance(item, tuple) and all(isinstance(value, int) for value in item)
+            for item in parsed
+        )
+    ):
+        return list(parsed)
     if isinstance(parsed, list) and all(
         isinstance(item, tuple) and all(isinstance(value, int) for value in item) for item in parsed
     ):
@@ -667,24 +931,34 @@ def tensor_for_recipe(shape: str, dtype: str) -> Any:
         "long": torch.int64,
         "int32": torch.int32,
         "bool": torch.bool,
+        "uint8": torch.uint8,
+        "int8": torch.int8,
+        "int16": torch.int16,
+        "complex64": torch.complex64,
+        "complex128": torch.complex128,
     }
-    torch_dtype = dtype_map.get(dtype.lower())
-    if torch_dtype is None:
-        raise ValueError(f"unsupported input_dtype={dtype!r}")
+
+    # Structured multi-input recipe takes priority (set input_dtype to "spec" in the catalog).
+    spec_tensors = _multi_input_from_spec(shape, dtype_map)
+    if spec_tensors is not None:
+        return spec_tensors
+
     parsed_shape = parse_shape(shape)
+    n_groups = len(parsed_shape) if isinstance(parsed_shape, list) else 1
+    resolved = _resolve_dtype_tokens(_split_dtype_tokens(dtype), n_groups, dtype_map)
+    if resolved is None:
+        raise ValueError(f"unsupported input_dtype={dtype!r}")
 
-    def make_tensor(parsed: tuple[int, ...]) -> Any:
-        """Create one tensor for an already parsed shape."""
+    def make_tensor(parsed: tuple[int, ...], torch_dtype: Any) -> Any:
+        """Create one tensor for an already-parsed shape and resolved dtype."""
 
-        if torch_dtype.is_floating_point:
+        if torch_dtype.is_floating_point or torch_dtype.is_complex:
             return torch.randn(parsed, dtype=torch_dtype)
-        if torch_dtype is torch.bool:
-            return torch.zeros(parsed, dtype=torch_dtype)
         return torch.zeros(parsed, dtype=torch_dtype)
 
     if isinstance(parsed_shape, list):
-        return [make_tensor(item) for item in parsed_shape]
-    return make_tensor(parsed_shape)
+        return [make_tensor(item, td) for item, td in zip(parsed_shape, resolved)]
+    return make_tensor(parsed_shape, resolved[0])
 
 
 def is_classics_row(row: CatalogRow) -> bool:
@@ -701,6 +975,14 @@ def is_classics_row(row: CatalogRow) -> bool:
         Whether the row is provided by ``menagerie.classics``.
     """
 
+    # A row is a local classic when its name is in the CLASSICS registry (the authoritative
+    # source of truth), OR it uses the bare ``menagerie.classics.X`` constructor convention.
+    # Codex-authored rows use the ``from menagerie.classics.X import ...`` form, so the
+    # startswith check alone misclassified them and fell through to input_shape parsing.
+    from menagerie.classics import CLASSICS
+
+    if row.name in CLASSICS and "menagerie.classics." in row.constructor_call:
+        return True
     return row.zoo == "classics-pytorch" and row.constructor_call.startswith("menagerie.classics.")
 
 
@@ -891,8 +1173,146 @@ def link_featured_copy(row: CatalogRow, render_path: Path, out_dir: Path) -> Pat
     return target
 
 
+def _collect_recipe_names(tree: ast.AST) -> tuple[set[str], set[str], set[str]]:
+    """Collect (imported-module-roots, attribute-roots, locally-bound-names) from a parsed recipe.
+
+    ``imported`` are the top-level package of every real absolute ``import``/``from`` statement --
+    these are the only reliable EXTERNAL-dependency signal. ``attribute_roots`` are the root names of
+    dotted attribute access (``models.networks.X`` -> ``models``); they are used ONLY to detect a
+    bare reference to the upstream repo's local source layout (e.g. ``models.networks.X(...)`` with
+    no import), never to invent a pip dependency -- a bare attribute root is just as likely a
+    namespace alias (``np.array``) or pseudo-code (``nn.GRUCell``) as a module. ``bound`` are import
+    aliases, assignment targets, comprehension/lambda/def/class params -- names LOCAL to the recipe.
+
+    Parameters
+    ----------
+    tree:
+        Parsed recipe AST.
+
+    Returns
+    -------
+    tuple[set[str], set[str], set[str]]
+        ``(imported_modules, attribute_roots, bound_names)``.
+    """
+
+    imported: set[str] = set()
+    bound: set[str] = set()
+    attr_roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported.add(alias.name.split(".")[0])
+                bound.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            # Only absolute imports name an external module; relative (level>0) imports are local.
+            if node.level == 0 and node.module:
+                imported.add(node.module.split(".")[0])
+            for alias in node.names:
+                bound.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                for name in ast.walk(target):
+                    if isinstance(name, ast.Name):
+                        bound.add(name.id)
+        elif isinstance(node, ast.comprehension):
+            for name in ast.walk(node.target):
+                if isinstance(name, ast.Name):
+                    bound.add(name.id)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            args = node.args
+            for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                bound.add(arg.arg)
+            if args.vararg:
+                bound.add(args.vararg.arg)
+            if args.kwarg:
+                bound.add(args.kwarg.arg)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                bound.add(node.name)
+        elif isinstance(node, ast.ClassDef):
+            bound.add(node.name)
+        elif isinstance(node, ast.Attribute):
+            value = node.value
+            while isinstance(value, ast.Attribute):
+                value = value.value
+            if isinstance(value, ast.Name):
+                attr_roots.add(value.id)
+    return imported, attr_roots, bound
+
+
+def _required_modules_with_error(constructor_call: str, zoo: str) -> tuple[tuple[str, ...], str]:
+    """Infer top-level EXTERNAL modules required by a constructor, plus a recipe parse-error string.
+
+    Uses a real AST parse instead of a regex split. The old regex split on ``[;\\n]`` shredded
+    inline ``exec``/``code=`` recipe bodies, mistaking fragments of the quoted source for imports
+    and producing garbled cluster keys. AST parsing ignores string-literal contents entirely, so
+    only genuine outer imports/attribute roots count; an unparseable recipe yields a clean error
+    string instead of garbage. Generic repo-internal source names (``models``/``src``/``lib``/...)
+    are local layout, NOT pip distributions, so they are excluded from the external-dep set.
+
+    Parameters
+    ----------
+    constructor_call:
+        Catalog constructor expression.
+    zoo:
+        Source model zoo.
+
+    Returns
+    -------
+    tuple[tuple[str, ...], str]
+        ``(external_module_names, parse_error)`` -- ``parse_error`` is empty on success.
+    """
+
+    modules: set[str] = set()
+    bound: set[str] = set()
+    parse_error = ""
+    source = constructor_call.strip()
+    try:
+        tree: ast.AST | None = ast.parse(source, mode="exec")
+    except SyntaxError as exc:
+        tree = None
+        parse_error = f"recipe parse error: {exc.msg} (line {exc.lineno})"
+    if tree is not None:
+        # External-dep detection uses ONLY real import statements -- never bare attribute roots,
+        # which are just as likely a namespace alias (`np.array`) or pseudo-code (`nn.GRUCell`) as a
+        # module and would wrongly gate valid recipes. Local-source attribute refs are handled
+        # separately by `unrenderable_reason`.
+        modules, _attr_roots, bound = _collect_recipe_names(tree)
+    else:
+        # Malformed recipe: never regex-split the body (that is what produced garbled cluster keys).
+        # Scan ONLY for known framework tokens so a recognizable real dep is still detected.
+        for token in KNOWN_FRAMEWORK_MODULES:
+            if re.search(rf"\b{re.escape(token)}\b", source):
+                modules.add(token)
+    zoo_lower = zoo.lower()
+    if "torchvision" in zoo_lower:
+        modules.add("torchvision")
+    if "timm" in zoo_lower:
+        modules.add("timm")
+    if "transformers" in zoo_lower or "huggingface" in zoo_lower:
+        modules.add("transformers")
+    if "diffusers" in zoo_lower:
+        modules.add("diffusers")
+    if "segmentation_models_pytorch" in zoo_lower or "smp" in zoo_lower:
+        modules.add("segmentation_models_pytorch")
+    if "ultralytics" in zoo_lower:
+        modules.add("ultralytics")
+
+    def _is_external_dep(name: str) -> bool:
+        if not name or name in STDLIB_OR_LOCAL:
+            return False
+        if name[0].isupper():
+            return False  # a Class/symbol, not a module
+        if name in LOCAL_SOURCE_NAMES:
+            return False  # repo-internal source layout, not a PyPI distribution
+        if name in bound and name not in KNOWN_FRAMEWORK_MODULES:
+            return False  # locally bound alias / variable, not an imported module
+        return True
+
+    return tuple(sorted(m for m in modules if _is_external_dep(m))), parse_error
+
+
 def required_modules(constructor_call: str, zoo: str) -> tuple[str, ...]:
-    """Infer top-level modules required by a constructor expression.
+    """Infer top-level EXTERNAL modules required by a constructor expression.
 
     Parameters
     ----------
@@ -907,31 +1327,8 @@ def required_modules(constructor_call: str, zoo: str) -> tuple[str, ...]:
         Required top-level import names.
     """
 
-    modules: set[str] = set()
-    for match in re.finditer(r"\b(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)", constructor_call):
-        module_name = match.group(1)
-        if not module_name[0].isupper():
-            modules.add(module_name)
-    dotted = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\.", constructor_call)
-    if dotted and not dotted.group(1)[0].isupper():
-        modules.add(dotted.group(1))
-    for token in ("timm", "torch", "torchvision", "transformers", "diffusers", *MODULE_PACKAGE_MAP):
-        if re.search(rf"\b{re.escape(token)}\b", constructor_call):
-            modules.add(token)
-    zoo_lower = zoo.lower()
-    if "torchvision" in zoo_lower:
-        modules.add("torchvision")
-    if "timm" in zoo_lower:
-        modules.add("timm")
-    if "transformers" in zoo_lower or "huggingface" in zoo_lower:
-        modules.add("transformers")
-    if "diffusers" in zoo_lower:
-        modules.add("diffusers")
-    if "segmentation_models_pytorch" in zoo_lower or "smp" in zoo_lower:
-        modules.add("segmentation_models_pytorch")
-    if "ultralytics" in zoo_lower:
-        modules.add("ultralytics")
-    return tuple(sorted(module for module in modules if module not in {"model", "cfg"}))
+    modules, _error = _required_modules_with_error(constructor_call, zoo)
+    return modules
 
 
 def dependency_plan(row: CatalogRow) -> DependencyPlan:
@@ -948,7 +1345,7 @@ def dependency_plan(row: CatalogRow) -> DependencyPlan:
         Dependency plan.
     """
 
-    top_modules = required_modules(row.constructor_call, row.zoo)
+    top_modules, parse_error = _required_modules_with_error(row.constructor_call, row.zoo)
     packages: set[str] = set()
     for module in top_modules:
         package = MODULE_PACKAGE_MAP.get(module)
@@ -958,12 +1355,18 @@ def dependency_plan(row: CatalogRow) -> DependencyPlan:
         if pattern.search(row.zoo):
             packages.update(hints)
     environment = f"python-{sys.version_info.major}.{sys.version_info.minor}:{sys.prefix}"
-    cluster_parts = sorted(packages) or sorted(top_modules) or [safe_path_part(row.zoo.lower())]
+    if parse_error:
+        # Malformed recipe: a stable, non-garbled cluster key (never the shredded recipe body).
+        cluster_key = "recipe_error"
+    else:
+        cluster_parts = sorted(packages) or sorted(top_modules) or [safe_path_part(row.zoo.lower())]
+        cluster_key = "+".join(cluster_parts)
     return DependencyPlan(
-        cluster_key="+".join(cluster_parts),
+        cluster_key=cluster_key,
         packages=tuple(sorted(packages)),
         top_modules=top_modules,
         environment=environment,
+        recipe_parse_error=parse_error,
     )
 
 
@@ -1074,7 +1477,29 @@ def unrenderable_reason(row: CatalogRow) -> str | None:
     joined = f"{row.zoo} {row.constructor_call} {row.notes}".lower()
     if "jax" in row.zoo.lower() or "jax" in row.constructor_call.lower():
         return "jax_native"
-    if "<model_config>" in row.constructor_call or "config.fromfile" in joined:
+    # Recipes that import the upstream repo's local source layout (`from models...`, `from src...`,
+    # `models.networks.X(...)`) need that repo on sys.path -- not a PyPI install. Surface that
+    # honestly instead of letting the dependency stage mislabel them "dependency missing". A recipe
+    # that is self-contained (its only `models`/`src` mention is a defined symbol, or it `exec`s an
+    # inline reimplementation) does NOT trip this, because such names are locally bound.
+    try:
+        local_tree: ast.AST | None = ast.parse(row.constructor_call.strip(), mode="exec")
+    except SyntaxError:
+        local_tree = None
+    if local_tree is not None:
+        imported, attr_roots, bound = _collect_recipe_names(local_tree)
+        local_refs = {
+            r for r in (imported | attr_roots) if r in LOCAL_SOURCE_NAMES and r not in bound
+        }
+        if local_refs:
+            return "local_source_unavailable"
+    if "<model_config>" in row.constructor_call:
+        return "web_or_config_recipe_sketch"
+    # A real resolved OpenMMLab .mim config build -- Config.fromfile(<pkg>/.mim/configs/<real>.py) -- is a
+    # genuine buildable recipe, NOT a sketch. Only flag config.fromfile when it lacks a resolved .mim path
+    # (a placeholder / web-config sketch). Fixed 2026-06-19: the blanket flag wrongly pre-skipped 838
+    # mm-family recipes that build the real published architecture from the installed .mim config.
+    if "config.fromfile" in joined and ".mim/configs/" not in row.constructor_call.lower():
         return "web_or_config_recipe_sketch"
     for marker, reason in UNRENDERABLE_MARKERS:
         if marker in joined:
@@ -1156,24 +1581,24 @@ def instantiate_model(row: CatalogRow) -> Any:
         return CLASSICS[row.name]["build"]()
 
     namespace = import_namespace(row)
-    builtins = {
-        "__import__": __import__,
-        "dict": dict,
-        "getattr": getattr,
-        "len": len,
-        "list": list,
-        "range": range,
-        "set": set,
-        "tuple": tuple,
-    }
-    globals_dict = {"__builtins__": builtins, **namespace}
+    # Recipes are our own audited catalog code, and __import__ is already permitted (so a restricted
+    # builtins set never actually sandboxed anything -- os/subprocess are reachable via import). The
+    # 8-entry whitelist silently broke ~2838 recipes that legitimately need type() class factories,
+    # `class` statements (__build_class__), setattr/super, and exec (JSON-encoded multi-line reimpls),
+    # all failing with "NameError: name 'type' is not defined". Expose the full builtins.
+    builtins = dict(vars(__import__("builtins")))
+    # __name__='__main__' so type()-built classes inherit __module__ (else torchlens trace hits
+    # AttributeError('__module__') on module-less dynamic classes -- the ignore-input wrapper pattern).
+    globals_dict = {"__builtins__": builtins, "__name__": "__main__", **namespace}
     constructor_call = row.constructor_call.strip()
     if ";" in constructor_call or constructor_call.startswith(("import ", "from ")):
-        locals_dict = dict(namespace)
-        exec(constructor_call, globals_dict, locals_dict)  # noqa: S102
+        # Single namespace (globals IS locals): recipe-level imports + names are visible inside
+        # lambdas/classes the recipe defines (separate locals left them unresolved -> "name 'nn' is
+        # not defined" when the wrapper's forward lambda ran during tracing).
+        exec(constructor_call, globals_dict)  # noqa: S102
         for output_name in ("model", "net", "module"):
-            if output_name in locals_dict:
-                return locals_dict[output_name]
+            if output_name in globals_dict:
+                return globals_dict[output_name]
         raise ValueError("statement recipe did not assign a `model`, `net`, or `module` variable")
     return eval(constructor_call, globals_dict, namespace)  # noqa: S307
 
@@ -1491,16 +1916,31 @@ def render_with_timeout(
         child_env = dict(os.environ)
         for key in ("TMPDIR", "TEMP", "TMP"):
             child_env[key] = str(tmp_dir)
+    # Run the worker in its OWN session/process group so that on timeout we can
+    # kill the entire group. The worker spawns graphviz children (``dot`` /
+    # ``neato``) for layout; ``subprocess.run``'s timeout only kills the direct
+    # child, orphaning those grandchildren -- they then reparent to init and can
+    # run for hours on pathologically dense graphs (load runaway). ``killpg``
+    # reaps the whole tree so a rerun is always safe and self-cleaning.
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=child_env,
+        start_new_session=True,
+    )
     try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            env=child_env,
-        )
+        stdout, stderr = proc.communicate(timeout=timeout_sec)
     except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
         return RenderResult(
             row.name,
             row.model_id,
@@ -1511,6 +1951,7 @@ def render_with_timeout(
             plan.cluster_key,
             f"timed out after {timeout_sec:.1f}s",
         )
+    completed = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
         return RenderResult(
@@ -1588,6 +2029,10 @@ def select_rows(args: argparse.Namespace) -> list[CatalogRow]:
     if args.name:
         terms = [term.lower() for term in args.name]
         rows = [row for row in rows if any(term in row.name.lower() for term in terms)]
+    if getattr(args, "names_file", None):
+        with open(args.names_file) as handle:
+            wanted = {line.strip().lower() for line in handle if line.strip()}
+        rows = [row for row in rows if row.name.lower() in wanted]
     if args.model_id:
         model_ids = set(args.model_id)
         rows = [row for row in rows if row.model_id in model_ids]
@@ -2241,6 +2686,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--domain")
     parser.add_argument("--zoo")
     parser.add_argument("--name", action="append", help="case-insensitive model-name substring")
+    parser.add_argument(
+        "--names-file", help="render only models whose exact name (one per line) is in this file"
+    )
     parser.add_argument("--model-id", action="append", type=int, help="exact catalog model id")
     parser.add_argument("--verified-only", action="store_true")
     parser.add_argument("--featured-only", action="store_true")
@@ -2330,6 +2778,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         os.environ.setdefault(_thread_var, "1")
     if args.worker_row_json:
+        # Per-worker address-space backstop: a pathological model that tries to
+        # allocate a runaway amount fails its OWN worker with a clean MemoryError
+        # (-> failed:exception) instead of triggering a global OOM that the kernel
+        # resolves by SIGKILLing an innocent sibling worker. Set generously (0.8x
+        # total RAM) so normal models -- even large ones -- never false-trip; it
+        # only catches genuine runaway allocation.
+        try:
+            import resource as _resource
+
+            _total_ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            _cap = int(_total_ram * 0.8)
+            _soft, _hard = _resource.getrlimit(_resource.RLIMIT_AS)
+            _new_hard = _cap if _hard == _resource.RLIM_INFINITY else min(_cap, _hard)
+            _resource.setrlimit(_resource.RLIMIT_AS, (_cap, _new_hard))
+        except (ValueError, OSError, AttributeError):
+            pass
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         try:
             result = render_one(

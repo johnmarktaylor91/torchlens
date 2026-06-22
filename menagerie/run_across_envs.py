@@ -148,6 +148,14 @@ class EnvRecipe:
         Whether unmatched rows should run in this environment.
     resolved_packages:
         Captured ``pip freeze`` output from a working environment.
+    torch_pin:
+        Optional torch/torchvision pins installed FIRST via ``--index-url`` so the
+        editable TorchLens install does not pull an incompatible default torch
+        (e.g. ``("torch==2.4.1", "torchvision==0.19.1")``). TorchLens needs
+        ``torch>=2.4``; many frameworks only ship wheels for a specific torch+CUDA.
+    torch_index_url:
+        Index URL used with ``--index-url`` for ``torch_pin`` (forces the right
+        CUDA wheels, unlike ``extra_index_url`` which only augments PyPI).
     """
 
     key: str
@@ -161,6 +169,9 @@ class EnvRecipe:
     notes: str
     catch_all: bool
     resolved_packages: tuple[str, ...]
+    torch_pin: tuple[str, ...] = ()
+    torch_index_url: str | None = None
+    post_install_commands: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -355,6 +366,11 @@ def _normalize_recipe(key: str, payload: dict[str, Any]) -> EnvRecipe:
         notes=str(payload.get("notes", "")),
         catch_all=bool(payload.get("catch_all", False)),
         resolved_packages=tuple(str(package) for package in payload.get("resolved_packages", [])),
+        torch_pin=tuple(str(package) for package in payload.get("torch_pin", [])),
+        torch_index_url=payload.get("torch_index_url"),
+        post_install_commands=tuple(
+            str(command) for command in payload.get("post_install_commands", [])
+        ),
     )
 
 
@@ -551,6 +567,15 @@ def _install_commands_for_recipe(recipe: EnvRecipe, repo_root: Path) -> tuple[Pl
         for package in recipe.pip_packages
         if package.startswith("mim:")
     ]
+    # Pin torch FIRST (via --index-url, which forces the chosen CUDA wheels) so the
+    # editable TorchLens install below sees a satisfying torch>=2.4 and does not pull
+    # an incompatible default build. --extra-index-url is insufficient here because it
+    # only augments PyPI and pip may still prefer a newer default-CUDA torch.
+    if recipe.torch_pin:
+        torch_command = [*base_pip, *recipe.torch_pin]
+        if recipe.torch_index_url:
+            torch_command.extend(["--index-url", recipe.torch_index_url])
+        commands.append(PlannedCommand(recipe.key, "install", tuple(torch_command)))
     editable_command = _command_with_extra_index(
         [*base_pip, "-e", str(repo_root)], recipe.extra_index_url
     )
@@ -566,6 +591,17 @@ def _install_commands_for_recipe(recipe: EnvRecipe, repo_root: Path) -> tuple[Pl
                 recipe.key,
                 "install",
                 ("conda", "run", "-n", env_name, "mim", "install", *mim_packages),
+            )
+        )
+    # Arbitrary post-install shell steps (run via bash -c in the env), e.g. writing a
+    # sitecustomize.py shim. Used by mmlab to spoof mmcv.__version__ so mmdet/mmseg's
+    # conservative <2.2.0 cap passes (mmcv 2.2.0 is additive-only over 2.1.0).
+    for shell_command in recipe.post_install_commands:
+        commands.append(
+            PlannedCommand(
+                recipe.key,
+                "post_install",
+                ("conda", "run", "-n", env_name, "bash", "-c", shell_command),
             )
         )
     return tuple(commands)
