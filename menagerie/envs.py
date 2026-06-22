@@ -40,6 +40,13 @@ BUILD_MARKER = "torchlens_env_build.json"
 LOCK_MANIFEST_SUFFIX = ".pixi.toml"
 LOCK_FILE_SUFFIX = ".pixi.lock"
 BASE_STATUS_MODULES = {"builtins", "menagerie", "pathlib", "torch"}
+TORCHLENS_RUNTIME_PYPI = (
+    "graphviz",
+    "safetensors>=0.4",
+    "tqdm",
+    "typing_extensions>=4.0",
+    "pillow>=9",
+)
 BuildStatus = Literal["built", "cached", "install_failed", "env_unavailable"]
 
 
@@ -539,6 +546,28 @@ def _split_package_spec(spec: str) -> tuple[str, str]:
     return spec.strip(), "*"
 
 
+def _split_pypi_package_spec(spec: str) -> tuple[str, str, tuple[str, ...]]:
+    """Split a PyPI package spec into name, constraint, and extras.
+
+    Parameters
+    ----------
+    spec:
+        PyPI package spec.
+
+    Returns
+    -------
+    tuple[str, str, tuple[str, ...]]
+        Package name, constraint, and extras.
+    """
+
+    name, constraint = _split_package_spec(spec)
+    if "[" not in name or not name.endswith("]"):
+        return name, constraint, ()
+    base_name, raw_extras = name[:-1].split("[", 1)
+    extras = tuple(extra.strip() for extra in raw_extras.split(",") if extra.strip())
+    return base_name, constraint, extras
+
+
 def _toml_quote(value: str) -> str:
     """Return a TOML string literal.
 
@@ -606,16 +635,52 @@ def render_pixi_manifest(spec: EnvSpec) -> str:
         if extra_urls:
             rendered = ", ".join(_toml_quote(str(url)) for url in extra_urls)
             lines.append(f"extra-index-urls = [{rendered}]")
+        index_strategy = spec.pypi_options.get("index_strategy")
+        if index_strategy:
+            lines.append(f"index-strategy = {_toml_quote(str(index_strategy))}")
+        elif extra_urls:
+            lines.append('index-strategy = "unsafe-best-match"')
         no_build_isolation = spec.pypi_options.get("no_build_isolation", [])
         if no_build_isolation:
             rendered = ", ".join(_toml_quote(str(item)) for item in no_build_isolation)
             lines.append(f"no-build-isolation = [{rendered}]")
-    if spec.pypi_packages:
+    pypi_packages = _with_torchlens_runtime_deps(spec.pypi_packages)
+    if pypi_packages:
         lines.extend(["", "[pypi-dependencies]"])
-        for package_spec in spec.pypi_packages:
-            name, constraint = _split_package_spec(package_spec)
-            lines.append(f"{_toml_key(name)} = {_toml_quote(constraint)}")
+        for package_spec in pypi_packages:
+            name, constraint, extras = _split_pypi_package_spec(package_spec)
+            if extras:
+                rendered_extras = ", ".join(_toml_quote(extra) for extra in extras)
+                lines.append(
+                    f"{_toml_key(name)} = "
+                    f"{{ version = {_toml_quote(constraint)}, extras = [{rendered_extras}] }}"
+                )
+            else:
+                lines.append(f"{_toml_key(name)} = {_toml_quote(constraint)}")
     return "\n".join(lines) + "\n"
+
+
+def _with_torchlens_runtime_deps(package_specs: Sequence[str]) -> tuple[str, ...]:
+    """Return package specs with TorchLens runtime deps included.
+
+    Parameters
+    ----------
+    package_specs:
+        Island package specs.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Package specs including TorchLens runtime dependencies.
+    """
+
+    existing = {_split_pypi_package_spec(spec)[0] for spec in package_specs}
+    runtime_specs = [
+        package_spec
+        for package_spec in TORCHLENS_RUNTIME_PYPI
+        if _split_pypi_package_spec(package_spec)[0] not in existing
+    ]
+    return (*runtime_specs, *package_specs)
 
 
 def _run_command(
@@ -1439,6 +1504,8 @@ def run_validate(
             "--no-install-deps",
             "--stable-ids",
             *stable_ids,
+            "--db",
+            str(build_result.project_dir / "catalog.db"),
             "--device",
             spec.expected_device,
             *extra_args,

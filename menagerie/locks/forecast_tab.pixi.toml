@@ -1,0 +1,31 @@
+[workspace]
+name = "torchlens-menagerie-forecast_tab"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+"python" = "3.11.*"
+"pip" = "*"
+"packaging" = "<25"
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu121"]
+index-strategy = "unsafe-best-match"
+
+[pypi-dependencies]
+"graphviz" = "*"
+"safetensors" = ">=0.4"
+"tqdm" = "*"
+"typing_extensions" = ">=4.0"
+"pillow" = ">=9"
+"torch" = "==2.4.1"
+"torchvision" = "==0.19.1"
+"numpy" = "<2"
+"pandas" = "<3"
+"neuralforecast" = "==3.1.9"
+"pytorch-widedeep" = "==1.7.0"
+"recbole" = "==1.2.1"
+"deepctr-torch" = "==0.3.0"
+"fuxictr" = "==2.3.9"
+"gluonts" = { version = "==0.16.2", extras = ["torch"] }

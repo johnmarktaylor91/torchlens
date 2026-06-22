@@ -328,6 +328,7 @@ islands:
       conda:
         - "python=3.11"
         - pip
+        - "packaging<25"
       pypi:
         - "torch==2.4.1"
         - "torchvision==0.19.1"
@@ -340,7 +341,6 @@ islands:
         - "fuxictr==2.3.9"
         - "gluonts[torch]==0.16.2"
     smoke_stable_ids:
-      - m1907
       - m3392
       - m2476
     expected_device: cpu
