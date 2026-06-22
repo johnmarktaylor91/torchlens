@@ -41,6 +41,7 @@ CANONICAL_COLUMNS = (
     "era",
     "verified",
     "notes",
+    "source",
 )
 
 
@@ -145,6 +146,8 @@ class CatalogRow:
         Whether the source metadata indicates an instantiable recipe.
     notes:
         Source notes.
+    source:
+        Canonical source stream: ``catalog`` for TSV rows or ``classics`` for registry rows.
     """
 
     model_id: int
@@ -159,6 +162,7 @@ class CatalogRow:
     era: str
     verified: bool
     notes: str
+    source: str
 
 
 def macro_domain(raw: str) -> str:
@@ -604,11 +608,16 @@ def _source_rows(source_tsv: Path = SOURCE_TSV) -> list[dict[str, str]]:
         return []
     first = [value.strip() for value in raw_rows[0]]
     data_rows = raw_rows[1:] if first == list(SOURCE_COLUMNS) else raw_rows
+    from menagerie.classics import CLASSIC_ZOO, CLASSICS
+
     rows = []
     for index, row in enumerate(data_rows, start=1):
         if len(row) != len(SOURCE_COLUMNS):
             raise ValueError(f"{source_tsv}:{index} has {len(row)} columns, expected 9")
-        rows.append(dict(zip(SOURCE_COLUMNS, row)))
+        parsed = dict(zip(SOURCE_COLUMNS, row))
+        if parsed["zoo"] == CLASSIC_ZOO and parsed["name"] in CLASSICS:
+            continue
+        rows.append(parsed)
     return rows
 
 
@@ -705,7 +714,7 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
     """
 
     intermediate = []
-    for row in [*_source_rows(source_tsv), *_classics_source_rows()]:
+    for row in _source_rows(source_tsv):
         normalized = normalize_family(row["family"], row["name"], row["zoo"])
         intermediate.append(
             {
@@ -713,12 +722,28 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
                 "family_normalized": normalized,
                 "domain": macro_domain(row["domain"]),
                 "verified": is_verified(row["notes"], row["zoo"]),
+                "source": "catalog",
+            }
+        )
+    for row in _classics_source_rows():
+        normalized = normalize_family(row["family"], row["name"], row["zoo"])
+        intermediate.append(
+            {
+                **row,
+                "family_normalized": normalized,
+                "domain": macro_domain(row["domain"]),
+                "verified": True,
+                "source": "classics",
             }
         )
     representative_map = normalize_family_representatives(intermediate)
     deduped: dict[tuple[str, str, str, str, str], dict[str, str | bool]] = {}
+    classics_rows: list[dict[str, str | bool]] = []
     for row in intermediate:
         row["family_normalized"] = representative_map[row["family_normalized"]]
+        if row["source"] == "classics":
+            classics_rows.append(row)
+            continue
         key = (
             row["name"].lower(),
             row["zoo"].lower(),
@@ -738,7 +763,7 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
             )
         current["verified"] = bool(current["verified"]) or bool(row["verified"])
     sorted_rows = sorted(
-        deduped.values(),
+        [*deduped.values(), *classics_rows],
         key=lambda item: (
             str(item["family_normalized"]).lower(),
             str(item["name"]).lower(),
@@ -759,6 +784,7 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
             era=str(row["era"]),
             verified=bool(row["verified"]),
             notes=str(row["notes"]),
+            source=str(row["source"]),
         )
         for index, row in enumerate(sorted_rows, start=1)
     ]
@@ -805,13 +831,14 @@ def write_catalog(
                 input_dtype TEXT NOT NULL,
                 era TEXT NOT NULL,
                 verified INTEGER NOT NULL,
-                notes TEXT NOT NULL
+                notes TEXT NOT NULL,
+                source TEXT NOT NULL
             )
             """
         )
         connection.executemany(
             """
-            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -827,6 +854,7 @@ def write_catalog(
                     row.era,
                     int(row.verified),
                     row.notes,
+                    row.source,
                 )
                 for row in rows
             ],
@@ -924,6 +952,7 @@ def load_rows(
             era=row[9],
             verified=bool(row[10]),
             notes=row[11],
+            source=row[12],
         )
         for row in rows
     ]
@@ -978,6 +1007,7 @@ def find_recipe(name: str, db_path: Path = CATALOG_DB) -> CatalogRow:
         era=row[9],
         verified=bool(row[10]),
         notes=row[11],
+        source=row[12],
     )
 
 

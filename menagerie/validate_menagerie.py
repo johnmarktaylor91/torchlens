@@ -235,6 +235,7 @@ def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
         era=str(payload["era"]),
         verified=bool(payload["verified"]),
         notes=str(payload["notes"]),
+        source=str(payload.get("source", "catalog")),
     )
 
 
