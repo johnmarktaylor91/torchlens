@@ -12,6 +12,7 @@ from menagerie.catalog import CatalogRow, build_canonical_rows
 from menagerie.classics import CLASSIC_ZOO, CLASSICS
 from menagerie.recipe import build_input_for_row
 from menagerie.runtime import unrenderable_reason
+from menagerie.tools.validate_catalog import validate_catalog_files
 
 
 DEFAULT_BASELINE = Path(".research/menagerie-redesign/phase0_baseline.json")
@@ -129,6 +130,21 @@ def _check_classics_count(rows: Sequence[CatalogRow], errors: list[str]) -> None
         )
 
 
+def _check_catalog_schema(errors: list[str]) -> None:
+    """Check committed JSONL source schema validity.
+
+    Parameters
+    ----------
+    errors:
+        Mutable error accumulator.
+    """
+
+    try:
+        validate_catalog_files()
+    except Exception as exc:  # noqa: BLE001 - parity reports schema failures.
+        errors.append(f"catalog JSONL schema validation failed: {exc!r}")
+
+
 def _check_natural_keys(rows: Sequence[CatalogRow], errors: list[str]) -> None:
     """Check ``(name, zoo, variant)`` uniqueness.
 
@@ -238,6 +254,7 @@ def run_parity_check(baseline_path: Path) -> int:
     baseline = _load_baseline(baseline_path)
     rows = build_canonical_rows()
     errors: list[str] = []
+    _check_catalog_schema(errors)
     _check_classics_count(rows, errors)
     _check_natural_keys(rows, errors)
     _check_renderable_floor(baseline, rows, errors)
