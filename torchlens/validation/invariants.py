@@ -33,16 +33,20 @@ import re
 from collections.abc import Mapping
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Callable, Literal, cast
 
 from ..errors._base import ValidationError
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
+    from ..backends import BackendSpec
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from ..data_classes.module import Module
+
+InvariantApplicability = Literal["torch", "non_torch", "all"]
+MetadataInvariantFunc = Callable[["Trace"], object]
 
 
 class MetadataInvariantError(ValidationError, ValueError):
@@ -86,6 +90,28 @@ class InvariantResult:
     message: str = ""
 
 
+@dataclass(frozen=True)
+class MetadataInvariantContract:
+    """Backend applicability contract for one metadata invariant check.
+
+    Attributes
+    ----------
+    name:
+        Stable check name used for dispatch introspection.
+    check:
+        Callable that runs the invariant.
+    applies_to:
+        Backend family this check currently runs on.
+    requires_capability:
+        Optional backend capability flag that must be truthy for the check to run.
+    """
+
+    name: str
+    check: MetadataInvariantFunc
+    applies_to: InvariantApplicability
+    requires_capability: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -108,13 +134,9 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     bool
         ``True`` if all invariants pass.
     """
-    from ..backends import get_backend_spec
-
-    spec = get_backend_spec(getattr(trace, "backend", "torch"))
-    if spec is not get_backend_spec("torch"):
-        return _check_backend_neutral_metadata_invariants(trace)
-
-    return _check_torch_metadata_invariants(trace)
+    for contract in _metadata_invariant_contracts_for_trace(trace):
+        contract.check(trace)
+    return True
 
 
 def _check_torch_metadata_invariants(trace: "Trace") -> bool:
@@ -131,31 +153,8 @@ def _check_torch_metadata_invariants(trace: "Trace") -> bool:
         ``True`` if all torch invariants pass.
     """
 
-    # --- Phase 1: structural invariants (A-L) ---
-    _check_trace_self_consistency(trace)  # A
-    _check_region_replay_provenance(trace)
-    _check_backward_graph_invariants(trace)  # T
-    _check_special_layer_lists(trace)  # B
-    _check_graph_topology(trace)  # C
-    _check_op_log_fields(trace)  # D
-    _check_recurrence_invariants(trace)  # E
-    _check_branching_invariants(trace)  # F
-    _check_conditional_invariants(trace)  # F2
-    _check_layer_pass_to_layer_log_xrefs(trace)  # G
-    _check_module_layer_containment(trace)  # H
-    _check_module_hierarchy(trace)  # I
-    _check_param_xrefs(trace)  # J
-    _check_buffer_xrefs(trace)  # K
-    _check_equivalence_symmetry(trace)  # L
-
-    # --- Phase 2: semantic invariants (M-R) ---
-    _check_graph_ordering(trace)  # M
-    _check_loop_detection_invariants(trace)  # N
-    _check_distance_invariants(trace)  # O
-    _check_graph_connectivity(trace)  # P
-    _check_module_containment_logic(trace)  # Q
-    _check_lookup_key_consistency(trace)  # R
-    check_func_call_id_invariant(trace)  # S
+    for contract in _metadata_invariant_contracts_for_backend("torch"):
+        contract.check(trace)
     return True
 
 
@@ -173,14 +172,8 @@ def _check_backend_neutral_metadata_invariants(trace: "Trace") -> bool:
         ``True`` if all backend-neutral invariants pass.
     """
 
-    _check_backend_identity_invariants(trace)
-    _check_trace_self_consistency(trace)
-    _check_region_replay_provenance(trace)
-    _check_non_torch_backward_inert(trace)
-    _check_backend_neutral_accessor_refs(trace)
-    _check_backend_neutral_module_mode_invariants(trace)
-    _check_graph_ordering(trace)
-    _check_lookup_key_consistency(trace)
+    for contract in _metadata_invariant_contracts_for_backend("non_torch"):
+        contract.check(trace)
     return True
 
 
@@ -3311,3 +3304,171 @@ def _check_lookup_key_consistency(ml: "Trace") -> None:
                 name,
                 f"_raw_to_final_layer_labels maps to '{final}' which is not a valid label",
             )
+
+
+METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
+    # Current non-torch-only setup checks.
+    MetadataInvariantContract(
+        "backend_identity_invariants",
+        _check_backend_identity_invariants,
+        "non_torch",
+    ),
+    # --- Phase 1: structural invariants (A-L) ---
+    MetadataInvariantContract("trace_self_consistency", _check_trace_self_consistency, "all"),
+    MetadataInvariantContract(
+        "region_replay_provenance",
+        _check_region_replay_provenance,
+        "all",
+    ),
+    MetadataInvariantContract(
+        "backward_graph_invariants",
+        _check_backward_graph_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "non_torch_backward_inert",
+        _check_non_torch_backward_inert,
+        "non_torch",
+    ),
+    MetadataInvariantContract(
+        "backend_neutral_accessor_refs",
+        _check_backend_neutral_accessor_refs,
+        "non_torch",
+    ),
+    MetadataInvariantContract(
+        "backend_neutral_module_mode_invariants",
+        _check_backend_neutral_module_mode_invariants,
+        "non_torch",
+    ),
+    MetadataInvariantContract("special_layer_lists", _check_special_layer_lists, "torch"),
+    MetadataInvariantContract("graph_topology", _check_graph_topology, "torch"),
+    MetadataInvariantContract("op_log_fields", _check_op_log_fields, "torch"),
+    MetadataInvariantContract("recurrence_invariants", _check_recurrence_invariants, "torch"),
+    MetadataInvariantContract("branching_invariants", _check_branching_invariants, "torch"),
+    MetadataInvariantContract("conditional_invariants", _check_conditional_invariants, "torch"),
+    MetadataInvariantContract(
+        "layer_pass_layer_log_xrefs",
+        _check_layer_pass_to_layer_log_xrefs,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "module_layer_containment",
+        _check_module_layer_containment,
+        "torch",
+    ),
+    MetadataInvariantContract("module_hierarchy", _check_module_hierarchy, "torch"),
+    MetadataInvariantContract("param_xrefs", _check_param_xrefs, "torch"),
+    MetadataInvariantContract("buffer_xrefs", _check_buffer_xrefs, "torch"),
+    MetadataInvariantContract(
+        "equivalence_symmetry",
+        _check_equivalence_symmetry,
+        "torch",
+    ),
+    # --- Phase 2: semantic invariants (M-R) ---
+    MetadataInvariantContract("graph_ordering", _check_graph_ordering, "all"),
+    MetadataInvariantContract(
+        "loop_detection_invariants",
+        _check_loop_detection_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract("distance_invariants", _check_distance_invariants, "torch"),
+    MetadataInvariantContract("graph_connectivity", _check_graph_connectivity, "torch"),
+    MetadataInvariantContract(
+        "module_containment_logic",
+        _check_module_containment_logic,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "lookup_key_consistency",
+        _check_lookup_key_consistency,
+        "all",
+    ),
+    MetadataInvariantContract(
+        "func_call_id_consistency",
+        check_func_call_id_invariant,
+        "torch",
+    ),
+)
+
+
+def _metadata_invariant_contracts_for_trace(
+    trace: "Trace",
+) -> tuple[MetadataInvariantContract, ...]:
+    """Return metadata invariant contracts applicable to ``trace``.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backend selects the contract subset.
+
+    Returns
+    -------
+    tuple[MetadataInvariantContract, ...]
+        Ordered invariant contracts matching the trace backend and capability
+        requirements.
+    """
+
+    from ..backends import get_backend_spec
+
+    spec = get_backend_spec(getattr(trace, "backend", "torch"))
+    torch_spec = get_backend_spec("torch")
+    backend_family = "torch" if spec is torch_spec else "non_torch"
+    return _metadata_invariant_contracts_for_backend(backend_family, spec=spec)
+
+
+def _metadata_invariant_contracts_for_backend(
+    backend_family: Literal["torch", "non_torch"],
+    *,
+    spec: "BackendSpec | None" = None,
+) -> tuple[MetadataInvariantContract, ...]:
+    """Return ordered metadata invariant contracts for a backend family.
+
+    Parameters
+    ----------
+    backend_family:
+        ``"torch"`` for torch traces, otherwise ``"non_torch"``.
+    spec:
+        Optional backend registry spec used for capability-gated contracts.
+
+    Returns
+    -------
+    tuple[MetadataInvariantContract, ...]
+        Ordered invariant contracts whose backend and capability contracts match.
+    """
+
+    return tuple(
+        contract
+        for contract in METADATA_INVARIANT_CONTRACTS
+        if _metadata_invariant_applies(contract, backend_family, spec)
+    )
+
+
+def _metadata_invariant_applies(
+    contract: MetadataInvariantContract,
+    backend_family: Literal["torch", "non_torch"],
+    spec: "BackendSpec | None",
+) -> bool:
+    """Return whether ``contract`` applies to a backend family and spec.
+
+    Parameters
+    ----------
+    contract:
+        Metadata invariant contract to evaluate.
+    backend_family:
+        Backend family selected from the trace backend.
+    spec:
+        Backend registry spec, when available.
+
+    Returns
+    -------
+    bool
+        True when backend applicability and optional capability gates match.
+    """
+
+    if contract.applies_to not in {"all", backend_family}:
+        return False
+    if contract.requires_capability is None:
+        return True
+    if spec is None:
+        return False
+    return bool(getattr(spec.capabilities, contract.requires_capability, False))
