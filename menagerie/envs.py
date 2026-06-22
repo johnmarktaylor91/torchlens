@@ -452,6 +452,8 @@ def env_for_row(row: CatalogRow, registry: EnvRegistry | None = None) -> str:
     """
 
     active_registry = registry or load_registry()
+    if not _row_needs_dependency_env(row, active_registry):
+        return "base"
     matches = [key for key, spec in active_registry.islands.items() if _row_matches_env(row, spec)]
     unique_matches = sorted(set(matches))
     if len(unique_matches) > 1:
@@ -460,9 +462,7 @@ def env_for_row(row: CatalogRow, registry: EnvRegistry | None = None) -> str:
         )
     if unique_matches:
         return unique_matches[0]
-    if _row_needs_dependency_env(row, active_registry):
-        return active_registry.fallback_dependency_env
-    return "base"
+    return active_registry.fallback_dependency_env
 
 
 def assign(rows: Sequence[CatalogRow], registry: EnvRegistry | None = None) -> dict[str, str]:
