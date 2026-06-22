@@ -943,6 +943,40 @@ def test_region_replay_annotation_with_importer_provenance_passes_tripwire() -> 
         log.cleanup()
 
 
+def test_backend_identity_invariants_reject_torch_param_source_none_with_params() -> None:
+    """Torch identity invariants reject ``param_source='none'`` with params present."""
+
+    log = _make_clean_log()
+    try:
+        assert log.backend == "torch"
+        assert log.module_identity_mode == "torch_module"
+        assert log.param_source == "native-module"
+        assert log.num_param_tensors > 0
+
+        log.param_source = "none"
+
+        with pytest.raises(MetadataInvariantError, match="param_source='none'"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backend_identity_invariants_pass_healthy_resnet() -> None:
+    """Backend identity preconditions fire on a healthy torch ResNet trace."""
+
+    torchvision_models = pytest.importorskip("torchvision.models")
+    model = torchvision_models.resnet18(weights=None).eval()
+    log = trace_fn(model, torch.randn(1, 3, 32, 32), random_seed=42)
+    try:
+        assert log.backend == "torch"
+        assert log.module_identity_mode == "torch_module"
+        assert log.param_source == "native-module"
+        assert log.num_param_tensors > 0
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
 def test_clean_log_ops_as_method():
     """check_metadata_invariants works as a bound method on Trace."""
     log = _make_clean_log()

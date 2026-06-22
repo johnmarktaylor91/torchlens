@@ -424,12 +424,19 @@ def _module_claim_address(claim: str) -> str | None:
 
 
 def _check_backend_identity_invariants(trace: "Trace") -> None:
-    """Check backend identity and declared mode fields for non-torch traces.
+    """Check backend identity and declared mode fields.
+
+    Precondition contract: every completed trace, including torch traces, must
+    declare a registered backend, a backend-supported module identity mode, and
+    a param-source domain value. ``param_source='none'`` is legitimate for
+    parameterless captures, but it is corruption if parameter tensors are
+    reported elsewhere on the trace. Backend-specific address or resolver
+    coupling is intentionally outside this identity contract.
 
     Parameters
     ----------
     trace:
-        Postprocessed non-torch trace to validate.
+        Postprocessed trace to validate.
 
     Raises
     ------
@@ -3307,13 +3314,11 @@ def _check_lookup_key_consistency(ml: "Trace") -> None:
 
 
 METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
-    # Phase A classification: these contracts encode current behavior only.
-    # Moving a check to another backend is a later semantic change.
-    # Current non-torch-only setup checks.
+    # Setup checks.
     MetadataInvariantContract(
         "backend_identity_invariants",
         _check_backend_identity_invariants,
-        "non_torch",
+        "all",
     ),
     # --- Phase 1: structural invariants (A-L) ---
     MetadataInvariantContract("trace_self_consistency", _check_trace_self_consistency, "all"),

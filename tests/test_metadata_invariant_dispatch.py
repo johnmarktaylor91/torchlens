@@ -11,6 +11,7 @@ from torchlens.validation import invariants
 
 
 PRE_REFACTOR_TORCH_SEQUENCE = (
+    "backend_identity_invariants",
     "trace_self_consistency",
     "region_replay_provenance",
     "backward_graph_invariants",
