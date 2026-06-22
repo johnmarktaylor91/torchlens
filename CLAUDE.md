@@ -16,6 +16,18 @@ pip install -e ".[test]"  # local development with test extras
 Graphviz rendering needs Graphviz (`apt install graphviz` on Debian/Ubuntu). Optional
 extras gate appliance and bridge namespaces; see `pyproject.toml` for the current list.
 
+## Torch Version Compatibility
+
+TorchLens supports torch 2.1 -> 2.12+ for eager torch capture. The declared floor stays
+`torch>=2.1`; torch 2.0 may work best-effort through guarded fallbacks, but it is not a
+declared support floor.
+
+Every fragile torch-private-API probe or cross-version torch signature must route through
+`torchlens/utils/_torch_compat.py`. Feature-detect the runtime capability; do not parse
+`torch.__version__` for behavioral branching. Every graceful degradation must flip a named
+`HAS_*` capability flag and be visible through the torch capability snapshot in
+`torchlens.utils.doctor()` / `torchlens.compat.report()`.
+
 ## Model Menagerie (`menagerie/`)
 
 `menagerie/` is a browsable atlas of 10,000+ neural-net architecture families captured with TorchLens:

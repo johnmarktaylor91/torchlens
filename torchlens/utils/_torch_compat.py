@@ -577,12 +577,12 @@ def get_torch_function_mode_stack_length() -> int | None:
     return int(stack_len())
 
 
-def get_device_constructors() -> Callable[[], Iterable[Any]] | None:
+def get_device_constructors() -> Any | None:
     """Return torch's private device-constructor inventory when available.
 
     Returns
     -------
-    Callable[[], Iterable[Any]] | None
+    Any | None
         ``torch.utils._device._device_constructors`` or ``None`` when absent.
     """
 
