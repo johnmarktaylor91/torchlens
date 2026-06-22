@@ -10,11 +10,17 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
 from menagerie.catalog import CATALOG_DB, DEFERRED_JSONL, SOURCE_JSONL, ensure_catalog
-from menagerie.ledger import VERIFICATION_DB, connect as connect_ledger, verified_count
+from menagerie.ledger import (
+    STATUS_VALUES,
+    VERIFICATION_DB,
+    connect as connect_ledger,
+    verified_count,
+)
 from menagerie.provenance import SweepProvenance, read_sweeps
 from menagerie.schema import (
     VerificationExpectation,
@@ -33,6 +39,9 @@ from menagerie.tools.distinct_report import (
 DEFAULT_RENDER_MANIFEST = Path("/tmp/torchlens_menagerie_gallery/manifest.tsv")
 DEFERRAL_REASON_RE = re.compile(r"deferral_reason=([^;]+)")
 CRAWL_HISTORY = Path(__file__).resolve().parent / "data" / "crawl_history.json"
+DEFAULT_COMPLETENESS_ROOT = Path("/tmp/torchlens_menagerie_status")
+CATALOG_SNAPSHOT_COLUMNS = ("stable_id", "recipe_revision_sha256", "name", "zoo", "source")
+TERMINAL_STATUSES = STATUS_VALUES
 
 
 @dataclass(frozen=True)
@@ -159,6 +168,86 @@ class ProvenanceStatus:
     model_wave_counts: dict[str, int]
     models_with_known_sweep: int
     models_without_wave: int
+
+
+@dataclass(frozen=True)
+class CompletenessIssue:
+    """One catalog row missing a current terminal verification row.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable catalog identity.
+    recipe_revision_sha256:
+        Current catalog recipe revision.
+    name:
+        Catalog model name.
+    zoo:
+        Catalog source zoo.
+    source:
+        Catalog source stream.
+    issue:
+        Audit issue class.
+    stale_recipe_revision_sha256:
+        Latest stale terminal recipe revision, when available.
+    stale_status:
+        Latest stale terminal status, when available.
+    """
+
+    stable_id: str
+    recipe_revision_sha256: str
+    name: str
+    zoo: str
+    source: str
+    issue: str
+    stale_recipe_revision_sha256: str = ""
+    stale_status: str = ""
+
+
+@dataclass(frozen=True)
+class CompletenessStatus:
+    """Completeness audit result.
+
+    Parameters
+    ----------
+    catalog_db:
+        Catalog database path used for the audit.
+    ledger_db:
+        Verification ledger path used for the audit.
+    torchlens_version:
+        TorchLens version used by the verified predicate.
+    run_dir:
+        Directory containing audit artifacts.
+    catalog_snapshot:
+        Catalog snapshot TSV artifact.
+    total_catalog_models:
+        Snapshot catalog row count.
+    terminal_current_recipe_models:
+        Catalog rows with a terminal ledger row at the current recipe revision.
+    missing_terminal_models:
+        Rows with no terminal ledger history.
+    stale_recipe_models:
+        Rows with terminal history only for stale recipe revisions.
+    issues:
+        Missing/stale catalog rows.
+    terminal_by_status:
+        Terminal current-recipe rows by ledger status.
+    funnel:
+        Honest status funnel, including the verified headline.
+    """
+
+    catalog_db: str
+    ledger_db: str
+    torchlens_version: str
+    run_dir: str
+    catalog_snapshot: str
+    total_catalog_models: int
+    terminal_current_recipe_models: int
+    missing_terminal_models: int
+    stale_recipe_models: int
+    issues: list[CompletenessIssue]
+    terminal_by_status: dict[str, int]
+    funnel: FunnelStatus
 
 
 def _catalog_rows(catalog_db: Path) -> list[sqlite3.Row]:
@@ -506,6 +595,311 @@ def build_status(
     )
 
 
+def _default_completeness_run_dir() -> Path:
+    """Return a timestamped completeness audit run directory.
+
+    Returns
+    -------
+    Path
+        Default run directory.
+    """
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return DEFAULT_COMPLETENESS_ROOT / timestamp
+
+
+def _write_catalog_snapshot(rows: list[sqlite3.Row], run_dir: Path) -> Path:
+    """Write the current catalog snapshot artifact.
+
+    Parameters
+    ----------
+    rows:
+        Current catalog rows.
+    run_dir:
+        Completeness audit run directory.
+
+    Returns
+    -------
+    Path
+        Snapshot TSV path.
+    """
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_path = run_dir / "catalog_snapshot.tsv"
+    with snapshot_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(CATALOG_SNAPSHOT_COLUMNS)
+        for row in rows:
+            writer.writerow(
+                (
+                    row["stable_id"],
+                    row["recipe_revision_sha256"],
+                    row["name"],
+                    row["zoo"],
+                    row["source"],
+                )
+            )
+    with snapshot_path.open(encoding="utf-8") as handle:
+        written = sum(1 for _line in handle) - 1
+    if written != len(rows):
+        raise RuntimeError(
+            f"catalog snapshot row-count mismatch: wrote {written}, expected {len(rows)}"
+        )
+    return snapshot_path
+
+
+def _load_catalog_snapshot(conn: sqlite3.Connection, rows: list[sqlite3.Row]) -> None:
+    """Load catalog rows into a temporary audit table.
+
+    Parameters
+    ----------
+    conn:
+        Ledger SQLite connection.
+    rows:
+        Current catalog rows.
+    """
+
+    conn.execute(
+        """
+        CREATE TEMP TABLE IF NOT EXISTS catalog_snapshot(
+            stable_id TEXT PRIMARY KEY,
+            recipe_revision_sha256 TEXT NOT NULL,
+            name TEXT NOT NULL,
+            zoo TEXT NOT NULL,
+            source TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("DELETE FROM catalog_snapshot")
+    conn.executemany(
+        """
+        INSERT INTO catalog_snapshot(stable_id, recipe_revision_sha256, name, zoo, source)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            (
+                str(row["stable_id"]),
+                str(row["recipe_revision_sha256"]),
+                str(row["name"]),
+                str(row["zoo"]),
+                str(row["source"]),
+            )
+            for row in rows
+        ),
+    )
+    snapshot_count = conn.execute("SELECT COUNT(*) FROM catalog_snapshot").fetchone()[0]
+    if int(snapshot_count) != len(rows):
+        raise RuntimeError(
+            f"catalog_snapshot temp row-count mismatch: loaded {snapshot_count}, expected {len(rows)}"
+        )
+
+
+def _terminal_status_placeholders() -> str:
+    """Return SQL placeholders for terminal statuses.
+
+    Returns
+    -------
+    str
+        Comma-separated SQLite placeholders.
+    """
+
+    return ",".join("?" for _status in TERMINAL_STATUSES)
+
+
+def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
+    """Return catalog rows lacking a current-recipe terminal row.
+
+    Parameters
+    ----------
+    conn:
+        Ledger SQLite connection with ``catalog_snapshot`` loaded.
+
+    Returns
+    -------
+    list[CompletenessIssue]
+        Missing or stale rows.
+    """
+
+    placeholders = _terminal_status_placeholders()
+    rows = conn.execute(
+        f"""
+        WITH current_terminal AS (
+            SELECT stable_id, recipe_revision_sha256, status
+            FROM (
+                SELECT
+                    verification_runs.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY stable_id, recipe_revision_sha256
+                        ORDER BY finished_at DESC, run_id DESC
+                    ) AS rn
+                FROM verification_runs
+                WHERE scope = 'forward'
+                  AND status IN ({placeholders})
+            )
+            WHERE rn = 1
+        ),
+        stale_terminal AS (
+            SELECT stable_id, recipe_revision_sha256, status
+            FROM (
+                SELECT
+                    verification_runs.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY stable_id
+                        ORDER BY finished_at DESC, run_id DESC
+                    ) AS rn
+                FROM verification_runs
+                WHERE scope = 'forward'
+                  AND status IN ({placeholders})
+            )
+            WHERE rn = 1
+        )
+        SELECT
+            catalog_snapshot.stable_id,
+            catalog_snapshot.recipe_revision_sha256,
+            catalog_snapshot.name,
+            catalog_snapshot.zoo,
+            catalog_snapshot.source,
+            CASE
+                WHEN stale_terminal.stable_id IS NULL THEN 'missing_terminal'
+                ELSE 'stale_recipe_revision'
+            END AS issue,
+            COALESCE(stale_terminal.recipe_revision_sha256, '') AS stale_recipe_revision_sha256,
+            COALESCE(stale_terminal.status, '') AS stale_status
+        FROM catalog_snapshot
+        LEFT JOIN current_terminal
+          ON current_terminal.stable_id = catalog_snapshot.stable_id
+         AND current_terminal.recipe_revision_sha256 = catalog_snapshot.recipe_revision_sha256
+        LEFT JOIN stale_terminal
+          ON stale_terminal.stable_id = catalog_snapshot.stable_id
+        WHERE current_terminal.stable_id IS NULL
+        ORDER BY catalog_snapshot.stable_id
+        """,
+        (*TERMINAL_STATUSES, *TERMINAL_STATUSES),
+    ).fetchall()
+    return [
+        CompletenessIssue(
+            stable_id=str(row["stable_id"]),
+            recipe_revision_sha256=str(row["recipe_revision_sha256"]),
+            name=str(row["name"]),
+            zoo=str(row["zoo"]),
+            source=str(row["source"]),
+            issue=str(row["issue"]),
+            stale_recipe_revision_sha256=str(row["stale_recipe_revision_sha256"]),
+            stale_status=str(row["stale_status"]),
+        )
+        for row in rows
+    ]
+
+
+def _terminal_by_status(conn: sqlite3.Connection) -> dict[str, int]:
+    """Return current-recipe terminal row counts by status.
+
+    Parameters
+    ----------
+    conn:
+        Ledger SQLite connection with ``catalog_snapshot`` loaded.
+
+    Returns
+    -------
+    dict[str, int]
+        Status counts.
+    """
+
+    placeholders = _terminal_status_placeholders()
+    rows = conn.execute(
+        f"""
+        WITH current_terminal AS (
+            SELECT stable_id, recipe_revision_sha256, status
+            FROM (
+                SELECT
+                    verification_runs.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY stable_id, recipe_revision_sha256
+                        ORDER BY finished_at DESC, run_id DESC
+                    ) AS rn
+                FROM verification_runs
+                WHERE scope = 'forward'
+                  AND status IN ({placeholders})
+            )
+            WHERE rn = 1
+        )
+        SELECT current_terminal.status, COUNT(*) AS count
+        FROM catalog_snapshot
+        JOIN current_terminal
+          ON current_terminal.stable_id = catalog_snapshot.stable_id
+         AND current_terminal.recipe_revision_sha256 = catalog_snapshot.recipe_revision_sha256
+        GROUP BY current_terminal.status
+        ORDER BY current_terminal.status
+        """,
+        TERMINAL_STATUSES,
+    ).fetchall()
+    return {str(row["status"]): int(row["count"]) for row in rows}
+
+
+def build_completeness_status(
+    catalog_db: Path = CATALOG_DB,
+    ledger_db: Path = VERIFICATION_DB,
+    torchlens_version: str | None = None,
+    render_manifest: Path = DEFAULT_RENDER_MANIFEST,
+    run_dir: Path | None = None,
+) -> CompletenessStatus:
+    """Build the auditable terminal-status completeness report.
+
+    Parameters
+    ----------
+    catalog_db:
+        Catalog SQLite database path.
+    ledger_db:
+        Verification ledger SQLite database path.
+    torchlens_version:
+        TorchLens version for the verified predicate. Defaults to installed TorchLens.
+    render_manifest:
+        Render manifest path for the underlying funnel.
+    run_dir:
+        Directory for audit artifacts. Defaults to a timestamped directory under ``/tmp``.
+
+    Returns
+    -------
+    CompletenessStatus
+        Completeness audit result.
+    """
+
+    if torchlens_version is None:
+        import torchlens as tl
+
+        torchlens_version = str(tl.__version__)
+    resolved_run_dir = run_dir or _default_completeness_run_dir()
+    catalog_rows = _catalog_rows(catalog_db)
+    snapshot_path = _write_catalog_snapshot(catalog_rows, resolved_run_dir)
+    funnel = build_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version=torchlens_version,
+        render_manifest=render_manifest,
+    )
+    with connect_ledger(ledger_db) as ledger_conn:
+        _load_catalog_snapshot(ledger_conn, catalog_rows)
+        issues = _completeness_issues(ledger_conn)
+        terminal_by_status = _terminal_by_status(ledger_conn)
+    missing = sum(1 for issue in issues if issue.issue == "missing_terminal")
+    stale = sum(1 for issue in issues if issue.issue == "stale_recipe_revision")
+    terminal_total = sum(terminal_by_status.values())
+    return CompletenessStatus(
+        catalog_db=str(catalog_db),
+        ledger_db=str(ledger_db),
+        torchlens_version=torchlens_version,
+        run_dir=str(resolved_run_dir),
+        catalog_snapshot=str(snapshot_path),
+        total_catalog_models=len(catalog_rows),
+        terminal_current_recipe_models=terminal_total,
+        missing_terminal_models=missing,
+        stale_recipe_models=stale,
+        issues=issues,
+        terminal_by_status=terminal_by_status,
+        funnel=funnel,
+    )
+
+
 def _missing_status(stable_id: str) -> CatalogStatus:
     """Build a conservative fallback status for a missing stable ID.
 
@@ -564,6 +958,25 @@ def _status_payload(status: FunnelStatus) -> dict[str, Any]:
 
     payload = asdict(status)
     payload["distinct"] = asdict(status.distinct)
+    return payload
+
+
+def _completeness_payload(status: CompletenessStatus) -> dict[str, Any]:
+    """Convert completeness status dataclasses to a JSON-ready payload.
+
+    Parameters
+    ----------
+    status:
+        Completeness status.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-serializable payload.
+    """
+
+    payload = asdict(status)
+    payload["funnel"] = _status_payload(status.funnel)
     return payload
 
 
@@ -739,6 +1152,77 @@ def format_status(status: FunnelStatus) -> str:
     return "\n".join(lines) + "\n"
 
 
+def format_completeness_status(status: CompletenessStatus) -> str:
+    """Format a human-readable completeness report.
+
+    Parameters
+    ----------
+    status:
+        Completeness status.
+
+    Returns
+    -------
+    str
+        Human-readable completeness report.
+    """
+
+    lines = [
+        "TorchLens Menagerie Completeness",
+        f"catalog db: {status.catalog_db}",
+        f"verification db: {status.ledger_db}",
+        f"torchlens version for verified predicate: {status.torchlens_version}",
+        f"run dir: {status.run_dir}",
+        f"catalog snapshot: {status.catalog_snapshot}",
+        "",
+        "Terminal-status audit:",
+        f"  total catalog models: {status.total_catalog_models}",
+        f"  terminal at current recipe: {status.terminal_current_recipe_models}",
+        f"  missing_terminal: {status.missing_terminal_models}",
+        f"  stale_recipe_revision: {status.stale_recipe_models}",
+        "",
+        "Terminal funnel:",
+    ]
+    if status.terminal_by_status:
+        lines.extend(
+            f"  {count}: {terminal_status}"
+            for terminal_status, count in status.terminal_by_status.items()
+        )
+    else:
+        lines.append("  none")
+    lines.extend(
+        [
+            "",
+            "Verified headline:",
+            (
+                "  real-input forward-validated @ current TL + current recipe: "
+                f"{status.funnel.headline_verified_real_input}"
+            ),
+            (
+                "  all forward-validated @ current TL + current recipe: "
+                f"{status.funnel.verified_models}"
+            ),
+        ]
+    )
+    if status.issues:
+        lines.extend(["", "Completeness issues:"])
+        for issue in status.issues[:50]:
+            detail = (
+                f" stale_recipe={issue.stale_recipe_revision_sha256}"
+                f" stale_status={issue.stale_status}"
+                if issue.issue == "stale_recipe_revision"
+                else ""
+            )
+            lines.append(
+                "  "
+                f"{issue.issue}: {issue.stable_id} "
+                f"{issue.name} [{issue.zoo}/{issue.source}]"
+                f" current_recipe={issue.recipe_revision_sha256}{detail}"
+            )
+        if len(status.issues) > 50:
+            lines.append(f"  ... {len(status.issues) - 50} more")
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the status CLI parser.
 
@@ -755,6 +1239,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--render-manifest", type=Path, default=DEFAULT_RENDER_MANIFEST)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--provenance", action="store_true")
+    parser.add_argument("--completeness", action="store_true")
+    parser.add_argument("--run-dir", type=Path)
     parser.add_argument("--max-deferred-frac", type=float)
     parser.add_argument("--max-quarantine-frac", type=float)
     return parser
@@ -781,6 +1267,20 @@ def run(args: argparse.Namespace) -> int:
         else:
             print(format_provenance_status(provenance), end="")
         return 0
+
+    if args.completeness:
+        completeness = build_completeness_status(
+            catalog_db=args.catalog_db,
+            ledger_db=args.ledger_db,
+            torchlens_version=args.torchlens_version,
+            render_manifest=args.render_manifest,
+            run_dir=args.run_dir,
+        )
+        if args.json:
+            print(json.dumps(_completeness_payload(completeness), indent=2, sort_keys=True))
+        else:
+            print(format_completeness_status(completeness), end="")
+        return 1 if completeness.issues else 0
 
     status = build_status(
         catalog_db=args.catalog_db,

@@ -9,7 +9,7 @@ import pytest
 from menagerie.catalog import CatalogRow, write_catalog
 from menagerie.ledger import VerificationRun, append_verification_run, connect
 import menagerie.status as status_module
-from menagerie.status import build_status, main
+from menagerie.status import build_completeness_status, build_status, main
 from menagerie.tools.distinct_report import build_distinct_report
 
 
@@ -319,6 +319,135 @@ def test_status_reflects_current_recipe_verified_count(tmp_path: Path) -> None:
         render_manifest=tmp_path / "missing.tsv",
     )
     assert current_status.verified_models == 1
+
+
+def test_completeness_audit_flags_missing_and_stale_rows(tmp_path: Path) -> None:
+    """Completeness reports catalog rows without current-recipe terminal rows."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [
+            _row(model_id=1, display_index=1, stable_id="m1", name="CurrentNet"),
+            _row(model_id=2, display_index=2, stable_id="m2", name="MissingNet"),
+            _row(
+                model_id=3,
+                display_index=3,
+                stable_id="m3",
+                name="StaleNet",
+                recipe_revision_sha256="recipe-b",
+            ),
+        ],
+    )
+    ledger_db = tmp_path / "verification.db"
+    conn = connect(ledger_db)
+    append_verification_run(conn, _run(run_id="run-current", stable_id="m1", name="CurrentNet"))
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-stale",
+            stable_id="m3",
+            name="StaleNet",
+            recipe_revision_sha256="recipe-a",
+            graph_shape_hash="hash-stale",
+        ),
+    )
+
+    completeness = build_completeness_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+        run_dir=tmp_path / "run-missing",
+    )
+
+    assert Path(completeness.catalog_snapshot).exists()
+    assert completeness.total_catalog_models == 3
+    assert completeness.terminal_current_recipe_models == 1
+    assert completeness.missing_terminal_models == 1
+    assert completeness.stale_recipe_models == 1
+    assert {issue.issue for issue in completeness.issues} == {
+        "missing_terminal",
+        "stale_recipe_revision",
+    }
+    assert (
+        main(
+            [
+                "--catalog-db",
+                str(catalog_db),
+                "--ledger-db",
+                str(ledger_db),
+                "--torchlens-version",
+                "tl-test",
+                "--render-manifest",
+                str(tmp_path / "missing.tsv"),
+                "--completeness",
+                "--run-dir",
+                str(tmp_path / "cli-run-missing"),
+            ]
+        )
+        == 1
+    )
+
+
+def test_completeness_audit_passes_when_all_rows_are_terminal(tmp_path: Path) -> None:
+    """Completeness exits successfully when every catalog row has a terminal row."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [
+            _row(model_id=1, display_index=1, stable_id="m1", name="PassNet"),
+            _row(model_id=2, display_index=2, stable_id="m2", name="FailedNet"),
+        ],
+    )
+    ledger_db = tmp_path / "verification.db"
+    conn = connect(ledger_db)
+    append_verification_run(conn, _run(run_id="run-pass", stable_id="m1", name="PassNet"))
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-failed",
+            stable_id="m2",
+            name="FailedNet",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="RuntimeError",
+            error_message="boom",
+        ),
+    )
+
+    completeness = build_completeness_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+        run_dir=tmp_path / "run-pass",
+    )
+
+    assert completeness.issues == []
+    assert completeness.terminal_current_recipe_models == 2
+    assert completeness.terminal_by_status == {"failed": 1, "passed": 1}
+    assert (
+        main(
+            [
+                "--catalog-db",
+                str(catalog_db),
+                "--ledger-db",
+                str(ledger_db),
+                "--torchlens-version",
+                "tl-test",
+                "--render-manifest",
+                str(tmp_path / "missing.tsv"),
+                "--completeness",
+                "--json",
+                "--run-dir",
+                str(tmp_path / "cli-run-pass"),
+            ]
+        )
+        == 0
+    )
 
 
 def test_status_fraction_thresholds_exit_nonzero(tmp_path: Path) -> None:
