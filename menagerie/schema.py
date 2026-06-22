@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ast
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -118,7 +119,7 @@ class ExecStringRecipe(BaseModel):
 
 
 class ExpressionRecipe(BaseModel):
-    """Quarantined legacy recipe backed by an eval expression."""
+    """Legacy recipe backed by an eval expression."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -126,11 +127,18 @@ class ExpressionRecipe(BaseModel):
     expr: str
     imports: list[str] = Field(default_factory=list)
     input: InputBuilder
-    quarantine: bool = True
+    quarantine: bool = False
+
+    @model_validator(mode="after")
+    def normalize_quarantine(self) -> ExpressionRecipe:
+        """Normalize legacy explicit quarantine markers to the narrowed default."""
+
+        self.quarantine = False
+        return self
 
 
 class StatementRecipe(BaseModel):
-    """Quarantined legacy recipe backed by statements that assign a model variable."""
+    """Legacy recipe backed by statements that assign a model variable."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -139,13 +147,121 @@ class StatementRecipe(BaseModel):
     imports: list[str] = Field(default_factory=list)
     input: InputBuilder
     output_name: str = "model"
-    quarantine: bool = True
+    quarantine: bool = False
+
+    @model_validator(mode="after")
+    def normalize_quarantine(self) -> StatementRecipe:
+        """Normalize quarantine to statements that contain arbitrary Python code."""
+
+        self.quarantine = statement_contains_arbitrary_code(self.code)
+        return self
 
 
 Recipe = Annotated[
     ImportCallableRecipe | ExecStringRecipe | ExpressionRecipe | StatementRecipe,
     Field(discriminator="type"),
 ]
+
+
+ARBITRARY_STATEMENT_NODES = (
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.For,
+    ast.FunctionDef,
+    ast.If,
+    ast.Lambda,
+    ast.Try,
+    ast.While,
+    ast.With,
+)
+ARBITRARY_CALL_NAMES = {"compile", "eval", "exec", "__import__"}
+
+
+def statement_contains_arbitrary_code(code: str) -> bool:
+    """Return whether a statement recipe contains arbitrary Python code.
+
+    Parameters
+    ----------
+    code:
+        Statement recipe source.
+
+    Returns
+    -------
+    bool
+        ``True`` for dynamic code execution, local class/function definitions, lambdas, or
+        control-flow blocks. Syntax failures are treated as arbitrary because they cannot be safely
+        classified as simple import-plus-constructor statements.
+    """
+
+    try:
+        tree = ast.parse(code, mode="exec")
+    except SyntaxError:
+        return True
+    for node in ast.walk(tree):
+        if isinstance(node, ARBITRARY_STATEMENT_NODES):
+            return True
+        if isinstance(node, ast.Call) and _call_name(node.func) in ARBITRARY_CALL_NAMES:
+            return True
+    return False
+
+
+def _call_name(node: ast.AST) -> str:
+    """Return the terminal call name for a call expression.
+
+    Parameters
+    ----------
+    node:
+        Function node from an ``ast.Call``.
+
+    Returns
+    -------
+    str
+        Name or attribute suffix used for conservative matching.
+    """
+
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
+
+
+def recipe_uses_code_execution(recipe: Recipe) -> bool:
+    """Return whether a recipe is built through Python code execution.
+
+    Parameters
+    ----------
+    recipe:
+        Typed recipe.
+
+    Returns
+    -------
+    bool
+        ``True`` for exec-string, expression, and statement recipe forms.
+    """
+
+    return recipe.type in {"exec-string", "expression", "statement"}
+
+
+def recipe_is_quarantined(recipe: Recipe) -> bool:
+    """Return whether a recipe is quarantined under the narrowed arbitrary-exec definition.
+
+    Parameters
+    ----------
+    recipe:
+        Typed recipe.
+
+    Returns
+    -------
+    bool
+        ``True`` for exec strings and statement recipes that contain arbitrary code.
+    """
+
+    if recipe.type == "exec-string":
+        return True
+    if recipe.type == "statement":
+        return statement_contains_arbitrary_code(recipe.code)
+    return False
 
 
 class Deferral(BaseModel):

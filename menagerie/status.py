@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import json
 import re
@@ -14,7 +15,12 @@ from typing import Any, Sequence
 
 from menagerie.catalog import CATALOG_DB, DEFERRED_JSONL, SOURCE_JSONL, ensure_catalog
 from menagerie.ledger import VERIFICATION_DB, connect as connect_ledger, verified_count
-from menagerie.schema import VerificationExpectation, load_jsonl
+from menagerie.schema import (
+    VerificationExpectation,
+    load_jsonl,
+    recipe_is_quarantined,
+    recipe_uses_code_execution,
+)
 from menagerie.tools.distinct_report import (
     DistinctArchitectureReport,
     build_distinct_report,
@@ -41,6 +47,8 @@ class CatalogStatus:
         Expected verification posture.
     quarantine:
         Whether the recipe is quarantined executable code.
+    code_execution:
+        Whether the recipe is built through Python code execution.
     deferred_reason:
         Human-readable deferral reason, when available.
     """
@@ -49,6 +57,7 @@ class CatalogStatus:
     input_is_real: bool
     verification_expectation: str
     quarantine: bool
+    code_execution: bool
     deferred_reason: str = ""
 
 
@@ -86,6 +95,10 @@ class FunnelStatus:
         Quarantined executable-recipe count.
     quarantine_fraction:
         Quarantined model fraction of total catalog models.
+    code_execution_models:
+        Models built through exec-string, expression, or statement recipes.
+    code_execution_fraction:
+        Code-execution model fraction of total catalog models.
     distinct:
         Distinct architecture report using shape-blind graph-shape hashes.
     render_manifest:
@@ -108,6 +121,8 @@ class FunnelStatus:
     deferred_by_reason: dict[str, int]
     quarantined_models: int
     quarantine_fraction: float
+    code_execution_models: int
+    code_execution_fraction: float
     distinct: DistinctArchitectureReport
     render_manifest: str
     render_manifest_available: bool
@@ -171,7 +186,8 @@ def _jsonl_status_by_key(
             stable_id="",
             input_is_real=record.input_is_real,
             verification_expectation=record.verification_expectation.value,
-            quarantine=bool(getattr(record.recipe, "quarantine", False)),
+            quarantine=recipe_is_quarantined(record.recipe),
+            code_execution=recipe_uses_code_execution(record.recipe),
             deferred_reason=reason,
         )
     return statuses
@@ -211,6 +227,7 @@ def catalog_statuses(catalog_db: Path = CATALOG_DB) -> dict[str, CatalogStatus]:
             input_is_real=source_status.input_is_real,
             verification_expectation=verification_expectation,
             quarantine=source_status.quarantine,
+            code_execution=source_status.code_execution,
             deferred_reason=deferred_reason,
         )
     return statuses
@@ -240,6 +257,11 @@ def _status_from_db_row(row: sqlite3.Row) -> CatalogStatus:
             else VerificationExpectation.forward_required.value
         ),
         quarantine=bool(row["quarantine"]) if "quarantine" in keys else False,
+        code_execution=(
+            False
+            if str(row["source"]) == "classics"
+            else _constructor_uses_code_execution(str(row["constructor_call"]))
+        ),
         deferred_reason="",
     )
 
@@ -267,6 +289,7 @@ def _merge_status(primary: CatalogStatus, notes_status: CatalogStatus) -> Catalo
         input_is_real=primary.input_is_real,
         verification_expectation=notes_status.verification_expectation,
         quarantine=primary.quarantine,
+        code_execution=primary.code_execution,
         deferred_reason=notes_status.deferred_reason,
     )
 
@@ -293,6 +316,7 @@ def _status_from_notes(stable_id: str, notes: str) -> CatalogStatus:
             input_is_real=True,
             verification_expectation=VerificationExpectation.forward_required.value,
             quarantine=False,
+            code_execution=False,
             deferred_reason="",
         )
     match = DEFERRAL_REASON_RE.search(notes)
@@ -301,8 +325,35 @@ def _status_from_notes(stable_id: str, notes: str) -> CatalogStatus:
         input_is_real=True,
         verification_expectation=VerificationExpectation.deferred.value,
         quarantine=False,
+        code_execution=False,
         deferred_reason=match.group(1).strip() if match else "deferred",
     )
+
+
+def _constructor_uses_code_execution(constructor_call: str) -> bool:
+    """Infer code-execution recipe status from a catalog constructor string.
+
+    Parameters
+    ----------
+    constructor_call:
+        Catalog constructor call.
+
+    Returns
+    -------
+    bool
+        Whether the constructor corresponds to exec-string, expression, or statement recipe forms.
+    """
+
+    code = constructor_call.strip()
+    if "\n" in code or "exec(" in code:
+        return True
+    if ";" in code or code.startswith(("import ", "from ")):
+        return True
+    try:
+        parsed = ast.parse(code, mode="eval")
+    except SyntaxError:
+        return True
+    return not isinstance(parsed.body, ast.Call)
 
 
 def rendered_stable_ids(manifest_path: Path = DEFAULT_RENDER_MANIFEST) -> set[str]:
@@ -372,6 +423,7 @@ def build_status(
         if status.verification_expectation == VerificationExpectation.deferred.value
     ]
     quarantined = [status for status in statuses.values() if status.quarantine]
+    code_execution = [status for status in statuses.values() if status.code_execution]
     current_revisions = current_revisions_from_catalog(catalog_db)
     with connect_ledger(ledger_db) as ledger_conn:
         verified_by_stable_id = verified_hashes(ledger_conn, torchlens_version, current_revisions)
@@ -407,6 +459,8 @@ def build_status(
         deferred_by_reason=dict(sorted(deferred_by_reason.items())),
         quarantined_models=len(quarantined),
         quarantine_fraction=_fraction(len(quarantined), total),
+        code_execution_models=len(code_execution),
+        code_execution_fraction=_fraction(len(code_execution), total),
         distinct=distinct,
         render_manifest=str(render_manifest),
         render_manifest_available=render_manifest.exists(),
@@ -432,6 +486,7 @@ def _missing_status(stable_id: str) -> CatalogStatus:
         input_is_real=True,
         verification_expectation=VerificationExpectation.forward_required.value,
         quarantine=False,
+        code_execution=False,
     )
 
 
@@ -510,8 +565,12 @@ def format_status(status: FunnelStatus) -> str:
             f"{status.deferred_models} ({status.deferred_fraction:.2%} of catalog)"
         ),
         (
-            "  quarantined exec-recipe models: "
+            "  quarantined arbitrary-exec models: "
             f"{status.quarantined_models} ({status.quarantine_fraction:.2%} of catalog)"
+        ),
+        (
+            "  built via code execution: "
+            f"{status.code_execution_models} ({status.code_execution_fraction:.2%} of catalog)"
         ),
         "",
         "Deferred reasons:",

@@ -146,6 +146,13 @@ def test_status_funnel_tiers_are_consistent(tmp_path: Path) -> None:
                 name="QuarantineNet",
                 quarantine=True,
             ),
+            _row(
+                model_id=5,
+                display_index=5,
+                stable_id="m5",
+                name="CodeExecNet",
+                constructor_call="import torch\nmodel = torch.nn.Identity()",
+            ),
         ],
     )
     ledger_db = tmp_path / "verification.db"
@@ -169,13 +176,14 @@ def test_status_funnel_tiers_are_consistent(tmp_path: Path) -> None:
         render_manifest=tmp_path / "missing.tsv",
     )
 
-    assert status.total_catalog_models == 4
-    assert status.expected_models == 3
+    assert status.total_catalog_models == 5
+    assert status.expected_models == 4
     assert status.verified_models == 2
     assert status.headline_verified_real_input == 1
     assert status.verified_wrapper_input == 1
     assert status.deferred_models == 1
     assert status.quarantined_models == 1
+    assert status.code_execution_models == 1
     assert (
         status.headline_verified_real_input + status.verified_wrapper_input
         <= status.verified_models

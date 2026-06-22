@@ -20,6 +20,8 @@ from menagerie.schema import (
     TensorInput,
     TensorSpec,
     load_jsonl,
+    recipe_is_quarantined,
+    recipe_uses_code_execution,
 )
 
 
@@ -111,6 +113,36 @@ def test_each_recipe_variant_constructs() -> None:
         "expression",
         "statement",
     ]
+
+
+def test_quarantine_is_narrowed_to_arbitrary_exec_recipes() -> None:
+    """Simple expressions/statements are code-exec but not arbitrary-exec quarantined."""
+
+    input_builder = _tensor_input()
+    import_callable = ImportCallableRecipe(
+        expr="torch.nn.Identity()", imports=["torch"], input=input_builder
+    )
+    expression = ExpressionRecipe(expr="factory()", input=input_builder, quarantine=True)
+    simple_statement = StatementRecipe(
+        code="import torch\nmodel = torch.nn.Identity()", input=input_builder, quarantine=True
+    )
+    arbitrary_statement = StatementRecipe(
+        code="import torch\nmodel = type('W', (torch.nn.Module,), {'forward': lambda self, x: x})()",
+        input=input_builder,
+    )
+    exec_string = ExecStringRecipe(body="class W: pass\nmodel = W()", input=input_builder)
+
+    assert recipe_uses_code_execution(import_callable) is False
+    assert recipe_uses_code_execution(expression) is True
+    assert recipe_uses_code_execution(simple_statement) is True
+    assert recipe_is_quarantined(import_callable) is False
+    assert recipe_is_quarantined(expression) is False
+    assert recipe_is_quarantined(simple_statement) is False
+    assert recipe_is_quarantined(arbitrary_statement) is True
+    assert recipe_is_quarantined(exec_string) is True
+    assert expression.quarantine is False
+    assert simple_statement.quarantine is False
+    assert arbitrary_statement.quarantine is True
 
 
 def test_each_input_variant_constructs() -> None:

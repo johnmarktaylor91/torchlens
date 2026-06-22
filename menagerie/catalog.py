@@ -13,7 +13,13 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from menagerie.identity import ensure_stable_ids, recipe_revision_sha256
-from menagerie.schema import CatalogRecord, VerificationExpectation, load_jsonl, validate_records
+from menagerie.schema import (
+    CatalogRecord,
+    VerificationExpectation,
+    load_jsonl,
+    recipe_is_quarantined,
+    validate_records,
+)
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -723,7 +729,7 @@ def _row_from_record(record: CatalogRecord, source: str) -> dict[str, str | bool
         "source": source,
         "input_is_real": record.input_is_real,
         "verification_expectation": record.verification_expectation.value,
-        "quarantine": bool(getattr(record.recipe, "quarantine", False)),
+        "quarantine": recipe_is_quarantined(record.recipe),
     }
 
 
