@@ -1614,6 +1614,259 @@ def _check_op_log_fields(ml: "Trace") -> None:
             )
 
 
+def _check_payload_metadata_invariants(ml: "Trace") -> None:
+    """Check saved and transformed live payload metadata.
+
+    Precondition contract: tensor payload fields may be legitimately absent
+    because of selective save, loaded traces, detached/audit-only metadata,
+    disk-only storage, streaming finalization, or gradient eviction. This check
+    compares shape, dtype, and memory only when a live payload object is
+    present. Presence of a live raw or transformed activation requires
+    ``has_saved_activation=True``; presence of a live raw or transformed
+    gradient requires ``has_grad=True``. Missing payloads never imply
+    corruption by themselves.
+
+    Parameters
+    ----------
+    ml:
+        Postprocessed torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a present payload disagrees with its recorded metadata.
+    """
+
+    name = "payload_metadata_invariants"
+    for op in ml.layer_list:
+        label = getattr(op, "label", getattr(op, "layer_label", type(op).__name__))
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=getattr(op, "out", None),
+            shape=getattr(op, "shape", None),
+            dtype=getattr(op, "dtype", None),
+            memory=getattr(op, "activation_memory", None),
+            presence_flag=getattr(op, "has_saved_activation", False),
+            presence_flag_name="has_saved_activation",
+            payload_name="out",
+        )
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=getattr(op, "transformed_out", None),
+            shape=getattr(op, "transformed_out_shape", None),
+            dtype=getattr(op, "transformed_out_dtype", None),
+            memory=getattr(op, "transformed_activation_memory", None),
+            presence_flag=getattr(op, "has_saved_activation", False),
+            presence_flag_name="has_saved_activation",
+            payload_name="transformed_out",
+        )
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=getattr(op, "grad", None),
+            shape=getattr(op, "grad_shape", None),
+            dtype=getattr(op, "grad_dtype", None),
+            memory=getattr(op, "gradient_memory", None),
+            presence_flag=getattr(op, "has_grad", False),
+            presence_flag_name="has_grad",
+            payload_name="grad",
+        )
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=getattr(op, "transformed_grad", None),
+            shape=getattr(op, "transformed_grad_shape", None),
+            dtype=getattr(op, "transformed_grad_dtype", None),
+            memory=getattr(op, "transformed_gradient_memory", None),
+            presence_flag=getattr(op, "has_grad", False),
+            presence_flag_name="has_grad",
+            payload_name="transformed_grad",
+        )
+        for record in getattr(op, "_grad_records", ()) or ():
+            record_label = f"{label}.grad_record[{getattr(record, 'backward_pass_index', '?')}]"
+            _check_live_payload_metadata(
+                name,
+                record_label,
+                payload=getattr(record, "grad", None),
+                shape=getattr(record, "shape", None),
+                dtype=getattr(record, "dtype", None),
+                memory=getattr(record, "memory", None),
+                presence_flag=getattr(record, "is_saved", False),
+                presence_flag_name="is_saved",
+                payload_name="grad",
+            )
+            _check_live_payload_metadata(
+                name,
+                record_label,
+                payload=getattr(record, "transformed_grad", None),
+                shape=getattr(record, "transformed_grad_shape", None),
+                dtype=getattr(record, "transformed_grad_dtype", None),
+                memory=getattr(record, "transformed_gradient_memory", None),
+                presence_flag=getattr(record, "is_saved", False),
+                presence_flag_name="is_saved",
+                payload_name="transformed_grad",
+            )
+
+
+def _check_live_payload_metadata(
+    name: str,
+    label: str,
+    *,
+    payload: object | None,
+    shape: object,
+    dtype: object,
+    memory: object,
+    presence_flag: bool,
+    presence_flag_name: str,
+    payload_name: str,
+) -> None:
+    """Check metadata for one live tensor-like payload.
+
+    Parameters
+    ----------
+    name:
+        Invariant name used in raised errors.
+    label:
+        Owner label for diagnostics.
+    payload:
+        Live payload object, or ``None`` when absent.
+    shape:
+        Recorded shape metadata.
+    dtype:
+        Recorded dtype metadata.
+    memory:
+        Recorded memory metadata.
+    presence_flag:
+        Boolean metadata that should be true when payload is present.
+    presence_flag_name:
+        Name of ``presence_flag`` for diagnostics.
+    payload_name:
+        Payload field name for diagnostics.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If present payload metadata disagrees with the payload.
+    """
+
+    if payload is None:
+        return
+    if not presence_flag:
+        raise MetadataInvariantError(
+            name,
+            f"{label} has live {payload_name} payload but {presence_flag_name}=False",
+        )
+    actual_shape = _payload_shape(payload)
+    if actual_shape is not None and shape != actual_shape:
+        raise MetadataInvariantError(
+            name,
+            f"{label} {payload_name} shape metadata {shape!r} != payload shape {actual_shape!r}",
+        )
+    actual_dtype = _payload_dtype(payload)
+    if (
+        actual_dtype is not None
+        and dtype is not None
+        and not _dtype_values_match(dtype, actual_dtype)
+    ):
+        raise MetadataInvariantError(
+            name,
+            f"{label} {payload_name} dtype metadata {dtype!r} != payload dtype {actual_dtype!r}",
+        )
+    actual_memory = _payload_memory(payload)
+    if actual_memory is not None and memory is not None and int(memory) != actual_memory:
+        raise MetadataInvariantError(
+            name,
+            f"{label} {payload_name} memory metadata {int(memory)!r} != payload memory "
+            f"{actual_memory!r}",
+        )
+
+
+def _payload_shape(payload: object) -> tuple[int, ...] | None:
+    """Return a tuple shape for a tensor-like payload.
+
+    Parameters
+    ----------
+    payload:
+        Candidate tensor-like payload.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Shape tuple when available.
+    """
+
+    shape = getattr(payload, "shape", None)
+    if shape is None:
+        return None
+    try:
+        return tuple(int(dim) for dim in shape)
+    except TypeError:
+        return None
+
+
+def _payload_dtype(payload: object) -> object | None:
+    """Return dtype metadata from a tensor-like payload.
+
+    Parameters
+    ----------
+    payload:
+        Candidate tensor-like payload.
+
+    Returns
+    -------
+    object | None
+        Payload dtype when available.
+    """
+
+    return getattr(payload, "dtype", None)
+
+
+def _payload_memory(payload: object) -> int | None:
+    """Return byte memory for a tensor-like payload.
+
+    Parameters
+    ----------
+    payload:
+        Candidate tensor-like payload.
+
+    Returns
+    -------
+    int | None
+        Number of bytes when ``nelement`` and ``element_size`` are available.
+    """
+
+    nelement = getattr(payload, "nelement", None)
+    element_size = getattr(payload, "element_size", None)
+    if not callable(nelement) or not callable(element_size):
+        return None
+    return int(nelement() * element_size())
+
+
+def _dtype_values_match(left: object, right: object) -> bool:
+    """Return whether two dtype representations are equivalent.
+
+    Parameters
+    ----------
+    left:
+        Recorded dtype value.
+    right:
+        Payload dtype value.
+
+    Returns
+    -------
+    bool
+        ``True`` when exact or normalized string forms agree.
+    """
+
+    if left == right:
+        return True
+    left_str = str(left).replace("torch.", "")
+    right_str = str(right).replace("torch.", "")
+    return left_str == right_str
+
+
 # ---------------------------------------------------------------------------
 # E. Recurrence / loop invariants
 # ---------------------------------------------------------------------------
@@ -4176,6 +4429,11 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
         "torch",
     ),
     MetadataInvariantContract("op_log_fields", _check_op_log_fields, "torch"),
+    MetadataInvariantContract(
+        "payload_metadata_invariants",
+        _check_payload_metadata_invariants,
+        "torch",
+    ),
     MetadataInvariantContract("recurrence_invariants", _check_recurrence_invariants, "torch"),
     MetadataInvariantContract("branching_invariants", _check_branching_invariants, "torch"),
     MetadataInvariantContract("conditional_invariants", _check_conditional_invariants, "torch"),

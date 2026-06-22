@@ -17,6 +17,7 @@ from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass, validate_saved_outs
 import torchlens.user_funcs as user_funcs
 from torchlens.errors import MetadataInvariantError
+from torchlens.options import SaveOptions
 from torchlens.validation import check_metadata_invariants
 from torchlens.intervention.types import DictKey
 from torchlens.validation.invariants import check_func_call_id_invariant
@@ -1260,6 +1261,64 @@ def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
         recurrent_param = next(param for param in log.param_logs if param.num_uses_by_ops > 1)
         assert recurrent_param.num_uses_by_ops == len(recurrent_param.used_by_ops)
         assert len(recurrent_param.used_by_layers) == 1
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None:
+    """Live transformed payload metadata must match the retained tensor."""
+
+    log = trace_fn(
+        _SimpleFF(),
+        torch.randn(2, 5),
+        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
+        random_seed=42,
+    )
+    try:
+        victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
+        assert victim.transformed_out_shape == ()
+
+        victim.transformed_out_shape = (999,)
+
+        with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None:
+    """Payload metadata checks inspect live raw and transformed activation payloads."""
+
+    log = trace_fn(
+        _SimpleFF(),
+        torch.randn(2, 5),
+        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
+        random_seed=42,
+    )
+    try:
+        assert any(layer.out is not None for layer in log.layer_list)
+        assert any(layer.transformed_out is not None for layer in log.layer_list)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
+    """Gradient metadata without a live payload is legitimate after eviction."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(
+            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+        )
+        victim.grad = None
+        victim.transformed_grad = None
+        victim.has_grad = False
+        victim.grad_shape = (2, 3)
+        victim.grad_dtype = torch.float32
+        victim.gradient_memory = 24
+
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
