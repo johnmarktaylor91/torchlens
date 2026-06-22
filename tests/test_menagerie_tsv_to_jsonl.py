@@ -1,0 +1,97 @@
+"""Tests for the menagerie TSV-to-JSONL migration tool."""
+
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+
+from menagerie.catalog import SOURCE_COLUMNS
+from menagerie.schema import load_jsonl
+from menagerie.tools.tsv_to_jsonl import migrate_tsv
+
+
+def _write_tsv(path: Path, rows: list[list[str]]) -> None:
+    """Write a small source TSV fixture.
+
+    Parameters
+    ----------
+    path:
+        Destination path.
+    rows:
+        Source rows.
+    """
+
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(SOURCE_COLUMNS)
+        writer.writerows(rows)
+
+
+def test_migrate_tsv_skips_classics_and_preserves_non_classics(tmp_path: Path) -> None:
+    """The migration writes one candidate record per non-classics row."""
+
+    source = tmp_path / "source.tsv"
+    output = tmp_path / "candidate.jsonl"
+    stats_path = tmp_path / "stats.json"
+    _write_tsv(
+        source,
+        [
+            [
+                "ClassicToy",
+                "classics-pytorch",
+                "menagerie.classics.toy.build()",
+                "(1, 3)",
+                "float32",
+                "classic",
+                "history",
+                "2026",
+                "verified",
+            ],
+            [
+                "ExprToy",
+                "unit",
+                "torch.nn.Identity()",
+                "(1, 3)",
+                "float32",
+                "toy",
+                "vision",
+                "2026",
+                "verified",
+            ],
+            [
+                "WrapperToy",
+                "unit",
+                "import builtins, torch; _W=builtins.type('W',(torch.nn.Module,),{'forward':(lambda self,x: x)}); model=_W()",
+                "(1,)",
+                "float32",
+                "toy",
+                "vision",
+                "2026",
+                "verified",
+            ],
+            [
+                "DeferredToy",
+                "unit",
+                "torch.nn.Identity()",
+                "text tokens",
+                "float32",
+                "toy",
+                "text",
+                "2026",
+                "source-only",
+            ],
+        ],
+    )
+
+    stats = migrate_tsv(source, output, stats_path)
+    records = load_jsonl(output)
+
+    assert stats["classics_rows_skipped"] == 1
+    assert stats["non_classics_records_produced"] == 3
+    assert [record.name for record in records] == ["ExprToy", "WrapperToy", "DeferredToy"]
+    assert records[0].recipe.type == "import-callable"
+    assert records[1].recipe.type == "statement"
+    assert records[1].input.kind == "none"
+    assert records[1].input_is_real is False
+    assert records[2].verification_expectation == "deferred"
+    assert records[2].deferral is not None
