@@ -1810,7 +1810,10 @@ def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
 
     return CatalogRow(
         model_id=int(payload["model_id"]),
+        display_index=int(payload.get("display_index", payload["model_id"])),
+        stable_id=str(payload.get("stable_id", "")),
         name=str(payload["name"]),
+        variant=str(payload.get("variant", "")),
         family=str(payload["family"]),
         family_normalized=str(payload["family_normalized"]),
         domain=str(payload["domain"]),
@@ -1822,6 +1825,7 @@ def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
         verified=bool(payload["verified"]),
         notes=str(payload["notes"]),
         source=str(payload.get("source", "catalog")),
+        recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
     )
 
 

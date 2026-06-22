@@ -7,16 +7,19 @@ import csv
 import re
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+
+from menagerie.identity import ensure_stable_ids, recipe_revision_sha256
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SOURCE_TSV = DATA_DIR / "master_catalog.tsv"
 CANONICAL_TSV = DATA_DIR / "catalog_canonical.tsv"
 CATALOG_DB = DATA_DIR / "catalog.db"
+STABLE_IDS_JSONL = DATA_DIR / "stable_ids.jsonl"
 SOURCE_COLUMNS = (
     "name",
     "zoo",
@@ -30,7 +33,10 @@ SOURCE_COLUMNS = (
 )
 CANONICAL_COLUMNS = (
     "model_id",
+    "display_index",
+    "stable_id",
     "name",
+    "variant",
     "family",
     "family_normalized",
     "domain",
@@ -42,6 +48,7 @@ CANONICAL_COLUMNS = (
     "verified",
     "notes",
     "source",
+    "recipe_revision_sha256",
 )
 
 
@@ -123,9 +130,15 @@ class CatalogRow:
     Parameters
     ----------
     model_id:
-        Stable integer identifier assigned after deduplication.
+        Alias for ``display_index``. This is not an identity key.
+    display_index:
+        Human-facing integer index assigned after sorting.
+    stable_id:
+        Opaque durable model identity.
     name:
         Model name from the source catalog.
+    variant:
+        Optional natural-key discriminator for same-name/same-zoo rows.
     family:
         Source family string.
     family_normalized:
@@ -148,10 +161,15 @@ class CatalogRow:
         Source notes.
     source:
         Canonical source stream: ``catalog`` for TSV rows or ``classics`` for registry rows.
+    recipe_revision_sha256:
+        Frozen recipe fingerprint for the row's current construction recipe.
     """
 
     model_id: int
+    display_index: int
+    stable_id: str
     name: str
+    variant: str
     family: str
     family_normalized: str
     domain: str
@@ -163,6 +181,7 @@ class CatalogRow:
     verified: bool
     notes: str
     source: str
+    recipe_revision_sha256: str
 
 
 def macro_domain(raw: str) -> str:
@@ -770,10 +789,30 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
             str(item["zoo"]).lower(),
         ),
     )
-    return [
-        CatalogRow(
+    natural_key_counts = Counter((str(row["name"]), str(row["zoo"])) for row in sorted_rows)
+    natural_key_seen: dict[tuple[str, str], int] = defaultdict(int)
+    variants = []
+    for row in sorted_rows:
+        base_key = (str(row["name"]), str(row["zoo"]))
+        natural_key_seen[base_key] += 1
+        if natural_key_counts[base_key] == 1 or natural_key_seen[base_key] == 1:
+            variants.append("")
+        else:
+            variants.append(f"variant-{natural_key_seen[base_key]}")
+
+    stable_keys = {
+        (str(row["name"]), str(row["zoo"]), variant) for row, variant in zip(sorted_rows, variants)
+    }
+    stable_ids = ensure_stable_ids(stable_keys, STABLE_IDS_JSONL)
+
+    canonical_rows = []
+    for index, (row, variant) in enumerate(zip(sorted_rows, variants), start=1):
+        draft = CatalogRow(
             model_id=index,
+            display_index=index,
+            stable_id=stable_ids[(str(row["name"]), str(row["zoo"]), variant)],
             name=str(row["name"]),
+            variant=variant,
             family=str(row["family"]),
             family_normalized=str(row["family_normalized"]),
             domain=str(row["domain"]),
@@ -785,9 +824,44 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
             verified=bool(row["verified"]),
             notes=str(row["notes"]),
             source=str(row["source"]),
+            recipe_revision_sha256="",
         )
-        for index, row in enumerate(sorted_rows, start=1)
+        canonical_rows.append(
+            CatalogRow(
+                **{
+                    **draft.__dict__,
+                    "recipe_revision_sha256": recipe_revision_sha256(draft),
+                }
+            )
+        )
+    assert_catalog_identity(canonical_rows)
+    return canonical_rows
+
+
+def assert_catalog_identity(rows: Sequence[CatalogRow]) -> None:
+    """Assert canonical row identity invariants.
+
+    Parameters
+    ----------
+    rows:
+        Canonical rows to validate.
+
+    Raises
+    ------
+    AssertionError
+        If stable IDs or natural keys are duplicated.
+    """
+
+    stable_ids = [row.stable_id for row in rows]
+    natural_keys = [(row.name, row.zoo, row.variant) for row in rows]
+    duplicate_stable_ids = [
+        stable_id for stable_id, count in Counter(stable_ids).items() if count > 1
     ]
+    duplicate_natural_keys = [key for key, count in Counter(natural_keys).items() if count > 1]
+    if duplicate_stable_ids:
+        raise AssertionError(f"duplicate stable_id values: {duplicate_stable_ids[:10]!r}")
+    if duplicate_natural_keys:
+        raise AssertionError(f"duplicate natural keys: {duplicate_natural_keys[:10]!r}")
 
 
 def write_catalog(
@@ -821,7 +895,10 @@ def write_catalog(
             """
             CREATE TABLE models (
                 model_id INTEGER PRIMARY KEY,
+                display_index INTEGER NOT NULL,
+                stable_id TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
+                variant TEXT NOT NULL DEFAULT '',
                 family TEXT NOT NULL,
                 family_normalized TEXT NOT NULL,
                 domain TEXT NOT NULL,
@@ -832,18 +909,23 @@ def write_catalog(
                 era TEXT NOT NULL,
                 verified INTEGER NOT NULL,
                 notes TEXT NOT NULL,
-                source TEXT NOT NULL
+                source TEXT NOT NULL,
+                recipe_revision_sha256 TEXT NOT NULL,
+                UNIQUE(name, zoo, variant)
             )
             """
         )
         connection.executemany(
             """
-            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     row.model_id,
+                    row.display_index,
+                    row.stable_id,
                     row.name,
+                    row.variant,
                     row.family,
                     row.family_normalized,
                     row.domain,
@@ -855,9 +937,14 @@ def write_catalog(
                     int(row.verified),
                     row.notes,
                     row.source,
+                    row.recipe_revision_sha256,
                 )
                 for row in rows
             ],
+        )
+        connection.execute("CREATE UNIQUE INDEX idx_models_stable_id ON models(stable_id)")
+        connection.execute(
+            "CREATE UNIQUE INDEX idx_models_natural_key ON models(name, zoo, variant)"
         )
         connection.execute("CREATE INDEX idx_models_name ON models(name)")
         connection.execute("CREATE INDEX idx_models_family ON models(family_normalized)")
@@ -941,18 +1028,22 @@ def load_rows(
     return [
         CatalogRow(
             model_id=row[0],
-            name=row[1],
-            family=row[2],
-            family_normalized=row[3],
-            domain=row[4],
-            zoo=row[5],
-            constructor_call=row[6],
-            input_shape=row[7],
-            input_dtype=row[8],
-            era=row[9],
-            verified=bool(row[10]),
-            notes=row[11],
-            source=row[12],
+            display_index=row[1],
+            stable_id=row[2],
+            name=row[3],
+            variant=row[4],
+            family=row[5],
+            family_normalized=row[6],
+            domain=row[7],
+            zoo=row[8],
+            constructor_call=row[9],
+            input_shape=row[10],
+            input_dtype=row[11],
+            era=row[12],
+            verified=bool(row[13]),
+            notes=row[14],
+            source=row[15],
+            recipe_revision_sha256=row[16],
         )
         for row in rows
     ]
@@ -996,18 +1087,22 @@ def find_recipe(name: str, db_path: Path = CATALOG_DB) -> CatalogRow:
         raise LookupError(f"No catalog model matched {name!r}")
     return CatalogRow(
         model_id=row[0],
-        name=row[1],
-        family=row[2],
-        family_normalized=row[3],
-        domain=row[4],
-        zoo=row[5],
-        constructor_call=row[6],
-        input_shape=row[7],
-        input_dtype=row[8],
-        era=row[9],
-        verified=bool(row[10]),
-        notes=row[11],
-        source=row[12],
+        display_index=row[1],
+        stable_id=row[2],
+        name=row[3],
+        variant=row[4],
+        family=row[5],
+        family_normalized=row[6],
+        domain=row[7],
+        zoo=row[8],
+        constructor_call=row[9],
+        input_shape=row[10],
+        input_dtype=row[11],
+        era=row[12],
+        verified=bool(row[13]),
+        notes=row[14],
+        source=row[15],
+        recipe_revision_sha256=row[16],
     )
 
 
