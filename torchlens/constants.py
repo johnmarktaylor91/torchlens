@@ -24,6 +24,8 @@ import warnings
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
+from .utils._torch_compat import get_torch_vf_namespace, get_variable_function_names
+
 # ---------------------------------------------------------------------------
 # Field-order definitions
 # ---------------------------------------------------------------------------
@@ -957,9 +959,9 @@ def _get_torch_overridable_functions() -> list[tuple[str, str]]:
     # Each entry: (dotted namespace string, namespace object, list of attr names to inspect).
     # torch._VF mirrors torch._C._VariableFunctions — both are crawled so decoration
     # can patch both the public and internal references to the same underlying C++ functions.
+    variable_function_names = get_variable_function_names()
     tested_namespaces = [
-        ("torch", torch, torch.__all__ + dir(torch._C._VariableFunctions)),
-        ("torch._VF", torch._VF, dir(torch._C._VariableFunctions)),
+        ("torch", torch, torch.__all__ + variable_function_names),
         ("torch.functional", torch.functional, torch.functional.__all__),
         ("torch.nn.functional", torch.nn.functional, dir(torch.nn.functional)),
         ("torch.nn.init", torch.nn.init, dir(torch.nn.init)),
@@ -967,6 +969,9 @@ def _get_torch_overridable_functions() -> list[tuple[str, str]]:
         ("torch.linalg", torch.linalg, dir(torch.linalg)),
         ("torch.fft", torch.fft, dir(torch.fft)),
     ]
+    torch_vf_namespace = get_torch_vf_namespace()
+    if torch_vf_namespace is not None:
+        tested_namespaces.append(("torch._VF", torch_vf_namespace, variable_function_names))
     if hasattr(torch, "special"):
         tested_namespaces.append(("torch.special", torch.special, dir(torch.special)))
     for namespace_str, namespace, ns_funcs in tested_namespaces:

@@ -71,6 +71,7 @@ from ._tl import (
 )
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
+from ...utils._torch_compat import get_optional_torch_namespace
 from ...utils.display import identity
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.hashing import make_random_barcode
@@ -655,8 +656,9 @@ def _decorate_transform_builders() -> None:
     """
 
     for namespace_name, attr_name, transform_kind in TRANSFORM_BUILDER_SITES:
-        namespace_key = namespace_name.removeprefix("torch.")
-        namespace = torch if namespace_name == "torch" else nested_getattr(torch, namespace_key)
+        namespace = get_optional_torch_namespace(namespace_name)
+        if namespace is None:
+            continue
         if not hasattr(namespace, attr_name):
             continue
         current = getattr(namespace, attr_name)
