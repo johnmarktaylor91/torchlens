@@ -15,6 +15,7 @@ from typing import Any, Sequence
 
 from menagerie.catalog import CATALOG_DB, DEFERRED_JSONL, SOURCE_JSONL, ensure_catalog
 from menagerie.ledger import VERIFICATION_DB, connect as connect_ledger, verified_count
+from menagerie.provenance import SweepProvenance, read_sweeps
 from menagerie.schema import (
     VerificationExpectation,
     load_jsonl,
@@ -31,6 +32,7 @@ from menagerie.tools.distinct_report import (
 
 DEFAULT_RENDER_MANIFEST = Path("/tmp/torchlens_menagerie_gallery/manifest.tsv")
 DEFERRAL_REASON_RE = re.compile(r"deferral_reason=([^;]+)")
+CRAWL_HISTORY = Path(__file__).resolve().parent / "data" / "crawl_history.json"
 
 
 @dataclass(frozen=True)
@@ -126,6 +128,37 @@ class FunnelStatus:
     distinct: DistinctArchitectureReport
     render_manifest: str
     render_manifest_available: bool
+
+
+@dataclass(frozen=True)
+class ProvenanceStatus:
+    """Structured provenance dashboard data.
+
+    Parameters
+    ----------
+    ledger_db:
+        Verification database path used for provenance.
+    last_exhaustive_crawl:
+        Last exhaustive crawl date from crawl history.
+    sweep_count:
+        Number of structured sweep provenance rows.
+    sweeps:
+        Structured sweep provenance rows.
+    model_wave_counts:
+        Catalog model counts by ``added_wave``.
+    models_with_known_sweep:
+        Models whose ``added_wave`` has a matching provenance row.
+    models_without_wave:
+        Models without an ``added_wave`` value.
+    """
+
+    ledger_db: str
+    last_exhaustive_crawl: str
+    sweep_count: int
+    sweeps: list[SweepProvenance]
+    model_wave_counts: dict[str, int]
+    models_with_known_sweep: int
+    models_without_wave: int
 
 
 def _catalog_rows(catalog_db: Path) -> list[sqlite3.Row]:
@@ -534,6 +567,113 @@ def _status_payload(status: FunnelStatus) -> dict[str, Any]:
     return payload
 
 
+def build_provenance_status(
+    ledger_db: Path = VERIFICATION_DB,
+    source_jsonl: Path = SOURCE_JSONL,
+    deferred_jsonl: Path = DEFERRED_JSONL,
+    crawl_history: Path = CRAWL_HISTORY,
+) -> ProvenanceStatus:
+    """Build the provenance dashboard.
+
+    Parameters
+    ----------
+    ledger_db:
+        Verification database path used for provenance.
+    source_jsonl:
+        Forward-required catalog JSONL source.
+    deferred_jsonl:
+        Deferred catalog JSONL source.
+    crawl_history:
+        Machine-readable crawl history path.
+
+    Returns
+    -------
+    ProvenanceStatus
+        Structured provenance dashboard data.
+    """
+
+    sweeps = read_sweeps(ledger_db)
+    sweep_ids = {sweep.sweep_id for sweep in sweeps}
+    records = load_jsonl(source_jsonl)
+    if deferred_jsonl.exists():
+        records.extend(load_jsonl(deferred_jsonl))
+    wave_counts = Counter(record.added_wave or "unassigned" for record in records)
+    known_sweep_models = sum(
+        count for wave, count in wave_counts.items() if wave != "unassigned" and wave in sweep_ids
+    )
+    crawl_data = json.loads(crawl_history.read_text(encoding="utf-8"))
+    return ProvenanceStatus(
+        ledger_db=str(ledger_db),
+        last_exhaustive_crawl=str(crawl_data.get("last_exhaustive_crawl", "")),
+        sweep_count=len(sweeps),
+        sweeps=sweeps,
+        model_wave_counts=dict(sorted(wave_counts.items())),
+        models_with_known_sweep=known_sweep_models,
+        models_without_wave=wave_counts.get("unassigned", 0),
+    )
+
+
+def _provenance_payload(status: ProvenanceStatus) -> dict[str, Any]:
+    """Convert provenance status to a JSON-ready payload.
+
+    Parameters
+    ----------
+    status:
+        Provenance status.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-serializable payload.
+    """
+
+    payload = asdict(status)
+    payload["sweeps"] = [asdict(sweep) for sweep in status.sweeps]
+    return payload
+
+
+def format_provenance_status(status: ProvenanceStatus) -> str:
+    """Format a human-readable provenance report.
+
+    Parameters
+    ----------
+    status:
+        Provenance status.
+
+    Returns
+    -------
+    str
+        Human-readable status text.
+    """
+
+    lines = [
+        "TorchLens Menagerie Provenance",
+        f"verification db: {status.ledger_db}",
+        f"last_exhaustive_crawl: {status.last_exhaustive_crawl}",
+        f"structured sweeps: {status.sweep_count}",
+        "",
+        "Sweeps:",
+    ]
+    if status.sweeps:
+        lines.extend(
+            f"  {sweep.date}: {sweep.sweep_id} [{len(sweep.sources)} sources]"
+            for sweep in status.sweeps
+        )
+    else:
+        lines.append("  none")
+    lines.extend(
+        [
+            "",
+            "Model added_wave coverage:",
+            f"  models with known sweep: {status.models_with_known_sweep}",
+            f"  models without added_wave: {status.models_without_wave}",
+        ]
+    )
+    for wave, count in status.model_wave_counts.items():
+        lines.append(f"  {count}: {wave}")
+    return "\n".join(lines) + "\n"
+
+
 def format_status(status: FunnelStatus) -> str:
     """Format a human-readable status report.
 
@@ -614,6 +754,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--torchlens-version")
     parser.add_argument("--render-manifest", type=Path, default=DEFAULT_RENDER_MANIFEST)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--provenance", action="store_true")
     parser.add_argument("--max-deferred-frac", type=float)
     parser.add_argument("--max-quarantine-frac", type=float)
     return parser
@@ -632,6 +773,14 @@ def run(args: argparse.Namespace) -> int:
     int
         Process exit code.
     """
+
+    if args.provenance:
+        provenance = build_provenance_status(ledger_db=args.ledger_db)
+        if args.json:
+            print(json.dumps(_provenance_payload(provenance), indent=2, sort_keys=True))
+        else:
+            print(format_provenance_status(provenance), end="")
+        return 0
 
     status = build_status(
         catalog_db=args.catalog_db,
