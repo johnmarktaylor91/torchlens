@@ -12,12 +12,14 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass, validate_saved_outs
 import torchlens.user_funcs as user_funcs
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 from torchlens.intervention.types import DictKey
+from torchlens.validation.invariants import check_func_call_id_invariant
 from torchlens.validation import validate_saved_outs as validate_from_subpkg
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
@@ -847,6 +849,16 @@ class _BufferWriteValidationModel(nn.Module):
         return self.state * x
 
 
+class _FuncCallSplitValidationModel(nn.Module):
+    """Model with a multi-output torch call in plain capture."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Split and recombine two tensor outputs."""
+
+        left, right = torch.split(x, 1, dim=0)
+        return left + right
+
+
 def _make_clean_log() -> Trace:
     """Return a Trace with all outs and metadata for a simple FF model."""
     from torchlens import trace as trace_fn
@@ -859,6 +871,12 @@ def _make_buffer_write_log() -> Trace:
     """Return a trace with static and write buffer versions."""
 
     return trace_fn(_BufferWriteValidationModel(), torch.ones(2), save_arg_values=True)
+
+
+def _make_func_call_split_log() -> Trace:
+    """Return a plain trace with a populated multi-output func_call_id group."""
+
+    return trace_fn(_FuncCallSplitValidationModel(), torch.randn(2, 3), random_seed=42)
 
 
 def _make_root_only_log() -> Trace:
@@ -1197,6 +1215,78 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
         assert write_version.parents
         assert not write_version._edge_uses
         assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
+    """Plain capture compute ops must retain populated func_call_id metadata."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(
+            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+        )
+        assert victim.func_call_id is not None
+
+        victim.func_call_id = None
+
+        with pytest.raises(MetadataInvariantError, match="has no func_call_id"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_invariant_rejects_plain_group_func_name_mismatch() -> None:
+    """Plain same-call groups compare function name and container spec only."""
+
+    log = _make_func_call_split_log()
+    try:
+        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        assert len(split_layers) == 2
+        assert len({layer.func_call_id for layer in split_layers}) == 1
+
+        split_layers[1].func_name = "chunk"
+
+        with pytest.raises(MetadataInvariantError, match="incompatible call metadata"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_plain_preconditions_reach_real_trace() -> None:
+    """The func_call_id check runs on a plain exhaustive multi-output trace."""
+
+    log = _make_func_call_split_log()
+    try:
+        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        assert len(split_layers) == 2
+        assert len({layer.func_call_id for layer in split_layers}) == 1
+        assert all(layer.container_path for layer in split_layers)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_invariant_allows_sparse_recording_projection() -> None:
+    """Sparse recording projections do not require templates or container specs."""
+
+    recording = tl.record(
+        _SimpleLinear(),
+        torch.randn(2, 10),
+        save=tl.func("linear"),
+    )
+    log = recording.to_trace()
+    try:
+        compute_layers = [
+            layer for layer in log.layer_list if not (layer.is_input or layer.is_output)
+        ]
+        assert compute_layers
+        assert any(layer.func_call_id is not None for layer in compute_layers)
+        assert all(layer.args_template is None for layer in compute_layers)
+        assert all(layer.container_spec is None for layer in compute_layers)
+        result = check_func_call_id_invariant(log)
+        assert result.passed is True
     finally:
         log.cleanup()
 

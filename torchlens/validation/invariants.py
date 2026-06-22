@@ -585,12 +585,16 @@ def _record_has_backend_neutral_accessor_metadata(record: object) -> bool:
 def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     """Invariant S: func_call_id consistency.
 
-    For intervention-ready logs, every non-synthetic function output must have a
-    ``func_call_id``. Outputs from the same call must agree on function identity,
-    call stack, captured templates, and container spec; each output in the group
-    must have a unique ``container_path``; and same-call groups must not span
-    incompatible pass labels. Synthetic input, output, and buffer nodes are
-    exempt.
+    Precondition contract: torch exhaustive and predicate captures populate
+    ``func_call_id`` for non-synthetic compute outputs. Synthetic input,
+    output, buffer, and internal placeholder nodes are exempt. Sparse recording
+    projections may have empty templates, ``edge_use='unknown'`` records, and
+    ``container_spec=None``; those fields are not required for this invariant.
+    When a ``func_call_id`` group is populated, members must agree only on the
+    plain-capture-stable function name and container spec, and populated
+    container paths must be unique within the group. The old intervention
+    signature fields (argument templates and ``code_context`` reprs) are
+    intentionally outside this plain-capture contract.
 
     Parameters
     ----------
@@ -604,46 +608,41 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     """
 
     name = "func_call_id_consistency"
-    if not getattr(trace, "intervention_ready", False):
-        return InvariantResult(name=name, passed=True)
-
     groups: dict[int, list["Op"]] = defaultdict(list)
     for layer in trace.layer_list:
         if _is_func_call_id_exempt(layer):
             continue
-        if layer.func_call_id is None:
+        func_call_id = getattr(layer, "func_call_id", None)
+        if func_call_id is None:
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label} has no func_call_id",
             )
-        groups[layer.func_call_id].append(layer)
+        if not isinstance(func_call_id, int):
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} has non-integer func_call_id {func_call_id!r}",
+            )
+        groups[func_call_id].append(layer)
 
     for func_call_id, group in groups.items():
         reference = group[0]
-        expected_signature = _func_call_group_signature(reference)
-        container_paths = []
-        pass_indices = set()
-        no_call_labels = set()
+        expected_signature = _plain_func_call_group_signature(reference)
+        container_paths: list[tuple[object, ...]] = []
         for layer in group:
-            if _func_call_group_signature(layer) != expected_signature:
+            if _plain_func_call_group_signature(layer) != expected_signature:
                 raise MetadataInvariantError(
                     name,
                     f"func_call_id {func_call_id} has incompatible call metadata",
                 )
             container_path = tuple(getattr(layer, "container_path", ()) or ())
-            if container_path in container_paths:
+            if container_path and container_path in container_paths:
                 raise MetadataInvariantError(
                     name,
                     f"func_call_id {func_call_id} has duplicate container_path {container_path!r}",
                 )
-            container_paths.append(container_path)
-            pass_indices.add(layer.pass_index)
-            no_call_labels.add(layer.layer_label)
-        if len(pass_indices) > 1 and len(no_call_labels) > 1:
-            raise MetadataInvariantError(
-                name,
-                f"func_call_id {func_call_id} spans incompatible pass labels",
-            )
+            if container_path:
+                container_paths.append(container_path)
     return InvariantResult(name=name, passed=True)
 
 
@@ -1126,6 +1125,26 @@ def _is_func_call_id_exempt(layer: "Op") -> bool:
         "buffer",
         "none",
     }
+
+
+def _plain_func_call_group_signature(layer: "Op") -> tuple[object, ...]:
+    """Return plain-capture-stable same-call metadata.
+
+    Parameters
+    ----------
+    layer:
+        Layer pass to summarize.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Function name and container spec representation for same-call grouping.
+    """
+
+    return (
+        getattr(layer, "func_name", None),
+        repr(getattr(layer, "container_spec", None)),
+    )
 
 
 def _func_call_group_signature(layer: "Op") -> tuple[object, ...]:
