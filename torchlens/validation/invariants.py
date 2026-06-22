@@ -3307,6 +3307,8 @@ def _check_lookup_key_consistency(ml: "Trace") -> None:
 
 
 METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
+    # Phase A classification: these contracts encode current behavior only.
+    # Moving a check to another backend is a later semantic change.
     # Current non-torch-only setup checks.
     MetadataInvariantContract(
         "backend_identity_invariants",
