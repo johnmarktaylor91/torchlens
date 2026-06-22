@@ -41,20 +41,20 @@ Always pair library enumeration with hub (A) + prior-art (C) harvesting.
   **OpenReview** (NeurIPS/ICLR/ICML/CVPR/ACL/...) · major-lab release blogs · arXiv recent (cs.LG/CV/CL/NE/AI,
   eess.*, q-bio, physics.*, ...). New architectures appear constantly — recency is the most reliable new-family source.
 
-## Dedup (how we guarantee "no architecture repeated")
+## Dedup (how we find repeated structures)
 TorchLens gives every trace a **`graph_shape_hash`** (`torchlens.utils.hashing.compute_graph_shape_hash`,
-exposed on `Trace.graph_shape_hash`). Verified 2026-06-18: it is **param-invariant, input-resolution-invariant,
-batch-invariant, and architecture-discriminative** — i.e. two models share a hash IFF they are the same
-architecture (ignoring weights/resolution/batch). It is the canonical menagerie dedup key: render a candidate,
-compute its `graph_shape_hash`, and if it collides with an existing entry's hash it is the SAME architecture.
-(`compute_raw_event_shape_hash` is a stricter variant if finer dedup is ever needed.) See `dedup_report.py`.
+exposed on `Trace.graph_shape_hash`). It is a shape-blind structural digest used for dedup reporting:
+render a candidate, compute its `graph_shape_hash`, and review collisions with existing entries as strong
+evidence of repeated topology. A collision is not an automatic proof that every shape-sensitive architecture
+detail is identical. (`compute_raw_event_shape_hash` is a stricter variant if finer dedup is ever needed.)
+See `dedup_report.py`.
 
 ## Update-pipeline checklist (each sweep)
 1. Read `data/crawl_history.json` (last-crawl date) and this file.
 2. Enumerate/diff A (hubs) + B (libraries) + C (prior-art lists), prioritizing post-last-crawl additions and D (frontier).
 3. Run the adversarial sweep in `DISCOVER_MODELS.md`; add genuinely-new architectures (family-not-variant) per its
    "Adding to the database" steps; render them.
-4. Dedup the whole corpus by `graph_shape_hash` (`dedup_report.py`) to prove no repeats.
+4. Review the whole corpus with `graph_shape_hash` (`dedup_report.py`) to find repeated structures.
 5. Append a `crawls[]` entry + bump `last_exhaustive_crawl`; append any newly-found hubs to this file.
 
 

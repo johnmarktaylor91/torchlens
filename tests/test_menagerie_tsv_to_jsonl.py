@@ -108,10 +108,14 @@ def test_migrate_tsv_skips_classics_and_preserves_non_classics(tmp_path: Path) -
 def test_default_cli_does_not_clobber_canonical_jsonl(tmp_path: Path) -> None:
     """Default migration output writes candidates without changing canonical JSONL sources."""
 
+    source = tmp_path / "source.tsv"
+    _write_tsv(source, [])
     canonical_before = tsv_to_jsonl.CANONICAL_OUTPUT.read_bytes()
     deferred_before = tsv_to_jsonl.CANONICAL_DEFERRED_OUTPUT.read_bytes()
 
-    exit_code = tsv_to_jsonl.main(["--stats", str(tmp_path / "stats.json")])
+    exit_code = tsv_to_jsonl.main(
+        ["--source-tsv", str(source), "--stats", str(tmp_path / "stats.json")]
+    )
 
     assert exit_code == 0
     assert tsv_to_jsonl.CANONICAL_OUTPUT.read_bytes() == canonical_before

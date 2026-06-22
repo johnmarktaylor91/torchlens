@@ -3,34 +3,39 @@
 The menagerie is a public, reproducible toolkit for cataloging neural-network model
 families and rendering their TorchLens computational graphs. It has two parts:
 
-- `catalog.py`: builds, normalizes, queries, and exports the model catalog.
+- `catalog.py`: builds, normalizes, and queries the model catalog.
 - `generate_menagerie.py`: resolves dependency clusters, renders models one at a time,
   purges per-model caches, and writes browsable gallery indexes.
 
 Bulk graph output should go outside the repository, for example
 `/tmp/torchlens_menagerie_gallery` or a large external volume.
 
-## Catalog Schema
+## Catalog Sources
 
-The source TSV lives at `menagerie/data/master_catalog.tsv` and uses nine columns:
+The source of truth is append-only typed JSONL plus the classics registry:
 
-```text
-name    zoo    constructor_call    input_shape    input_dtype    family    domain    era    notes
-```
+- `menagerie/data/master_catalog.jsonl`: non-classics expected to build and validate.
+- `menagerie/data/deferred.jsonl`: non-classics with an explicit deferral reason.
+- `menagerie/classics/`: hand-built historical reimplementations exposed by the
+  classics registry. These are not duplicated in JSONL.
 
-`python -m menagerie.catalog build` normalizes that source into:
+`python -m menagerie.catalog build` normalizes JSONL plus classics into derived
+artifacts:
 
-- `menagerie/data/catalog_canonical.tsv`
-- `menagerie/data/catalog.db`
+- `menagerie/data/catalog_canonical.tsv` for inspection/export.
+- `menagerie/data/catalog.db` as a rebuildable SQLite cache.
 
 The canonical rows add:
 
-- `model_id`: stable integer row id after sorting.
+- `model_id` / `display_index`: human-facing integer row id after sorting.
+- `stable_id`: durable natural-key identity.
+- `recipe_revision_sha256`: current recipe fingerprint.
 - `family_normalized`: canonical family label.
-- `verified`: recipe signal inferred from notes and known zoos.
+- `input_is_real`, `verification_expectation`, and `quarantine`: typed reporting flags.
 
-The catalog intentionally keeps distinct rows when the same model name appears in different
-zoos or has different constructor/input recipes.
+`verification.db` is separate from `catalog.db`: it is the append-only ledger for
+verification runs and sweep provenance. The catalog intentionally keeps distinct rows
+when the same model name appears in different zoos or has a real `variant` value.
 
 ## Catalog Commands
 
@@ -204,4 +209,4 @@ python -m menagerie.run_across_envs --setup-only --envs <env> --execute
 ## Update Flow
 
 See `DISCOVER_MODELS.md` for the recurring discovery prompt and `UPDATE_RECIPE.md` for
-the incremental update procedure.
+the JSONL/classics update procedure.
