@@ -122,6 +122,46 @@ def test_append_round_trip_and_verified_count(tmp_path: Path) -> None:
     assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
 
 
+def test_new_terminal_statuses_round_trip(tmp_path: Path) -> None:
+    """Island terminal statuses are accepted and stored by the ledger."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-install-failed",
+            status="install_failed",
+            forward_pass=None,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="InstallError",
+            error_message="install failed",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-env-unavailable",
+            stable_id="m2",
+            status="env_unavailable",
+            forward_pass=None,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="EnvUnavailable",
+            error_message="disk floor",
+        ),
+    )
+
+    statuses = {
+        str(row["status"])
+        for row in conn.execute("SELECT status FROM verification_runs").fetchall()
+    }
+
+    assert statuses == {"install_failed", "env_unavailable"}
+
+
 def test_verified_count_rises_after_real_torchlens_trace(tmp_path: Path) -> None:
     """A fresh ledger count rises only after a real validation-like trace row."""
 

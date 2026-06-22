@@ -9,6 +9,8 @@ import sys
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -28,16 +30,20 @@ Status = Literal[
     "not_applicable",
     "deferred",
     "error",
+    "install_failed",
+    "env_unavailable",
 ]
-VERIFIED_COUNT_SQL = """
-SELECT COUNT(DISTINCT stable_id)
-FROM current_verification
-WHERE forward_pass = 1
-  AND metadata_ok = 1
-  AND n_ops IS NOT NULL
-  AND graph_shape_hash IS NOT NULL
-  AND torchlens_version = :torchlens_version
-"""
+STATUS_VALUES: tuple[str, ...] = (
+    "passed",
+    "failed",
+    "skipped",
+    "timeout",
+    "not_applicable",
+    "deferred",
+    "error",
+    "install_failed",
+    "env_unavailable",
+)
 
 
 @dataclass(frozen=True)
@@ -167,6 +173,49 @@ def runner_host() -> str:
     return socket.gethostname()
 
 
+def _package_version(package: str, fallback: str) -> str:
+    """Return an installed package version with a safe fallback.
+
+    Parameters
+    ----------
+    package:
+        Distribution package name.
+    fallback:
+        Version string to return when distribution metadata is unavailable.
+
+    Returns
+    -------
+    str
+        Package version.
+    """
+
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return fallback
+
+
+def base_env_hash() -> str:
+    """Return the deterministic base validation environment hash.
+
+    Returns
+    -------
+    str
+        SHA-256 hash of the sorted base environment identity.
+    """
+
+    import torch
+    import torchlens as tl
+
+    identity = {
+        "python": python_version(),
+        "torch": str(torch.__version__),
+        "torchlens": _package_version("torchlens", str(getattr(tl, "__version__", "unknown"))),
+    }
+    payload = "\n".join(f"{key}={identity[key]}" for key in sorted(identity))
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
 def connect(db_path: Path = VERIFICATION_DB) -> sqlite3.Connection:
     """Open and initialize a verification ledger connection.
 
@@ -230,7 +279,9 @@ def initialize(conn: sqlite3.Connection) -> None:
                     'timeout',
                     'not_applicable',
                     'deferred',
-                    'error'
+                    'error',
+                    'install_failed',
+                    'env_unavailable'
                 )
             ),
             forward_pass INTEGER,
@@ -318,6 +369,97 @@ def initialize(conn: sqlite3.Connection) -> None:
         END;
         """
     )
+    _migrate_status_constraint(conn)
+
+
+def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
+    """Recreate legacy ledger tables whose status check lacks new terminal statuses.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    row = conn.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table'
+          AND name = 'verification_runs'
+        """
+    ).fetchone()
+    if row is None:
+        return
+    table_sql = str(row["sql"] if isinstance(row, sqlite3.Row) else row[0])
+    if "install_failed" in table_sql and "env_unavailable" in table_sql:
+        return
+    conn.executescript(
+        """
+        DROP VIEW IF EXISTS current_verification;
+        DROP TRIGGER IF EXISTS verification_runs_no_update;
+        DROP TRIGGER IF EXISTS verification_runs_no_delete;
+
+        ALTER TABLE verification_runs RENAME TO verification_runs_legacy_status_check;
+
+        CREATE TABLE verification_runs(
+            run_id TEXT PRIMARY KEY,
+            stable_id TEXT NOT NULL,
+            recipe_revision_sha256 TEXT NOT NULL,
+            name TEXT NOT NULL,
+            zoo TEXT NOT NULL,
+            variant TEXT NOT NULL DEFAULT '',
+            scope TEXT NOT NULL CHECK(scope IN ('forward','backward')),
+            status TEXT NOT NULL CHECK(
+                status IN (
+                    'passed',
+                    'failed',
+                    'skipped',
+                    'timeout',
+                    'not_applicable',
+                    'deferred',
+                    'error',
+                    'install_failed',
+                    'env_unavailable'
+                )
+            ),
+            forward_pass INTEGER,
+            backward_pass INTEGER,
+            backward_na_reason TEXT,
+            metadata_ok INTEGER,
+            n_ops INTEGER,
+            graph_shape_hash TEXT,
+            svg_sha256 TEXT,
+            torchlens_version TEXT NOT NULL,
+            torch_version TEXT NOT NULL,
+            python_version TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            device_actual TEXT,
+            env_hash TEXT,
+            runner_host TEXT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            duration_sec REAL NOT NULL,
+            error_class TEXT,
+            error_message TEXT
+        );
+
+        INSERT INTO verification_runs
+        SELECT *
+        FROM verification_runs_legacy_status_check;
+
+        DROP TABLE verification_runs_legacy_status_check;
+
+        CREATE INDEX IF NOT EXISTS idx_vr_stable_id ON verification_runs(stable_id);
+        CREATE INDEX IF NOT EXISTS idx_vr_recipe_revision
+            ON verification_runs(recipe_revision_sha256);
+        CREATE INDEX IF NOT EXISTS idx_vr_scope_status ON verification_runs(scope, status);
+        CREATE INDEX IF NOT EXISTS idx_vr_finished_at ON verification_runs(finished_at);
+        CREATE INDEX IF NOT EXISTS idx_vr_torchlens_version
+            ON verification_runs(torchlens_version);
+        """
+    )
+    initialize(conn)
 
 
 def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> str:
