@@ -275,7 +275,16 @@ class RecordingTrace:
 
 @dataclass(frozen=True, slots=True)
 class Recording(CapturedRun):
-    """Result of a fastlog recording session."""
+    """Result of a fastlog recording session.
+
+    Notes
+    -----
+    Failed partial recordings contain everything captured up to but excluding
+    the failing op. user-op failures exclude the failing call; TL-side capture
+    failures may include a skipped/partial current-call event. ``last_event_*``
+    fields are best-effort details about the last captured event, not an
+    authoritative description of the failing op.
+    """
 
     records: list[ActivationRecord]
     by_pass: dict[int, list[int]]
@@ -292,6 +301,16 @@ class Recording(CapturedRun):
     history_size: int
     orphan_records: list[dict[str, Any]] = field(default_factory=list)
     halted: bool = False
+    status: Literal["complete", "halted", "partial_error", "recovered"] = "complete"
+    failed: bool = False
+    error_repr: str | None = None
+    error_traceback: str | None = None
+    n_ops_completed: int = 0
+    last_successful_op_label: str | None = None
+    last_event_label: str | None = None
+    last_event_func: str | None = None
+    last_event_source_line: str | None = None
+    last_event_input_meta: str | None = None
     halt_reason: str | None = None
     halts_by_pass: dict[int, str] = field(default_factory=dict)
     grad_records: list[GradientRecord] = field(default_factory=list)
@@ -480,6 +499,14 @@ class Recording(CapturedRun):
             This recording, mutated with gradient records.
         """
 
+        if self.failed:
+            from .exceptions import RecorderStateError
+
+            raise RecorderStateError(
+                "Cannot call log_backward on failed partial Recording; "
+                "user-op failures exclude the failing call; TL-side capture failures may "
+                "include a skipped/partial current-call event."
+            )
         if self.halted:
             from .exceptions import RecorderStateError
 
@@ -553,8 +580,15 @@ class Recording(CapturedRun):
     def summary(self) -> str:
         """Return a concise human-readable recording summary."""
 
+        if self.failed:
+            return (
+                f"Recording(status={self.status!r}, n_ops={self.n_ops}, "
+                f"n_records={len(self)}, n_ops_completed={self.n_ops_completed}, "
+                "caveat='user-op failures exclude the failing call; TL-side capture "
+                "failures may include a skipped/partial current-call event.')"
+            )
         return (
-            f"Recording(n_ops={self.n_ops}, n_records={len(self)}, "
+            f"Recording(status={self.status!r}, n_ops={self.n_ops}, n_records={len(self)}, "
             f"n_grad_records={len(self.grad_records)})"
         )
 
@@ -591,6 +625,12 @@ class Recording(CapturedRun):
             If the recording does not retain the topology-complete event stream.
         """
 
+        if self.failed:
+            raise RuntimeError(
+                "Recording.to_trace() cannot materialize a failed partial Recording because "
+                "the topology is incomplete; user-op failures exclude the failing call; "
+                "TL-side capture failures may include a skipped/partial current-call event."
+            )
         if self._capture_events is None:
             raise RuntimeError(
                 "Recording.to_trace() requires retained capture events; disk-recovered "
@@ -632,6 +672,7 @@ def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -
     if recording.halted:
         return
     object.__setattr__(recording, "halted", True)
+    object.__setattr__(recording, "status", "halted")
     object.__setattr__(recording, "halt_reason", reason)
 
 

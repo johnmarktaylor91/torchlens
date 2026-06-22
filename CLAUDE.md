@@ -89,7 +89,16 @@ print(tl.compat.report(model, x).to_markdown())
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
-  registry. `keep_op=` and `keep_module=` are deprecated aliases.
+  registry. `keep_op=` and `keep_module=` are deprecated aliases. Failed forwards default to
+  the historical `on_forward_error="raise"` behavior; opt into
+  `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
+  `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
+  set `status="partial_error"`, `failed=True`, string-only error metadata, `n_ops_completed`,
+  and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
+  capture failures may include a skipped/partial current-call event. Failed partials cannot be
+  converted with `Recording.to_trace()` or used with `Recording.log_backward()`.
+  Trace-side failed captures expose `exc.partial_log`, recoverable with
+  `tl.partial.from_failed_capture(exc)`.
 - `tl.trace(..., backend=None)` routes through `BackendSpec`; explicit backend mismatches,
   unknown names, unsupported capabilities, and audit-only payload reads raise typed backend
   errors. Public backend-neutral metadata lives on `Trace.backend`, `Trace.module_identity_mode`,

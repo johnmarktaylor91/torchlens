@@ -72,6 +72,16 @@ assert gelu_site.out.shape == (2, 4)
 `tl.record(save=...)` is the canonical torch sparse-capture spelling. `record(keep_op=...)` and
 `record(keep_module=...)` remain deprecated aliases for older code.
 
+When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
+`on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
+`on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
+returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
+string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+failures exclude the failing call; TL-side capture failures may include a skipped/partial
+current-call event. Failed partials cannot be converted with `Recording.to_trace()` or used with
+`Recording.log_backward()`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
+with `tl.partial.from_failed_capture(exc)`.
+
 ## Speed knobs
 
 | Knob | Faster setting | Tradeoff |

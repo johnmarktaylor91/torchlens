@@ -48,6 +48,21 @@ Storage is resolved from streaming/recording options:
 - RAM plus disk mirror when `retain_in_memory=True`.
 - Disk-only when `retain_in_memory=False`, rejecting `keep_grad=True`.
 
+Forward exceptions are opt-in partials. The default is the historical
+`on_forward_error="raise"` path. `on_forward_error="attach_partial"` attaches a failed
+`Recording` to `exc.partial_recording` and re-raises the original exception.
+`on_forward_error="return_partial"` swallows the forward exception and returns the failed
+partial; with `return_output=True` the output slot is `None`, and manual `Recorder.log()`
+returns `None` while `recorder.recording` holds the partial. Failed partials set
+`status="partial_error"`, `failed=True`, `error_repr`, `error_traceback`,
+`n_ops_completed`, `last_successful_op_label`, and best-effort `last_event_*` fields.
+user-op failures exclude the failing call; TL-side capture failures may include a
+skipped/partial current-call event. `Recording.to_trace()` and `Recording.log_backward()`
+reject failed partials because the topology is incomplete.
+
+Trace has a separate failed-capture diagnostic: failed `tl.trace(...)` exceptions carry
+`exc.partial_log`, which can be retrieved with `tl.partial.from_failed_capture(exc)`.
+
 ## Training Semantics
 `backward_ready=True` promotes omitted defaults to graph-connected out capture. Explicit
 defaults still win, but incompatible `keep_grad=False` or disk-only settings raise

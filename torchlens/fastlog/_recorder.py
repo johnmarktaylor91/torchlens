@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import time
+import traceback as traceback_module
 from types import TracebackType
 from typing import Any, cast
 import warnings
@@ -33,6 +34,7 @@ from .options import (
     LookbackPayloadPolicy,
     PredicateErrorMode,
     PredicateFn,
+    ForwardErrorMode,
     RecordingOptions,
     merge_recording_options,
 )
@@ -176,6 +178,7 @@ class Recorder:
         halt: HaltPredicateFn | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
+        on_forward_error: ForwardErrorMode | MissingType = MISSING,
         storage: StreamingOptions | None | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
@@ -197,6 +200,12 @@ class Recorder:
         lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
         on_predicate_error, storage, streaming, random_seed:
             Fastlog recording options.
+        on_forward_error:
+            Controls failed-forward handling. ``"raise"`` preserves the
+            historical behavior. ``"attach_partial"`` attaches a failed partial
+            ``Recording`` to ``exc.partial_recording`` and re-raises.
+            ``"return_partial"`` returns ``None`` from the failed ``log()`` and
+            exposes the failed partial on ``recorder.recording``.
         halt:
             Optional predicate evaluated after each event's save decision. Returning
             ``True`` stops the active forward pass and marks the recording halted.
@@ -252,6 +261,7 @@ class Recorder:
             halt=halt,
             max_predicate_failures=max_predicate_failures,
             on_predicate_error=on_predicate_error,
+            on_forward_error=on_forward_error,
             streaming=streaming,
             random_seed=random_seed,
             activation_transform=activation_transform,
@@ -269,6 +279,7 @@ class Recorder:
         self._output_tensor_addresses: list[str] = []
         self._entered = False
         self._exited = False
+        self._failed = False
         self._next_pass_index = 1
 
     def __enter__(self) -> "Recorder":
@@ -294,6 +305,10 @@ class Recorder:
         _ = exc_type, traceback
         if not self._entered or self._exited or self._state is None:
             raise RecorderStateError("Recorder is not active")
+        if self._failed:
+            self._entered = False
+            self._exited = True
+            return
         if exc_value is None:
             self._state.finalize_storage()
             session = type("_FastlogCaptureSession", (), {})()
@@ -385,8 +400,23 @@ class Recorder:
             output = None
             return output
         except Exception as exc:
-            self._state.abort_storage(str(exc))
-            raise
+            if self.options.on_forward_error == "raise":
+                self._state.abort_storage(str(exc))
+                raise
+            partial_build_failed = False
+            try:
+                partial = self._mark_recording_failed(trace, exc)
+                self._failed = True
+                self._recording = partial
+                if self.options.on_forward_error == "attach_partial":
+                    exc.partial_recording = partial  # type: ignore[attr-defined]
+            except Exception:
+                partial_build_failed = True
+            if partial_build_failed:
+                raise
+            if self.options.on_forward_error == "attach_partial":
+                raise
+            return None
         finally:
             self._state.recording.end_times.append(time.time())
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(trace, output)
@@ -409,6 +439,111 @@ class Recorder:
         if self._state is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
         _mark_recording_halted(self._state.recording, pass_index, halt_exc.reason)
+
+    def _mark_recording_failed(self, trace: Trace, exc: BaseException) -> Recording:
+        """Build and stamp a failed partial recording for a forward exception.
+
+        Parameters
+        ----------
+        trace:
+            Live trace whose predicate event stream contains the events captured
+            before the exception.
+        exc:
+            Original forward exception. Only string metadata is copied from it.
+
+        Returns
+        -------
+        Recording
+            Failed partial recording. user-op failures exclude the failing call;
+            TL-side capture failures may include a skipped/partial current-call
+            event.
+        """
+
+        if self._state is None or self._capture_events is None:
+            raise RecorderStateError("Recorder.log() requires an active with-block")
+        self._state.abort_storage(str(exc))
+        failed_events = getattr(trace, "_failed_fastlog_capture_events", trace.capture_events)
+        combined_events = CaptureEvents()
+        combined_events.extend(self._capture_events.op_events)
+        if failed_events is not self._capture_events:
+            combined_events.extend(failed_events.op_events)
+        self._capture_events = combined_events
+        trace.capture_events = combined_events
+        trace._capture_events = combined_events
+        self._state.runtime_trace = trace
+        session = type("_FastlogCaptureSession", (), {})()
+        session.capture_events = self._capture_events
+        session.output_tensors = []
+        session.output_tensor_addresses = []
+        session._fastlog_recording = self._state.recording
+        session.recording_state = self._state
+        recording = Recording.from_capture_events(session)
+        self._stamp_failed_recording(recording, exc)
+        return recording
+
+    def _stamp_failed_recording(self, recording: Recording, exc: BaseException) -> None:
+        """Stamp string-only failure metadata onto a frozen recording."""
+
+        op_events = tuple(
+            self._capture_events.op_events if self._capture_events is not None else ()
+        )
+        last_event = op_events[-1] if op_events else None
+        last_ctx = getattr(last_event, "record_context", None)
+        successful_op_labels = [
+            str(getattr(event, "label_raw", getattr(event, "label", "")))
+            for event in op_events
+            if getattr(getattr(event, "record_context", None), "kind", None) == "op"
+        ]
+        object.__setattr__(recording, "status", "partial_error")
+        object.__setattr__(recording, "failed", True)
+        object.__setattr__(recording, "error_repr", repr(exc))
+        object.__setattr__(
+            recording,
+            "error_traceback",
+            "".join(traceback_module.format_exception(type(exc), exc, exc.__traceback__)),
+        )
+        object.__setattr__(recording, "n_ops_completed", len(successful_op_labels))
+        object.__setattr__(
+            recording,
+            "last_successful_op_label",
+            successful_op_labels[-1] if successful_op_labels else None,
+        )
+        object.__setattr__(
+            recording,
+            "last_event_label",
+            None if last_ctx is None else str(getattr(last_ctx, "label", "")),
+        )
+        object.__setattr__(
+            recording,
+            "last_event_func",
+            None if last_event is None else getattr(last_event, "func_name", None),
+        )
+        source_line = None if last_event is None else getattr(last_event, "source_line", None)
+        object.__setattr__(
+            recording, "last_event_source_line", str(source_line) if source_line else None
+        )
+        input_meta = None if last_ctx is None else getattr(last_ctx, "input_meta", None)
+        object.__setattr__(
+            recording,
+            "last_event_input_meta",
+            repr(input_meta) if input_meta is not None else None,
+        )
+        recoverable_path = self._recoverable_temp_bundle_path()
+        if recoverable_path is not None:
+            object.__setattr__(recording, "bundle_path", recoverable_path)
+
+    def _recoverable_temp_bundle_path(self) -> Path | None:
+        """Return the fastlog temp bundle path when it has a recoverable index."""
+
+        if self._state is None:
+            return None
+        writer = getattr(self._state.storage_backend, "writer", None)
+        tmp_path = getattr(writer, "tmp_path", None)
+        if not isinstance(tmp_path, Path):
+            return None
+        if not (tmp_path / "fastlog_index.jsonl").exists():
+            return None
+        return tmp_path
 
     def _reset_state_for_pass(self, *, sample_id: str | int | None) -> None:
         """Reset per-pass predicate state while preserving accumulated events."""

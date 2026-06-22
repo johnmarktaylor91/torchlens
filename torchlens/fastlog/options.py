@@ -18,6 +18,7 @@ PredicateFn = Callable[[RecordContext], PredicateDecision]
 HaltPredicateFn = Callable[[RecordContext], bool]
 GradPredicateFn = Callable[[GradRecordContext], CaptureDecision]
 PredicateErrorMode = Literal["auto", "accumulate", "fail-fast"]
+ForwardErrorMode = Literal["raise", "attach_partial", "return_partial"]
 LookbackPayloadPolicy = Literal[
     "metadata_only",
     "detached_raw",
@@ -39,6 +40,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "halt",
     "max_predicate_failures",
     "on_predicate_error",
+    "on_forward_error",
     "streaming",
     "random_seed",
     "activation_transform",
@@ -80,6 +82,7 @@ class RecordingOptions:
     halt: HaltPredicateFn | None = None
     max_predicate_failures: int = 32
     on_predicate_error: PredicateErrorMode = "auto"
+    on_forward_error: ForwardErrorMode = "raise"
     streaming: StreamingOptions | None = None
     random_seed: int | None = None
     activation_transform: ActivationPostfunc | None = None
@@ -109,6 +112,7 @@ class RecordingOptions:
         halt: HaltPredicateFn | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
+        on_forward_error: ForwardErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
@@ -152,6 +156,9 @@ class RecordingOptions:
             ),
             "on_predicate_error": _resolve_recording_option(
                 "on_predicate_error", on_predicate_error, "auto", specified_fields
+            ),
+            "on_forward_error": _resolve_recording_option(
+                "on_forward_error", on_forward_error, "raise", specified_fields
             ),
             "streaming": _resolve_recording_option("streaming", streaming, None, specified_fields),
             "random_seed": _resolve_recording_option(
@@ -217,6 +224,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     halt = values["halt"]
     max_predicate_failures = values["max_predicate_failures"]
     on_predicate_error = values["on_predicate_error"]
+    on_forward_error = values["on_forward_error"]
     activation_transform = values["activation_transform"]
     save_raw_activations = values["save_raw_activations"]
     save_grads = values["save_grads"]
@@ -246,6 +254,8 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
         raise ValueError("max_predicate_failures must be a non-negative integer")
     if on_predicate_error not in {"auto", "accumulate", "fail-fast"}:
         raise ValueError("on_predicate_error must be 'auto', 'accumulate', or 'fail-fast'")
+    if on_forward_error not in {"raise", "attach_partial", "return_partial"}:
+        raise ValueError("on_forward_error must be 'raise', 'attach_partial', or 'return_partial'")
     if activation_transform is not None and not callable(activation_transform):
         raise ValueError("activation_transform must be callable or None")
     if not isinstance(save_raw_activations, bool):
@@ -279,6 +289,7 @@ def merge_recording_options(
     halt: HaltPredicateFn | None | MissingType = MISSING,
     max_predicate_failures: int | MissingType = MISSING,
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
+    on_forward_error: ForwardErrorMode | MissingType = MISSING,
     streaming: StreamingOptions | None | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
     activation_transform: ActivationPostfunc | None | MissingType = MISSING,
@@ -307,6 +318,7 @@ def merge_recording_options(
         "halt": halt,
         "max_predicate_failures": max_predicate_failures,
         "on_predicate_error": on_predicate_error,
+        "on_forward_error": on_forward_error,
         "streaming": streaming,
         "random_seed": random_seed,
         "activation_transform": activation_transform,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .._io import TorchLensIOError
 from .._io.manifest import Manifest, enforce_version_policy, sha256_of_file
@@ -207,6 +207,10 @@ def _recording_from_records(
 ) -> Recording:
     """Build a Recording around loaded records."""
 
+    halted = bool(metadata.get("halted", False))
+    status: Literal["complete", "halted", "partial_error", "recovered"] = (
+        "recovered" if recovered else "halted" if halted else "complete"
+    )
     return Recording(
         records=records,
         by_pass={},
@@ -219,7 +223,7 @@ def _recording_from_records(
         end_times=list(metadata.get("end_times", [])),
         predicate_failures=[],
         predicate_failure_overflow_count=int(metadata.get("predicate_failure_overflow_count", 0)),
-        halted=bool(metadata.get("halted", False)),
+        halted=halted,
         halt_reason=metadata.get("halt_reason"),
         halts_by_pass={
             int(pass_index): str(reason)
@@ -230,6 +234,7 @@ def _recording_from_records(
         history_size=int(metadata.get("history_size", 0)),
         _activation_transform_repr=metadata.get("_activation_transform_repr"),
         recovered=recovered,
+        status=status,
         recovery_warnings=recovery_warnings,
     )
 

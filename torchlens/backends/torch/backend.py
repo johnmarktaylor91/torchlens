@@ -676,6 +676,14 @@ class TorchBackend:
         # partially-constructed tensor entries to avoid stale references (#110).
         from ...partial import PartialTrace
 
+        if getattr(session, "capture_mode", None) == "predicate":
+            from ...ir import CaptureEvents
+
+            events = getattr(session, "capture_events", None)
+            if events is not None:
+                failed_fastlog_events = CaptureEvents()
+                failed_fastlog_events.extend(list(getattr(events, "op_events", ())))
+                setattr(session, "_failed_fastlog_capture_events", failed_fastlog_events)
         try:
             exc.partial_log = PartialTrace.from_trace(  # type: ignore[attr-defined]
                 cast("Trace", session),

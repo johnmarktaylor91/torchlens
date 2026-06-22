@@ -27,6 +27,7 @@ import copy
 import inspect
 import itertools
 import math
+import sys
 import time
 import warnings
 from collections.abc import Callable
@@ -1822,6 +1823,7 @@ def module_forward_decorator(
                 out = orig_forward(*args, **kwargs)
                 return out
             finally:
+                active_model_exc = sys.exc_info()[1]
                 state.event_index += 1
                 exit_ctx = _build_record_context(
                     kind="module_exit",
@@ -1858,9 +1860,13 @@ def module_forward_decorator(
                         )
                         _evaluate_halt(exit_ctx, state.options, frontier_output=out)
                 except HaltSignal:
-                    raise
+                    if active_model_exc is None:
+                        raise
                 except Exception as exc:
-                    state.handle_predicate_exception(exit_ctx, exc)
+                    if active_model_exc is None:
+                        state.handle_predicate_exception(exit_ctx, exc)
+                    else:
+                        state.add_predicate_failure(exit_ctx, exc)
                 finally:
                     if not halt_only:
                         if not any(

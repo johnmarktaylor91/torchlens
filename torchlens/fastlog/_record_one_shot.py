@@ -21,6 +21,7 @@ from .options import (
     HaltPredicateFn,
     LookbackPayloadPolicy,
     PredicateErrorMode,
+    ForwardErrorMode,
     PredicateFn,
 )
 from .types import CaptureSpec, Recording
@@ -67,6 +68,7 @@ def record(
     halt: HaltPredicateFn | None = None,
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
+    on_forward_error: ForwardErrorMode = "raise",
     storage: StreamingOptions | None = None,
     streaming: StreamingOptions | None = None,
     return_output: bool = False,
@@ -101,6 +103,12 @@ def record(
     lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
     on_predicate_error, storage, streaming, random_seed:
         Fastlog recording options.
+    on_forward_error:
+        Controls failed-forward handling. ``"raise"`` preserves the historical
+        behavior, ``"attach_partial"`` attaches ``exc.partial_recording`` and
+        re-raises, and ``"return_partial"`` returns a failed partial Recording.
+        With ``return_output=True``, the returned output is ``None`` because no
+        valid model output exists on failure.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
     halt:
@@ -161,6 +169,7 @@ def record(
         halt=halt,
         max_predicate_failures=max_predicate_failures,
         on_predicate_error=on_predicate_error,
+        on_forward_error=on_forward_error,
         storage=storage,
         streaming=streaming,
         random_seed=random_seed,

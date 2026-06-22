@@ -194,7 +194,13 @@ class PartialTrace:
 
 
 def from_failed_capture(exception: BaseException) -> PartialTrace:
-    """Return the partial log attached to a failed TorchLens capture exception.
+    """Return the partial log attached to a failed TorchLens trace exception.
+
+    Failed ``tl.trace(...)`` captures attach an honest partial as
+    ``exception.partial_log`` before re-raising. This helper retrieves that
+    wrapper. Fastlog ``tl.record(...)`` failed partials are separate
+    ``Recording`` objects attached as ``exception.partial_recording`` or
+    returned by ``on_forward_error="return_partial"``.
 
     Parameters
     ----------

@@ -27,7 +27,14 @@ Key entry points:
   backend resolution, validation dispatch, and canonical backend errors.
 - Sparse capture: `tl.record(model, x, save=...)` is torch-only in backend v1; it returns
   `Recording`, and `Recording.to_trace()` materializes full graph structure with explicit
-  errors for unsaved payload reads.
+  errors for unsaved payload reads. Forward exceptions default to
+  `on_forward_error="raise"`; `on_forward_error="attach_partial"` attaches
+  `exc.partial_recording` and re-raises, while `on_forward_error="return_partial"` returns a
+  failed partial `Recording`. Failed partials set `status="partial_error"`, `failed=True`,
+  string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields.
+  user-op failures exclude the failing call; TL-side capture failures may include a
+  skipped/partial current-call event. Trace failed captures separately expose
+  `exc.partial_log`, recoverable with `tl.partial.from_failed_capture(exc)`.
 - Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and `patch_detached_references()`
 - Forward-pass orchestration: `torchlens/capture/trace.py`
