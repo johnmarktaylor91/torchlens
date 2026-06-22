@@ -10,7 +10,8 @@ from typing import Any, Sequence
 
 from menagerie.catalog import CatalogRow, build_canonical_rows
 from menagerie.classics import CLASSIC_ZOO, CLASSICS
-from menagerie.generate_menagerie import parse_shape, unrenderable_reason
+from menagerie.recipe import parse_shape
+from menagerie.runtime import unrenderable_reason
 
 
 DEFAULT_BASELINE = Path(".research/menagerie-redesign/phase0_baseline.json")

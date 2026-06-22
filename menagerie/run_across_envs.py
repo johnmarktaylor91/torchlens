@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from menagerie.catalog import CatalogRow, load_rows
-from menagerie.generate_menagerie import log_event
+from menagerie.runtime import log_event
 
 
 DEFAULT_RENDER_OUT_DIR = Path("/tmp/torchlens_menagerie_gallery")

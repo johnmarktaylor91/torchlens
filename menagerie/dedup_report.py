@@ -12,14 +12,16 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from menagerie.catalog import CATALOG_DB, CatalogRow, load_rows
-from menagerie.generate_menagerie import (
+from menagerie.recipe import (
     classics_example_input,
-    cuda_is_available,
     instantiate_model,
     is_classics_row,
+    tensor_for_recipe,
+)
+from menagerie.runtime import (
+    cuda_is_available,
     is_device_related_error,
     move_model_and_input_to_device,
-    tensor_for_recipe,
     unrenderable_reason,
 )
 

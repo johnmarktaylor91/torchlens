@@ -21,31 +21,33 @@ from pathlib import Path
 from typing import Any, ContextManager, Mapping, Sequence, cast
 
 from menagerie.catalog import CatalogRow, load_rows
-from menagerie.generate_menagerie import (
+from menagerie.recipe import (
+    classics_example_input,
+    instantiate_model,
+    is_classics_row,
+    tensor_for_recipe,
+)
+from menagerie.runtime import (
     CACHE_ROOTS,
     DependencyPlan,
     assert_min_free,
-    classics_example_input,
     combine_notes,
     cleanup_runtime,
+    cuda_is_available,
     default_jobs,
     dependency_plan,
     device_note,
     disk_free_gb,
     group_by_dependency,
     install_dependency_plan,
-    instantiate_model,
     is_device_related_error,
-    is_classics_row,
     log_event,
     move_model_and_input_to_device,
     purge_new_cache_entries,
     safe_path_part,
     select_rows,
     snapshot_cache,
-    tensor_for_recipe,
     unrenderable_reason,
-    cuda_is_available,
 )
 from menagerie.ledger import (
     VerificationRun,
