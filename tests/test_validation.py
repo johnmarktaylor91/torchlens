@@ -1515,6 +1515,64 @@ def test_corruption_module_back_reference():
     log.cleanup()
 
 
+def test_module_call_boundary_rejects_output_outside_ops() -> None:
+    """ModuleCall output ops must be produced inside the call."""
+
+    log = _make_nested_log()
+    try:
+        victim = log.modules["fc"].ops["fc:1"]
+        external_input = victim.input_ops[0]
+        assert external_input not in victim.ops
+
+        victim.output_ops = [external_input]
+
+        with pytest.raises(MetadataInvariantError, match="outside its ops"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_module_call_boundary_allows_external_inputs_on_nested_modules() -> None:
+    """ModuleCall input ops are allowed to come from the parent scope."""
+
+    log = _make_nested_log()
+    try:
+        fc_call = log.modules["fc"].ops["fc:1"]
+        assert fc_call.input_ops
+        assert fc_call.input_ops[0] not in fc_call.ops
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_module_call_tree_preconditions_reach_nested_trace() -> None:
+    """ModuleCall call-tree links and stacks are populated on a nested trace."""
+
+    log = _make_nested_log()
+    try:
+        layer1_call = log.module_calls["layer1:1"]
+        layer10_call = log.module_calls["layer1.0:1"]
+        assert layer1_call.call_parent == "self:1"
+        assert "layer1.0:1" in layer1_call.call_children
+        assert layer10_call.module_call_stack == ["layer1:1"]
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_module_call_output_structure_precondition_reaches_real_trace() -> None:
+    """Populated ModuleCall output structures are scoped to retained outputs."""
+
+    log = _make_tuple_output_module_log()
+    try:
+        sub_call = log.module_calls["sub:1"]
+        assert sub_call.output_structure is not None
+        assert sub_call.output_ops
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
 def test_torch_trace_metadata_invariants_still_green() -> None:
     """Torch traces still validate through the unchanged torch invariant path."""
 
@@ -1636,6 +1694,31 @@ class _NestedModel(nn.Module):
         return self.fc(x)
 
 
+class _TupleOutputSubmodule(nn.Module):
+    """Submodule that returns a tuple of tensors."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return two tensor leaves."""
+
+        return x + 1, x + 2
+
+
+class _TupleOutputModule(nn.Module):
+    """Model with a real ModuleCall output structure."""
+
+    def __init__(self) -> None:
+        """Initialize the tuple-output submodule."""
+
+        super().__init__()
+        self.sub = _TupleOutputSubmodule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Use one output from a tuple-returning child module."""
+
+        left, _right = self.sub(x)
+        return left * 2
+
+
 def _make_recurrent_log():
     from torchlens import trace as trace_fn
 
@@ -1646,6 +1729,14 @@ def _make_nested_log():
     from torchlens import trace as trace_fn
 
     return trace_fn(_NestedModel(), torch.randn(2, 5), random_seed=42)
+
+
+def _make_tuple_output_module_log() -> Trace:
+    """Return a trace with a ModuleCall output structure."""
+
+    from torchlens import trace as trace_fn
+
+    return trace_fn(_TupleOutputModule(), torch.randn(2, 5), random_seed=42)
 
 
 # -- M. Graph ordering corruption --

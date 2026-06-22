@@ -2603,6 +2603,13 @@ def _check_module_layer_containment(ml: "Trace") -> None:
 def _check_module_hierarchy(ml: "Trace") -> None:
     """Check I: module address tree consistency and pass structure.
 
+    Precondition contract: rich ModuleCall checks run only for materialized
+    real ModuleCall records in called modules. Static uncalled child modules
+    are still handled by the existing address-level exceptions. ModuleCall
+    boundary inputs are allowed to be external to the call because they are
+    commonly produced in the parent scope; only output ops are required to be
+    produced inside the call's own ``ops`` list.
+
     Validates:
     - Root module 'self' exists.
     - Address parent-child bidirectionality (with exemptions for shared
@@ -2611,6 +2618,8 @@ def _check_module_hierarchy(ml: "Trace") -> None:
       ModuleLogs -- skip rather than error.
     - Pass dict keys are contiguous {1..N} and match num_passes.
     - call_parent and call_children reference valid modules.
+    - ModuleCall labels, output boundaries, call-tree links, stacks, and
+      output structures are internally consistent.
     """
     name = "module_hierarchy"
     mod_accessor = ml.modules
@@ -2699,6 +2708,202 @@ def _check_module_hierarchy(ml: "Trace") -> None:
                         f"ModuleCall '{addr}:{call_index}' call_children "
                         f"contains '{cc}' not in module accessor",
                     )
+
+            _check_module_call_boundary_and_tree(ml, mpl, name)
+
+
+def _check_module_call_boundary_and_tree(
+    ml: "Trace",
+    module_call: object,
+    name: str,
+) -> None:
+    """Check one materialized ModuleCall boundary and dynamic call-tree links.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module-call metadata.
+    module_call:
+        ModuleCall record to validate.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If the ModuleCall's label, output boundary, call-tree links, stack, or
+        output structure references are inconsistent.
+    """
+
+    call_label = getattr(module_call, "call_label", None)
+    address = getattr(module_call, "address", None)
+    call_index = getattr(module_call, "call_index", None)
+    expected_call_label = f"{address}:{call_index}"
+    if call_label != expected_call_label:
+        raise MetadataInvariantError(
+            name,
+            f"ModuleCall {call_label!r} has address/call_index label {expected_call_label!r}",
+        )
+
+    call_ops = set(getattr(module_call, "ops", ()) or ())
+    call_ops_no_pass = {_strip_pass_suffix(label) for label in call_ops}
+    for output_op_label in getattr(module_call, "output_ops", ()) or ():
+        resolved_label = _resolve_trace_label(ml, output_op_label)
+        if resolved_label is None:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' output_ops contains unresolved {output_op_label!r}",
+            )
+        if output_op_label not in call_ops and _strip_pass_suffix(output_op_label) not in call_ops:
+            resolved_no_pass = _strip_pass_suffix(resolved_label)
+            if resolved_label not in call_ops and resolved_no_pass not in call_ops_no_pass:
+                raise MetadataInvariantError(
+                    name,
+                    f"ModuleCall '{call_label}' output_ops contains {output_op_label!r} "
+                    "outside its ops",
+                )
+
+    for input_op_label in getattr(module_call, "input_ops", ()) or ():
+        if _resolve_trace_label(ml, input_op_label) is None:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' input_ops contains unresolved {input_op_label!r}",
+            )
+
+    _check_module_call_tree_links(ml, module_call, name)
+    _check_module_call_output_structure_paths(ml, module_call, name)
+
+
+def _check_module_call_tree_links(ml: "Trace", module_call: object, name: str) -> None:
+    """Check ModuleCall parent/child links and stack prefixes.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module-call metadata.
+    module_call:
+        ModuleCall record to validate.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a call-tree relation is unresolved, non-bidirectional, or has an
+        inconsistent child stack prefix.
+    """
+
+    call_label = getattr(module_call, "call_label", "")
+    call_accessor = getattr(ml, "module_calls", {})
+    call_parent = getattr(module_call, "call_parent", None)
+    if call_parent is not None:
+        try:
+            parent_call = call_accessor[call_parent]
+        except (KeyError, IndexError):
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' call_parent={call_parent!r} is not a ModuleCall",
+            )
+        if call_label not in getattr(parent_call, "call_children", ()):
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' parent {call_parent!r} does not list it as a child",
+            )
+
+    for child_label in getattr(module_call, "call_children", ()) or ():
+        try:
+            child_call = call_accessor[child_label]
+        except (KeyError, IndexError):
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' call_children contains unresolved {child_label!r}",
+            )
+        if getattr(child_call, "call_parent", None) != call_label:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' child {child_label!r} has call_parent="
+                f"{getattr(child_call, 'call_parent', None)!r}",
+            )
+        expected_prefix = list(getattr(module_call, "module_call_stack", ()) or ())
+        if call_label != "self:1":
+            expected_prefix.append(call_label)
+        child_stack = list(getattr(child_call, "module_call_stack", ()) or ())
+        if child_stack[: len(expected_prefix)] != expected_prefix:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{child_label}' module_call_stack={child_stack!r} does not "
+                f"start with {expected_prefix!r}",
+            )
+
+
+def _check_module_call_output_structure_paths(
+    ml: "Trace",
+    module_call: object,
+    name: str,
+) -> None:
+    """Check output ops are compatible with populated output structures.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module-call metadata.
+    module_call:
+        ModuleCall record to validate.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a retained output op path is not present in the output structure.
+    """
+
+    output_structure = getattr(module_call, "output_structure", None)
+    if output_structure is None:
+        return
+    structure_paths = set(_container_leaf_paths(output_structure))
+    mismatched_paths: list[tuple[object, ...]] = []
+    for output_op_label in getattr(module_call, "output_ops", ()) or ():
+        resolved_label = _resolve_trace_label(ml, output_op_label)
+        if resolved_label is None:
+            continue
+        output_op = ml[resolved_label]
+        output_path = tuple(getattr(output_op, "container_path", ()) or ())
+        if output_path and output_path not in structure_paths:
+            mismatched_paths.append(output_path)
+    if mismatched_paths:
+        raise MetadataInvariantError(
+            name,
+            f"ModuleCall '{getattr(module_call, 'call_label', '')}' output_structure "
+            f"does not contain retained output paths {mismatched_paths!r}",
+        )
+
+
+def _container_leaf_paths(
+    spec: object, prefix: tuple[object, ...] = ()
+) -> list[tuple[object, ...]]:
+    """Return leaf paths from a ``ContainerSpec``-like object.
+
+    Parameters
+    ----------
+    spec:
+        ContainerSpec-like object with ``child_specs``.
+    prefix:
+        Path prefix accumulated during recursion.
+
+    Returns
+    -------
+    list[tuple[object, ...]]
+        Leaf paths in traversal order.
+    """
+
+    child_specs = tuple(getattr(spec, "child_specs", ()) or ())
+    if not child_specs:
+        return [prefix]
+    paths: list[tuple[object, ...]] = []
+    for component, child_spec in child_specs:
+        paths.extend(_container_leaf_paths(child_spec, (*prefix, component)))
+    return paths
 
 
 # ---------------------------------------------------------------------------
