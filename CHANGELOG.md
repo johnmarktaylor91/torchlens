@@ -1,6 +1,232 @@
 # CHANGELOG
 
 
+## v2.27.0 (2026-06-22)
+
+### Bug Fixes
+
+- **menagerie**: Bump smp PSPNet recipes to encoder_depth=5
+  ([`4178ef5`](https://github.com/johnmarktaylor91/torchlens/commit/4178ef5d7e3a94bef093a006fa6ca0e90a74e1b9))
+
+PSPNet's default encoder_depth=3 only executes the first 3 encoder stages, where
+  resnet50/resnet101/resnext101 backbones are topologically identical -- so backbone variants
+  collapsed to one graph_shape_hash. Running the full encoder (depth=5) makes them trace as the
+  genuinely distinct architectures they are. Verify-each: only rows that still instantiate and trace
+  at depth=5 were changed.
+
+- **menagerie**: Cross-env render --retry-failed + merge round-2 repairs
+  ([`48bd02e`](https://github.com/johnmarktaylor91/torchlens/commit/48bd02ea7a085b8d001265cb40ed50e3223e99d8))
+
+run_across_envs render command now passes --retry-failed so freshly-installed envs re-attempt rows
+  the base env marked skipped:dependency_unavailable (they were being treated as completed and
+  skipped, rendering 0). Also merges 2 verified round-2 recipe repairs and records env_specs install
+  status/resolved_packages provenance.
+
+- **menagerie**: Merge 252 round-3 recipe repairs (assign-model/syntax/dilated/attr)
+  ([`6205061`](https://github.com/johnmarktaylor91/torchlens/commit/6205061d018d2e24f935bd62090efe90fe11cd1e))
+
+Recovers 252 recipes a prior wave had wrongly classified as ceilings; each rewritten and verified to
+  instantiate + trace (add missing model binding, fix syntax, drop unsupported smp dilated-mode
+  kwargs, correct module import paths).
+
+- **menagerie**: Repair 64 catalog recipe bindings
+  ([`c0020f3`](https://github.com/johnmarktaylor91/torchlens/commit/c0020f39fccbbdf70afc276217347f8f0f50db5e))
+
+- **torch**: Also guard module __name__ access in patch_detached_references
+  ([`39a3135`](https://github.com/johnmarktaylor91/torchlens/commit/39a3135f6fc24ef724e40a2409f8c27f30417807))
+
+Completes the lazy-module-safety fix (after the __file__ guard). The sys.modules crawl read
+  mod.__name__ via hasattr/getattr, which - like __file__ - can propagate a non-AttributeError from
+  a lazy shim's __getattr__ (hasattr only swallows AttributeError). Read it defensively with a
+  fallback to the sys.modules key. Audited the rest of the crawl: remaining attribute access is via
+  __dict__/vars(), which does not trigger __getattr__, so the bug class is fully closed. Regression
+  test now exercises BOTH the __file__ and __name__ vectors.
+
+- **torch**: Guard module __file__ access in patch_detached_references
+  ([`f07db5b`](https://github.com/johnmarktaylor91/torchlens/commit/f07db5b0c45d1edd97a74c11be764524ff85b4e3))
+
+SpeechBrain's LazyModule (and similar lazy-import shims) raise ImportError from __getattr__ when an
+  optional dependency (k2/flair) is missing. getattr(mod, '__file__', None) only suppresses
+  AttributeError, so the sys.modules crawl in patch_detached_references propagated the ImportError
+  and aborted tracing of every model imported alongside SpeechBrain (11 models in the menagerie acid
+  test). Add _safe_module_file() to guard the access broadly and treat any failure as 'no file'; add
+  a regression test with a module whose __file__ access raises.
+
+- **torch**: Make wrapped torch.nn.functional Python ops jit.script-able
+  ([`80e1137`](https://github.com/johnmarktaylor91/torchlens/commit/80e11370b401bdd5954c1f11397767ca992f21eb))
+
+torch.jit.script failed compiling any function that calls a wrapped pure-Python functional op (e.g.
+  F.softsign): such ops are absent from torch's jit _builtin_table, so the wrapper is not registered
+  as a builtin; jit then pulls the original op's source but resolves names against the wrapper
+  module's globals, which lacked the torch.overrides boilerplate -> 'undefined value
+  has_torch_function_unary'. Surfaced by spikingjelly @torch.jit.script surrogates in the model
+  menagerie. Import has_torch_function_unary and handle_torch_function into the wrappers module
+  globals so jit resolves the shared functional-op preamble (jit treats has_torch_function_unary as
+  always-False, eliding the override branch). Verified: F.softsign + spikingjelly surrogate.SoftSign
+  now script; added a jit_compat regression test; smoke green.
+
+### Chores
+
+- **menagerie**: Record cross-env install provenance (status + resolved_packages)
+  ([`ad5943c`](https://github.com/johnmarktaylor91/torchlens/commit/ad5943caa94e79215b7f262bac29a2c2b69d285f))
+
+The cross-env orchestrator writes back per-env install status and the exact resolved package set
+  after a run, so future reruns reuse captured recipes without re-debugging.
+
+- **types**: Cast coerced bundle member items for mypy 2.x
+  ([`a7a7ffd`](https://github.com/johnmarktaylor91/torchlens/commit/a7a7ffdcff2e0e3b1450fe98dd076e62df1c47b2))
+
+mypy 2.1.0 (CI) flagged _coerce_member_name_list passing the wide str|Trace|Sequence union to
+  _coerce_member_name; the _is_list_like runtime narrowing is invisible to mypy. Cast each item to
+  the type the narrowing guarantees. Runtime no-op; mypy 1.19 + 2.1 both clean.
+
+### Continuous Integration
+
+- **release**: Skip publish steps when no dist is built
+  ([`a3449c1`](https://github.com/johnmarktaylor91/torchlens/commit/a3449c15e3c5c2289a4f9efa70df5bf95cab8dea))
+
+Non-releasing commits (ci/docs/chore/test/refactor pushed on their own) make semantic-release
+  produce no new version and no dist/, so the unconditional 'Publish to PyPI' step failed with
+  FileNotFoundError: dist and turned the Release job red despite nothing being meant to ship. Gate
+  both publish steps on hashFiles('dist/**') != '' so they no-op when there is nothing to publish
+  and run normally on real releases.
+
+### Features
+
+- **menagerie**: A 10k+ neural-net architecture atlas as a live TorchLens acid test [skip ci]
+  ([`1896ed7`](https://github.com/johnmarktaylor91/torchlens/commit/1896ed71d1c797111ed4f30e7af9f7527e59b39f))
+
+Brings the model menagerie to main: a browsable atlas of 10,540+ neural-network architecture
+  families plus 300+ hand-built historical "classics" -- each with no prior public PyTorch
+  implementation, every one trace-verified -- all captured and graphed with TorchLens.
+
+It doubles as an exhaustive correctness/coverage test of TorchLens itself: every architecture that
+  instantiates is traced end-to-end and rendered, turning the full breadth of public deep learning
+  into a single regression surface for the capture engine.
+
+Highlights: - Queryable catalog (`python -m menagerie.catalog stats|query|recipe`) over an SQLite +
+  TSV source. - Disk-safe parallel renderer: per-model subprocess isolation, --jobs/--gpu-jobs, GPU
+  support, BLAS/OMP thread pinning, aesthetic passthrough, idempotent --retry/--force reruns. -
+  Architectural graph-shape hashing: parameter/resolution/width-invariant fingerprints that dedup
+  variants while staying architecture-discriminative -- verified resnet18/50/101 hash distinctly,
+  while aimv2 width+resolution variants correctly collapse to a single architecture. - Rerun-proof
+  cross-environment orchestrator with captured per-framework install recipes. - A durable
+  adversarial "find every architecture we missed" discovery prompt + arXiv harvest crawler. -
+  Prior-art subsumed (Younger / NAR / ONNX Zoo) as a superset, with related work credited.
+
+[skip ci]: this is a visibility push. The menagerie is not part of the published `torchlens`
+  package, so no release is cut. The render/validation campaign to 100% coverage is still in flight.
+
+- **menagerie**: Add 58 adversarial-sweep families + durable discovery prompt
+  ([`3fedb00`](https://github.com/johnmarktaylor91/torchlens/commit/3fedb00d98a9bb8b5ece98a7fff19598d2c051eb))
+
+Fold in the cross-lab adversarial red-team sweep (hostile Opus + Codex auditors tasked with proving
+  the catalog incomplete): - classics/: +58 historical / exotic / non-English families with no prior
+  PyTorch implementation (Associatron, Gelenbe Random NN, Tsetlin Machine, Lenia/Flow-Lenia,
+  Coherent Ising Machine, P-bit nets, morphological/fuzzy/oscillator nets, neuroevolution
+  phenotypes, differentiable machines, ...). 312 classics total; all trace-verified (312/312). -
+  data/master_catalog.tsv: +103 red-team catalog-adds (particle physics, EEG foundation models,
+  seismology, Chinese-lab CTR/LLM, satellite). Catalog: 10,742 canonical / 6,127 verified. -
+  DISCOVER_MODELS.md: rewritten as the durable, reusable adversarial "find missed families" sweep
+  prompt (every-axis + non-English + newly-published coverage, family-not-variant discipline, exact
+  catalog/classics add instructions, orchestration recipe). - discover_crawler.py: starter
+  recent-arXiv candidate harvester to seed sweeps. - CLAUDE.md / AGENTS.md: point top-level agents
+  at the discovery prompt.
+
+- **menagerie**: Add model menagerie catalog + 254 trace-verified historical classics
+  ([`895fbd9`](https://github.com/johnmarktaylor91/torchlens/commit/895fbd9fb24cf039a8a72618e706e14f64c10aac))
+
+Add the menagerie/ package: a browsable atlas of neural-net architectures captured with TorchLens.
+
+- catalog.py: queryable SQLite+TSV catalog of 10,581 canonical models across ~3,600 normalized
+  families (CLI: stats / query / recipe). Auto-folds the historical-classics registry into the
+  catalog at build time. - classics/: 254 historical architectures that previously lacked a PyTorch
+  implementation, spanning every era (McCulloch-Pitts 1943 onward), domain (vision, RL, sequence,
+  comp-neuro, genomics), paradigm (logic, PDP, neuro-symbolic, vector-symbolic, spiking), and orphan
+  corner (stat-mech machines, hyperbolic nets, photonic/memristor, DDSP, EEGNet). Each exposes a
+  builder plus example input and is trace-verified with TorchLens (254/254). -
+  generate_menagerie.py: disk-safe, dependency-aware, resumable graph renderer. - README /
+  METHODOLOGY / UPDATE_RECIPE / DISCOVER_MODELS docs.
+
+The generated SQLite DB and canonical TSV are rebuilt from the tracked master catalog and code; bulk
+  render outputs are gitignored.
+
+- **menagerie**: Add validate-all script, cross-env orchestrator, crawl-date metadata
+  ([`c233980`](https://github.com/johnmarktaylor91/torchlens/commit/c233980b849224d83bf66386bf158518827a6ba4))
+
+- validate_menagerie.py: run TorchLens validation (forward replay + metadata invariants) over every
+  model, independent of rendering. Separate validation_manifest.tsv + out-dir + VALIDATION_REPORT.md
+  + validation_summary.json (verified count + actionable failures). Resumable, disk-safe,
+  subprocess-isolated. Shares the catalog DB and renderer helpers, but render and validate run
+  independently. - run_across_envs.py: cross-conda-env orchestrator (core / mmlab / recbole / paddle
+  / detectron2 / fla) to render OR validate models with mutually-incompatible deps. --dry-run by
+  default (prints the per-env conda/pip/run commands); --execute to run. - crawl_history.json +
+  CRAWL_LOG.md: durable record of the last exhaustive discovery crawl (2026-06-18).
+  discover_crawler.py and DISCOVER_MODELS.md now read it so future sweeps focus on architectures
+  published since the last crawl.
+
+- **menagerie**: Architectural-hash dedup tooling + harvest-source list + prior-art adds
+  ([`51861dc`](https://github.com/johnmarktaylor91/torchlens/commit/51861dcc17a12f29d99841b0c2998aa962a7f01a))
+
+- generate_menagerie.py + validate_menagerie.py: record Trace.graph_shape_hash per model
+  (append-only manifest column) -- the architectural dedup key (param/resolution/batch-invariant,
+  architecture-discriminative; verified 2026-06-18). - dedup_report.py: group manifest rows by
+  graph_shape_hash -> distinct architectures + any architectural duplicates; proves no architecture
+  is repeated. - HARVEST_SOURCES.md: running list of model hubs / library zoos / prior-art datasets
+  to harvest, with the mandate to be a superset of their union; dedup via graph_shape_hash. -
+  crawl_history.json: record that Younger/NAR are already subsumed (0 new) and that library-only
+  sourcing is the #1 blind spot; point future sweeps at HARVEST_SOURCES.md. - master_catalog.tsv:
+  +91 prior-art harvest models + 13 installed-lib adds + harvest-repaired recipes.
+
+- **menagerie**: Gpu --device support, prior-art lessons, discovery upgrades, recipe repairs
+  ([`4f586a7`](https://github.com/johnmarktaylor91/torchlens/commit/4f586a71299feb6f47077aa995dda02a1a43223e))
+
+- generate_menagerie.py + validate_menagerie.py: --device {cpu,cuda,auto} (default cpu); auto runs
+  CPU-first then retries on GPU for CUDA/Triton-required models (fla family). -
+  PRIOR_ART_LESSONS.md: curation methods + metadata/storage/release design notes mined from Younger
+  / NAR / ONNX-Zoo / GitGraph / DeepNets-1M / NAS-Bench; why-we-missed analysis; coverage-funnel +
+  versioned-HF-release + provenance recommendations. - DISCOVER_MODELS.md: fold in hub +
+  prior-art-dataset harvest sources (Kaggle, ONNX Zoo, Younger/NAR lists), graph-fingerprint
+  near-duplicate detection, continuous-expansion loop. - master_catalog.tsv: 259 repaired recipes
+  (sketch -> verified instantiate+trace) + 13 installed-lib coverage adds folded in.
+
+- **menagerie**: Parallel render+validate (--jobs/--gpu-jobs) + aesthetic passthrough + --force
+  ([`368c433`](https://github.com/johnmarktaylor91/torchlens/commit/368c433ec8d559c3fbc0b3fc6a3cdd100499f424))
+
+- generate_menagerie.py + validate_menagerie.py: ThreadPoolExecutor over per-model subprocesses
+  (--jobs, default min(8,cpu-2)); --gpu-jobs semaphore caps concurrent GPU traces (default 4);
+  main-thread manifest appends preserve append-only correctness + resumability (~4.5x faster). -
+  thread-safe per-model tmp isolation via subprocess env= (no global os.environ mutation). -
+  generate: --vis-option KEY=VALUE (repeatable) -> Trace.draw() kwargs, and --force to
+  regenerate/overwrite existing renders (restyle-all); validate gets the same parallelism.
+
+- **menagerie**: Rerun-proof cross-env infra (env_specs recipes) + ceiling log
+  ([`e07eaed`](https://github.com/johnmarktaylor91/torchlens/commit/e07eaedbedb6cc4ec8afcbf0d2d92e213b1b12c1))
+
+- run_across_envs.py: idempotent conda-env reuse, captured per-env install recipes in
+  data/env_specs.json (6 envs), disk-safe per-env create->render->optional-cleanup, --setup-only,
+  resumable, graceful failure logging; applies to --task render AND validate. - data/env_specs.json:
+  working install recipes so reruns don't re-debug dependencies. - CEILING_LOG.md: durable
+  don't-retrace record (no-public-code is not a ceiling if the architecture is described well enough
+  to reimplement faithfully). - README: cross-environment rerun-safe section.
+
+### Performance Improvements
+
+- **menagerie**: Pin worker BLAS/OMP threads to 1 (render + validate)
+  ([`7b434bc`](https://github.com/johnmarktaylor91/torchlens/commit/7b434bce90e1d7d9310a3898db96f1a8154892a8))
+
+Each render/validate runs in its own subprocess with the trace on GPU and graphviz layout
+  single-threaded, so per-worker multi-threaded BLAS only oversubscribed the CPU (load ~40 on 20
+  cores at 6 concurrent). Pin OMP/MKL/OpenBLAS/NumExpr=1 + torch.set_num_threads(1) per worker ->
+  load ~15, enabling higher concurrency (jobs 14 / gpu-jobs 10) for much faster reruns and the 100%
+  push.
+
+### Testing
+
+- **debug**: Harden input shape inference
+  ([`51a3ff0`](https://github.com/johnmarktaylor91/torchlens/commit/51a3ff0f99ac69eef29a9ecb642304c0713cfaa6))
+
+
 ## v2.26.0 (2026-06-17)
 
 ### Bug Fixes
