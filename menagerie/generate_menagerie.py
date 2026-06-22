@@ -33,6 +33,8 @@ DEFAULT_OUT_DIR = Path("/tmp/torchlens_menagerie_gallery")
 MANIFEST_COLUMNS = (
     "name",
     "model_id",
+    "stable_id",
+    "recipe_revision_sha256",
     "status",
     "n_nodes",
     "render_path",
@@ -304,6 +306,10 @@ class RenderResult:
         Error or skip note.
     graph_shape_hash:
         TorchLens architecture hash for deduplication.
+    stable_id:
+        Opaque durable model identity.
+    recipe_revision_sha256:
+        Frozen recipe fingerprint for the row's current construction recipe.
     """
 
     name: str
@@ -315,6 +321,8 @@ class RenderResult:
     dependency_cluster: str
     error: str
     graph_shape_hash: str = ""
+    stable_id: str = ""
+    recipe_revision_sha256: str = ""
 
 
 def disk_free_gb(path: Path) -> float:
@@ -623,7 +631,7 @@ def parse_vis_options(pairs: Sequence[str]) -> dict[str, Any]:
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
-    """Read the latest manifest record for each model name.
+    """Read the latest manifest record for each stable model identity.
 
     Parameters
     ----------
@@ -633,18 +641,18 @@ def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
     Returns
     -------
     dict[str, dict[str, str]]
-        Latest manifest rows keyed by model name.
+        Latest manifest rows keyed by stable ID.
     """
 
     if not manifest_path.exists():
         return {}
     with manifest_path.open(newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
-        return {row["name"]: row for row in reader if row.get("name")}
+        return {row["stable_id"]: row for row in reader if row.get("stable_id")}
 
 
-def completed_names(manifest_path: Path, retry_failed: bool) -> set[str]:
-    """Read names already completed in an append-only manifest.
+def completed_stable_ids(manifest_path: Path, retry_failed: bool) -> set[str]:
+    """Read stable IDs already completed in an append-only manifest.
 
     Parameters
     ----------
@@ -656,13 +664,13 @@ def completed_names(manifest_path: Path, retry_failed: bool) -> set[str]:
     Returns
     -------
     set[str]
-        Completed model names.
+        Completed stable IDs.
     """
 
     records = manifest_records(manifest_path)
     if not retry_failed:
         return set(records)
-    return {name for name, row in records.items() if row.get("status") == "rendered"}
+    return {stable_id for stable_id, row in records.items() if row.get("status") == "rendered"}
 
 
 def append_manifest(manifest_path: Path, result: RenderResult) -> None:
@@ -686,6 +694,8 @@ def append_manifest(manifest_path: Path, result: RenderResult) -> None:
             (
                 result.name,
                 result.model_id,
+                result.stable_id,
+                result.recipe_revision_sha256,
                 result.status,
                 result.n_nodes,
                 result.render_path,
@@ -1682,6 +1692,8 @@ def render_one(
             time.monotonic() - start,
             plan.cluster_key,
             skip_reason,
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     try:
         input_tensor = (
@@ -1699,6 +1711,8 @@ def render_one(
             time.monotonic() - start,
             plan.cluster_key,
             str(error),
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     if dry_run:
         return RenderResult(
@@ -1710,6 +1724,8 @@ def render_one(
             time.monotonic() - start,
             plan.cluster_key,
             "validated recipe",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
 
     import torch
@@ -1772,6 +1788,8 @@ def render_one(
             plan.cluster_key,
             device_note(device, actual_device),
             graph_shape_hash,
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
 
     if device == "cuda":
@@ -1853,6 +1871,8 @@ def render_result_from_payload(payload: Mapping[str, Any]) -> RenderResult:
         dependency_cluster=str(payload["dependency_cluster"]),
         error=str(payload["error"]),
         graph_shape_hash=str(payload.get("graph_shape_hash", "")),
+        stable_id=str(payload.get("stable_id", "")),
+        recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
     )
 
 
@@ -1955,6 +1975,8 @@ def render_with_timeout(
             timeout_sec,
             plan.cluster_key,
             f"timed out after {timeout_sec:.1f}s",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     completed = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
     if completed.returncode != 0:
@@ -1968,6 +1990,8 @@ def render_with_timeout(
             0.0,
             plan.cluster_key,
             stderr_tail or f"worker exited with code {completed.returncode}",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     for line in reversed(completed.stdout.splitlines()):
         try:
@@ -1985,6 +2009,8 @@ def render_with_timeout(
         0.0,
         plan.cluster_key,
         "worker did not emit a worker_result event",
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
     )
 
 
@@ -2206,7 +2232,7 @@ def render_link_for_row(
     from_path:
         Markdown file path.
     records:
-        Manifest records keyed by model name.
+        Manifest records keyed by stable ID.
 
     Returns
     -------
@@ -2217,7 +2243,7 @@ def render_link_for_row(
     render_path = model_render_path(row, out_dir, file_format)
     if render_path.exists():
         return relative_markdown_link(from_path, render_path, "graph")
-    status = records.get(row.name, {}).get("status", "not rendered")
+    status = records.get(row.stable_id, {}).get("status", "not rendered")
     return status
 
 
@@ -2482,14 +2508,14 @@ def run(args: argparse.Namespace) -> int:
     log_event("run_start", out_dir=str(out_dir), free_gb=round(start_free_gb, 3))
     assert_min_free(out_dir, args.min_free_gb)
 
-    done = set() if args.force else completed_names(manifest_path, args.retry_failed)
-    rows = [row for row in selected if row.name not in done]
+    done = set() if args.force else completed_stable_ids(manifest_path, args.retry_failed)
+    rows = [row for row in selected if row.stable_id not in done]
     if args.only_new and not args.force:
         rows = [
             row
             for row in rows
             if not selected_render_exists(row, out_dir, args.file_format)
-            and manifest_records(manifest_path).get(row.name, {}).get("status") != "rendered"
+            and manifest_records(manifest_path).get(row.stable_id, {}).get("status") != "rendered"
         ]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
 
@@ -2516,6 +2542,8 @@ def run(args: argparse.Namespace) -> int:
                         0.0,
                         plan.cluster_key,
                         install_error,
+                        stable_id=row.stable_id,
+                        recipe_revision_sha256=row.recipe_revision_sha256,
                     ),
                 )
             log_event(
@@ -2820,6 +2848,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 0.0,
                 plan.cluster_key,
                 repr(error),
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
             )
         print(json.dumps({"event": "worker_result", "result": result.__dict__}), flush=True)
         return 0

@@ -51,6 +51,8 @@ DEFAULT_OUT_DIR = Path("/tmp/torchlens_menagerie_validation")
 MANIFEST_COLUMNS = (
     "name",
     "model_id",
+    "stable_id",
+    "recipe_revision_sha256",
     "status",
     "n_ops",
     "validate_metadata_ok",
@@ -90,22 +92,28 @@ class ValidationResult:
         Error text or skip note.
     graph_shape_hash:
         TorchLens architecture hash for deduplication.
+    stable_id:
+        Opaque durable model identity.
+    recipe_revision_sha256:
+        Frozen recipe fingerprint for the row's current construction recipe.
     """
 
     name: str
     model_id: int
     status: str
-    n_ops: int
+    n_ops: int | None
     validate_metadata_ok: bool
     scope: str
     elapsed: float
     dependency_cluster: str
     error: str
     graph_shape_hash: str = ""
+    stable_id: str = ""
+    recipe_revision_sha256: str = ""
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
-    """Read latest validation manifest rows keyed by model name.
+    """Read latest validation manifest rows keyed by stable model identity.
 
     Parameters
     ----------
@@ -122,11 +130,11 @@ def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
         return {}
     with manifest_path.open(newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
-        return {row["name"]: row for row in reader if row.get("name")}
+        return {row["stable_id"]: row for row in reader if row.get("stable_id")}
 
 
-def completed_names(manifest_path: Path, revalidate_failed: bool) -> set[str]:
-    """Return model names that should be skipped for resumable validation.
+def completed_stable_ids(manifest_path: Path, revalidate_failed: bool) -> set[str]:
+    """Return stable IDs that should be skipped for resumable validation.
 
     Parameters
     ----------
@@ -138,13 +146,13 @@ def completed_names(manifest_path: Path, revalidate_failed: bool) -> set[str]:
     Returns
     -------
     set[str]
-        Names to skip.
+        Stable IDs to skip.
     """
 
     records = manifest_records(manifest_path)
     if not revalidate_failed:
         return set(records)
-    return {name for name, row in records.items() if row.get("status") == "validated"}
+    return {stable_id for stable_id, row in records.items() if row.get("status") == "validated"}
 
 
 def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
@@ -168,8 +176,10 @@ def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
             (
                 result.name,
                 result.model_id,
+                result.stable_id,
+                result.recipe_revision_sha256,
                 result.status,
-                result.n_ops,
+                "" if result.n_ops is None else result.n_ops,
                 str(result.validate_metadata_ok).lower(),
                 result.scope,
                 f"{result.elapsed:.3f}",
@@ -194,17 +204,21 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         Parsed validation result.
     """
 
+    raw_n_ops = payload.get("n_ops")
+    n_ops = None if raw_n_ops in {None, ""} else int(raw_n_ops)
     return ValidationResult(
         name=str(payload["name"]),
         model_id=int(payload["model_id"]),
         status=str(payload["status"]),
-        n_ops=int(payload["n_ops"]),
+        n_ops=n_ops,
         validate_metadata_ok=bool(payload["validate_metadata_ok"]),
         scope=str(payload["scope"]),
         elapsed=float(payload["elapsed"]),
         dependency_cluster=str(payload["dependency_cluster"]),
         error=str(payload["error"]),
         graph_shape_hash=str(payload.get("graph_shape_hash", "")),
+        stable_id=str(payload.get("stable_id", "")),
+        recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
     )
 
 
@@ -372,6 +386,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
             time.monotonic() - start,
             plan.cluster_key,
             skip_reason,
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     try:
         input_tensor = _build_input(row)
@@ -386,6 +402,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
             time.monotonic() - start,
             plan.cluster_key,
             str(error),
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     if dry_run:
         return ValidationResult(
@@ -398,6 +416,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
             time.monotonic() - start,
             plan.cluster_key,
             "validated recipe",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
 
     model = instantiate_model(row)
@@ -446,6 +466,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                     device_note(device, actual_device),
                     f"{error!r}\n{traceback.format_exc(limit=8)}",
                 ),
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
             )
         if not bool(forward_result):
             return ValidationResult(
@@ -458,6 +480,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 time.monotonic() - start,
                 plan.cluster_key,
                 combine_notes(device_note(device, actual_device), repr(forward_result)),
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
             )
 
         backward_error = ""
@@ -484,6 +508,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                         device_note(device, actual_device),
                         f"backward validation failed: {error!r}\n{traceback.format_exc(limit=8)}",
                     ),
+                    stable_id=row.stable_id,
+                    recipe_revision_sha256=row.recipe_revision_sha256,
                 )
             if not bool(backward_result):
                 return ValidationResult(
@@ -499,6 +525,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                         device_note(device, actual_device),
                         f"backward validation returned {backward_result!r}",
                     ),
+                    stable_id=row.stable_id,
+                    recipe_revision_sha256=row.recipe_revision_sha256,
                 )
             backward_error = f"; backward={backward_result!r}"
 
@@ -521,6 +549,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 f"forward={forward_result!r}{backward_error}",
             ),
             graph_shape_hash,
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
 
     if device == "cuda":
@@ -537,6 +567,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 time.monotonic() - start,
                 plan.cluster_key,
                 f"device=cuda; {error!r}\n{traceback.format_exc(limit=8)}",
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
             )
         return attempt_validation(model, input_tensor, "cuda")
 
@@ -560,6 +592,8 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                     time.monotonic() - start,
                     plan.cluster_key,
                     f"device=cuda; {error!r}\n{traceback.format_exc(limit=8)}",
+                    stable_id=row.stable_id,
+                    recipe_revision_sha256=row.recipe_revision_sha256,
                 )
             return attempt_validation(model, input_tensor, "cuda")
         if cpu_result.error:
@@ -573,6 +607,9 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 cpu_result.elapsed,
                 cpu_result.dependency_cluster,
                 combine_notes(device_note(device, "cpu"), cpu_result.error),
+                cpu_result.graph_shape_hash,
+                stable_id=cpu_result.stable_id,
+                recipe_revision_sha256=cpu_result.recipe_revision_sha256,
             )
         return cpu_result
 
@@ -653,6 +690,8 @@ def validate_with_timeout(
             timeout_sec,
             plan.cluster_key,
             f"timed out after {timeout_sec:.1f}s",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
@@ -666,6 +705,8 @@ def validate_with_timeout(
             0.0,
             plan.cluster_key,
             stderr_tail or f"worker exited with code {completed.returncode}",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
         )
     for line in reversed(completed.stdout.splitlines()):
         try:
@@ -684,6 +725,8 @@ def validate_with_timeout(
         0.0,
         plan.cluster_key,
         "worker did not emit a worker_result event",
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
     )
 
 
@@ -722,16 +765,17 @@ def write_reports(out_dir: Path, manifest_path: Path, rows: Sequence[CatalogRow]
     """
 
     records = manifest_records(manifest_path)
-    row_by_name = {
-        row.name: row for row in load_rows(db_path=Path(__file__).parent / "data" / "catalog.db")
+    row_by_stable_id = {
+        row.stable_id: row
+        for row in load_rows(db_path=Path(__file__).parent / "data" / "catalog.db")
     }
-    row_by_name.update({row.name: row for row in rows})
+    row_by_stable_id.update({row.stable_id: row for row in rows})
     statuses = Counter(_status_bucket(row.get("status", "")) for row in records.values())
     by_domain: dict[str, Counter[str]] = defaultdict(Counter)
     by_zoo: dict[str, Counter[str]] = defaultdict(Counter)
     failures = []
-    for name, record in records.items():
-        catalog_row = row_by_name.get(name)
+    for stable_id, record in records.items():
+        catalog_row = row_by_stable_id.get(stable_id)
         domain = catalog_row.domain if catalog_row else "unknown"
         zoo = catalog_row.zoo if catalog_row else "unknown"
         bucket = _status_bucket(record.get("status", ""))
@@ -740,7 +784,8 @@ def write_reports(out_dir: Path, manifest_path: Path, rows: Sequence[CatalogRow]
         if bucket == "failed":
             failures.append(
                 {
-                    "name": name,
+                    "name": record.get("name", ""),
+                    "stable_id": stable_id,
                     "model_id": record.get("model_id", ""),
                     "status": record.get("status", ""),
                     "error": record.get("error", ""),
@@ -838,8 +883,8 @@ def run(args: argparse.Namespace) -> int:
     log_event("validation_run_start", out_dir=str(out_dir), free_gb=round(start_free_gb, 3))
     assert_min_free(out_dir, args.min_free_gb)
 
-    done = completed_names(manifest_path, args.revalidate_failed)
-    rows = [row for row in selected if row.name not in done]
+    done = completed_stable_ids(manifest_path, args.revalidate_failed)
+    rows = [row for row in selected if row.stable_id not in done]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
 
     # Phase 1: install dependencies per cluster (serial -- installs mutate the
@@ -862,6 +907,8 @@ def run(args: argparse.Namespace) -> int:
                         0.0,
                         plan.cluster_key,
                         install_error,
+                        stable_id=row.stable_id,
+                        recipe_revision_sha256=row.recipe_revision_sha256,
                     ),
                 )
             log_event(
@@ -1088,6 +1135,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 0.0,
                 plan.cluster_key,
                 f"{error!r}\n{traceback.format_exc(limit=8)}",
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
             )
         print(json.dumps({"event": "worker_result", "result": result.__dict__}), flush=True)
         return 0

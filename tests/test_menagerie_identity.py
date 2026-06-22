@@ -2,8 +2,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from menagerie.catalog import CatalogRow
+from menagerie.generate_menagerie import (
+    RenderResult,
+    append_manifest as append_render_manifest,
+    completed_stable_ids as completed_render_stable_ids,
+)
 from menagerie.identity import canonical_recipe_v1, recipe_revision_sha256
+from menagerie.validate_menagerie import (
+    ValidationResult,
+    append_manifest as append_validation_manifest,
+    completed_stable_ids as completed_validation_stable_ids,
+)
 
 
 def _row(**overrides: object) -> CatalogRow:
@@ -89,3 +101,58 @@ def test_constructor_change_changes_recipe_hash() -> None:
     assert recipe_revision_sha256(_row()) != recipe_revision_sha256(
         _row(constructor_call="torch.nn.Linear(4, 3)")
     )
+
+
+def test_render_manifest_resume_uses_stable_id_for_same_name_siblings(tmp_path: Path) -> None:
+    """Render resume keeps same-name siblings distinct by stable ID."""
+
+    manifest_path = tmp_path / "manifest.tsv"
+    append_render_manifest(
+        manifest_path,
+        RenderResult(
+            name="SharedName",
+            model_id=1,
+            status="rendered",
+            n_nodes=3,
+            render_path="SharedName.svg",
+            elapsed=0.1,
+            dependency_cluster="unit",
+            error="",
+            graph_shape_hash="shape-a",
+            stable_id="m1",
+            recipe_revision_sha256="recipe-a",
+        ),
+    )
+
+    done = completed_render_stable_ids(manifest_path, retry_failed=False)
+    rows = [_row(name="SharedName", stable_id="m1"), _row(name="SharedName", stable_id="m2")]
+
+    assert [row.stable_id for row in rows if row.stable_id not in done] == ["m2"]
+
+
+def test_validation_manifest_resume_uses_stable_id_for_same_name_siblings(tmp_path: Path) -> None:
+    """Validation resume keeps same-name siblings distinct by stable ID."""
+
+    manifest_path = tmp_path / "validation_manifest.tsv"
+    append_validation_manifest(
+        manifest_path,
+        ValidationResult(
+            name="SharedName",
+            model_id=1,
+            status="validated",
+            n_ops=3,
+            validate_metadata_ok=True,
+            scope="forward",
+            elapsed=0.1,
+            dependency_cluster="unit",
+            error="",
+            graph_shape_hash="shape-a",
+            stable_id="m1",
+            recipe_revision_sha256="recipe-a",
+        ),
+    )
+
+    done = completed_validation_stable_ids(manifest_path, revalidate_failed=False)
+    rows = [_row(name="SharedName", stable_id="m1"), _row(name="SharedName", stable_id="m2")]
+
+    assert [row.stable_id for row in rows if row.stable_id not in done] == ["m2"]
