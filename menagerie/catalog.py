@@ -52,6 +52,9 @@ CANONICAL_COLUMNS = (
     "notes",
     "source",
     "recipe_revision_sha256",
+    "input_is_real",
+    "verification_expectation",
+    "quarantine",
 )
 
 
@@ -166,6 +169,13 @@ class CatalogRow:
         Canonical source stream: ``catalog`` for TSV rows or ``classics`` for registry rows.
     recipe_revision_sha256:
         Frozen recipe fingerprint for the row's current construction recipe.
+    input_is_real:
+        Whether the runtime input is a real example input rather than a sentinel ignored by a
+        wrapper.
+    verification_expectation:
+        Expected validation posture for honest reporting.
+    quarantine:
+        Whether the row uses a quarantined executable recipe form.
     """
 
     model_id: int
@@ -185,6 +195,9 @@ class CatalogRow:
     notes: str
     source: str
     recipe_revision_sha256: str
+    input_is_real: bool = True
+    verification_expectation: str = "forward_required"
+    quarantine: bool = False
 
 
 def macro_domain(raw: str) -> str:
@@ -708,6 +721,9 @@ def _row_from_record(record: CatalogRecord, source: str) -> dict[str, str | bool
         "notes": notes,
         "verified": verified,
         "source": source,
+        "input_is_real": record.input_is_real,
+        "verification_expectation": record.verification_expectation.value,
+        "quarantine": bool(getattr(record.recipe, "quarantine", False)),
     }
 
 
@@ -855,6 +871,9 @@ def build_canonical_rows(
                 "domain": macro_domain(row["domain"]),
                 "verified": True,
                 "source": "classics",
+                "input_is_real": True,
+                "verification_expectation": VerificationExpectation.forward_required.value,
+                "quarantine": False,
             }
         )
     representative_map = normalize_family_representatives(intermediate)
@@ -895,6 +914,11 @@ def build_canonical_rows(
             notes=str(row["notes"]),
             source=str(row["source"]),
             recipe_revision_sha256="",
+            input_is_real=bool(row.get("input_is_real", True)),
+            verification_expectation=str(
+                row.get("verification_expectation", VerificationExpectation.forward_required.value)
+            ),
+            quarantine=bool(row.get("quarantine", False)),
         )
         canonical_rows.append(
             CatalogRow(
@@ -981,13 +1005,16 @@ def write_catalog(
                 notes TEXT NOT NULL,
                 source TEXT NOT NULL,
                 recipe_revision_sha256 TEXT NOT NULL,
+                input_is_real INTEGER NOT NULL DEFAULT 1,
+                verification_expectation TEXT NOT NULL DEFAULT 'forward_required',
+                quarantine INTEGER NOT NULL DEFAULT 0,
                 UNIQUE(name, zoo, variant)
             )
             """
         )
         connection.executemany(
             """
-            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -1008,6 +1035,9 @@ def write_catalog(
                     row.notes,
                     row.source,
                     row.recipe_revision_sha256,
+                    int(row.input_is_real),
+                    row.verification_expectation,
+                    int(row.quarantine),
                 )
                 for row in rows
             ],
@@ -1114,6 +1144,9 @@ def load_rows(
             notes=row[14],
             source=row[15],
             recipe_revision_sha256=row[16],
+            input_is_real=bool(row[17]) if len(row) > 17 else True,
+            verification_expectation=str(row[18]) if len(row) > 18 else "forward_required",
+            quarantine=bool(row[19]) if len(row) > 19 else False,
         )
         for row in rows
     ]
@@ -1173,6 +1206,9 @@ def find_recipe(name: str, db_path: Path = CATALOG_DB) -> CatalogRow:
         notes=row[14],
         source=row[15],
         recipe_revision_sha256=row[16],
+        input_is_real=bool(row[17]) if len(row) > 17 else True,
+        verification_expectation=str(row[18]) if len(row) > 18 else "forward_required",
+        quarantine=bool(row[19]) if len(row) > 19 else False,
     )
 
 
