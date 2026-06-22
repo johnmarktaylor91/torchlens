@@ -33,7 +33,8 @@ from menagerie.schema import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "master_catalog.jsonl.candidate"
+DEFAULT_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "master_catalog.jsonl"
+DEFAULT_DEFERRED_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "deferred.jsonl"
 DEFAULT_STATS = PROJECT_ROOT / ".research" / "menagerie-redesign" / "migration_stats.json"
 CLASSICS_ZOO = "classics-pytorch"
 SOURCE_URL_RE = re.compile(r"(https?://\S+|arXiv:\s*[0-9.]+)", re.I)
@@ -464,6 +465,7 @@ def _record_from_row(row: dict[str, str]) -> tuple[CatalogRecord, bool]:
 def migrate_tsv(
     source_tsv: Path = SOURCE_TSV,
     output_path: Path = DEFAULT_OUTPUT,
+    deferred_output_path: Path = DEFAULT_DEFERRED_OUTPUT,
     stats_path: Path = DEFAULT_STATS,
     *,
     write: bool = True,
@@ -475,7 +477,9 @@ def migrate_tsv(
     source_tsv:
         Legacy TSV path.
     output_path:
-        Candidate JSONL path.
+        Candidate JSONL path for forward-required records.
+    deferred_output_path:
+        JSONL path for honestly deferred records.
     stats_path:
         Migration stats JSON path.
     write:
@@ -510,20 +514,36 @@ def migrate_tsv(
             f"mapped {len(records)} records from {non_classics_count} non-classics rows"
         )
     validate_records(records)
+    forward_required_records = [
+        record
+        for record in records
+        if record.verification_expectation == VerificationExpectation.forward_required
+    ]
+    deferred_records = [
+        record
+        for record in records
+        if record.verification_expectation == VerificationExpectation.deferred
+    ]
 
     recipe_counts = Counter(record.recipe.type for record in records)
     input_counts = Counter(record.input.kind for record in records)
     deferred = [
         {"name": record.name, "zoo": record.zoo, "reason": record.deferral.reason}
-        for record in records
+        for record in deferred_records
         if record.deferral is not None
     ]
+    if len(forward_required_records) + len(deferred_records) != non_classics_count:
+        raise AssertionError(
+            "mapped rows must partition into forward-required records and deferred records"
+        )
     stats: dict[str, Any] = {
         "source_tsv": str(source_tsv),
         "output_path": str(output_path),
+        "deferred_output_path": str(deferred_output_path),
         "total_tsv_rows": len(raw_rows),
         "classics_rows_skipped": classics_count,
         "non_classics_records_produced": len(records),
+        "forward_required_records_written": len(forward_required_records),
         "recipe_type_counts": dict(sorted(recipe_counts.items())),
         "input_builder_kind_counts": dict(sorted(input_counts.items())),
         "input_is_real_counts": {
@@ -539,7 +559,12 @@ def migrate_tsv(
     if write:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
-            "".join(record.model_dump_json() + "\n" for record in records),
+            "".join(record.model_dump_json() + "\n" for record in forward_required_records),
+            encoding="utf-8",
+        )
+        deferred_output_path.parent.mkdir(parents=True, exist_ok=True)
+        deferred_output_path.write_text(
+            "".join(record.model_dump_json() + "\n" for record in deferred_records),
             encoding="utf-8",
         )
         stats_path.parent.mkdir(parents=True, exist_ok=True)
@@ -564,6 +589,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-tsv", type=Path, default=SOURCE_TSV)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--deferred-output", type=Path, default=DEFAULT_DEFERRED_OUTPUT)
     parser.add_argument("--stats", type=Path, default=DEFAULT_STATS)
     parser.add_argument(
         "--no-write",
@@ -571,7 +597,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="dry-run validation only; do not write candidate JSONL or stats",
     )
     args = parser.parse_args(argv)
-    stats = migrate_tsv(args.source_tsv, args.output, args.stats, write=not args.no_write)
+    stats = migrate_tsv(
+        args.source_tsv,
+        args.output,
+        args.deferred_output,
+        args.stats,
+        write=not args.no_write,
+    )
     print(json.dumps(stats, indent=2, sort_keys=True))
     return 0
 
