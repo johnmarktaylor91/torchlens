@@ -269,6 +269,20 @@ def build_stspikformer() -> nn.Module:
     )
 
 
+def build_stspikformer_temporal_attention() -> nn.Module:
+    """Build ST-SpikFormer showcasing the temporal attention over T=4 timesteps.
+
+    Uses T=4 timesteps (nominal config) so TorchLens unrolls the full
+    space-time attention over 4 spiking steps -- the unrolled graph
+    highlights the STAtten temporal interaction more clearly.  Same
+    architecture as ``build_stspikformer``; named variant to expose the
+    temporal-attention axis explicitly in the catalog.
+    """
+    return STSpikFormer(
+        embed_dim=48, depth=1, num_heads=4, mlp_ratio=2, num_classes=10, in_ch=3, timesteps=4
+    )
+
+
 def example_input() -> torch.Tensor:
     """Example RGB image tensor ``(1, 3, 32, 32)``; the model repeats it over T internally."""
     return torch.randn(1, 3, 32, 32)
@@ -278,6 +292,13 @@ MENAGERIE_ENTRIES = [
     (
         "ST-SpikFormer (STAtten spatial-temporal spiking attention)",
         "build_stspikformer",
+        "example_input",
+        "2024",
+        "DC",
+    ),
+    (
+        "ST-SpikFormer temporal attention (space-time joint spiking attention, T=4)",
+        "build_stspikformer_temporal_attention",
         "example_input",
         "2024",
         "DC",

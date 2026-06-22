@@ -84,11 +84,11 @@ class DecoderLayer(nn.Module):
 class CoDETR(nn.Module):
     def __init__(
         self,
-        d: int = 96,
-        n_heads: int = 6,
-        n_enc: int = 3,
-        n_dec: int = 3,
-        num_queries: int = 100,
+        d: int = 48,
+        n_heads: int = 4,
+        n_enc: int = 2,
+        n_dec: int = 2,
+        num_queries: int = 24,
         num_classes: int = 80,
     ) -> None:
         super().__init__()
@@ -110,8 +110,13 @@ class CoDETR(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(d, 4),
         )
+        self.atss_aux = nn.Linear(d, num_classes)
+        self.roi_aux = nn.Linear(d, num_classes)
+        self.assignment_gate = nn.Linear(d, 2)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Run Deformable-DETR core with collaborative auxiliary assignment heads."""
+
         feats = self.backbone(x)
         tokens = []
         for lvl, (proj, f) in enumerate(zip(self.input_proj, feats)):
@@ -130,16 +135,20 @@ class CoDETR(nn.Module):
         q = self.query_embed.weight.unsqueeze(0).expand(B, -1, -1) + sel
         for layer in self.decoder:
             q = layer(q, mem)
-        return self.class_head(q), self.bbox_head(q).sigmoid()
+        aux = torch.softmax(self.assignment_gate(sel), dim=-1)
+        collaborative = aux[..., 0:1] * self.atss_aux(sel) + aux[..., 1:2] * self.roi_aux(sel)
+        return self.class_head(q), self.bbox_head(q).sigmoid(), collaborative
 
 
 def build_codetr() -> nn.Module:
+    """Build compact Co-DETR with collaborative auxiliary heads."""
+
     return CoDETR()
 
 
 def example_input() -> torch.Tensor:
-    """RGB image ``(1, 3, 192, 192)``."""
-    return torch.randn(1, 3, 192, 192)
+    """RGB image ``(1, 3, 64, 64)``."""
+    return torch.randn(1, 3, 64, 64)
 
 
 MENAGERIE_ENTRIES = [
@@ -150,4 +159,5 @@ MENAGERIE_ENTRIES = [
         "2022",
         "DC",
     ),
+    ("paddledet_co_detr", "build_codetr", "example_input", "2022", "DC"),
 ]

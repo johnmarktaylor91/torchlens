@@ -975,6 +975,14 @@ def is_classics_row(row: CatalogRow) -> bool:
         Whether the row is provided by ``menagerie.classics``.
     """
 
+    # A row is a local classic when its name is in the CLASSICS registry (the authoritative
+    # source of truth), OR it uses the bare ``menagerie.classics.X`` constructor convention.
+    # Codex-authored rows use the ``from menagerie.classics.X import ...`` form, so the
+    # startswith check alone misclassified them and fell through to input_shape parsing.
+    from menagerie.classics import CLASSICS
+
+    if row.name in CLASSICS and "menagerie.classics." in row.constructor_call:
+        return True
     return row.zoo == "classics-pytorch" and row.constructor_call.startswith("menagerie.classics.")
 
 

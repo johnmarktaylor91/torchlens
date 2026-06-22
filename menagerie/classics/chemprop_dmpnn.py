@@ -112,13 +112,64 @@ class MoleculeModel(nn.Module):
             nn.Linear(ffn_hidden, n_tasks),
         )
 
-    def forward(self, graph: tuple) -> torch.Tensor:
+    def forward(self, graph: tuple[torch.Tensor, ...]) -> torch.Tensor:
+        """Predict molecular properties from Chemprop graph tensors.
+
+        Parameters
+        ----------
+        graph:
+            Tuple ``(f_atoms, f_bonds, a2b, b2a, b2revb)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Property predictions.
+        """
+
         f_atoms, f_bonds, a2b, b2a, b2revb = graph
         mol_vec = self.encoder(f_atoms, f_bonds, a2b, b2a, b2revb)
         return self.ffn(mol_vec)
 
 
-def _build_molgraph():
+class TensorInputMoleculeModel(nn.Module):
+    """Tensor-fronted Chemprop D-MPNN over a fixed compact molecular graph."""
+
+    def __init__(self) -> None:
+        """Initialize the model and store fixed graph indices as buffers."""
+
+        super().__init__()
+        self.model = MoleculeModel()
+        f_atoms, f_bonds, a2b, b2a, b2revb = _build_molgraph()
+        self.register_buffer("base_f_atoms", f_atoms)
+        self.register_buffer("base_f_bonds", f_bonds)
+        self.register_buffer("a2b", a2b)
+        self.register_buffer("b2a", b2a)
+        self.register_buffer("b2revb", b2revb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run D-MPNN from a simple tensor input.
+
+        Parameters
+        ----------
+        x:
+            Small conditioning tensor. Its mean shifts the fixed atom and bond features so
+            TorchLens sees an ordinary tensor input path instead of a structured graph object.
+
+        Returns
+        -------
+        torch.Tensor
+            Property predictions.
+        """
+
+        scale = x.mean().to(dtype=self.base_f_atoms.dtype)
+        f_atoms = self.base_f_atoms + scale
+        f_bonds = self.base_f_bonds + scale
+        return self.model((f_atoms, f_bonds, self.a2b, self.b2a, self.b2revb))
+
+
+def _build_molgraph() -> tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+]:
     """Materialize a small fixed molecular graph as Chemprop-style index tensors."""
     n_atoms = 6
     directed = []  # (src, dst)
@@ -150,11 +201,50 @@ def _build_molgraph():
 
 
 def build() -> nn.Module:
+    """Build a tensor-fronted compact Chemprop D-MPNN.
+
+    Returns
+    -------
+    nn.Module
+        Random-initialized Chemprop D-MPNN with simple tensor input.
+    """
+
+    return TensorInputMoleculeModel()
+
+
+def build_graph_tuple() -> nn.Module:
+    """Build the raw tuple-input Chemprop D-MPNN.
+
+    Returns
+    -------
+    nn.Module
+        Random-initialized tuple-input MoleculeModel.
+    """
+
     return MoleculeModel()
 
 
-def example_input() -> tuple:
-    """Fixed small molecular graph as (f_atoms, f_bonds, a2b, b2a, b2revb) tensors."""
+def example_input() -> torch.Tensor:
+    """Create a simple tensor input for the fixed molecular graph.
+
+    Returns
+    -------
+    torch.Tensor
+        Conditioning tensor.
+    """
+
+    return torch.randn(1, 4)
+
+
+def example_graph_tuple() -> tuple[torch.Tensor, ...]:
+    """Create raw Chemprop graph tensors.
+
+    Returns
+    -------
+    tuple[torch.Tensor, ...]
+        Fixed small molecular graph as ``(f_atoms, f_bonds, a2b, b2a, b2revb)``.
+    """
+
     return _build_molgraph()
 
 
@@ -163,6 +253,13 @@ MENAGERIE_ENTRIES = [
         "Chemprop D-MPNN (directed bond message-passing)",
         "build",
         "example_input",
+        "2019",
+        "DC",
+    ),
+    (
+        "Chemprop D-MPNN tuple-input reference",
+        "build_graph_tuple",
+        "example_graph_tuple",
         "2019",
         "DC",
     ),

@@ -230,6 +230,18 @@ def build() -> nn.Module:
     return _DoGFrontEndSNN(n_classes=10, time_steps=4)
 
 
+def build_spyke_torch_stdp_convnet() -> nn.Module:
+    """Build the SpykeTorch STDP spiking convnet (rank-order coding + conv stages + WTA).
+
+    Exposes the STDP-trained convnet configuration: DoG front end -> latency
+    (rank-order / time-to-first-spike) temporal coding -> 3 spiking conv stages
+    each with lateral WTA inhibition -> K-winners-take-all readout.  The STDP
+    weight-update rule applies during training (omitted here for the forward
+    atlas); the architecture fully captures the SpykeTorch inference graph.
+    """
+    return _DoGFrontEndSNN(n_classes=10, time_steps=4)
+
+
 def example_input() -> torch.Tensor:
     """Example grayscale image ``(1, 1, 28, 28)`` (DoG front end expands to ON/OFF)."""
     return torch.rand(1, 1, 28, 28)
@@ -239,6 +251,13 @@ MENAGERIE_ENTRIES = [
     (
         "SpykeTorch STDP convolutional spiking network (time-to-first-spike, WTA)",
         "build",
+        "example_input",
+        "2019",
+        "DC",
+    ),
+    (
+        "SpykeTorch STDP convnet (rank-order coding, 3 spiking conv stages, WTA)",
+        "build_spyke_torch_stdp_convnet",
         "example_input",
         "2019",
         "DC",

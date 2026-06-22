@@ -197,6 +197,15 @@ ignore = ["E721", "F401"]
 # code (E402). This shim is mandated by notebooks/audit/CLAUDE.md.
 "notebooks/audit/*.ipynb" = ["E402"]
 
+# menagerie/classics/ holds ~1000 faithful random-init architecture reconstructions
+# (the model atlas). They are compact reimpl *recipes*, not library code: dense one-line
+# block definitions (E702), conventional math/ML single-letter names like l/I/O for
+# layers/identity (E741), and intentional dead scaffolding vars kept for readability of
+# the reconstructed forward (F841). Enforcing these would mean editing generated forwards
+# and perturbing already-rendered architecture graphs. Real-bug lints (F821/F811/etc.)
+# stay enforced.
+"menagerie/classics/*.py" = ["E702", "E741", "F841"]
+
 # =============================================================================
 # RELEASE POLICY (locked): TorchLens stays on the 2.x family on PyPI.
 # Major version bumps require explicit JMT authorization in the same turn and

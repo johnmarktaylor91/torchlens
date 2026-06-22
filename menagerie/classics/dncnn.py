@@ -73,6 +73,11 @@ def build_dncnn_b() -> nn.Module:
     return DnCNN(depth=20, n_channels=64, image_channels=1)
 
 
+def build_dncnn_color() -> nn.Module:
+    """Build FDnCNN Color (depth 17, 3-channel color denoiser)."""
+    return DnCNN(depth=17, n_channels=64, image_channels=3)
+
+
 def build() -> nn.Module:
     """Default builder (DnCNN-S, depth 17)."""
     return build_dncnn_s()
@@ -81,6 +86,11 @@ def build() -> nn.Module:
 def example_input() -> torch.Tensor:
     """Example grayscale noisy-image patch tensor ``(1, 1, 64, 64)``."""
     return torch.randn(1, 1, 64, 64)
+
+
+def example_input_color() -> torch.Tensor:
+    """Example color noisy-image patch tensor ``(1, 3, 64, 64)``."""
+    return torch.randn(1, 3, 64, 64)
 
 
 MENAGERIE_ENTRIES = [
@@ -95,6 +105,13 @@ MENAGERIE_ENTRIES = [
         "DnCNN-B (depth-20 blind residual-learning denoiser)",
         "build_dncnn_b",
         "example_input",
+        "2017",
+        "DC",
+    ),
+    (
+        "FDnCNN Color (3-channel color residual denoiser)",
+        "build_dncnn_color",
+        "example_input_color",
         "2017",
         "DC",
     ),

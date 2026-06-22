@@ -193,7 +193,7 @@
     "status": "working",
     "notes": "RecBole recommender models.",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@48bd02ea7a085b8d001265cb40ed50e3223e99d8#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@e335b4c3a899a02d60a3fc7e80e9b235e645bfa1#egg=torchlens",
       "Jinja2==3.1.6",
       "Markdown==3.10.2",
       "MarkupSafe==3.0.3",
@@ -283,7 +283,7 @@
       "paddle"
     ],
     "post_install_check": "import torchlens, paddle, paddleseg, paddleclas",
-    "status": "working",
+    "status": "failed",
     "notes": "GPU Paddle stack for PaddleSeg and PaddleClas zoos.",
     "resolved_packages": [
       "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@b9883d028206f33ca5e69257ccc586a7efc38d85#egg=torchlens",
@@ -475,7 +475,7 @@
     "status": "working",
     "notes": "effdet 0.4.1 (rwightman); pulls timm/omegaconf/pycocotools (manylinux wheels). torch floor 1.12.",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@7d00269d774231a5d28e725616565ad92223765d#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "Jinja2==3.1.6",
       "MarkupSafe==3.0.3",
       "PyYAML==6.0.3",
@@ -1155,7 +1155,7 @@
     "post_install_commands": [],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "ImageIO==2.37.3",
       "Jinja2==3.1.6",
       "Mako==1.3.12",
@@ -1200,7 +1200,7 @@
       "decorator==5.3.1",
       "diffusers==0.38.0",
       "einops==0.8.2",
-      "fastapi==0.137.2",
+      "fastapi==0.138.0",
       "filelock==3.29.0",
       "fire==0.7.1",
       "fonttools==4.63.0",
@@ -1402,7 +1402,7 @@
       "typer==0.25.1",
       "typing_extensions==4.15.0"
     ],
-    "status": "working",
+    "status": "failed",
     "torch_index_url": "https://download.pytorch.org/whl/cu126",
     "torch_pin": [
       "torch==2.7.1",
@@ -1434,7 +1434,7 @@
     "post_install_commands": [],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "ConfigArgParse==1.7.5",
       "GitPython==3.1.50",
       "Jinja2==3.1.6",
@@ -1451,7 +1451,7 @@
       "aiosignal==1.4.0",
       "alembic==1.18.4",
       "antlr4-python3-runtime==4.9.3",
-      "ase==3.28.0",
+      "ase==3.29.0",
       "attrs==26.1.0",
       "backports.zstd==1.6.0",
       "black==26.5.1",
@@ -1606,7 +1606,7 @@
     "post_install_commands": [],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "ConfigArgParse==1.7.5",
       "Distance==0.1.3",
       "Jinja2==3.1.6",
@@ -1745,7 +1745,7 @@
     "post_install_commands": [],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "Cython==3.2.5",
       "GitPython==3.1.50",
       "HyperPyYAML==1.2.3",
@@ -1935,7 +1935,7 @@
       "webdataset==1.0.2",
       "wget==3.2",
       "whisper_normalizer==0.1.12",
-      "wrapt==2.2.1",
+      "wrapt==2.2.2",
       "xxhash==3.7.0",
       "yarl==1.24.2"
     ],
@@ -1974,7 +1974,7 @@
     "post_install_commands": [],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "Jinja2==3.1.6",
       "Keras-Preprocessing==1.1.2",
       "Markdown==3.10.2",
@@ -2096,7 +2096,7 @@
       "urllib3==2.7.0",
       "wasabi==1.1.3",
       "weasel==1.0.0",
-      "wrapt==2.2.1"
+      "wrapt==2.2.2"
     ],
     "status": "working",
     "torch_index_url": "https://download.pytorch.org/whl/cu121",
@@ -2148,7 +2148,7 @@
     ],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@04186ffcf569cadbecc92b2660e4c1cf3dfca315#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "CoLT5-attention==0.11.1",
       "Jinja2==3.1.6",
       "Mako==1.3.12",
@@ -2292,7 +2292,7 @@
     "post_install_commands": [],
     "python_version": "3.11",
     "resolved_packages": [
-      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@30cf1eb8f45ce8baba33cdab7a9b5eed39712599#egg=torchlens",
+      "-e git+ssh://git@github.com/johnmarktaylor91/torchlens.git@bfaf47e010b4c269f312fd47b8ed48b60468b242#egg=torchlens",
       "Jinja2==3.1.6",
       "MarkupSafe==3.0.3",
       "PyYAML==6.0.3",
@@ -2526,7 +2526,7 @@
       "yarl==1.24.2",
       "zipp==4.1.0"
     ],
-    "status": "working",
+    "status": "failed",
     "torch_index_url": "https://download.pytorch.org/whl/cu126",
     "torch_pin": [
       "torch==2.7.1",
