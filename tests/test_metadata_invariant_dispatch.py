@@ -20,6 +20,7 @@ PRE_REFACTOR_TORCH_SEQUENCE = (
     "graph_topology",
     "edge_use_parent_arg_consistency",
     "op_log_fields",
+    "payload_metadata_invariants",
     "recurrence_invariants",
     "branching_invariants",
     "conditional_invariants",

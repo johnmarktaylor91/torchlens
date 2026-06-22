@@ -3344,7 +3344,13 @@ def _check_module_call_output_structure_paths(
     module_call: object,
     name: str,
 ) -> None:
-    """Check output ops are compatible with populated output structures.
+    """Check complete output structures agree with retained output-op paths.
+
+    The precondition contract is intentionally narrow: retained outputs and
+    ``ContainerSpec`` leaves are only compared when both sides expose the same
+    number of non-root paths. Partial structures are legitimate for captures
+    that retain or project only part of a module output, and they are skipped
+    rather than treated as corruption.
 
     Parameters
     ----------
@@ -3358,27 +3364,32 @@ def _check_module_call_output_structure_paths(
     Raises
     ------
     MetadataInvariantError
-        If a retained output op path is not present in the output structure.
+        If a complete retained output path set disagrees with a complete output
+        structure path set.
     """
 
     output_structure = getattr(module_call, "output_structure", None)
     if output_structure is None:
         return
     structure_paths = set(_container_leaf_paths(output_structure))
-    mismatched_paths: list[tuple[object, ...]] = []
+    output_paths: set[tuple[object, ...]] = set()
     for output_op_label in getattr(module_call, "output_ops", ()) or ():
         resolved_label = _resolve_trace_label(ml, output_op_label)
         if resolved_label is None:
             continue
         output_op = ml[resolved_label]
         output_path = tuple(getattr(output_op, "container_path", ()) or ())
-        if output_path and output_path not in structure_paths:
-            mismatched_paths.append(output_path)
+        if output_path:
+            output_paths.add(output_path)
+    if structure_paths and output_paths and len(structure_paths) == len(output_paths):
+        mismatched_paths = sorted(output_paths ^ structure_paths, key=repr)
+    else:
+        mismatched_paths = []
     if mismatched_paths:
         raise MetadataInvariantError(
             name,
             f"ModuleCall '{getattr(module_call, 'call_label', '')}' output_structure "
-            f"does not contain retained output paths {mismatched_paths!r}",
+            f"paths disagree with retained output paths {mismatched_paths!r}",
         )
 
 
