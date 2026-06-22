@@ -17,6 +17,7 @@ from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass, validate_saved_outs
 import torchlens.user_funcs as user_funcs
 from torchlens.errors import MetadataInvariantError
+from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
 from torchlens.validation import check_metadata_invariants
 from torchlens.intervention.types import DictKey
@@ -799,6 +800,21 @@ class _SimpleFF(nn.Module):
         return self.fc(x)
 
 
+class _FirstInputModel(nn.Module):
+    """Return only the first input so the second input can remain unsaved."""
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return the first input tensor."""
+
+        return x
+
+
+def _save_first_input_record(ctx: RecordContext) -> bool:
+    """Select only first-input records for selective-save validation tests."""
+
+    return ctx.label.startswith("input_1")
+
+
 class _RootOnlyModel(nn.Module):
     """Root-only model with compute ops outside child modules."""
 
@@ -1287,6 +1303,22 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
         log.cleanup()
 
 
+def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> None:
+    """Live raw payload metadata must still be checked when the payload is retained."""
+
+    log = trace_fn(_SimpleFF(), torch.randn(2, 5), random_seed=42)
+    try:
+        victim = next(layer for layer in log.layer_list if layer.has_saved_activation)
+        assert victim.out is not None
+
+        victim.activation_memory = 999
+
+        with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
 def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None:
     """Payload metadata checks inspect live raw and transformed activation payloads."""
 
@@ -1300,6 +1332,20 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
         assert any(layer.out is not None for layer in log.layer_list)
         assert any(layer.transformed_out is not None for layer in log.layer_list)
         assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_allows_selective_save_validation() -> None:
+    """Metadata validation must not read intentionally unsaved selective-save payloads."""
+
+    model = _FirstInputModel()
+    x = torch.randn(2, 5)
+    y = torch.randn(2, 5)
+    log = trace_fn(model, [x, y], save=_save_first_input_record, random_seed=42)
+    try:
+        assert any(not layer.has_saved_activation for layer in log.layer_list)
+        assert log.validate_forward_pass([x], validate_metadata=True) is True
     finally:
         log.cleanup()
 

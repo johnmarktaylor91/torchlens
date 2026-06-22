@@ -1887,7 +1887,7 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
         _check_live_payload_metadata(
             name,
             label,
-            payload=getattr(op, "out", None),
+            payload=_live_payload_value(op, "out"),
             shape=getattr(op, "shape", None),
             dtype=getattr(op, "dtype", None),
             memory=getattr(op, "activation_memory", None),
@@ -1898,7 +1898,7 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
         _check_live_payload_metadata(
             name,
             label,
-            payload=getattr(op, "transformed_out", None),
+            payload=_live_payload_value(op, "transformed_out"),
             shape=getattr(op, "transformed_out_shape", None),
             dtype=getattr(op, "transformed_out_dtype", None),
             memory=getattr(op, "transformed_activation_memory", None),
@@ -1909,7 +1909,7 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
         _check_live_payload_metadata(
             name,
             label,
-            payload=getattr(op, "grad", None),
+            payload=_live_payload_value(op, "grad"),
             shape=getattr(op, "grad_shape", None),
             dtype=getattr(op, "grad_dtype", None),
             memory=getattr(op, "gradient_memory", None),
@@ -1920,7 +1920,7 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
         _check_live_payload_metadata(
             name,
             label,
-            payload=getattr(op, "transformed_grad", None),
+            payload=_live_payload_value(op, "transformed_grad"),
             shape=getattr(op, "transformed_grad_shape", None),
             dtype=getattr(op, "transformed_grad_dtype", None),
             memory=getattr(op, "transformed_gradient_memory", None),
@@ -1933,7 +1933,7 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
             _check_live_payload_metadata(
                 name,
                 record_label,
-                payload=getattr(record, "grad", None),
+                payload=_live_payload_value(record, "grad"),
                 shape=getattr(record, "shape", None),
                 dtype=getattr(record, "dtype", None),
                 memory=getattr(record, "memory", None),
@@ -1944,7 +1944,7 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
             _check_live_payload_metadata(
                 name,
                 record_label,
-                payload=getattr(record, "transformed_grad", None),
+                payload=_live_payload_value(record, "transformed_grad"),
                 shape=getattr(record, "transformed_grad_shape", None),
                 dtype=getattr(record, "transformed_grad_dtype", None),
                 memory=getattr(record, "transformed_gradient_memory", None),
@@ -1952,6 +1952,28 @@ def _check_payload_metadata_invariants(ml: "Trace") -> None:
                 presence_flag_name="is_saved",
                 payload_name="transformed_grad",
             )
+
+
+def _live_payload_value(owner: object, payload_name: str) -> object | None:
+    """Return an already-live payload without invoking guarded payload accessors.
+
+    Parameters
+    ----------
+    owner:
+        Object that owns the payload field.
+    payload_name:
+        Name of the payload field to inspect.
+
+    Returns
+    -------
+    object or None
+        The live payload object, or ``None`` when no payload is currently attached.
+    """
+
+    slot_getter = getattr(owner, "_slot", None)
+    if callable(slot_getter):
+        return slot_getter(payload_name, None)
+    return getattr(owner, payload_name, None)
 
 
 def _check_live_payload_metadata(
