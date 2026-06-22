@@ -1018,6 +1018,9 @@ def select_rows(args: argparse.Namespace) -> list[CatalogRow]:
     if args.model_id:
         model_ids = set(args.model_id)
         rows = [row for row in rows if row.model_id in model_ids]
+    if getattr(args, "stable_ids", None):
+        stable_ids = set(args.stable_ids)
+        rows = [row for row in rows if row.stable_id in stable_ids]
     if args.featured_only:
         rows = [row for row in rows if is_featured(row)]
     if args.since is not None:

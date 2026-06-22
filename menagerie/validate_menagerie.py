@@ -313,6 +313,7 @@ def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: 
     """
 
     ledger_status = _ledger_status(result.status)
+    env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
     passed = ledger_status == "passed"
     started_at = utc_now()
     finished_at = utc_now()
@@ -343,7 +344,7 @@ def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: 
                 python_version=python_version(),
                 device_requested=device,
                 device_actual=_actual_device(result, device),
-                env_hash=base_env_hash(),
+                env_hash=env_hash,
                 runner_host=runner_host(),
                 started_at=started_at,
                 finished_at=finished_at,
@@ -1226,6 +1227,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--zoo")
     parser.add_argument("--name", action="append", help="case-insensitive model-name substring")
     parser.add_argument("--model-id", action="append", type=int, help="exact catalog model id")
+    parser.add_argument("--stable-ids", nargs="+", help="exact stable IDs to validate")
     parser.add_argument("--verified-only", action="store_true")
     parser.add_argument("--featured-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
