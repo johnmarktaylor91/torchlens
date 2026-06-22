@@ -119,7 +119,7 @@ def test_append_round_trip_and_verified_count(tmp_path: Path) -> None:
         "n_ops": 4,
         "graph_shape_hash": "shape-a",
     }
-    assert verified_count(conn, "tl-current") == 1
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
 
 
 def test_verified_count_rises_after_real_torchlens_trace(tmp_path: Path) -> None:
@@ -135,7 +135,7 @@ def test_verified_count_rises_after_real_torchlens_trace(tmp_path: Path) -> None
     n_ops = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
     graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
 
-    assert verified_count(conn, "tl-current") == 0
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 0
 
     append_verification_run(
         conn,
@@ -147,7 +147,7 @@ def test_verified_count_rises_after_real_torchlens_trace(tmp_path: Path) -> None
         ),
     )
 
-    assert verified_count(conn, "tl-current") == 1
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
 
 
 def test_update_and_delete_are_rejected_by_trigger(tmp_path: Path) -> None:
@@ -211,7 +211,7 @@ def test_legacy_seed_and_failure_n_ops_null_do_not_count(tmp_path: Path) -> None
     rows = conn.execute("SELECT torchlens_version, n_ops FROM verification_runs").fetchall()
 
     assert ("legacy-unknown", None) in [(row["torchlens_version"], row["n_ops"]) for row in rows]
-    assert verified_count(conn, "tl-current") == 0
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a", "m3": "recipe-a"}) == 0
 
 
 def test_failed_run_with_n_ops_is_rejected(tmp_path: Path) -> None:
@@ -224,6 +224,28 @@ def test_failed_run_with_n_ops_is_rejected(tmp_path: Path) -> None:
             conn,
             _run(status="failed", forward_pass=0, n_ops=0, graph_shape_hash=None),
         )
+
+
+def test_verified_count_requires_catalog_current_recipe_revision(tmp_path: Path) -> None:
+    """A stale recipe pass does not certify a repaired catalog recipe."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(conn, _run(run_id="run-recipe-a", recipe_revision_sha256="recipe-a"))
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
+    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 0
+
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-recipe-b",
+            recipe_revision_sha256="recipe-b",
+            graph_shape_hash="shape-b",
+            finished_at="2026-06-22T00:00:02+00:00",
+        ),
+    )
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 1
 
 
 def test_concurrent_appends_from_two_threads_both_land(tmp_path: Path) -> None:

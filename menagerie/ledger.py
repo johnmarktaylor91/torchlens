@@ -407,8 +407,12 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
     return run_id
 
 
-def verified_count(conn: sqlite3.Connection, torchlens_version: str) -> int:
-    """Return the frozen current-version verified architecture count.
+def verified_count(
+    conn: sqlite3.Connection,
+    torchlens_version: str,
+    current_revisions: dict[str, str],
+) -> int:
+    """Return the current-recipe, current-version verified architecture count.
 
     Parameters
     ----------
@@ -416,6 +420,8 @@ def verified_count(conn: sqlite3.Connection, torchlens_version: str) -> int:
         Initialized SQLite connection.
     torchlens_version:
         TorchLens version that must match current verification rows.
+    current_revisions:
+        Catalog mapping from stable ID to the current recipe revision hash.
 
     Returns
     -------
@@ -423,9 +429,31 @@ def verified_count(conn: sqlite3.Connection, torchlens_version: str) -> int:
         Count of distinct stable IDs satisfying the full honesty predicate.
     """
 
+    if not current_revisions:
+        return 0
+    values_sql = ", ".join(["(?, ?)"] * len(current_revisions))
+    params: list[str] = []
+    for stable_id, recipe_revision_sha256 in current_revisions.items():
+        params.extend([stable_id, recipe_revision_sha256])
+    params.append(torchlens_version)
     row = conn.execute(
-        VERIFIED_COUNT_SQL,
-        {"torchlens_version": torchlens_version},
+        f"""
+        WITH current_catalog(stable_id, recipe_revision_sha256) AS (
+            VALUES {values_sql}
+        )
+        SELECT COUNT(DISTINCT current_verification.stable_id)
+        FROM current_verification
+        JOIN current_catalog
+          ON current_catalog.stable_id = current_verification.stable_id
+         AND current_catalog.recipe_revision_sha256 =
+             current_verification.recipe_revision_sha256
+        WHERE current_verification.forward_pass = 1
+          AND current_verification.metadata_ok = 1
+          AND current_verification.n_ops IS NOT NULL
+          AND current_verification.graph_shape_hash IS NOT NULL
+          AND current_verification.torchlens_version = ?
+        """,
+        params,
     ).fetchone()
     return int(row[0])
 
