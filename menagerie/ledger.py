@@ -431,21 +431,29 @@ def verified_count(
 
     if not current_revisions:
         return 0
-    values_sql = ", ".join(["(?, ?)"] * len(current_revisions))
-    params: list[str] = []
-    for stable_id, recipe_revision_sha256 in current_revisions.items():
-        params.extend([stable_id, recipe_revision_sha256])
-    params.append(torchlens_version)
-    row = conn.execute(
-        f"""
-        WITH current_catalog(stable_id, recipe_revision_sha256) AS (
-            VALUES {values_sql}
+    conn.execute(
+        """
+        CREATE TEMP TABLE IF NOT EXISTS temp_current_catalog_revisions(
+            stable_id TEXT PRIMARY KEY,
+            recipe_revision_sha256 TEXT NOT NULL
         )
+        """
+    )
+    conn.execute("DELETE FROM temp_current_catalog_revisions")
+    conn.executemany(
+        """
+        INSERT INTO temp_current_catalog_revisions(stable_id, recipe_revision_sha256)
+        VALUES (?, ?)
+        """,
+        current_revisions.items(),
+    )
+    row = conn.execute(
+        """
         SELECT COUNT(DISTINCT current_verification.stable_id)
         FROM current_verification
-        JOIN current_catalog
-          ON current_catalog.stable_id = current_verification.stable_id
-         AND current_catalog.recipe_revision_sha256 =
+        JOIN temp_current_catalog_revisions
+          ON temp_current_catalog_revisions.stable_id = current_verification.stable_id
+         AND temp_current_catalog_revisions.recipe_revision_sha256 =
              current_verification.recipe_revision_sha256
         WHERE current_verification.forward_pass = 1
           AND current_verification.metadata_ok = 1
@@ -453,7 +461,7 @@ def verified_count(
           AND current_verification.graph_shape_hash IS NOT NULL
           AND current_verification.torchlens_version = ?
         """,
-        params,
+        (torchlens_version,),
     ).fetchone()
     return int(row[0])
 

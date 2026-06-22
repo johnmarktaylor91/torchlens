@@ -42,12 +42,18 @@ class HashRecord:
         Source or tracing status.
     error:
         Error text, when tracing failed.
+    stable_id:
+        Opaque durable model identity, when available.
+    recipe_revision_sha256:
+        Frozen recipe fingerprint, when available.
     """
 
     name: str
     graph_shape_hash: str
     status: str = ""
     error: str = ""
+    stable_id: str = ""
+    recipe_revision_sha256: str = ""
 
 
 def read_manifest_records(manifest_path: Path) -> tuple[list[HashRecord], bool]:
@@ -74,6 +80,8 @@ def read_manifest_records(manifest_path: Path) -> tuple[list[HashRecord], bool]:
                 name=str(row.get("name", "")),
                 graph_shape_hash=str(row.get("graph_shape_hash", "") or ""),
                 status=str(row.get("status", "") or ""),
+                stable_id=str(row.get("stable_id", "") or ""),
+                recipe_revision_sha256=str(row.get("recipe_revision_sha256", "") or ""),
             )
             for row in reader
             if row.get("name")
