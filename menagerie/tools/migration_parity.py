@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from menagerie.catalog import SOURCE_COLUMNS, SOURCE_TSV, CatalogRow, is_verified
-from menagerie.recipe import build_from_record, build_model_and_input
+from menagerie.recipe import build_from_record, build_input_from_record, instantiate_model
 from menagerie.schema import CatalogRecord, load_jsonl
 from menagerie.structural_digest import structural_fingerprint
 from menagerie.tools.tsv_to_jsonl import DEFAULT_OUTPUT
@@ -165,7 +165,8 @@ def compare_record(record: CatalogRecord, raw_rows: dict[int, dict[str, str]]) -
     line_number = _line_number(record)
     old_row = _catalog_row_from_raw(raw_rows[line_number], line_number)
     torch.manual_seed(0)
-    old_model, old_input = build_model_and_input(old_row)
+    old_input = build_input_from_record(record)
+    old_model = instantiate_model(old_row)
     torch.manual_seed(0)
     new_model, new_input = build_from_record(record)
     torch.manual_seed(0)

@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 from menagerie.catalog import CatalogRow, build_canonical_rows
 from menagerie.classics import CLASSIC_ZOO, CLASSICS
-from menagerie.recipe import parse_shape
+from menagerie.recipe import build_input_for_row
 from menagerie.runtime import unrenderable_reason
 
 
@@ -51,7 +51,7 @@ def _renderable_keys(rows: Sequence[CatalogRow]) -> set[RenderableKey]:
             )
             continue
         try:
-            parse_shape(row.input_shape)
+            build_input_for_row(row)
         except Exception:  # noqa: BLE001 - parity reports the row as non-renderable.
             continue
         renderable.add((row.name, row.zoo, row.constructor_call, row.input_shape, row.input_dtype))

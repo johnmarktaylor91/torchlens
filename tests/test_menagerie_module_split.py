@@ -41,7 +41,7 @@ LEGACY_GENERATE_IMPORTS = (
     "CACHE_ROOTS",
     "DependencyPlan",
     "assert_min_free",
-    "classics_example_input",
+    "build_input_for_row",
     "cleanup_runtime",
     "combine_notes",
     "cuda_is_available",
@@ -56,12 +56,10 @@ LEGACY_GENERATE_IMPORTS = (
     "is_device_related_error",
     "log_event",
     "move_model_and_input_to_device",
-    "parse_shape",
     "purge_new_cache_entries",
     "safe_path_part",
     "select_rows",
     "snapshot_cache",
-    "tensor_for_recipe",
     "unrenderable_reason",
 )
 
@@ -110,7 +108,7 @@ def test_catalog_build_counts_are_stable() -> None:
     """The rebuilt catalog keeps the module-split parity counts."""
 
     rows = load_rows()
-    assert len(rows) == 11590
+    assert len(rows) == 11641
     assert sum(row.source == "classics" for row in rows) == 3212
 
 

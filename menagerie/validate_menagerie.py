@@ -22,10 +22,8 @@ from typing import Any, ContextManager, Mapping, Sequence, cast
 
 from menagerie.catalog import CatalogRow, load_rows
 from menagerie.recipe import (
-    classics_example_input,
+    build_input_for_row,
     instantiate_model,
-    is_classics_row,
-    tensor_for_recipe,
 )
 from menagerie.runtime import (
     CACHE_ROOTS,
@@ -436,9 +434,7 @@ def _build_input(row: CatalogRow) -> Any:
         Example input.
     """
 
-    if is_classics_row(row):
-        return classics_example_input(row)
-    return tensor_for_recipe(row.input_shape, row.input_dtype)
+    return build_input_for_row(row)
 
 
 def _sum_float_outputs(output: Any) -> Any:

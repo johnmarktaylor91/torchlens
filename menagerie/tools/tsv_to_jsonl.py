@@ -38,6 +38,22 @@ DEFAULT_DEFERRED_OUTPUT = PROJECT_ROOT / "menagerie" / "data" / "deferred.jsonl"
 DEFAULT_STATS = PROJECT_ROOT / ".research" / "menagerie-redesign" / "migration_stats.json"
 CLASSICS_ZOO = "classics-pytorch"
 SOURCE_URL_RE = re.compile(r"(https?://\S+|arXiv:\s*[0-9.]+)", re.I)
+TORCH_DTYPE_TOKENS = {
+    "float16",
+    "float32",
+    "float64",
+    "bfloat16",
+    "int64",
+    "long",
+    "int",
+    "int32",
+    "bool",
+    "uint8",
+    "int8",
+    "int16",
+    "complex64",
+    "complex128",
+}
 
 
 def _read_source_rows(path: Path) -> list[dict[str, str]]:
@@ -149,11 +165,13 @@ def _dtype_tokens(dtype: str) -> list[str]:
         Normalized dtype tokens.
     """
 
-    return [
-        token.strip().split()[0]
-        for token in re.split(r"\s*[+/,;]\s*| and ", dtype.lower())
-        if token.strip()
-    ]
+    tokens = []
+    for raw in re.split(r"\s*[+,;]\s*| and ", dtype.lower()):
+        token = raw.strip().split()[0]
+        if not token:
+            continue
+        tokens.append(token if token in TORCH_DTYPE_TOKENS else "float32")
+    return tokens
 
 
 def _dtype_for_index(dtype: str, index: int) -> str:
@@ -302,6 +320,44 @@ def _builder_from_structured(shape: str, dtype: str) -> InputBuilder | None:
     return None
 
 
+def _concrete_shapes_from_literal(shape: str) -> tuple[int, ...] | list[tuple[int, ...]]:
+    """Parse concrete literal shape metadata without prose heuristics.
+
+    Parameters
+    ----------
+    shape:
+        Legacy input shape text.
+
+    Returns
+    -------
+    tuple[int, ...] | list[tuple[int, ...]]
+        Concrete tensor shape or concrete multi-input shapes.
+    """
+
+    parsed = ast.literal_eval(shape.strip())
+    if isinstance(parsed, tuple) and all(isinstance(value, int) for value in parsed):
+        return parsed
+    if (
+        isinstance(parsed, tuple)
+        and parsed
+        and all(
+            isinstance(item, tuple) and all(isinstance(value, int) for value in item)
+            for item in parsed
+        )
+    ):
+        return list(parsed)
+    if (
+        isinstance(parsed, list)
+        and parsed
+        and all(
+            isinstance(item, (tuple, list)) and all(isinstance(value, int) for value in item)
+            for item in parsed
+        )
+    ):
+        return [tuple(item) for item in parsed]
+    raise ValueError(f"expected concrete literal shape, got {shape!r}")
+
+
 def _deferred_callable(reason: str) -> CallableInput:
     """Build a callable marker for an honestly deferred input.
 
@@ -370,10 +426,8 @@ def _builder_from_shape(
     if structured is not None:
         return structured, True, None, False
 
-    from menagerie.recipe import parse_shape
-
     try:
-        parsed = parse_shape(shape)
+        parsed = _concrete_shapes_from_literal(shape)
     except Exception as exc:  # noqa: BLE001 - migration reports honest deferrals.
         reason = f"could not derive concrete runtime input from input_shape={shape!r}: {exc}"
         return _deferred_callable(reason), False, reason, True
@@ -465,9 +519,9 @@ def _record_from_row(row: dict[str, str]) -> tuple[CatalogRecord, bool]:
 def migrate_tsv(
     source_tsv: Path = SOURCE_TSV,
     output_path: Path = DEFAULT_OUTPUT,
-    deferred_output_path: Path = DEFAULT_DEFERRED_OUTPUT,
     stats_path: Path = DEFAULT_STATS,
     *,
+    deferred_output_path: Path = DEFAULT_DEFERRED_OUTPUT,
     write: bool = True,
 ) -> dict[str, Any]:
     """Migrate non-classics TSV rows to JSONL candidate records.
@@ -478,10 +532,10 @@ def migrate_tsv(
         Legacy TSV path.
     output_path:
         Candidate JSONL path for forward-required records.
-    deferred_output_path:
-        JSONL path for honestly deferred records.
     stats_path:
         Migration stats JSON path.
+    deferred_output_path:
+        JSONL path for honestly deferred records.
     write:
         Whether to write JSONL and stats artifacts.
 
@@ -600,8 +654,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     stats = migrate_tsv(
         args.source_tsv,
         args.output,
-        args.deferred_output,
         args.stats,
+        deferred_output_path=args.deferred_output,
         write=not args.no_write,
     )
     print(json.dumps(stats, indent=2, sort_keys=True))

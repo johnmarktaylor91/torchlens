@@ -32,6 +32,7 @@ def test_migrate_tsv_skips_classics_and_preserves_non_classics(tmp_path: Path) -
 
     source = tmp_path / "source.tsv"
     output = tmp_path / "candidate.jsonl"
+    deferred_output = tmp_path / "deferred.jsonl"
     stats_path = tmp_path / "stats.json"
     _write_tsv(
         source,
@@ -83,15 +84,19 @@ def test_migrate_tsv_skips_classics_and_preserves_non_classics(tmp_path: Path) -
         ],
     )
 
-    stats = migrate_tsv(source, output, stats_path)
+    stats = migrate_tsv(source, output, stats_path, deferred_output_path=deferred_output)
     records = load_jsonl(output)
+    deferred_records = load_jsonl(deferred_output)
 
     assert stats["classics_rows_skipped"] == 1
     assert stats["non_classics_records_produced"] == 3
-    assert [record.name for record in records] == ["ExprToy", "WrapperToy", "DeferredToy"]
+    assert stats["forward_required_records_written"] == 2
+    assert stats["deferred_count"] == 1
+    assert [record.name for record in records] == ["ExprToy", "WrapperToy"]
+    assert [record.name for record in deferred_records] == ["DeferredToy"]
     assert records[0].recipe.type == "import-callable"
     assert records[1].recipe.type == "statement"
     assert records[1].input.kind == "none"
     assert records[1].input_is_real is False
-    assert records[2].verification_expectation == "deferred"
-    assert records[2].deferral is not None
+    assert deferred_records[0].verification_expectation == "deferred"
+    assert deferred_records[0].deferral is not None

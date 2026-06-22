@@ -28,11 +28,9 @@ from typing import Any, ContextManager, Iterator, Mapping, Sequence
 
 from menagerie.catalog import CatalogRow, load_rows
 from menagerie.recipe import (
-    classics_example_input,
+    build_input_for_row,
     instantiate_model,
     is_classics_row,
-    parse_shape,
-    tensor_for_recipe,
 )
 from menagerie.runtime import (
     CACHE_ROOTS,
@@ -390,11 +388,7 @@ def render_one(
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
     try:
-        input_tensor = (
-            classics_example_input(row)
-            if is_classics_row(row)
-            else tensor_for_recipe(row.input_shape, row.input_dtype)
-        )
+        input_tensor = build_input_for_row(row)
     except Exception as error:
         return RenderResult(
             row.name,
