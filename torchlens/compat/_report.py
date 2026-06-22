@@ -12,6 +12,11 @@ from typing import Any, Literal
 import torch
 from torch import nn
 
+from torchlens.utils._torch_compat import (
+    get_fx_graph_module_type,
+    get_torch_capability_snapshot,
+)
+
 Status = Literal["pass", "known_broken", "scope", "not_tested"]
 Severity = Literal["ok", "info", "warning", "error"]
 
@@ -186,6 +191,7 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
         _deepspeed_row(model),
         _torch_compile_row(model),
         _fx_row(model),
+        _torch_capabilities_row(),
         _lightning_row(model),
         _functorch_row(model),
         _quantized_row(model, input),
@@ -771,7 +777,7 @@ def _fx_row(model: nn.Module) -> CompatRow:
         Report row.
     """
 
-    graph_module_type = getattr(torch.fx, "GraphModule", None)
+    graph_module_type = get_fx_graph_module_type()
     detected = graph_module_type is not None and isinstance(model, graph_module_type)
     status: Status = "scope" if detected else "pass"
     details = (
@@ -969,6 +975,41 @@ def _device_context_row() -> CompatRow:
         False,
         "Factory functions honor active torch.device(...) contexts during active logging.",
         "",
+    )
+
+
+def _torch_capabilities_row() -> CompatRow:
+    """Build the torch capability snapshot row.
+
+    Returns
+    -------
+    CompatRow
+        Report row summarizing torch capability probes.
+    """
+
+    snapshot = get_torch_capability_snapshot()
+    missing = [name for name, available in snapshot.items() if not available]
+    status: Status = "not_tested" if missing else "pass"
+    severity: Severity = "warning" if missing else "ok"
+    details = (
+        "Missing torch capabilities: " + ", ".join(missing)
+        if missing
+        else "All probed torch capabilities are available."
+    )
+    suggestion = (
+        "Run torchlens.utils.doctor() for the same snapshot; missing flags indicate graceful "
+        "degradation of private torch integration points."
+        if missing
+        else ""
+    )
+    return CompatRow(
+        "torch_capabilities",
+        "Torch capability snapshot",
+        status,
+        severity,
+        bool(missing),
+        details,
+        suggestion,
     )
 
 

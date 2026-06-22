@@ -227,8 +227,9 @@ def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -
 
     assert len(reports) == 5
     assert all(isinstance(item, CompatReport) for item in reports)
-    assert all(len(item.rows) == 17 for item in reports)
+    assert all(len(item.rows) == 18 for item in reports)
     assert reports[1].row("hf_transformers").detected is True
+    assert reports[1].row("torch_capabilities").status in {"pass", "not_tested"}
     assert reports[2].row("quantized_tensor").status == "known_broken"
     assert reports[3].row("multi_gpu_rng").detected is True
     assert reports[4].row("fsdp").status == "scope"

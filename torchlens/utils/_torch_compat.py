@@ -37,7 +37,8 @@ keeps the modern signature but changes its version string.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+import importlib
 import os
 from typing import Any
 import warnings
@@ -47,6 +48,7 @@ import torch
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
     "HAS_ACCUMULATE_GRAD_CLASS",
+    "HAS_AUTOCAST_DEVICE_TYPE_ARG",
     "HAS_DEVICE_CONTEXT_DISPATCH",
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_FUNCTORCH_APIS",
@@ -61,8 +63,16 @@ __all__ = [
     "autocast_get_dtype",
     "autocast_is_enabled",
     "get_accumulate_grad_class",
+    "get_current_function_mode_stack",
+    "get_device_constructors",
+    "get_device_context_type",
+    "get_functorch_maybe_current_level",
+    "get_functorch_wrapped_tensor_checker",
+    "get_fx_graph_module_type",
+    "get_jit_builtin_table",
     "get_optional_torch_namespace",
     "get_torch_capability_snapshot",
+    "get_torch_function_mode_stack_length",
     "get_torch_vf_namespace",
     "get_variable_function_names",
     "mark_torch_capability_missing",
@@ -122,6 +132,29 @@ def _nested_getattr_or_none(root: Any, path: Iterable[str]) -> Any | None:
     return current
 
 
+def _import_module_attr_or_none(module_name: str, attr_name: str) -> Any | None:
+    """Import a module attribute or return ``None`` if it is unavailable.
+
+    Parameters
+    ----------
+    module_name:
+        Module to import.
+    attr_name:
+        Attribute to read from the imported module.
+
+    Returns
+    -------
+    Any | None
+        Imported attribute, or ``None`` when the module or attribute is absent.
+    """
+
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError:
+        return None
+    return getattr(module, attr_name, None)
+
+
 def _probe_variable_functions() -> bool:
     """Return whether torch exposes the private C variable-functions table.
 
@@ -167,7 +200,10 @@ def _probe_functorch_apis() -> bool:
         True when ``torch._functorch.apis`` is present.
     """
 
-    return _nested_getattr_or_none(torch, ("_functorch", "apis")) is not None
+    return (
+        _nested_getattr_or_none(torch, ("_functorch", "apis")) is not None
+        or importlib.util.find_spec("torch._functorch.apis") is not None
+    )
 
 
 def _probe_functorch_level_api() -> bool:
@@ -206,7 +242,7 @@ def _probe_jit_builtin_table() -> bool:
         True when ``torch.jit._builtins._builtin_table`` is present.
     """
 
-    return _nested_getattr_or_none(torch, ("jit", "_builtins", "_builtin_table")) is not None
+    return _import_module_attr_or_none("torch.jit._builtins", "_builtin_table") is not None
 
 
 def _probe_device_context_dispatch() -> bool:
@@ -219,10 +255,10 @@ def _probe_device_context_dispatch() -> bool:
     """
 
     return (
-        _nested_getattr_or_none(torch, ("utils", "_device", "DeviceContext")) is not None
-        and _nested_getattr_or_none(torch, ("overrides", "_get_current_function_mode_stack"))
+        _import_module_attr_or_none("torch.utils._device", "DeviceContext") is not None
+        and _import_module_attr_or_none("torch.overrides", "_get_current_function_mode_stack")
         is not None
-        and _nested_getattr_or_none(torch, ("overrides", "_len_torch_function_stack")) is not None
+        and _import_module_attr_or_none("torch.overrides", "_len_torch_function_stack") is not None
     )
 
 
@@ -235,7 +271,7 @@ def _probe_device_constructors() -> bool:
         True when ``torch.utils._device._device_constructors`` is present.
     """
 
-    return _nested_getattr_or_none(torch, ("utils", "_device", "_device_constructors")) is not None
+    return _import_module_attr_or_none("torch.utils._device", "_device_constructors") is not None
 
 
 def _probe_accumulate_grad_class() -> bool:
@@ -421,6 +457,162 @@ def get_accumulate_grad_class() -> Any:
         )
         return ()
     return accumulate_grad_cls
+
+
+def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
+    """Return functorch transform-level introspection when available.
+
+    Returns
+    -------
+    Callable[[], Any] | None
+        ``torch._C._functorch.maybe_current_level`` or ``None`` when absent.
+    """
+
+    maybe_current_level = _nested_getattr_or_none(
+        torch, ("_C", "_functorch", "maybe_current_level")
+    )
+    if maybe_current_level is None:
+        mark_torch_capability_missing(
+            "HAS_FUNCTORCH_LEVEL_API",
+            "functorch transform-boundary detection is disabled",
+        )
+        return None
+    return maybe_current_level
+
+
+def get_functorch_wrapped_tensor_checker() -> Callable[[Any], bool] | None:
+    """Return functorch wrapped-tensor detection when available.
+
+    Returns
+    -------
+    Callable[[Any], bool] | None
+        ``torch._C._functorch.is_functorch_wrapped_tensor`` or ``None``.
+    """
+
+    checker = _nested_getattr_or_none(torch, ("_C", "_functorch", "is_functorch_wrapped_tensor"))
+    if checker is None:
+        mark_torch_capability_missing(
+            "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
+            "functorch wrapped-tensor equality handling is disabled",
+        )
+        return None
+    return checker
+
+
+def get_jit_builtin_table() -> dict[int, Any] | None:
+    """Return TorchScript's private builtin table when available.
+
+    Returns
+    -------
+    dict[int, Any] | None
+        TorchScript builtin table, or ``None`` when unavailable.
+    """
+
+    builtin_table = _import_module_attr_or_none("torch.jit._builtins", "_builtin_table")
+    if builtin_table is None:
+        mark_torch_capability_missing(
+            "HAS_JIT_BUILTIN_TABLE",
+            "TorchScript wrapper registration is disabled",
+        )
+        return None
+    return builtin_table
+
+
+def get_device_context_type() -> type[Any] | None:
+    """Return torch's DeviceContext type when available.
+
+    Returns
+    -------
+    type[Any] | None
+        ``torch.utils._device.DeviceContext`` or ``None`` when unavailable.
+    """
+
+    device_context = _import_module_attr_or_none("torch.utils._device", "DeviceContext")
+    if device_context is None:
+        mark_torch_capability_missing(
+            "HAS_DEVICE_CONTEXT_DISPATCH",
+            "torch.device context kwarg injection is disabled",
+        )
+        return None
+    return device_context
+
+
+def get_current_function_mode_stack() -> Iterable[Any] | None:
+    """Return the current TorchFunctionMode stack when available.
+
+    Returns
+    -------
+    Iterable[Any] | None
+        Current mode stack, or ``None`` when stack introspection is unavailable.
+    """
+
+    stack_getter = _import_module_attr_or_none(
+        "torch.overrides", "_get_current_function_mode_stack"
+    )
+    if stack_getter is None:
+        mark_torch_capability_missing(
+            "HAS_DEVICE_CONTEXT_DISPATCH",
+            "torch.device context stack introspection is disabled",
+        )
+        return None
+    return stack_getter()
+
+
+def get_torch_function_mode_stack_length() -> int | None:
+    """Return the TorchFunctionMode stack length when available.
+
+    Returns
+    -------
+    int | None
+        Active stack length, or ``None`` when unavailable.
+    """
+
+    stack_len = _import_module_attr_or_none("torch.overrides", "_len_torch_function_stack")
+    if stack_len is None:
+        mark_torch_capability_missing(
+            "HAS_DEVICE_CONTEXT_DISPATCH",
+            "torch.device context stack length introspection is disabled",
+        )
+        return None
+    return int(stack_len())
+
+
+def get_device_constructors() -> Callable[[], Iterable[Any]] | None:
+    """Return torch's private device-constructor inventory when available.
+
+    Returns
+    -------
+    Callable[[], Iterable[Any]] | None
+        ``torch.utils._device._device_constructors`` or ``None`` when absent.
+    """
+
+    device_constructors = _import_module_attr_or_none("torch.utils._device", "_device_constructors")
+    if device_constructors is None:
+        mark_torch_capability_missing(
+            "HAS_DEVICE_CONSTRUCTORS",
+            "factory-function device injection inventory is disabled",
+        )
+        return None
+    return device_constructors
+
+
+def get_fx_graph_module_type() -> type[Any] | None:
+    """Return ``torch.fx.GraphModule`` when available.
+
+    Returns
+    -------
+    type[Any] | None
+        FX GraphModule type, or ``None`` when unavailable.
+    """
+
+    graph_module_type = _nested_getattr_or_none(torch, ("fx", "GraphModule"))
+    if graph_module_type is None:
+        mark_torch_capability_missing(
+            "HAS_FX_GRAPH_MODULE",
+            "FX GraphModule compatibility detection is disabled",
+        )
+        return None
+    return graph_module_type
 
 
 # --- Legacy (torch 2.1-2.3) per-device fallbacks -------------------------------

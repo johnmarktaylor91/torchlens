@@ -71,7 +71,16 @@ from ._tl import (
 )
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
-from ...utils._torch_compat import get_optional_torch_namespace
+from ...utils._torch_compat import (
+    get_current_function_mode_stack,
+    get_device_constructors,
+    get_device_context_type,
+    get_functorch_maybe_current_level,
+    get_jit_builtin_table,
+    get_optional_torch_namespace,
+    get_torch_function_mode_stack_length,
+    mark_torch_capability_missing,
+)
 from ...utils.display import identity
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.hashing import make_random_barcode
@@ -252,12 +261,10 @@ def _fix_tensor_sequence_slot() -> None:
 
 def _is_inside_functorch_transform() -> bool:
     """Return True if inside a vmap/grad/etc. functorch transform."""
-    try:
-        from torch._C._functorch import maybe_current_level
-
-        return maybe_current_level() is not None
-    except (ImportError, AttributeError):
+    maybe_current_level = get_functorch_maybe_current_level()
+    if maybe_current_level is None:
         return False
+    return maybe_current_level() is not None
 
 
 def _warn_transform_boundary_collapse(transform_kind: str) -> None:
@@ -745,17 +752,15 @@ def _get_active_device() -> str | None:
     """
     global _DeviceContext
     if _DeviceContext is None:
-        from torch.utils._device import DeviceContext
-
-        _DeviceContext = DeviceContext
-    try:
-        from torch.overrides import _get_current_function_mode_stack
-
-        for mode in reversed(_get_current_function_mode_stack()):  # type: ignore[no-untyped-call]
-            if isinstance(mode, _DeviceContext):
-                return str(mode.device)
-    except (ImportError, AttributeError):
-        pass
+        _DeviceContext = get_device_context_type()
+    if _DeviceContext is None:
+        return None
+    mode_stack = get_current_function_mode_stack()
+    if mode_stack is None:
+        return None
+    for mode in reversed(list(mode_stack)):
+        if isinstance(mode, _DeviceContext):
+            return str(mode.device)
     return None
 
 
@@ -774,15 +779,11 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[s
         return kwargs
     if "device" in kwargs:
         return kwargs
-    try:
-        from torch.overrides import _len_torch_function_stack  # type: ignore[attr-defined]
-
-        if _len_torch_function_stack() > 0:
-            device = _get_active_device()
-            if device is not None:
-                return {**kwargs, "device": device}
-    except (ImportError, AttributeError):
-        pass
+    stack_length = get_torch_function_mode_stack_length()
+    if stack_length is not None and stack_length > 0:
+        device = _get_active_device()
+        if device is not None:
+            return {**kwargs, "device": device}
     return kwargs
 
 
@@ -1192,25 +1193,22 @@ def _sanitize_jit_wrapper_annotations(func: Callable[..., Any]) -> None:
 def _register_jit_builtin_wrappers() -> None:
     """Register decorated torch wrappers in TorchScript's builtin table."""
 
-    try:
-        import torch.jit._builtins as _jit_builtins
-
-        builtin_table = cast(Any, _jit_builtins._builtin_table)
-        for orig_id, decorated_func in _state._orig_to_decorated.items():
-            builtin_name = builtin_table.get(orig_id)
-            if builtin_name is not None:
-                if callable(decorated_func):
-                    _sanitize_jit_wrapper_annotations(decorated_func)
-                builtin_table[id(decorated_func)] = builtin_name
-                # For properties, also register getter/setter/deleter individually
-                # since JIT may call them directly.
-                if isinstance(decorated_func, property):
-                    for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
-                        if accessor is not None:
-                            _sanitize_jit_wrapper_annotations(accessor)
-                            builtin_table[id(accessor)] = builtin_name
-    except (ImportError, AttributeError):
-        pass  # JIT internals may change across PyTorch versions
+    builtin_table = get_jit_builtin_table()
+    if builtin_table is None:
+        return
+    for orig_id, decorated_func in _state._orig_to_decorated.items():
+        builtin_name = builtin_table.get(orig_id)
+        if builtin_name is not None:
+            if callable(decorated_func):
+                _sanitize_jit_wrapper_annotations(decorated_func)
+            builtin_table[id(decorated_func)] = builtin_name
+            # For properties, also register getter/setter/deleter individually
+            # since JIT may call them directly.
+            if isinstance(decorated_func, property):
+                for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
+                    if accessor is not None:
+                        _sanitize_jit_wrapper_annotations(accessor)
+                        builtin_table[id(accessor)] = builtin_name
 
 
 # ---------------------------------------------------------------------------
@@ -1353,16 +1351,19 @@ def decorate_all_once() -> None:
     # Collect names of factory functions (zeros, ones, empty, etc.) that accept
     # a device kwarg. The lru_cache must be cleared first so _device_constructors()
     # re-evaluates with our wrapped functions (otherwise it returns stale refs).
-    try:
-        from torch.utils._device import _device_constructors
-
-        _device_constructors.cache_clear()
-        for ctor in _device_constructors():
-            name = getattr(ctor, "__name__", None)
-            if name:
-                _DEVICE_CONSTRUCTOR_NAMES.add(name)
-    except (ImportError, AttributeError):
-        pass
+    device_constructors = get_device_constructors()
+    if device_constructors is not None:
+        try:
+            device_constructors.cache_clear()
+            for ctor in device_constructors():
+                name = getattr(ctor, "__name__", None)
+                if name:
+                    _DEVICE_CONSTRUCTOR_NAMES.add(name)
+        except (AttributeError, TypeError):
+            mark_torch_capability_missing(
+                "HAS_DEVICE_CONSTRUCTORS",
+                "factory-function device injection inventory could not be evaluated",
+            )
 
     # Create the decorated identity — a no-op that forces a new log entry at
     # module boundaries (nn.Identity, pass-through outputs).  Stored on _state

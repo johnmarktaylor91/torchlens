@@ -21,6 +21,8 @@ from typing import Any, Callable, Literal, Optional, cast
 import numpy as np
 import torch
 
+from ._torch_compat import get_functorch_wrapped_tensor_checker
+
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 
 SaveMode = Literal["copy", "reference", "view", "cpu_async"]
@@ -144,9 +146,8 @@ def is_functorch_wrapped_tensor(value: Any) -> bool:
 
     if not isinstance(value, torch.Tensor):
         return False
-    try:
-        checker = torch._C._functorch.is_functorch_wrapped_tensor  # type: ignore[attr-defined]
-    except AttributeError:
+    checker = get_functorch_wrapped_tensor_checker()
+    if checker is None:
         return False
     try:
         return bool(checker(value))

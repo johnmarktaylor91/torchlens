@@ -15,6 +15,8 @@ from typing import Any, Callable, Iterator, Literal, cast
 
 import torch
 
+from ...utils._torch_compat import get_accumulate_grad_class
+
 from ..._deprecations import MISSING, MissingType
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
@@ -2042,7 +2044,7 @@ def _is_accumulate_grad(grad_fn_handle: Any) -> bool:
         True when ``grad_fn_handle`` is an AccumulateGrad node.
     """
 
-    accumulate_grad_cls = getattr(getattr(torch._C, "_functions", object()), "AccumulateGrad", ())
+    accumulate_grad_cls = get_accumulate_grad_class()
     return type(grad_fn_handle).__name__ == "AccumulateGrad" or isinstance(
         grad_fn_handle, accumulate_grad_cls
     )
