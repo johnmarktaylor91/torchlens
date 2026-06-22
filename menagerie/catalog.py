@@ -7,16 +7,19 @@ import csv
 import re
 import sqlite3
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from menagerie.identity import ensure_stable_ids, recipe_revision_sha256
+from menagerie.schema import CatalogRecord, VerificationExpectation, load_jsonl, validate_records
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SOURCE_TSV = DATA_DIR / "master_catalog.tsv"
+SOURCE_JSONL = DATA_DIR / "master_catalog.jsonl"
+DEFERRED_JSONL = DATA_DIR / "deferred.jsonl"
 CANONICAL_TSV = DATA_DIR / "catalog_canonical.tsv"
 CATALOG_DB = DATA_DIR / "catalog.db"
 STABLE_IDS_JSONL = DATA_DIR / "stable_ids.jsonl"
@@ -640,6 +643,101 @@ def _source_rows(source_tsv: Path = SOURCE_TSV) -> list[dict[str, str]]:
     return rows
 
 
+def _constructor_from_record(record: CatalogRecord) -> str:
+    """Return the legacy constructor text preserved in a typed record.
+
+    Parameters
+    ----------
+    record:
+        Typed catalog record.
+
+    Returns
+    -------
+    str
+        Constructor text used by legacy row consumers.
+    """
+
+    legacy_constructor = record.legacy.get("constructor_call")
+    if isinstance(legacy_constructor, str):
+        return legacy_constructor
+    recipe = record.recipe
+    if recipe.type in {"import-callable", "expression"}:
+        return recipe.expr
+    if recipe.type == "statement":
+        return recipe.code
+    if recipe.type == "exec-string":
+        return recipe.body
+    raise ValueError(f"unsupported recipe type={recipe.type!r}")
+
+
+def _row_from_record(record: CatalogRecord, source: str) -> dict[str, str | bool]:
+    """Convert one typed JSONL record to the canonical build row shape.
+
+    Parameters
+    ----------
+    record:
+        Typed catalog record.
+    source:
+        Source stream label for the canonical row.
+
+    Returns
+    -------
+    dict[str, str | bool]
+        Row dictionary ready for normalization and identity assignment.
+    """
+
+    notes = record.notes
+    verified = record.verification_expectation == VerificationExpectation.forward_required
+    if record.verification_expectation == VerificationExpectation.deferred:
+        reason = record.deferral.reason if record.deferral is not None else "deferred"
+        notes = (
+            f"{notes}; verification_expectation=deferred; deferral_reason={reason}"
+            if notes
+            else f"verification_expectation=deferred; deferral_reason={reason}"
+        )
+    return {
+        "name": record.name,
+        "variant": record.variant,
+        "zoo": record.zoo,
+        "constructor_call": _constructor_from_record(record),
+        "input_shape": record.input_shape or "",
+        "input_dtype": record.input_dtype or "",
+        "family": record.family,
+        "domain": record.domain,
+        "era": record.era,
+        "notes": notes,
+        "verified": verified,
+        "source": source,
+    }
+
+
+def _jsonl_source_rows(
+    source_jsonl: Path = SOURCE_JSONL, deferred_jsonl: Path = DEFERRED_JSONL
+) -> list[dict[str, str | bool]]:
+    """Load typed non-classics rows from committed JSONL sources.
+
+    Parameters
+    ----------
+    source_jsonl:
+        Forward-required non-classics JSONL source.
+    deferred_jsonl:
+        Honestly deferred non-classics JSONL source.
+
+    Returns
+    -------
+    list[dict[str, str | bool]]
+        Source rows converted from typed records.
+    """
+
+    records = load_jsonl(source_jsonl)
+    deferred_records = load_jsonl(deferred_jsonl) if deferred_jsonl.exists() else []
+    validate_records([*records, *deferred_records])
+    return [
+        *[_row_from_record(record, "catalog") for record in records],
+        *[_row_from_record(record, "catalog") for record in deferred_records],
+    ]
+
+
 def _shape_dtype_for_input(example: Any) -> tuple[str, str]:
     """Describe a classics example input for catalog metadata.
 
@@ -718,13 +816,17 @@ def _classics_source_rows() -> list[dict[str, str]]:
     return rows
 
 
-def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
+def build_canonical_rows(
+    source_jsonl: Path = SOURCE_JSONL, deferred_jsonl: Path = DEFERRED_JSONL
+) -> list[CatalogRow]:
     """Build normalized, deduplicated catalog rows.
 
     Parameters
     ----------
-    source_tsv:
-        Source TSV path.
+    source_jsonl:
+        Forward-required non-classics JSONL source.
+    deferred_jsonl:
+        Honestly deferred non-classics JSONL source.
 
     Returns
     -------
@@ -733,7 +835,7 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
     """
 
     intermediate = []
-    for row in _source_rows(source_tsv):
+    for row in _jsonl_source_rows(source_jsonl, deferred_jsonl):
         normalized = normalize_family(row["family"], row["name"], row["zoo"])
         intermediate.append(
             {
@@ -756,49 +858,17 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
             }
         )
     representative_map = normalize_family_representatives(intermediate)
-    deduped: dict[tuple[str, str, str, str, str], dict[str, str | bool]] = {}
-    classics_rows: list[dict[str, str | bool]] = []
     for row in intermediate:
         row["family_normalized"] = representative_map[row["family_normalized"]]
-        if row["source"] == "classics":
-            classics_rows.append(row)
-            continue
-        key = (
-            row["name"].lower(),
-            row["zoo"].lower(),
-            row["constructor_call"],
-            row["input_shape"],
-            row["input_dtype"],
-        )
-        current = deduped.get(key)
-        if current is None:
-            deduped[key] = row
-            continue
-        current_notes = str(current["notes"])
-        new_notes = str(row["notes"])
-        if new_notes and new_notes not in current_notes:
-            current["notes"] = (
-                f"{current_notes}; duplicate_note={new_notes}" if current_notes else new_notes
-            )
-        current["verified"] = bool(current["verified"]) or bool(row["verified"])
     sorted_rows = sorted(
-        [*deduped.values(), *classics_rows],
+        intermediate,
         key=lambda item: (
             str(item["family_normalized"]).lower(),
             str(item["name"]).lower(),
             str(item["zoo"]).lower(),
         ),
     )
-    natural_key_counts = Counter((str(row["name"]), str(row["zoo"])) for row in sorted_rows)
-    natural_key_seen: dict[tuple[str, str], int] = defaultdict(int)
-    variants = []
-    for row in sorted_rows:
-        base_key = (str(row["name"]), str(row["zoo"]))
-        natural_key_seen[base_key] += 1
-        if natural_key_counts[base_key] == 1 or natural_key_seen[base_key] == 1:
-            variants.append("")
-        else:
-            variants.append(f"variant-{natural_key_seen[base_key]}")
+    variants = [str(row.get("variant", "")) for row in sorted_rows]
 
     stable_keys = {
         (str(row["name"]), str(row["zoo"]), variant) for row, variant in zip(sorted_rows, variants)
@@ -1187,7 +1257,7 @@ def _build_command(args: argparse.Namespace) -> int:
         Process exit code.
     """
 
-    rows = build_canonical_rows(args.source)
+    rows = build_canonical_rows(args.source_jsonl, args.deferred_jsonl)
     write_catalog(rows, args.tsv, args.db)
     print(f"wrote {len(rows)} rows")
     print(f"tsv={args.tsv}")
@@ -1274,7 +1344,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     build = subparsers.add_parser("build", help="rebuild canonical TSV and SQLite DB")
-    build.add_argument("--source", type=Path, default=SOURCE_TSV)
+    build.add_argument("--source-jsonl", type=Path, default=SOURCE_JSONL)
+    build.add_argument("--deferred-jsonl", type=Path, default=DEFERRED_JSONL)
     build.add_argument("--tsv", type=Path, default=CANONICAL_TSV)
     build.add_argument("--db", type=Path, default=CATALOG_DB)
     build.set_defaults(func=_build_command)

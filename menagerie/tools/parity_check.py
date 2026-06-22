@@ -16,6 +16,7 @@ from menagerie.runtime import unrenderable_reason
 
 DEFAULT_BASELINE = Path(".research/menagerie-redesign/phase0_baseline.json")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+UNREGISTERED_CLASSICS_ZOO = "unregistered-classics-pytorch"
 RenderableKey = tuple[str, str, str, str, str]
 NAME_KEYED_RESUME_PATTERNS = (
     "completed_names",
@@ -96,6 +97,8 @@ def _baseline_floor(baseline: dict[str, Any]) -> set[RenderableKey]:
         name, zoo, _constructor_call, _input_shape, _input_dtype = key
         if zoo == CLASSIC_ZOO and name in CLASSICS:
             continue
+        if zoo == CLASSIC_ZOO:
+            key = (name, UNREGISTERED_CLASSICS_ZOO, *key[2:])
         floor.add(key)
     return floor
 

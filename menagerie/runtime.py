@@ -193,6 +193,7 @@ ZOO_PACKAGE_HINTS = (
     (re.compile(r"open_clip", re.I), ("open-clip-torch",)),
 )
 UNRENDERABLE_MARKERS = (
+    ("verification_expectation=deferred", "deferred"),
     ("jax", "jax_native"),
     ("flax", "jax_native"),
     ("web-only", "web_only_recipe"),
