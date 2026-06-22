@@ -1397,6 +1397,91 @@ def _check_graph_topology(ml: "Trace") -> None:
             )
 
 
+def _check_edge_use_parent_arg_invariants(ml: "Trace") -> None:
+    """Check existing edge-use records and parent-arg references.
+
+    Precondition contract: edge-use metadata is optional on torch graph edges.
+    The torch eager builder emits ``_edge_uses`` only for args/kwargs-derived
+    parent entries. Buffer-source, output, control, module, and
+    intervention-injected edges may legitimately have no edge-use record. When
+    an ``_edge_uses`` record exists, its kind must be in ``EdgeUseKind`` and
+    its parent/child labels must resolve. When a ``parent_arg_positions`` entry
+    exists, its referenced parent label must resolve. This invariant never
+    asserts that every parent edge has a corresponding edge-use record.
+
+    Parameters
+    ----------
+    ml:
+        Postprocessed torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If populated edge-use or parent-arg-position metadata is malformed or
+        references labels that do not resolve.
+    """
+
+    name = "edge_use_parent_arg_consistency"
+    valid_edge_uses = {"arg", "kwarg", "container", "module", "buffer", "output", "control"}
+    valid_arg_kinds = {"positional", "keyword"}
+    for layer in ml.layer_list:
+        layer_label = getattr(layer, "layer_label", type(layer).__name__)
+        for record in getattr(layer, "_edge_uses", ()) or ():
+            edge_use = getattr(record, "edge_use", None)
+            if edge_use not in valid_edge_uses:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has invalid edge_use kind {edge_use!r}",
+                )
+            arg_kind = getattr(record, "arg_kind", None)
+            if arg_kind not in valid_arg_kinds:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has invalid edge arg_kind {arg_kind!r}",
+                )
+            parent_label = getattr(record, "parent_label", None)
+            if not isinstance(parent_label, str) or _resolve_trace_label(ml, parent_label) is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has edge-use record with unresolved parent "
+                    f"{parent_label!r}",
+                )
+            child_label = getattr(record, "child_label", None)
+            if not isinstance(child_label, str) or _resolve_trace_label(ml, child_label) is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has edge-use record with unresolved child "
+                    f"{child_label!r}",
+                )
+
+        parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+        if not isinstance(parent_arg_positions, Mapping):
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{layer_label}' has non-mapping parent_arg_positions",
+            )
+        for arg_domain in ("args", "kwargs"):
+            entries = parent_arg_positions.get(arg_domain, {}) or {}
+            if not isinstance(entries, Mapping):
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' parent_arg_positions[{arg_domain!r}] is not a mapping",
+                )
+            for position, parent_label in entries.items():
+                if not isinstance(parent_label, str):
+                    raise MetadataInvariantError(
+                        name,
+                        f"Layer '{layer_label}' parent_arg_positions[{arg_domain!r}]"
+                        f"[{position!r}] is not a label string",
+                    )
+                if _resolve_trace_label(ml, parent_label) is None:
+                    raise MetadataInvariantError(
+                        name,
+                        f"Layer '{layer_label}' parent_arg_positions[{arg_domain!r}]"
+                        f"[{position!r}] references missing parent {parent_label!r}",
+                    )
+
+
 # ---------------------------------------------------------------------------
 # D. Op field consistency
 # ---------------------------------------------------------------------------
@@ -3619,6 +3704,11 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
     ),
     MetadataInvariantContract("special_layer_lists", _check_special_layer_lists, "torch"),
     MetadataInvariantContract("graph_topology", _check_graph_topology, "torch"),
+    MetadataInvariantContract(
+        "edge_use_parent_arg_consistency",
+        _check_edge_use_parent_arg_invariants,
+        "torch",
+    ),
     MetadataInvariantContract("op_log_fields", _check_op_log_fields, "torch"),
     MetadataInvariantContract("recurrence_invariants", _check_recurrence_invariants, "torch"),
     MetadataInvariantContract("branching_invariants", _check_branching_invariants, "torch"),

@@ -4,6 +4,7 @@ Covers: import paths, registry consistency, perturbation unit tests,
 deep clone helpers, and integration tests through specific exemption paths.
 """
 
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import cast
 
@@ -1133,6 +1134,68 @@ def test_buffer_integrity_preconditions_reach_real_trace() -> None:
         assert any(version.buffer_write_kind is not None for version in buffer.versions)
         assert {version.buffer_pass for version in buffer.versions} == {1, 2}
         assert any(version.buffer_source is not None for version in buffer.versions)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_invariant_rejects_invalid_existing_record_kind() -> None:
+    """Edge-use contract rejects an invalid kind on a populated edge-use record."""
+
+    log = _make_clean_log()
+    try:
+        layer = next(layer for layer in log.layer_list if layer._edge_uses)
+        layer._edge_uses[0] = replace(layer._edge_uses[0], edge_use="bogus")
+
+        with pytest.raises(MetadataInvariantError, match="invalid edge_use kind"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_invariant_rejects_missing_parent_arg_reference() -> None:
+    """Parent-arg contract rejects populated entries whose labels do not resolve."""
+
+    log = _make_clean_log()
+    try:
+        layer = next(layer for layer in log.layer_list if layer.parent_arg_positions["args"])
+        first_position = next(iter(layer.parent_arg_positions["args"]))
+        layer.parent_arg_positions["args"][first_position] = "missing_parent_label"
+
+        with pytest.raises(MetadataInvariantError, match="references missing parent"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_parent_arg_preconditions_reach_real_trace() -> None:
+    """Edge-use and parent-arg contracts inspect populated metadata on a real trace."""
+
+    log = _make_clean_log()
+    try:
+        edge_use_layers = [layer for layer in log.layer_list if layer._edge_uses]
+        parent_arg_layers = [
+            layer
+            for layer in log.layer_list
+            if layer.parent_arg_positions["args"] or layer.parent_arg_positions["kwargs"]
+        ]
+        assert edge_use_layers
+        assert parent_arg_layers
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
+    """Buffer-source parent edges are valid even without per-edge use records."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.parents
+        assert not write_version._edge_uses
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
