@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 
 
 HashPair = tuple[str, str]
@@ -380,7 +381,7 @@ def _trace_hash_pair(model: nn.Module, example_input: Any) -> HashPair:
 
     model.eval()
     with torch.no_grad():
-        trace = tl.trace(model, example_input, inference_only=True)
+        trace = tl.trace(model, example_input, capture=CaptureOptions(inference_only=True))
     return str(trace.graph_shape_hash), str(trace._raw_event_shape_hash)  # noqa: SLF001
 
 
