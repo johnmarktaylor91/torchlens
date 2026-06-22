@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -15,8 +16,9 @@ from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, ContextManager, Mapping, Sequence
+from typing import Any, ContextManager, Mapping, Sequence, cast
 
 from menagerie.catalog import CatalogRow, load_rows
 from menagerie.generate_menagerie import (
@@ -44,6 +46,15 @@ from menagerie.generate_menagerie import (
     tensor_for_recipe,
     unrenderable_reason,
     cuda_is_available,
+)
+from menagerie.ledger import (
+    VerificationRun,
+    Status,
+    append_verification_run,
+    connect as connect_ledger,
+    python_version,
+    runner_host,
+    utc_now,
 )
 
 
@@ -190,6 +201,158 @@ def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
         )
 
 
+def _package_version(package: str, fallback: str) -> str:
+    """Return an installed package version with a safe fallback.
+
+    Parameters
+    ----------
+    package:
+        Distribution package name.
+    fallback:
+        Version string to return when distribution metadata is unavailable.
+
+    Returns
+    -------
+    str
+        Package version.
+    """
+
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return fallback
+
+
+def _torchlens_version() -> str:
+    """Return the current TorchLens version.
+
+    Returns
+    -------
+    str
+        TorchLens package version.
+    """
+
+    import torchlens as tl
+
+    return _package_version("torchlens", str(getattr(tl, "__version__", "unknown")))
+
+
+def _torch_version() -> str:
+    """Return the current PyTorch version.
+
+    Returns
+    -------
+    str
+        PyTorch package version.
+    """
+
+    import torch
+
+    return str(torch.__version__)
+
+
+def _ledger_status(status: str) -> str:
+    """Map validation manifest status to ledger status.
+
+    Parameters
+    ----------
+    status:
+        Validation manifest status.
+
+    Returns
+    -------
+    str
+        Ledger status.
+    """
+
+    if status == "validated":
+        return "passed"
+    if status == "failed:timeout":
+        return "timeout"
+    if status.startswith("skipped:"):
+        return "skipped"
+    if status.startswith("failed:"):
+        return "failed"
+    return "error"
+
+
+def _actual_device(result: ValidationResult, requested_device: str) -> str:
+    """Infer the actual validation device from the result note.
+
+    Parameters
+    ----------
+    result:
+        Validation result.
+    requested_device:
+        Requested device mode.
+
+    Returns
+    -------
+    str
+        Actual device string.
+    """
+
+    match = re.search(r"(?:^|; )device=([^; |]+)", result.error)
+    if match is not None:
+        return match.group(1)
+    return "cpu" if requested_device in {"cpu", "auto"} else requested_device
+
+
+def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: str) -> None:
+    """Append one validation result to the verification ledger.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    result:
+        Validation result.
+    device:
+        Requested validation device.
+    """
+
+    ledger_status = _ledger_status(result.status)
+    passed = ledger_status == "passed"
+    started_at = utc_now()
+    finished_at = utc_now()
+    with connect_ledger() as conn:
+        append_verification_run(
+            conn,
+            VerificationRun(
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
+                name=row.name,
+                zoo=row.zoo,
+                variant=row.variant,
+                scope="forward",
+                status=cast(Status, ledger_status),
+                forward_pass=1 if passed else (None if ledger_status == "skipped" else 0),
+                backward_pass=None,
+                backward_na_reason=None,
+                metadata_ok=(
+                    int(result.validate_metadata_ok)
+                    if not result.status.startswith("skipped:")
+                    else None
+                ),
+                n_ops=result.n_ops if passed else None,
+                graph_shape_hash=result.graph_shape_hash or None,
+                svg_sha256=None,
+                torchlens_version=_torchlens_version(),
+                torch_version=_torch_version(),
+                python_version=python_version(),
+                device_requested=device,
+                device_actual=_actual_device(result, device),
+                env_hash=None,
+                runner_host=runner_host(),
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_sec=result.elapsed,
+                error_class=None if passed else result.status,
+                error_message=None if passed else result.error,
+            ),
+        )
+
+
 def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
     """Build a validation result from a JSON-compatible payload.
 
@@ -318,7 +481,7 @@ def _sum_float_outputs(output: Any) -> Any:
     return loss
 
 
-def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int, str]:
+def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int | None, str, str]:
     """Trace a model once to count forward ops and compute its architecture hash.
 
     Parameters
@@ -330,26 +493,30 @@ def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int, str]:
 
     Returns
     -------
-    tuple[int, str]
-        Number of traced ops and graph-shape hash.
+    tuple[int | None, str, str]
+        Number of traced ops, graph-shape hash, and error text. ``n_ops`` is
+        ``None`` when trace summarization fails.
     """
 
     import torch
     import torchlens as tl
 
-    torch.set_num_threads(1)
-    with torch.no_grad():
-        trace = tl.trace(
-            model,
-            input_tensor,
-            layers_to_save=None,
-            save=None,
-            save_rng_states=False,
-            inference_only=True,
-        )
-    n_ops = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
-    graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
-    return n_ops, graph_shape_hash
+    try:
+        torch.set_num_threads(1)
+        with torch.no_grad():
+            trace = tl.trace(
+                model,
+                input_tensor,
+                layers_to_save=None,
+                save=None,
+                save_rng_states=False,
+                inference_only=True,
+            )
+        n_ops = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
+        graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
+    except Exception as error:
+        return None, "", f"{error!r}\n{traceback.format_exc(limit=8)}"
+    return n_ops, graph_shape_hash, ""
 
 
 def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> ValidationResult:
@@ -530,11 +697,21 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 )
             backward_error = f"; backward={backward_result!r}"
 
-        try:
-            n_ops, graph_shape_hash = _trace_n_ops_and_hash(attempt_model, attempt_input)
-        except Exception:
-            n_ops = 0
-            graph_shape_hash = ""
+        n_ops, graph_shape_hash, trace_error = _trace_n_ops_and_hash(attempt_model, attempt_input)
+        if n_ops is None:
+            return ValidationResult(
+                row.name,
+                row.model_id,
+                "failed:trace_summary",
+                None,
+                True,
+                scope,
+                time.monotonic() - start,
+                plan.cluster_key,
+                combine_notes(device_note(device, actual_device), trace_error),
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
+            )
         return ValidationResult(
             row.name,
             row.model_id,
@@ -895,21 +1072,23 @@ def run(args: argparse.Namespace) -> int:
         install_error = install_dependency_plan(plan, args)
         if install_error is not None:
             for row in cluster_rows:
+                result = ValidationResult(
+                    row.name,
+                    row.model_id,
+                    "skipped:dependency_unavailable",
+                    0,
+                    False,
+                    args.scope,
+                    0.0,
+                    plan.cluster_key,
+                    install_error,
+                    stable_id=row.stable_id,
+                    recipe_revision_sha256=row.recipe_revision_sha256,
+                )
+                append_validation_ledger(row, result, args.device)
                 append_manifest(
                     manifest_path,
-                    ValidationResult(
-                        row.name,
-                        row.model_id,
-                        "skipped:dependency_unavailable",
-                        0,
-                        False,
-                        args.scope,
-                        0.0,
-                        plan.cluster_key,
-                        install_error,
-                        stable_id=row.stable_id,
-                        recipe_revision_sha256=row.recipe_revision_sha256,
-                    ),
+                    result,
                 )
             log_event(
                 "cluster_skipped",
@@ -997,6 +1176,7 @@ def run(args: argparse.Namespace) -> int:
             plan, row = futures[future]
             processed += 1
             result, removed = future.result()
+            append_validation_ledger(row, result, args.device)
             append_manifest(manifest_path, result)
             after_free_gb = disk_free_gb(out_dir)
             log_event(
