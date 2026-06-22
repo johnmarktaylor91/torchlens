@@ -15,6 +15,7 @@ PRE_REFACTOR_TORCH_SEQUENCE = (
     "trace_self_consistency",
     "region_replay_provenance",
     "backward_graph_invariants",
+    "backend_neutral_accessor_refs",
     "special_layer_lists",
     "graph_topology",
     "op_log_fields",

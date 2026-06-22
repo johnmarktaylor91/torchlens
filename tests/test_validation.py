@@ -977,6 +977,56 @@ def test_backend_identity_invariants_pass_healthy_resnet() -> None:
         log.cleanup()
 
 
+def test_backend_neutral_accessor_refs_reject_invalid_torch_status() -> None:
+    """Structural neutral accessor checks reject bad torch resolver status."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        assert victim.resolver_status == "resolved"
+
+        victim.resolver_status = "bogus"
+
+        with pytest.raises(MetadataInvariantError, match="invalid resolver_status"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backend_neutral_accessor_refs_reject_malformed_torch_dtype_ref() -> None:
+    """Structural neutral accessor checks reject refs missing a name."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        assert victim.dtype_ref is not None
+
+        victim.dtype_ref = SimpleNamespace(backend="torch", name="")
+
+        with pytest.raises(MetadataInvariantError, match="malformed dtype_ref"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backend_neutral_accessor_refs_pass_healthy_torch_trace() -> None:
+    """Structural neutral accessor preconditions fire on a healthy torch trace."""
+
+    log = _make_clean_log()
+    try:
+        records = [
+            *log.layer_list,
+            *list(log.layer_logs.values()),
+            *list(log.param_logs.values()),
+        ]
+        assert any(getattr(record, "resolver_status", None) == "resolved" for record in records)
+        assert any(getattr(record, "dtype_ref", None) is not None for record in records)
+        assert any(getattr(record, "device_ref", None) is not None for record in records)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
 def test_clean_log_ops_as_method():
     """check_metadata_invariants works as a bound method on Trace."""
     log = _make_clean_log()

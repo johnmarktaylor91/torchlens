@@ -507,12 +507,23 @@ def _check_non_torch_backward_inert(trace: "Trace") -> None:
 
 
 def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
-    """Check backend-neutral dtype/device/address resolver fields.
+    """Check structural backend-neutral dtype/device/address resolver fields.
+
+    Precondition contract: Op, Layer, and Param records may carry neutral mirror
+    fields independent of retained payloads. Missing or ``None`` dtype/device
+    refs and backend addresses are legitimate. When a neutral field is
+    populated, the structural contract is backend-neutral: ``resolver_status``
+    must be in the public status domain when present, dtype/device refs must
+    expose non-empty ``backend`` and ``name`` strings when present, and
+    ``backend_address`` must be a string when present. This check intentionally
+    does not compare ref names to legacy dtype/device payload values, and it
+    does not assert any ``backend_address`` <-> ``resolver_status`` semantic
+    coupling.
 
     Parameters
     ----------
     trace:
-        Postprocessed non-torch trace to validate.
+        Postprocessed trace to validate.
 
     Raises
     ------
@@ -522,11 +533,17 @@ def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
 
     name = "backend_neutral_accessor_refs"
     valid_statuses = {"resolved", "unresolved", "audit_only", "metadata_only"}
-    records = [*getattr(trace, "layer_list", ()), *list(getattr(trace, "param_logs", {}).values())]
+    records = [
+        *getattr(trace, "layer_list", ()),
+        *list(getattr(trace, "layer_logs", {}).values()),
+        *list(getattr(trace, "param_logs", {}).values()),
+    ]
     for record in records:
+        if not _record_has_backend_neutral_accessor_metadata(record):
+            continue
         label = getattr(record, "layer_label", getattr(record, "address", type(record).__name__))
         resolver_status = getattr(record, "resolver_status", None)
-        if resolver_status not in valid_statuses:
+        if resolver_status is not None and resolver_status not in valid_statuses:
             raise MetadataInvariantError(
                 name,
                 f"{label} has invalid resolver_status={resolver_status!r}",
@@ -543,6 +560,26 @@ def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
         backend_address = getattr(record, "backend_address", None)
         if backend_address is not None and not isinstance(backend_address, str):
             raise MetadataInvariantError(name, f"{label} has non-string backend_address")
+
+
+def _record_has_backend_neutral_accessor_metadata(record: object) -> bool:
+    """Return whether ``record`` has any populated neutral accessor field.
+
+    Parameters
+    ----------
+    record:
+        Op-, Layer-, or Param-like object to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when a backend-neutral mirror field is present and non-``None``.
+    """
+
+    return any(
+        getattr(record, field_name, None) is not None
+        for field_name in ("resolver_status", "dtype_ref", "device_ref", "backend_address")
+    )
 
 
 def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
@@ -3340,7 +3377,7 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
     MetadataInvariantContract(
         "backend_neutral_accessor_refs",
         _check_backend_neutral_accessor_refs,
-        "non_torch",
+        "all",
     ),
     MetadataInvariantContract(
         "backend_neutral_module_mode_invariants",
