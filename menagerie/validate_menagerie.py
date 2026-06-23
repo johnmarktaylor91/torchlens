@@ -7,6 +7,7 @@ import csv
 import json
 import os
 import re
+import resource
 import subprocess
 import sys
 import threading
@@ -73,6 +74,7 @@ MANIFEST_COLUMNS = (
     "dependency_cluster",
     "error",
     "graph_shape_hash",
+    "peak_rss_mb",
 )
 SUMMARY_JSON = "validation_summary.json"
 REPORT_MD = "VALIDATION_REPORT.md"
@@ -108,6 +110,8 @@ class ValidationResult:
         Opaque durable model identity.
     recipe_revision_sha256:
         Frozen recipe fingerprint for the row's current construction recipe.
+    peak_rss_mb:
+        Peak resident set size observed by the isolated worker process, in MB.
     """
 
     name: str
@@ -122,6 +126,7 @@ class ValidationResult:
     graph_shape_hash: str = ""
     stable_id: str = ""
     recipe_revision_sha256: str = ""
+    peak_rss_mb: int | None = None
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -198,6 +203,7 @@ def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
                 result.dependency_cluster,
                 result.error.replace("\n", " | "),
                 result.graph_shape_hash,
+                "" if result.peak_rss_mb is None else result.peak_rss_mb,
             )
         )
 
@@ -349,6 +355,7 @@ def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: 
                 started_at=started_at,
                 finished_at=finished_at,
                 duration_sec=result.elapsed,
+                peak_rss_mb=result.peak_rss_mb,
                 error_class=None if passed else result.status,
                 error_message=None if passed else result.error,
             ),
@@ -371,6 +378,8 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
 
     raw_n_ops = payload.get("n_ops")
     n_ops = None if raw_n_ops in {None, ""} else int(raw_n_ops)
+    raw_peak_rss_mb = payload.get("peak_rss_mb")
+    peak_rss_mb = None if raw_peak_rss_mb in {None, ""} else int(raw_peak_rss_mb)
     return ValidationResult(
         name=str(payload["name"]),
         model_id=int(payload["model_id"]),
@@ -384,6 +393,7 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         graph_shape_hash=str(payload.get("graph_shape_hash", "")),
         stable_id=str(payload.get("stable_id", "")),
         recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
+        peak_rss_mb=peak_rss_mb,
     )
 
 
@@ -517,6 +527,20 @@ def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int | None, st
     except Exception as error:
         return None, "", f"{error!r}\n{traceback.format_exc(limit=8)}"
     return n_ops, graph_shape_hash, ""
+
+
+def _peak_rss_mb() -> int:
+    """Return this process's peak resident set size in MB.
+
+    Returns
+    -------
+    int
+        Peak resident set size rounded up to whole MB.
+    """
+
+    # Linux reports ru_maxrss in KiB. The validator runs on Linux workers.
+    peak_kib = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    return max(0, (peak_kib + 1023) // 1024)
 
 
 def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> ValidationResult:
@@ -1319,6 +1343,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 stable_id=row.stable_id,
                 recipe_revision_sha256=row.recipe_revision_sha256,
             )
+        result = ValidationResult(
+            result.name,
+            result.model_id,
+            result.status,
+            result.n_ops,
+            result.validate_metadata_ok,
+            result.scope,
+            result.elapsed,
+            result.dependency_cluster,
+            result.error,
+            result.graph_shape_hash,
+            result.stable_id,
+            result.recipe_revision_sha256,
+            _peak_rss_mb(),
+        )
         print(json.dumps({"event": "worker_result", "result": result.__dict__}), flush=True)
         return 0
     try:

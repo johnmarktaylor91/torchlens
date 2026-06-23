@@ -100,6 +100,8 @@ class VerificationRun:
         ISO-8601 UTC finish timestamp.
     duration_sec:
         Run duration in seconds.
+    peak_rss_mb:
+        Peak resident set size observed by the isolated validation worker, in MB.
     error_class:
         Exception class name, when available.
     error_message:
@@ -132,6 +134,7 @@ class VerificationRun:
     started_at: str
     finished_at: str
     duration_sec: float
+    peak_rss_mb: int | None = None
     error_class: str | None = None
     error_message: str | None = None
     run_id: str = ""
@@ -301,6 +304,7 @@ def initialize(conn: sqlite3.Connection) -> None:
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
             duration_sec REAL NOT NULL,
+            peak_rss_mb INTEGER,
             error_class TEXT,
             error_message TEXT
         );
@@ -351,6 +355,7 @@ def initialize(conn: sqlite3.Connection) -> None:
             started_at,
             finished_at,
             duration_sec,
+            peak_rss_mb,
             error_class,
             error_message
         FROM ranked
@@ -370,6 +375,43 @@ def initialize(conn: sqlite3.Connection) -> None:
         """
     )
     _migrate_status_constraint(conn)
+    _migrate_peak_rss_column(conn)
+
+
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    """Return whether a SQLite table has a column.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    table:
+        Table name.
+    column:
+        Column name.
+
+    Returns
+    -------
+    bool
+        ``True`` when the column exists.
+    """
+
+    return any(str(row["name"]) == column for row in conn.execute(f"PRAGMA table_info({table})"))
+
+
+def _migrate_peak_rss_column(conn: sqlite3.Connection) -> None:
+    """Add the nullable peak RSS column to legacy verification ledgers.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    if _has_column(conn, "verification_runs", "peak_rss_mb"):
+        return
+    conn.execute("ALTER TABLE verification_runs ADD COLUMN peak_rss_mb INTEGER")
+    initialize(conn)
 
 
 def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
@@ -440,12 +482,70 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
             duration_sec REAL NOT NULL,
+            peak_rss_mb INTEGER,
             error_class TEXT,
             error_message TEXT
         );
 
-        INSERT INTO verification_runs
-        SELECT *
+        INSERT INTO verification_runs(
+            run_id,
+            stable_id,
+            recipe_revision_sha256,
+            name,
+            zoo,
+            variant,
+            scope,
+            status,
+            forward_pass,
+            backward_pass,
+            backward_na_reason,
+            metadata_ok,
+            n_ops,
+            graph_shape_hash,
+            svg_sha256,
+            torchlens_version,
+            torch_version,
+            python_version,
+            device_requested,
+            device_actual,
+            env_hash,
+            runner_host,
+            started_at,
+            finished_at,
+            duration_sec,
+            peak_rss_mb,
+            error_class,
+            error_message
+        )
+        SELECT
+            run_id,
+            stable_id,
+            recipe_revision_sha256,
+            name,
+            zoo,
+            variant,
+            scope,
+            status,
+            forward_pass,
+            backward_pass,
+            backward_na_reason,
+            metadata_ok,
+            n_ops,
+            graph_shape_hash,
+            svg_sha256,
+            torchlens_version,
+            torch_version,
+            python_version,
+            device_requested,
+            device_actual,
+            env_hash,
+            runner_host,
+            started_at,
+            finished_at,
+            duration_sec,
+            NULL AS peak_rss_mb,
+            error_class,
+            error_message
         FROM verification_runs_legacy_status_check;
 
         DROP TABLE verification_runs_legacy_status_check;
@@ -509,6 +609,7 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             started_at,
             finished_at,
             duration_sec,
+            peak_rss_mb,
             error_class,
             error_message
         ) VALUES (
@@ -537,6 +638,7 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             :started_at,
             :finished_at,
             :duration_sec,
+            :peak_rss_mb,
             :error_class,
             :error_message
         )
