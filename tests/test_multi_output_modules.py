@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import namedtuple
 from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -480,3 +481,46 @@ def test_literal_container_spec_is_picklable() -> None:
 
     spec = ContainerSpec(kind="literal", literal_value=3)
     assert pickle.loads(pickle.dumps(spec)) == spec
+
+
+class _OpaqueExpr(tuple[Any, ...]):
+    """Tuple-like opaque object that raises like a Narwhals/Polars expression."""
+
+    def __new__(cls) -> "_OpaqueExpr":
+        """Create an empty tuple payload for the opaque expression."""
+
+        return super().__new__(cls, ())
+
+    def __iter__(self) -> Iterator[Any]:
+        """Raise the non-iterable expression error seen in forecast-table outputs."""
+
+        raise TypeError("'Expr' object is not iterable")
+
+
+class _OpaqueOutputModel(nn.Module):
+    """Model returning a real tensor output beside an opaque expression leaf."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, _OpaqueExpr]:
+        """Return one tensor output and one opaque non-output object.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, _OpaqueExpr]
+            Tensor model output alongside an opaque expression object.
+        """
+
+        return x.relu(), _OpaqueExpr()
+
+
+def test_opaque_non_iterable_output_leaf_preserves_tensor_outputs() -> None:
+    """Opaque non-iterable output leaves do not hide sibling tensor outputs."""
+
+    trace = tl.trace(_OpaqueOutputModel(), torch.tensor([-1.0, 2.0]))
+
+    assert len(trace.output_layers) == 1
+    assert torch.equal(trace[trace.output_layers[0]].out, torch.tensor([0.0, 2.0]))

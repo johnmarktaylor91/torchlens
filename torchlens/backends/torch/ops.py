@@ -675,6 +675,68 @@ def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
     return field_names
 
 
+def _non_iterable_type_error(exc: TypeError) -> bool:
+    """Return whether ``exc`` represents an opaque non-iterable object.
+
+    Parameters
+    ----------
+    exc
+        TypeError raised while attempting output-container iteration.
+
+    Returns
+    -------
+    bool
+        True when the exception text matches Python's non-iterable diagnostics.
+    """
+
+    return "not iterable" in str(exc)
+
+
+def _iter_sequence_items(value: Any) -> tuple[tuple[int, Any], ...] | None:
+    """Return indexed sequence items, or no items for opaque non-iterables.
+
+    Parameters
+    ----------
+    value
+        Candidate list/tuple output container.
+
+    Returns
+    -------
+    tuple[tuple[int, Any], ...] | None
+        Enumerated child values. ``None`` means the object raised a
+        non-iterable ``TypeError`` and should be treated as an opaque leaf.
+    """
+
+    try:
+        return tuple(enumerate(value))
+    except TypeError as exc:
+        if _non_iterable_type_error(exc):
+            return None
+        raise
+
+
+def _try_build_container_spec(value: Any) -> ContainerSpec | None:
+    """Build a child container spec, treating opaque non-iterables as leaves.
+
+    Parameters
+    ----------
+    value
+        Child output value to describe.
+
+    Returns
+    -------
+    ContainerSpec | None
+        Child container spec, or ``None`` when the child is an opaque leaf.
+    """
+
+    try:
+        return _build_container_spec(value)
+    except TypeError as exc:
+        if _non_iterable_type_error(exc):
+            return None
+        raise
+
+
 def _is_hf_model_output(value: Any) -> bool:
     """Return whether ``value`` looks like a HuggingFace ``ModelOutput``.
 
@@ -742,7 +804,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if registered is not None:
         children, aux_data = registered.flatten(value)
         for index, item in enumerate(children):
-            child_spec = _build_container_spec(item)
+            child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
         module, qualname = _container_type_ref(value)
@@ -757,7 +819,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         for key in keys:
-            child_spec = _build_container_spec(value[key])
+            child_spec = _try_build_container_spec(value[key])
             if child_spec is not None:
                 child_specs.append((HFKey(key), child_spec))
         module, qualname = _container_type_ref(value)
@@ -773,7 +835,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if _is_namedtuple_instance(value) or torch_fields:
         fields = torch_fields or tuple(value._fields)
         for field_name in fields:
-            child_spec = _build_container_spec(getattr(value, field_name))
+            child_spec = _try_build_container_spec(getattr(value, field_name))
             if child_spec is not None:
                 child_specs.append((NamedField(field_name), child_spec))
         module, qualname = _container_type_ref(value)
@@ -788,7 +850,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         fields = tuple(field.name for field in dataclasses.fields(value))
         for field_name in fields:
-            child_spec = _build_container_spec(getattr(value, field_name))
+            child_spec = _try_build_container_spec(getattr(value, field_name))
             if child_spec is not None:
                 child_specs.append((DataclassField(field_name), child_spec))
         module, qualname = _container_type_ref(value)
@@ -803,7 +865,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if isinstance(value, dict):
         keys = tuple(value.keys())
         for key in keys:
-            child_spec = _build_container_spec(value[key])
+            child_spec = _try_build_container_spec(value[key])
             if child_spec is not None:
                 child_specs.append((DictKey(key), child_spec))
         return ContainerSpec(
@@ -813,14 +875,20 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             child_specs=tuple(child_specs),
         )
     if isinstance(value, tuple):
-        for index, item in enumerate(value):
-            child_spec = _build_container_spec(item)
+        items = _iter_sequence_items(value)
+        if items is None:
+            return None
+        for index, item in items:
+            child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
         return ContainerSpec(kind="tuple", length=len(value), child_specs=tuple(child_specs))
     if isinstance(value, list):
-        for index, item in enumerate(value):
-            child_spec = _build_container_spec(item)
+        items = _iter_sequence_items(value)
+        if items is None:
+            return None
+        for index, item in items:
+            child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
         return ContainerSpec(kind="list", length=len(value), child_specs=tuple(child_specs))
@@ -899,7 +967,10 @@ def _walk_supported_output_container(
             )
         return
     if isinstance(out, (list, tuple)):
-        for index, item in enumerate(out):
+        items = _iter_sequence_items(out)
+        if items is None:
+            return
+        for index, item in items:
             yield from _walk_supported_output_container(
                 item,
                 root_spec=root_spec,
@@ -929,7 +1000,7 @@ def _walk_output_tensors_with_paths(
             yield out, (), None
         return
 
-    root_spec = _build_container_spec(out)
+    root_spec = _try_build_container_spec(out)
     if root_spec is None:
         if _literal_value_supported(out) or isinstance(out, torch.Size):
             return
