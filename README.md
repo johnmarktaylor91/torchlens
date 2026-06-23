@@ -344,10 +344,15 @@ documented in [`docs/`](docs/).
 
 ## Gallery
 
-TorchLens visualizes any architecture -- no matter how exotic. Below is a sample
-across families. The
-[full menagerie](https://drive.google.com/drive/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb?usp=sharing)
-has 650+ graphs across 44 architecture families.
+TorchLens visualizes any architecture -- no matter how exotic. Explore the
+**[Model Menagerie](https://model-menagerie.pages.dev)**: a browsable atlas of **10,000+ unique
+neural-network architectures** -- from McCulloch & Pitts (1943) to today's frontier models -- each with
+structured metadata and a faithful TorchLens-rendered diagram.
+
+> **Early preview.** The gallery is live and growing; full-text search, a downloadable dataset, and
+> richer per-model pages are on the way.
+
+A sample across families is shown below.
 
 **Classic CNN + Vision Transformer**
 
