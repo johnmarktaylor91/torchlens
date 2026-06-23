@@ -11,8 +11,9 @@ network as it runs. Any architecture, even dynamic and recurrent ones.
 > **10,000+ unique neural-network architectures** captured with TorchLens, from McCulloch & Pitts (1943)
 > to today's frontier models. *(Early preview.)*
 
-Tested on over **700 models** (image, video, audio, multimodal, language;
-feedforward, recurrent, transformer, GNN) — and it records **every last detail
+Run on **10,000+ architectures** (image, video, audio, multimodal, language;
+feedforward, recurrent, transformer, GNN), with **700+ rigorously validated** for
+capture correctness — and it records **every last detail
 of every part of your model**: **180+ metadata fields per operation**, and
 **550+ fields in total** across every record type — operations, modules,
 parameters, buffers, gradients, and the model itself.
