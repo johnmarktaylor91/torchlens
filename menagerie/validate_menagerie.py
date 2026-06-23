@@ -793,37 +793,22 @@ def _sum_float_outputs(output: Any) -> Any:
     return loss
 
 
-def _trace_n_ops_and_hash(model: Any, input_tensor: Any) -> tuple[int | None, str, str]:
-    """Trace a model once to count forward ops and compute its architecture hash.
+def _trace_n_ops_and_hash_from_trace(trace: Any) -> tuple[int | None, str, str]:
+    """Count forward ops and compute the architecture hash from a validation trace.
 
     Parameters
     ----------
-    model:
-        Instantiated model.
-    input_tensor:
-        Example input.
+    trace:
+        Completed TorchLens validation trace.
 
     Returns
     -------
     tuple[int | None, str, str]
-        Number of traced ops, graph-shape hash, and error text. ``n_ops`` is
-        ``None`` when trace summarization fails.
+        Number of traced ops, graph-shape hash, and error text. ``n_ops`` is ``None``
+        when trace summarization fails.
     """
 
-    import torch
-    import torchlens as tl
-
     try:
-        torch.set_num_threads(1)
-        with torch.no_grad():
-            trace = tl.trace(
-                model,
-                input_tensor,
-                layers_to_save=None,
-                save=None,
-                save_rng_states=False,
-                inference_only=True,
-            )
         n_ops = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
         graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
     except Exception as error:
@@ -938,12 +923,30 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
         """
 
         import torchlens as tl
+        from torchlens.user_funcs import _validate_forward_pass_torch
+
+        n_ops: int | None = None
+        graph_shape_hash = ""
+        trace_error = ""
+
+        def observe_validation_trace(trace: Any) -> None:
+            """Record summary fields from the trace already built for validation.
+
+            Parameters
+            ----------
+            trace:
+                Completed TorchLens validation trace.
+            """
+
+            nonlocal graph_shape_hash, n_ops, trace_error
+            n_ops, graph_shape_hash, trace_error = _trace_n_ops_and_hash_from_trace(trace)
 
         try:
-            forward_result = tl.validate_forward_pass(
+            forward_result = _validate_forward_pass_torch(
                 attempt_model,
                 attempt_input,
                 validate_metadata=True,
+                _trace_observer=observe_validation_trace,
             )
         except Exception as error:
             return ValidationResult(
@@ -1023,7 +1026,6 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
                 )
             backward_error = f"; backward={backward_result!r}"
 
-        n_ops, graph_shape_hash, trace_error = _trace_n_ops_and_hash(attempt_model, attempt_input)
         if n_ops is None:
             return ValidationResult(
                 row.name,

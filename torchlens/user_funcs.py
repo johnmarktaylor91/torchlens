@@ -4218,6 +4218,8 @@ def _validate_forward_pass_torch(
     random_seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
+    *,
+    _trace_observer: Callable[[Trace], None] | None = None,
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
@@ -4237,15 +4239,27 @@ def _validate_forward_pass_torch(
     each function using its saved non-tensor arguments (e.g., stride, padding for
     conv2d).  Without them, replay cannot reconstruct the correct computation.
 
-    Args:
-        model: PyTorch model.
-        input_args: Input for which to validate the saved outs.
-        input_kwargs: Keyword arguments for model forward pass.
-        random_seed: Fixed RNG seed for reproducibility (auto-generated if None).
-        verbose: If True, print detailed error messages on validation failure.
-        validate_metadata: If True (default), also run metadata invariant checks.
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Input for which to validate the saved outs.
+    input_kwargs:
+        Keyword arguments for model forward pass.
+    random_seed:
+        Fixed RNG seed for reproducibility (auto-generated if None).
+    verbose:
+        If True, print detailed error messages on validation failure.
+    validate_metadata:
+        If True (default), also run metadata invariant checks.
+    _trace_observer:
+        Optional private callback invoked with the completed validation trace
+        after replay validation and before cleanup.
 
-    Returns:
+    Returns
+    -------
+    bool
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
@@ -4328,6 +4342,8 @@ def _validate_forward_pass_torch(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
         outs_are_valid = validation_result if isinstance(validation_result, bool) else False
+        if _trace_observer is not None:
+            _trace_observer(trace)
     finally:
         model.load_state_dict(state_dict)
         if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
