@@ -84,6 +84,7 @@ class _DummyLog:
         node_spec_fn: Any = None,
         collapsed_node_spec_fn: Any = None,
         collapse_fn: Any = None,
+        collapse: str = "none",
         skip_fn: Any = None,
         vis_edge_overrides: dict[str, Any] | None = None,
         vis_grad_edge_overrides: dict[str, Any] | None = None,
