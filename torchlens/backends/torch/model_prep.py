@@ -44,6 +44,7 @@ from ._tl import (
     clear_meta,
     get_buffer_address,
     get_label_list,
+    get_live_tensor_label,
     get_module_meta,
     get_param_meta,
     get_tensor_label,
@@ -1020,7 +1021,7 @@ def _record_module_entry_metadata(
         if is_functorch_wrapped_tensor(t):
             continue
         # Lazily register buffer tensors that haven't been logged yet.
-        label = get_tensor_label(t)
+        label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         buffer_address = cast(str, get_buffer_address(t))
         if label is None and buffer_address is not None:
             log_source_tensor(trace, t, "buffer", buffer_address)
@@ -1558,10 +1559,15 @@ def _make_user_forward_hook_wrapper(
         parent_labels = [
             label
             for tensor in get_vars_of_type_from_obj(original_output, torch.Tensor, search_depth=4)
-            if (label := get_tensor_label(tensor)) is not None
+            if (
+                label := get_live_tensor_label(tensor, trace.capture_events.live_index.by_raw_label)
+            )
+            is not None
         ]
         for replacement in get_vars_of_type_from_obj(result, torch.Tensor, search_depth=4):
-            replacement_label = get_tensor_label(replacement)
+            replacement_label = get_live_tensor_label(
+                replacement, trace.capture_events.live_index.by_raw_label
+            )
             if replacement_label is not None:
                 replace_op_event(trace, replacement_label, intervention_replaced=True)
             else:
@@ -1624,12 +1630,12 @@ def _record_module_exit_metadata(
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
         # so the graph correctly shows the module boundary.
-        tensor_label = get_tensor_label(t)
+        tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         if (_module_type(module).lower() == "identity") or (
             tensor_label is not None and tensor_label in input_tensor_labels
         ):
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
-            tensor_label = get_tensor_label(t)
+            tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         if tensor_label is None:
             # An untagged module output is a genuine intervention replacement
             # only when the module has a raw forward hook that could have
@@ -1946,7 +1952,7 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     ``num_batches_tracked`` increment) and so would mis-flag multi-op leaves as
     atomic. This stub keeps the call site stable and always defers.
     """
-    tensor_label = get_tensor_label(t)
+    tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
     if tensor_label is None:
         raise KeyError("Tensor is missing TorchLens metadata")
     trace.capture_events.live_index.require_event(tensor_label)

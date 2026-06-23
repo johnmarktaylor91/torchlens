@@ -50,6 +50,32 @@ _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
 _TEST_FORWARD_GLOBAL_PAYLOAD: dict[str, torch.Tensor] | None = None
 
 
+class _StaleLabelConstantModel(nn.Module):
+    """Model that consumes an unregistered tensor carrying a stale label."""
+
+    def __init__(self) -> None:
+        """Initialize a constant tensor that is not a registered buffer."""
+
+        super().__init__()
+        self.constant = torch.ones(2, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the unregistered constant to the input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Shifted tensor.
+        """
+
+        return x + self.constant
+
+
 # =============================================================================
 # Import / binding tests
 # =============================================================================
@@ -1530,6 +1556,27 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
+
+
+def test_stale_internal_source_label_is_relogged_not_reused() -> None:
+    """A stale tensor label must not become a missing live-index parent."""
+
+    from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+
+    model = _StaleLabelConstantModel()
+    set_tensor_label(model.constant, "internalsource_1_2_raw")
+
+    log = trace_fn(model, torch.zeros(2, 2))
+    try:
+        raw_labels = {entry._label_raw for entry in log.layer_list}
+        assert "internalsource_1_2_raw" not in raw_labels
+        assert get_tensor_label(model.constant) != "internalsource_1_2_raw"
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+    set_tensor_label(model.constant, "internalsource_1_2_raw")
+    assert validate_forward_pass(model, torch.zeros(2, 2), validate_metadata=True)
 
 
 def test_param_deep_xref_rejects_missing_op_back_reference() -> None:

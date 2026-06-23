@@ -48,7 +48,15 @@ import torch
 
 from ... import _state as _st
 from ..._state import pause_logging
-from ._tl import get_label_list, get_param_meta, get_tensor_label, get_tensor_meta, set_tensor_label
+from ._tl import (
+    get_label_list,
+    get_live_label_list,
+    get_live_tensor_label,
+    get_param_meta,
+    get_tensor_label,
+    get_tensor_meta,
+    set_tensor_label,
+)
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
@@ -982,7 +990,9 @@ def _literal_value_supported(value: Any) -> bool:
     )
 
 
-def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
+def _classify_arg_component(
+    value: Any, notes: list[str], trace: "Trace | None" = None
+) -> ArgComponent:
     """Classify a function argument value for replay templating.
 
     Parameters
@@ -998,7 +1008,12 @@ def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
         Tagged replay template component.
     """
 
-    label = None if isinstance(value, torch.nn.Parameter) else get_tensor_label(value)
+    label = None
+    if not isinstance(value, torch.nn.Parameter):
+        if trace is None:
+            label = get_tensor_label(value)
+        else:
+            label = get_live_tensor_label(value, trace.capture_events.live_index.by_raw_label)
     if isinstance(label, str):
         return ParentRef(label)
     if isinstance(value, torch.Tensor):
@@ -1007,9 +1022,11 @@ def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
     if _literal_value_supported(value):
         return LiteralValue(value)
     if isinstance(value, (list, tuple)):
-        return tuple(_classify_arg_component(item, notes) for item in value)
+        return tuple(_classify_arg_component(item, notes, trace) for item in value)
     if isinstance(value, dict):
-        return tuple((key, _classify_arg_component(item, notes)) for key, item in value.items())
+        return tuple(
+            (key, _classify_arg_component(item, notes, trace)) for key, item in value.items()
+        )
 
     reason = f"unsupported argument type {type(value).__module__}.{type(value).__qualname__}"
     notes.append(reason)
@@ -1020,6 +1037,7 @@ def _build_args_template(
     func: Callable[..., Any],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
+    trace: "Trace | None" = None,
 ) -> CapturedArgTemplate:
     """Build a replay template from original function args and kwargs.
 
@@ -1031,6 +1049,8 @@ def _build_args_template(
         Original positional args.
     kwargs
         Original keyword args.
+    trace
+        Active trace used to reject stale parent labels.
 
     Returns
     -------
@@ -1039,9 +1059,9 @@ def _build_args_template(
     """
 
     notes: list[str] = []
-    arg_components = tuple(_classify_arg_component(arg, notes) for arg in args)
+    arg_components = tuple(_classify_arg_component(arg, notes, trace) for arg in args)
     kwarg_components = tuple(
-        (str(key), _classify_arg_component(value, notes)) for key, value in kwargs.items()
+        (str(key), _classify_arg_component(value, notes, trace)) for key, value in kwargs.items()
     )
     return CapturedArgTemplate(
         args=arg_components,
@@ -1914,7 +1934,9 @@ def _build_graph_relationship_fields(
     out_kwarg_label = None
     out_kwarg = kwargs.get("out")
     if isinstance(out_kwarg, torch.Tensor):
-        out_kwarg_label = get_tensor_label(out_kwarg)
+        out_kwarg_label = get_live_tensor_label(
+            out_kwarg, self.capture_events.live_index.by_raw_label
+        )
     if out_kwarg_label is not None and out_kwarg_label not in parent_layer_labels:
         parent_layer_labels = [*parent_layer_labels, out_kwarg_label]
         parent_layer_entries = [
@@ -2092,7 +2114,9 @@ def _build_shared_fields_dict(
     # (which become metadata and feed into equivalence_class hashing).
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
-    parent_layer_labels = get_label_list(arg_tensors)
+    parent_layer_labels = get_live_label_list(
+        arg_tensors, self.capture_events.live_index.by_raw_label
+    )
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
@@ -2110,7 +2134,7 @@ def _build_shared_fields_dict(
         getattr(self, "intervention_ready", False) or getattr(self, "save_arg_templates", False)
     )
     if should_capture_template:
-        captured_template = _build_args_template(func, args, kwargs)
+        captured_template = _build_args_template(func, args, kwargs, self)
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if kwargs else None
     else:
