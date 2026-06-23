@@ -249,6 +249,8 @@ islands:
     pypi_options:
       extra_index_urls:
         - "https://download.pytorch.org/whl/cu121"
+      no_build_isolation:
+        - yolox
     packages:
       conda:
         - "python=3.11"
