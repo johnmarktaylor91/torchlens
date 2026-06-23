@@ -6,11 +6,37 @@ pixi:
   disk_free_reserve_gib: 25
 assignment:
   invariant: "Every catalog row is assigned to exactly one island; base-capable rows assign to base."
+  empirical_manifest: "/tmp/menagerie_base_sweep/manifest.tsv"
+  dependency_unavailable_status: "skipped:dependency_unavailable"
   base_modules:
     - builtins
     - menagerie
     - pathlib
     - torch
+  cluster_envs:
+    audioseal: audio
+    cnn: misc
+    espnet2: audio
+    gvp: geom_sci
+    lerobot+torch: gpu_tail
+    miscc: misc
+    miscc+torch: misc
+    mmdet+mmengine: mmlab_core
+    mmengine+mmsegmentation: mmlab_core
+    mmocr: mmocr
+    nemo: audio
+    nequip+torch: geom_sci
+    neuralforecast+torch: forecast_tab
+    pytorch_widedeep: forecast_tab
+    s2cnn: geom_sci
+    schnetpack+torch: geom_sci
+    sgmse: audio
+    siamrpn: misc
+    sonata: misc
+    spikingtorch: snn
+    super_gradients: yolox_sg
+    tinycudann: gpu_tail
+    yolox: yolox_sg
   fallback_dependency_env: gpu_tail
 islands:
   base:
@@ -63,11 +89,13 @@ islands:
         - "^mmpose$"
         - "^mmocr$"
     python: "3.11"
-    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_pin: "torch==2.1.0+cu121 torchvision==0.16.0+cu121"
     torch_index_url: "https://download.pytorch.org/whl/cu121"
     pypi_options:
       extra_index_urls:
         - "https://download.pytorch.org/whl/cu121"
+      find_links:
+        - "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html"
       no_build_isolation:
         - mmcv
     packages:
@@ -75,19 +103,19 @@ islands:
         - "python=3.11"
         - pip
       pypi:
-        - "torch==2.4.1"
-        - "torchvision==0.19.1"
+        - "torch==2.1.0+cu121"
+        - "torchvision==0.16.0+cu121"
         - "numpy<2"
         - openmim
         - ftfy
         - regex
         - xtcocotools
         - munkres
-        - mmengine
-        - mmcv
-        - mmdet
-        - mmsegmentation
-        - mmpretrain
+        - "mmengine==0.10.7"
+        - "mmcv==2.1.0"
+        - "mmdet==3.3.0"
+        - "mmsegmentation==1.2.2"
+        - "mmpretrain==1.2.0"
     smoke_stable_ids:
       - m6375
       - m7069
@@ -110,11 +138,13 @@ islands:
       name_patterns:
         - "mmpose"
     python: "3.11"
-    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_pin: "torch==2.1.0+cu121 torchvision==0.16.0+cu121"
     torch_index_url: "https://download.pytorch.org/whl/cu121"
     pypi_options:
       extra_index_urls:
         - "https://download.pytorch.org/whl/cu121"
+      find_links:
+        - "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html"
       no_build_isolation:
         - mmcv
     packages:
@@ -122,17 +152,17 @@ islands:
         - "python=3.11"
         - pip
       pypi:
-        - "torch==2.4.1"
-        - "torchvision==0.19.1"
+        - "torch==2.1.0+cu121"
+        - "torchvision==0.16.0+cu121"
         - "numpy<2"
         - openmim
         - ftfy
         - regex
         - xtcocotools
         - munkres
-        - mmengine
-        - mmcv
-        - mmdet
+        - "mmengine==0.10.7"
+        - "mmcv==2.1.0"
+        - "mmdet==3.2.0"
         - "mmpose==1.3.2"
     smoke_stable_ids:
       - m6875
@@ -154,11 +184,13 @@ islands:
       name_patterns:
         - "mmocr"
     python: "3.11"
-    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_pin: "torch==2.1.0+cu121 torchvision==0.16.0+cu121"
     torch_index_url: "https://download.pytorch.org/whl/cu121"
     pypi_options:
       extra_index_urls:
         - "https://download.pytorch.org/whl/cu121"
+      find_links:
+        - "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html"
       no_build_isolation:
         - mmcv
     packages:
@@ -166,15 +198,15 @@ islands:
         - "python=3.11"
         - pip
       pypi:
-        - "torch==2.4.1"
-        - "torchvision==0.19.1"
+        - "torch==2.1.0+cu121"
+        - "torchvision==0.16.0+cu121"
         - "numpy<2"
         - openmim
         - ftfy
         - regex
         - munkres
-        - mmengine
-        - mmcv
+        - "mmengine==0.10.7"
+        - "mmcv==2.0.1"
         - "mmdet==3.1.0"
         - "mmocr==1.0.1"
     smoke_stable_ids:
@@ -464,6 +496,48 @@ islands:
       - m7788
     expected_device: cpu
     disk_estimate_gib: 5
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  misc:
+    description: "Small dependency tail with source-only or unclear package availability."
+    selectors:
+      cluster_patterns:
+        - "^cnn$"
+        - "^miscc"
+        - "^siamrpn$"
+        - "^sonata$"
+      module_patterns:
+        - "^cnn$"
+        - "^miscc$"
+        - "^siamrpn$"
+        - "^sonata$"
+      zoo_patterns:
+        - "siamrpn"
+        - "sonata"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - "cnn"
+        - "miscc"
+        - "siamrpn"
+        - "sonata"
+    smoke_stable_ids:
+      - m467
+      - m3549
+    expected_device: cpu
+    disk_estimate_gib: 6
     status_policy:
       default_status: env_unavailable
       unavailable_status: env_unavailable

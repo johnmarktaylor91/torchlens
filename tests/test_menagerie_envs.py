@@ -59,7 +59,7 @@ def test_forecast_tab_assignment_examples(tmp_path: Path) -> None:
     rows_by_id = {row.stable_id: row for row in build_canonical_rows()}
 
     assert envs.env_for_row(rows_by_id["m3392"], registry) == "forecast_tab"
-    assert envs.env_for_row(rows_by_id["m2476"], registry) == "forecast_tab"
+    assert envs.env_for_row(rows_by_id["m1907"], registry) == "forecast_tab"
 
 
 def test_lock_hash_is_stable_with_mocked_pixi(

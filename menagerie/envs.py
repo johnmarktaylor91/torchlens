@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -36,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = Path(__file__).resolve().parent / "data" / "validation_envs.yml"
 LOCKS_DIR = Path(__file__).resolve().parent / "locks"
 DEFAULT_CACHE_ROOT = Path.home() / ".cache" / "torchlens" / "menagerie" / "envs"
+DEFAULT_BASE_SWEEP_MANIFEST = Path("/tmp/menagerie_base_sweep/manifest.tsv")
 BUILD_MARKER = "torchlens_env_build.json"
 LOCK_MANIFEST_SUFFIX = ".pixi.toml"
 LOCK_FILE_SUFFIX = ".pixi.lock"
@@ -135,6 +138,12 @@ class EnvRegistry:
         Required free-space floor.
     base_modules:
         Top-level modules considered base-capable.
+    empirical_manifest:
+        Base-sweep manifest that identifies the dependency-gated rows.
+    dependency_unavailable_status:
+        Status in the base-sweep manifest used to identify island rows.
+    cluster_envs:
+        Exact dependency-cluster to island mapping for empirical island rows.
     fallback_dependency_env:
         Island used for unmatched external dependency rows.
     islands:
@@ -145,6 +154,9 @@ class EnvRegistry:
     cache_root: Path
     disk_free_reserve_gib: float
     base_modules: frozenset[str]
+    empirical_manifest: Path
+    dependency_unavailable_status: str
+    cluster_envs: dict[str, str]
     fallback_dependency_env: str
     islands: dict[str, EnvSpec]
 
@@ -289,6 +301,16 @@ def load_registry(path: Path = REGISTRY_PATH) -> EnvRegistry:
         cache_root=cache_root,
         disk_free_reserve_gib=float(pixi.get("disk_free_reserve_gib", 25.0)),
         base_modules=frozenset(str(item) for item in assignment.get("base_modules", [])),
+        empirical_manifest=_expand_path(
+            assignment.get("empirical_manifest", DEFAULT_BASE_SWEEP_MANIFEST)
+        ),
+        dependency_unavailable_status=str(
+            assignment.get("dependency_unavailable_status", "skipped:dependency_unavailable")
+        ),
+        cluster_envs={
+            str(cluster): str(env_key)
+            for cluster, env_key in assignment.get("cluster_envs", {}).items()
+        },
         fallback_dependency_env=str(assignment.get("fallback_dependency_env", "gpu_tail")),
         islands=islands,
     )
@@ -407,8 +429,101 @@ def _row_matches_env(row: CatalogRow, spec: EnvSpec) -> bool:
     )
 
 
+@lru_cache(maxsize=8)
+def _read_empirical_dependency_assignments_cached(
+    manifest_path: str,
+    dependency_status: str,
+    cluster_env_items: tuple[tuple[str, str], ...],
+    island_keys: tuple[str, ...],
+) -> tuple[tuple[str, str], ...]:
+    """Read empirical base-sweep dependency skips from a manifest.
+
+    Parameters
+    ----------
+    manifest_path:
+        Path to the base-sweep TSV manifest.
+    dependency_status:
+        Manifest status that marks rows needing island environments.
+    cluster_env_items:
+        Exact dependency-cluster to island mapping.
+    island_keys:
+        Known island keys from the registry.
+
+    Returns
+    -------
+    tuple[tuple[str, str], ...]
+        Stable-ID to island assignments for empirical dependency skips.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the empirical manifest is not available.
+    ValueError
+        If the manifest is malformed or contains an unmapped cluster.
+    """
+
+    path = Path(manifest_path)
+    if not path.exists():
+        raise FileNotFoundError(f"empirical base-sweep manifest not found: {path}")
+    cluster_envs = dict(cluster_env_items)
+    known_islands = set(island_keys)
+    assignments: dict[str, str] = {}
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        required_columns = {"stable_id", "status", "dependency_cluster"}
+        missing_columns = required_columns.difference(reader.fieldnames or ())
+        if missing_columns:
+            missing = ", ".join(sorted(missing_columns))
+            raise ValueError(f"manifest {path} missing required column(s): {missing}")
+        for row in reader:
+            if row["status"] != dependency_status:
+                continue
+            stable_id = row["stable_id"]
+            cluster = row["dependency_cluster"]
+            env_key = cluster_envs.get(cluster)
+            if env_key is None:
+                raise ValueError(
+                    f"dependency cluster {cluster!r} for {stable_id} has no island mapping"
+                )
+            if env_key not in known_islands:
+                raise ValueError(
+                    f"dependency cluster {cluster!r} maps to unknown island {env_key!r}"
+                )
+            previous = assignments.setdefault(stable_id, env_key)
+            if previous != env_key:
+                raise ValueError(
+                    f"stable_id {stable_id} mapped to both {previous!r} and {env_key!r}"
+                )
+    return tuple(sorted(assignments.items()))
+
+
+def _empirical_dependency_assignments(registry: EnvRegistry) -> dict[str, str]:
+    """Return empirical dependency-skip assignments for a registry.
+
+    Parameters
+    ----------
+    registry:
+        Loaded environment registry.
+
+    Returns
+    -------
+    dict[str, str]
+        Stable-ID to island mapping for the base sweep's dependency-unavailable rows.
+    """
+
+    items = tuple(sorted(registry.cluster_envs.items()))
+    island_keys = tuple(sorted(registry.islands))
+    assignments = _read_empirical_dependency_assignments_cached(
+        str(registry.empirical_manifest),
+        registry.dependency_unavailable_status,
+        items,
+        island_keys,
+    )
+    return dict(assignments)
+
+
 def _row_needs_dependency_env(row: CatalogRow, registry: EnvRegistry) -> bool:
-    """Return whether a row has non-base external dependency signals.
+    """Return whether a row was empirically dependency-gated in the base sweep.
 
     Parameters
     ----------
@@ -420,14 +535,10 @@ def _row_needs_dependency_env(row: CatalogRow, registry: EnvRegistry) -> bool:
     Returns
     -------
     bool
-        Whether a non-base dependency island is needed.
+        Whether the row needs a non-base dependency island.
     """
 
-    plan = dependency_plan(row)
-    external_modules = [
-        module for module in plan.top_modules if module not in registry.base_modules
-    ]
-    return bool(plan.packages or external_modules)
+    return row.stable_id in _empirical_dependency_assignments(registry)
 
 
 def env_for_row(row: CatalogRow, registry: EnvRegistry | None = None) -> str:
@@ -445,24 +556,11 @@ def env_for_row(row: CatalogRow, registry: EnvRegistry | None = None) -> str:
     str
         Island key.
 
-    Raises
-    ------
-    ValueError
-        If specialized selectors overlap.
     """
 
     active_registry = registry or load_registry()
-    if not _row_needs_dependency_env(row, active_registry):
-        return "base"
-    matches = [key for key, spec in active_registry.islands.items() if _row_matches_env(row, spec)]
-    unique_matches = sorted(set(matches))
-    if len(unique_matches) > 1:
-        raise ValueError(
-            f"{row.stable_id} matched multiple validation envs: {', '.join(unique_matches)}"
-        )
-    if unique_matches:
-        return unique_matches[0]
-    return active_registry.fallback_dependency_env
+    empirical_assignments = _empirical_dependency_assignments(active_registry)
+    return empirical_assignments.get(row.stable_id, "base")
 
 
 def assign(rows: Sequence[CatalogRow], registry: EnvRegistry | None = None) -> dict[str, str]:
@@ -482,11 +580,12 @@ def assign(rows: Sequence[CatalogRow], registry: EnvRegistry | None = None) -> d
     """
 
     active_registry = registry or load_registry()
+    empirical_assignments = _empirical_dependency_assignments(active_registry)
     assignments: dict[str, str] = {}
     for row in rows:
-        env_key = env_for_row(row, active_registry)
         if row.stable_id in assignments:
             raise ValueError(f"duplicate stable_id in assignment input: {row.stable_id}")
+        env_key = empirical_assignments.get(row.stable_id, "base")
         assignments[row.stable_id] = env_key
     return assignments
 
@@ -635,6 +734,10 @@ def render_pixi_manifest(spec: EnvSpec) -> str:
         if extra_urls:
             rendered = ", ".join(_toml_quote(str(url)) for url in extra_urls)
             lines.append(f"extra-index-urls = [{rendered}]")
+        find_links = spec.pypi_options.get("find_links", [])
+        if find_links:
+            rendered = ", ".join(_toml_quote(str(url)) for url in find_links)
+            lines.append(f"find-links = [{rendered}]")
         index_strategy = spec.pypi_options.get("index_strategy")
         if index_strategy:
             lines.append(f"index-strategy = {_toml_quote(str(index_strategy))}")
@@ -1535,11 +1638,33 @@ def _assignment_summary(rows: Sequence[CatalogRow], registry: EnvRegistry) -> di
     """
 
     assignments = assign(rows, registry)
+    empirical_assignments = _empirical_dependency_assignments(registry)
+    row_ids = {row.stable_id for row in rows}
+    missing_empirical_rows = sorted(set(empirical_assignments).difference(row_ids))
+    if missing_empirical_rows:
+        raise ValueError(
+            "empirical dependency-skip rows missing from assignment input: "
+            + ", ".join(missing_empirical_rows[:20])
+        )
+    non_empirical_island_rows = sorted(
+        stable_id
+        for stable_id, env_key in assignments.items()
+        if stable_id not in empirical_assignments and env_key != "base"
+    )
+    if non_empirical_island_rows:
+        raise ValueError(
+            "base-capable rows routed to islands: " + ", ".join(non_empirical_island_rows[:20])
+        )
     counts: dict[str, int] = {key: 0 for key in registry.islands}
     for env_key in assignments.values():
         counts[env_key] = counts.get(env_key, 0) + 1
-    dep_count = sum(1 for row in rows if _row_needs_dependency_env(row, registry))
-    return {"rows": len(rows), "dependency_rows": dep_count, "counts": counts}
+    dep_count = sum(1 for row in rows if row.stable_id in empirical_assignments)
+    return {
+        "rows": len(rows),
+        "dependency_rows": dep_count,
+        "empirical_manifest": str(registry.empirical_manifest),
+        "counts": counts,
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
