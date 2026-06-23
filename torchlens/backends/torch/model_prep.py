@@ -32,6 +32,7 @@ import warnings
 from collections.abc import Callable
 from collections import defaultdict, deque
 from functools import wraps
+from types import ModuleType
 from typing import Any, TYPE_CHECKING, cast
 
 import torch
@@ -2029,7 +2030,7 @@ def _clear_session_tensor_metadata(value: Any, seen: set[int], depth: int = 0) -
         Mutates reachable tensors in place by removing TorchLens metadata.
     """
 
-    if value is None or isinstance(value, (str, bytes, int, float, bool)):
+    if value is None or isinstance(value, (str, bytes, int, float, bool, ModuleType)):
         return
     if isinstance(value, torch.Tensor):
         if not isinstance(value, torch.nn.Parameter):
@@ -2088,9 +2089,12 @@ def _clear_callable_session_tensor_metadata(callable_obj: Any, seen: set[int]) -
     globals_dict = getattr(raw_callable, "__globals__", None)
     if not isinstance(globals_dict, dict):
         return
-    for global_value in globals_dict.values():
-        if isinstance(global_value, torch.Tensor):
-            _clear_session_tensor_metadata(global_value, seen)
+    code = getattr(raw_callable, "__code__", None)
+    if code is None:
+        return
+    for name in code.co_names:
+        if name in globals_dict:
+            _clear_session_tensor_metadata(globals_dict[name], seen)
 
 
 def _undecorate_model_tensors(model: nn.Module) -> None:

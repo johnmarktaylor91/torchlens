@@ -286,6 +286,44 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
         _TEST_FORWARD_GLOBAL_TENSOR = None
 
 
+def test_trace_clears_forward_global_container_tensor_labels_between_sessions() -> None:
+    """A second trace should not see stale labels inside forward-global containers."""
+
+    global _TEST_FORWARD_GLOBAL_PAYLOAD
+
+    class GlobalPayloadForwardModel(nn.Module):
+        """Model whose forward reads a tensor from a global container."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model with a tensor stored in a global dict.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Elementwise sum of the cached global tensor and input.
+            """
+
+            assert _TEST_FORWARD_GLOBAL_PAYLOAD is not None
+            return x + _TEST_FORWARD_GLOBAL_PAYLOAD["value"]
+
+    x = torch.randn(2, 3)
+    _TEST_FORWARD_GLOBAL_PAYLOAD = {"value": torch.ones_like(x)}
+    try:
+        model = GlobalPayloadForwardModel()
+
+        assert validate_forward_pass(model, x, validate_metadata=True) is True
+        second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+
+        assert second_trace.num_ops > 0
+    finally:
+        _TEST_FORWARD_GLOBAL_PAYLOAD = None
+
+
 def test_validate_forward_pass_replays_tuple_output_identity_leaf() -> None:
     """Output identity replay should not index into an already-selected tensor leaf."""
 
