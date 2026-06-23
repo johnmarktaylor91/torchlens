@@ -591,7 +591,7 @@ def _run_fold_ellipsis_name(address: str) -> str:
 def _run_fold_ellipsis_count(source: str, multiplicity: int) -> int:
     """Return count of run-fold ellipsis labels for ``multiplicity`` folded modules."""
 
-    return source.count(f'label="... +{multiplicity - 1} more of this type"')
+    return source.count(f"... +{multiplicity - 1} more ")
 
 
 def _has_run_fold_multiplicity_label(source: str, multiplicity: int) -> bool:
@@ -690,6 +690,7 @@ def test_auto_collapse_run_fold_ignores_dimension_steps(tmp_path: Path) -> None:
 
         assert _collapsed_exact_label_count(auto_source, "blocks.1") == 1
         assert _run_fold_ellipsis_count(auto_source, 23) == 1
+        assert "... +22 more DimStepBlock" in auto_source
         assert _collapsed_exact_label_count(auto_source, "blocks.23") == 0
         assert "shapes " in auto_source
         assert _edge_count(auto_source, "blocks.1pass1", ellipsis_name) == 1
@@ -739,7 +740,7 @@ def test_auto_collapse_run_fold_skips_readable_stack(tmp_path: Path) -> None:
 
         assert folds == {}
         assert "runfoldellipsis" not in auto_source
-        assert "more of this type" not in auto_source
+        assert "... +" not in auto_source
         assert _collapsed_exact_label_count(auto_source, "blocks.0") == 1
         assert _collapsed_exact_label_count(auto_source, "blocks.11") == 1
     finally:
@@ -757,7 +758,7 @@ def test_auto_collapse_run_fold_fires_when_stack_exceeds_band(tmp_path: Path) ->
 
         assert folds["blocks.0"].addresses == tuple(f"blocks.{index}" for index in range(24))
         assert _run_fold_ellipsis_count(auto_source, 24) == 1
-        assert "... +23 more of this type" in auto_source
+        assert "... +23 more ResidualBlock" in auto_source
     finally:
         trace.cleanup()
 

@@ -68,6 +68,8 @@ class ModuleRunFold:
         First module address in the folded run.
     addresses:
         Consecutive sibling module addresses included in the run.
+    class_name:
+        Module class name shared by the folded run (named in the elision label).
     num_layers:
         Aggregate recursive layer count across the run.
     num_params:
@@ -82,6 +84,7 @@ class ModuleRunFold:
 
     representative: str
     addresses: tuple[str, ...]
+    class_name: str
     num_layers: int
     num_params: int
     num_params_trainable: int
@@ -790,6 +793,7 @@ def _make_run_fold(trace: "Trace", addresses: tuple[str, ...]) -> ModuleRunFold:
     return ModuleRunFold(
         representative=addresses[0],
         addresses=addresses,
+        class_name=str(getattr(modules[0], "class_name", "") or "blocks"),
         num_layers=sum(int(getattr(module, "num_layers", 0) or 0) for module in modules),
         num_params=sum(int(getattr(module, "num_params", 0) or 0) for module in modules),
         num_params_trainable=sum(

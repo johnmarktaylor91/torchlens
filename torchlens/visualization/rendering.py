@@ -5066,7 +5066,7 @@ def _run_fold_ellipsis_label(fold: "ModuleRunFold") -> str:
         Plaintext label describing the number of elided siblings.
     """
 
-    return f"... +{fold.multiplicity - 1} more of this type"
+    return f"... +{fold.multiplicity - 1} more {fold.class_name}"
 
 
 def _edge_touches_run_fold(
