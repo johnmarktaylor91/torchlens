@@ -64,6 +64,7 @@ DEFAULT_OUT_DIR = Path("/tmp/torchlens_menagerie_validation")
 MB_PER_GB = 1024
 DEFAULT_UNKNOWN_MEMORY_MB = 4 * MB_PER_GB
 HEAVY_UNKNOWN_MEMORY_MB = 12 * MB_PER_GB
+DEFAULT_MEMORY_FLOOR_GB = 12.0
 AUTO_MEMORY_BUDGET_FRACTION = 0.7
 FALLBACK_MEMORY_BUDGET_GB = 8.0
 HEAVY_MEMORY_PATTERNS = (
@@ -193,12 +194,17 @@ class AdmissionDecision:
         Items admitted alone despite exceeding the memory budget.
     throttled:
         Whether pending work could not be admitted because in-flight estimated
-        memory already consumed the remaining budget.
+        memory already consumed the remaining budget or actual free memory is
+        below the admission floor.
+    throttle_reason:
+        Stable reason code for throttling, either ``"estimate_budget"``,
+        ``"actual_free"``, or ``None`` when not throttled.
     """
 
     admitted: tuple[ValidationWorkItem, ...]
     forced_oversized: tuple[ValidationWorkItem, ...]
     throttled: bool
+    throttle_reason: str | None = None
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -602,6 +608,42 @@ def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
     return max(0.001, available_gb * AUTO_MEMORY_BUDGET_FRACTION)
 
 
+def _resolve_memory_floor_gb(requested_floor_gb: float | None) -> float:
+    """Resolve the actual-free-memory admission floor.
+
+    Parameters
+    ----------
+    requested_floor_gb:
+        User-provided floor in GB, or ``None`` for the default.
+
+    Returns
+    -------
+    float
+        Actual-free-memory floor in GB.
+    """
+
+    if requested_floor_gb is not None:
+        return max(0.001, requested_floor_gb)
+    return DEFAULT_MEMORY_FLOOR_GB
+
+
+def _actual_available_memory_mb() -> int | None:
+    """Return currently available system memory in MB.
+
+    Returns
+    -------
+    int | None
+        Available memory in MB, or ``None`` when it cannot be measured.
+    """
+
+    try:
+        import psutil
+
+        return int(psutil.virtual_memory().available // (1024**2))
+    except Exception:
+        return None
+
+
 def _in_flight_memory_mb(
     in_flight: Mapping[Future[tuple[ValidationResult, int]], ValidationWorkItem],
 ) -> int:
@@ -624,10 +666,13 @@ def _in_flight_memory_mb(
 def _admit_memory_budgeted_items(
     pending: list[ValidationWorkItem],
     in_flight_memory_mb: int,
+    in_flight_count: int,
     budget_mb: int,
+    memory_floor_mb: int,
+    actual_available_memory_mb: int | None,
     available_slots: int,
 ) -> AdmissionDecision:
-    """Select pending validation work that fits the remaining memory budget.
+    """Select pending validation work that fits memory admission gates.
 
     Parameters
     ----------
@@ -635,8 +680,16 @@ def _admit_memory_budgeted_items(
         Mutable queue of not-yet-submitted work items.
     in_flight_memory_mb:
         Estimated memory already submitted and still running, in MB.
+    in_flight_count:
+        Number of submitted jobs still running.
     budget_mb:
         Maximum estimated in-flight memory, in MB.
+    memory_floor_mb:
+        Minimum actual free memory required before admitting another job, in MB.
+        The effective floor for each item is ``max(memory_floor_mb,
+        item.estimated_memory_mb)``.
+    actual_available_memory_mb:
+        Currently available system memory in MB, or ``None`` when unavailable.
     available_slots:
         Remaining concurrency slots under the hard job cap.
 
@@ -649,28 +702,57 @@ def _admit_memory_budgeted_items(
     admitted: list[ValidationWorkItem] = []
     forced_oversized: list[ValidationWorkItem] = []
     throttled = False
+    throttle_reason: str | None = None
     while pending and len(admitted) < available_slots:
         admitted_memory_mb = sum(item.estimated_memory_mb for item in admitted)
         remaining_mb = budget_mb - in_flight_memory_mb - admitted_memory_mb
+        estimate_fit_indexes = [
+            index for index, item in enumerate(pending) if item.estimated_memory_mb <= remaining_mb
+        ]
+        force_first_job = in_flight_count == 0 and not admitted
+
+        def has_actual_headroom(item: ValidationWorkItem) -> bool:
+            """Return whether actual free memory admits an item.
+
+            Parameters
+            ----------
+            item:
+                Candidate work item.
+
+            Returns
+            -------
+            bool
+                True when the actual-free-memory gate is satisfied.
+            """
+
+            if actual_available_memory_mb is None:
+                return True
+            if force_first_job:
+                return True
+            required_mb = max(memory_floor_mb, item.estimated_memory_mb)
+            return actual_available_memory_mb >= required_mb
+
         fit_index = next(
-            (
-                index
-                for index, item in enumerate(pending)
-                if item.estimated_memory_mb <= remaining_mb
-            ),
+            (index for index in estimate_fit_indexes if has_actual_headroom(pending[index])),
             None,
         )
         if fit_index is None:
-            if not admitted and in_flight_memory_mb == 0:
+            if not admitted and in_flight_count == 0:
                 item = pending.pop(0)
                 admitted.append(item)
                 if item.estimated_memory_mb > budget_mb:
                     forced_oversized.append(item)
             elif pending and available_slots > len(admitted):
                 throttled = True
+                throttle_reason = "actual_free" if estimate_fit_indexes else "estimate_budget"
             break
         admitted.append(pending.pop(fit_index))
-    return AdmissionDecision(tuple(admitted), tuple(forced_oversized), throttled)
+    return AdmissionDecision(
+        tuple(admitted),
+        tuple(forced_oversized),
+        throttled,
+        throttle_reason,
+    )
 
 
 def _refresh_pending_estimates(
@@ -1441,6 +1523,8 @@ def run(args: argparse.Namespace) -> int:
     gpu_semaphore = threading.Semaphore(gpu_jobs) if use_gpu_cap else None
     memory_budget_gb = _resolve_memory_budget_gb(args.memory_budget_gb)
     memory_budget_mb = max(1, int(memory_budget_gb * MB_PER_GB))
+    memory_floor_gb = _resolve_memory_floor_gb(args.memory_floor_gb)
+    memory_floor_mb = max(1, int(memory_floor_gb * MB_PER_GB))
     ledger_memory_estimates = latest_peak_rss_estimates()
     pending = _build_validation_work_items(runnable, ledger_memory_estimates)
 
@@ -1483,6 +1567,7 @@ def run(args: argparse.Namespace) -> int:
         effective_jobs=effective_jobs,
         gpu_jobs=gpu_jobs if use_gpu_cap else None,
         memory_budget_gb=round(memory_budget_gb, 3),
+        memory_floor_gb=round(memory_floor_gb, 3),
         default_unknown_memory_gb=round(DEFAULT_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         heavy_unknown_memory_gb=round(HEAVY_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         device=args.device,
@@ -1500,10 +1585,14 @@ def run(args: argparse.Namespace) -> int:
     with ThreadPoolExecutor(max_workers=effective_jobs) as executor:
         futures: dict[Future[tuple[ValidationResult, int]], ValidationWorkItem] = {}
         while pending or futures:
+            actual_available_memory_mb = _actual_available_memory_mb()
             decision = _admit_memory_budgeted_items(
                 pending=pending,
                 in_flight_memory_mb=_in_flight_memory_mb(futures),
+                in_flight_count=len(futures),
                 budget_mb=memory_budget_mb,
+                memory_floor_mb=memory_floor_mb,
+                actual_available_memory_mb=actual_available_memory_mb,
                 available_slots=effective_jobs - len(futures),
             )
             for item in decision.forced_oversized:
@@ -1532,10 +1621,17 @@ def run(args: argparse.Namespace) -> int:
             if decision.throttled:
                 log_event(
                     "memory_throttle",
+                    reason=decision.throttle_reason,
                     pending=len(pending),
                     in_flight=len(futures),
                     in_flight_estimated_gb=round(_in_flight_memory_mb(futures) / MB_PER_GB, 3),
                     memory_budget_gb=round(memory_budget_gb, 3),
+                    memory_floor_gb=round(memory_floor_gb, 3),
+                    actual_available_gb=(
+                        None
+                        if actual_available_memory_mb is None
+                        else round(actual_available_memory_mb / MB_PER_GB, 3)
+                    ),
                     next_pending_estimated_gb=round(
                         min(item.estimated_memory_mb for item in pending) / MB_PER_GB,
                         3,
@@ -1637,6 +1733,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "max estimated in-flight validation RSS in GB; default auto-detects "
             "70%% of currently available RAM"
+        ),
+    )
+    parser.add_argument(
+        "--memory-floor-gb",
+        type=float,
+        default=None,
+        help=(
+            "minimum actual free RAM required before admitting another model; "
+            f"default {DEFAULT_MEMORY_FLOOR_GB:g} GB, and each model also requires "
+            "headroom at least equal to its estimate"
         ),
     )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
