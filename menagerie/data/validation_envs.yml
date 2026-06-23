@@ -305,11 +305,12 @@ islands:
       conda:
         - "python=3.11"
         - pip
+        - "setuptools<74"
       pypi:
         - "torch==2.4.1"
         - "torchvision==0.19.1"
         - "torchaudio==2.4.1"
-        - "numpy<2"
+        - "numpy>=2.0,<2.2"
         - "speechbrain==1.1.0"
         - "espnet==202511"
         - "nemo_toolkit[asr]==2.4.0"
