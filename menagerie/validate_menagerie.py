@@ -76,6 +76,11 @@ HEAVY_MEMORY_PATTERNS = (
     "u-net",
     "unet",
 )
+WORKER_MEMORY_CAP_STATUS = "failed:memory_cap"
+WORKER_MEMORY_CAP_EXIT_CODE = 99
+WORKER_MEMORY_CAP_POLL_INTERVAL_SEC = 0.5
+WORKER_MEMORY_CAP_AS_BACKSTOP_MULTIPLIER = 1.5
+WORKER_MEMORY_TEST_ALLOC_ENV = "TORCHLENS_MENAGERIE_WORKER_TEST_ALLOC_MB"
 MANIFEST_COLUMNS = (
     "name",
     "model_id",
@@ -608,6 +613,36 @@ def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
     return max(0.001, available_gb * AUTO_MEMORY_BUDGET_FRACTION)
 
 
+def _resolve_scheduler_memory_budget_gb(
+    requested_budget_gb: float | None,
+    worker_memory_cap_gb: float | None,
+    effective_jobs: int,
+) -> float:
+    """Resolve the scheduler's estimated in-flight memory budget.
+
+    Parameters
+    ----------
+    requested_budget_gb:
+        User-provided soft scheduler budget, or ``None`` for the default policy.
+    worker_memory_cap_gb:
+        Per-worker hard RSS cap, or ``None`` when disabled.
+    effective_jobs:
+        Maximum number of workers that can run concurrently.
+
+    Returns
+    -------
+    float
+        Estimated in-flight memory budget in GB.
+    """
+
+    if worker_memory_cap_gb is None:
+        return _resolve_memory_budget_gb(requested_budget_gb)
+    cap_budget_gb = max(0.001, worker_memory_cap_gb) * max(1, effective_jobs)
+    if requested_budget_gb is None:
+        return cap_budget_gb
+    return min(_resolve_memory_budget_gb(requested_budget_gb), cap_budget_gb)
+
+
 def _resolve_memory_floor_gb(requested_floor_gb: float | None) -> float:
     """Resolve the actual-free-memory admission floor.
 
@@ -912,6 +947,195 @@ def _peak_rss_mb() -> int:
     return max(0, (peak_kib + 1023) // 1024)
 
 
+def _bytes_to_mb(value: int) -> int:
+    """Round a byte count up to whole MB.
+
+    Parameters
+    ----------
+    value:
+        Byte count.
+
+    Returns
+    -------
+    int
+        Whole-MB byte count rounded up.
+    """
+
+    return max(0, (value + (1024**2 - 1)) // (1024**2))
+
+
+def _memory_cap_result(
+    row: CatalogRow,
+    scope: str,
+    cap_gb: float,
+    peak_rss_bytes: int,
+    elapsed: float,
+) -> ValidationResult:
+    """Build the honest failure result for a worker RSS cap breach.
+
+    Parameters
+    ----------
+    row:
+        Catalog row being validated.
+    scope:
+        Validation scope requested by the parent.
+    cap_gb:
+        Per-worker RSS cap in GB.
+    peak_rss_bytes:
+        Highest RSS observed by the monitor, in bytes.
+    elapsed:
+        Elapsed worker time in seconds.
+
+    Returns
+    -------
+    ValidationResult
+        Memory-cap validation failure result.
+    """
+
+    plan = dependency_plan(row)
+    peak_rss_mb = _bytes_to_mb(peak_rss_bytes)
+    return ValidationResult(
+        row.name,
+        row.model_id,
+        WORKER_MEMORY_CAP_STATUS,
+        0,
+        False,
+        scope,
+        elapsed,
+        plan.cluster_key,
+        (f"worker RSS exceeded --worker-memory-cap-gb={cap_gb:.3f}; peak_rss_mb={peak_rss_mb}"),
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        peak_rss_mb=peak_rss_mb,
+    )
+
+
+def _emit_worker_result(result: ValidationResult) -> None:
+    """Emit one JSON worker result event.
+
+    Parameters
+    ----------
+    result:
+        Validation result to send to the parent process.
+    """
+
+    print(json.dumps({"event": "worker_result", "result": result.__dict__}), flush=True)
+
+
+def _set_worker_address_space_backstop(cap_bytes: int, current_vms_bytes: int) -> None:
+    """Set a generous virtual-memory backstop for capped workers when possible.
+
+    Parameters
+    ----------
+    cap_bytes:
+        RSS cap in bytes.
+    current_vms_bytes:
+        Current virtual memory size in bytes.
+    """
+
+    if not hasattr(resource, "RLIMIT_AS"):
+        return
+    backstop_bytes = max(
+        int(cap_bytes * WORKER_MEMORY_CAP_AS_BACKSTOP_MULTIPLIER),
+        current_vms_bytes + int(cap_bytes * 2),
+    )
+    try:
+        soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_AS)
+        if hard_limit != resource.RLIM_INFINITY:
+            backstop_bytes = min(backstop_bytes, hard_limit)
+        if soft_limit != resource.RLIM_INFINITY:
+            backstop_bytes = min(backstop_bytes, soft_limit)
+        resource.setrlimit(resource.RLIMIT_AS, (backstop_bytes, hard_limit))
+    except (OSError, ValueError):
+        return
+
+
+def _start_worker_memory_monitor(
+    row: CatalogRow,
+    scope: str,
+    cap_gb: float | None,
+    start_time: float,
+) -> threading.Thread | None:
+    """Start a daemon RSS monitor that records memory-cap failures.
+
+    Parameters
+    ----------
+    row:
+        Catalog row being validated.
+    scope:
+        Validation scope requested by the parent.
+    cap_gb:
+        Per-worker RSS cap in GB, or ``None`` to disable the monitor.
+    start_time:
+        Worker monotonic start time.
+
+    Returns
+    -------
+    threading.Thread | None
+        Started monitor thread, or ``None`` when no cap is active.
+    """
+
+    if cap_gb is None:
+        return None
+    cap_bytes = max(1, int(cap_gb * (1024**3)))
+    import psutil
+
+    process = psutil.Process()
+    initial_memory = process.memory_info()
+    peak_rss_bytes = int(initial_memory.rss)
+    _set_worker_address_space_backstop(cap_bytes, int(initial_memory.vms))
+
+    def monitor() -> None:
+        """Hard-exit the worker after emitting a result if RSS exceeds the cap."""
+
+        nonlocal peak_rss_bytes
+        while True:
+            try:
+                rss_bytes = int(process.memory_info().rss)
+            except psutil.Error:
+                return
+            peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+            if rss_bytes > cap_bytes:
+                result = _memory_cap_result(
+                    row,
+                    scope,
+                    cap_gb,
+                    peak_rss_bytes,
+                    time.monotonic() - start_time,
+                )
+                _emit_worker_result(result)
+                os._exit(WORKER_MEMORY_CAP_EXIT_CODE)
+            time.sleep(WORKER_MEMORY_CAP_POLL_INTERVAL_SEC)
+
+    thread = threading.Thread(target=monitor, name="menagerie-rss-cap", daemon=True)
+    thread.start()
+    return thread
+
+
+def _run_worker_test_allocation_from_env() -> list[bytearray]:
+    """Allocate test memory in worker subprocesses when requested by tests.
+
+    Returns
+    -------
+    list[bytearray]
+        Retained allocation chunks, empty outside test-hook usage.
+    """
+
+    requested_mb = int(os.environ.get(WORKER_MEMORY_TEST_ALLOC_ENV, "0") or "0")
+    if requested_mb <= 0:
+        return []
+    chunks: list[bytearray] = []
+    chunk_mb = 8
+    remaining_mb = requested_mb
+    while remaining_mb > 0:
+        this_chunk_mb = min(chunk_mb, remaining_mb)
+        chunks.append(bytearray(this_chunk_mb * 1024 * 1024))
+        remaining_mb -= this_chunk_mb
+        time.sleep(0.05)
+    time.sleep(WORKER_MEMORY_CAP_POLL_INTERVAL_SEC * 2)
+    return chunks
+
+
 def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> ValidationResult:
     """Instantiate and validate one menagerie model.
 
@@ -1210,6 +1434,7 @@ def validate_with_timeout(
     device: str,
     timeout_sec: float,
     tmp_dir: Path | None = None,
+    worker_memory_cap_gb: float | None = None,
 ) -> ValidationResult:
     """Run one validation in an isolated child process with a timeout.
 
@@ -1230,6 +1455,8 @@ def validate_with_timeout(
         ``TMPDIR``/``TEMP``/``TMP`` environment variables. Passed through the
         subprocess environment (not process globals) so concurrent workers each
         get an isolated scratch directory without mutating shared state.
+    worker_memory_cap_gb:
+        Optional per-worker RSS cap in GB enforced inside the child process.
 
     Returns
     -------
@@ -1251,6 +1478,8 @@ def validate_with_timeout(
     ]
     if dry_run:
         command.append("--dry-run")
+    if worker_memory_cap_gb is not None:
+        command.extend(("--worker-memory-cap-gb", f"{worker_memory_cap_gb:.6f}"))
     child_env = None
     if tmp_dir is not None:
         tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -1280,6 +1509,21 @@ def validate_with_timeout(
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
+    for line in reversed(completed.stdout.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("event") == "worker_result":
+            return result_from_payload(payload["result"])
+    if completed.returncode == WORKER_MEMORY_CAP_EXIT_CODE and worker_memory_cap_gb is not None:
+        return _memory_cap_result(
+            row,
+            scope,
+            worker_memory_cap_gb,
+            0,
+            0.0,
+        )
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
         return ValidationResult(
@@ -1295,13 +1539,6 @@ def validate_with_timeout(
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
-    for line in reversed(completed.stdout.splitlines()):
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if payload.get("event") == "worker_result":
-            return result_from_payload(payload["result"])
     return ValidationResult(
         row.name,
         row.model_id,
@@ -1521,8 +1758,17 @@ def run(args: argparse.Namespace) -> int:
     gpu_jobs = max(1, args.gpu_jobs)
     effective_jobs = min(jobs, gpu_jobs) if use_gpu_cap else jobs
     gpu_semaphore = threading.Semaphore(gpu_jobs) if use_gpu_cap else None
-    memory_budget_gb = _resolve_memory_budget_gb(args.memory_budget_gb)
+    memory_budget_gb = _resolve_scheduler_memory_budget_gb(
+        args.memory_budget_gb,
+        args.worker_memory_cap_gb,
+        effective_jobs,
+    )
     memory_budget_mb = max(1, int(memory_budget_gb * MB_PER_GB))
+    worker_cap_safe_budget_gb = (
+        None
+        if args.worker_memory_cap_gb is None
+        else round(max(0.001, args.worker_memory_cap_gb) * effective_jobs, 3)
+    )
     memory_floor_gb = _resolve_memory_floor_gb(args.memory_floor_gb)
     memory_floor_mb = max(1, int(memory_floor_gb * MB_PER_GB))
     ledger_memory_estimates = latest_peak_rss_estimates()
@@ -1555,6 +1801,7 @@ def run(args: argparse.Namespace) -> int:
                 args.device,
                 args.timeout_sec,
                 tmp_dir=tmp_dir,
+                worker_memory_cap_gb=args.worker_memory_cap_gb,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
         return result, removed
@@ -1567,6 +1814,10 @@ def run(args: argparse.Namespace) -> int:
         effective_jobs=effective_jobs,
         gpu_jobs=gpu_jobs if use_gpu_cap else None,
         memory_budget_gb=round(memory_budget_gb, 3),
+        worker_memory_cap_gb=(
+            None if args.worker_memory_cap_gb is None else round(args.worker_memory_cap_gb, 3)
+        ),
+        worker_cap_safe_budget_gb=worker_cap_safe_budget_gb,
         memory_floor_gb=round(memory_floor_gb, 3),
         default_unknown_memory_gb=round(DEFAULT_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         heavy_unknown_memory_gb=round(HEAVY_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
@@ -1745,6 +1996,12 @@ def build_parser() -> argparse.ArgumentParser:
             "headroom at least equal to its estimate"
         ),
     )
+    parser.add_argument(
+        "--worker-memory-cap-gb",
+        type=float,
+        default=None,
+        help="per-worker RSS cap in GB; default off",
+    )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument(
@@ -1793,6 +2050,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         os.environ.setdefault(_thread_var, "1")
     if args.worker_row_json:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
+        worker_start = time.monotonic()
+        _start_worker_memory_monitor(row, args.scope, args.worker_memory_cap_gb, worker_start)
+        worker_test_allocations = _run_worker_test_allocation_from_env()
         try:
             result = validate_one(row, args.dry_run, args.scope, args.device)
         except Exception as error:
@@ -1825,7 +2085,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result.recipe_revision_sha256,
             _peak_rss_mb(),
         )
-        print(json.dumps({"event": "worker_result", "result": result.__dict__}), flush=True)
+        if worker_test_allocations:
+            worker_test_allocations.clear()
+        _emit_worker_result(result)
         return 0
     try:
         return run(args)
