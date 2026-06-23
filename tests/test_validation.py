@@ -952,6 +952,27 @@ class _ZerosLikeModel(nn.Module):
         return x + z
 
 
+class _NewTensorFactoryModel(nn.Module):
+    """Model that uses the input tensor as a ``new_tensor`` factory."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a constant tensor using ``x`` only as a factory template.
+
+        Parameters
+        ----------
+        x:
+            Input tensor providing dtype, device, and layout metadata.
+
+        Returns
+        -------
+        torch.Tensor
+            Input shifted by a constant factory-created scalar.
+        """
+
+        values = x.new_tensor([1.0, 2.0, 3.0])
+        return x + values.sum()
+
+
 class _EmptyLikeModel(nn.Module):
     """Model that uses empty_like (tests SKIP_VALIDATION_ENTIRELY)."""
 
@@ -1007,6 +1028,14 @@ def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
 
 def test_validation_with_zeros_like():
     model = _ZerosLikeModel()
+    x = torch.randn(3, 3)
+    assert validate_forward_pass(model, x)
+
+
+def test_validation_with_new_tensor_factory_source() -> None:
+    """Perturbation skips the structural source tensor for ``new_tensor``."""
+
+    model = _NewTensorFactoryModel()
     x = torch.randn(3, 3)
     assert validate_forward_pass(model, x)
 
