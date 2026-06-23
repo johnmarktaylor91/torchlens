@@ -14,7 +14,7 @@ import threading
 import time
 import traceback
 from collections import Counter, defaultdict
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import nullcontext
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
@@ -61,6 +61,20 @@ from menagerie.ledger import (
 
 
 DEFAULT_OUT_DIR = Path("/tmp/torchlens_menagerie_validation")
+MB_PER_GB = 1024
+DEFAULT_UNKNOWN_MEMORY_MB = 4 * MB_PER_GB
+HEAVY_UNKNOWN_MEMORY_MB = 12 * MB_PER_GB
+AUTO_MEMORY_BUDGET_FRACTION = 0.7
+FALLBACK_MEMORY_BUDGET_GB = 8.0
+HEAVY_MEMORY_PATTERNS = (
+    "deeplab",
+    "mask2former",
+    "segmentation",
+    "segformer",
+    "smp_",
+    "u-net",
+    "unet",
+)
 MANIFEST_COLUMNS = (
     "name",
     "model_id",
@@ -127,6 +141,64 @@ class ValidationResult:
     stable_id: str = ""
     recipe_revision_sha256: str = ""
     peak_rss_mb: int | None = None
+
+
+@dataclass(frozen=True)
+class MemoryEstimate:
+    """Memory estimate used by the validation scheduler.
+
+    Parameters
+    ----------
+    estimated_mb:
+        Estimated peak resident set size, in MB.
+    source:
+        Estimate source: ``"ledger"``, ``"heavy_default"``, or ``"default"``.
+    """
+
+    estimated_mb: int
+    source: str
+
+
+@dataclass(frozen=True)
+class ValidationWorkItem:
+    """One runnable validation item with its memory estimate.
+
+    Parameters
+    ----------
+    plan:
+        Dependency plan for the row's cluster.
+    row:
+        Catalog row to validate.
+    estimated_memory_mb:
+        Estimated peak resident set size for scheduler admission, in MB.
+    estimate_source:
+        Origin of the estimate used for logging and tests.
+    """
+
+    plan: DependencyPlan
+    row: CatalogRow
+    estimated_memory_mb: int
+    estimate_source: str
+
+
+@dataclass(frozen=True)
+class AdmissionDecision:
+    """Validation work admitted in one scheduler pass.
+
+    Parameters
+    ----------
+    admitted:
+        Items selected for submission.
+    forced_oversized:
+        Items admitted alone despite exceeding the memory budget.
+    throttled:
+        Whether pending work could not be admitted because in-flight estimated
+        memory already consumed the remaining budget.
+    """
+
+    admitted: tuple[ValidationWorkItem, ...]
+    forced_oversized: tuple[ValidationWorkItem, ...]
+    throttled: bool
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -395,6 +467,236 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
         peak_rss_mb=peak_rss_mb,
     )
+
+
+def latest_peak_rss_estimates() -> dict[str, int]:
+    """Return latest recorded peak RSS values keyed by stable model ID.
+
+    Returns
+    -------
+    dict[str, int]
+        Latest non-null peak RSS measurements from the verification ledger.
+    """
+
+    query = """
+        WITH ranked AS (
+            SELECT
+                stable_id,
+                peak_rss_mb,
+                ROW_NUMBER() OVER (
+                    PARTITION BY stable_id
+                    ORDER BY finished_at DESC, run_id DESC
+                ) AS rn
+            FROM verification_runs
+            WHERE peak_rss_mb IS NOT NULL
+              AND scope = 'forward'
+        )
+        SELECT stable_id, peak_rss_mb
+        FROM ranked
+        WHERE rn = 1
+    """
+    with connect_ledger() as conn:
+        rows = conn.execute(query).fetchall()
+    return {str(row["stable_id"]): int(row["peak_rss_mb"]) for row in rows}
+
+
+def _looks_memory_heavy(row: CatalogRow) -> bool:
+    """Return whether an unmeasured model should receive the high memory default.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+
+    Returns
+    -------
+    bool
+        ``True`` for names/families/domains that suggest high-resolution segmentation.
+    """
+
+    haystack = " ".join((row.name, row.family, row.domain, row.zoo)).casefold()
+    return any(pattern in haystack for pattern in HEAVY_MEMORY_PATTERNS)
+
+
+def _memory_estimate_for_row(
+    row: CatalogRow, ledger_estimates_mb: Mapping[str, int]
+) -> MemoryEstimate:
+    """Return the scheduler memory estimate for one catalog row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    ledger_estimates_mb:
+        Latest ledger peak RSS measurements keyed by stable ID.
+
+    Returns
+    -------
+    MemoryEstimate
+        Estimate and source.
+    """
+
+    measured_mb = ledger_estimates_mb.get(row.stable_id)
+    if measured_mb is not None and measured_mb > 0:
+        return MemoryEstimate(measured_mb, "ledger")
+    if _looks_memory_heavy(row):
+        return MemoryEstimate(HEAVY_UNKNOWN_MEMORY_MB, "heavy_default")
+    return MemoryEstimate(DEFAULT_UNKNOWN_MEMORY_MB, "default")
+
+
+def _build_validation_work_items(
+    runnable: Sequence[tuple[DependencyPlan, CatalogRow]],
+    ledger_estimates_mb: Mapping[str, int],
+) -> list[ValidationWorkItem]:
+    """Build scheduler work items with memory estimates.
+
+    Parameters
+    ----------
+    runnable:
+        Dependency-qualified rows ready for validation.
+    ledger_estimates_mb:
+        Latest ledger peak RSS measurements keyed by stable ID.
+
+    Returns
+    -------
+    list[ValidationWorkItem]
+        Work items in their original runnable order.
+    """
+
+    items = []
+    for plan, row in runnable:
+        estimate = _memory_estimate_for_row(row, ledger_estimates_mb)
+        items.append(
+            ValidationWorkItem(
+                plan=plan,
+                row=row,
+                estimated_memory_mb=estimate.estimated_mb,
+                estimate_source=estimate.source,
+            )
+        )
+    return items
+
+
+def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
+    """Resolve an explicit or automatic validation memory budget.
+
+    Parameters
+    ----------
+    requested_budget_gb:
+        User-provided budget in GB, or ``None`` for automatic detection.
+
+    Returns
+    -------
+    float
+        Memory budget in GB.
+    """
+
+    if requested_budget_gb is not None:
+        return max(0.001, requested_budget_gb)
+    try:
+        import psutil
+
+        available_gb = psutil.virtual_memory().available / (1024**3)
+    except Exception:
+        return FALLBACK_MEMORY_BUDGET_GB
+    return max(0.001, available_gb * AUTO_MEMORY_BUDGET_FRACTION)
+
+
+def _in_flight_memory_mb(
+    in_flight: Mapping[Future[tuple[ValidationResult, int]], ValidationWorkItem],
+) -> int:
+    """Return total estimated memory for currently submitted validation work.
+
+    Parameters
+    ----------
+    in_flight:
+        Future-to-work-item mapping.
+
+    Returns
+    -------
+    int
+        Sum of in-flight estimated peak RSS values, in MB.
+    """
+
+    return sum(item.estimated_memory_mb for item in in_flight.values())
+
+
+def _admit_memory_budgeted_items(
+    pending: list[ValidationWorkItem],
+    in_flight_memory_mb: int,
+    budget_mb: int,
+    available_slots: int,
+) -> AdmissionDecision:
+    """Select pending validation work that fits the remaining memory budget.
+
+    Parameters
+    ----------
+    pending:
+        Mutable queue of not-yet-submitted work items.
+    in_flight_memory_mb:
+        Estimated memory already submitted and still running, in MB.
+    budget_mb:
+        Maximum estimated in-flight memory, in MB.
+    available_slots:
+        Remaining concurrency slots under the hard job cap.
+
+    Returns
+    -------
+    AdmissionDecision
+        Items admitted, oversized items forced to run alone, and throttle state.
+    """
+
+    admitted: list[ValidationWorkItem] = []
+    forced_oversized: list[ValidationWorkItem] = []
+    throttled = False
+    while pending and len(admitted) < available_slots:
+        admitted_memory_mb = sum(item.estimated_memory_mb for item in admitted)
+        remaining_mb = budget_mb - in_flight_memory_mb - admitted_memory_mb
+        fit_index = next(
+            (
+                index
+                for index, item in enumerate(pending)
+                if item.estimated_memory_mb <= remaining_mb
+            ),
+            None,
+        )
+        if fit_index is None:
+            if not admitted and in_flight_memory_mb == 0:
+                item = pending.pop(0)
+                admitted.append(item)
+                if item.estimated_memory_mb > budget_mb:
+                    forced_oversized.append(item)
+            elif pending and available_slots > len(admitted):
+                throttled = True
+            break
+        admitted.append(pending.pop(fit_index))
+    return AdmissionDecision(tuple(admitted), tuple(forced_oversized), throttled)
+
+
+def _refresh_pending_estimates(
+    pending: list[ValidationWorkItem], stable_id: str, peak_rss_mb: int
+) -> None:
+    """Update pending duplicate rows with a fresh same-run memory measurement.
+
+    Parameters
+    ----------
+    pending:
+        Mutable pending work queue.
+    stable_id:
+        Stable ID whose estimate should be updated.
+    peak_rss_mb:
+        Fresh peak RSS measurement in MB.
+    """
+
+    for index, item in enumerate(pending):
+        if item.row.stable_id != stable_id:
+            continue
+        pending[index] = ValidationWorkItem(
+            plan=item.plan,
+            row=item.row,
+            estimated_memory_mb=peak_rss_mb,
+            estimate_source="ledger",
+        )
 
 
 def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
@@ -1125,14 +1427,20 @@ def run(args: argparse.Namespace) -> int:
 
     # Phase 2: validate runnable rows concurrently. Each model already runs in an
     # isolated child process (``validate_with_timeout``); threads here just
-    # dispatch and await those subprocesses. The GPU semaphore caps in-flight
-    # jobs when a device that may use CUDA is selected. The main thread does ALL
-    # manifest appends and disk bookkeeping single-threaded as futures complete.
+    # dispatch and await those subprocesses. The scheduler admits only work that
+    # fits under the memory budget while still respecting the hard jobs cap. The
+    # GPU semaphore caps in-flight jobs when a device that may use CUDA is
+    # selected. The main thread does ALL manifest appends and disk bookkeeping
+    # single-threaded as futures complete.
     jobs = max(1, args.jobs)
     use_gpu_cap = args.device in {"cuda", "auto"}
     gpu_jobs = max(1, args.gpu_jobs)
     effective_jobs = min(jobs, gpu_jobs) if use_gpu_cap else jobs
     gpu_semaphore = threading.Semaphore(gpu_jobs) if use_gpu_cap else None
+    memory_budget_gb = _resolve_memory_budget_gb(args.memory_budget_gb)
+    memory_budget_mb = max(1, int(memory_budget_gb * MB_PER_GB))
+    ledger_memory_estimates = latest_peak_rss_estimates()
+    pending = _build_validation_work_items(runnable, ledger_memory_estimates)
 
     def process_one(plan: DependencyPlan, row: CatalogRow) -> tuple[ValidationResult, int]:
         """Validate one row in a worker thread and clean up its scratch state.
@@ -1172,6 +1480,9 @@ def run(args: argparse.Namespace) -> int:
         jobs=jobs,
         effective_jobs=effective_jobs,
         gpu_jobs=gpu_jobs if use_gpu_cap else None,
+        memory_budget_gb=round(memory_budget_gb, 3),
+        default_unknown_memory_gb=round(DEFAULT_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
+        heavy_unknown_memory_gb=round(HEAVY_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         device=args.device,
         rows=total,
     )
@@ -1185,44 +1496,83 @@ def run(args: argparse.Namespace) -> int:
             assert_min_free(out_dir, args.min_free_gb)
 
     with ThreadPoolExecutor(max_workers=effective_jobs) as executor:
-        futures: dict[Future[tuple[ValidationResult, int]], tuple[DependencyPlan, CatalogRow]] = {}
-        for plan, row in runnable:
-            before_free_gb = disk_free_gb(out_dir)
-            log_event(
-                "model_start",
-                name=row.name,
-                cluster=plan.cluster_key,
-                free_gb=round(before_free_gb, 3),
+        futures: dict[Future[tuple[ValidationResult, int]], ValidationWorkItem] = {}
+        while pending or futures:
+            decision = _admit_memory_budgeted_items(
+                pending=pending,
+                in_flight_memory_mb=_in_flight_memory_mb(futures),
+                budget_mb=memory_budget_mb,
+                available_slots=effective_jobs - len(futures),
             )
-            futures[executor.submit(process_one, plan, row)] = (plan, row)
-
-        for future in as_completed(futures):
-            plan, row = futures[future]
-            processed += 1
-            result, removed = future.result()
-            append_validation_ledger(row, result, args.device)
-            append_manifest(manifest_path, result)
-            after_free_gb = disk_free_gb(out_dir)
-            log_event(
-                "model_done",
-                index=processed,
-                total=total,
-                name=row.name,
-                status=result.status,
-                n_ops=result.n_ops,
-                cache_entries_removed=removed,
-                after_free_gb=round(after_free_gb, 3),
-                elapsed=round(result.elapsed, 3),
-                error=result.error,
-            )
-            # Periodic disk-safety check: free space should not run dry as the
-            # batch progresses.
-            try:
-                assert_min_free(out_dir, args.min_free_gb)
-            except RuntimeError:
-                for snapshot in run_cache_snapshots:
-                    purge_new_cache_entries(snapshot)
-                assert_min_free(out_dir, args.min_free_gb)
+            for item in decision.forced_oversized:
+                log_event(
+                    "memory_oversized_solo",
+                    name=item.row.name,
+                    estimated_peak_rss_gb=round(item.estimated_memory_mb / MB_PER_GB, 3),
+                    memory_budget_gb=round(memory_budget_gb, 3),
+                )
+            for item in decision.admitted:
+                plan = item.plan
+                row = item.row
+                before_free_gb = disk_free_gb(out_dir)
+                in_flight_after_submit_mb = _in_flight_memory_mb(futures) + item.estimated_memory_mb
+                log_event(
+                    "model_start",
+                    name=row.name,
+                    cluster=plan.cluster_key,
+                    free_gb=round(before_free_gb, 3),
+                    estimated_peak_rss_gb=round(item.estimated_memory_mb / MB_PER_GB, 3),
+                    estimate_source=item.estimate_source,
+                    in_flight_estimated_gb=round(in_flight_after_submit_mb / MB_PER_GB, 3),
+                    memory_budget_gb=round(memory_budget_gb, 3),
+                )
+                futures[executor.submit(process_one, plan, row)] = item
+            if decision.throttled:
+                log_event(
+                    "memory_throttle",
+                    pending=len(pending),
+                    in_flight=len(futures),
+                    in_flight_estimated_gb=round(_in_flight_memory_mb(futures) / MB_PER_GB, 3),
+                    memory_budget_gb=round(memory_budget_gb, 3),
+                    next_pending_estimated_gb=round(
+                        min(item.estimated_memory_mb for item in pending) / MB_PER_GB,
+                        3,
+                    ),
+                )
+            if not futures:
+                continue
+            done_futures, _ = wait(futures, return_when=FIRST_COMPLETED)
+            for future in done_futures:
+                item = futures.pop(future)
+                row = item.row
+                processed += 1
+                result, removed = future.result()
+                if result.peak_rss_mb is not None and result.peak_rss_mb > 0:
+                    _refresh_pending_estimates(pending, row.stable_id, result.peak_rss_mb)
+                append_validation_ledger(row, result, args.device)
+                append_manifest(manifest_path, result)
+                after_free_gb = disk_free_gb(out_dir)
+                log_event(
+                    "model_done",
+                    index=processed,
+                    total=total,
+                    name=row.name,
+                    status=result.status,
+                    n_ops=result.n_ops,
+                    cache_entries_removed=removed,
+                    after_free_gb=round(after_free_gb, 3),
+                    elapsed=round(result.elapsed, 3),
+                    peak_rss_mb=result.peak_rss_mb,
+                    error=result.error,
+                )
+                # Periodic disk-safety check: free space should not run dry as the
+                # batch progresses.
+                try:
+                    assert_min_free(out_dir, args.min_free_gb)
+                except RuntimeError:
+                    for snapshot in run_cache_snapshots:
+                        purge_new_cache_entries(snapshot)
+                    assert_min_free(out_dir, args.min_free_gb)
 
     write_reports(out_dir, manifest_path, selected)
     log_event(
@@ -1277,6 +1627,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=4,
         help="max concurrent in-flight jobs when --device is cuda/auto (GPU OOM guard)",
+    )
+    parser.add_argument(
+        "--memory-budget-gb",
+        type=float,
+        default=None,
+        help=(
+            "max estimated in-flight validation RSS in GB; default auto-detects "
+            "70%% of currently available RAM"
+        ),
     )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--manifest", type=Path)
