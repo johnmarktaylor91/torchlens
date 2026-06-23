@@ -438,12 +438,10 @@ islands:
         - "torch==2.4.1"
         - "torchvision==0.19.1"
         - "numpy>=2.0,<2.2"
-        - "torch-geometric==2.6.1"
-        - "pykeen==1.11.1"
-        - "e3nn==0.6.0"
-        - "mace-torch==0.3.16"
+        - nequip
+        - gvp
+        - s2cnn
         - "schnetpack==2.1.1"
-        - ogb
     smoke_stable_ids:
       - m5
       - m4421
