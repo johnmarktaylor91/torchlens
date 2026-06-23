@@ -348,7 +348,7 @@ def _compute_signal_skeleton(trace: "Trace") -> dict[str, ModuleCollapseSignals]
             internal_edges=len(internal_edges.get(address, ())),
             input_edges=len(input_edges.get(address, ())),
             output_edges=len(output_edges.get(address, ())),
-            params=int(getattr(module, "num_recursive_params", 0) or 0),
+            params=int(getattr(module, "num_params", 0) or 0),
             depth=int(getattr(module, "address_depth", 0) or 0),
             num_calls=int(getattr(module, "num_calls", 1) or 1),
             structural_digest="",
