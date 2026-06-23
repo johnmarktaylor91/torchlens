@@ -131,8 +131,9 @@ from ._render_utils import (
 
 if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
-    from ..data_classes.trace import Trace
     from ..data_classes.module import Module
+    from ..data_classes.trace import Trace
+    from .auto_collapse import ModuleRunFold
 
 BaseGraphNode = Union["Op", "Layer"]
 ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"]
@@ -933,6 +934,11 @@ def draw(
         from .auto_collapse import resolve_collapse_fn
 
         collapse_fn = resolve_collapse_fn(self, collapse, vis_mode)
+    run_folds: dict[str, ModuleRunFold] = {}
+    if collapse in {"auto", "max"}:
+        from .auto_collapse import resolve_run_folds
+
+        run_folds = resolve_run_folds(self, collapse_fn)
     theme = resolve_theme(vis_theme, for_paper=for_paper)
     if node_overlay is None:
         node_overlay = getattr(self, "_node_overlay_scores", None)
@@ -1173,6 +1179,7 @@ def draw(
             show_containers,
             collapsed_container_nodes,
             show_input_transform_summary,
+            run_folds,
         )
 
     for node_args in getattr(self, "_pending_container_collapse_nodes", []):
@@ -4418,6 +4425,7 @@ def _add_node_to_graphviz(
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
     show_input_transform_summary: bool = False,
+    run_folds: Mapping[str, "ModuleRunFold"] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -4438,9 +4446,17 @@ def _add_node_to_graphviz(
         collapse_fn=collapse_fn,
         max_module_depth=vis_call_depth,
     )
+    fold_ancestor_address = _run_fold_ancestor_for_node(node, run_folds)
+    if fold_ancestor_address is not None:
+        collapse_address = fold_ancestor_address
     is_collapsed_module = collapse_address is not None
+    is_hidden_run_member = (
+        collapse_address is not None
+        and run_folds is not None
+        and not _is_run_fold_representative(collapse_address, run_folds)
+    )
 
-    if is_collapsed_module:
+    if is_collapsed_module and not is_hidden_run_member:
         _build_collapsed_module_node(
             self,
             node,
@@ -4453,7 +4469,10 @@ def _add_node_to_graphviz(
             node_mode,
             collapsed_node_spec_fn,
             theme,
+            run_folds,
         )
+        node_color = "black"
+    elif is_hidden_run_member:
         node_color = "black"
     else:
         node_color = _build_layer_node(
@@ -4493,6 +4512,7 @@ def _add_node_to_graphviz(
         rankdir,
         show_containers,
         collapsed_container_nodes,
+        run_folds,
     )
 
 
@@ -4841,6 +4861,209 @@ def _build_layer_node(
             s.node(_render_node_label(node, vis_mode).replace(":", "pass"))
 
     return node_color
+
+
+def _run_fold_for_address(
+    address_w_pass: str,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+) -> "ModuleRunFold | None":
+    """Return the fold descriptor for a module address.
+
+    Parameters
+    ----------
+    address_w_pass:
+        Pass-qualified or pass-free module address.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+
+    Returns
+    -------
+    ModuleRunFold | None
+        Matching fold descriptor, or ``None``.
+    """
+
+    if run_folds is None:
+        return None
+    return run_folds.get(address_w_pass.rsplit(":", 1)[0])
+
+
+def _is_run_fold_representative(
+    address_w_pass: str,
+    run_folds: Mapping[str, "ModuleRunFold"],
+) -> bool:
+    """Return whether ``address_w_pass`` is the representative for its fold.
+
+    Parameters
+    ----------
+    address_w_pass:
+        Pass-qualified or pass-free module address.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+
+    Returns
+    -------
+    bool
+        True when the address is not folded or is the first run member.
+    """
+
+    address = address_w_pass.rsplit(":", 1)[0]
+    fold = run_folds.get(address)
+    return fold is None or address == fold.representative
+
+
+def _run_fold_ancestor_for_node(
+    node: GraphNode,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+) -> str | None:
+    """Return the pass-qualified folded ancestor that should absorb ``node``.
+
+    Parameters
+    ----------
+    node:
+        Rendered graph node.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+
+    Returns
+    -------
+    str | None
+        Pass-qualified folded ancestor address, or ``None``.
+    """
+
+    if not run_folds:
+        return None
+    for address_w_pass in getattr(node, "modules", ()) or ():
+        if _run_fold_for_address(str(address_w_pass), run_folds) is not None:
+            return str(address_w_pass)
+    return None
+
+
+def _run_fold_graph_node_name(
+    address_w_pass: str,
+    vis_mode: str,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+) -> str:
+    """Return the Graphviz node name after run-fold remapping.
+
+    Parameters
+    ----------
+    address_w_pass:
+        Pass-qualified or pass-free module address.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+
+    Returns
+    -------
+    str
+        Graphviz node identifier for the folded representative or original module.
+    """
+
+    fold = _run_fold_for_address(address_w_pass, run_folds)
+    if fold is None:
+        module_tuple = address_w_pass.split(":")
+    else:
+        suffix = address_w_pass.rsplit(":", 1)[1] if ":" in address_w_pass else "1"
+        module_tuple = [fold.representative, suffix]
+    if vis_mode == "unrolled":
+        return "pass".join(module_tuple)
+    return module_tuple[0]
+
+
+def _edge_touches_run_fold(
+    tail_name: str,
+    head_name: str,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    vis_mode: str,
+) -> bool:
+    """Return whether either rendered edge endpoint is a folded-run box.
+
+    Parameters
+    ----------
+    tail_name:
+        Rendered edge tail node name.
+    head_name:
+        Rendered edge head node name.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    bool
+        True when either endpoint is a run-fold representative.
+    """
+
+    if not run_folds:
+        return False
+    representative_names = _run_fold_representative_names(run_folds, vis_mode)
+    return tail_name in representative_names or head_name in representative_names
+
+
+def _run_fold_representative_names(
+    run_folds: Mapping[str, "ModuleRunFold"],
+    vis_mode: str,
+) -> set[str]:
+    """Return Graphviz node names for unique folded-run representatives.
+
+    Parameters
+    ----------
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    set[str]
+        Rendered representative node names.
+    """
+
+    return {
+        _run_fold_graph_node_name(
+            f"{fold.representative}:1",
+            vis_mode,
+            {fold.representative: fold},
+        )
+        for fold in set(run_folds.values())
+    }
+
+
+def _run_fold_edge_label(
+    graph_node_name: str,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    vis_mode: str,
+) -> str:
+    """Return a multiplicity label for a folded-run edge.
+
+    Parameters
+    ----------
+    graph_node_name:
+        Rendered folded representative node name.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str
+        Multiplicity label such as ``"x4"``.
+    """
+
+    if not run_folds:
+        return "x1"
+    for fold in set(run_folds.values()):
+        representative_name = _run_fold_graph_node_name(
+            f"{fold.representative}:1",
+            vis_mode,
+            {fold.representative: fold},
+        )
+        if representative_name == graph_node_name:
+            return f"x{fold.multiplicity}"
+    return "x1"
 
 
 def _render_raw_input(
@@ -5420,6 +5643,7 @@ def _build_collapsed_module_node(
     node_mode: VisNodeModeLiteral,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     theme: VisualizationTheme | None = None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -5447,6 +5671,11 @@ def _build_collapsed_module_node(
     if module_output_fsize is None:
         module_output_fsize = "0 B"
     address, call_index = module_tuple
+    fold = _run_fold_for_address(address, run_folds)
+    if fold is not None:
+        address = fold.representative
+        address_w_pass = f"{address}:{call_index}" if vis_mode == "unrolled" else address
+        module_tuple = address_w_pass.rsplit(":", 1)
     ml = self.modules[address]
     module_type = ml.class_name  # type: ignore[union-attr]
     module_num_calls = ml.num_calls  # type: ignore[union-attr]
@@ -5471,7 +5700,9 @@ def _build_collapsed_module_node(
         return
 
     module_suffix = _collapsed_module_rolling_suffix(self, address)
-    if module_num_calls == 1:
+    if fold is not None:
+        node_title = f"<b>@{address}  x{fold.multiplicity}</b>"
+    elif module_num_calls == 1:
         node_title = f"<b>@{address}</b>"
     elif vis_mode == "unrolled" and (module_num_calls > 1):
         node_title = f"<b>@{address}:{call_index}</b>"
@@ -5484,6 +5715,11 @@ def _build_collapsed_module_node(
 
     module_nparams_trainable = ml.num_params_trainable  # type: ignore[union-attr]
     module_nparams_frozen = ml.num_params_frozen  # type: ignore[union-attr]
+    if fold is not None:
+        module_num_tensors = fold.num_layers
+        module_nparams = fold.num_params
+        module_nparams_trainable = fold.num_params_trainable
+        module_nparams_frozen = fold.num_params_frozen
 
     if module_nparams > 0:
         if module_nparams_frozen == 0:
@@ -5513,14 +5749,16 @@ def _build_collapsed_module_node(
             f"{module_nparams_frozen} frozen)"
         )
 
+    lines = [
+        node_title.replace("<b>", "").replace("</b>", ""),
+        module_type,
+        f"{shape_str}, {format_memory(module_output_fsize)}",
+    ]
+    if fold is not None and fold.shape_summary is not None:
+        lines.append(f"shapes {fold.shape_summary}")
+    lines.extend([f"{module_num_tensors} layers total", param_detail])
     default_spec = NodeSpec(
-        lines=[
-            node_title.replace("<b>", "").replace("</b>", ""),
-            module_type,
-            f"{shape_str}, {format_memory(module_output_fsize)}",
-            f"{module_num_tensors} layers total",
-            param_detail,
-        ],
+        lines=lines,
         shape="box3d",
         fillcolor=bg_color,
         fontcolor="black",
@@ -6393,6 +6631,7 @@ def _add_edges_for_node(
     rankdir: str = "BT",
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None = None,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -6464,13 +6703,12 @@ def _add_edges_for_node(
                 collapse_fn=collapse_fn,
                 max_module_depth=vis_call_depth,
             )
+            parent_fold_ancestor = _run_fold_ancestor_for_node(parent_node, run_folds)
+            if parent_fold_ancestor is not None:
+                module_name_w_pass = parent_fold_ancestor
             if module_name_w_pass is None:
                 continue
-            module_tuple = module_name_w_pass.split(":")
-            if vis_mode == "unrolled":
-                tail_name = "pass".join(module_tuple)
-            else:
-                tail_name = module_tuple[0]
+            tail_name = _run_fold_graph_node_name(module_name_w_pass, vis_mode, run_folds)
         else:
             tail_name = _render_node_label(parent_node, vis_mode).replace(":", "pass")
 
@@ -6481,17 +6719,16 @@ def _add_edges_for_node(
             collapse_fn=collapse_fn,
             max_module_depth=vis_call_depth,
         )
+        child_fold_ancestor = _run_fold_ancestor_for_node(child_node, run_folds)
+        if child_fold_ancestor is not None:
+            child_collapse_address = child_fold_ancestor
         child_is_collapsed_module = child_collapse_address is not None
 
         if child_is_collapsed_module:
             module_name_w_pass = child_collapse_address
             if module_name_w_pass is None:
                 continue
-            module_tuple = module_name_w_pass.split(":")
-            if vis_mode == "unrolled":
-                head_name = "pass".join(module_tuple)
-            else:
-                head_name = module_tuple[0]
+            head_name = _run_fold_graph_node_name(module_name_w_pass, vis_mode, run_folds)
         else:
             head_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
         if collapsed_head_name is not None:
@@ -6539,14 +6776,22 @@ def _add_edges_for_node(
             tail_name = hook_name
 
         edge_is_self_loop = tail_name == head_name
-        if edge_is_self_loop and not _is_rolled_loop_carried_self_edge(
-            parent_node,
-            child_node,
-            vis_mode,
+        edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, run_folds, vis_mode)
+        if (
+            edge_is_self_loop
+            and not edge_touches_run_fold
+            and not _is_rolled_loop_carried_self_edge(
+                parent_node,
+                child_node,
+                vis_mode,
+            )
         ):
             continue
 
-        dedupe_key = (tail_name, head_name, render_edge.occurrence_key)
+        occurrence_key = render_edge.occurrence_key
+        if edge_touches_run_fold:
+            occurrence_key = ("run_fold_edge", tail_name, head_name)
+        dedupe_key = (tail_name, head_name, occurrence_key)
         if dedupe_key in edges_used:
             continue
         edges_used.add(dedupe_key)
@@ -6583,6 +6828,10 @@ def _add_edges_for_node(
             )
         if edge_label is not None:
             edge_dict["label"] = edge_label
+        if edge_touches_run_fold and edge_is_self_loop and "label" not in edge_dict:
+            edge_dict["label"] = _html_edge_label(
+                _run_fold_edge_label(tail_name, run_folds, vis_mode)
+            )
         if show_containers:
             container_label = _container_edge_label(metadata_base)
             if (

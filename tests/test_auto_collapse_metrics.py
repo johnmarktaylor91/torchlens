@@ -50,6 +50,79 @@ class RepeatedResidual(torch.nn.Module):
         return self.out(x)
 
 
+class DimStepBlock(torch.nn.Module):
+    """Convolutional block whose channel dimensions may change."""
+
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        """Initialize a dim-stepping convolutional block."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, out_channels, 1),
+            torch.nn.BatchNorm2d(out_channels),
+            torch.nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.net(x)
+
+
+class DimStepRun(torch.nn.Module):
+    """Run of structurally identical blocks with varying channel widths."""
+
+    def __init__(self) -> None:
+        """Initialize the dim-stepping run."""
+
+        super().__init__()
+        widths = [4, 6, 8, 10, 12]
+        self.blocks = torch.nn.ModuleList(
+            DimStepBlock(in_channels, out_channels)
+            for in_channels, out_channels in zip(widths[:-1], widths[1:], strict=True)
+        )
+        self.head = torch.nn.Conv2d(widths[-1], widths[-1], 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run all dim-stepping blocks."""
+
+        for block in self.blocks:
+            x = block(x)
+        return self.head(x)
+
+
+class VggBnFeatures(torch.nn.Module):
+    """Flat VGG-style conv-bn-relu-pool features container."""
+
+    def __init__(self) -> None:
+        """Initialize a small VGG-BN-style feature extractor."""
+
+        super().__init__()
+        self.features = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 4, 3, padding=1),
+            torch.nn.BatchNorm2d(4),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(4, 4, 3, padding=1),
+            torch.nn.BatchNorm2d(4),
+            torch.nn.ReLU(),
+            torch.nn.MaxPool2d(2),
+            torch.nn.Conv2d(4, 8, 3, padding=1),
+            torch.nn.BatchNorm2d(8),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(8, 8, 3, padding=1),
+            torch.nn.BatchNorm2d(8),
+            torch.nn.ReLU(),
+            torch.nn.MaxPool2d(2),
+        )
+        self.classifier = torch.nn.Linear(8 * 4 * 4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run features and classifier."""
+
+        x = self.features(x)
+        return self.classifier(torch.flatten(x, 1))
+
+
 class ResidualBody(torch.nn.Module):
     """Residual branch body whose join lives in the parent module."""
 
@@ -411,6 +484,24 @@ def _collapsed_exact_label_count(source: str, address: str) -> int:
     )
 
 
+def _folded_label_count(source: str, address: str, multiplicity: int) -> int:
+    """Return folded-run label count for exactly ``address`` and ``multiplicity``."""
+
+    return source.count(f"@{address}  x{multiplicity}")
+
+
+def _edge_count(source: str, tail: str, head: str) -> int:
+    """Return Graphviz edge count between two rendered node names."""
+
+    return len(
+        re.findall(
+            rf'^\s*"?{re.escape(tail)}"? -> "?{re.escape(head)}"?',
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+
+
 def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> None:
     """Auto collapse hits the overview budget and renders deterministically."""
 
@@ -426,7 +517,7 @@ def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> Non
         assert _box_count(auto_source) >= 1
         assert _box_count(max_source) >= _box_count(auto_source)
         assert _dot_node_count(auto_source) <= _dot_node_count(none_source)
-        assert 8 <= _dot_node_count(auto_source) <= 40
+        assert 4 <= _dot_node_count(auto_source) <= 40
 
         collapsed_scores = [score for _, score in trace.module_collapse_order if score > 0]
         assert collapsed_scores
@@ -443,6 +534,49 @@ def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> Non
         assert max(selected_sizes) - min(selected_sizes) <= max(selected_sizes)
         assert "input_" in auto_source
         assert "output_" in auto_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_collapses_nodes_and_edges(tmp_path: Path) -> None:
+    """Auto folds a consecutive identical run to one xN box and one edge."""
+
+    trace = _trace(RepeatedResidual(depth=5), torch.randn(2, 8))
+    try:
+        auto_source = _draw_source(trace, tmp_path, "run_fold_auto", "auto")
+
+        assert _folded_label_count(auto_source, "blocks.0", 5) == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.1") == 0
+        assert _collapsed_exact_label_count(auto_source, "blocks.4") == 0
+        assert _edge_count(auto_source, "blocks.0pass1", "blocks.0pass1") == 1
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_ignores_dimension_steps(tmp_path: Path) -> None:
+    """Auto folds structurally identical runs even when channel dimensions vary."""
+
+    trace = _trace(DimStepRun(), torch.randn(1, 4, 16, 16))
+    try:
+        auto_source = _draw_source(trace, tmp_path, "dim_step_auto", "auto")
+
+        assert _folded_label_count(auto_source, "blocks.1", 3) == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.2") == 0
+        assert "shapes " in auto_source
+        assert _edge_count(auto_source, "blocks.1pass1", "blocks.1pass1") == 1
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_flat_vgg_bn_features_container_folds(tmp_path: Path) -> None:
+    """Auto folds a flat VGG-BN-style features Sequential as one container."""
+
+    trace = _trace(VggBnFeatures(), torch.randn(1, 3, 16, 16))
+    try:
+        auto_source = _draw_source(trace, tmp_path, "vgg_bn_auto", "auto")
+
+        assert _collapsed_exact_label_count(auto_source, "features") == 1
+        assert _dot_node_count(auto_source) <= 8
     finally:
         trace.cleanup()
 
@@ -494,7 +628,8 @@ def test_auto_collapse_residual_peer_bodies_keep_parent_joins(tmp_path: Path) ->
 
         assert _dot_node_count(none_source) > 15
         assert _dot_node_count(auto_source) <= int(_dot_node_count(none_source) * 0.7)
-        assert _box_count(auto_source) >= 5
+        assert _box_count(auto_source) >= 1
+        assert _folded_label_count(auto_source, "blocks.0", 5) == 1
         assert _has_visible_node(auto_source, "add_")
         assert auto_source != none_source
     finally:

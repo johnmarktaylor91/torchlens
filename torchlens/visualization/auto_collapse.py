@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import time
 import weakref
-import re
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -55,6 +55,44 @@ _STAGE_NAME_RE = re.compile(
     r"^(?:denseblock\d*|transition\d*|layer\d+|stage\d*|mixed_[0-9a-z]+|mixed_\d+)$",
     re.IGNORECASE,
 )
+RUN_FOLD_MIN_LENGTH = 3
+
+
+@dataclass(frozen=True)
+class ModuleRunFold:
+    """Consecutive structurally-identical module run selected for render folding.
+
+    Parameters
+    ----------
+    representative:
+        First module address in the folded run.
+    addresses:
+        Consecutive sibling module addresses included in the run.
+    num_layers:
+        Aggregate recursive layer count across the run.
+    num_params:
+        Aggregate recursive parameter count across the run.
+    num_params_trainable:
+        Aggregate trainable parameter count across the run.
+    num_params_frozen:
+        Aggregate frozen parameter count across the run.
+    shape_summary:
+        Short first-to-last output-shape summary when shapes vary, else ``None``.
+    """
+
+    representative: str
+    addresses: tuple[str, ...]
+    num_layers: int
+    num_params: int
+    num_params_trainable: int
+    num_params_frozen: int
+    shape_summary: str | None
+
+    @property
+    def multiplicity(self) -> int:
+        """Return the number of folded sibling modules."""
+
+        return len(self.addresses)
 
 
 @dataclass(frozen=True)
@@ -307,6 +345,82 @@ def resolve_collapse_fn(
     return collapse_fn
 
 
+def resolve_run_folds(
+    trace: "Trace",
+    collapse_fn: Callable[["Module"], bool] | None,
+) -> dict[str, ModuleRunFold]:
+    """Return render-time folds for consecutive collapsed sibling runs.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    collapse_fn:
+        Active collapse predicate. ``None`` disables run folding.
+
+    Returns
+    -------
+    dict[str, ModuleRunFold]
+        Mapping from each folded module address to its run descriptor.
+    """
+
+    if collapse_fn is None:
+        return {}
+    dimless_digests = _compute_dimless_structural_digests(trace)
+    folds_by_address: dict[str, ModuleRunFold] = {}
+    for child_addresses in _sibling_address_groups(trace).values():
+        for run in _iter_collapsible_runs(trace, child_addresses, dimless_digests, collapse_fn):
+            fold = _make_run_fold(trace, run)
+            for address in run:
+                folds_by_address[address] = fold
+        for run in _iter_collapsible_child_path_runs(
+            trace,
+            child_addresses,
+            dimless_digests,
+            collapse_fn,
+        ):
+            if any(address in folds_by_address for address in run):
+                continue
+            fold = _make_run_fold(trace, run)
+            for address in run:
+                folds_by_address[address] = fold
+        for run in _iter_collapsible_runs(
+            trace,
+            child_addresses,
+            dimless_digests,
+            collapse_fn,
+            allow_selected_descendant=True,
+        ):
+            if any(address in folds_by_address for address in run):
+                continue
+            fold = _make_run_fold(trace, run)
+            for address in run:
+                folds_by_address[address] = fold
+    return folds_by_address
+
+
+def _sibling_address_groups(trace: "Trace") -> dict[str | None, list[str]]:
+    """Return ordered sibling module addresses grouped by parent address.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+
+    Returns
+    -------
+    dict[str | None, list[str]]
+        Module addresses keyed by their recorded parent address.
+    """
+
+    groups: dict[str | None, list[str]] = defaultdict(list)
+    for module in trace.modules:
+        if module.address == "self":
+            continue
+        groups[getattr(module, "address_parent", None)].append(module.address)
+    return groups
+
+
 def module_collapse_score(module: "Module") -> float:
     """Return the canonical default collapse score for a module.
 
@@ -329,6 +443,318 @@ def module_collapse_score(module: "Module") -> float:
     if signal is None or not signal.eligible:
         return 0.0
     return analysis.scores.get(module.address, 0.0)
+
+
+def _compute_dimless_structural_digests(trace: "Trace") -> dict[str, str]:
+    """Compute module structural digests that ignore dimensions and parameters.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose module hierarchy is being fingerprinted.
+
+    Returns
+    -------
+    dict[str, str]
+        Digest keyed by pass-free module address.
+    """
+
+    signals = _compute_signal_skeleton(trace)
+    digests: dict[str, str] = {}
+    modules = sorted(trace.modules, key=lambda module: module.address_depth, reverse=True)
+    for module in modules:
+        signal = signals[module.address]
+        child_sigs = tuple(
+            digests[child_address]
+            for child_address in getattr(module, "address_children", ()) or ()
+            if child_address in digests
+        )
+        payload = repr(
+            (
+                getattr(module, "class_name", ""),
+                signal.own_func_names,
+                child_sigs,
+            )
+        ).encode("utf-8")
+        digests[module.address] = hashlib.sha1(payload).hexdigest()
+    return digests
+
+
+def _iter_collapsible_runs(
+    trace: "Trace",
+    child_addresses: list[str],
+    dimless_digests: Mapping[str, str],
+    collapse_fn: Callable[["Module"], bool],
+    run_stem: str | None = None,
+    allow_selected_descendant: bool = False,
+) -> Iterator[tuple[str, ...]]:
+    """Yield consecutive sibling runs that should fold to one render node.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    child_addresses:
+        Ordered direct children for one parent module.
+    dimless_digests:
+        Dim-insensitive structural digest keyed by address.
+    collapse_fn:
+        Active collapse predicate.
+    run_stem:
+        Optional precomputed sibling-run stem for descendant-path folds.
+    allow_selected_descendant:
+        Whether a module with selected descendants can stand in for a selected
+        module. This supports folding repeated ancestors whose internal
+        submodules would otherwise render as a node wall.
+
+    Yields
+    ------
+    tuple[str, ...]
+        One run of at least :data:`RUN_FOLD_MIN_LENGTH` addresses.
+    """
+
+    current_key: tuple[str, str, str] | None = None
+    current_run: list[str] = []
+    for address in child_addresses:
+        module = cast("Module", trace.modules[address])
+        selected = collapse_fn(module) or (
+            allow_selected_descendant and bool(_selected_descendants(trace, address, collapse_fn))
+        )
+        if not selected:
+            if allow_selected_descendant:
+                continue
+            if len(current_run) >= RUN_FOLD_MIN_LENGTH:
+                yield tuple(current_run)
+            current_key = None
+            current_run = []
+            continue
+        key = (
+            str(getattr(module, "class_name", "")),
+            "" if allow_selected_descendant else dimless_digests.get(address, ""),
+            run_stem or _indexed_parent_stem(address),
+        )
+        if key == current_key:
+            current_run.append(address)
+            continue
+        if len(current_run) >= RUN_FOLD_MIN_LENGTH:
+            yield tuple(current_run)
+        current_key = key
+        current_run = [address]
+    if len(current_run) >= RUN_FOLD_MIN_LENGTH:
+        yield tuple(current_run)
+
+
+def _iter_collapsible_child_path_runs(
+    trace: "Trace",
+    sibling_addresses: list[str],
+    dimless_digests: Mapping[str, str],
+    collapse_fn: Callable[["Module"], bool],
+) -> Iterator[tuple[str, ...]]:
+    """Yield repeated selected child paths under consecutive sibling parents.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    sibling_addresses:
+        Ordered direct children for one parent module.
+    dimless_digests:
+        Dim-insensitive structural digest keyed by address.
+    collapse_fn:
+        Active collapse predicate.
+
+    Yields
+    ------
+    tuple[str, ...]
+        One run of selected descendant modules sharing the same relative path.
+    """
+
+    relative_paths = sorted(
+        {
+            selected_address.removeprefix(f"{sibling}.")
+            for sibling in sibling_addresses
+            for selected_address in _selected_descendants(trace, sibling, collapse_fn)
+            if selected_address.startswith(f"{sibling}.")
+        }
+    )
+    for relative_path in relative_paths:
+        candidate_addresses = [
+            f"{sibling}.{relative_path}" if f"{sibling}.{relative_path}" in trace.modules else ""
+            for sibling in sibling_addresses
+        ]
+        current_stem: str | None = None
+        current_candidates: list[str] = []
+        for sibling, candidate_address in zip(
+            sibling_addresses,
+            candidate_addresses,
+            strict=True,
+        ):
+            stem = _indexed_parent_stem(sibling)
+            if stem == current_stem:
+                if candidate_address:
+                    current_candidates.append(candidate_address)
+                continue
+            if current_candidates:
+                yield from _iter_collapsible_runs(
+                    trace,
+                    current_candidates,
+                    dimless_digests,
+                    collapse_fn,
+                    current_stem,
+                )
+            current_stem = stem
+            current_candidates = [candidate_address] if candidate_address else []
+        if current_candidates:
+            yield from _iter_collapsible_runs(
+                trace,
+                current_candidates,
+                dimless_digests,
+                collapse_fn,
+                current_stem,
+            )
+
+
+def _indexed_parent_stem(address: str) -> str:
+    """Return a stem that keeps long indexed sibling runs together.
+
+    Parameters
+    ----------
+    address:
+        Module address.
+
+    Returns
+    -------
+    str
+        Address stem before a trailing numeric component or suffix.
+    """
+
+    if "." in address:
+        parent, name = address.rsplit(".", 1)
+    else:
+        parent, name = "", address
+    match = _INDEXED_CHILD_RE.match(name)
+    if match is None:
+        stem = name
+    else:
+        stem = match.group("stem").rstrip("._") or ""
+    return f"{parent}.{stem}" if parent and stem else parent or stem or name
+
+
+def _selected_descendants(
+    trace: "Trace",
+    address: str,
+    collapse_fn: Callable[["Module"], bool],
+) -> tuple[str, ...]:
+    """Return selected descendant module addresses under ``address``.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    address:
+        Parent module address.
+    collapse_fn:
+        Active collapse predicate.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Selected descendant addresses in lexical order.
+    """
+
+    prefix = f"{address}."
+    return tuple(
+        module.address
+        for module in trace.modules
+        if module.address.startswith(prefix) and collapse_fn(module)
+    )
+
+
+def _make_run_fold(trace: "Trace", addresses: tuple[str, ...]) -> ModuleRunFold:
+    """Build aggregate metadata for one folded run.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    addresses:
+        Consecutive sibling addresses in the run.
+
+    Returns
+    -------
+    ModuleRunFold
+        Aggregate run-fold descriptor.
+    """
+
+    modules = [cast("Module", trace.modules[address]) for address in addresses]
+    return ModuleRunFold(
+        representative=addresses[0],
+        addresses=addresses,
+        num_layers=sum(int(getattr(module, "num_layers", 0) or 0) for module in modules),
+        num_params=sum(int(getattr(module, "num_params", 0) or 0) for module in modules),
+        num_params_trainable=sum(
+            int(getattr(module, "num_params_trainable", 0) or 0) for module in modules
+        ),
+        num_params_frozen=sum(
+            int(getattr(module, "num_params_frozen", 0) or 0) for module in modules
+        ),
+        shape_summary=_run_shape_summary(trace, addresses),
+    )
+
+
+def _run_shape_summary(trace: "Trace", addresses: tuple[str, ...]) -> str | None:
+    """Return a compact first-to-last output shape summary for a folded run.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    addresses:
+        Consecutive sibling addresses in the run.
+
+    Returns
+    -------
+    str | None
+        Shape summary when first and last output shapes differ, else ``None``.
+    """
+
+    shapes = [_module_output_shape(trace, address) for address in addresses]
+    first = shapes[0]
+    last = shapes[-1]
+    if first is None or last is None or first == last:
+        return None
+    return f"{first}->{last}"
+
+
+def _module_output_shape(trace: "Trace", address: str) -> str | None:
+    """Return the primary output shape string for a module address.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module.
+    address:
+        Pass-free module address.
+
+    Returns
+    -------
+    str | None
+        Formatted shape string, or ``None`` when unavailable.
+    """
+
+    pass_address = f"{address}:1"
+    if pass_address not in trace.modules:
+        return None
+    try:
+        module_output_layer = trace[pass_address]
+    except (KeyError, IndexError):
+        return None
+    shape = getattr(module_output_layer, "shape", None)
+    if shape is None:
+        shape = getattr(module_output_layer, "out_shape", None)
+    if not shape:
+        return None
+    return str(tuple(shape))
 
 
 def _resolve_weights(weights: CollapseWeights | Mapping[str, float] | None) -> CollapseWeights:
@@ -776,6 +1202,8 @@ def _is_structured_container(trace: "Trace", signal: ModuleCollapseSignals) -> b
     container_name = signal.address.rsplit(".", 1)[-1].lower()
     if container_name not in STRUCTURED_CONTAINER_NAMES:
         return False
+    if _is_flat_feature_leaf_container(trace, module):
+        return False
     child_addresses = [
         str(child_address)
         for child_address in getattr(module, "address_children", ()) or ()
@@ -792,6 +1220,37 @@ def _is_structured_container(trace: "Trace", signal: ModuleCollapseSignals) -> b
             "stages",
         }
     return True
+
+
+def _is_flat_feature_leaf_container(trace: "Trace", module: "Module") -> bool:
+    """Return whether a container is a flat feature layer chain.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    module:
+        Candidate container module.
+
+    Returns
+    -------
+    bool
+        True for flat Sequential-like conv/norm/activation/pool feature chains.
+    """
+
+    if str(getattr(module, "class_name", "")) not in GENERIC_CONTAINER_CLASSES:
+        return False
+    child_addresses = [
+        str(child_address)
+        for child_address in getattr(module, "address_children", ()) or ()
+        if child_address in trace.modules
+    ]
+    if len(child_addresses) < 3:
+        return False
+    return all(
+        _is_leaf_block_ingredient(cast("Module", trace.modules[child_address]))
+        for child_address in child_addresses
+    )
 
 
 def _is_meaningful_stage_child(module: "Module") -> bool:
