@@ -48,6 +48,10 @@ if TYPE_CHECKING:
 SKIP_VALIDATION_ENTIRELY: Set[str] = {
     "empty_like",
     "new",  # torch.Tensor.new() — uninitialized memory
+    "new_empty",  # torch.Tensor.new_empty() — uninitialized memory
+    "new_empty_strided",  # torch.Tensor.new_empty_strided() — uninitialized memory
+    "newempty",  # torch.Tensor.new_empty() — uninitialized memory
+    "newemptystrided",  # torch.Tensor.new_empty_strided() — uninitialized memory
 }
 
 # ---------------------------------------------------------------------------
@@ -219,6 +223,25 @@ def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
     return False
 
 
+def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
+    """Exempt where when the perturbed condition selects between equal branches."""
+    perturbed_tensor = self[layers_to_perturb[0]].out
+    args = layer.saved_args
+    if len(args) < 3:
+        return False
+    condition, true_branch, false_branch = args[:3]
+    if not (
+        isinstance(condition, torch.Tensor)
+        and isinstance(true_branch, torch.Tensor)
+        and isinstance(false_branch, torch.Tensor)
+    ):
+        return False
+    if not torch.equal(perturbed_tensor, condition):
+        return False
+    true_values, false_values = torch.broadcast_tensors(true_branch, false_branch)
+    return bool(torch.equal(true_values, false_values))
+
+
 # ---------------------------------------------------------------------------
 # Registry 4: Custom exemption checks keyed by func name.
 # ---------------------------------------------------------------------------
@@ -228,6 +251,7 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", Op, List[str]], bool]] = {
     "lstm": _check_lstm_exempt,
     "interpolate": _check_interpolate_exempt,
     "scatter_": _check_scatter_exempt,
+    "where": _check_where_exempt,
 }
 
 

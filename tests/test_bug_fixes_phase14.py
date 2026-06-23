@@ -150,6 +150,49 @@ class _IdentityOutputModel(nn.Module):
         return x
 
 
+class _NewEmptyFilledModel(nn.Module):
+    """Model with deterministic output after an uninitialized allocation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Allocate with ``new_empty`` and overwrite every element.
+
+        Parameters
+        ----------
+        x:
+            Tensor providing shape, dtype, and device.
+
+        Returns
+        -------
+        torch.Tensor
+            Fully initialized tensor derived from ``new_empty``.
+        """
+
+        out = x.new_empty(x.shape)
+        return out.fill_(3.0)
+
+
+class _WhereEqualBranchesModel(nn.Module):
+    """Model whose ``where`` condition selects between equal tensors."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ``where`` with identical true and false branches.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The branch tensor selected by an irrelevant condition.
+        """
+
+        branch = x + 1.0
+        condition = x[:, :1] > 0
+        return torch.where(condition, branch, branch)
+
+
 class _ResidualRecurrentModel(nn.Module):
     """Small recurrent model that produces grads in rolled mode."""
 
@@ -232,6 +275,24 @@ def test_arg_specs_extract_common_keyword_tensor_arguments() -> None:
         {"condition": x > 0, "input": x, "other": x - 1},
     )
     assert len(where_tensors) == 3
+
+
+def test_validate_forward_pass_handles_new_empty_followed_by_full_overwrite() -> None:
+    """Validation replay skips only the uninitialized allocation itself."""
+
+    model = _NewEmptyFilledModel()
+    x = torch.randn(2, 3)
+
+    assert validate_forward_pass(model, x, validate_metadata=True) is True
+
+
+def test_validate_forward_pass_handles_where_equal_branch_condition() -> None:
+    """Perturbation skips an irrelevant ``where`` condition with equal branches."""
+
+    model = _WhereEqualBranchesModel()
+    x = torch.tensor([[1.0, -2.0], [-3.0, 4.0]])
+
+    assert validate_forward_pass(model, x, validate_metadata=True) is True
 
 
 def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
