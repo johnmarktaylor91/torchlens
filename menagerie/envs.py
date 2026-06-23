@@ -1571,6 +1571,8 @@ def run_validate(
     stable_ids: Sequence[str],
     registry: EnvRegistry | None = None,
     extra_args: Sequence[str] = (),
+    worker_memory_cap_gb: float | None = None,
+    jobs: int | None = None,
 ) -> CommandResult:
     """Run menagerie validation inside a managed island.
 
@@ -1584,6 +1586,10 @@ def run_validate(
         Optional loaded registry.
     extra_args:
         Extra CLI arguments forwarded to the validator.
+    worker_memory_cap_gb:
+        Optional per-worker RSS cap in GB forwarded to the validator.
+    jobs:
+        Optional validator concurrency forwarded to the validator.
 
     Returns
     -------
@@ -1604,21 +1610,26 @@ def run_validate(
         )
         return CommandResult(1, "", build_result.message)
     spec = active_registry.islands[env_key]
+    validate_args = [
+        "python",
+        "-m",
+        "menagerie.validate_menagerie",
+        "--no-install-deps",
+        "--stable-ids",
+        *stable_ids,
+        "--db",
+        str(build_result.project_dir / "catalog.db"),
+        "--device",
+        spec.expected_device,
+    ]
+    if worker_memory_cap_gb is not None:
+        validate_args.extend(("--worker-memory-cap-gb", f"{worker_memory_cap_gb:.6f}"))
+    if jobs is not None:
+        validate_args.extend(("--jobs", str(jobs)))
+    validate_args.extend(extra_args)
     command = _pixi_run_command(
         build_result.project_dir,
-        [
-            "python",
-            "-m",
-            "menagerie.validate_menagerie",
-            "--no-install-deps",
-            "--stable-ids",
-            *stable_ids,
-            "--db",
-            str(build_result.project_dir / "catalog.db"),
-            "--device",
-            spec.expected_device,
-            *extra_args,
-        ],
+        validate_args,
     )
     return _run_command(
         command,
@@ -1695,6 +1706,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("env_key")
     validate_parser.add_argument("stable_ids", nargs="+")
+    validate_parser.add_argument("--worker-memory-cap-gb", type=float, default=None)
+    validate_parser.add_argument("--jobs", type=int, default=None)
     worker_parser = subparsers.add_parser("_smoke_worker")
     worker_parser.add_argument("env_key")
     worker_parser.add_argument("--stable-ids", nargs="+", required=True)
@@ -1745,7 +1758,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(result.stderr, end="", file=sys.stderr)
         return result.returncode
     if args.command == "validate":
-        result = run_validate(args.env_key, args.stable_ids, registry)
+        result = run_validate(
+            args.env_key,
+            args.stable_ids,
+            registry,
+            worker_memory_cap_gb=args.worker_memory_cap_gb,
+            jobs=args.jobs,
+        )
         print(result.stdout, end="")
         print(result.stderr, end="", file=sys.stderr)
         return result.returncode

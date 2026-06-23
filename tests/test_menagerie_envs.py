@@ -169,6 +169,64 @@ def test_env_manager_statuses_map_to_ledger_statuses() -> None:
     assert envs.ledger_status_for_build_status("cached") == "deferred"
 
 
+def test_run_validate_threads_memory_cap_and_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Island validation forwards explicit memory and concurrency controls."""
+
+    registry = _registry(tmp_path)
+    project_dir = tmp_path / "forecast_tab"
+    captured: dict[str, Any] = {}
+
+    def fake_build(
+        env_key: str, active_registry: envs.EnvRegistry | None = None
+    ) -> envs.BuildResult:
+        """Return a cached build result for command construction."""
+
+        del active_registry
+        return envs.BuildResult(
+            env_key=env_key,
+            status="cached",
+            env_hash="forecast_tab-test",
+            lock_hash="lock-test",
+            project_dir=project_dir,
+            message="cached",
+        )
+
+    def fake_run(
+        command: list[str] | tuple[str, ...],
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> envs.CommandResult:
+        """Capture the pixi command instead of executing it."""
+
+        del cwd, timeout
+        captured["command"] = list(command)
+        captured["env"] = env
+        return envs.CommandResult(0, "validated", "")
+
+    monkeypatch.setattr(envs, "build", fake_build)
+    monkeypatch.setattr(envs, "pixi_bin", lambda: Path("/tmp/fake-pixi"))
+    monkeypatch.setattr(envs, "_run_command", fake_run)
+
+    result = envs.run_validate(
+        "forecast_tab",
+        ["m3392"],
+        registry,
+        worker_memory_cap_gb=22.0,
+        jobs=2,
+    )
+
+    assert result.returncode == 0
+    assert captured["env"] == {"TORCHLENS_MENAGERIE_ENV_HASH": "forecast_tab-test"}
+    command = captured["command"]
+    assert "--worker-memory-cap-gb" in command
+    assert command[command.index("--worker-memory-cap-gb") + 1] == "22.000000"
+    assert "--jobs" in command
+    assert command[command.index("--jobs") + 1] == "2"
+
+
 def test_assign_rejects_duplicate_stable_ids(tmp_path: Path) -> None:
     """Assignment refuses duplicate stable IDs in the input sequence."""
 
