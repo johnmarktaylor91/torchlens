@@ -7,6 +7,10 @@ and gradient -- across the forward and backward pass -- auto-visualizes the full
 computational graph, exposes rich per-op metadata, and lets you intervene on the
 network as it runs. Any architecture, even dynamic and recurrent ones.
 
+> **[Explore the Model Menagerie](https://model-menagerie.pages.dev)** -- a live, browsable atlas of
+> **10,000+ unique neural-network architectures** captured with TorchLens, from McCulloch & Pitts (1943)
+> to today's frontier models. *(Early preview.)*
+
 Tested on over **700 models** (image, video, audio, multimodal, language;
 feedforward, recurrent, transformer, GNN) — and it records **every last detail
 of every part of your model**: **180+ metadata fields per operation**, and
