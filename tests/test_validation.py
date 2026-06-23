@@ -6,7 +6,7 @@ deep clone helpers, and integration tests through specific exemption paths.
 
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 import torch
@@ -34,6 +34,7 @@ from torchlens.validation.core import (
     _deep_clone_tensors,
     _copy_validation_args,
     _execute_func_with_restored_state,
+    _restore_live_parameter_args_for_replay,
     MAX_PERTURB_ATTEMPTS,
 )
 from torchlens.validation.status import (
@@ -46,6 +47,7 @@ from torchlens.validation.status import (
 from torchlens.utils.tensor_utils import tensor_nanequal
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
+_TEST_FORWARD_GLOBAL_PAYLOAD: dict[str, torch.Tensor] | None = None
 
 
 # =============================================================================
@@ -116,6 +118,39 @@ def test_validation_replay_status_aggregate_fold() -> None:
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
     assert callable(validate_forward_pass)
+
+
+def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
+    """Replay args use live parameters only when saved snapshots still match."""
+
+    live_param = nn.Parameter(torch.tensor([[1.0, 2.0], [3.0, 4.0]]))
+    saved_parent = live_param.detach().clone()
+    saved_param = live_param.detach().clone()
+    input_args = {"args": [saved_parent, saved_param], "kwargs": {}}
+    layer = SimpleNamespace(
+        is_inplace=False,
+        _param_logs=[SimpleNamespace(handle=live_param)],
+        parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
+    )
+
+    _restore_live_parameter_args_for_replay(input_args, cast(Any, layer))
+
+    assert input_args["args"][0] is saved_parent
+    assert input_args["args"][1] is live_param
+
+    stale_snapshot = live_param.detach().clone()
+    with torch.no_grad():
+        live_param.add_(1.0)
+    stale_args = {"args": [stale_snapshot], "kwargs": {}}
+    stale_layer = SimpleNamespace(
+        is_inplace=False,
+        _param_logs=[SimpleNamespace(handle=live_param)],
+        parent_arg_positions={"args": {}, "kwargs": {}},
+    )
+
+    _restore_live_parameter_args_for_replay(stale_args, cast(Any, stale_layer))
+
+    assert stale_args["args"][0] is stale_snapshot
 
 
 def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:
