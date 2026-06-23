@@ -38,7 +38,7 @@ _DEFAULT_NODE_HEIGHT = 60  # points — fallback when label isn't available
 # *edge crossings* the routed layout contains.  Crossings grow with BOTH the raw
 # node count (more nodes packed in 2D -> more geometric crossings even at a low
 # logical edge/node ratio) AND with fan-out density (DenseNet concat fan-out,
-# MaxViT/ConvNeXt attention + dense conv blocks).  A graph only reaches this
+# attention-heavy dense conv blocks).  A graph only reaches this
 # neato path at all once its estimated layout cost already exceeds
 # ``RANK_LAYOUT_COST_THRESHOLD`` (20k), i.e. it is large or hub-heavy by
 # construction -- precisely the regime where splines choke.
@@ -46,7 +46,7 @@ _DEFAULT_NODE_HEIGHT = 60  # points — fallback when label isn't available
 # Empirically calibrated 2026-06-20 against three real failures on this path:
 #   convnextv2_huge       785 nodes / 928 edges  (ratio 1.18) -> spline TIMEOUT
 #   smp_Unet_densenet201  772 nodes / 2578 edges (ratio 3.34) -> spline TIMEOUT
-#   maxvit_xlarge_tf_512  2359 nodes / 2598 edges(ratio 1.10) -> rtree overflow
+#   high-res attention model 2359 nodes / 2598 edges(ratio 1.10) -> rtree overflow
 # All three MUST degrade to straight "line" edges.  convnext shows the node
 # count alone is the dominant signal: at ~1.18 edges/node it still timed out, so
 # the node ceiling must sit below 785.
@@ -871,8 +871,8 @@ def render_rank_layout(
 # neato builds an rtree spatial index over node/label boxes during edge
 # routing; its box coordinates are 16-bit-ish and it aborts with "area too
 # large for rtree" when a box (or the whole canvas) overflows that range.
-# Very-high-resolution models (maxvit_xlarge_tf_512 @ 512px input -> 2747 nodes
-# spread across a huge pinned canvas) trip this.  ``-Gsize``/``-Gratio`` only
+# Very-high-resolution models (512px input -> 2747 nodes spread across a huge
+# pinned canvas) trip this.  ``-Gsize``/``-Gratio`` only
 # rescale the OUTPUT viewport, not the coordinates fed to the rtree, so they do
 # NOT fix it.  We instead shrink the pinned coordinates themselves so the whole
 # drawing fits inside this ceiling before re-running neato.

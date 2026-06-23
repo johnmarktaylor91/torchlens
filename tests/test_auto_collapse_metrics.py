@@ -9,7 +9,11 @@ from pathlib import Path
 import torch
 
 import torchlens as tl
-from torchlens.visualization.auto_collapse import analyze_collapse, resolve_run_folds
+from torchlens.visualization.auto_collapse import (
+    analyze_collapse,
+    resolve_collapse_fn,
+    resolve_run_folds,
+)
 
 
 class ResidualBlock(torch.nn.Module):
@@ -72,11 +76,11 @@ class DimStepBlock(torch.nn.Module):
 class DimStepRun(torch.nn.Module):
     """Run of structurally identical blocks with varying channel widths."""
 
-    def __init__(self) -> None:
+    def __init__(self, depth: int = 4, start_width: int = 4) -> None:
         """Initialize the dim-stepping run."""
 
         super().__init__()
-        widths = [4, 6, 8, 10, 12]
+        widths = list(range(start_width, start_width + depth + 1))
         self.blocks = torch.nn.ModuleList(
             DimStepBlock(in_channels, out_channels)
             for in_channels, out_channels in zip(widths[:-1], widths[1:], strict=True)
@@ -130,12 +134,12 @@ class DepthStage(torch.nn.Module):
 class UnevenDepthStages(torch.nn.Module):
     """Same-class sibling stages with different internal depths."""
 
-    def __init__(self) -> None:
+    def __init__(self, depths: tuple[int, ...] = (2, 3, 4)) -> None:
         """Initialize stages of depths two, three, and four."""
 
         super().__init__()
         self.stem = torch.nn.Conv2d(4, 4, 1)
-        self.stages = torch.nn.ModuleList([DepthStage(4, depth) for depth in (2, 3, 4)])
+        self.stages = torch.nn.ModuleList([DepthStage(4, depth) for depth in depths])
         self.head = torch.nn.Conv2d(4, 4, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -578,10 +582,22 @@ def _collapsed_exact_label_count(source: str, address: str) -> int:
     )
 
 
-def _folded_label_count(source: str, address: str, multiplicity: int) -> int:
-    """Return folded-run label count for exactly ``address`` and ``multiplicity``."""
+def _run_fold_ellipsis_name(address: str) -> str:
+    """Return the deterministic run-fold ellipsis node name for ``address``."""
 
-    return source.count(f"@{address}  x{multiplicity}")
+    return f"{address}pass1___runfoldellipsis"
+
+
+def _run_fold_ellipsis_count(source: str, multiplicity: int) -> int:
+    """Return count of run-fold ellipsis labels for ``multiplicity`` folded modules."""
+
+    return source.count(f'label="... +{multiplicity - 1} more of this type"')
+
+
+def _has_run_fold_multiplicity_label(source: str, multiplicity: int) -> bool:
+    """Return whether DOT source contains the old run-fold ``xN`` label."""
+
+    return bool(re.search(rf"\bx{multiplicity}\b", source))
 
 
 def _select_first_stage_unit(module: object) -> bool:
@@ -601,7 +617,7 @@ def _edge_count(source: str, tail: str, head: str) -> int:
 
     return len(
         re.findall(
-            rf'^\s*"?{re.escape(tail)}"? -> "?{re.escape(head)}"?',
+            rf'^\s*"?{re.escape(tail)}"? -> "?{re.escape(head)}"?\s+\[',
             source,
             flags=re.MULTILINE,
         )
@@ -645,16 +661,20 @@ def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> Non
 
 
 def test_auto_collapse_run_fold_collapses_nodes_and_edges(tmp_path: Path) -> None:
-    """Auto folds a consecutive identical run to one xN box and one edge."""
+    """Auto folds an unreadable consecutive identical run through an ellipsis node."""
 
-    trace = _trace(RepeatedResidual(depth=5), torch.randn(2, 8))
+    trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
     try:
         auto_source = _draw_source(trace, tmp_path, "run_fold_auto", "auto")
+        ellipsis_name = _run_fold_ellipsis_name("blocks.0")
 
-        assert _folded_label_count(auto_source, "blocks.0", 5) == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.0") == 1
+        assert _run_fold_ellipsis_count(auto_source, 24) == 1
+        assert not _has_run_fold_multiplicity_label(auto_source, 24)
         assert _collapsed_exact_label_count(auto_source, "blocks.1") == 0
-        assert _collapsed_exact_label_count(auto_source, "blocks.4") == 0
-        assert _edge_count(auto_source, "blocks.0pass1", "blocks.0pass1") == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.23") == 0
+        assert _edge_count(auto_source, "blocks.0pass1", ellipsis_name) == 1
+        assert _edge_count(auto_source, "blocks.0pass1", "blocks.0pass1") == 0
     finally:
         trace.cleanup()
 
@@ -662,16 +682,18 @@ def test_auto_collapse_run_fold_collapses_nodes_and_edges(tmp_path: Path) -> Non
 def test_auto_collapse_run_fold_ignores_dimension_steps(tmp_path: Path) -> None:
     """Auto folds structurally identical runs even when channel dimensions vary."""
 
-    trace = _trace(DimStepRun(), torch.randn(1, 4, 16, 16))
+    trace = _trace(DimStepRun(depth=24, start_width=32), torch.randn(1, 32, 8, 8))
     try:
         auto_source = _draw_source(trace, tmp_path, "dim_step_auto", "auto")
         folds = resolve_run_folds(trace, _select_blocks_child)
+        ellipsis_name = _run_fold_ellipsis_name("blocks.1")
 
-        assert _folded_label_count(auto_source, "blocks.1", 3) == 1
-        assert _collapsed_exact_label_count(auto_source, "blocks.2") == 0
+        assert _collapsed_exact_label_count(auto_source, "blocks.1") == 1
+        assert _run_fold_ellipsis_count(auto_source, 23) == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.23") == 0
         assert "shapes " in auto_source
-        assert _edge_count(auto_source, "blocks.1pass1", "blocks.1pass1") == 1
-        assert folds["blocks.1"].addresses == ("blocks.1", "blocks.2", "blocks.3")
+        assert _edge_count(auto_source, "blocks.1pass1", ellipsis_name) == 1
+        assert folds["blocks.1"].addresses == tuple(f"blocks.{index}" for index in range(1, 24))
     finally:
         trace.cleanup()
 
@@ -679,12 +701,12 @@ def test_auto_collapse_run_fold_ignores_dimension_steps(tmp_path: Path) -> None:
 def test_auto_collapse_run_fold_keeps_different_depth_stages_separate(tmp_path: Path) -> None:
     """Run-fold does not merge same-class sibling stages with different depths."""
 
-    trace = _trace(UnevenDepthStages(), torch.randn(1, 4, 16, 16))
+    trace = _trace(UnevenDepthStages(depths=(2, 3, 4) * 8), torch.randn(1, 4, 16, 16))
     try:
         auto_source = _draw_source(trace, tmp_path, "uneven_depth_stages_auto", "auto")
         folds = resolve_run_folds(trace, _select_first_stage_unit)
 
-        assert _folded_label_count(auto_source, "stages.0", 3) == 0
+        assert _run_fold_ellipsis_count(auto_source, 3) == 0
         assert "stages.0" not in folds
         assert "stages.1" not in folds
         assert "stages.2" not in folds
@@ -702,6 +724,40 @@ def test_auto_collapse_run_fold_rejects_spatial_span() -> None:
         assert "blocks.0" not in folds
         assert "blocks.1" not in folds
         assert "blocks.2" not in folds
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_skips_readable_stack(tmp_path: Path) -> None:
+    """Run-fold does not elide a stack whose collapsed render is readable."""
+
+    trace = _trace(DimStepRun(depth=12, start_width=16), torch.randn(1, 16, 8, 8))
+    try:
+        collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
+        folds = resolve_run_folds(trace, collapse_fn)
+        auto_source = _draw_source(trace, tmp_path, "run_fold_readable_auto", "auto")
+
+        assert folds == {}
+        assert "runfoldellipsis" not in auto_source
+        assert "more of this type" not in auto_source
+        assert _collapsed_exact_label_count(auto_source, "blocks.0") == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.11") == 1
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_fires_when_stack_exceeds_band(tmp_path: Path) -> None:
+    """Run-fold elides the longest stack when collapsed render exceeds the band."""
+
+    trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
+    try:
+        collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
+        folds = resolve_run_folds(trace, collapse_fn)
+        auto_source = _draw_source(trace, tmp_path, "run_fold_over_band_auto", "auto")
+
+        assert folds["blocks.0"].addresses == tuple(f"blocks.{index}" for index in range(24))
+        assert _run_fold_ellipsis_count(auto_source, 24) == 1
+        assert "... +23 more of this type" in auto_source
     finally:
         trace.cleanup()
 
@@ -757,9 +813,9 @@ def test_max_collapse_is_never_less_collapsed_than_auto(tmp_path: Path) -> None:
 
 
 def test_auto_collapse_residual_peer_bodies_keep_parent_joins(tmp_path: Path) -> None:
-    """Auto folds repeated residual bodies while keeping add junction nodes visible."""
+    """Auto elides repeated residual bodies while keeping add junction nodes visible."""
 
-    trace = _trace(ParentJoinResidual(depth=5), torch.randn(2, 8))
+    trace = _trace(ParentJoinResidual(depth=24), torch.randn(2, 8))
     try:
         none_source = _draw_source(trace, tmp_path, "parent_residual_none", "none")
         auto_source = _draw_source(trace, tmp_path, "parent_residual_auto", "auto")
@@ -767,7 +823,8 @@ def test_auto_collapse_residual_peer_bodies_keep_parent_joins(tmp_path: Path) ->
         assert _dot_node_count(none_source) > 15
         assert _dot_node_count(auto_source) <= int(_dot_node_count(none_source) * 0.7)
         assert _box_count(auto_source) >= 1
-        assert _folded_label_count(auto_source, "blocks.0", 5) == 1
+        assert _collapsed_exact_label_count(auto_source, "blocks.0") == 1
+        assert _run_fold_ellipsis_count(auto_source, 24) == 1
         assert _has_visible_node(auto_source, "add_")
         assert auto_source != none_source
     finally:

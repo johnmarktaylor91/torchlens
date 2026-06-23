@@ -1137,6 +1137,7 @@ def draw(
     # Critical when collapsed modules cause many layers to map to the same
     # node name -- without this, we'd get duplicate edges.
     edges_used: Set[tuple[str, str, tuple[Any, ...]]] = set()
+    run_fold_ellipsis_nodes: set[str] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
     self._pending_container_collapse_nodes = []
     container_clusters: list[ContainerClusterSpec] = []
@@ -1180,6 +1181,7 @@ def draw(
             collapsed_container_nodes,
             show_input_transform_summary,
             run_folds,
+            run_fold_ellipsis_nodes,
         )
 
     for node_args in getattr(self, "_pending_container_collapse_nodes", []):
@@ -4426,6 +4428,7 @@ def _add_node_to_graphviz(
     collapsed_container_nodes: Mapping[str, str] | None = None,
     show_input_transform_summary: bool = False,
     run_folds: Mapping[str, "ModuleRunFold"] | None = None,
+    run_fold_ellipsis_nodes: set[str] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -4513,6 +4516,7 @@ def _add_node_to_graphviz(
         show_containers,
         collapsed_container_nodes,
         run_folds,
+        run_fold_ellipsis_nodes,
     )
 
 
@@ -4971,6 +4975,100 @@ def _run_fold_graph_node_name(
     return module_tuple[0]
 
 
+def _unique_run_folds(run_folds: Mapping[str, "ModuleRunFold"]) -> tuple["ModuleRunFold", ...]:
+    """Return unique fold descriptors in deterministic representative order.
+
+    Parameters
+    ----------
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+
+    Returns
+    -------
+    tuple[ModuleRunFold, ...]
+        Unique folds sorted by representative address.
+    """
+
+    seen: set[str] = set()
+    unique: list[ModuleRunFold] = []
+    for address in sorted(run_folds):
+        fold = run_folds[address]
+        if fold.representative in seen:
+            continue
+        seen.add(fold.representative)
+        unique.append(fold)
+    return tuple(unique)
+
+
+def _run_fold_for_graph_node_name(
+    graph_node_name: str,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    vis_mode: str,
+) -> "ModuleRunFold | None":
+    """Return the fold represented by ``graph_node_name``.
+
+    Parameters
+    ----------
+    graph_node_name:
+        Rendered Graphviz node identifier.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    ModuleRunFold | None
+        Matching fold, or ``None`` when ``graph_node_name`` is not a folded representative.
+    """
+
+    if not run_folds:
+        return None
+    for fold in _unique_run_folds(run_folds):
+        representative_name = _run_fold_graph_node_name(
+            f"{fold.representative}:1",
+            vis_mode,
+            {fold.representative: fold},
+        )
+        if representative_name == graph_node_name:
+            return fold
+    return None
+
+
+def _run_fold_ellipsis_node_name(representative_name: str) -> str:
+    """Return the deterministic ellipsis node name for a folded run.
+
+    Parameters
+    ----------
+    representative_name:
+        Graphviz node identifier for the folded representative.
+
+    Returns
+    -------
+    str
+        Collision-resistant ellipsis node name derived from the representative.
+    """
+
+    return f"{representative_name}___runfoldellipsis"
+
+
+def _run_fold_ellipsis_label(fold: "ModuleRunFold") -> str:
+    """Return the in-flow elision label for ``fold``.
+
+    Parameters
+    ----------
+    fold:
+        Fold descriptor to label.
+
+    Returns
+    -------
+    str
+        Plaintext label describing the number of elided siblings.
+    """
+
+    return f"... +{fold.multiplicity - 1} more of this type"
+
+
 def _edge_touches_run_fold(
     tail_name: str,
     head_name: str,
@@ -5027,43 +5125,8 @@ def _run_fold_representative_names(
             vis_mode,
             {fold.representative: fold},
         )
-        for fold in set(run_folds.values())
+        for fold in _unique_run_folds(run_folds)
     }
-
-
-def _run_fold_edge_label(
-    graph_node_name: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
-    vis_mode: str,
-) -> str:
-    """Return a multiplicity label for a folded-run edge.
-
-    Parameters
-    ----------
-    graph_node_name:
-        Rendered folded representative node name.
-    run_folds:
-        Fold descriptors keyed by pass-free module address.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"`` visualization mode.
-
-    Returns
-    -------
-    str
-        Multiplicity label such as ``"x4"``.
-    """
-
-    if not run_folds:
-        return "x1"
-    for fold in set(run_folds.values()):
-        representative_name = _run_fold_graph_node_name(
-            f"{fold.representative}:1",
-            vis_mode,
-            {fold.representative: fold},
-        )
-        if representative_name == graph_node_name:
-            return f"x{fold.multiplicity}"
-    return "x1"
 
 
 def _render_raw_input(
@@ -5700,9 +5763,7 @@ def _build_collapsed_module_node(
         return
 
     module_suffix = _collapsed_module_rolling_suffix(self, address)
-    if fold is not None:
-        node_title = f"<b>@{address}  x{fold.multiplicity}</b>"
-    elif module_num_calls == 1:
+    if module_num_calls == 1:
         node_title = f"<b>@{address}</b>"
     elif vis_mode == "unrolled" and (module_num_calls > 1):
         node_title = f"<b>@{address}:{call_index}</b>"
@@ -6611,6 +6672,56 @@ def _format_shape_str(shape: tuple[Any, ...]) -> str:
     return format_shape(shape)
 
 
+def _queue_run_fold_ellipsis_node(
+    graphviz_graph: graphviz.Digraph,
+    module_edge_dict: Dict[str, Any],
+    emitted_ellipsis_nodes: set[str],
+    *,
+    representative_name: str,
+    fold: "ModuleRunFold",
+    module_key: str | int,
+) -> str:
+    """Queue the in-flow ellipsis node for ``fold`` and return its node name.
+
+    Parameters
+    ----------
+    graphviz_graph:
+        Graphviz graph used for top-level node emission.
+    module_edge_dict:
+        Module-cluster accumulator for nested node placement.
+    emitted_ellipsis_nodes:
+        Graph-level set of ellipsis node names already emitted.
+    representative_name:
+        Graphviz node identifier for the folded representative.
+    fold:
+        Fold descriptor represented by the ellipsis.
+    module_key:
+        Module cluster key that owns the current folded-run edge, or ``-1`` for
+        top-level emission.
+
+    Returns
+    -------
+    str
+        Graphviz node name for the ellipsis.
+    """
+
+    ellipsis_name = _run_fold_ellipsis_node_name(representative_name)
+    if ellipsis_name in emitted_ellipsis_nodes:
+        return ellipsis_name
+    emitted_ellipsis_nodes.add(ellipsis_name)
+    node_args = {
+        "name": ellipsis_name,
+        "label": _run_fold_ellipsis_label(fold),
+        "shape": "plaintext",
+        "fontcolor": "#777777",
+    }
+    if module_key == -1:
+        graphviz_graph.node(**node_args)
+    else:
+        module_edge_dict[cast(str, module_key)].setdefault("nodes", []).append(node_args)
+    return ellipsis_name
+
+
 def _add_edges_for_node(
     self: "Trace",
     parent_node: GraphNode,
@@ -6632,6 +6743,7 @@ def _add_edges_for_node(
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
     run_folds: Mapping[str, "ModuleRunFold"] | None = None,
+    run_fold_ellipsis_nodes: set[str] | None = None,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -6775,6 +6887,74 @@ def _add_edges_for_node(
                 )
             tail_name = hook_name
 
+        edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
+            child_node, BoundaryNode
+        )
+
+        # Add it to the appropriate module cluster (most nested one containing both nodes)
+        if edge_has_boundary:
+            module = _get_lowest_module_for_two_render_nodes(
+                parent_node,
+                child_node,
+                both_nodes_collapsed_modules,
+                vis_call_depth,
+            )
+        else:
+            module = _get_lowest_module_for_two_nodes(
+                _base_node_for_metadata(parent_node),
+                _base_node_for_metadata(child_node),
+                both_nodes_collapsed_modules,
+                vis_call_depth,
+            )
+        if tail_name == head_name and _self_loop_is_single_op_module(self, parent_node):
+            module = -1
+        # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
+        # below clobber the ``module`` loop variable (they reassign it to each
+        # node's own module path). Without this, the captured forward edge would
+        # record the wrong cluster key and sibling rank-groups would never resolve
+        # to a common cluster (always falling back to top-level emission).
+        edge_module_key: str | int = module
+
+        run_fold_ellipsis_edge_key: tuple[Any, ...] | None = None
+        representative_fold = _run_fold_for_graph_node_name(tail_name, run_folds, vis_mode)
+        if representative_fold is not None:
+            if run_fold_ellipsis_nodes is None:
+                run_fold_ellipsis_nodes = set()
+            ellipsis_name = _queue_run_fold_ellipsis_node(
+                graphviz_graph,
+                module_edge_dict,
+                run_fold_ellipsis_nodes,
+                representative_name=tail_name,
+                fold=representative_fold,
+                module_key=edge_module_key,
+            )
+            run_fold_ellipsis_edge_key = (
+                "run_fold_ellipsis_edge",
+                tail_name,
+                ellipsis_name,
+            )
+            if tail_name == head_name:
+                head_name = ellipsis_name
+            else:
+                if (tail_name, ellipsis_name, run_fold_ellipsis_edge_key) not in edges_used:
+                    edges_used.add((tail_name, ellipsis_name, run_fold_ellipsis_edge_key))
+                    ellipsis_edge_dict = {
+                        "tail_name": tail_name,
+                        "head_name": ellipsis_name,
+                        "color": node_color,
+                        "fontcolor": node_color,
+                        "style": edge_style,
+                        "arrowsize": ".7",
+                        "labelfontsize": "8",
+                    }
+                    if edge_module_key == -1:
+                        graphviz_graph.edge(**ellipsis_edge_dict)
+                    else:
+                        module_edge_dict[cast(str, edge_module_key)]["edges"].append(
+                            ellipsis_edge_dict
+                        )
+                tail_name = ellipsis_name
+
         edge_is_self_loop = tail_name == head_name
         edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, run_folds, vis_mode)
         if (
@@ -6789,7 +6969,9 @@ def _add_edges_for_node(
             continue
 
         occurrence_key = render_edge.occurrence_key
-        if edge_touches_run_fold:
+        if run_fold_ellipsis_edge_key is not None and edge_touches_run_fold:
+            occurrence_key = run_fold_ellipsis_edge_key
+        elif edge_touches_run_fold:
             occurrence_key = ("run_fold_edge", tail_name, head_name)
         dedupe_key = (tail_name, head_name, occurrence_key)
         if dedupe_key in edges_used:
@@ -6805,9 +6987,6 @@ def _add_edges_for_node(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
-        edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
-            child_node, BoundaryNode
-        )
         metadata_base = (
             _base_node_for_metadata(metadata_child)
             if metadata_child is not None and not edge_has_boundary
@@ -6828,10 +7007,6 @@ def _add_edges_for_node(
             )
         if edge_label is not None:
             edge_dict["label"] = edge_label
-        if edge_touches_run_fold and edge_is_self_loop and "label" not in edge_dict:
-            edge_dict["label"] = _html_edge_label(
-                _run_fold_edge_label(tail_name, run_folds, vis_mode)
-            )
         if show_containers:
             container_label = _container_edge_label(metadata_base)
             if (
@@ -6889,29 +7064,6 @@ def _add_edges_for_node(
             else:
                 edge_dict[arg_name] = str(arg_val)
 
-        # Add it to the appropriate module cluster (most nested one containing both nodes)
-        if edge_has_boundary:
-            module = _get_lowest_module_for_two_render_nodes(
-                parent_node,
-                child_node,
-                both_nodes_collapsed_modules,
-                vis_call_depth,
-            )
-        else:
-            module = _get_lowest_module_for_two_nodes(
-                _base_node_for_metadata(parent_node),
-                _base_node_for_metadata(child_node),
-                both_nodes_collapsed_modules,
-                vis_call_depth,
-            )
-        if edge_is_self_loop and _self_loop_is_single_op_module(self, parent_node):
-            module = -1
-        # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
-        # below clobber the ``module`` loop variable (they reassign it to each
-        # node's own module path). Without this, the captured forward edge would
-        # record the wrong cluster key and sibling rank-groups would never resolve
-        # to a common cluster (always falling back to top-level emission).
-        edge_module_key: str | int = module
         if module != -1:
             module_key = cast(str, module)
             module_edge_dict[module_key]["edges"].append(edge_dict)

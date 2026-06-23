@@ -366,28 +366,34 @@ def resolve_run_folds(
 
     if collapse_fn is None:
         return {}
+    analysis = analyze_collapse(trace)
+    selected = [module.address for module in trace.modules if collapse_fn(module)]
+    projected_count = _visible_count_after_selection(trace, analysis, selected)
+    if projected_count <= _readable_band_high(trace):
+        return {}
     dimless_digests = _compute_dimless_structural_digests(trace)
-    folds_by_address: dict[str, ModuleRunFold] = {}
+    candidate_folds: list[ModuleRunFold] = []
+    candidate_addresses: set[str] = set()
     for child_addresses in _sibling_address_groups(trace).values():
         for run in _iter_collapsible_runs(trace, child_addresses, dimless_digests, collapse_fn):
             if not _run_span_allows_fold(trace, run):
                 continue
             fold = _make_run_fold(trace, run)
-            for address in run:
-                folds_by_address[address] = fold
+            candidate_folds.append(fold)
+            candidate_addresses.update(run)
         for run in _iter_collapsible_child_path_runs(
             trace,
             child_addresses,
             dimless_digests,
             collapse_fn,
         ):
-            if any(address in folds_by_address for address in run):
+            if any(address in candidate_addresses for address in run):
                 continue
             if not _run_span_allows_fold(trace, run):
                 continue
             fold = _make_run_fold(trace, run)
-            for address in run:
-                folds_by_address[address] = fold
+            candidate_folds.append(fold)
+            candidate_addresses.update(run)
         for run in _iter_collapsible_runs(
             trace,
             child_addresses,
@@ -395,13 +401,22 @@ def resolve_run_folds(
             collapse_fn,
             allow_selected_descendant=True,
         ):
-            if any(address in folds_by_address for address in run):
+            if any(address in candidate_addresses for address in run):
                 continue
             if not _run_span_allows_fold(trace, run):
                 continue
             fold = _make_run_fold(trace, run)
-            for address in run:
-                folds_by_address[address] = fold
+            candidate_folds.append(fold)
+            candidate_addresses.update(run)
+    folds_by_address: dict[str, ModuleRunFold] = {}
+    for fold in sorted(candidate_folds, key=lambda item: (-item.multiplicity, item.representative)):
+        if any(address in folds_by_address for address in fold.addresses):
+            continue
+        for address in fold.addresses:
+            folds_by_address[address] = fold
+        projected_count -= sum(analysis.signals[address].hidden_ops for address in fold.addresses)
+        if projected_count <= _readable_band_high(trace):
+            break
     return folds_by_address
 
 
@@ -1545,9 +1560,9 @@ def _select_modules(
 
     _ = vis_mode
     analysis = analyze_collapse(trace)
-    band = (8, 40, 28) if collapse == "auto" else (4, 12, 7)
+    band = (8, _readable_band_high(trace), 28) if collapse == "auto" else (4, 12, 7)
     if collapse == "auto" and len(trace.ops) > 100:
-        band = (1, 25, 0)
+        band = (1, _readable_band_high(trace), 0)
     floor = 1 if collapse == "auto" else 3
     target = band[2]
     if collapse == "auto" and len(trace.ops) > 15:
@@ -1605,6 +1620,23 @@ def _select_modules(
     if band[0] <= visible_count <= band[1]:
         return frozenset(selected)
     return frozenset(selected)
+
+
+def _readable_band_high(trace: "Trace") -> int:
+    """Return the high watermark for a readable auto-collapsed render.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+
+    Returns
+    -------
+    int
+        Upper readable node-count budget for auto collapse.
+    """
+
+    return 25 if len(trace.ops) > 100 else 40
 
 
 def _visible_count_after_selection(
