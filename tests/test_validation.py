@@ -29,12 +29,14 @@ from torchlens.validation.exemptions import (
     SKIP_PERTURBATION_ENTIRELY,
     STRUCTURAL_ARG_POSITIONS,
     CUSTOM_EXEMPTION_CHECKS,
+    posthoc_perturb_check,
 )
 from torchlens.validation.core import (
     _perturb_layer_outs,
     _deep_clone_tensors,
     _copy_validation_args,
     _execute_func_with_restored_state,
+    _check_perturbation_exemptions,
     _restore_live_parameter_args_for_replay,
     MAX_PERTURB_ATTEMPTS,
 )
@@ -1045,6 +1047,94 @@ class _RemainderDividendBelowDivisorModel(nn.Module):
         return torch.remainder(dividend, divisor) + x
 
 
+class _WhereDifferentBranchesModel(nn.Module):
+    """Model whose ``where`` branches are value-sensitive and non-equal."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Select between distinct true and false branches.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Result of a value-sensitive ``torch.where`` call.
+        """
+
+        condition = x > 0
+        true_branch = x + 10.0
+        false_branch = x - 10.0
+        return torch.where(condition, true_branch, false_branch)
+
+
+class _RemainderDividendAtLeastDivisorModel(nn.Module):
+    """Model where the remainder divisor must remain value-sensitive."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute a remainder whose output differs from the dividend.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Remainder output plus the input to keep the op live.
+        """
+
+        dividend = x.abs() + 5.0
+        divisor = torch.full_like(dividend, 2.0)
+        return torch.remainder(dividend, divisor) + x
+
+
+class _NewTensorDataArgModel(nn.Module):
+    """Model whose ``new_tensor`` data argument comes from a real parent op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a tensor from value data, not only from a template.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Data-derived ``new_tensor`` result.
+        """
+
+        data = x + 1.0
+        return x.new_tensor(data) * 2.0
+
+
+class _PopulatedContainerOutputModel(nn.Module):
+    """Model returning a populated tuple/dict container of tensor leaves."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Return tensor leaves through a populated nested container.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, dict[str, torch.Tensor]]
+            Two real output leaves with non-empty container paths.
+        """
+
+        left = x + 1.0
+        right = x * 2.0
+        return left, {"right": right}
+
+
 class _EmptyLikeModel(nn.Module):
     """Model that uses empty_like (tests SKIP_VALIDATION_ENTIRELY)."""
 
@@ -1052,6 +1142,27 @@ class _EmptyLikeModel(nn.Module):
         # empty_like output is nondeterministic — don't use it in computation
         _ = torch.empty_like(x)
         return x * 2
+
+
+def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
+    """Return the only layer in ``trace`` with the requested function name.
+
+    Parameters
+    ----------
+    trace:
+        Trace to search.
+    func_name:
+        Function name to locate.
+
+    Returns
+    -------
+    Any
+        The unique matching layer.
+    """
+
+    matches = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    assert len(matches) == 1
+    return matches[0]
 
 
 def test_validation_with_getitem_tensor_index():
@@ -1118,6 +1229,90 @@ def test_validation_with_remainder_dividend_below_divisor() -> None:
     model = _RemainderDividendBelowDivisorModel()
     x = torch.randn(3, 3)
     assert validate_forward_pass(model, x)
+
+
+def test_where_different_branches_are_not_condition_exempt() -> None:
+    """Different ``where`` branches require real perturbation sensitivity."""
+
+    model = _WhereDifferentBranchesModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        where_layer = _only_layer_with_func_name(trace, "where")
+        condition_parent = where_layer.parent_arg_positions["args"][0]
+
+        assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [condition_parent]) is False
+        assert _check_perturbation_exemptions(trace, where_layer, [condition_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> None:
+    """Remainder divisor perturbation is real when dividend is not the output."""
+
+    model = _RemainderDividendAtLeastDivisorModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        remainder_layer = _only_layer_with_func_name(trace, "remainder")
+        divisor_parent = remainder_layer.parent_arg_positions["args"][1]
+        ground_truth = [model(x).detach().clone()]
+
+        assert posthoc_perturb_check(trace, remainder_layer, [divisor_parent]) is False
+
+        remainder_layer.out = remainder_layer.out + 100.0
+        assert trace.validate_forward_pass(ground_truth, validate_metadata=False) is False
+    finally:
+        trace.cleanup()
+
+
+def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
+    """Only the ``new_tensor`` template arg is structural; data is value input."""
+
+    model = _NewTensorDataArgModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        new_tensor_layer = _only_layer_with_func_name(trace, "new_tensor")
+        data_parent = new_tensor_layer.parent_arg_positions["args"][1]
+
+        assert _check_perturbation_exemptions(trace, new_tensor_layer, [data_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_populated_multi_output_container_keeps_leaf_paths() -> None:
+    """Populated output containers must enumerate and validate real leaves."""
+
+    model = _PopulatedContainerOutputModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        output_paths = {tuple(trace[label].container_path) for label in trace.output_layers}
+        output_path_reprs = {repr(path) for path in output_paths}
+        ground_truth = [x + 1.0, x * 2.0]
+
+        assert len(trace.output_layers) == 2
+        assert all(output_paths)
+        assert output_path_reprs == {
+            "(TupleIndex(index=0),)",
+            "(TupleIndex(index=1), DictKey(key='right'))",
+        }
+        assert trace.validate_forward_pass(ground_truth, validate_metadata=True) is True
+    finally:
+        trace.cleanup()
 
 
 def test_validation_with_empty_like():
