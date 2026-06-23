@@ -48,6 +48,7 @@ TORCHLENS_RUNTIME_PYPI = (
     "typing_extensions>=4.0",
     "pillow>=9",
     "pydantic>=2",
+    "psutil>=5.9",
 )
 BuildStatus = Literal["built", "cached", "install_failed", "env_unavailable"]
 
