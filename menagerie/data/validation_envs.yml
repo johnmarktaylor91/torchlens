@@ -485,14 +485,9 @@ islands:
       pypi:
         - "torch==2.4.1"
         - "torchvision==0.19.1"
-        - "spikingjelly==0.0.0.0.14"
-        - snntorch
-        - norse
-        - bindsnet
+        - spikingtorch
     smoke_stable_ids:
-      - m10166
-      - m10081
-      - m7788
+      - m10226
     expected_device: cpu
     disk_estimate_gib: 5
     status_policy:

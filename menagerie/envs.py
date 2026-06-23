@@ -18,8 +18,6 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Callable, Literal, Sequence
 
-import yaml
-
 from menagerie.catalog import CatalogRow, build_canonical_rows
 from menagerie.ledger import (
     Status,
@@ -49,6 +47,7 @@ TORCHLENS_RUNTIME_PYPI = (
     "tqdm",
     "typing_extensions>=4.0",
     "pillow>=9",
+    "pydantic>=2",
 )
 BuildStatus = Literal["built", "cached", "install_failed", "env_unavailable"]
 
@@ -288,6 +287,8 @@ def load_registry(path: Path = REGISTRY_PATH) -> EnvRegistry:
     EnvRegistry
         Normalized registry.
     """
+
+    import yaml
 
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     pixi = payload.get("pixi", {})
