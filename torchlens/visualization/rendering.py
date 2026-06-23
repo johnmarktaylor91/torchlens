@@ -8044,7 +8044,6 @@ def _should_order_siblings(
         and num_nodes <= SIBLING_ORDER_NODE_CAP
         and module is None
         and vis_intervention_mode == "node_mark"
-        and collapse_fn is None
         and vis_call_depth >= 1000
     )
 
@@ -8154,6 +8153,9 @@ def _verify_and_apply_sibling_ordering(
 
     baseline_source = _strip_sibling_rank_groups(source)
     baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
+    chains = _filter_sibling_chains_to_rendered_nodes(chains, baseline.nodes)
+    if not chains:
+        return baseline_source, _sibling_order_decision((), (), {})
     injected = _layout_dot_plain(source, rankdir, captured_edges)
     _assert_sibling_backstops(baseline, injected, chains, captured_edges)
 
@@ -8188,6 +8190,26 @@ def _verify_and_apply_sibling_ordering(
         current_source = _inject_sibling_rank_groups(baseline_source, survivors)
         current_layout = _layout_dot_plain(current_source, rankdir, captured_edges)
     return current_source, _sibling_order_decision(chains, survivors, ratios)
+
+
+def _filter_sibling_chains_to_rendered_nodes(
+    chains: tuple[SiblingOrderChain, ...],
+    rendered_nodes: Mapping[str, tuple[float, float]],
+) -> tuple[SiblingOrderChain, ...]:
+    """Keep sibling chains whose source and targets survived DOT rendering.
+
+    Predicate-based module collapse can deduplicate or absorb candidate
+    endpoints after edge capture. Sibling ordering is a layout refinement, so
+    chains whose rendered nodes are gone are ignored rather than failing the
+    render.
+    """
+
+    return tuple(
+        chain
+        for chain in chains
+        if chain.source_name in rendered_nodes
+        and all(target in rendered_nodes for target in chain.targets)
+    )
 
 
 def _sibling_chain_key(chain: SiblingOrderChain) -> tuple[str, tuple[str, ...]]:
