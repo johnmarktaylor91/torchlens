@@ -3435,6 +3435,16 @@ def _container_leaf_paths(
 
     child_specs = tuple(getattr(spec, "child_specs", ()) or ())
     if not child_specs:
+        if prefix == () and getattr(spec, "kind", None) in {
+            "tuple",
+            "list",
+            "dict",
+            "namedtuple",
+            "dataclass",
+            "hf_model_output",
+            "registered",
+        }:
+            return []
         return [prefix]
     paths: list[tuple[object, ...]] = []
     for component, child_spec in child_specs:

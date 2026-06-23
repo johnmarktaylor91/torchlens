@@ -880,7 +880,7 @@ def _execute_func_with_restored_state(
     # Multi-output functions may return typed containers; select the specific
     # output this layer represents using the captured typed path when available.
     container_path = tuple(getattr(layer, "container_path", ()) or ())
-    if container_path:
+    if container_path and not isinstance(recomputed_output, torch.Tensor):
         recomputed_output = _slice_recomputed_output_by_path(recomputed_output, container_path)
     elif isinstance(recomputed_output, (list, tuple)):
         recomputed_output = recomputed_output[layer.multi_output_index]

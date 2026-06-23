@@ -397,13 +397,11 @@ class TorchBackend:
         """
 
         self_trace = cast("Trace", session)
-        if getattr(self_trace, "intervention_ready", False) or getattr(
-            self_trace, "_capture_container_structure", False
-        ):
-            output_entries = list(_walk_output_tensors_with_paths(outputs))
+        output_entries = list(_walk_output_tensors_with_paths(outputs))
+        if output_entries:
             output_tensors_w_addresses_all = [
                 (tensor, _container_path_to_address(path), None)
-                for tensor, path, container_spec in output_entries
+                for tensor, path, _container_spec in output_entries
             ]
             output_specs_by_raw_label = {}
             for tensor, path, container_spec in output_entries:
@@ -414,8 +412,14 @@ class TorchBackend:
                         container_spec,
                     )
             setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
-            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
         else:
+            output_tensors_w_addresses_all = []
+        if output_entries and (
+            getattr(self_trace, "intervention_ready", False)
+            or getattr(self_trace, "_capture_container_structure", False)
+        ):
+            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
+        if not output_entries:
             output_tensors_w_addresses_all = get_vars_of_type_from_obj(
                 outputs,
                 torch.Tensor,

@@ -251,6 +251,35 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
         _TEST_FORWARD_GLOBAL_TENSOR = None
 
 
+def test_validate_forward_pass_replays_tuple_output_identity_leaf() -> None:
+    """Output identity replay should not index into an already-selected tensor leaf."""
+
+    class TupleChunkOutputModel(nn.Module):
+        """Return a tuple whose first element is a multi-output op leaf."""
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            """Return two tensors in a tuple.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            tuple[torch.Tensor, torch.Tensor]
+                First chunk and a derived tensor.
+            """
+
+            first, _second = x.chunk(2, dim=1)
+            return first, x + 1
+
+    model = TupleChunkOutputModel()
+    x = torch.randn(1, 4, 1)
+
+    assert tl.validate_forward_pass(model, x, validate_metadata=True) is True
+
+
 def test_validate_forward_pass_replays_dict_output_by_typed_path() -> None:
     """Validation replay indexes dict-returning outputs by typed container path."""
 
