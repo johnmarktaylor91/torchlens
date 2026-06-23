@@ -47,6 +47,7 @@ from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
     BufferVisibilityLiteral,
+    CollapseLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -3524,6 +3525,7 @@ def show_model_graph(
     vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
     vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
+    collapse: CollapseLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
@@ -3577,6 +3579,7 @@ def show_model_graph(
             callable modes receive the live model object and are only available
             while that object is still alive.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
+        collapse: Smart module-collapse mode: ``"none"``, ``"auto"``, or ``"max"``.
         random_seed: Fixed RNG seed for stochastic models.
         recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
@@ -3616,6 +3619,7 @@ def show_model_graph(
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
         vis_node_mode=vis_node_mode,
+        collapse=collapse,
         vis_edge_overrides=vis_edge_overrides,
         vis_grad_edge_overrides=vis_grad_edge_overrides,
         vis_module_overrides=vis_module_overrides,

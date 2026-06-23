@@ -1328,6 +1328,21 @@ class Module:
         return self.num_internal_edges + self.num_input_edges + self.num_output_edges
 
     @property
+    def collapse_score(self) -> float:
+        """Canonical smart-collapse score for this Module.
+
+        Returns
+        -------
+        float
+            Rounded default-policy score, or ``0.0`` when the module is not
+            eligible for renderer collapse.
+        """
+
+        from ..visualization.auto_collapse import module_collapse_score
+
+        return module_collapse_score(self)
+
+    @property
     def call_parent_address(self) -> str | None:
         """Parent Module address (label string) in the dynamic call tree.
 

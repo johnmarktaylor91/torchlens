@@ -84,6 +84,7 @@ from .._trace_state import TraceState
 from .._training_validation import reject_compiled_model
 from .._literals import (
     BufferVisibilityLiteral,
+    CollapseLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -4868,6 +4869,45 @@ class Trace(CapturedRun):
         """Access structured per-module metadata by address, index, or pass notation."""
         return self._module_logs
 
+    @property
+    def module_collapse_order(self) -> list[tuple[str, float]]:
+        """Canonical smart-collapse module ranking.
+
+        Returns
+        -------
+        list[tuple[str, float]]
+            ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
+        """
+
+        from ..visualization.auto_collapse import collapse_order
+
+        return collapse_order(self)
+
+    def collapse_order(
+        self,
+        weights: Any | None = None,
+        mode: Literal["auto", "max"] = "auto",
+    ) -> list[tuple[str, float]]:
+        """Return smart-collapse ranking for a custom policy.
+
+        Parameters
+        ----------
+        weights:
+            Optional mapping or ``CollapseWeights`` overriding default score
+            weights.
+        mode:
+            ``"auto"`` or ``"max"`` landmark policy.
+
+        Returns
+        -------
+        list[tuple[str, float]]
+            ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
+        """
+
+        from ..visualization.auto_collapse import collapse_order
+
+        return collapse_order(self, weights=weights, mode=mode)
+
     def modules_with_facet(self, name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now.
 
@@ -5632,6 +5672,7 @@ class Trace(CapturedRun):
         node_spec_fn: Optional[Callable[..., Any]] = None,
         collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
         collapse_fn: Optional[Callable[..., Any]] = None,
+        collapse: CollapseLiteral = "none",
         skip_fn: Optional[Callable[..., Any]] = None,
         vis_edge_overrides: Optional[Dict[str, Any]] = None,
         vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -5713,6 +5754,7 @@ class Trace(CapturedRun):
             node_spec_fn=node_spec_fn,
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             collapse_fn=collapse_fn,
+            collapse=collapse,
             skip_fn=skip_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_grad_edge_overrides=vis_grad_edge_overrides,

@@ -64,6 +64,7 @@ from PIL import Image
 
 from .._literals import (
     BufferVisibilityLiteral,
+    CollapseLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -761,6 +762,7 @@ def draw(
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
+    collapse: CollapseLiteral = "none",
     skip_fn: SkipFn | None = None,
     vis_edge_overrides: Optional[Dict[str, Any]] = None,
     vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -814,6 +816,9 @@ def draw(
             ``(module_log, default_spec)`` for collapsed module nodes.
         collapse_fn: Optional predicate receiving a Module. When provided,
             it replaces ``vis_call_depth`` collapse decisions.
+        collapse: Smart module-collapse mode. ``"none"`` preserves existing
+            rendering, ``"auto"`` targets a readable overview, and ``"max"``
+            aggressively collapses eligible modules.
         skip_fn: Optional predicate receiving a Layer. Skipped nodes are
             elided and edges are chained through them.
         vis_edge_overrides: Overrides for forward edges.
@@ -891,6 +896,8 @@ def draw(
         )
     if vis_intervention_mode not in {"node_mark", "as_node"}:
         raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
+    if collapse not in {"none", "auto", "max"}:
+        raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
     site_labels, _ = intervention_site_and_cone_labels(self, show_cone=vis_show_cone)
     intervention_node_spec_fn = make_intervention_node_spec_fn(
@@ -922,6 +929,10 @@ def draw(
         )
     if vis_renderer not in {"graphviz", "dagua"}:
         raise ValueError("vis_renderer must be 'graphviz' or 'dagua'")
+    if collapse != "none" and collapse_fn is None:
+        from .auto_collapse import resolve_collapse_fn
+
+        collapse_fn = resolve_collapse_fn(self, collapse, vis_mode)
     theme = resolve_theme(vis_theme, for_paper=for_paper)
     if node_overlay is None:
         node_overlay = getattr(self, "_node_overlay_scores", None)

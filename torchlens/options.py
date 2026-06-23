@@ -12,6 +12,7 @@ import torch
 from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._literals import (
     BufferVisibilityLiteral,
+    CollapseLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -97,6 +98,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "node_spec_fn",
     "collapsed_node_spec_fn",
     "collapse_fn",
+    "collapse",
     "skip_fn",
     "edge_overrides",
     "grad_edge_overrides",
@@ -204,6 +206,7 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "vis_graph_overrides": "graph_overrides",
     "node_style": "node_style",
     "vis_node_mode": "node_style",
+    "collapse": "collapse",
     "vis_edge_overrides": "edge_overrides",
     "vis_grad_edge_overrides": "grad_edge_overrides",
     "vis_module_overrides": "module_overrides",
@@ -441,6 +444,24 @@ def _validate_buffer_visibility(value: BufferVisibilityLiteral | bool) -> None:
     if value in {"never", "meaningful", "always"}:
         return
     raise ValueError("Buffer visibility must be 'never', 'meaningful', 'always', or a bool.")
+
+
+def _validate_collapse(value: CollapseLiteral) -> None:
+    """Validate smart module-collapse mode.
+
+    Parameters
+    ----------
+    value:
+        Candidate collapse mode.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not a supported collapse mode.
+    """
+
+    if value not in {"none", "auto", "max"}:
+        raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
 
 
 def _set_frozen_fields(
@@ -1094,6 +1115,8 @@ class VisualizationOptions:
         Optional collapsed module-node customization callback.
     collapse_fn:
         Optional module collapse predicate.
+    collapse:
+        Smart module-collapse mode: ``"none"``, ``"auto"``, or ``"max"``.
     skip_fn:
         Optional layer skip predicate.
     edge_overrides:
@@ -1149,6 +1172,7 @@ class VisualizationOptions:
     node_spec_fn: Callable[["Layer", NodeSpec], NodeSpec | None] | None = None
     collapsed_node_spec_fn: Callable[["Module", NodeSpec], NodeSpec | None] | None = None
     collapse_fn: Callable[["Module"], bool] | None = None
+    collapse: CollapseLiteral = "none"
     skip_fn: Callable[["Layer"], bool] | None = None
     edge_overrides: dict[str, Any] | None = None
     grad_edge_overrides: dict[str, Any] | None = None
@@ -1186,6 +1210,7 @@ class VisualizationOptions:
             Callable[["Module", NodeSpec], NodeSpec | None] | None | MissingType
         ) = MISSING,
         collapse_fn: Callable[["Module"], bool] | None | MissingType = MISSING,
+        collapse: CollapseLiteral | MissingType = MISSING,
         skip_fn: Callable[["Layer"], bool] | None | MissingType = MISSING,
         edge_overrides: dict[str, Any] | None | MissingType = MISSING,
         grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -1264,6 +1289,7 @@ class VisualizationOptions:
             "collapse_fn": _resolve_option_value(
                 "collapse_fn", collapse_fn, None, specified_fields
             ),
+            "collapse": _resolve_option_value("collapse", collapse, "none", specified_fields),
             "skip_fn": _resolve_option_value("skip_fn", skip_fn, None, specified_fields),
             "edge_overrides": _resolve_option_value(
                 "edge_overrides", edge_overrides, None, specified_fields
@@ -1305,6 +1331,7 @@ class VisualizationOptions:
         _validate_buffer_visibility(values["show_buffers"])
         _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
         _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
+        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
@@ -1356,6 +1383,7 @@ class VisualizationOptions:
         _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
         _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
         _validate_buffer_visibility(values["show_buffers"])
+        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
@@ -1738,6 +1766,7 @@ def merge_visualization_options(
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
+    collapse: CollapseLiteral | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -1773,6 +1802,7 @@ def merge_visualization_options(
         "vis_direction": vis_direction,
         "vis_graph_overrides": vis_graph_overrides,
         "vis_node_mode": vis_node_mode,
+        "collapse": collapse,
         "vis_edge_overrides": vis_edge_overrides,
         "vis_grad_edge_overrides": vis_grad_edge_overrides,
         "vis_module_overrides": vis_module_overrides,
@@ -1886,6 +1916,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "node_spec_fn": visualization.node_spec_fn,
         "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
         "collapse_fn": visualization.collapse_fn,
+        "collapse": visualization.collapse,
         "skip_fn": visualization.skip_fn,
         "vis_edge_overrides": visualization.edge_overrides,
         "vis_grad_edge_overrides": visualization.grad_edge_overrides,
