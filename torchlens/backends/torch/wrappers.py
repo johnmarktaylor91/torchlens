@@ -988,6 +988,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             out_orig = func(*args, **kwargs)
         finally:
             _nvtx_range_pop(nvtx_pushed)
+        return_value = out_orig
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - capture_start_time,
             rng_states=rng_states,
@@ -1008,13 +1009,16 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Both cases need safe_copy so logging doesn't overwrite the original's
         # label, but only true in-place ops should propagate the new label back.
         was_inplace = same_object_returned and (
-            func_name.endswith("_") or func_name.startswith("__i")
+            func_name.endswith("_")
+            or func_name.startswith("__i")
+            or func_name in {"__setitem__", "__delitem__"}
         )
         if same_object_returned:
             # Create a distinct tensor object for logging — otherwise attaching
             # _tl.label_raw on the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
 
+        out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
             func,
@@ -1055,6 +1059,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 out_label = get_tensor_label(out_orig)
                 if out_label is not None:
                     set_tensor_label(args[0], out_label)
+                    if isinstance(return_value, torch.Tensor):
+                        set_tensor_label(return_value, out_label)
 
         producer_label = None
         if isinstance(out_orig, torch.Tensor):
@@ -1064,7 +1070,9 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         if is_bottom_level_func:
             record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
 
-        return out_orig
+        if out_orig is not out_before_hooks:
+            return out_orig
+        return return_value
 
     # ---- __wrapped__ removal for JIT compatibility ----
     # @wraps sets __wrapped__ on the wrapper. For C builtins (no __code__),
