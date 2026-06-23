@@ -5,12 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch import buffer_writes
 from torchlens.data_classes.cleanup import _scrub_per_op_equivalence_lists
 
 
@@ -261,6 +263,34 @@ class AliasWrite(nn.Module):
         return self.b.sum()
 
 
+class ManyBufferWrites(nn.Module):
+    """Model with many registered buffers but writes to only one of them."""
+
+    def __init__(self, num_extra_buffers: int = 48, steps: int = 8) -> None:
+        """Initialize a repeated-write model with many unrelated buffers.
+
+        Parameters
+        ----------
+        num_extra_buffers:
+            Number of read-free registered buffers used to stress lookup scale.
+        steps:
+            Number of in-place writes to the target buffer.
+        """
+
+        super().__init__()
+        self.steps = steps
+        self.register_buffer("target", torch.zeros(2))
+        for index in range(num_extra_buffers):
+            self.register_buffer(f"unused_{index}", torch.full((2,), float(index)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Repeatedly mutate the target buffer while passing a non-buffer tensor arg."""
+
+        for _ in range(self.steps):
+            self.target.add_(x)
+        return self.target + x
+
+
 @pytest.mark.parametrize(
     ("model_factory", "input_factory", "expected_overwrites"),
     [
@@ -322,6 +352,29 @@ def test_buffer_write_models_validate_and_expose_entities(
         assert buffer.final_value is not None
         assert buffer.num_overwrites == overwrite_count
     assert not any(op.is_buffer for op in trace.compute_ops)
+
+
+def test_buffer_write_lookup_avoids_per_op_full_storage_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Storage-key calls scale near buffers plus writes, not buffers times writes."""
+
+    call_count = 0
+    original_storage_key = buffer_writes.storage_key
+
+    def counted_storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
+        """Count storage-key computations while preserving real behavior."""
+
+        nonlocal call_count
+        call_count += 1
+        return original_storage_key(tensor)
+
+    monkeypatch.setattr(buffer_writes, "storage_key", counted_storage_key)
+
+    trace = tl.trace(ManyBufferWrites(num_extra_buffers=48, steps=8), torch.ones(2))
+
+    assert trace.graph_shape_hash is not None
+    assert call_count < 180
 
 
 def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
