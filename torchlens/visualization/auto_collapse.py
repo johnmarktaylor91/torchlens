@@ -33,6 +33,23 @@ STRUCTURED_CONTAINER_NAMES = frozenset(
         "trunk",
     }
 )
+JUNCTION_FUNC_NAMES = frozenset({"__add__", "add", "cat", "concat", "concatenate"})
+LEAF_BLOCK_MAX_OPS = 12
+LEAF_BLOCK_WRAPPER_CLASSES = frozenset(
+    {"BasicConv2d", "Conv2dNormActivation", "ConvNormActivation"}
+)
+LEAF_BLOCK_CHILD_CLASS_PARTS = (
+    "Activation",
+    "BatchNorm",
+    "Conv",
+    "Dropout",
+    "GELU",
+    "Identity",
+    "LayerNorm",
+    "Pool",
+    "ReLU",
+    "SiLU",
+)
 _INDEXED_CHILD_RE = re.compile(r"^(?P<stem>.*?)(?:\.?\d+|_?\d+[a-z]?)$")
 _STAGE_NAME_RE = re.compile(
     r"^(?:denseblock\d*|transition\d*|layer\d+|stage\d*|mixed_[0-9a-z]+|mixed_\d+)$",
@@ -518,7 +535,7 @@ def _count_passthrough_edges(
         op = cast("Op", trace.ops[label])
         if _base_label(op.label) not in output_layers:
             continue
-        if _op_func_name(op) not in {"__add__", "add", "cat", "concat", "concatenate"}:
+        if _op_func_name(op) not in JUNCTION_FUNC_NAMES:
             continue
         has_internal_parent = False
         has_input_parent = False
@@ -783,6 +800,75 @@ def _is_meaningful_stage_child(module: "Module") -> bool:
     return int(getattr(module, "num_layers", 0) or 0) >= 2
 
 
+def _is_meaningful_leaf_block(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
+    """Return whether a standalone small op chain should collapse as one block.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the module hierarchy.
+    signal:
+        Candidate module signals.
+
+    Returns
+    -------
+    bool
+        True when the module is a compact non-junction block whose internals
+        would otherwise render at a finer grain than neighboring stage boxes.
+    """
+
+    if not signal.eligible:
+        return False
+    try:
+        module = cast("Module", trace.modules[signal.address])
+    except KeyError:
+        return False
+    op_count = len(signal.subtree_ops)
+    forced_wrapper = (
+        module.class_name in LEAF_BLOCK_WRAPPER_CLASSES
+        or signal.address.rsplit(".", 1)[-1].lower() == "project"
+    )
+    if op_count < 2:
+        return False
+    if op_count > LEAF_BLOCK_MAX_OPS and not forced_wrapper:
+        return False
+    if signal.passthrough_edges > 0:
+        return False
+    if _is_structured_container(trace, signal):
+        return False
+    child_addresses = [
+        str(child_address)
+        for child_address in getattr(module, "address_children", ()) or ()
+        if child_address in trace.modules
+    ]
+    if not child_addresses and _is_tiny_norm_leaf(module, op_count):
+        return True
+    for child_address in child_addresses:
+        child_module = cast("Module", trace.modules[child_address])
+        if not _is_leaf_block_ingredient(child_module):
+            return False
+    if any(
+        _op_func_name(cast("Op", trace.ops[label])) in JUNCTION_FUNC_NAMES
+        for label in signal.subtree_ops
+    ):
+        return False
+    return signal.internal_edges >= 1
+
+
+def _is_leaf_block_ingredient(module: "Module") -> bool:
+    """Return whether a child module is an atomic layer inside a leaf block."""
+
+    class_name = str(getattr(module, "class_name", ""))
+    return any(part in class_name for part in LEAF_BLOCK_CHILD_CLASS_PARTS)
+
+
+def _is_tiny_norm_leaf(module: "Module", op_count: int) -> bool:
+    """Return whether a norm module should fold its primitive bookkeeping ops."""
+
+    class_name = str(getattr(module, "class_name", ""))
+    return 2 <= op_count <= 3 and "Norm" in class_name
+
+
 def _clip(value: float) -> float:
     """Clip a value to the unit interval."""
 
@@ -820,6 +906,9 @@ def _select_modules(
         target = min(target, math.ceil(len(trace.ops) * 0.7))
     selected: list[str] = []
     visible_count = len(trace.ops)
+    if collapse == "max":
+        selected = list(_select_modules(trace, collapse="auto", vis_mode=vis_mode))
+        visible_count = _visible_count_after_selection(trace, analysis, selected)
     ordered = collapse_order(trace, mode=collapse)
     for address, score in ordered:
         if score <= 0.0:
@@ -839,10 +928,13 @@ def _select_modules(
         ):
             hidden_ops = min(hidden_ops, max(1, visible_count - 20))
         next_visible = visible_count - hidden_ops
+        tentative_selected = _selection_with_addresses(selected, addresses, collapse=collapse)
+        if collapse == "max":
+            next_visible = _visible_count_after_selection(trace, analysis, tentative_selected)
         if next_visible < floor and len(addresses) > 1:
             addresses = (address,)
-            hidden_ops = analysis.signals[address].hidden_ops
-            next_visible = visible_count - hidden_ops
+            tentative_selected = _selection_with_addresses(selected, addresses, collapse=collapse)
+            next_visible = _visible_count_after_selection(trace, analysis, tentative_selected)
         if (
             next_visible < floor
             and collapse == "auto"
@@ -853,15 +945,85 @@ def _select_modules(
             next_visible = visible_count - hidden_ops
         if next_visible < floor:
             continue
-        selected.extend(addresses)
+        selected = tentative_selected
         visible_count = next_visible
         if band[0] <= visible_count <= target:
             break
+    selected = _complete_leaf_block_selection(trace, analysis, selected, collapse=collapse)
     if collapse == "max":
         return frozenset(selected)
     if band[0] <= visible_count <= band[1]:
         return frozenset(selected)
     return frozenset(selected)
+
+
+def _visible_count_after_selection(
+    trace: "Trace",
+    analysis: CollapseAnalysis,
+    selected: list[str],
+) -> int:
+    """Return the rendered op count estimate after collapsing ``selected``."""
+
+    hidden_ops = sum(analysis.signals[address].hidden_ops for address in selected)
+    return max(1, len(trace.ops) - hidden_ops)
+
+
+def _selection_with_addresses(
+    selected: list[str],
+    addresses: tuple[str, ...],
+    *,
+    collapse: Literal["auto", "max"],
+) -> list[str]:
+    """Return ``selected`` updated with ``addresses`` under mode overlap rules."""
+
+    if collapse == "auto":
+        return [*selected, *addresses]
+    selected_without_descendants = [
+        selected_address
+        for selected_address in selected
+        if not any(selected_address.startswith(f"{address}.") for address in addresses)
+    ]
+    return [*selected_without_descendants, *addresses]
+
+
+def _complete_leaf_block_selection(
+    trace: "Trace",
+    analysis: CollapseAnalysis,
+    selected: list[str],
+    *,
+    collapse: Literal["auto", "max"],
+) -> list[str]:
+    """Add compatible standalone leaf-blocks for uniform collapse grain.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    analysis:
+        Precomputed collapse analysis.
+    selected:
+        Greedy collapse antichain selected so far.
+    collapse:
+        Active collapse mode.
+
+    Returns
+    -------
+    list[str]
+        Selection plus compatible leaf-block candidates.
+    """
+
+    completed = list(selected)
+    leaf_addresses = [
+        address
+        for address, signal in analysis.signals.items()
+        if _is_meaningful_leaf_block(trace, signal)
+    ]
+    leaf_addresses.sort(key=lambda address: (analysis.signals[address].depth, address))
+    for address in leaf_addresses:
+        if _selection_conflicts(address, completed, collapse=collapse):
+            continue
+        completed = _selection_with_addresses(completed, (address,), collapse=collapse)
+    return completed
 
 
 def _inside_selected(address: str, selected: list[str]) -> bool:

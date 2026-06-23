@@ -201,6 +201,26 @@ class NestedStageBackbone(torch.nn.Module):
         return self.head(self.backbone(self.stem(x)))
 
 
+class StemStageBackbone(torch.nn.Module):
+    """Backbone with a standalone leaf-block stem and repeated stage blocks."""
+
+    def __init__(self) -> None:
+        """Initialize a leaf-block stem, stages, and leaf-block head."""
+
+        super().__init__()
+        self.stem = ConvNormRelu(4, 4, 3)
+        self.stages = torch.nn.ModuleList([ConvNormRelu(4, 4, 3) for _ in range(4)])
+        self.head = ConvNormRelu(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, repeated stages, and head."""
+
+        x = self.stem(x)
+        for stage in self.stages:
+            x = stage(x)
+        return self.head(x)
+
+
 class ConvNormRelu(torch.nn.Module):
     """Fixed conv-batchnorm-relu leaf chain."""
 
@@ -379,6 +399,18 @@ def _collapsed_label_count(source: str, prefix: str) -> int:
     return source.count(f"<B>@{prefix}")
 
 
+def _collapsed_exact_label_count(source: str, address: str) -> int:
+    """Return collapsed module label count for exactly ``address``."""
+
+    return len(
+        [
+            line
+            for line in source.splitlines()
+            if "shape=box3d" in line and f"<B>@{address}</B>" in line
+        ]
+    )
+
+
 def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> None:
     """Auto collapse hits the overview budget and renders deterministically."""
 
@@ -430,6 +462,28 @@ def test_repeat_capture_and_trivial_collapse_score() -> None:
         trivial.cleanup()
 
 
+def test_max_collapse_is_never_less_collapsed_than_auto(tmp_path: Path) -> None:
+    """Max collapse renders no more nodes than auto on representative toy models."""
+
+    cases: list[tuple[str, torch.nn.Module, torch.Tensor]] = [
+        ("repeated", RepeatedResidual(depth=5), torch.randn(2, 8)),
+        ("parent_residual", ParentJoinResidual(depth=4), torch.randn(2, 8)),
+        ("skip_concat", SkipConcatUNet(), torch.randn(1, 4, 16, 16)),
+        ("branch_concat", BranchConcat(), torch.randn(1, 4, 16, 16)),
+        ("stem_stage", StemStageBackbone(), torch.randn(1, 4, 16, 16)),
+        ("recurrent", RecurrentWrapper(), torch.randn(1, 6, 8)),
+    ]
+    for name, model, x in cases:
+        trace = _trace(model, x)
+        try:
+            auto_source = _draw_source(trace, tmp_path, f"{name}_auto", "auto")
+            max_source = _draw_source(trace, tmp_path, f"{name}_max", "max")
+
+            assert _dot_node_count(max_source) <= _dot_node_count(auto_source)
+        finally:
+            trace.cleanup()
+
+
 def test_auto_collapse_residual_peer_bodies_keep_parent_joins(tmp_path: Path) -> None:
     """Auto folds repeated residual bodies while keeping add junction nodes visible."""
 
@@ -458,10 +512,10 @@ def test_auto_collapse_skip_concat_keeps_cat_junction(tmp_path: Path) -> None:
 
         assert _dot_node_count(none_source) > 15
         assert _dot_node_count(auto_source) <= int(_dot_node_count(none_source) * 0.7)
+        assert _dot_node_count(max_source) <= _dot_node_count(auto_source)
         assert _box_count(auto_source) >= 2
         assert _has_visible_node(auto_source, "cat_")
         assert auto_source != none_source
-        assert auto_source != max_source
     finally:
         trace.cleanup()
 
@@ -483,6 +537,24 @@ def test_auto_collapse_branch_concat_keeps_cat_junction(tmp_path: Path) -> None:
         trace.cleanup()
 
 
+def test_auto_collapse_leaf_blocks_match_stage_grain(tmp_path: Path) -> None:
+    """Auto folds standalone leaf blocks at the same grain as stage siblings."""
+
+    trace = _trace(StemStageBackbone(), torch.randn(1, 4, 16, 16))
+    try:
+        none_source = _draw_source(trace, tmp_path, "stem_stage_none", "none")
+        auto_source = _draw_source(trace, tmp_path, "stem_stage_auto", "auto")
+        max_source = _draw_source(trace, tmp_path, "stem_stage_max", "max")
+
+        assert _dot_node_count(auto_source) < _dot_node_count(none_source)
+        assert _dot_node_count(max_source) <= _dot_node_count(auto_source)
+        assert _collapsed_exact_label_count(auto_source, "stem") == 1
+        assert _collapsed_label_count(auto_source, "stages.") >= 4
+        assert _collapsed_exact_label_count(auto_source, "head") == 1
+    finally:
+        trace.cleanup()
+
+
 def test_auto_collapse_descends_into_nested_stage_container(tmp_path: Path) -> None:
     """Auto keeps nested stage boxes instead of swallowing the whole container."""
 
@@ -493,7 +565,7 @@ def test_auto_collapse_descends_into_nested_stage_container(tmp_path: Path) -> N
 
         assert _collapsed_label_count(auto_source, "backbone.") >= 4
         assert "<B>@backbone</B></TD>" not in auto_source
-        assert _dot_node_count(max_source) < _dot_node_count(auto_source)
+        assert _dot_node_count(max_source) <= _dot_node_count(auto_source)
         assert auto_source != max_source
     finally:
         trace.cleanup()
