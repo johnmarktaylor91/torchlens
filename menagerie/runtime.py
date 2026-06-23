@@ -901,6 +901,40 @@ def unrenderable_reason(row: CatalogRow) -> str | None:
     return None
 
 
+def _importable_attr_module_roots(constructor_call: str) -> set[str]:
+    """Attribute roots that resolve to an installed importable module.
+
+    Many catalog recipes call a model via a dotted attribute path with no explicit
+    ``import`` statement -- e.g. ``torchaudio.models.DeepSpeech(...)`` or
+    ``monai.networks.nets.AHNet(...)``. ``required_modules`` deliberately ignores bare
+    attribute roots for *dependency-cluster* gating (an attribute root is just as likely a
+    namespace alias like ``np`` or pseudo-code like ``nn`` as a real package). For
+    *namespace building*, though, an attribute root that genuinely resolves to an installed
+    top-level module must be bound, or the recipe raises ``NameError`` even though the
+    package is present. This recovers the whole ``module.Class(...)``-with-no-import class of
+    recipes (torchaudio / torchsr / monai / torch_geometric / cornet / ...) without inventing
+    any pip dependency: only roots that ``importlib`` can actually find a spec for are added.
+    """
+
+    try:
+        tree = ast.parse(constructor_call.strip(), mode="exec")
+    except SyntaxError:
+        return set()
+    _imported, attr_roots, bound = _collect_recipe_names(tree)
+    roots: set[str] = set()
+    for root in attr_roots:
+        if not root or root[0].isupper():
+            continue  # a Class/symbol, not a module
+        if root in bound or root in STDLIB_OR_LOCAL or root in LOCAL_SOURCE_NAMES:
+            continue
+        try:
+            if importlib.util.find_spec(root) is not None:
+                roots.add(root)
+        except (ImportError, ModuleNotFoundError, ValueError):
+            continue
+    return roots
+
+
 def import_namespace(row: CatalogRow) -> dict[str, Any]:
     """Build the namespace used to instantiate a model recipe.
 
@@ -924,6 +958,7 @@ def import_namespace(row: CatalogRow) -> dict[str, Any]:
         "diffusers",
         "segmentation_models_pytorch",
         *required_modules(row.constructor_call, row.zoo),
+        *_importable_attr_module_roots(row.constructor_call),
     }
     for module_name in sorted(module_names):
         try:
