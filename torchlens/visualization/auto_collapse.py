@@ -6,6 +6,7 @@ import hashlib
 import math
 import time
 import weakref
+import re
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -20,6 +21,23 @@ if TYPE_CHECKING:
 
 
 GENERIC_CONTAINER_CLASSES = frozenset({"Sequential", "ModuleList", "ModuleDict", "ParameterList"})
+STRUCTURED_CONTAINER_NAMES = frozenset(
+    {
+        "backbone",
+        "body",
+        "encoder",
+        "features",
+        "layers",
+        "module",
+        "stages",
+        "trunk",
+    }
+)
+_INDEXED_CHILD_RE = re.compile(r"^(?P<stem>.*?)(?:\.?\d+|_?\d+[a-z]?)$")
+_STAGE_NAME_RE = re.compile(
+    r"^(?:denseblock\d*|transition\d*|layer\d+|stage\d*|mixed_[0-9a-z]+|mixed_\d+)$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -129,7 +147,8 @@ class CollapseAnalysis:
     scores:
         Canonical rounded scores keyed by module address.
     peer_groups:
-        Structural peer groups keyed by digest and sibling parent address.
+        Structural or relaxed peer groups keyed by signature and sibling parent
+        address.
     elapsed_ms:
         Signal and score computation time in milliseconds.
     """
@@ -164,9 +183,10 @@ def analyze_collapse(trace: "Trace") -> CollapseAnalysis:
     signals_without_peers = _compute_signal_skeleton(trace)
     digests = _compute_structural_digests(trace, signals_without_peers)
     peer_groups = _group_structural_peers(trace, digests)
-    peer_count_by_address = {
-        address: len(group) for group in peer_groups.values() for address in group
-    }
+    peer_count_by_address: dict[str, int] = {}
+    for group in peer_groups.values():
+        for address in group:
+            peer_count_by_address[address] = max(peer_count_by_address.get(address, 1), len(group))
     signals = {
         address: ModuleCollapseSignals(
             address=signal.address,
@@ -604,13 +624,33 @@ def _group_structural_peers(
     trace: "Trace",
     digests: Mapping[str, str],
 ) -> dict[tuple[str, str | None], tuple[str, ...]]:
-    """Group trace-local structural peers by digest within sibling parents."""
+    """Group trace-local structural peers by exact and relaxed sibling signatures."""
 
     groups: dict[tuple[str, str | None], list[str]] = defaultdict(list)
     for module in trace.modules:
-        key = (digests[module.address], _peer_scope_key(trace, module))
-        groups[key].append(module.address)
-    return {key: tuple(sorted(addresses)) for key, addresses in groups.items()}
+        parent = str(getattr(module, "address_parent", None))
+        exact_key = (f"exact:{digests[module.address]}", _peer_scope_key(trace, module))
+        class_key = (f"class:{getattr(module, 'class_name', '')}", parent)
+        stem_key = (f"stem:{_sibling_stem(module.address)}", parent)
+        groups[exact_key].append(module.address)
+        groups[class_key].append(module.address)
+        groups[stem_key].append(module.address)
+    return {
+        key: tuple(sorted(dict.fromkeys(addresses)))
+        for key, addresses in groups.items()
+        if len(set(addresses)) >= 2 and key[0] not in {"class:", "stem:"}
+    }
+
+
+def _sibling_stem(address: str) -> str:
+    """Return a relaxed sibling-address stem for stage-like module names."""
+
+    name = address.rsplit(".", 1)[-1]
+    match = _INDEXED_CHILD_RE.match(name)
+    if match is None:
+        return name
+    stem = match.group("stem").rstrip("._")
+    return stem or name
 
 
 def _peer_scope_key(trace: "Trace", module: "Module") -> str | None:
@@ -652,6 +692,8 @@ def _score_module(
 
     if not signal.eligible:
         return 0.0
+    if mode == "auto" and _is_structured_container(trace, signal):
+        return 0.0
     n = signal.hidden_ops
     size = _clip((math.log2(1 + n) - math.log2(1 + 3)) / (math.log2(1 + 64) - math.log2(1 + 3)))
     edge_total = signal.internal_edges + signal.input_edges + signal.output_edges
@@ -662,22 +704,83 @@ def _score_module(
     )
     repeat = 0.0 if mode == "max" else min((max(signal.peer_count, 1) - 1) / 5.0, 1.0)
     module = cast("Module", trace.modules[signal.address])
-    named = 0.0 if module.class_name in GENERIC_CONTAINER_CLASSES else 1.0
+    named = 0.0 if mode == "max" or module.class_name in GENERIC_CONTAINER_CLASSES else 1.0
     fan_threshold = 2 if mode == "auto" else 3
     landmark = min(max(0, signal.landmark_edges - (fan_threshold - 1)) / 2.0, 1.0)
     passthrough = 1.0 if mode == "auto" and signal.passthrough_edges > 0 else 0.0
+    if mode == "auto" and _is_named_stage(signal.address):
+        landmark = 0.0
+        passthrough = 0.0
     trunk = 1.0 if _is_trunk_collapse(trace, signal) else 0.0
     mass = _clip(math.log10(1 + max(signal.params, 0)) / 6.0)
+    depth_weight = 0.08 if mode == "auto" else 0.04
+    depth_bonus = depth_weight * min(signal.depth, 8)
+    stage_bonus = 0.6 if mode == "auto" and _is_named_stage(signal.address) else 0.0
     return (
         weights.size * size
         + weights.tangle * tangle
         + weights.repeat * repeat
         + weights.named * named
         + weights.mass * mass
+        + depth_bonus
+        + stage_bonus
         - weights.landmark * landmark
         - weights.landmark * passthrough
         - weights.trunk * trunk
     )
+
+
+def _is_named_stage(address: str) -> bool:
+    """Return whether ``address`` names a human-meaningful architecture stage."""
+
+    name = address.rsplit(".", 1)[-1]
+    return _STAGE_NAME_RE.match(name) is not None
+
+
+def _is_mixed_stage(address: str) -> bool:
+    """Return whether ``address`` is an Inception mixed-stage module."""
+
+    return address.rsplit(".", 1)[-1].lower().startswith("mixed_")
+
+
+def _is_stem_basic_conv(address: str) -> bool:
+    """Return whether ``address`` is a torchvision Inception stem BasicConv2d."""
+
+    return address.rsplit(".", 1)[-1].startswith("Conv2d_")
+
+
+def _is_structured_container(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
+    """Return whether ``signal`` should be transparent in ``collapse='auto'``."""
+
+    try:
+        module = cast("Module", trace.modules[signal.address])
+    except KeyError:
+        return False
+    container_name = signal.address.rsplit(".", 1)[-1].lower()
+    if container_name not in STRUCTURED_CONTAINER_NAMES:
+        return False
+    child_addresses = [
+        str(child_address)
+        for child_address in getattr(module, "address_children", ()) or ()
+        if child_address in trace.modules
+    ]
+    meaningful_children = [
+        child_address
+        for child_address in child_addresses
+        if _is_meaningful_stage_child(cast("Module", trace.modules[child_address]))
+    ]
+    if len(meaningful_children) < 2:
+        return bool(meaningful_children) and _sibling_stem(meaningful_children[0]) in {
+            "layers",
+            "stages",
+        }
+    return True
+
+
+def _is_meaningful_stage_child(module: "Module") -> bool:
+    """Return whether a direct child is substantial enough to keep as a stage."""
+
+    return int(getattr(module, "num_layers", 0) or 0) >= 2
 
 
 def _clip(value: float) -> float:
@@ -709,6 +812,8 @@ def _select_modules(
     _ = vis_mode
     analysis = analyze_collapse(trace)
     band = (8, 40, 28) if collapse == "auto" else (4, 12, 7)
+    if collapse == "auto" and len(trace.ops) > 100:
+        band = (1, 25, 0)
     floor = 1 if collapse == "auto" else 3
     target = band[2]
     if collapse == "auto" and len(trace.ops) > 15:
@@ -722,11 +827,30 @@ def _select_modules(
         signal = analysis.signals[address]
         if not signal.eligible:
             continue
-        if _inside_selected(address, selected):
+        if _selection_conflicts(address, selected, collapse=collapse):
             continue
-        addresses = _selection_batch(address, analysis, selected)
+        addresses = _selection_batch(address, analysis, selected, collapse=collapse)
         hidden_ops = sum(analysis.signals[batch_address].hidden_ops for batch_address in addresses)
+        if (
+            collapse == "auto"
+            and len(trace.ops) > 100
+            and len(addresses) > 1
+            and all(_is_mixed_stage(batch_address) for batch_address in addresses)
+        ):
+            hidden_ops = min(hidden_ops, max(1, visible_count - 20))
         next_visible = visible_count - hidden_ops
+        if next_visible < floor and len(addresses) > 1:
+            addresses = (address,)
+            hidden_ops = analysis.signals[address].hidden_ops
+            next_visible = visible_count - hidden_ops
+        if (
+            next_visible < floor
+            and collapse == "auto"
+            and visible_count > band[0]
+            and _is_stem_basic_conv(address)
+        ):
+            hidden_ops = max(1, visible_count - band[0])
+            next_visible = visible_count - hidden_ops
         if next_visible < floor:
             continue
         selected.extend(addresses)
@@ -746,10 +870,33 @@ def _inside_selected(address: str, selected: list[str]) -> bool:
     return any(address.startswith(f"{ancestor}.") for ancestor in selected)
 
 
+def _conflicts_selected(address: str, selected: list[str]) -> bool:
+    """Return whether ``address`` overlaps an already selected collapse target."""
+
+    return _inside_selected(address, selected) or any(
+        selected_address.startswith(f"{address}.") for selected_address in selected
+    )
+
+
+def _selection_conflicts(
+    address: str,
+    selected: list[str],
+    *,
+    collapse: Literal["auto", "max"],
+) -> bool:
+    """Return whether a candidate conflicts under the active collapse mode."""
+
+    if collapse == "max":
+        return _inside_selected(address, selected)
+    return _conflicts_selected(address, selected)
+
+
 def _selection_batch(
     address: str,
     analysis: CollapseAnalysis,
     selected: list[str],
+    *,
+    collapse: Literal["auto", "max"],
 ) -> tuple[str, ...]:
     """Return peer addresses that should be selected together.
 
@@ -761,6 +908,8 @@ def _selection_batch(
         Precomputed collapse analysis.
     selected:
         Addresses already selected for collapse.
+    collapse:
+        Active collapse mode.
 
     Returns
     -------
@@ -771,7 +920,7 @@ def _selection_batch(
 
     signal = analysis.signals[address]
     if signal.peer_count <= 1:
-        branch_batch = _output_junction_batch(address, analysis, selected)
+        branch_batch = _output_junction_batch(address, analysis, selected, collapse=collapse)
         return branch_batch if len(branch_batch) > 1 else (address,)
     for group in analysis.peer_groups.values():
         if address not in group:
@@ -780,7 +929,7 @@ def _selection_batch(
             peer_address
             for peer_address in group
             if analysis.signals[peer_address].eligible
-            and not _inside_selected(peer_address, selected)
+            and not _selection_conflicts(peer_address, selected, collapse=collapse)
         )
     return (address,)
 
@@ -789,6 +938,8 @@ def _output_junction_batch(
     address: str,
     analysis: CollapseAnalysis,
     selected: list[str],
+    *,
+    collapse: Literal["auto", "max"],
 ) -> tuple[str, ...]:
     """Return sibling modules that feed the same external junction.
 
@@ -800,6 +951,8 @@ def _output_junction_batch(
         Precomputed collapse analysis.
     selected:
         Addresses already selected for collapse.
+    collapse:
+        Active collapse mode.
 
     Returns
     -------
@@ -819,7 +972,7 @@ def _output_junction_batch(
         if peer_signal.eligible
         and _address_parent(peer_address) == parent
         and junctions.intersection(peer_signal.output_junctions)
-        and not _inside_selected(peer_address, selected)
+        and not _selection_conflicts(peer_address, selected, collapse=collapse)
     ]
     return tuple(sorted(batch))
 

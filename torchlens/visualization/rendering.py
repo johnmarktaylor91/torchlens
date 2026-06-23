@@ -7881,6 +7881,8 @@ def _get_lowest_module_for_two_nodes(
     if both_nodes_collapsed_modules:
         if (vis_call_depth == 1) or (len(node1_nested_modules) == 1):
             return -1
+        if len(node1_modules) < vis_call_depth or len(node2_modules) < vis_call_depth:
+            return -1
         if node1_modules[vis_call_depth - 1] == node2_modules[vis_call_depth - 1]:
             module = node1_modules[vis_call_depth - 2]
             return cast(str, module)

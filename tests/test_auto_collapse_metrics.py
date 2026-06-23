@@ -164,6 +164,108 @@ class BranchConcat(torch.nn.Module):
         return torch.cat([self.a(x), self.b(x), self.c(x)], dim=1)
 
 
+class NestedStage(torch.nn.Module):
+    """Stage block used inside a generic nested backbone container."""
+
+    def __init__(self, width: int) -> None:
+        """Initialize a two-convolution stage."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(width, width, 3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(width, width, 3, padding=1),
+            torch.nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stage."""
+
+        return self.net(x)
+
+
+class NestedStageBackbone(torch.nn.Module):
+    """Model whose repeated stages live under a generic container."""
+
+    def __init__(self) -> None:
+        """Initialize a stem, nested backbone, and head."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(4, 4, 1)
+        self.backbone = torch.nn.Sequential(*(NestedStage(4) for _ in range(4)))
+        self.head = torch.nn.Conv2d(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the nested-stage backbone."""
+
+        return self.head(self.backbone(self.stem(x)))
+
+
+class ConvNormRelu(torch.nn.Module):
+    """Fixed conv-batchnorm-relu leaf chain."""
+
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int) -> None:
+        """Initialize the chain."""
+
+        super().__init__()
+        self.conv = torch.nn.Conv2d(
+            in_channels, out_channels, kernel_size, padding=kernel_size // 2
+        )
+        self.bn = torch.nn.BatchNorm2d(out_channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run convolution, normalization, and activation."""
+
+        return torch.relu(self.bn(self.conv(x)))
+
+
+class UniqueMixed(torch.nn.Module):
+    """Inception-like module with unique branch internals."""
+
+    def __init__(self, width: int, kernel_size: int) -> None:
+        """Initialize parallel branches with varying structure."""
+
+        super().__init__()
+        self.a = ConvNormRelu(width, width, 1)
+        self.b = torch.nn.Sequential(
+            ConvNormRelu(width, width, 1),
+            ConvNormRelu(width, width, kernel_size),
+        )
+        self.c = torch.nn.Sequential(
+            torch.nn.AvgPool2d(3, stride=1, padding=1),
+            ConvNormRelu(width, width, 1),
+        )
+        self.project = torch.nn.Conv2d(width * 3, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the parallel branches and project the concatenation."""
+
+        return self.project(torch.cat([self.a(x), self.b(x), self.c(x)], dim=1))
+
+
+class UniqueParallelStack(torch.nn.Module):
+    """Stack of same-role but structurally non-identical mixed modules."""
+
+    def __init__(self) -> None:
+        """Initialize mixed modules with different kernels."""
+
+        super().__init__()
+        self.mixed_5b = UniqueMixed(4, 3)
+        self.mixed_5c = UniqueMixed(4, 5)
+        self.mixed_5d = UniqueMixed(4, 3)
+        self.mixed_6a = UniqueMixed(4, 5)
+        self.head = torch.nn.Conv2d(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the mixed-module stack."""
+
+        x = self.mixed_5b(x)
+        x = self.mixed_5c(x)
+        x = self.mixed_5d(x)
+        x = self.mixed_6a(x)
+        return self.head(x)
+
+
 class RecurrentWrapper(torch.nn.Module):
     """GRU wrapper for recurrent module collapse coverage."""
 
@@ -271,6 +373,12 @@ def _has_visible_node(source: str, prefix: str) -> bool:
     return re.search(pattern, source, flags=re.MULTILINE) is not None
 
 
+def _collapsed_label_count(source: str, prefix: str) -> int:
+    """Return collapsed module label count with ``prefix``."""
+
+    return source.count(f"<B>@{prefix}")
+
+
 def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> None:
     """Auto collapse hits the overview budget and renders deterministically."""
 
@@ -370,6 +478,40 @@ def test_auto_collapse_branch_concat_keeps_cat_junction(tmp_path: Path) -> None:
         assert _dot_node_count(auto_source) <= int(_dot_node_count(none_source) * 0.7)
         assert _box_count(auto_source) >= 3
         assert _has_visible_node(auto_source, "cat_")
+        assert auto_source != none_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_descends_into_nested_stage_container(tmp_path: Path) -> None:
+    """Auto keeps nested stage boxes instead of swallowing the whole container."""
+
+    trace = _trace(NestedStageBackbone(), torch.randn(1, 4, 16, 16))
+    try:
+        auto_source = _draw_source(trace, tmp_path, "nested_stage_auto", "auto")
+        max_source = _draw_source(trace, tmp_path, "nested_stage_max", "max")
+
+        assert _collapsed_label_count(auto_source, "backbone.") >= 4
+        assert "<B>@backbone</B></TD>" not in auto_source
+        assert _dot_node_count(max_source) < _dot_node_count(auto_source)
+        assert auto_source != max_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_groups_structurally_similar_unique_parallel_modules(
+    tmp_path: Path,
+) -> None:
+    """Auto groups same-role unique mixed modules and avoids node-wall renders."""
+
+    trace = _trace(UniqueParallelStack(), torch.randn(1, 4, 16, 16))
+    try:
+        none_source = _draw_source(trace, tmp_path, "unique_parallel_none", "none")
+        auto_source = _draw_source(trace, tmp_path, "unique_parallel_auto", "auto")
+
+        assert _dot_node_count(none_source) > 40
+        assert _collapsed_label_count(auto_source, "mixed_") >= 4
+        assert _dot_node_count(auto_source) < 30
         assert auto_source != none_source
     finally:
         trace.cleanup()
