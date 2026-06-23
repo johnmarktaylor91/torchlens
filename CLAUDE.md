@@ -41,6 +41,8 @@ activation = log["linear_1_1"].out
 print(log.summary())
 print(tl.report.explain(log))
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
+log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
+print(log.module_collapse_order[:10])
 ```
 
 Use the unified predicate surface for selective capture, windowed saves, interventions, and
@@ -112,6 +114,13 @@ print(tl.compat.report(model, x).to_markdown())
   deferred like sibling preview gaps.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
+- `Trace.draw(collapse="none"|"auto"|"max")` controls smart module collapse. The default
+  `"none"` preserves existing rendering; `"auto"` targets a readable node budget; `"max"`
+  aggressively collapses eligible modules. `collapse=` supersedes `vis_call_depth` when used
+  and is orthogonal to `show_containers` (visual review is usually clearest with containers off).
+- Smart-collapse metadata is computed at access time: `Module.collapse_score`,
+  `Trace.module_collapse_order`, and `Trace.collapse_order(weights=..., mode=...)`. These are
+  not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;

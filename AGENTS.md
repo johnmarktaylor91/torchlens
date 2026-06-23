@@ -43,6 +43,11 @@ Key entry points:
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases
 - Visualization: `Trace.draw(order_siblings=True)` applies a Graphviz-only verified
   sibling-ordering post-pass for forward unrolled graphs under the node cap.
+  `Trace.draw(collapse="none"|"auto"|"max")` controls smart module collapse;
+  `"none"` is the default and preserves existing rendering, `"auto"` targets a readable
+  overview, and `"max"` aggressively collapses eligible modules. `collapse=` supersedes
+  `vis_call_depth` for smart collapse and is orthogonal to `show_containers` (usually best
+  reviewed with containers off).
 
 Common unified capture patterns:
 
@@ -66,6 +71,8 @@ patched = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
+overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
+module_scores = torch_trace.module_collapse_order
 ```
 
 ## Conventions
@@ -117,7 +124,8 @@ pytest tests/ -m "not slow" -x --tb=short
 10a. `inference_only=True` wraps forward capture in `torch.no_grad()` for forward-only analysis
      and is mutually exclusive with backward-related capture because it discards autograd history.
 11. Sibling ordering is forward/unrolled/dot-only; collapsed, rolled, backward, focused,
-    conditional, and large graphs must conservatively no-op.
+    conditional, and large graphs must conservatively no-op. Predicate-based smart collapse
+    keeps sibling ordering enabled when endpoints survive as rendered nodes.
 12. Predicate `save=` is the primary selective-capture spelling; `record(keep_op=...)` and
     `record(keep_module=...)` are deprecated aliases.
 13. `torch.func` / functorch transforms are captured as boundary ops; do not expect their
@@ -129,6 +137,9 @@ pytest tests/ -m "not slow" -x --tb=short
     `keras.backend.backend() == "tensorflow"`. Eager `op_callbacks` capture is the shipped primary
     path; graph-only FuncGraph fallback is the static-mode design; interventions, true backward
     capture, and T1 derived gradients are deferred.
+16. Smart-collapse metadata is computed, not serialized: `Module.collapse_score`,
+    `Trace.module_collapse_order`, and `Trace.collapse_order(weights=..., mode=...)` must stay
+    out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 
 ## Known Gotchas
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
