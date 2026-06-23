@@ -737,7 +737,12 @@ def render_pixi_manifest(spec: EnvSpec) -> str:
             lines.append(f"extra-index-urls = [{rendered}]")
         find_links = spec.pypi_options.get("find_links", [])
         if find_links:
-            rendered = ", ".join(_toml_quote(str(url)) for url in find_links)
+            rendered_links = []
+            for link in find_links:
+                link_value = str(link)
+                link_key = "url" if link_value.startswith(("http://", "https://")) else "path"
+                rendered_links.append(f"{{ {link_key} = {_toml_quote(link_value)} }}")
+            rendered = ", ".join(rendered_links)
             lines.append(f"find-links = [{rendered}]")
         index_strategy = spec.pypi_options.get("index_strategy")
         if index_strategy:
