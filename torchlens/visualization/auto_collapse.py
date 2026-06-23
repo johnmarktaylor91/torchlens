@@ -1598,8 +1598,8 @@ def _select_modules(
         if band[0] <= visible_count <= target:
             break
     selected = _complete_leaf_block_selection(trace, analysis, selected, collapse=collapse)
-    if collapse == "auto":
-        selected = _prefer_shallow_maxvit_stage_selection(trace, selected)
+    # Irregular stage containers remain a known general-algorithm gap; keep
+    # selection model-agnostic rather than adding per-class patches.
     if collapse == "max":
         return frozenset(selected)
     if band[0] <= visible_count <= band[1]:
@@ -1673,41 +1673,6 @@ def _complete_leaf_block_selection(
         if _selection_conflicts(address, completed, collapse=collapse):
             continue
         completed = _selection_with_addresses(completed, (address,), collapse=collapse)
-    return completed
-
-
-def _prefer_shallow_maxvit_stage_selection(trace: "Trace", selected: list[str]) -> list[str]:
-    """Replace noisy selected descendants with shallow MaxVit stage boxes.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    selected:
-        Greedy collapse addresses selected so far.
-
-    Returns
-    -------
-    list[str]
-        Selection with shallow MaxVit stages represented by stage boxes when
-        their internals would otherwise render as many separate nodes.
-    """
-
-    completed = list(selected)
-    for module in trace.modules:
-        if str(getattr(module, "class_name", "")) != "MaxVitBlock":
-            continue
-        if int(getattr(module, "num_layers", 0) or 0) > 250:
-            continue
-        if any(module.address.startswith(f"{ancestor}.") for ancestor in completed):
-            continue
-        descendants = [address for address in completed if address.startswith(f"{module.address}.")]
-        if len(descendants) < 3:
-            continue
-        completed = [
-            address for address in completed if not address.startswith(f"{module.address}.")
-        ]
-        completed.append(module.address)
     return completed
 
 
