@@ -2008,21 +2008,23 @@ def _build_param_fields(
     arg_parameters: list[torch.nn.Parameter],
 ) -> dict[str, int]:
     """Populate parameter-involvement fields. Returns parent_param_ops dict."""
-    parent_param_ops = _process_parent_param_ops(arg_parameters)
-    indiv_param_barcodes = list(parent_param_ops.keys())
-
     _param_logs = []
+    resolved_parameters = []
     for param in arg_parameters:
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
         if addr is not None and addr in self.param_logs:
             _param_logs.append(self.param_logs[addr])
+            resolved_parameters.append(param)
 
-    fields_dict["parent_params"] = arg_parameters
+    parent_param_ops = _process_parent_param_ops(resolved_parameters)
+    indiv_param_barcodes = list(parent_param_ops.keys())
+
+    fields_dict["parent_params"] = resolved_parameters
     fields_dict["_param_barcodes"] = indiv_param_barcodes
     fields_dict["parent_param_ops"] = parent_param_ops
     fields_dict["_param_logs"] = _param_logs
-    fields_dict["param_shapes"] = [tuple(param.shape) for param in arg_parameters]
+    fields_dict["param_shapes"] = [tuple(param.shape) for param in resolved_parameters]
     fields_dict["num_params"] = sum(prod(shape) for shape in fields_dict["param_shapes"])
     fields_dict["num_params_trainable"] = sum(
         pl.num_params for pl in _param_logs if pl.is_trainable
@@ -2031,7 +2033,9 @@ def _build_param_fields(
         pl.num_params for pl in _param_logs if not pl.is_trainable
     )
     with pause_logging():
-        fields_dict["param_memory"] = sum(p.nelement() * p.element_size() for p in arg_parameters)
+        fields_dict["param_memory"] = sum(
+            p.nelement() * p.element_size() for p in resolved_parameters
+        )
     return parent_param_ops
 
 

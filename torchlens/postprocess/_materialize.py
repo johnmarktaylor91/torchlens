@@ -323,9 +323,16 @@ def _fields_from_event(
     templates = event.templates
     params = tuple(event.params)
     param_logs = _param_logs_for_event(trace, params)
-    parent_param_ops = {param.barcode: event.pass_index for param in params}
-    param_shapes = [param.shape for param in params]
-    parent_params = list(event.parent_params)
+    resolved_param_addresses = {log.address for log in param_logs}
+    resolved_params = tuple(param for param in params if param.address in resolved_param_addresses)
+    resolved_parent_params = [
+        parent_param
+        for param, parent_param in zip(params, event.parent_params, strict=False)
+        if param.address in resolved_param_addresses
+    ]
+    parent_param_ops = {param.barcode: event.pass_index for param in resolved_params}
+    param_shapes = [param.shape for param in resolved_params]
+    parent_params = resolved_parent_params
     grad_handle = grad_fn_handle if grad_fn_handle is not None else event.grad_fn_handle
     module = event.modules[-1] if event.modules else None
     resolved_address = buffer_address or _event_address(event)
@@ -440,7 +447,7 @@ def _fields_from_event(
             "transform_fn_source": event.transform_fn_source,
             "unattributed_tensor_args": tuple(event.unattributed_tensor_args),
             "parent_params": parent_params,
-            "_param_barcodes": [param.barcode for param in params],
+            "_param_barcodes": [param.barcode for param in resolved_params],
             "parent_param_ops": parent_param_ops,
             "_param_logs": param_logs,
             "param_shapes": param_shapes,

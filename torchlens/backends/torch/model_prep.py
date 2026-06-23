@@ -32,6 +32,7 @@ import warnings
 from collections.abc import Callable
 from collections import defaultdict, deque
 from functools import wraps
+from types import ModuleType
 from typing import Any, TYPE_CHECKING, cast
 
 import torch
@@ -1974,7 +1975,11 @@ def clear_hooks(hook_handles: list[Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_model_session(model: nn.Module, input_tensors: Any = None) -> None:
+def _cleanup_model_session(
+    model: nn.Module,
+    input_tensors: Any = None,
+    input_objects: Any = None,
+) -> None:
     """Clean up session-specific state after a ``trace`` call.
 
     Restores ``requires_grad`` to its original value on all parameters,
@@ -1997,31 +2002,113 @@ def _cleanup_model_session(model: nn.Module, input_tensors: Any = None) -> None:
     _undecorate_model_tensors(model)
 
     # Clean tensor labels from input tensors
+    seen: set[int] = set()
     if input_tensors:
         for t in input_tensors:
             clear_meta(t)
+            seen.add(id(t))
+    if input_objects is not None:
+        _clear_session_tensor_metadata(input_objects, seen)
+
+
+def _clear_session_tensor_metadata(value: Any, seen: set[int], depth: int = 0) -> None:
+    """Clear TorchLens tensor metadata from a model-owned object graph.
+
+    Parameters
+    ----------
+    value
+        Candidate object reachable from a prepared model.
+    seen
+        Object ids already visited during this cleanup scan.
+    depth
+        Current recursion depth, used to bound traversal through arbitrary
+        third-party helper objects.
+
+    Returns
+    -------
+    None
+        Mutates reachable tensors in place by removing TorchLens metadata.
+    """
+
+    if value is None or isinstance(value, (str, bytes, int, float, bool, ModuleType)):
+        return
+    if isinstance(value, torch.Tensor):
+        if not isinstance(value, torch.nn.Parameter):
+            clear_meta(value)
+        return
+    obj_id = id(value)
+    if obj_id in seen or depth >= 12:
+        return
+    seen.add(obj_id)
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _clear_session_tensor_metadata(key, seen, depth + 1)
+            _clear_session_tensor_metadata(item, seen, depth + 1)
+        return
+    if isinstance(value, (list, tuple, set, frozenset, deque)):
+        for item in value:
+            _clear_session_tensor_metadata(item, seen, depth + 1)
+        return
+    if isinstance(value, nn.Module):
+        return
+    namespace = getattr(value, "__dict__", None)
+    if namespace is None:
+        return
+    for item in namespace.values():
+        _clear_session_tensor_metadata(item, seen, depth + 1)
+
+
+def _clear_callable_session_tensor_metadata(callable_obj: Any, seen: set[int]) -> None:
+    """Clear TorchLens tensor metadata captured by a callable object.
+
+    Parameters
+    ----------
+    callable_obj
+        Candidate callable, such as a model's bound ``forward`` method.
+    seen
+        Object ids already visited during this cleanup scan.
+
+    Returns
+    -------
+    None
+        Mutates reachable tensor metadata in place.
+    """
+
+    raw_callable = getattr(callable_obj, "__func__", callable_obj)
+    defaults = getattr(raw_callable, "__defaults__", None) or ()
+    _clear_session_tensor_metadata(defaults, seen)
+    kwdefaults = getattr(raw_callable, "__kwdefaults__", None) or {}
+    _clear_session_tensor_metadata(kwdefaults, seen)
+    closure = getattr(raw_callable, "__closure__", None) or ()
+    for cell in closure:
+        try:
+            cell_value = cell.cell_contents
+        except ValueError:
+            continue
+        _clear_session_tensor_metadata(cell_value, seen)
+    globals_dict = getattr(raw_callable, "__globals__", None)
+    if not isinstance(globals_dict, dict):
+        return
+    code = getattr(raw_callable, "__code__", None)
+    if code is None:
+        return
+    for name in code.co_names:
+        if name in globals_dict:
+            _clear_session_tensor_metadata(globals_dict[name], seen)
 
 
 def _undecorate_model_tensors(model: nn.Module) -> None:
     """Remove session-scoped metadata from non-parameter tensors in the model.
 
-    Uses ``__dict__`` scan (fast) instead of ``iter_accessible_attributes`` (slow
-    dir() + getattr MRO walk). Handles tensors stored directly as attributes,
-    inside lists/tuples, and inside dicts.
+    Uses a bounded ``__dict__`` scan instead of ``iter_accessible_attributes``
+    (slow dir() + getattr MRO walk). Handles tensors stored directly as
+    attributes, inside Python containers, and inside model-owned helper objects.
     """
+    seen: set[int] = set()
     for submodule in model.modules():
         for attr_val in submodule.__dict__.values():
-            if isinstance(attr_val, torch.Tensor):
-                if not isinstance(attr_val, torch.nn.Parameter):
-                    clear_meta(attr_val)
-            elif isinstance(attr_val, (list, tuple, set)):
-                for item in attr_val:
-                    if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
-                        clear_meta(item)
-            elif isinstance(attr_val, dict):
-                for val in attr_val.values():
-                    if isinstance(val, torch.Tensor) and not isinstance(val, torch.nn.Parameter):
-                        clear_meta(val)
+            _clear_session_tensor_metadata(attr_val, seen)
+        _clear_callable_session_tensor_metadata(getattr(submodule, "forward", None), seen)
     # Also clean any tensors from the registered buffer dict (_buffers)
     for submodule in model.modules():
         for buf_tensor in submodule._buffers.values():

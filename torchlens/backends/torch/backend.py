@@ -31,7 +31,11 @@ from ...utils.tensor_utils import safe_copy
 from . import _tl
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
-from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
+from .model_prep import (
+    _cleanup_model_session,
+    _ensure_model_prepared,
+    _prepare_model_session,
+)
 from .module_stack import pop_frame, push_existing_frame
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
@@ -122,12 +126,16 @@ class TorchBackend:
         """Clean up per-session torch metadata."""
         model: object
         input_tensors: object
-        if isinstance(prepared_model, tuple) and len(prepared_model) == 2:
+        input_objects: object
+        if isinstance(prepared_model, tuple) and len(prepared_model) == 3:
+            model, input_tensors, input_objects = prepared_model
+        elif isinstance(prepared_model, tuple) and len(prepared_model) == 2:
             model, input_tensors = prepared_model
+            input_objects = None
         else:
-            model, input_tensors = prepared_model, None
+            model, input_tensors, input_objects = prepared_model, None, None
         uninstall_buffer_write_tracker(cast("Trace", session))
-        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors)
+        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors, input_objects)
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch logging context manager."""
@@ -389,13 +397,11 @@ class TorchBackend:
         """
 
         self_trace = cast("Trace", session)
-        if getattr(self_trace, "intervention_ready", False) or getattr(
-            self_trace, "_capture_container_structure", False
-        ):
-            output_entries = list(_walk_output_tensors_with_paths(outputs))
+        output_entries = list(_walk_output_tensors_with_paths(outputs))
+        if output_entries:
             output_tensors_w_addresses_all = [
                 (tensor, _container_path_to_address(path), None)
-                for tensor, path, container_spec in output_entries
+                for tensor, path, _container_spec in output_entries
             ]
             output_specs_by_raw_label = {}
             for tensor, path, container_spec in output_entries:
@@ -406,8 +412,14 @@ class TorchBackend:
                         container_spec,
                     )
             setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
-            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
         else:
+            output_tensors_w_addresses_all = []
+        if output_entries and (
+            getattr(self_trace, "intervention_ready", False)
+            or getattr(self_trace, "_capture_container_structure", False)
+        ):
+            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
+        if not output_entries:
             output_tensors_w_addresses_all = get_vars_of_type_from_obj(
                 outputs,
                 torch.Tensor,

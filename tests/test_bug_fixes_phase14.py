@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 
 import torchlens as tl
@@ -150,6 +151,75 @@ class _IdentityOutputModel(nn.Module):
         return x
 
 
+class _NewEmptyFilledModel(nn.Module):
+    """Model with deterministic output after an uninitialized allocation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Allocate with ``new_empty`` and overwrite every element.
+
+        Parameters
+        ----------
+        x:
+            Tensor providing shape, dtype, and device.
+
+        Returns
+        -------
+        torch.Tensor
+            Fully initialized tensor derived from ``new_empty``.
+        """
+
+        out = x.new_empty(x.shape)
+        return out.fill_(3.0)
+
+
+class _WhereEqualBranchesModel(nn.Module):
+    """Model whose ``where`` condition selects between equal tensors."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ``where`` with identical true and false branches.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The branch tensor selected by an irrelevant condition.
+        """
+
+        branch = x + 1.0
+        condition = x[:, :1] > 0
+        return torch.where(condition, branch, branch)
+
+
+class _FunctionalParameterViewModel(nn.Module):
+    """Model using a differentiable tensor view as a functional weight."""
+
+    def __init__(self) -> None:
+        """Initialize one registered parameter."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.eye(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run ``F.linear`` with a tensor view of a registered parameter.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Functional linear output.
+        """
+
+        return F.linear(x, self.weight.t())
+
+
 class _ResidualRecurrentModel(nn.Module):
     """Small recurrent model that produces grads in rolled mode."""
 
@@ -232,6 +302,37 @@ def test_arg_specs_extract_common_keyword_tensor_arguments() -> None:
         {"condition": x > 0, "input": x, "other": x - 1},
     )
     assert len(where_tensors) == 3
+
+
+def test_validate_forward_pass_handles_new_empty_followed_by_full_overwrite() -> None:
+    """Validation replay skips only the uninitialized allocation itself."""
+
+    model = _NewEmptyFilledModel()
+    x = torch.randn(2, 3)
+
+    assert validate_forward_pass(model, x, validate_metadata=True) is True
+
+
+def test_validate_forward_pass_handles_where_equal_branch_condition() -> None:
+    """Perturbation skips an irrelevant ``where`` condition with equal branches."""
+
+    model = _WhereEqualBranchesModel()
+    x = torch.tensor([[1.0, -2.0], [-3.0, 4.0]])
+
+    assert validate_forward_pass(model, x, validate_metadata=True) is True
+
+
+def test_functional_parameter_view_does_not_inflate_param_counts() -> None:
+    """Differentiable tensor views are not counted as separate parameters."""
+
+    model = _FunctionalParameterViewModel()
+    trace = tl.trace(model, torch.randn(2, 4), save_arg_values=True)
+
+    assert trace.num_params == model.weight.numel()
+    assert trace.num_params_trainable == model.weight.numel()
+    assert trace.num_params_frozen == 0
+    assert trace.num_params == trace.num_params_trainable + trace.num_params_frozen
+    assert check_metadata_invariants(trace) is True
 
 
 def test_conditional_then_children_merge_across_multipass_layerlog() -> None:

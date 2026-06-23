@@ -4,15 +4,62 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.data_classes.cleanup import _scrub_per_op_equivalence_lists
 
 
 TensorFactory = Callable[[], torch.Tensor]
+
+
+def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None:
+    """Deleted buffer nodes leave no stale raw labels for final label mapping."""
+
+    op = SimpleNamespace(
+        parents=["buffer_3_raw", "add_1_raw"],
+        root_ancestors={"buffer_3_raw", "input_1_raw"},
+        children=["mul_1_raw", "buffer_3_raw"],
+        input_ancestors={"input_1_raw"},
+        output_descendants={"buffer_3_raw", "output_1_raw"},
+        internal_source_parents=["buffer_3_raw"],
+        internal_source_ancestors={"buffer_3_raw"},
+        conditional_entry_children=["buffer_3_raw"],
+        conditional_then_children=["buffer_3_raw", "relu_1_raw"],
+        conditional_else_children=[],
+        op_equivalence_classes={"buffer_3_raw", "add_1_raw"},
+        equivalent_ops=["buffer_3_raw", "add_1_raw"],
+        recurrent_ops=["buffer_3_raw"],
+        parent_arg_positions={
+            "args": {0: "buffer_3_raw", 1: "add_1_raw"},
+            "kwargs": {"bias": "buffer_3_raw"},
+        },
+        out_versions_by_child={"buffer_3_raw": torch.ones(1), "add_1_raw": torch.zeros(1)},
+        conditional_elif_children={0: ["buffer_3_raw", "add_1_raw"]},
+        conditional_arm_children={1: {"then": ["buffer_3_raw"], "else": ["add_1_raw"]}},
+    )
+
+    _scrub_per_op_equivalence_lists([op], {"buffer_3_raw"})
+
+    assert op.parents == ["add_1_raw"]
+    assert op.root_ancestors == {"input_1_raw"}
+    assert op.children == ["mul_1_raw"]
+    assert op.output_descendants == {"output_1_raw"}
+    assert op.internal_source_parents == []
+    assert op.internal_source_ancestors == set()
+    assert op.conditional_entry_children == []
+    assert op.conditional_then_children == ["relu_1_raw"]
+    assert op.op_equivalence_classes == {"add_1_raw"}
+    assert op.equivalent_ops == ["add_1_raw"]
+    assert op.recurrent_ops == []
+    assert op.parent_arg_positions == {"args": {1: "add_1_raw"}, "kwargs": {}}
+    assert set(op.out_versions_by_child) == {"add_1_raw"}
+    assert op.conditional_elif_children == {0: ["add_1_raw"]}
+    assert op.conditional_arm_children == {1: {"then": [], "else": ["add_1_raw"]}}
 
 
 class RecurrentReassign(nn.Module):

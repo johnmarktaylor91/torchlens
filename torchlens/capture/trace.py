@@ -842,7 +842,7 @@ def run_and_log_inputs_through_model(
         )
 
         if not postprocess:
-            backend.cleanup_model_session(self, (model, input_tensors))
+            backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
             self.capture_end_time = time.time()
             return outputs
 
@@ -851,7 +851,7 @@ def run_and_log_inputs_through_model(
         )
         output_tensors = cast(list[torch.Tensor], output_tensors_any)
 
-        backend.cleanup_model_session(self, (model, input_tensors))
+        backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
         return outputs
@@ -871,11 +871,15 @@ def run_and_log_inputs_through_model(
                 input_tensors,
                 postprocess,
             )
-        backend.cleanup_halted_forward_session(self, (model, input_tensors))
+        backend.cleanup_halted_forward_session(
+            self, (model, input_tensors, (input_args, input_kwargs))
+        )
         raise
 
     except Exception as e:
-        backend.cleanup_failed_forward_session(self, (model, input_tensors), e)
+        backend.cleanup_failed_forward_session(
+            self, (model, input_tensors, (input_args, input_kwargs)), e
+        )
         raise e
 
     finally:
