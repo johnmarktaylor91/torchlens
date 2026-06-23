@@ -593,15 +593,10 @@ islands:
       pypi:
         - "torch==2.7.1"
         - "torchvision==0.22.1"
-        - "triton==3.3.1"
-        - "flash-linear-attention==0.5.1"
-        - diffusers
-        - pytorchvideo
-        - normflows
-        - nflows
-        - lightly
+        - lerobot
+        - tinycudann
     smoke_stable_ids:
-      - m4907
+      - m5575
       - m10552
     expected_device: cuda
     disk_estimate_gib: 12
