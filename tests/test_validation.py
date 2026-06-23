@@ -4,6 +4,7 @@ Covers: import paths, registry consistency, perturbation unit tests,
 deep clone helpers, and integration tests through specific exemption paths.
 """
 
+from collections import namedtuple
 from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, cast
@@ -74,6 +75,29 @@ class _StaleLabelConstantModel(nn.Module):
         """
 
         return x + self.constant
+
+
+_TensorLiteralReturn = namedtuple("_TensorLiteralReturn", ("values", "valid"))
+
+
+class _TensorLiteralOutputModel(nn.Module):
+    """Model returning a tensor plus literal metadata in one container."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, bool]:
+        """Return a namedtuple-style mixed output.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, bool]
+            Tensor output and literal validity flag.
+        """
+
+        return _TensorLiteralReturn(values=x + 1, valid=False)
 
 
 # =============================================================================
@@ -1577,6 +1601,23 @@ def test_stale_internal_source_label_is_relogged_not_reused() -> None:
 
     set_tensor_label(model.constant, "internalsource_1_2_raw")
     assert validate_forward_pass(model, torch.zeros(2, 2), validate_metadata=True)
+
+
+def test_module_output_structure_allows_literal_metadata_fields() -> None:
+    """Module output-structure paths compare tensor leaves only."""
+
+    log = trace_fn(
+        _TensorLiteralOutputModel(),
+        torch.zeros(2, 2),
+        capture_container_structure=True,
+    )
+    try:
+        root_call = log.module_calls["self:1"]
+        assert root_call.output_ops == ["output_1"]
+        assert log[root_call.output_ops[0]].container_path
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
 
 
 def test_param_deep_xref_rejects_missing_op_back_reference() -> None:

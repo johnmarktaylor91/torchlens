@@ -35,6 +35,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Literal, cast
 
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..errors._base import ValidationError
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
@@ -3393,7 +3394,7 @@ def _check_module_call_output_structure_paths(
     output_structure = getattr(module_call, "output_structure", None)
     if output_structure is None:
         return
-    structure_paths = set(_container_leaf_paths(output_structure))
+    structure_paths = set(_container_tensor_leaf_paths(output_structure))
     output_paths: set[tuple[object, ...]] = set()
     for output_op_label in getattr(module_call, "output_ops", ()) or ():
         resolved_label = _resolve_trace_label(ml, output_op_label)
@@ -3415,10 +3416,10 @@ def _check_module_call_output_structure_paths(
         )
 
 
-def _container_leaf_paths(
+def _container_tensor_leaf_paths(
     spec: object, prefix: tuple[object, ...] = ()
 ) -> list[tuple[object, ...]]:
-    """Return leaf paths from a ``ContainerSpec``-like object.
+    """Return tensor leaf paths from a ``ContainerSpec``-like object.
 
     Parameters
     ----------
@@ -3430,26 +3431,53 @@ def _container_leaf_paths(
     Returns
     -------
     list[tuple[object, ...]]
-        Leaf paths in traversal order.
+        Tensor leaf paths in traversal order.
     """
 
+    kind = getattr(spec, "kind", None)
+    if kind in {"literal", "opaque"}:
+        return []
+    components = _container_tensor_components(spec)
+    if not components:
+        return []
     child_specs = tuple(getattr(spec, "child_specs", ()) or ())
-    if not child_specs:
-        if prefix == () and getattr(spec, "kind", None) in {
-            "tuple",
-            "list",
-            "dict",
-            "namedtuple",
-            "dataclass",
-            "hf_model_output",
-            "registered",
-        }:
-            return []
-        return [prefix]
+    child_by_component = dict(child_specs)
     paths: list[tuple[object, ...]] = []
-    for component, child_spec in child_specs:
-        paths.extend(_container_leaf_paths(child_spec, (*prefix, component)))
+    for component in components:
+        child_spec = child_by_component.get(component)
+        if child_spec is None:
+            paths.append((*prefix, component))
+        else:
+            paths.extend(_container_tensor_leaf_paths(child_spec, (*prefix, component)))
     return paths
+
+
+def _container_tensor_components(spec: object) -> tuple[object, ...]:
+    """Return child components that may represent tensor leaves.
+
+    Parameters
+    ----------
+    spec:
+        ContainerSpec-like object.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Components in traversal order.
+    """
+
+    kind = getattr(spec, "kind", None)
+    if kind in {"tuple", "list", "registered"}:
+        return tuple(TupleIndex(index) for index in range(int(getattr(spec, "length", 0) or 0)))
+    if kind == "dict":
+        return tuple(DictKey(key) for key in getattr(spec, "keys", ()) or ())
+    if kind == "hf_model_output":
+        return tuple(HFKey(key) for key in getattr(spec, "keys", ()) or ())
+    if kind == "namedtuple":
+        return tuple(NamedField(field) for field in getattr(spec, "fields", ()) or ())
+    if kind == "dataclass":
+        return tuple(DataclassField(field) for field in getattr(spec, "fields", ()) or ())
+    return ()
 
 
 # ---------------------------------------------------------------------------
