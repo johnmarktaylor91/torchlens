@@ -370,6 +370,8 @@ def resolve_run_folds(
     folds_by_address: dict[str, ModuleRunFold] = {}
     for child_addresses in _sibling_address_groups(trace).values():
         for run in _iter_collapsible_runs(trace, child_addresses, dimless_digests, collapse_fn):
+            if not _run_span_allows_fold(trace, run):
+                continue
             fold = _make_run_fold(trace, run)
             for address in run:
                 folds_by_address[address] = fold
@@ -380,6 +382,8 @@ def resolve_run_folds(
             collapse_fn,
         ):
             if any(address in folds_by_address for address in run):
+                continue
+            if not _run_span_allows_fold(trace, run):
                 continue
             fold = _make_run_fold(trace, run)
             for address in run:
@@ -392,6 +396,8 @@ def resolve_run_folds(
             allow_selected_descendant=True,
         ):
             if any(address in folds_by_address for address in run):
+                continue
+            if not _run_span_allows_fold(trace, run):
                 continue
             fold = _make_run_fold(trace, run)
             for address in run:
@@ -474,10 +480,45 @@ def _compute_dimless_structural_digests(trace: "Trace") -> dict[str, str]:
                 getattr(module, "class_name", ""),
                 signal.own_func_names,
                 child_sigs,
+                len(signal.subtree_ops),
+                int(getattr(module, "num_layers", 0) or 0),
+                _normalized_internal_topology(trace, signal.subtree_ops),
             )
         ).encode("utf-8")
         digests[module.address] = hashlib.sha1(payload).hexdigest()
     return digests
+
+
+def _normalized_internal_topology(
+    trace: "Trace",
+    subtree_ops: tuple[str, ...],
+) -> tuple[tuple[int, int], ...]:
+    """Return dimension-free internal op-edge topology for ``subtree_ops``.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    subtree_ops:
+        Pass-qualified operation labels in module scope.
+
+    Returns
+    -------
+    tuple[tuple[int, int], ...]
+        Internal edges expressed as subtree-order indices.
+    """
+
+    index_by_label = {label: index for index, label in enumerate(subtree_ops)}
+    subtree = set(subtree_ops)
+    edges: set[tuple[int, int]] = set()
+    for parent_label in subtree_ops:
+        parent = cast("Op", trace.ops[parent_label])
+        parent_index = index_by_label[parent.label]
+        for child_label in getattr(parent, "children", ()) or ():
+            if child_label not in subtree:
+                continue
+            edges.add((parent_index, index_by_label[child_label]))
+    return tuple(sorted(edges))
 
 
 def _iter_collapsible_runs(
@@ -530,7 +571,11 @@ def _iter_collapsible_runs(
             continue
         key = (
             str(getattr(module, "class_name", "")),
-            "" if allow_selected_descendant else dimless_digests.get(address, ""),
+            (
+                _selected_descendant_run_digest(trace, module, dimless_digests)
+                if allow_selected_descendant
+                else dimless_digests.get(address, "")
+            ),
             run_stem or _indexed_parent_stem(address),
         )
         if key == current_key:
@@ -542,6 +587,46 @@ def _iter_collapsible_runs(
         current_run = [address]
     if len(current_run) >= RUN_FOLD_MIN_LENGTH:
         yield tuple(current_run)
+
+
+def _selected_descendant_run_digest(
+    trace: "Trace",
+    module: "Module",
+    dimless_digests: Mapping[str, str],
+) -> str:
+    """Return the structural digest for selected-descendant run folding.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    module:
+        Candidate module whose descendants may be selected for collapse.
+    dimless_digests:
+        Full dimensionless structural digests keyed by module address.
+
+    Returns
+    -------
+    str
+        Digest that preserves immediate child topology and depth while ignoring
+        implementation-level op differences inside those repeated children.
+    """
+
+    child_addresses = tuple(
+        str(child_address)
+        for child_address in getattr(module, "address_children", ()) or ()
+        if child_address in trace.modules
+    )
+    if not child_addresses:
+        return dimless_digests.get(module.address, "")
+    child_classes = tuple(
+        str(getattr(cast("Module", trace.modules[child_address]), "class_name", ""))
+        for child_address in child_addresses
+    )
+    payload = repr((getattr(module, "class_name", ""), child_classes, len(child_addresses))).encode(
+        "utf-8"
+    )
+    return hashlib.sha1(payload).hexdigest()
 
 
 def _iter_collapsible_child_path_runs(
@@ -726,6 +811,119 @@ def _run_shape_summary(trace: "Trace", addresses: tuple[str, ...]) -> str | None
     return f"{first}->{last}"
 
 
+def _run_span_allows_fold(trace: "Trace", addresses: tuple[str, ...]) -> bool:
+    """Return whether first-to-last tensor shape span is safe to fold.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    addresses:
+        Consecutive sibling addresses in the candidate run.
+
+    Returns
+    -------
+    bool
+        True when the run does not cross a spatial-resolution boundary and
+        does not span more than a 2x channel-width change. Unknown shapes are
+        treated as foldable because the structural key is the primary guard.
+    """
+
+    first = _module_output_shape_tuple(trace, addresses[0])
+    last = _module_output_shape_tuple(trace, addresses[-1])
+    if first is None or last is None:
+        return True
+    if len(first) != len(last):
+        return False
+    first_spatial = _shape_spatial_dims(first)
+    last_spatial = _shape_spatial_dims(last)
+    if first_spatial is not None and last_spatial is not None and first_spatial != last_spatial:
+        return False
+    first_channels = _shape_channel_dim(first)
+    last_channels = _shape_channel_dim(last)
+    if first_channels is None or last_channels is None:
+        return True
+    smaller = min(first_channels, last_channels)
+    larger = max(first_channels, last_channels)
+    return smaller > 0 and larger <= smaller * 2
+
+
+def _module_output_shape_tuple(trace: "Trace", address: str) -> tuple[int, ...] | None:
+    """Return the primary output shape tuple for a module address.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module.
+    address:
+        Pass-free module address.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Output shape as integers, or ``None`` when unavailable.
+    """
+
+    pass_address = f"{address}:1"
+    if pass_address not in trace.modules:
+        return None
+    try:
+        module_output_layer = trace[pass_address]
+    except (KeyError, IndexError):
+        return None
+    shape = getattr(module_output_layer, "shape", None)
+    if shape is None:
+        shape = getattr(module_output_layer, "out_shape", None)
+    if not shape:
+        return None
+    try:
+        return tuple(int(dim) for dim in shape)
+    except (TypeError, ValueError):
+        return None
+
+
+def _shape_spatial_dims(shape: tuple[int, ...]) -> tuple[int, ...] | None:
+    """Return spatial dimensions for common image/video tensor shapes.
+
+    Parameters
+    ----------
+    shape:
+        Output tensor shape.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Spatial dimensions, or ``None`` for non-spatial ranks.
+    """
+
+    if len(shape) == 4:
+        return shape[2:]
+    if len(shape) == 5:
+        return shape[2:]
+    return None
+
+
+def _shape_channel_dim(shape: tuple[int, ...]) -> int | None:
+    """Return the channel-like dimension for common tensor shapes.
+
+    Parameters
+    ----------
+    shape:
+        Output tensor shape.
+
+    Returns
+    -------
+    int | None
+        Channel dimension, or ``None`` when no stable convention applies.
+    """
+
+    if len(shape) in {2, 4, 5}:
+        return shape[1]
+    if len(shape) == 3:
+        return shape[2]
+    return None
+
+
 def _module_output_shape(trace: "Trace", address: str) -> str | None:
     """Return the primary output shape string for a module address.
 
@@ -742,17 +940,8 @@ def _module_output_shape(trace: "Trace", address: str) -> str | None:
         Formatted shape string, or ``None`` when unavailable.
     """
 
-    pass_address = f"{address}:1"
-    if pass_address not in trace.modules:
-        return None
-    try:
-        module_output_layer = trace[pass_address]
-    except (KeyError, IndexError):
-        return None
-    shape = getattr(module_output_layer, "shape", None)
+    shape = _module_output_shape_tuple(trace, address)
     if shape is None:
-        shape = getattr(module_output_layer, "out_shape", None)
-    if not shape:
         return None
     return str(tuple(shape))
 
@@ -1409,6 +1598,8 @@ def _select_modules(
         if band[0] <= visible_count <= target:
             break
     selected = _complete_leaf_block_selection(trace, analysis, selected, collapse=collapse)
+    if collapse == "auto":
+        selected = _prefer_shallow_maxvit_stage_selection(trace, selected)
     if collapse == "max":
         return frozenset(selected)
     if band[0] <= visible_count <= band[1]:
@@ -1482,6 +1673,41 @@ def _complete_leaf_block_selection(
         if _selection_conflicts(address, completed, collapse=collapse):
             continue
         completed = _selection_with_addresses(completed, (address,), collapse=collapse)
+    return completed
+
+
+def _prefer_shallow_maxvit_stage_selection(trace: "Trace", selected: list[str]) -> list[str]:
+    """Replace noisy selected descendants with shallow MaxVit stage boxes.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    selected:
+        Greedy collapse addresses selected so far.
+
+    Returns
+    -------
+    list[str]
+        Selection with shallow MaxVit stages represented by stage boxes when
+        their internals would otherwise render as many separate nodes.
+    """
+
+    completed = list(selected)
+    for module in trace.modules:
+        if str(getattr(module, "class_name", "")) != "MaxVitBlock":
+            continue
+        if int(getattr(module, "num_layers", 0) or 0) > 250:
+            continue
+        if any(module.address.startswith(f"{ancestor}.") for ancestor in completed):
+            continue
+        descendants = [address for address in completed if address.startswith(f"{module.address}.")]
+        if len(descendants) < 3:
+            continue
+        completed = [
+            address for address in completed if not address.startswith(f"{module.address}.")
+        ]
+        completed.append(module.address)
     return completed
 
 

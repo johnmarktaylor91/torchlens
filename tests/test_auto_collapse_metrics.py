@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 
 import torchlens as tl
-from torchlens.visualization.auto_collapse import analyze_collapse
+from torchlens.visualization.auto_collapse import analyze_collapse, resolve_run_folds
 
 
 class ResidualBlock(torch.nn.Module):
@@ -85,6 +85,100 @@ class DimStepRun(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run all dim-stepping blocks."""
+
+        for block in self.blocks:
+            x = block(x)
+        return self.head(x)
+
+
+class StageUnit(torch.nn.Module):
+    """Small convolutional unit used to build synthetic stages."""
+
+    def __init__(self, width: int) -> None:
+        """Initialize the unit."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(width, width, 3, padding=1),
+            torch.nn.BatchNorm2d(width),
+            torch.nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the unit."""
+
+        return self.net(x)
+
+
+class DepthStage(torch.nn.Module):
+    """Same-class stage whose depth is constructor-controlled."""
+
+    def __init__(self, width: int, depth: int) -> None:
+        """Initialize a stage with ``depth`` units."""
+
+        super().__init__()
+        self.blocks = torch.nn.ModuleList([StageUnit(width) for _ in range(depth)])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run all units in the stage."""
+
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
+class UnevenDepthStages(torch.nn.Module):
+    """Same-class sibling stages with different internal depths."""
+
+    def __init__(self) -> None:
+        """Initialize stages of depths two, three, and four."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(4, 4, 1)
+        self.stages = torch.nn.ModuleList([DepthStage(4, depth) for depth in (2, 3, 4)])
+        self.head = torch.nn.Conv2d(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the uneven-depth stages."""
+
+        x = self.stem(x)
+        for stage in self.stages:
+            x = stage(x)
+        return self.head(x)
+
+
+class SpatialStepBlock(torch.nn.Module):
+    """Structurally identical block that changes spatial resolution."""
+
+    def __init__(self, width: int) -> None:
+        """Initialize the spatial-step block."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(width, width, 3, padding=1),
+            torch.nn.BatchNorm2d(width),
+            torch.nn.ReLU(),
+            torch.nn.AvgPool2d(2),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the spatial-step block."""
+
+        return self.net(x)
+
+
+class SpatialStepRun(torch.nn.Module):
+    """Run that should not fold because it crosses spatial scales."""
+
+    def __init__(self) -> None:
+        """Initialize repeated spatial-step blocks."""
+
+        super().__init__()
+        self.blocks = torch.nn.ModuleList([SpatialStepBlock(4) for _ in range(3)])
+        self.head = torch.nn.Conv2d(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run all spatial-step blocks."""
 
         for block in self.blocks:
             x = block(x)
@@ -490,6 +584,18 @@ def _folded_label_count(source: str, address: str, multiplicity: int) -> int:
     return source.count(f"@{address}  x{multiplicity}")
 
 
+def _select_first_stage_unit(module: object) -> bool:
+    """Return whether ``module`` is the first unit inside a synthetic stage."""
+
+    return re.match(r"^stages\.\d+\.blocks\.0$", str(getattr(module, "address", ""))) is not None
+
+
+def _select_blocks_child(module: object) -> bool:
+    """Return whether ``module`` is a direct child of a ``blocks`` container."""
+
+    return re.match(r"^blocks\.\d+$", str(getattr(module, "address", ""))) is not None
+
+
 def _edge_count(source: str, tail: str, head: str) -> int:
     """Return Graphviz edge count between two rendered node names."""
 
@@ -559,11 +665,43 @@ def test_auto_collapse_run_fold_ignores_dimension_steps(tmp_path: Path) -> None:
     trace = _trace(DimStepRun(), torch.randn(1, 4, 16, 16))
     try:
         auto_source = _draw_source(trace, tmp_path, "dim_step_auto", "auto")
+        folds = resolve_run_folds(trace, _select_blocks_child)
 
         assert _folded_label_count(auto_source, "blocks.1", 3) == 1
         assert _collapsed_exact_label_count(auto_source, "blocks.2") == 0
         assert "shapes " in auto_source
         assert _edge_count(auto_source, "blocks.1pass1", "blocks.1pass1") == 1
+        assert folds["blocks.1"].addresses == ("blocks.1", "blocks.2", "blocks.3")
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_keeps_different_depth_stages_separate(tmp_path: Path) -> None:
+    """Run-fold does not merge same-class sibling stages with different depths."""
+
+    trace = _trace(UnevenDepthStages(), torch.randn(1, 4, 16, 16))
+    try:
+        auto_source = _draw_source(trace, tmp_path, "uneven_depth_stages_auto", "auto")
+        folds = resolve_run_folds(trace, _select_first_stage_unit)
+
+        assert _folded_label_count(auto_source, "stages.0", 3) == 0
+        assert "stages.0" not in folds
+        assert "stages.1" not in folds
+        assert "stages.2" not in folds
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_rejects_spatial_span() -> None:
+    """Run-fold does not create a box across spatial-resolution changes."""
+
+    trace = _trace(SpatialStepRun(), torch.randn(1, 4, 32, 32))
+    try:
+        folds = resolve_run_folds(trace, _select_blocks_child)
+
+        assert "blocks.0" not in folds
+        assert "blocks.1" not in folds
+        assert "blocks.2" not in folds
     finally:
         trace.cleanup()
 
