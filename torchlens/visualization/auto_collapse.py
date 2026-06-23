@@ -77,6 +77,13 @@ class ModuleCollapseSignals:
         Distinct op-graph edges entering the module from outside.
     output_edges:
         Distinct op-graph edges leaving the module.
+    landmark_edges:
+        Boundary-crossing edges that enter or leave non-boundary internal
+        operations and therefore hide a meaningful cross-module junction.
+    passthrough_edges:
+        Internal output junctions that combine module input with internal work.
+    output_junctions:
+        External multi-parent children fed by module outputs.
     params:
         Number of recursive parameters for the module.
     depth:
@@ -99,6 +106,9 @@ class ModuleCollapseSignals:
     internal_edges: int
     input_edges: int
     output_edges: int
+    landmark_edges: int
+    passthrough_edges: int
+    output_junctions: tuple[str, ...]
     params: int
     depth: int
     num_calls: int
@@ -119,14 +129,14 @@ class CollapseAnalysis:
     scores:
         Canonical rounded scores keyed by module address.
     peer_groups:
-        Structural peer groups keyed by digest and all-addresses tuple.
+        Structural peer groups keyed by digest and sibling parent address.
     elapsed_ms:
         Signal and score computation time in milliseconds.
     """
 
     signals: Mapping[str, ModuleCollapseSignals]
     scores: Mapping[str, float]
-    peer_groups: Mapping[tuple[str, tuple[str, ...]], tuple[str, ...]]
+    peer_groups: Mapping[tuple[str, str | None], tuple[str, ...]]
     elapsed_ms: float
 
 
@@ -165,6 +175,9 @@ def analyze_collapse(trace: "Trace") -> CollapseAnalysis:
             internal_edges=signal.internal_edges,
             input_edges=signal.input_edges,
             output_edges=signal.output_edges,
+            landmark_edges=signal.landmark_edges,
+            passthrough_edges=signal.passthrough_edges,
+            output_junctions=signal.output_junctions,
             params=signal.params,
             depth=signal.depth,
             num_calls=signal.num_calls,
@@ -348,6 +361,19 @@ def _compute_signal_skeleton(trace: "Trace") -> dict[str, ModuleCollapseSignals]
             internal_edges=len(internal_edges.get(address, ())),
             input_edges=len(input_edges.get(address, ())),
             output_edges=len(output_edges.get(address, ())),
+            landmark_edges=_count_landmark_edges(
+                trace,
+                module,
+                subtree_ops,
+                input_edges.get(address, set()) | output_edges.get(address, set()),
+            ),
+            passthrough_edges=_count_passthrough_edges(trace, module, subtree_ops),
+            output_junctions=_output_junctions(
+                trace,
+                module,
+                subtree_ops,
+                output_edges.get(address, set()),
+            ),
             params=int(getattr(module, "num_params", 0) or 0),
             depth=int(getattr(module, "address_depth", 0) or 0),
             num_calls=int(getattr(module, "num_calls", 1) or 1),
@@ -369,6 +395,163 @@ def _op_func_name(op: "Op") -> str:
     """Return a stable operation function name for digesting."""
 
     return str(getattr(op, "func_name", None) or getattr(op, "layer_type", "") or "")
+
+
+def _count_landmark_edges(
+    trace: "Trace",
+    module: "Module",
+    subtree_ops: tuple[str, ...],
+    boundary_edges: set[tuple[str, str]],
+) -> int:
+    """Return boundary-crossing non-boundary edges for a module.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the operation graph.
+    module:
+        Candidate module being scored.
+    subtree_ops:
+        Pass-qualified operation labels in the module subtree.
+    boundary_edges:
+        Distinct edges crossing the module boundary.
+
+    Returns
+    -------
+    int
+        Count of boundary edges whose internal endpoint is not a normal module
+        input or output boundary. Fully internal junctions are intentionally not
+        counted because they are safely hidden with the collapsed module box.
+    """
+
+    subtree = set(subtree_ops)
+    input_layers = {_base_label(label) for label in getattr(module, "input_layers", ()) or ()}
+    output_layers = {_base_label(label) for label in getattr(module, "output_layers", ()) or ()}
+    landmarks: set[tuple[str, str]] = set()
+    for parent_label, child_label in boundary_edges:
+        parent = cast("Op", trace.ops[parent_label])
+        child = cast("Op", trace.ops[child_label])
+        if getattr(parent, "is_buffer", False) or getattr(child, "is_buffer", False):
+            continue
+        parent_inside = parent.label in subtree
+        child_inside = child.label in subtree
+        if parent_inside == child_inside:
+            continue
+        parent_base = _base_label(parent.label)
+        child_base = _base_label(child.label)
+        if child_inside and parent_base in input_layers:
+            continue
+        if parent_inside and parent_base in output_layers:
+            continue
+        if child_inside and child_base in output_layers:
+            continue
+        landmarks.add((parent.label, child.label))
+    return len(landmarks)
+
+
+def _base_label(label: str) -> str:
+    """Return a pass-free operation label.
+
+    Parameters
+    ----------
+    label:
+        Operation label that may include a pass suffix.
+
+    Returns
+    -------
+    str
+        Operation label without the trailing pass suffix.
+    """
+
+    return str(label).rsplit(":", 1)[0]
+
+
+def _count_passthrough_edges(
+    trace: "Trace",
+    module: "Module",
+    subtree_ops: tuple[str, ...],
+) -> int:
+    """Return internal output joins fed directly by module inputs.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the operation graph.
+    module:
+        Candidate module being scored.
+    subtree_ops:
+        Pass-qualified operation labels in the module subtree.
+
+    Returns
+    -------
+    int
+        Number of module-output Ops that merge an external module input with
+        internal computation. These joins are useful orientation landmarks for
+        ``collapse="auto"`` but may be hidden by ``collapse="max"``.
+    """
+
+    subtree = set(subtree_ops)
+    input_layers = {_base_label(label) for label in getattr(module, "input_layers", ()) or ()}
+    output_layers = {_base_label(label) for label in getattr(module, "output_layers", ()) or ()}
+    passthrough_edges = 0
+    for label in subtree_ops:
+        op = cast("Op", trace.ops[label])
+        if _base_label(op.label) not in output_layers:
+            continue
+        if _op_func_name(op) not in {"__add__", "add", "cat", "concat", "concatenate"}:
+            continue
+        has_internal_parent = False
+        has_input_parent = False
+        for parent_label in op.parents:
+            parent = cast("Op", trace.ops[parent_label])
+            if parent.label in subtree:
+                has_internal_parent = True
+            elif _base_label(parent.label) in input_layers:
+                has_input_parent = True
+        if has_internal_parent and has_input_parent:
+            passthrough_edges += 1
+    return passthrough_edges
+
+
+def _output_junctions(
+    trace: "Trace",
+    module: "Module",
+    subtree_ops: tuple[str, ...],
+    output_edges: set[tuple[str, str]],
+) -> tuple[str, ...]:
+    """Return external multi-parent junction children fed by module outputs.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the operation graph.
+    module:
+        Candidate module being scored.
+    subtree_ops:
+        Pass-qualified operation labels in the module subtree.
+    output_edges:
+        Distinct edges leaving the module subtree.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Pass-free labels for external multi-parent children fed by this module.
+    """
+
+    subtree = set(subtree_ops)
+    output_layers = {_base_label(label) for label in getattr(module, "output_layers", ()) or ()}
+    junctions: set[str] = set()
+    for parent_label, child_label in output_edges:
+        parent = cast("Op", trace.ops[parent_label])
+        child = cast("Op", trace.ops[child_label])
+        if parent.label not in subtree:
+            continue
+        if _base_label(parent.label) not in output_layers:
+            continue
+        if len(getattr(child, "parents", ()) or ()) < 2:
+            continue
+        junctions.add(_base_label(child.label))
+    return tuple(sorted(junctions))
 
 
 def _gate_module(
@@ -420,14 +603,43 @@ def _compute_structural_digests(
 def _group_structural_peers(
     trace: "Trace",
     digests: Mapping[str, str],
-) -> dict[tuple[str, tuple[str, ...]], tuple[str, ...]]:
-    """Group trace-local structural peers by digest and all addresses."""
+) -> dict[tuple[str, str | None], tuple[str, ...]]:
+    """Group trace-local structural peers by digest within sibling parents."""
 
-    groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
+    groups: dict[tuple[str, str | None], list[str]] = defaultdict(list)
     for module in trace.modules:
-        key = (digests[module.address], tuple(getattr(module, "all_addresses", ()) or ()))
+        key = (digests[module.address], _peer_scope_key(trace, module))
         groups[key].append(module.address)
     return {key: tuple(sorted(addresses)) for key, addresses in groups.items()}
+
+
+def _peer_scope_key(trace: "Trace", module: "Module") -> str | None:
+    """Return the sibling scope key used for repeated structural peers.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the module hierarchy.
+    module:
+        Module whose peer grouping scope is being resolved.
+
+    Returns
+    -------
+    str | None
+        Stable scope key shared by repeated siblings or cousins under repeated
+        parents.
+    """
+
+    parent_address = getattr(module, "address_parent", None)
+    if parent_address is None:
+        return None
+    try:
+        parent = cast("Module", trace.modules[parent_address])
+    except KeyError:
+        return str(parent_address)
+    grandparent = getattr(parent, "address_parent", None)
+    parent_class = str(getattr(parent, "class_name", ""))
+    return f"{grandparent}:{parent_class}"
 
 
 def _score_module(
@@ -445,15 +657,15 @@ def _score_module(
     edge_total = signal.internal_edges + signal.input_edges + signal.output_edges
     tangle = (
         min(signal.internal_edges / edge_total, 1.0)
-        if signal.internal_edges >= 2 and edge_total > 0
+        if signal.internal_edges >= 1 and edge_total > 0
         else 0.0
     )
     repeat = 0.0 if mode == "max" else min((max(signal.peer_count, 1) - 1) / 5.0, 1.0)
     module = cast("Module", trace.modules[signal.address])
     named = 0.0 if module.class_name in GENERIC_CONTAINER_CLASSES else 1.0
     fan_threshold = 2 if mode == "auto" else 3
-    max_boundary = max(signal.input_edges, signal.output_edges)
-    landmark = min(max(0, max_boundary - (fan_threshold - 1)) / 2.0, 1.0)
+    landmark = min(max(0, signal.landmark_edges - (fan_threshold - 1)) / 2.0, 1.0)
+    passthrough = 1.0 if mode == "auto" and signal.passthrough_edges > 0 else 0.0
     trunk = 1.0 if _is_trunk_collapse(trace, signal) else 0.0
     mass = _clip(math.log10(1 + max(signal.params, 0)) / 6.0)
     return (
@@ -463,6 +675,7 @@ def _score_module(
         + weights.named * named
         + weights.mass * mass
         - weights.landmark * landmark
+        - weights.landmark * passthrough
         - weights.trunk * trunk
     )
 
@@ -497,6 +710,9 @@ def _select_modules(
     analysis = analyze_collapse(trace)
     band = (8, 40, 28) if collapse == "auto" else (4, 12, 7)
     floor = 1 if collapse == "auto" else 3
+    target = band[2]
+    if collapse == "auto" and len(trace.ops) > 15:
+        target = min(target, math.ceil(len(trace.ops) * 0.7))
     selected: list[str] = []
     visible_count = len(trace.ops)
     ordered = collapse_order(trace, mode=collapse)
@@ -508,12 +724,14 @@ def _select_modules(
             continue
         if _inside_selected(address, selected):
             continue
-        next_visible = visible_count - signal.hidden_ops
+        addresses = _selection_batch(address, analysis, selected)
+        hidden_ops = sum(analysis.signals[batch_address].hidden_ops for batch_address in addresses)
+        next_visible = visible_count - hidden_ops
         if next_visible < floor:
             continue
-        selected.append(address)
+        selected.extend(addresses)
         visible_count = next_visible
-        if band[0] <= visible_count <= band[1]:
+        if band[0] <= visible_count <= target:
             break
     if collapse == "max":
         return frozenset(selected)
@@ -526,3 +744,100 @@ def _inside_selected(address: str, selected: list[str]) -> bool:
     """Return whether ``address`` is already hidden by a selected ancestor."""
 
     return any(address.startswith(f"{ancestor}.") for ancestor in selected)
+
+
+def _selection_batch(
+    address: str,
+    analysis: CollapseAnalysis,
+    selected: list[str],
+) -> tuple[str, ...]:
+    """Return peer addresses that should be selected together.
+
+    Parameters
+    ----------
+    address:
+        Candidate address from the greedy ranking.
+    analysis:
+        Precomputed collapse analysis.
+    selected:
+        Addresses already selected for collapse.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The candidate plus eligible structural sibling peers when a repeated
+        peer group exists.
+    """
+
+    signal = analysis.signals[address]
+    if signal.peer_count <= 1:
+        branch_batch = _output_junction_batch(address, analysis, selected)
+        return branch_batch if len(branch_batch) > 1 else (address,)
+    for group in analysis.peer_groups.values():
+        if address not in group:
+            continue
+        return tuple(
+            peer_address
+            for peer_address in group
+            if analysis.signals[peer_address].eligible
+            and not _inside_selected(peer_address, selected)
+        )
+    return (address,)
+
+
+def _output_junction_batch(
+    address: str,
+    analysis: CollapseAnalysis,
+    selected: list[str],
+) -> tuple[str, ...]:
+    """Return sibling modules that feed the same external junction.
+
+    Parameters
+    ----------
+    address:
+        Candidate module address.
+    analysis:
+        Precomputed collapse analysis.
+    selected:
+        Addresses already selected for collapse.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Eligible sibling addresses that feed at least one shared external
+        multi-parent junction.
+    """
+
+    signal = analysis.signals[address]
+    if not signal.output_junctions:
+        return (address,)
+    junctions = set(signal.output_junctions)
+    parent = _address_parent(address)
+    batch = [
+        peer_address
+        for peer_address, peer_signal in analysis.signals.items()
+        if peer_signal.eligible
+        and _address_parent(peer_address) == parent
+        and junctions.intersection(peer_signal.output_junctions)
+        and not _inside_selected(peer_address, selected)
+    ]
+    return tuple(sorted(batch))
+
+
+def _address_parent(address: str) -> str | None:
+    """Return the dotted parent address for a module address.
+
+    Parameters
+    ----------
+    address:
+        Module address.
+
+    Returns
+    -------
+    str | None
+        Parent address, or ``"self"`` for top-level children.
+    """
+
+    if "." not in address:
+        return "self"
+    return address.rsplit(".", 1)[0]
