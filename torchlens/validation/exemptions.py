@@ -392,10 +392,23 @@ def posthoc_perturb_check(
     ):
         return True
 
+    output_tensor = layer_to_validate_parents_for.out
+
     # max/min/maximum/minimum with multiple args — binary max/min is insensitive
     # to perturbation when one arg dominates (e.g., extreme negative vs normal value).
     if func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
         return True
+
+    # remainder/fmod divisor is locally irrelevant when the dividend is already
+    # the result (e.g., 0 <= dividend < divisor elementwise).
+    if func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
+        dividend, divisor = args[:2]
+        if isinstance(dividend, torch.Tensor) and isinstance(divisor, torch.Tensor):
+            arg_positions = layer_to_validate_parents_for.parent_arg_positions.get("args", {})
+            perturbed_label = layers_to_perturb[0]
+            perturbed_is_divisor = arg_positions.get(1) == perturbed_label
+            if perturbed_is_divisor and torch.equal(output_tensor, dividend):
+                return True
 
     # max non-floating-point — discrete
     if func_name == "max" and not torch.is_floating_point(args[0]):
@@ -408,7 +421,6 @@ def posthoc_perturb_check(
 
     # Constant output — function is structurally constant-valued
     # (e.g., softmax on a dimension with size 1 always produces all-ones).
-    output_tensor = layer_to_validate_parents_for.out
     if output_tensor.numel() > 0 and len(torch.unique(output_tensor)) == 1:
         return True
 
