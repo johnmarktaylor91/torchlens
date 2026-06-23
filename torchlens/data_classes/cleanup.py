@@ -464,6 +464,22 @@ _LIST_FIELDS_TO_CLEAN = [
     "internally_terminated_bool_ops",
 ]
 
+_OP_LABEL_FIELDS_TO_CLEAN = (
+    "parents",
+    "root_ancestors",
+    "children",
+    "input_ancestors",
+    "output_descendants",
+    "internal_source_parents",
+    "internal_source_ancestors",
+    "conditional_entry_children",
+    "conditional_then_children",
+    "conditional_else_children",
+    "op_equivalence_classes",
+    "equivalent_ops",
+    "recurrent_ops",
+)
+
 
 def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
     """Removes all references to a single Op from the Trace's list/dict fields.
@@ -513,22 +529,110 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
 
 
 def _scrub_per_op_equivalence_lists(ops: Iterable["Op"], labels_to_remove: Set[str]) -> None:
-    """Remove dead labels from per-op ``equivalent_ops``/``recurrent_ops`` lists.
+    """Remove dead labels from per-op graph-reference fields.
 
-    ``equivalent_ops`` and ``recurrent_ops`` are *stored* per-op label lists
+    ``equivalent_ops`` and other raw-label fields are stored per op
     (``FieldPolicy.KEEP``), so removing an Op from the Trace does not by itself
-    clear references to it held by *other* ops — scrubbing the global
-    ``op_equivalence_classes`` map is not enough. Loop detection iterates
-    ``node.equivalent_ops`` and dereferences each label via ``self[...]``, so a
-    dangling reference (e.g. an output node that returns a buffer still listing
-    the now-merged buffer source) raises ``"... is not a known raw label"``
-    mid-pass. Keep both per-op lists consistent with the surviving graph.
+    clear references to it held by other ops. Later postprocess phases rename
+    these fields by raw-label lookup; stale labels therefore mean the graph is
+    internally inconsistent and can raise ``KeyError`` before validation gets a
+    chance to replay the model. Keep every raw-label-bearing per-op field
+    consistent with the surviving graph.
     """
 
     for op in ops:
-        equivalent_ops = getattr(op, "equivalent_ops", None)
-        if equivalent_ops:
-            op.equivalent_ops = [label for label in equivalent_ops if label not in labels_to_remove]
-        recurrent_ops = getattr(op, "recurrent_ops", None)
-        if recurrent_ops:
-            op.recurrent_ops = [label for label in recurrent_ops if label not in labels_to_remove]
+        _scrub_op_label_collections(op, labels_to_remove)
+        _scrub_parent_arg_positions(op, labels_to_remove)
+        _scrub_out_versions_by_child(op, labels_to_remove)
+        _scrub_conditional_child_maps(op, labels_to_remove)
+
+
+def _scrub_op_label_collections(op: "Op", labels_to_remove: Set[str]) -> None:
+    """Remove dead labels from direct list/set fields on one op.
+
+    Parameters
+    ----------
+    op:
+        Operation record to repair.
+    labels_to_remove:
+        Raw labels that no longer have a materialized operation record.
+    """
+
+    for field_name in _OP_LABEL_FIELDS_TO_CLEAN:
+        value = getattr(op, field_name, None)
+        if not value:
+            continue
+        if isinstance(value, list):
+            setattr(op, field_name, [label for label in value if label not in labels_to_remove])
+        elif isinstance(value, set):
+            setattr(op, field_name, value - labels_to_remove)
+
+
+def _scrub_parent_arg_positions(op: "Op", labels_to_remove: Set[str]) -> None:
+    """Remove parent-argument references to deleted raw labels.
+
+    Parameters
+    ----------
+    op:
+        Operation record to repair.
+    labels_to_remove:
+        Raw labels that no longer have a materialized operation record.
+    """
+
+    parent_arg_positions = getattr(op, "parent_arg_positions", None)
+    if not parent_arg_positions:
+        return
+    for arg_type in ("args", "kwargs"):
+        positions = parent_arg_positions.get(arg_type, {})
+        for key, value in list(positions.items()):
+            if value in labels_to_remove:
+                del positions[key]
+
+
+def _scrub_out_versions_by_child(op: "Op", labels_to_remove: Set[str]) -> None:
+    """Remove output-version records keyed by deleted child raw labels.
+
+    Parameters
+    ----------
+    op:
+        Operation record to repair.
+    labels_to_remove:
+        Raw labels that no longer have a materialized operation record.
+    """
+
+    out_versions_by_child = getattr(op, "out_versions_by_child", None)
+    if not out_versions_by_child:
+        return
+    op.out_versions_by_child = {
+        child_label: tensor_version
+        for child_label, tensor_version in out_versions_by_child.items()
+        if child_label not in labels_to_remove
+    }
+
+
+def _scrub_conditional_child_maps(op: "Op", labels_to_remove: Set[str]) -> None:
+    """Remove deleted raw labels from nested conditional child maps.
+
+    Parameters
+    ----------
+    op:
+        Operation record to repair.
+    labels_to_remove:
+        Raw labels that no longer have a materialized operation record.
+    """
+
+    conditional_elif_children = getattr(op, "conditional_elif_children", None)
+    if conditional_elif_children:
+        op.conditional_elif_children = {
+            elif_ix: [label for label in child_labels if label not in labels_to_remove]
+            for elif_ix, child_labels in conditional_elif_children.items()
+        }
+    conditional_arm_children = getattr(op, "conditional_arm_children", None)
+    if conditional_arm_children:
+        op.conditional_arm_children = {
+            cond_id: {
+                branch_kind: [label for label in child_labels if label not in labels_to_remove]
+                for branch_kind, child_labels in branch_children.items()
+            }
+            for cond_id, branch_children in conditional_arm_children.items()
+        }
