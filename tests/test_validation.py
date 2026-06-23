@@ -45,6 +45,8 @@ from torchlens.validation.status import (
 )
 from torchlens.utils.tensor_utils import tensor_nanequal
 
+_TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
+
 
 # =============================================================================
 # Import / binding tests
@@ -114,6 +116,139 @@ def test_validation_replay_status_aggregate_fold() -> None:
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
     assert callable(validate_forward_pass)
+
+
+def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:
+    """A second trace should not see stale labels on nested model-owned tensors."""
+
+    class TensorCache:
+        """Small model-owned cache that stores tensors below a custom object."""
+
+        def __init__(self) -> None:
+            """Initialize an empty tensor cache."""
+
+            self.items: dict[str, torch.Tensor | None] = {"mask": None}
+
+    class CachedTensorBlock(nn.Module):
+        """Consume a cached tensor in a child module."""
+
+        def forward(self, cached: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+            """Add the cached tensor to the live input.
+
+            Parameters
+            ----------
+            cached
+                Tensor cached on the parent module during an earlier trace.
+            x
+                Live model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Elementwise sum of the cached tensor and input.
+            """
+
+            return cached + x
+
+    class NestedCachedTensorModel(nn.Module):
+        """Model that keeps an op output in a nested custom cache."""
+
+        def __init__(self) -> None:
+            """Initialize the nested cache and child module."""
+
+            super().__init__()
+            self.cache = TensorCache()
+            self.block = CachedTensorBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model while reusing a nested cached tensor.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Child-module output.
+            """
+
+            if self.cache.items["mask"] is None:
+                self.cache.items["mask"] = torch.ones_like(x)
+            return self.block(cast(torch.Tensor, self.cache.items["mask"]), x)
+
+    model = NestedCachedTensorModel()
+    x = torch.randn(2, 3)
+
+    tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+    second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+
+    assert second_trace.num_ops > 0
+
+
+def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
+    """A second trace should not see stale labels on forward-global tensors."""
+
+    global _TEST_FORWARD_GLOBAL_TENSOR
+
+    class GlobalTensorBlock(nn.Module):
+        """Consume a tensor read from the caller module's globals."""
+
+        def forward(self, cached: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+            """Add a global tensor to a live input.
+
+            Parameters
+            ----------
+            cached
+                Tensor captured through the parent forward function's globals.
+            x
+                Live model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Elementwise sum of the cached tensor and input.
+            """
+
+            return cached + x
+
+    class GlobalTensorForwardModel(nn.Module):
+        """Model whose forward reads a tensor from function globals."""
+
+        def __init__(self) -> None:
+            """Initialize the child module."""
+
+            super().__init__()
+            self.block = GlobalTensorBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model with a global tensor input to the child module.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Child-module output.
+            """
+
+            return self.block(cast(torch.Tensor, _TEST_FORWARD_GLOBAL_TENSOR), x)
+
+    x = torch.randn(2, 3)
+    _TEST_FORWARD_GLOBAL_TENSOR = torch.ones_like(x)
+    try:
+        model = GlobalTensorForwardModel()
+
+        tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+        second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+
+        assert second_trace.num_ops > 0
+    finally:
+        _TEST_FORWARD_GLOBAL_TENSOR = None
 
 
 def test_validate_forward_pass_replays_dict_output_by_typed_path() -> None:

@@ -31,7 +31,11 @@ from ...utils.tensor_utils import safe_copy
 from . import _tl
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
-from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
+from .model_prep import (
+    _cleanup_model_session,
+    _ensure_model_prepared,
+    _prepare_model_session,
+)
 from .module_stack import pop_frame, push_existing_frame
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
@@ -122,12 +126,16 @@ class TorchBackend:
         """Clean up per-session torch metadata."""
         model: object
         input_tensors: object
-        if isinstance(prepared_model, tuple) and len(prepared_model) == 2:
+        input_objects: object
+        if isinstance(prepared_model, tuple) and len(prepared_model) == 3:
+            model, input_tensors, input_objects = prepared_model
+        elif isinstance(prepared_model, tuple) and len(prepared_model) == 2:
             model, input_tensors = prepared_model
+            input_objects = None
         else:
-            model, input_tensors = prepared_model, None
+            model, input_tensors, input_objects = prepared_model, None, None
         uninstall_buffer_write_tracker(cast("Trace", session))
-        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors)
+        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors, input_objects)
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch logging context manager."""
