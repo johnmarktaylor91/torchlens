@@ -553,8 +553,12 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             if pid in seen_param_ids:
                 existing_address = param_id_to_address[pid]
                 alias_address = f"{address}.{param_name}" if address else param_name
-                if alias_address not in param_logs[existing_address].co_parent_params:
-                    param_logs[existing_address].co_parent_params.append(alias_address)
+                param_log = param_logs[existing_address]
+                if alias_address not in param_log.all_addresses:
+                    param_log.all_addresses.append(alias_address)
+                alias_module_address = address or "self"
+                if alias_module_address not in param_log.all_module_addresses:
+                    param_log.all_module_addresses.append(alias_module_address)
                 continue
             seen_param_ids.add(pid)
 
