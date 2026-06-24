@@ -441,6 +441,69 @@ class WeatherGridTransformer(nn.Module):
         return self.up(tokens.transpose(1, 2).view(b, c, h, w))
 
 
+class FunctionalGenerativeWeather(nn.Module):
+    """Latent functional generator that maps noise codes to weather fields."""
+
+    def __init__(self, channels: int = 6, dim: int = 48, latent_dim: int = 16) -> None:
+        """Initialize the latent-to-field generator.
+
+        Parameters
+        ----------
+        channels:
+            Meteorological channel count.
+        dim:
+            Token width.
+        latent_dim:
+            Latent noise-code width.
+        """
+
+        super().__init__()
+        self.encoder = nn.Conv2d(channels, dim, 4, stride=4)
+        self.latent = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(dim, latent_dim),
+            nn.Tanh(),
+        )
+        self.coord = nn.Linear(2, dim)
+        self.generator = nn.Sequential(
+            nn.Linear(latent_dim + dim, dim),
+            nn.GELU(),
+            nn.Linear(dim, dim),
+        )
+        self.refine = TransformerBlock(dim)
+        self.to_field = nn.ConvTranspose2d(dim, channels, 4, stride=4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Generate a weather field from latent code and spatial coordinates.
+
+        Parameters
+        ----------
+        x:
+            Conditioning weather field.
+
+        Returns
+        -------
+        torch.Tensor
+            Generated weather field.
+        """
+
+        encoded = self.encoder(x)
+        b, c, h, w = encoded.shape
+        z = self.latent(encoded)
+        yy, xx = torch.meshgrid(
+            torch.linspace(-1, 1, h, device=x.device, dtype=x.dtype),
+            torch.linspace(-1, 1, w, device=x.device, dtype=x.dtype),
+            indexing="ij",
+        )
+        coords = torch.stack([xx, yy], dim=-1).reshape(1, h * w, 2)
+        coord_tokens = self.coord(coords).expand(b, -1, -1)
+        latent_tokens = z[:, None, :].expand(-1, h * w, -1)
+        tokens = self.generator(torch.cat([latent_tokens, coord_tokens], dim=-1))
+        tokens = self.refine(tokens + encoded.flatten(2).transpose(1, 2))
+        return self.to_field(tokens.transpose(1, 2).view(b, c, h, w))
+
+
 class SiameseRPNTracker(nn.Module):
     """Siamese tracker with depthwise correlation and RPN heads."""
 
@@ -920,7 +983,7 @@ def build_fengwu_ghr() -> nn.Module:
 def build_functional_weather() -> nn.Module:
     """Build functional generative weather network."""
 
-    return WeatherGridTransformer("functional").eval()
+    return FunctionalGenerativeWeather().eval()
 
 
 def build_graph_weather() -> nn.Module:
