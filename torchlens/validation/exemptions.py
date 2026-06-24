@@ -87,6 +87,7 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
 STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "cross_entropy": {1},  # target labels (LongTensor)
     "embedding": {1},  # index tensor — random indices cause CUDA OOB
+    "gather": {2},  # index tensor
     "index_select": {2},  # index tensor
     "scatter_": {2},  # index tensor
     "maskedfill": {1},  # mask tensor; TorchLens canonical name for Tensor.masked_fill
@@ -200,29 +201,86 @@ def _check_interpolate_exempt(self: "Trace", layer: Op, layers_to_perturb: List[
     return False
 
 
-def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
-    """Exempt scatter_ when the perturbed layer is the destination tensor and
-    the index covers all positions along the scatter dimension (full overwrite)."""
-    perturbed_tensor = self[layers_to_perturb[0]].out
+def _get_scatter_destination_dim_index(layer: Op) -> tuple[torch.Tensor, int, torch.Tensor] | None:
+    """Return scatter destination, dim, and index tensors when they are replayable.
+
+    Parameters
+    ----------
+    layer:
+        Scatter operation being validated.
+
+    Returns
+    -------
+    tuple[torch.Tensor, int, torch.Tensor] | None
+        Destination tensor, scatter dimension, and index tensor, or ``None``
+        when the call shape is unsupported or uses reduce semantics.
+    """
+
     args = layer.saved_args
-    # scatter_(dim, index, src): args[0]=self(dest), args[1]=dim, args[2]=index, args[3]=src
-    if len(args) < 4:
+    kwargs = layer.saved_kwargs
+    if len(args) < 1 or not isinstance(args[0], torch.Tensor):
+        return None
+    if kwargs.get("reduce") is not None:
+        return None
+    if len(args) > 4 and args[4] is not None:
+        return None
+
+    dest = args[0]
+    dim = kwargs.get("dim", args[1] if len(args) > 1 else None)
+    index = kwargs.get("index", args[2] if len(args) > 2 else None)
+    if not isinstance(dim, int) or not isinstance(index, torch.Tensor):
+        return None
+    if dim < 0:
+        dim = dest.ndim + dim
+    if dim < 0 or dim >= dest.ndim:
+        return None
+    return dest, dim, index
+
+
+def _scatter_index_fully_overwrites_dim(dest: torch.Tensor, dim: int, index: torch.Tensor) -> bool:
+    """Return whether scatter index covers every destination slot along ``dim``.
+
+    Parameters
+    ----------
+    dest:
+        Scatter destination tensor.
+    dim:
+        Normalized scatter dimension.
+    index:
+        Scatter index tensor.
+
+    Returns
+    -------
+    bool
+        True when every slice orthogonal to ``dim`` contains each valid
+        destination index, making the destination's prior values irrelevant.
+    """
+
+    if index.ndim != dest.ndim or index.shape[dim] < dest.shape[dim]:
         return False
-    dest, dim, index = args[0], args[1], args[2]
-    if not isinstance(dest, torch.Tensor) or not isinstance(index, torch.Tensor):
+    n_positions = dest.shape[dim]
+    if n_positions == 0:
         return False
-    # Only exempt when the perturbed layer is the destination (arg[0])
+    moved = index.detach().cpu().movedim(dim, -1).reshape(-1, index.shape[dim])
+    required = set(range(n_positions))
+    for row in moved:
+        row_values = {int(value) for value in row.tolist() if 0 <= int(value) < n_positions}
+        if not required.issubset(row_values):
+            return False
+    return True
+
+
+def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
+    """Exempt scatter destination perturbation when scatter fully overwrites it."""
+
+    perturbed_tensor = self[layers_to_perturb[0]].out
+    scatter_components = _get_scatter_destination_dim_index(layer)
+    if scatter_components is None:
+        return False
+    dest, dim, index = scatter_components
     if not torch.equal(perturbed_tensor, dest):
         return False
-    # Check if index covers all positions along the scatter dimension
-    if isinstance(dim, int) and dim < 0:
-        dim = dest.ndim + dim
-    if isinstance(dim, int) and dim < dest.ndim:
-        n_positions = dest.shape[dim]
-        n_index_entries = index.shape[dim]
-        if n_index_entries >= n_positions:
-            return True
-    return False
+    return _scatter_index_fully_overwrites_dim(dest, dim, index)
 
 
 def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
@@ -252,6 +310,7 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", Op, List[str]], bool]] = {
     "__setitem__": _check_setitem_exempt,
     "lstm": _check_lstm_exempt,
     "interpolate": _check_interpolate_exempt,
+    "scatter": _check_scatter_exempt,
     "scatter_": _check_scatter_exempt,
     "where": _check_where_exempt,
 }
