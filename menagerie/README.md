@@ -127,32 +127,40 @@ without a random-init path.
 ## Validating Every Model
 
 `validate_menagerie.py` runs TorchLens replay validation over menagerie recipes without
-rendering graphs:
+rendering graphs. A validated row means TorchLens captured the model, replayed the
+captured forward pass, matched model outputs, and passed metadata-invariant validation.
+See [docs/menagerie-validation.md](../docs/menagerie-validation.md) for the full
+procedure, ledger semantics, status taxonomy, pixi environment-island workflow, and
+memory-aware scheduler details.
 
 ```bash
 python -m menagerie.validate_menagerie \
-  --verified-only \
   --out-dir /tmp/torchlens_menagerie_validation \
-  --no-install-deps
+  --memory-budget-gb 48 \
+  --worker-memory-cap-gb 16 \
+  --timeout-sec 240
 ```
 
 Validation is independent from rendering. It uses its own default output directory and
 append-only `validation_manifest.tsv`, then writes `validation_summary.json` and
 `VALIDATION_REPORT.md`. The renderer's `manifest.tsv` is not read or updated.
 
-The default `--scope forward` calls `torchlens.validate_forward_pass(...,
-validate_metadata=True)` for the claim that saved activations replay the forward pass
-and satisfy metadata invariants. `--scope forward+backward` additionally tries backward
+The default `--scope forward` uses TorchLens forward validation with
+`validate_metadata=True`. `--scope forward+backward` additionally tries backward
 validation with a scalar loss over floating tensor outputs.
 
 Useful validation controls:
 
 ```bash
 # Retry only non-validated rows in the validation manifest.
-python -m menagerie.validate_menagerie --revalidate-failed
+python -m menagerie.validate_menagerie \
+  --out-dir /tmp/torchlens_menagerie_validation \
+  --revalidate-failed
 
 # Rebuild validation_summary.json and VALIDATION_REPORT.md from the manifest.
-python -m menagerie.validate_menagerie --report-only
+python -m menagerie.validate_menagerie \
+  --out-dir /tmp/torchlens_menagerie_validation \
+  --report-only
 
 # Validate a tiny local sample.
 python -m menagerie.validate_menagerie \
