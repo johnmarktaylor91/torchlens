@@ -8,11 +8,11 @@ computational graph, exposes rich per-op metadata, and lets you intervene on the
 network as it runs. Any architecture, even dynamic and recurrent ones.
 
 > **[Explore the Model Menagerie](https://model-menagerie.pages.dev)** -- a live, browsable atlas of
-> **10,000+ unique neural-network architectures** captured with TorchLens, from McCulloch & Pitts (1943)
+> **11,000+ unique neural-network architectures** captured with TorchLens, from McCulloch & Pitts (1943)
 > to today's frontier models. *(Early preview.)*
 
-Run on **10,000+ architectures** (image, video, audio, multimodal, language;
-feedforward, recurrent, transformer, GNN), with **700+ rigorously validated** for
+Run on **11,000+ architectures** (image, video, audio, multimodal, language;
+feedforward, recurrent, transformer, GNN), with **over 99% rigorously validated** for
 capture correctness — and it records **every last detail
 of every part of your model**: **180+ metadata fields per operation**, and
 **550+ fields in total** across every record type — operations, modules,
@@ -350,7 +350,7 @@ documented in [`docs/`](docs/).
 ## Gallery
 
 TorchLens visualizes any architecture -- no matter how exotic. Explore the
-**[Model Menagerie](https://model-menagerie.pages.dev)**: a browsable atlas of **10,000+ unique
+**[Model Menagerie](https://model-menagerie.pages.dev)**: a browsable atlas of **11,000+ unique
 neural-network architectures** -- from McCulloch & Pitts (1943) to today's frontier models -- each with
 structured metadata and a faithful TorchLens-rendered diagram.
 
