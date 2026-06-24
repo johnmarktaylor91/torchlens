@@ -20,6 +20,7 @@ no-build-isolation = ["yolox"]
 "typing_extensions" = ">=4.0"
 "pillow" = ">=9"
 "pydantic" = ">=2"
+"psutil" = ">=5.9"
 "torch" = "==2.4.1"
 "torchvision" = "==0.19.1"
 "yolox" = "==0.3.0"

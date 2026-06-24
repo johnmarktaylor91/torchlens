@@ -1,0 +1,87 @@
+# Menagerie Reimplementation Candidates
+
+Models assigned to pixi islands that were honestly attempted during island-phase recovery but remained unbuildable. These are candidates for later classic reimplementation rather than permanent validation failure.
+
+## yolox_sg (10)
+- m10350	super_gradients_yolo_nas_l	super-gradients 3.7.1 (installed --no-deps after full install failed)
+- m10352	super_gradients_yolo_nas_m	super-gradients 3.7.1 (installed --no-deps after full install failed)
+- m10358	super_gradients_yolo_nas_s	super-gradients 3.7.1 (installed --no-deps after full install failed)
+- m11542	yolox_darknet53	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+- m11544	yolox_l	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+- m11546	yolox_m	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+- m11548	yolox_nano	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+- m11550	yolox_s	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+- m11552	yolox_tiny	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+- m11554	yolox_x	Megvii-BaseDetection/YOLOX source + torch2.1/cu121
+
+## audio (40)
+- m3554	audiocraft.AudioSeal	audiocraft (web; pip av-build-fail)
+- m7572	nemo_citrinet_encoder	nemo (web; not installed)
+- m4746	espnet_asr_conformer_ctc	espnet
+- m4747	espnet_asr_conformer_transducer	espnet
+- m4753	espnet_conformer_encoder	espnet (web; not installed)
+- m4754	espnet_conformer_separator	espnet (web; not installed)
+- m4755	espnet_contextual_block_conformer_encoder	espnet (web; not installed)
+- m4774	espnet_transducer_encoder	espnet (web; not installed)
+- m7574	nemo_conformer_encoder	nemo (web; not installed)
+- m7584	nemo_fastconformer_ctc	nemo (web; not installed)
+- m7585	nemo_fastconformer_encoder	nemo (web; not installed)
+- m7588	nemo_fastconformer_transducer	nemo (web; not installed)
+- m7576	nemo_contextnet_encoder	nemo (web; not installed)
+- m4757	espnet_ctc	espnet (web; not installed)
+- m4758	espnet_dprnn_separator	espnet (web; not installed)
+- m4761	espnet_enh_dprnn	espnet
+- m4748	espnet_asr_e_branchformer_ctc	espnet
+- m4759	espnet_ebranchformer_encoder	espnet (web; not installed)
+- m4789	espnet_vocoder_hifigan	espnet
+- m7580	nemo_convasr_encoder	nemo (web; not installed)
+- m7600	nemo_marblenet_vad	nemo (web; not installed)
+- m4790	espnet_vocoder_melgan	espnet
+- m4791	espnet_vocoder_multiband_melgan	espnet
+- m4769	espnet_rnn_decoder	espnet (web; not installed)
+- m4770	espnet_rnn_encoder	espnet (web; not installed)
+- m10129	speechbrain_sgmse_voicebank	speechbrain
+- m7619	nemo_speakernet	nemo (web; not installed)
+- m7622	nemo_squeezeformer_encoder	nemo (web; not installed)
+- m4772	espnet_tacotron2	espnet (web; not installed)
+- m4785	espnet_tts_tacotron2_gst	espnet
+- m4773	espnet_tfgridnet_separator	espnet (web; not installed)
+- m7629	nemo_titanet_large	nemo (web; not installed)
+- m4775	espnet_transducer_joint_network	espnet (web; not installed)
+- m4776	espnet_transducer_rnn_decoder	espnet (web; not installed)
+- m4756	espnet_contextual_block_transformer_encoder	espnet (web; not installed)
+- m4777	espnet_transformer_decoder	espnet (web; not installed)
+- m4778	espnet_transformer_encoder	espnet (web; not installed)
+- m4779	espnet_transformer_tts	espnet (web; not installed)
+- m4751	espnet_asr_transformer_ctc_attention	espnet
+- m4786	espnet_tts_transformer_tts	espnet
+
+## geom_sci (6)
+- m94	Allegro	external(pip install allegro)
+- m5279	gvp_gnn	github:drorlab/gvp-pytorch
+- m8993	s2cnn (Spherical CNN)	github:jonas-koehler/s2cnn
+- m10138	spherical_cnn	github:jonkhler/s2cnn
+- m9085	schnetpack_SO3net	schnetpack
+- m9087	schnetpack_SO3net_R6	schnetpack
+
+## gpu_tail (4)
+- m5575	lerobot_act	lerobot
+- m2181	Pi0FAST_lerobot	lerobot(PyTorch port)
+- m1578	LeRobot_DiffusionPolicy	lerobot(PyTorch)
+- m10552	tinycudann_FullyFusedMLP	NVlabs/tiny-cuda-nn (pip tinycudann; CUDA-only)
+
+## mmocr (6)
+- m952	FCE-ResNet50-DCN	mmocr
+- m953	FCENet-ResNet50	mmocr
+- m1720	MaskRCNN-OCR-Text	mmocr
+- m2082	PANet-ResNet18	mmocr
+- m2083	PANet-ResNet50	mmocr
+- m2138	PSENet-ResNet50	mmocr
+
+## misc (6)
+- m3549	attngan_g_net	github:taoxugit/AttnGAN
+- m3863	controlgan_g_net	github:mrlibw/ControlGAN
+- m467	DARTS-CIFAR-NormalCell	quark0/darts
+- m4344	dm_gan_g_net	github:MinfengZhu/DM-GAN
+- m2865	Sonata	facebookresearch/sonata
+- m2817	SiamRPN-AlexNet	github:HonglinChu/SiamTrackers/SiamRPN
