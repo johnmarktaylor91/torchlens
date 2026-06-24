@@ -65,7 +65,7 @@ class BlockwiseCausalSelfAttention(nn.Module):
 class Pi0FlowPolicy(nn.Module):
     """Compact π0 flow-matching VLA with VLM and action expert tokens."""
 
-    def __init__(self, dim: int = 48, action_dim: int = 7) -> None:
+    def __init__(self, dim: int = 48, action_dim: int = 7, *, system_two: bool = False) -> None:
         """Initialize π0 model.
 
         Parameters
@@ -74,13 +74,17 @@ class Pi0FlowPolicy(nn.Module):
             Token width.
         action_dim:
             Continuous action dimension.
+        system_two:
+            Whether to add the π0.5 high-level recurrent planning stage.
         """
 
         super().__init__()
+        self.system_two = system_two
         self.image = nn.Conv2d(3, dim, 8, stride=8)
         self.text = nn.Embedding(128, dim)
         self.state = nn.Linear(action_dim, dim)
         self.action = nn.Linear(action_dim + 1, dim)
+        self.planner = nn.GRU(dim, dim, batch_first=True) if system_two else None
         self.blocks = nn.ModuleList([BlockwiseCausalSelfAttention(dim) for _ in range(2)])
         self.out = nn.Linear(dim, action_dim)
 
@@ -117,6 +121,9 @@ class Pi0FlowPolicy(nn.Module):
         st = self.state(state).unsqueeze(1)
         time = tau.view(tau.shape[0], 1, 1).expand(-1, noisy_action.shape[1], 1)
         act = self.action(torch.cat([noisy_action, time], dim=-1))
+        if self.planner is not None:
+            plan, _ = self.planner(vlm[:, :4])
+            vlm = torch.cat([vlm, plan], dim=1)
         tokens = torch.cat([vlm, st, act], dim=1)
         mask = torch.zeros(tokens.shape[1], tokens.shape[1], device=tokens.device)
         mask[: vlm.shape[1], vlm.shape[1] :] = float("-inf")
@@ -185,11 +192,17 @@ class Pi0FASTPolicy(nn.Module):
 class Pi0ConcatInputWrapper(nn.Module):
     """Single-tensor input wrapper for the structured π0 VLA policy."""
 
-    def __init__(self) -> None:
-        """Initialize the wrapped flow-matching policy."""
+    def __init__(self, *, system_two: bool = False) -> None:
+        """Initialize the wrapped flow-matching policy.
+
+        Parameters
+        ----------
+        system_two:
+            Whether to use the π0.5 recurrent planning stage.
+        """
 
         super().__init__()
-        self.policy = Pi0FlowPolicy()
+        self.policy = Pi0FlowPolicy(system_two=system_two)
 
     def forward(self, packed: torch.Tensor) -> torch.Tensor:
         """Unpack image, text, state, action, and time from one tensor.
@@ -271,6 +284,18 @@ def build() -> nn.Module:
     return Pi0ConcatInputWrapper()
 
 
+def build_pi05() -> nn.Module:
+    """Build π0.5 flow policy with a System-2 planner.
+
+    Returns
+    -------
+    nn.Module
+        π0.5 flow model.
+    """
+
+    return Pi0ConcatInputWrapper(system_two=True)
+
+
 def build_fast() -> nn.Module:
     """Build π0-FAST autoregressive policy.
 
@@ -310,6 +335,6 @@ def example_fast_input() -> torch.Tensor:
 MENAGERIE_ENTRIES = [
     ("openpi_pi0_jax", "build", "example_input", "2024", "E7"),
     ("Pi0_openpi", "build", "example_input", "2024", "E7"),
-    ("Pi05_openpi", "build", "example_input", "2025", "E7"),
+    ("Pi05_openpi", "build_pi05", "example_input", "2025", "E7"),
     ("openpi_pi0_fast_jax", "build_fast", "example_fast_input", "2025", "E7"),
 ]
