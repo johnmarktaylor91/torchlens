@@ -292,9 +292,8 @@ class ReStyleEncoder(nn.Module):
     def forward(self, x: torch.Tensor, current_latent: torch.Tensor) -> torch.Tensor:
         # x: (B,3,H,W), current_latent: (B, num_styles, style_dim)
         # generate reconstruction from current latent (simplified: just upsample latent to image)
-        recon = current_latent.mean(dim=1, keepdim=True)  # (B,1,style_dim)
-        recon = recon.unsqueeze(-1).expand(-1, -1, x.shape[2], x.shape[3])
-        recon_img = recon[:, :3, :, :]  # take first 3 channels as dummy reconstruction
+        recon = current_latent.mean(dim=-1)[:, :3].view(x.shape[0], 3, 1, 1)
+        recon_img = recon.expand(-1, -1, x.shape[2], x.shape[3])
         inp = torch.cat([x, recon_img], dim=1)  # (B, 6, H, W)
         delta = self.enc(inp)  # (B, num_styles, style_dim)
         return current_latent + delta

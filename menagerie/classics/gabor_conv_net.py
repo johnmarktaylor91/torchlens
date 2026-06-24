@@ -40,8 +40,8 @@ class GaborConvolutionalNetwork(nn.Module):
         self.classifier = nn.Linear(16 * 8 * 8, num_classes)
         coords = torch.linspace(-1.0, 1.0, 7)
         yy, xx = torch.meshgrid(coords, coords, indexing="ij")
-        self.register_buffer("xx", xx)
-        self.register_buffer("yy", yy)
+        self.register_buffer("xx", xx.clone())
+        self.register_buffer("yy", yy.clone())
 
     def _gabor_weight(self) -> Tensor:
         """Generate first-layer Gabor filters from trainable parameters.

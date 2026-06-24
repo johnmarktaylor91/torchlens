@@ -193,10 +193,13 @@ class UFLDHead(nn.Module):
         self.num_lanes = num_lanes
         self.pool = nn.Conv2d(512, 8, kernel_size=1)
         total = (griding_num + 1) * num_row * num_lanes
-        # flattened input dim depends on pooled spatial size; computed lazily
-        self.cls = None
-        self.total = total
         self.hidden = 2048
+        self.cls = nn.Sequential(
+            nn.Linear(8 * 4 * 8, self.hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.hidden, total),
+        )
+        self.total = total
         # auxiliary segmentation branch
         self.aux_header4 = nn.Sequential(
             nn.Conv2d(512, 128, 3, padding=1, bias=False),
@@ -212,12 +215,6 @@ class UFLDHead(nn.Module):
         # main row-anchor classification head
         p = self.pool(c5)
         flat = p.flatten(1)
-        if self.cls is None:
-            self.cls = nn.Sequential(
-                nn.Linear(flat.shape[1], self.hidden),
-                nn.ReLU(inplace=True),
-                nn.Linear(self.hidden, self.total),
-            ).to(flat.device)
         out = self.cls(flat)
         out = out.view(-1, self.griding_num + 1, self.num_row, self.num_lanes)
         return out, aux
