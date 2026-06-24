@@ -1,6 +1,93 @@
 # CHANGELOG
 
 
+## v2.28.0 (2026-06-24)
+
+### Bug Fixes
+
+- **fastlog**: Harden partial recording failure handling
+  ([`d2ee04d`](https://github.com/johnmarktaylor91/torchlens/commit/d2ee04d072a513ff09261eadd473762d6d43d57c))
+
+- **viz**: Collapse at stage level for nested-container models
+  ([`5ef95cd`](https://github.com/johnmarktaylor91/torchlens/commit/5ef95cd49bd0c99c368caad6493759e8a27a2aae))
+
+Descend through named backbone containers (features/encoder/backbone) and fold the repeated/similar
+  stage children as peer boxes instead of swallowing the whole container; relaxed
+  structural-similarity peer grouping (class/stem) so unique-but-parallel modules (Inception
+  Mixed_*) fold; atomic conv-bn-relu fold; guard mixed-depth collapsed-edge placement.
+
+- **viz**: Fold standalone auto-collapse leaf blocks
+  ([`f7b4aee`](https://github.com/johnmarktaylor91/torchlens/commit/f7b4aeef3e2af1edfa0d449b4774205d7f130bb0))
+
+- **viz**: Keep sibling ordering with collapse predicates
+  ([`531b793`](https://github.com/johnmarktaylor91/torchlens/commit/531b793ff1310cc92b4d432a9d8d510954fb394f))
+
+- **viz**: Name the repeated module class in the run-fold ellipsis label
+  ([`06a6e9a`](https://github.com/johnmarktaylor91/torchlens/commit/06a6e9ace622502539a64134d2aee7101f5e5fb5))
+
+- **viz**: Remove model-specific collapse override
+  ([`435d952`](https://github.com/johnmarktaylor91/torchlens/commit/435d9525cc744123e7c3c6360ffee3702bd66219))
+
+- **viz**: Render run folds with ellipsis
+  ([`6bc5e84`](https://github.com/johnmarktaylor91/torchlens/commit/6bc5e844f25956691a0dd5360cce690a8efdc08e))
+
+- **viz**: Tighten auto run-fold structural key
+  ([`2c47137`](https://github.com/johnmarktaylor91/torchlens/commit/2c47137cd6199cbcce33c469fdd42ce4972d4109))
+
+- **viz**: Tune auto collapse landmarks
+  ([`362499f`](https://github.com/johnmarktaylor91/torchlens/commit/362499f8457bd1ebf9c1ec1a33af48310c57bf92))
+
+### Documentation
+
+- **readme**: Feature 10,000+ run scope, keep 700+ validated distinct
+  ([`4ff02f6`](https://github.com/johnmarktaylor91/torchlens/commit/4ff02f6f3c5724c19cd5e4906eb550921009fb14))
+
+- **readme**: Feature the Model Menagerie up front in the intro
+  ([`992a7bb`](https://github.com/johnmarktaylor91/torchlens/commit/992a7bb47b9f1589ce06cd40d9173b7ef9ee73c8))
+
+- **readme**: Point Gallery to the live Model Menagerie (10k+ architectures, early preview)
+  ([`fee6951`](https://github.com/johnmarktaylor91/torchlens/commit/fee6951aa49d9494f2e779ba10a7063ca10b0503))
+
+- **readme**: Update menagerie stats to current campaign state
+  ([`03fd83a`](https://github.com/johnmarktaylor91/torchlens/commit/03fd83a7e88730afa987609129c30cf9beed394c))
+
+The validation campaign took the menagerie from ~700 validated to over 99% (of 11,000+
+  architectures) rigorously validated for capture correctness.
+
+- **viz**: Document smart collapse controls
+  ([`06456f1`](https://github.com/johnmarktaylor91/torchlens/commit/06456f108a1efde08020a4453b4152b935640cd3))
+
+### Features
+
+- **fastlog**: Return partial recordings on forward errors
+  ([`40e12eb`](https://github.com/johnmarktaylor91/torchlens/commit/40e12ebfdfb33fa3f566510d211ed1107ef2f256))
+
+- **viz**: Add smart module collapse policy
+  ([`4dc56f6`](https://github.com/johnmarktaylor91/torchlens/commit/4dc56f60a1edacc0a1b85dabc33f6bdcbf31966b))
+
+- **viz**: Fold runs of repeated blocks to representative + xN
+  ([`ce05e3b`](https://github.com/johnmarktaylor91/torchlens/commit/ce05e3b7e38707b8af64ad4391e2065a734fd442))
+
+Fold a run of >=3 consecutive structurally-identical sibling blocks (fold key = class + internal
+  topology, dim-insensitive) into one representative box with an xN multiplicity badge; fold the
+  run's parallel inter-block edges to one representative edge. Fixes under-collapse on deep
+  repeated-block nets (swin_s 96->16, vit 24->13, vgg19_bn flat conv-bn fold 58->6) while keeping
+  distinct stages separate.
+
+### Performance Improvements
+
+- **viz**: Keep collapse signal tally linear
+  ([`6f735f6`](https://github.com/johnmarktaylor91/torchlens/commit/6f735f6603152d567247f6752d1459d3644e809c))
+
+### Testing
+
+- **viz**: Accept new collapse kwarg in _DummyLog.draw mock
+  ([`fc3ac69`](https://github.com/johnmarktaylor91/torchlens/commit/fc3ac691c88254b62728af76da304871e30c324c))
+
+- **viz**: Cover smart auto collapse metrics
+  ([`d3da42e`](https://github.com/johnmarktaylor91/torchlens/commit/d3da42ec7cd0b7c30e898e023e36d64a87e06f46))
+
+
 ## v2.27.0 (2026-06-22)
 
 ### Bug Fixes
