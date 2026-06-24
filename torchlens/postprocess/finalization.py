@@ -159,6 +159,13 @@ def _build_root_module_log(
     root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.is_trainable)
     root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.is_trainable)
     root_fsize = Bytes(sum(int(pl.param_memory) for pl in self.param_logs))
+    root_meta_children = root_meta.get("address_children")
+    if root_meta_children is None:
+        address_children = [m for m in mbd["top_level_modules"] if m != "self" and "." not in m]
+    else:
+        address_children = [
+            child for child in root_meta_children if child != "self" and "." not in child
+        ]
 
     root_module = Module(
         address="self",
@@ -183,7 +190,7 @@ def _build_root_module_log(
         # top_level_modules may include grandchildren called directly
         # (e.g., self.level21.level12(x)), which belong in call_children
         # but not in the static address hierarchy.
-        address_children=[m for m in mbd["top_level_modules"] if m != "self" and "." not in m],
+        address_children=address_children,
         address_depth=0,
         call_parent=None,
         call_children=[m for m in mbd["top_level_modules"] if m != "self"],
