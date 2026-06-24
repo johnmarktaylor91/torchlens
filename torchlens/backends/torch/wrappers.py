@@ -1891,6 +1891,8 @@ def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:
         defaults = getattr(func, "__defaults__", None)
     except Exception:
         return
+    if defaults is not None and not isinstance(defaults, tuple):
+        return
     if defaults is not None:
         new_defaults = []
         changed = False
