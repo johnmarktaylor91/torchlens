@@ -21,6 +21,7 @@ no-build-isolation = ["mmcv"]
 "typing_extensions" = ">=4.0"
 "pillow" = ">=9"
 "pydantic" = ">=2"
+"psutil" = ">=5.9"
 "torch" = "==2.1.0+cu121"
 "torchvision" = "==0.16.0+cu121"
 "numpy" = "<2"
