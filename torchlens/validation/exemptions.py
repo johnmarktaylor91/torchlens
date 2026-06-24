@@ -155,7 +155,48 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
     if torch.equal(perturbed_tensor, args[0]) and _check_if_arg_is_special_val(args[0]):
         return True
 
+    # Case 4: perturbed layer is the destination, but the indexed destination
+    # slice is fully overwritten by the replacement value.
+    if _setitem_destination_slice_is_fully_overwritten(perturbed_tensor, args):
+        return True
+
     return False
+
+
+def _setitem_destination_slice_is_fully_overwritten(
+    perturbed_tensor: torch.Tensor | None,
+    args: tuple[Any, ...],
+) -> bool:
+    """Return whether a ``__setitem__`` call overwrites the perturbed destination slice.
+
+    Parameters
+    ----------
+    perturbed_tensor:
+        Tensor selected for perturbation.
+    args:
+        Saved ``__setitem__`` positional arguments.
+
+    Returns
+    -------
+    bool
+        True when the perturbed tensor is the destination, the replacement is a
+        tensor, and ``destination[index]`` has exactly the replacement shape.
+    """
+
+    if len(args) < 3:
+        return False
+    destination, index, replacement = args[:3]
+    if not isinstance(perturbed_tensor, torch.Tensor):
+        return False
+    if not isinstance(destination, torch.Tensor) or not isinstance(replacement, torch.Tensor):
+        return False
+    if not torch.equal(perturbed_tensor, destination):
+        return False
+    try:
+        selected = destination[index]
+    except (IndexError, TypeError, RuntimeError):
+        return False
+    return tuple(selected.shape) == tuple(replacement.shape)
 
 
 def _check_lstm_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:

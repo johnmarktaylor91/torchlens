@@ -1309,6 +1309,48 @@ def test_validation_with_functional_masked_fill() -> None:
     assert validate_forward_pass(model, x)
 
 
+def test_validation_with_setitem_slice_full_overwrite() -> None:
+    """Perturbing a fully overwritten ``__setitem__`` destination slice is exempt."""
+
+    class SetItemSliceOverwriteModel(nn.Module):
+        """Model that overwrites one destination slice with a value tensor."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Assign a replacement tensor into a selected destination slice.
+
+            Parameters
+            ----------
+            x:
+                Input tensor with a singleton slice dimension.
+
+            Returns
+            -------
+            torch.Tensor
+                Tensor after an indexed slice assignment.
+            """
+
+            destination = x.clone()
+            replacement = x[:, :, 0, :, :] + 1.0
+            destination[:, :, 0, :, :] = replacement
+            return destination
+
+    model = SetItemSliceOverwriteModel()
+    x = torch.randn(1, 3, 1, 4, 4)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        setitem_layer = _only_layer_with_func_name(trace, "__setitem__")
+        destination_parent = setitem_layer.parent_arg_positions["args"][0]
+        replacement_parent = setitem_layer.parent_arg_positions["args"][2]
+
+        assert _check_perturbation_exemptions(trace, setitem_layer, [destination_parent]) is True
+        assert _check_perturbation_exemptions(trace, setitem_layer, [replacement_parent]) is False
+    finally:
+        trace.cleanup()
+
+
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
     """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
 
