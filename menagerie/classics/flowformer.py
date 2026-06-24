@@ -64,14 +64,14 @@ class CostVolumeEncoder(nn.Module):
     Then a linear projection maps cost_vec (H*W) -> d_model.
     """
 
-    def __init__(self, d_feat: int = 32, d_model: int = 32) -> None:
+    def __init__(self, d_feat: int = 32, d_model: int = 32, n_kv: int = 64) -> None:
         super().__init__()
-        # Will determine n_kv at runtime from spatial size
         self.d_feat = d_feat
         self.d_model = d_model
-        self.proj = None  # lazy init
+        self.proj = nn.Linear(n_kv, d_model)
 
     def _ensure_proj(self, n_kv: int, device: torch.device, dtype: torch.dtype) -> None:
+        """Resize the cost-vector projection when tracing a non-default input size."""
         if self.proj is None or self.proj.in_features != n_kv:
             self.proj = nn.Linear(n_kv, self.d_model).to(device=device, dtype=dtype)
 
