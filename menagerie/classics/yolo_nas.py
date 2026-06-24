@@ -391,6 +391,27 @@ def example_input() -> torch.Tensor:
 
 MENAGERIE_ENTRIES = [
     (
+        "super_gradients_yolo_nas_s",
+        "build_yolo_nas_s",
+        "example_input",
+        "2023",
+        "DC",
+    ),
+    (
+        "super_gradients_yolo_nas_m",
+        "build_yolo_nas_m",
+        "example_input",
+        "2023",
+        "DC",
+    ),
+    (
+        "super_gradients_yolo_nas_l",
+        "build_yolo_nas_l",
+        "example_input",
+        "2023",
+        "DC",
+    ),
+    (
         "YOLO-NAS-S (RepVGG-QSP detector, PAN neck, decoupled head)",
         "build_yolo_nas_s",
         "example_input",

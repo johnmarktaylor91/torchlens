@@ -657,6 +657,8 @@ def _entry(
 
 
 MENAGERIE_ENTRIES = [
+    _entry("Pi0FAST_lerobot", "build_pi0fast", "example_vla", "2024", "RL"),
+    _entry("LeRobot_DiffusionPolicy", "build_diffusion", "example_diffusion", "2023", "RL"),
     _entry("lerobot_act_aloha_sim_insertion_human", "build_act", "example_act", "2023", "RL"),
     _entry("lerobot_act_aloha_sim_transfer_cube_human", "build_act", "example_act", "2023", "RL"),
     _entry("lerobot_diffusion_pusht", "build_diffusion", "example_diffusion", "2023", "RL"),
