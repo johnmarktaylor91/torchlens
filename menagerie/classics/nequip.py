@@ -21,12 +21,11 @@ from torch import Tensor, nn
 try:
     from e3nn import nn as e3nn_nn
     from e3nn import o3
-
-    _HAS_E3NN: Final = True
 except ImportError:
     e3nn_nn = None
     o3 = None
-    _HAS_E3NN = False
+
+_HAS_E3NN: Final = False
 
 
 class BesselRadialBasis(nn.Module):
@@ -347,7 +346,7 @@ else:
             self.radial_mlp = nn.Sequential(
                 nn.Linear(num_radial, 32),
                 nn.SiLU(),
-                nn.Linear(32, 4 * scalar_dim + 3 * vector_dim),
+                nn.Linear(32, 3 * scalar_dim + 4 * vector_dim),
             )
 
         def forward(

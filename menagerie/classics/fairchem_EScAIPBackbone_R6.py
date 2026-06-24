@@ -108,11 +108,15 @@ class NeighborAttentionBlock(nn.Module):
         k = self.k(edge_feat).view(-1, self.heads, self.head_dim)
         v = self.v(edge_feat).view(-1, self.heads, self.head_dim)
         logits = (q * k).sum(dim=-1) / (self.head_dim**0.5)
-        attn = torch.zeros_like(logits)
-        for node in range(atoms.shape[0]):
-            mask = dst == node
-            if bool(mask.any()):
-                attn[mask] = torch.softmax(logits[mask], dim=0)
+        shifted = logits - logits.detach().amax(dim=0, keepdim=True)
+        exp_logits = torch.exp(shifted)
+        denom = torch.zeros(
+            atoms.shape[0],
+            self.heads,
+            dtype=exp_logits.dtype,
+            device=exp_logits.device,
+        ).index_add(0, dst, exp_logits)
+        attn = exp_logits / denom[dst].clamp_min(1e-6)
         msg = (attn[..., None] * v).reshape(edge_feat.shape[0], -1)
         agg = torch.zeros_like(atoms).index_add(0, dst, msg)
         atoms = atoms + self.out(agg)

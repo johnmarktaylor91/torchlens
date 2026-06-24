@@ -36,7 +36,8 @@ class SampleRNN(nn.Module):
         """
         super().__init__()
         self.frame_size = frame_size
-        self.embedding = nn.Embedding(quantization, embed_size)
+        self.register_buffer("levels", torch.linspace(-1.0, 1.0, quantization))
+        self.embedding = nn.Parameter(torch.randn(quantization, embed_size) * 0.02)
         self.frame_gru = nn.GRU(embed_size, hidden_size, batch_first=True)
         self.sample_mlp = nn.Sequential(
             nn.Linear(embed_size + hidden_size, hidden_size),
@@ -50,15 +51,16 @@ class SampleRNN(nn.Module):
         Parameters
         ----------
         audio:
-            Unsigned integer samples with shape ``(batch, time)``.
+            Raw waveform samples scaled to ``[-1, 1]`` with shape ``(batch, time)``.
 
         Returns
         -------
         Tensor
             Per-sample logits with shape ``(batch, time, quantization)``.
         """
-        tokens = audio.long()
-        embedded = self.embedding(tokens)
+        distances = (audio.clamp(-1.0, 1.0).unsqueeze(-1) - self.levels) ** 2
+        soft_codes = torch.softmax(-128.0 * distances, dim=-1)
+        embedded = soft_codes @ self.embedding
         batch, steps, features = embedded.shape
         n_frames = steps // self.frame_size
         framed = embedded[:, : n_frames * self.frame_size].reshape(
@@ -89,9 +91,9 @@ def example_input() -> Tensor:
     Returns
     -------
     Tensor
-        UInt8 tensor with shape ``(1, 4096)``.
+        Float waveform tensor with shape ``(1, 4096)``.
     """
-    return torch.randint(0, 256, (1, 4096), dtype=torch.uint8)
+    return torch.randn(1, 4096).clamp(-1.0, 1.0)
 
 
 MENAGERIE_ENTRIES = [("SampleRNN Hierarchical Audio Model", "build", "example_input", "2016", "DE")]
