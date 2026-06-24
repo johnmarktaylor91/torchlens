@@ -979,6 +979,52 @@ class _ScatterModel(nn.Module):
         return x + out
 
 
+class _GatherIndexModel(nn.Module):
+    """Model that uses a tensor parent as a gather index."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Gather from ``x`` using a derived structural index tensor.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Gathered tensor plus a data dependency on ``x``.
+        """
+
+        index = torch.argmax(x, dim=1, keepdim=True).expand(-1, 2)
+        gathered = torch.gather(x, 1, index)
+        return gathered + x[:, :2]
+
+
+class _FunctionalScatterKwargsModel(nn.Module):
+    """Model that uses functional scatter with keyword index and src tensors."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scatter values into a destination whose prior values are overwritten.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scatter result plus a data dependency on ``x``.
+        """
+
+        order = torch.argsort(x, dim=-1)
+        src = torch.arange(x.shape[-1], dtype=x.dtype, device=x.device).expand_as(x)
+        dest = torch.zeros_like(x)
+        scattered = dest.scatter(dim=-1, index=order, src=src)
+        return scattered + x
+
+
 class _MaskedFillModel(nn.Module):
     """Model that uses masked_fill_."""
 
@@ -1175,6 +1221,22 @@ def test_validation_with_scatter():
     model = _ScatterModel()
     x = torch.randn(3, 5)
     assert validate_forward_pass(model, x)
+
+
+def test_validation_with_gather_index_parent() -> None:
+    """Validate gather index tensors as structural perturbation parents."""
+
+    model = _GatherIndexModel()
+    x = torch.randn(4, 5)
+    assert validate_forward_pass(model, x, random_seed=123)
+
+
+def test_validation_with_functional_scatter_kwargs_full_overwrite() -> None:
+    """Validate functional scatter when index fully overwrites destination."""
+
+    model = _FunctionalScatterKwargsModel()
+    x = torch.randn(5, 7)
+    assert validate_forward_pass(model, x, random_seed=123)
 
 
 def test_validation_with_masked_fill():
