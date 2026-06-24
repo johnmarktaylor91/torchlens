@@ -1533,14 +1533,48 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
         else:
             lo = parent_outs.float().min().item()
             hi = parent_outs.float().max().item()
+            finite_output = output_outs.detach().float().abs()
+            finite_output = finite_output[torch.isfinite(finite_output)]
+            output_scale = finite_output.max().item() if finite_output.numel() else 0.0
+            dtype_info = torch.finfo(parent_outs.dtype)
+            parent_scale = max(abs(lo), abs(hi), hi - lo, 1.0)
+            scaled_expansion: float | None = None
             if hi - lo < max(1e-6, abs(lo) * 1e-6):
                 # Near-constant tensor — range is too narrow for meaningful
-                # perturbation at float32 precision.  Expand by ±10% of
-                # magnitude (or ±1 near zero).  Conservative to avoid feeding
-                # invalid values to C extensions (e.g. ROI align segfaults).
-                expansion = max(1.0, abs(lo) * 0.1)
-                lo, hi = lo - expansion, hi + expansion
-            perturbed_outs = torch.rand_like(parent_outs.float(), device=device) * (hi - lo) + lo
+                # perturbation at float32 precision. Expand by ±10% of the
+                # parent magnitude, or by the child output scale when the parent
+                # is near zero but the op output is huge. Without the output
+                # scale, zero-valued broadcast parents can be perturbed by only
+                # ~1 and then disappear under float32 rounding beside 1e38
+                # operands.
+                expansion = min(
+                    max(1.0, abs(lo) * 0.1, output_scale * 0.1),
+                    dtype_info.max * 0.25,
+                )
+                if output_scale > parent_scale * 1.0e6:
+                    scaled_expansion = expansion
+                else:
+                    lo, hi = lo - expansion, hi + expansion
+            elif output_scale > parent_scale * 1.0e6:
+                # A non-constant but tiny parent range can also be invisible
+                # when combined additively with enormous operands. Expand only
+                # for extreme scale separation so normal range-restricted
+                # tensors keep their original valid-domain perturbations.
+                scaled_expansion = min(output_scale * 0.1, dtype_info.max * 0.25)
+            if scaled_expansion is not None:
+                signs = torch.where(
+                    torch.rand_like(parent_outs.float(), device=device) < 0.5,
+                    -1.0,
+                    1.0,
+                )
+                magnitudes = (
+                    torch.rand_like(parent_outs.float(), device=device) * 0.5 + 0.5
+                ) * scaled_expansion
+                perturbed_outs = parent_outs.float() + signs * magnitudes
+            else:
+                perturbed_outs = (
+                    torch.rand_like(parent_outs.float(), device=device) * (hi - lo) + lo
+                )
             perturbed_outs = perturbed_outs.type(parent_outs.dtype)
 
     return perturbed_outs

@@ -835,7 +835,9 @@ def test_custom_exemption_checks_are_callable():
 
 
 @pytest.mark.smoke
-def test_perturbation_changes_float_tensor():
+def test_perturbation_changes_float_tensor() -> None:
+    """Floating-point perturbation changes ordinary tensor values."""
+
     parent = torch.randn(10, 10)
     output = torch.randn(10, 10)
     perturbed = _perturb_layer_outs(parent, output)
@@ -843,7 +845,62 @@ def test_perturbation_changes_float_tensor():
     assert perturbed.shape == parent.shape
 
 
-def test_perturbation_changes_int_tensor():
+def test_perturbation_scales_near_constant_float_to_large_output() -> None:
+    """Near-constant float perturbations scale up when child outputs are huge."""
+
+    parent = torch.zeros(16, dtype=torch.float32)
+    output = torch.full((16,), 1.0e30, dtype=torch.float32)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.abs().max() > 1.0e20
+    assert not torch.equal(output - perturbed, output)
+
+
+def test_perturbation_scales_tiny_float_range_to_large_output() -> None:
+    """Tiny float ranges scale up when otherwise swallowed by huge operands."""
+
+    parent = torch.linspace(-0.25, 0.25, 16, dtype=torch.float32)
+    output = torch.full((16,), 1.0e30, dtype=torch.float32)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.abs().max() > 1.0e20
+    assert not torch.equal(output + perturbed, output)
+
+
+def test_validation_perturbs_zero_parent_at_large_float_scale() -> None:
+    """Replay validation detects sensitivity when a zero parent meets a huge operand."""
+
+    class HugeSubZero(nn.Module):
+        """Model whose subtraction parent is zero but value-sensitive."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Subtract a data-derived zero tensor from a huge float tensor.
+
+            Parameters
+            ----------
+            x:
+                Input tensor used to shape the zero-valued parent.
+
+            Returns
+            -------
+            torch.Tensor
+                Huge float tensor with a zero-valued subtraction parent.
+            """
+
+            huge = torch.ones_like(x) * 1.0e30
+            zero = x * 0.0
+            return huge - zero
+
+    assert validate_forward_pass(HugeSubZero(), torch.ones(2, 3), random_seed=123)
+
+
+def test_perturbation_changes_int_tensor() -> None:
+    """Integer perturbation changes tensor values while preserving dtype."""
+
     parent = torch.randint(0, 100, (10, 10))
     output = torch.randn(10, 10)
     perturbed = _perturb_layer_outs(parent, output)
