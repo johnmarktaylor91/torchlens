@@ -13015,3 +13015,6 @@
 ["PANet-ResNet50",174,"m12264"]
 ["PSENet-ResNet50",174,"m12265"]
 ["Pi0FAST_lerobot",174,"m12266"]
+[["AttnGAN generator (condi","tioning augmentation + w","ord attention)"],174,"m12267"]
+["ControlGAN generator (word-level controllable channels)",174,"m12268"]
+["DM-GAN generator (dynamic memory text-to-image refinement)",174,"m12269"]
