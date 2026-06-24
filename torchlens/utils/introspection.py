@@ -453,9 +453,16 @@ def _extend_search_stack_from_item(
         #   - Skip _ATTR_SKIP_SET (.T, .mT, .H, .real, .imag) — trigger
         #     deprecation warnings or create duplicate tensor views
         #   - Skip anything containing "grad" — grad tensors tracked separately
+        try:
+            attrs = dir(item)
+        except Exception:
+            # Some third-party expression/proxy objects intentionally refuse
+            # Python introspection. Treat them as opaque leaves so tensor
+            # discovery can continue for the real tensor arguments.
+            return
         _state._dir_cache[obj_type] = [
             a
-            for a in dir(item)
+            for a in attrs
             if not a.startswith("__") and a not in _ATTR_SKIP_SET and "grad" not in a
         ]
     filtered_attrs = _state._dir_cache[obj_type]

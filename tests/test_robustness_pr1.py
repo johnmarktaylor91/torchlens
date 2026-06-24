@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.backends.torch.wrappers import torch_func_decorator, wrap_torch
 
 
 class _Tiny(nn.Module):
@@ -180,6 +180,55 @@ def test_non_vmap_forward_pass_emits_no_functorch_warning() -> None:
 
     functorch_warnings = [w for w in caught if "functorch" in str(w.message).lower()]
     assert functorch_warnings == []
+
+
+def test_opaque_non_iterable_arg_does_not_hide_tensor_capture() -> None:
+    """Opaque non-tensor args must pass through wrappers while tensors still log."""
+
+    class OpaqueExpr:
+        """Synthetic expression object that refuses iteration and introspection."""
+
+        def __iter__(self) -> None:
+            """Raise the same non-iterable error shape as dataframe expressions."""
+
+            raise TypeError("'Expr' object is not iterable")
+
+        def __dir__(self) -> list[str]:
+            """Route introspection through iteration to reproduce opaque proxy failure."""
+
+            iter(self)
+            return []
+
+    def opaque_passthrough(x: torch.Tensor, expr: OpaqueExpr) -> torch.Tensor:
+        """Return a real tensor result while carrying an opaque side argument."""
+
+        del expr
+        return torch.relu(x)
+
+    wrapped_passthrough = torch_func_decorator(opaque_passthrough, "opaque_passthrough")
+
+    class OpaqueArgModel(nn.Module):
+        """Model that passes an opaque object through a decorated call."""
+
+        def __init__(self) -> None:
+            """Initialize the opaque expression payload."""
+
+            super().__init__()
+            self.expr = OpaqueExpr()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a decorated call with both tensor and opaque arguments."""
+
+            return wrapped_passthrough(x, self.expr) + 1
+
+    model = OpaqueArgModel()
+    x = torch.randn(2, 4)
+
+    trace = tl.trace(model, x, layers_to_save="all")
+
+    assert tl.validation.validate_forward_pass(model, x)
+    assert any(label.startswith("relu") for label in trace.layer_labels)
+    assert any(label.startswith("add") for label in trace.layer_labels)
 
 
 # ---------------------------------------------------------------------------
