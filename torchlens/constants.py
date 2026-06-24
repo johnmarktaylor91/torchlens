@@ -634,6 +634,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "output_ops",
     "output_layers",
     "output_structure",
+    "output_paths",
     "forward_arg_names",
     "num_forward_args_total",
     "num_forward_pos_args",

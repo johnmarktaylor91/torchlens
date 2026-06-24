@@ -566,6 +566,7 @@ def _build_submodule_call_logs(
             output_structure=mbd.get("module_output_structures", {}).get(
                 call_label, _first_output_structure(self, pass_output_layers)
             ),
+            output_paths=mbd.get("module_output_paths", {}).get(call_label, ()),
             forward_args=fwd_positional,
             forward_kwargs=fwd_kwargs,
             forward_args_template=fwd_args_template,

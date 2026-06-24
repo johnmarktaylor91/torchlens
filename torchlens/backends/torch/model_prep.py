@@ -1624,6 +1624,7 @@ def _record_module_exit_metadata(
         module_call_label=module_call_label,
     )
     output_tensor_labels_raw: list[str] = []
+    output_paths: list[tuple[object, ...]] = []
     per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
     output_names: list[str | None] = []
     for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
@@ -1659,6 +1660,7 @@ def _record_module_exit_metadata(
         is_atomic_module = _is_bottom_level_submodule_exit(trace, t, module)
         atomic_module_call = (address, module_call_index) if is_atomic_module else None
         output_tensor_labels_raw.append(tensor_label)
+        output_paths.append(tuple(container_path))
         event = trace.capture_events.live_index.require_event(tensor_label)
         per_output_atomic.append(
             (
@@ -1685,6 +1687,7 @@ def _record_module_exit_metadata(
             forward_duration=forward_duration,
             output_structure=output_structure,
             output_tensor_labels_raw=tuple(output_tensor_labels_raw),
+            output_paths=tuple(output_paths),
             has_user_forward_hooks=bool(getattr(module, "_forward_hooks", None)),
             per_output_atomic=tuple(per_output_atomic),
             output_names=tuple(output_names),

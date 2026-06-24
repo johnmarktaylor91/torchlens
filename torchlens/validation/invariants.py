@@ -3396,7 +3396,12 @@ def _check_module_call_output_structure_paths(
         return
     structure_paths = set(_container_tensor_leaf_paths(output_structure))
     output_paths: set[tuple[object, ...]] = set()
+    captured_output_paths = tuple(getattr(module_call, "output_paths", ()) or ())
+    if captured_output_paths:
+        output_paths.update(tuple(path) for path in captured_output_paths if tuple(path))
     for output_op_label in getattr(module_call, "output_ops", ()) or ():
+        if captured_output_paths:
+            break
         resolved_label = _resolve_trace_label(ml, output_op_label)
         if resolved_label is None:
             continue

@@ -1205,6 +1205,8 @@ def _apply_module_exit_event(trace: "Trace", event: ModuleExitEvent) -> None:
     mbd["module_forward_durations"][event.call_label] = event.forward_duration
     if event.output_structure is not None:
         mbd["module_output_structures"][event.call_label] = event.output_structure
+    if event.output_paths:
+        mbd.setdefault("module_output_paths", {})[event.call_label] = tuple(event.output_paths)
 
 
 def _module_enter_addresses(

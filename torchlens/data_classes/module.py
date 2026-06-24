@@ -371,6 +371,7 @@ class ModuleCall:
         "output_ops": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
         "output_structure": FieldPolicy.KEEP,
+        "output_paths": FieldPolicy.KEEP,
         "forward_args": FieldPolicy.BLOB_RECURSIVE,
         "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
         "forward_arg_names": FieldPolicy.KEEP,
@@ -406,6 +407,7 @@ class ModuleCall:
     output_ops: List[str]
     output_layers: List[str]
     output_structure: "ContainerSpec | None"
+    output_paths: tuple[tuple[Any, ...], ...]
     forward_args: tuple[Any, ...] | None
     forward_kwargs: dict[str, Any] | None
     forward_arg_names: List[str]
@@ -430,6 +432,7 @@ class ModuleCall:
         output_layers: List[str],
         output_ops: List[str] | None = None,
         output_structure: "ContainerSpec | None" = None,
+        output_paths: tuple[tuple[Any, ...], ...] | None = None,
         forward_args: tuple[Any, ...] | None = None,
         forward_kwargs: dict[str, Any] | None = None,
         forward_args_template: Any = None,
@@ -461,6 +464,7 @@ class ModuleCall:
         self.input_ops = list(input_layers)
         self.output_ops = output_ops if output_ops is not None else list(output_layers)
         self.output_structure = output_structure
+        self.output_paths = output_paths if output_paths is not None else ()
         self.forward_args = forward_args
         self.forward_kwargs = forward_kwargs
         self.forward_arg_names = forward_arg_names if forward_arg_names is not None else []
@@ -989,6 +993,7 @@ class ModuleCall:
                 "module_call_stack": [],
                 "_source_trace_ref": None,
                 "output_structure": None,
+                "output_paths": (),
             },
         )
         state["forward_duration"] = Duration(state.get("forward_duration") or 0.0)
