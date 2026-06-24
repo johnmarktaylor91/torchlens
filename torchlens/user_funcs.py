@@ -533,6 +533,34 @@ class _PlainAttrIdentitySnapshot:
     value_type_name: str
 
 
+@dataclasses.dataclass(frozen=True)
+class _PlainAttrManagedTensorSnapshot:
+    """Snapshot marker for PyTorch-managed derived tensor attributes.
+
+    Parameters
+    ----------
+    module:
+        Owning module that exposes the derived tensor attribute.
+    name:
+        Attribute name on ``module``.
+    shape:
+        Tensor shape at snapshot time.
+    dtype:
+        Tensor dtype at snapshot time.
+    device:
+        Tensor device at snapshot time.
+    manager:
+        Human-readable manager kind for diagnostics.
+    """
+
+    module: nn.Module
+    name: str
+    shape: tuple[int, ...]
+    dtype: torch.dtype
+    device: torch.device
+    manager: str
+
+
 def _is_identity_stable_plain_attr(value: Any) -> bool:
     """Return whether a plain attr should be tracked by object identity.
 
@@ -561,6 +589,135 @@ def _is_identity_stable_plain_attr(value: Any) -> bool:
     ) or callable(value)
 
 
+def _legacy_parametrization_manager(module: nn.Module, name: str) -> str | None:
+    """Return the legacy PyTorch parametrization hook managing an attribute.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the candidate plain tensor attribute.
+    name:
+        Attribute name to classify.
+
+    Returns
+    -------
+    str | None
+        Manager kind when the attribute is a computed view backed by registered
+        module state, otherwise ``None``.
+    """
+
+    for hook in getattr(module, "_forward_pre_hooks", {}).values():
+        if getattr(hook, "name", None) != name:
+            continue
+        hook_type = type(hook)
+        hook_key = f"{hook_type.__module__}.{hook_type.__name__}"
+        if (
+            hook_key == "torch.nn.utils.weight_norm.WeightNorm"
+            and f"{name}_g" in module._parameters
+            and f"{name}_v" in module._parameters
+        ):
+            return "legacy_weight_norm"
+        if (
+            hook_key == "torch.nn.utils.spectral_norm.SpectralNorm"
+            and f"{name}_orig" in module._parameters
+            and f"{name}_u" in module._buffers
+            and f"{name}_v" in module._buffers
+        ):
+            return "legacy_spectral_norm"
+    return None
+
+
+def _parametrize_manager(module: nn.Module, name: str) -> str | None:
+    """Return whether PyTorch's parametrization API manages an attribute.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the candidate plain tensor attribute.
+    name:
+        Attribute name to classify.
+
+    Returns
+    -------
+    str | None
+        Manager kind when the attribute is parametrized, otherwise ``None``.
+    """
+
+    try:
+        from torch.nn.utils import parametrize
+    except ImportError:
+        return None
+    try:
+        if parametrize.is_parametrized(module, name):
+            return "parametrize"
+    except (AttributeError, ValueError, TypeError):
+        return None
+    return None
+
+
+def _managed_plain_tensor_attr_snapshot(
+    module: nn.Module,
+    name: str,
+    value: Any,
+) -> _PlainAttrManagedTensorSnapshot | None:
+    """Return a marker for a legitimate derived plain tensor attribute.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the candidate attribute.
+    name:
+        Attribute name to classify.
+    value:
+        Current attribute value.
+
+    Returns
+    -------
+    _PlainAttrManagedTensorSnapshot | None
+        Snapshot marker when PyTorch registered state manages this plain tensor
+        attribute, otherwise ``None``.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        return None
+    manager = _parametrize_manager(module, name) or _legacy_parametrization_manager(module, name)
+    if manager is None:
+        return None
+    return _PlainAttrManagedTensorSnapshot(
+        module=module,
+        name=name,
+        shape=tuple(value.shape),
+        dtype=value.dtype,
+        device=value.device,
+        manager=manager,
+    )
+
+
+def _snapshot_module_plain_attr_value(module: nn.Module, name: str, attr_path: str) -> Any:
+    """Return a snapshot for a named plain attribute on a module.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the plain attribute.
+    name:
+        Attribute name.
+    attr_path:
+        Human-readable module/attribute path for diagnostics.
+
+    Returns
+    -------
+    Any
+        Snapshot suitable for later comparison and restoration.
+    """
+
+    value = getattr(module, name)
+    managed_snapshot = _managed_plain_tensor_attr_snapshot(module, name, value)
+    if managed_snapshot is not None:
+        return managed_snapshot
+    return _snapshot_plain_attr_value(value, attr_path)
+
+
 def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
     """Return a value snapshot for a plain module-tree attribute.
 
@@ -583,7 +740,7 @@ def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
         validation restore. External objects remain unsupported in this path.
     """
 
-    if isinstance(value, _PlainAttrIdentitySnapshot):
+    if isinstance(value, (_PlainAttrIdentitySnapshot, _PlainAttrManagedTensorSnapshot)):
         return value
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
         return value
@@ -694,6 +851,21 @@ def _plain_attr_values_equal(left: Any, right: Any, attr_path: str) -> bool:
         ):
             return False
         return left.value is right.value
+    if isinstance(left, _PlainAttrManagedTensorSnapshot) or isinstance(
+        right, _PlainAttrManagedTensorSnapshot
+    ):
+        if not isinstance(left, _PlainAttrManagedTensorSnapshot) or not isinstance(
+            right, _PlainAttrManagedTensorSnapshot
+        ):
+            return False
+        return (
+            left.module is right.module
+            and left.name == right.name
+            and left.shape == right.shape
+            and left.dtype == right.dtype
+            and left.device == right.device
+            and left.manager == right.manager
+        )
     if isinstance(left, torch.Tensor) or isinstance(right, torch.Tensor):
         if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
             return False
@@ -757,6 +929,8 @@ def _plain_attr_restore_value(snapshot: Any) -> Any:
 
     if isinstance(snapshot, _PlainAttrIdentitySnapshot):
         return snapshot.value
+    if isinstance(snapshot, _PlainAttrManagedTensorSnapshot):
+        return getattr(snapshot.module, snapshot.name)
     return _snapshot_plain_attr_value(snapshot, "<snapshot>")
 
 
@@ -807,7 +981,7 @@ class _ModuleTreePlainAttrSnapshot:
                         module,
                         name,
                         attr_path,
-                        _snapshot_plain_attr_value(getattr(module, name), attr_path),
+                        _snapshot_module_plain_attr_value(module, name, attr_path),
                     )
                 )
 
@@ -833,7 +1007,7 @@ class _ModuleTreePlainAttrSnapshot:
                     ) from exc
         for module, name, attr_path, snapshot in self._entries:
             try:
-                current_snapshot = _snapshot_plain_attr_value(getattr(module, name), attr_path)
+                current_snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
             except AttributeError:
                 current_snapshot = None
                 changed = True
