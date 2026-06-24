@@ -456,6 +456,120 @@ def test_validate_forward_pass_replays_dict_output_by_typed_path() -> None:
     assert validate_forward_pass(DictOutputModel(), torch.tensor([-1.0, 2.0]))
 
 
+def test_validate_forward_pass_uses_typed_ground_truth_leaf_order() -> None:
+    """Ground-truth output leaves follow capture's typed container traversal."""
+
+    UnpoolInfo = namedtuple("UnpoolInfo", ("edge_index", "cluster", "batch"))
+
+    class NestedNamedtupleOutput(nn.Module):
+        """Return a tuple with a nested namedtuple payload."""
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, UnpoolInfo]:
+            """Run the model.
+
+            Parameters
+            ----------
+            x
+                Input tensor.
+
+            Returns
+            -------
+            tuple[torch.Tensor, UnpoolInfo]
+                Tensor output plus namedtuple metadata leaves.
+            """
+
+            edge_index = torch.stack((torch.arange(4), torch.arange(4).flip(0)))
+            cluster = torch.zeros(4, dtype=torch.long)
+            batch = torch.ones(4, dtype=torch.long)
+            return x + 1.0, UnpoolInfo(edge_index=edge_index, cluster=cluster, batch=batch)
+
+    assert validate_forward_pass(NestedNamedtupleOutput(), torch.randn(1, 3)) is True
+
+
+def test_validate_forward_pass_accepts_nested_lstm_module_outputs() -> None:
+    """Module output metadata preserves nn.LSTM's nested public return paths."""
+
+    class TupleLSTM(nn.Module):
+        """Return the raw nested output of an ``nn.LSTM`` module."""
+
+        def __init__(self) -> None:
+            """Initialize the LSTM fixture."""
+
+            super().__init__()
+            self.lstm = nn.LSTM(5, 7, batch_first=True)
+
+        def forward(
+            self, x: torch.Tensor
+        ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+            """Run the LSTM.
+
+            Parameters
+            ----------
+            x
+                Batch-major sequence input.
+
+            Returns
+            -------
+            tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]
+                Raw ``nn.LSTM`` output and hidden-state tuple.
+            """
+
+            return self.lstm(x)
+
+    model = TupleLSTM().eval()
+    x = torch.randn(2, 3, 5)
+
+    assert validate_forward_pass(model, x, validate_metadata=True) is True
+
+    trace = trace_fn(model, x, save_arg_values=True)
+    try:
+        path_reprs = {repr(path) for path in trace.module_calls["lstm:1"].output_paths}
+
+        assert path_reprs == {
+            "(TupleIndex(index=0),)",
+            "(TupleIndex(index=1), TupleIndex(index=0))",
+            "(TupleIndex(index=1), TupleIndex(index=1))",
+        }
+    finally:
+        trace.cleanup()
+
+
+def test_detached_reference_patcher_ignores_opaque_defaults() -> None:
+    """Detached-reference patching treats non-tuple defaults as opaque metadata."""
+
+    from torchlens.backends.torch.wrappers import _patch_function_defaults
+
+    class CallableWithOpaqueDefaults:
+        """Callable object exposing a non-standard ``__defaults__`` value."""
+
+        __defaults__ = object()
+
+        def __call__(self) -> None:
+            """Run the callable."""
+
+    candidate = CallableWithOpaqueDefaults()
+    original_defaults = candidate.__defaults__
+
+    _patch_function_defaults(candidate, {id(original_defaults): "replacement"})
+
+    assert candidate.__defaults__ is original_defaults
+
+
+def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
+    """Posthoc perturbation checks do not call unsupported ``unique`` on complex tensors."""
+
+    layer = SimpleNamespace(
+        func_name="fft",
+        saved_args=(torch.ones(4, dtype=torch.complex64),),
+        saved_kwargs={},
+        dtype=torch.complex64,
+        out=torch.ones(4, dtype=torch.complex64),
+        layer_label="fft_1_1",
+    )
+
+    assert posthoc_perturb_check(SimpleNamespace(), layer, ["input_1"], verbose=False) is True
+
+
 def test_validation_recompute_selects_dict_output_by_container_path() -> None:
     """Validation replay selects a dict leaf by typed path, not raw integer index."""
 
