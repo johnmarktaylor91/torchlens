@@ -657,6 +657,100 @@ class SpeechSequenceCompact(nn.Module):
         return self.head(h)
 
 
+class MelFeatureAdapter(nn.Module):
+    """Adapt SpeechBrain feature tensors to wave-C log-mel encoder builders."""
+
+    def __init__(self, core: nn.Module, input_bins: int) -> None:
+        """Initialize a feature-bin projection in front of a speech encoder.
+
+        Parameters
+        ----------
+        core:
+            Wave-C speech encoder/head module that consumes ``(batch, 80, time)`` mel features.
+        input_bins:
+            Number of frequency or model-width bins in the catalog input tensor.
+        """
+
+        super().__init__()
+        self.core = core
+        self.to_mel = nn.Linear(input_bins, 80)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Project time-major features to mel-major features and run the core model.
+
+        Parameters
+        ----------
+        x:
+            Speech feature tensor shaped ``(batch, time, bins)`` or ``(batch, 80, time)``.
+
+        Returns
+        -------
+        Tensor
+            Core model output.
+        """
+
+        if x.ndim != 3:
+            raise ValueError("MelFeatureAdapter expects a 3D speech feature tensor")
+        if x.shape[1] == 80 and x.shape[-1] != self.to_mel.in_features:
+            mel = x
+        else:
+            mel = self.to_mel(x[..., : self.to_mel.in_features]).transpose(1, 2)
+        return self.core(mel)
+
+
+class FastSpeech2Compact(nn.Module):
+    """FastSpeech2-style non-autoregressive TTS with variance adaptation."""
+
+    def __init__(self, vocab: int = 128, dim: int = 64) -> None:
+        """Initialize text encoder, duration/pitch/energy predictors, and mel decoder.
+
+        Parameters
+        ----------
+        vocab:
+            Token vocabulary size.
+        dim:
+            Hidden width.
+        """
+
+        super().__init__()
+        self.embed = nn.Embedding(vocab, dim)
+        self.pos = nn.Parameter(torch.randn(1, 128, dim) * 0.02)
+        layer = nn.TransformerEncoderLayer(dim, 4, dim * 4, batch_first=True, norm_first=True)
+        self.encoder = nn.TransformerEncoder(layer, 2)
+        self.duration = nn.Sequential(
+            nn.Conv1d(dim, dim, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv1d(dim, 1, 3, padding=1),
+        )
+        self.pitch = nn.Linear(dim, dim)
+        self.energy = nn.Linear(dim, dim)
+        self.decoder = nn.TransformerEncoder(layer, 1)
+        self.mel = nn.Linear(dim, 80)
+
+    def forward(self, tokens: Tensor) -> Tensor:
+        """Generate mel frames with a compact variance-adaptor path.
+
+        Parameters
+        ----------
+        tokens:
+            Text token ids shaped ``(batch, length)``.
+
+        Returns
+        -------
+        Tensor
+            Mel sequence shaped ``(batch, length, 80)``.
+        """
+
+        x = self.embed(tokens.long().clamp(0, self.embed.num_embeddings - 1))
+        x = x + self.pos[:, : x.shape[1]]
+        encoded = self.encoder(x)
+        log_duration = self.duration(encoded.transpose(1, 2)).transpose(1, 2)
+        duration_gate = torch.sigmoid(log_duration)
+        variance = self.pitch(encoded) + self.energy(encoded)
+        adapted = encoded + duration_gate * variance
+        return self.mel(self.decoder(adapted))
+
+
 class ODEBlockCompact(nn.Module):
     """Neural ODE block using an explicit Euler integration path."""
 
@@ -842,6 +936,40 @@ def build_speech(mode: str) -> nn.Module:
         Speech model.
     """
 
+    if mode == "branchformer":
+        from menagerie.classics.wave_c_audio_misc import build_ebranchformer
+
+        return MelFeatureAdapter(build_ebranchformer(), input_bins=256).eval()
+    if mode == "conformer":
+        from menagerie.classics.wave_c_audio_misc import build_conformer
+
+        return MelFeatureAdapter(build_conformer(), input_bins=256).eval()
+    if mode == "contextnet":
+        from menagerie.classics.wave_c_audio_misc import build_contextnet
+
+        return MelFeatureAdapter(build_contextnet(), input_bins=80).eval()
+    if mode == "fastspeech":
+        return FastSpeech2Compact().eval()
+    if mode == "tacotron":
+        from menagerie.classics.wave_c_audio_misc import build_tacotron2
+
+        return build_tacotron2()
+    if mode == "mstacotron":
+        from menagerie.classics.wave_c_audio_misc import build_tacotron2_gst
+
+        return build_tacotron2_gst()
+    if mode == "hifigan":
+        from menagerie.classics.wave_c_audio_misc import build_hifigan
+
+        return build_hifigan()
+    if mode == "codec":
+        from menagerie.classics.descript_dac_codec import build
+
+        return build()
+    if mode == "separator":
+        from menagerie.classics.wave_c_audio_misc import build_dprnn
+
+        return build_dprnn()
     return SpeechSequenceCompact(mode).eval()
 
 
