@@ -238,9 +238,15 @@ class OrientedRPNRoIHeads(RPNRoIHeads):
 
 
 class TwoStageDetector(nn.Module):
-    """FPN/RPN/RoI detector with optional mask and rotated-box branches."""
+    """FPN/RPN/RoI detector with optional mask, rotated, and HTC branches."""
 
-    def __init__(self, mask: bool = False, rotated: bool = False, cascade: bool = False) -> None:
+    def __init__(
+        self,
+        mask: bool = False,
+        rotated: bool = False,
+        cascade: bool = False,
+        semantic: bool = False,
+    ) -> None:
         """Initialize two-stage detector.
 
         Parameters
@@ -251,6 +257,8 @@ class TwoStageDetector(nn.Module):
             Whether to predict rotated-box angle deltas.
         cascade:
             Whether to add a cascade refinement head.
+        semantic:
+            Whether to add the HTC semantic branch and semantic mask context.
         """
 
         super().__init__()
@@ -261,6 +269,13 @@ class TwoStageDetector(nn.Module):
         self.mask = nn.Linear(24, 5 * 8 * 8) if mask else None
         self.angle = nn.Linear(24, 5) if rotated else None
         self.cascade = nn.ModuleList([nn.Linear(24, 5 * 4) for _ in range(2)]) if cascade else None
+        self.semantic = nn.Sequential(_cba(24, 24), nn.Conv2d(24, 5, 1)) if semantic else None
+        self.semantic_roi = nn.Linear(5, 24) if semantic else None
+        self.mask_refine = (
+            nn.ModuleList([nn.Linear(24, 5 * 8 * 8) for _ in range(2)])
+            if mask and cascade
+            else None
+        )
 
     def forward(self, image: Tensor) -> tuple[Tensor, ...]:
         """Run two-stage detection.
@@ -277,6 +292,11 @@ class TwoStageDetector(nn.Module):
         """
 
         feat = self.backbone(image)[0]
+        semantic_context = None
+        semantic_logits = None
+        if self.semantic is not None and self.semantic_roi is not None:
+            semantic_logits = self.semantic(feat)
+            semantic_context = self.semantic_roi(semantic_logits.mean(dim=(2, 3))).unsqueeze(1)
         roi_out = self.roi(feat)
         if self.angle is not None:
             rpn_box, midpoint, cls, box, roi = roi_out
@@ -284,13 +304,20 @@ class TwoStageDetector(nn.Module):
         else:
             rpn_box, cls, box, roi = roi_out
             outputs = [rpn_box, cls, box]
+        mask_roi = roi + semantic_context if semantic_context is not None else roi
+        if semantic_logits is not None:
+            outputs.append(semantic_logits)
         if self.mask is not None:
-            outputs.append(self.mask(roi).reshape(image.shape[0], self.roi.proposals, 5, 8, 8))
+            mask_logits = self.mask(mask_roi).reshape(image.shape[0], self.roi.proposals, 5, 8, 8)
+            outputs.append(mask_logits)
         if self.cascade is not None:
             refined = box
-            for head in self.cascade:
+            for stage, head in enumerate(self.cascade):
                 refined = refined + 0.1 * head(roi)
                 outputs.append(refined)
+                if self.mask_refine is not None:
+                    stage_mask = self.mask_refine[stage](mask_roi)
+                    outputs.append(stage_mask.reshape(image.shape[0], self.roi.proposals, 5, 8, 8))
         return tuple(outputs)
 
 
@@ -1872,7 +1899,7 @@ def build_oriented_rcnn() -> nn.Module:
 def build_htc() -> nn.Module:
     """Build Hybrid Task Cascade-style detector with cascaded box and mask heads."""
 
-    return TwoStageDetector(mask=True, cascade=True).eval()
+    return TwoStageDetector(mask=True, cascade=True, semantic=True).eval()
 
 
 def build_retinanet_rotated() -> nn.Module:
