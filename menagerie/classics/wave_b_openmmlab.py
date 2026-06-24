@@ -603,6 +603,228 @@ class MLPBlock(nn.Module):
         return x + self.channel_mix(self.norm2(x))
 
 
+class SAMImageEncoderCompact(nn.Module):
+    """SAM ViT-Det image encoder with window/global blocks and convolutional neck."""
+
+    def __init__(self, classes: int) -> None:
+        """Initialize patch embedding, local/global attention blocks, and neck.
+
+        Parameters
+        ----------
+        classes:
+            Number of output classes for the compact catalog head.
+        """
+
+        super().__init__()
+        self.patch = nn.Conv2d(3, 64, 8, stride=8)
+        self.window_a = WindowAttentionBlock(64)
+        self.global_a = TransformerBlock(64)
+        self.window_b = WindowAttentionBlock(64, shift=True)
+        self.global_b = TransformerBlock(64)
+        self.neck = nn.Sequential(
+            nn.Conv2d(64, 64, 1),
+            nn.LayerNorm([64, 8, 8]),
+            nn.Conv2d(64, 64, 3, padding=1),
+        )
+        self.head = nn.Linear(64, classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Encode an image using local windows with periodic global attention.
+
+        Parameters
+        ----------
+        x:
+            RGB image tensor.
+
+        Returns
+        -------
+        Tensor
+            Compact image-encoder logits.
+        """
+
+        grid = self.patch(x)
+        grid = self.window_a(grid)
+        tokens = self.global_a(grid.flatten(2).transpose(1, 2))
+        grid = tokens.transpose(1, 2).reshape_as(grid)
+        grid = self.window_b(grid)
+        tokens = self.global_b(grid.flatten(2).transpose(1, 2))
+        grid = self.neck(tokens.transpose(1, 2).reshape_as(grid))
+        return self.head(grid.mean(dim=(2, 3)))
+
+
+class HiViTCompact(nn.Module):
+    """HiViT hierarchical patch-merging vision transformer without a class token."""
+
+    def __init__(self, classes: int) -> None:
+        """Initialize hierarchical stages and patch-merging projections.
+
+        Parameters
+        ----------
+        classes:
+            Number of output classes for the compact catalog head.
+        """
+
+        super().__init__()
+        self.patch = nn.Conv2d(3, 32, 4, stride=4)
+        self.stage1 = TransformerBlock(32, heads=4)
+        self.merge1 = nn.Conv2d(32, 48, 2, stride=2)
+        self.stage2 = TransformerBlock(48, heads=4)
+        self.merge2 = nn.Conv2d(48, 64, 2, stride=2)
+        self.stage3 = TransformerBlock(64, heads=4)
+        self.head = nn.Linear(64, classes)
+
+    def _stage(self, grid: Tensor, block: TransformerBlock) -> Tensor:
+        """Apply a token block to a spatial grid and restore grid layout.
+
+        Parameters
+        ----------
+        grid:
+            Feature grid.
+        block:
+            Token mixing block.
+
+        Returns
+        -------
+        Tensor
+            Refined feature grid.
+        """
+
+        batch, channels, height, width = grid.shape
+        tokens = block(grid.flatten(2).transpose(1, 2))
+        return tokens.transpose(1, 2).reshape(batch, channels, height, width)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Run hierarchical ViT stages and global-average the final tokens.
+
+        Parameters
+        ----------
+        x:
+            RGB image tensor.
+
+        Returns
+        -------
+        Tensor
+            Compact classifier logits.
+        """
+
+        grid = self._stage(self.patch(x), self.stage1)
+        grid = self._stage(self.merge1(grid), self.stage2)
+        grid = self._stage(self.merge2(grid), self.stage3)
+        return self.head(grid.mean(dim=(2, 3)))
+
+
+class EVA02Block(nn.Module):
+    """EVA-02 transformer block with RoPE attention, SwiGLU FFN, and sub-LN."""
+
+    def __init__(self, dim: int = 64, heads: int = 4) -> None:
+        """Initialize RoPE attention and SwiGLU feed-forward paths.
+
+        Parameters
+        ----------
+        dim:
+            Token width.
+        heads:
+            Attention head count.
+        """
+
+        super().__init__()
+        self.heads = heads
+        self.head_dim = dim // heads
+        self.norm1 = nn.LayerNorm(dim)
+        self.qkv = nn.Linear(dim, dim * 3)
+        self.attn_subln = nn.LayerNorm(dim)
+        self.proj = nn.Linear(dim, dim)
+        self.norm2 = nn.LayerNorm(dim)
+        self.gate = nn.Linear(dim, dim * 4)
+        self.value = nn.Linear(dim, dim * 4)
+        self.ffn_subln = nn.LayerNorm(dim * 4)
+        self.out = nn.Linear(dim * 4, dim)
+
+    def _rope(self, tensor: Tensor) -> Tensor:
+        """Apply rotary position embedding to query or key heads.
+
+        Parameters
+        ----------
+        tensor:
+            Head tensor shaped ``(batch, heads, tokens, head_dim)``.
+
+        Returns
+        -------
+        Tensor
+            Rotary-positioned tensor.
+        """
+
+        pos = torch.arange(tensor.shape[-2], device=tensor.device, dtype=tensor.dtype)
+        freq = torch.arange(0, tensor.shape[-1], 2, device=tensor.device, dtype=tensor.dtype)
+        angles = pos[:, None] / (10000.0 ** (freq[None, :] / tensor.shape[-1]))
+        sin = angles.sin()[None, None]
+        cos = angles.cos()[None, None]
+        even = tensor[..., 0::2]
+        odd = tensor[..., 1::2]
+        return torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1).flatten(-2)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Apply one EVA-02 block.
+
+        Parameters
+        ----------
+        x:
+            Token tensor.
+
+        Returns
+        -------
+        Tensor
+            Refined token tensor.
+        """
+
+        batch, tokens, dim = x.shape
+        qkv = self.qkv(self.norm1(x)).view(batch, tokens, 3, self.heads, self.head_dim)
+        q, k, v = qkv.permute(2, 0, 3, 1, 4)
+        q = self._rope(q)
+        k = self._rope(k)
+        attn = torch.softmax(q @ k.transpose(-2, -1) * (self.head_dim**-0.5), dim=-1)
+        mixed = (attn @ v).transpose(1, 2).reshape(batch, tokens, dim)
+        x = x + self.proj(self.attn_subln(mixed))
+        y = self.norm2(x)
+        y = F.silu(self.gate(y)) * self.value(y)
+        return x + self.out(self.ffn_subln(y))
+
+
+class EVA02Compact(nn.Module):
+    """EVA-02 compact ViT with RoPE, SwiGLU feed-forward layers, and sub-LN."""
+
+    def __init__(self, classes: int) -> None:
+        """Initialize patch tokens, EVA-02 blocks, and classifier head.
+
+        Parameters
+        ----------
+        classes:
+            Number of output classes for the compact catalog head.
+        """
+
+        super().__init__()
+        self.patch = PatchTokenizer(dim=64, patch=8, extra_tokens=1)
+        self.blocks = nn.Sequential(EVA02Block(), EVA02Block())
+        self.head = nn.Linear(64, classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Classify an image with EVA-02 token mixing.
+
+        Parameters
+        ----------
+        x:
+            RGB image tensor.
+
+        Returns
+        -------
+        Tensor
+            Compact classifier logits.
+        """
+
+        tokens = self.blocks(self.patch(x))
+        return self.head(tokens[:, 0])
+
+
 class PatchTokenizer(nn.Module):
     """Image-to-token projection with learnable class and position tokens."""
 
@@ -671,6 +893,9 @@ class MMPPretrainClassifier(nn.Module):
         self.arc_margin = nn.Parameter(torch.ones(classes, 64))
         self.text_tokens = nn.Parameter(torch.randn(1, 6, 64) * 0.02)
         self.text_block = TransformerBlock(64)
+        self.sam_encoder = SAMImageEncoderCompact(classes)
+        self.hivit_encoder = HiViTCompact(classes)
+        self.eva02_encoder = EVA02Compact(classes)
         self._build_family_modules(kind)
 
     def _build_family_modules(self, kind: str) -> None:
@@ -793,6 +1018,7 @@ class MMPPretrainClassifier(nn.Module):
         self.graph_proj = nn.Linear(64, 64)
         self.rev_f = nn.Linear(32, 32)
         self.rev_g = nn.Linear(32, 32)
+        self.dinov2_registers = nn.Parameter(torch.randn(1, 4, 64) * 0.02)
         self.tnt_inner = TransformerBlock(16)
         self.tnt_outer = TransformerBlock(64)
         self.t2t_unfold = nn.Unfold(kernel_size=3, padding=1, stride=2)
@@ -911,6 +1137,10 @@ class MMPPretrainClassifier(nn.Module):
         elif self.kind == "itpn":
             tokens = self.token_blocks(tokens)
             _ = self.pixel_head(tokens[:, 1:]).mean()
+        elif self.kind == "dinov2":
+            registers = self.dinov2_registers.expand(x.shape[0], -1, -1)
+            tokens = torch.cat([tokens[:, :1], registers, tokens[:, 1:]], dim=1)
+            tokens = self.token_blocks(tokens)
         elif self.kind == "clip":
             image_tokens = self.token_blocks(tokens)
             text_tokens = self.text_block(self.text_tokens.expand(x.shape[0], -1, -1))
@@ -919,6 +1149,8 @@ class MMPPretrainClassifier(nn.Module):
             return (image * text).sum(dim=-1, keepdim=True).repeat(1, self.classes)
         else:
             tokens = self.token_blocks(tokens)
+        if self.kind == "dinov2":
+            return self.token_head(tokens[:, :5].mean(dim=1))
         pooled = tokens[:, :2].mean(dim=1) if self.kind == "deit" else tokens[:, 0]
         return self.token_head(pooled)
 
@@ -977,6 +1209,12 @@ class MMPPretrainClassifier(nn.Module):
         if self.kind == "xcit":
             tokens = self.patch(x)
             return self.token_head(self.token_blocks(tokens)[:, 0])
+        if self.kind == "sam":
+            return self.sam_encoder(x)
+        if self.kind == "hivit":
+            return self.hivit_encoder(x)
+        if self.kind == "eva02":
+            return self.eva02_encoder(x)
         return self._transformer_forward(x)
 
 
