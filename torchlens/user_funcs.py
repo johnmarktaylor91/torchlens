@@ -4293,13 +4293,23 @@ def _validate_forward_pass_torch(
     outs_are_valid = False
     try:
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
-        ground_truth_output_all = get_vars_of_type_from_obj(
-            ground_truth_model(*input_args_copy, **input_kwargs_copy),
-            torch.Tensor,
-            search_depth=5,
-            return_addresses=True,
-            allow_repeats=True,
-        )
+        from .backends.torch.ops import _walk_output_tensors_with_paths
+
+        ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
+        ground_truth_output_all = [
+            (tensor, tuple(path))
+            for tensor, path, _container_spec in _walk_output_tensors_with_paths(
+                ground_truth_output
+            )
+        ]
+        if not ground_truth_output_all:
+            ground_truth_output_all = get_vars_of_type_from_obj(
+                ground_truth_output,
+                torch.Tensor,
+                search_depth=5,
+                return_addresses=True,
+                allow_repeats=True,
+            )
         # Deduplicate by structural address to match how capture/trace.py extracts
         # outputs (same tensor returned in multiple positions is counted once).
         addresses_used = []
