@@ -42,6 +42,33 @@ log.draw()                    # PDF of the computational graph
   [Migration tables](docs/migration/)
 
 
+## Validated on 11,600+ architectures
+
+TorchLens is not just smoke-tested on example models. Its menagerie validation
+campaign runs the same adversarial check across more than **11,600 neural-net
+architecture families**: capture the model with TorchLens, forward-replay the
+captured DAG, compare replayed outputs against the original forward pass, and
+run metadata-invariant tripwires over the resulting graph. If replay or an
+invariant fails, the capture is treated as genuinely wrong and caught
+automatically, not waved through because the model "ran."
+
+```text
+model forward -> TorchLens capture -> DAG replay -> output parity + metadata invariants
+```
+
+Today, roughly **89%** of that 11.6k+ menagerie is algorithmically verified and
+climbing, covering about **5,400 distinct architectures**. That is the wedge:
+TorchLens aims for captures that are **provably faithful, not just plausible**.
+Plain forward hooks and static extraction utilities can be fast and useful, but
+they can also silently miss dynamic paths, reused modules, functional ops,
+fused attention, recurrent unrolls, or metadata needed to tell two sites apart.
+
+The residual is tracked openly: the remaining tail is mostly genuinely huge
+models, models with hard-to-build dependencies, or architectures that need more
+bespoke inputs before an automated run is fair. They are counted as unverified,
+not hidden as successes.
+
+
 ## Installation
 
 Install Graphviz first (required for graph visualizations), then TorchLens:
