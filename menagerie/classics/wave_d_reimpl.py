@@ -751,6 +751,93 @@ class FastSpeech2Compact(nn.Module):
         return self.mel(self.decoder(adapted))
 
 
+class MetricGANGeneratorCompact(nn.Module):
+    """MetricGAN speech-enhancement generator with BLSTM mask prediction."""
+
+    def __init__(self, freq_bins: int = 257, hidden: int = 64) -> None:
+        """Initialize BLSTM and learnable-sigmoid mask head.
+
+        Parameters
+        ----------
+        freq_bins:
+            Input spectral magnitude bins.
+        hidden:
+            BLSTM hidden width.
+        """
+
+        super().__init__()
+        self.norm = nn.LayerNorm(freq_bins)
+        self.blstm = nn.LSTM(freq_bins, hidden, num_layers=2, batch_first=True, bidirectional=True)
+        self.mask = nn.Sequential(nn.Linear(hidden * 2, freq_bins), nn.Sigmoid())
+        self.sharpness = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, spectrum: Tensor) -> Tensor:
+        """Enhance a magnitude spectrogram by predicting a soft mask.
+
+        Parameters
+        ----------
+        spectrum:
+            Magnitude spectrum shaped ``(batch, time, freq)``.
+
+        Returns
+        -------
+        Tensor
+            Masked enhanced spectrum.
+        """
+
+        features = self.norm(spectrum)
+        hidden, _ = self.blstm(features)
+        mask = torch.sigmoid(self.sharpness.clamp_min(0.1) * (self.mask(hidden) * 2.0 - 1.0))
+        return spectrum * mask
+
+
+class CNNTransformerSECompact(nn.Module):
+    """CNN-Transformer speech-enhancement network with spectral mask output."""
+
+    def __init__(self, freq_bins: int = 257, dim: int = 64) -> None:
+        """Initialize convolutional frontend, Transformer core, and mask head.
+
+        Parameters
+        ----------
+        freq_bins:
+            Input spectral feature count.
+        dim:
+            Transformer width.
+        """
+
+        super().__init__()
+        self.front = nn.Sequential(
+            nn.Conv2d(1, 16, 3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(16, 16, 3, stride=(1, 2), padding=1),
+            nn.GELU(),
+        )
+        reduced_bins = (freq_bins + 1) // 2
+        self.project = nn.Linear(16 * reduced_bins, dim)
+        layer = nn.TransformerEncoderLayer(dim, 4, dim * 4, batch_first=True, norm_first=True)
+        self.transformer = nn.TransformerEncoder(layer, 2)
+        self.mask = nn.Linear(dim, freq_bins)
+
+    def forward(self, spectrum: Tensor) -> Tensor:
+        """Estimate and apply a time-frequency enhancement mask.
+
+        Parameters
+        ----------
+        spectrum:
+            Spectral features shaped ``(batch, time, freq)``.
+
+        Returns
+        -------
+        Tensor
+            Enhanced spectral features.
+        """
+
+        feat = self.front(spectrum.unsqueeze(1)).transpose(1, 2).flatten(2)
+        tokens = self.project(feat)
+        hidden = self.transformer(tokens)
+        return spectrum * torch.sigmoid(self.mask(hidden))
+
+
 class ODEBlockCompact(nn.Module):
     """Neural ODE block using an explicit Euler integration path."""
 
@@ -970,6 +1057,10 @@ def build_speech(mode: str) -> nn.Module:
         from menagerie.classics.wave_c_audio_misc import build_dprnn
 
         return build_dprnn()
+    if mode == "metricgan":
+        return MetricGANGeneratorCompact().eval()
+    if mode == "cnntransformer_se":
+        return CNNTransformerSECompact().eval()
     return SpeechSequenceCompact(mode).eval()
 
 
