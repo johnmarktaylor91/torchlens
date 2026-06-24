@@ -7,6 +7,7 @@ installation, environment mutation, subprocess orchestration, or cache/device cl
 from __future__ import annotations
 
 import importlib
+import ast
 import re
 from collections.abc import Sequence
 from functools import lru_cache
@@ -79,6 +80,100 @@ def _tensor_from_spec(shape: Sequence[int | str], dtype: str) -> Any:
     return torch.zeros(concrete_shape, dtype=torch_dtype)
 
 
+def _record_tensor_dtype(record: Any, shape: Sequence[int | str], dtype: str, index: int) -> str:
+    """Return the runtime dtype for a typed input tensor.
+
+    Parameters
+    ----------
+    record:
+        Catalog record carrying model and input-shape context.
+    shape:
+        Tensor shape from the schema.
+    dtype:
+        Declared dtype token from the schema.
+    index:
+        Positional tensor index within a multi-input record.
+
+    Returns
+    -------
+    str
+        Dtype token to use for synthetic input construction.
+    """
+
+    zoo = str(getattr(record, "zoo", ""))
+    input_shape = str(getattr(record, "input_shape", ""))
+    if not zoo.startswith("torch_geometric"):
+        return dtype
+    concrete_shape = tuple(int(dim) for dim in shape)
+    if "edge_index" in input_shape and len(concrete_shape) == 2 and concrete_shape[0] == 2:
+        return "long"
+    if "batch" in input_shape and len(concrete_shape) == 1 and index > 0:
+        return "long"
+    if "pos" in input_shape and len(concrete_shape) == 2 and concrete_shape[1] == 3:
+        return "float32"
+    return dtype
+
+
+def _tensor_from_record_spec(
+    record: Any, shape: Sequence[int | str], dtype: str, index: int
+) -> Any:
+    """Create a tensor from a typed spec plus catalog-record context.
+
+    Parameters
+    ----------
+    record:
+        Catalog record carrying model and input-shape context.
+    shape:
+        Tensor shape from the schema.
+    dtype:
+        Dtype token from the schema.
+    index:
+        Positional tensor index within a multi-input record.
+
+    Returns
+    -------
+    Any
+        Torch tensor.
+    """
+
+    return _tensor_from_spec(shape, _record_tensor_dtype(record, shape, dtype, index))
+
+
+def _special_record_input(record: Any) -> Any | None:
+    """Return special-case real inputs for typed records when required.
+
+    Parameters
+    ----------
+    record:
+        Catalog record.
+
+    Returns
+    -------
+    Any | None
+        Input object, or ``None`` when the generic builder should be used.
+    """
+
+    if (
+        getattr(record, "zoo", "") == "torch_geometric"
+        and getattr(record, "name", "") == "JumpingKnowledge"
+    ):
+        import torch
+
+        return [torch.randn(8, 64), torch.randn(8, 64), torch.randn(8, 64)]
+    if getattr(record, "zoo", "") == "torch_geometric" and getattr(record, "name", "") in {
+        "SAGPooling",
+        "TopKPooling",
+    }:
+        import torch
+
+        edge_index = torch.tensor(
+            [[0, 1, 2, 3, 0, 2, 1, 3], [1, 2, 3, 0, 2, 0, 3, 1]],
+            dtype=torch.long,
+        )
+        return [torch.randn(8, 16), edge_index, None, torch.zeros(8, dtype=torch.long)]
+    return None
+
+
 def _typed_namespace(imports: Sequence[str]) -> dict[str, Any]:
     """Build a permissive namespace for typed recipe/input evaluation.
 
@@ -98,6 +193,11 @@ def _typed_namespace(imports: Sequence[str]) -> dict[str, Any]:
         "torch",
         "torchvision",
         "timm",
+        "monai",
+        "snntorch",
+        "torchaudio",
+        "torch_geometric",
+        "torchsr",
         "transformers",
         "diffusers",
         "segmentation_models_pytorch",
@@ -109,6 +209,12 @@ def _typed_namespace(imports: Sequence[str]) -> dict[str, Any]:
         except ImportError:
             continue
         namespace[module_name] = module
+        root_name = module_name.partition(".")[0]
+        if root_name and root_name not in namespace:
+            try:
+                namespace[root_name] = importlib.import_module(root_name)
+            except ImportError:
+                pass
         if module_name == "segmentation_models_pytorch":
             namespace["smp"] = module
         if module_name == "transformers":
@@ -133,6 +239,35 @@ def _typed_namespace(imports: Sequence[str]) -> dict[str, Any]:
     return namespace
 
 
+def _exec_statement_with_optional_result(code: str, globals_dict: dict[str, Any]) -> Any | None:
+    """Execute statement recipe code and return a trailing expression result.
+
+    Parameters
+    ----------
+    code:
+        Python statement recipe source.
+    globals_dict:
+        Shared recipe globals namespace.
+
+    Returns
+    -------
+    Any | None
+        Value of a final expression statement, or ``None`` when the recipe has no
+        trailing expression.
+    """
+
+    tree = ast.parse(code, mode="exec")
+    if tree.body and isinstance(tree.body[-1], ast.Expr):
+        prefix = ast.Module(body=tree.body[:-1], type_ignores=tree.type_ignores)
+        ast.fix_missing_locations(prefix)
+        exec(compile(prefix, "<menagerie-recipe>", "exec"), globals_dict)  # noqa: S102
+        expr = ast.Expression(body=tree.body[-1].value)
+        ast.fix_missing_locations(expr)
+        return eval(compile(expr, "<menagerie-recipe>", "eval"), globals_dict)  # noqa: S307
+    exec(code, globals_dict)  # noqa: S102
+    return None
+
+
 def build_input_from_record(record: Any) -> Any:
     """Build the example input for a typed catalog record.
 
@@ -147,11 +282,23 @@ def build_input_from_record(record: Any) -> Any:
         Example input object.
     """
 
+    special_input = _special_record_input(record)
+    if special_input is not None:
+        return special_input
+
     input_builder = record.input
     if input_builder.kind == "tensor":
-        return _tensor_from_spec(input_builder.spec.shape, input_builder.spec.dtype)
+        return _tensor_from_record_spec(
+            record,
+            input_builder.spec.shape,
+            input_builder.spec.dtype,
+            0,
+        )
     if input_builder.kind == "multi":
-        values = [_tensor_from_spec(spec.shape, spec.dtype) for spec in input_builder.specs]
+        values = [
+            _tensor_from_record_spec(record, spec.shape, spec.dtype, index)
+            for index, spec in enumerate(input_builder.specs)
+        ]
         return tuple(values) if input_builder.as_tuple else values
     if input_builder.kind == "kwargs":
         return {
@@ -190,15 +337,18 @@ def instantiate_model_from_record(record: Any) -> Any:
     globals_dict = {"__builtins__": builtins, "__name__": "__main__", **namespace}
     if recipe.type in {"import-callable", "expression"}:
         return eval(recipe.expr, globals_dict, namespace)  # noqa: S307
+    statement_result: Any | None = None
     if recipe.type == "statement":
-        exec(recipe.code, globals_dict)  # noqa: S102
+        statement_result = _exec_statement_with_optional_result(recipe.code, globals_dict)
     elif recipe.type == "exec-string":
         exec(recipe.body, globals_dict)  # noqa: S102
     else:
         raise ValueError(f"unsupported recipe type={recipe.type!r}")
-    for output_name in (recipe.output_name, "model", "net", "module"):
+    for output_name in (recipe.output_name, "model", "net", "module", "m"):
         if output_name in globals_dict:
             return globals_dict[output_name]
+    if statement_result is not None:
+        return statement_result
     raise ValueError("typed statement recipe did not assign a model output")
 
 
@@ -381,10 +531,12 @@ def instantiate_model(row: CatalogRow) -> Any:
         # Single namespace (globals IS locals): recipe-level imports + names are visible inside
         # lambdas/classes the recipe defines (separate locals left them unresolved -> "name 'nn' is
         # not defined" when the wrapper's forward lambda ran during tracing).
-        exec(constructor_call, globals_dict)  # noqa: S102
-        for output_name in ("model", "net", "module"):
+        statement_result = _exec_statement_with_optional_result(constructor_call, globals_dict)
+        for output_name in ("model", "net", "module", "m"):
             if output_name in globals_dict:
                 return globals_dict[output_name]
+        if statement_result is not None:
+            return statement_result
         raise ValueError("statement recipe did not assign a `model`, `net`, or `module` variable")
     return eval(constructor_call, globals_dict, namespace)  # noqa: S307
 
