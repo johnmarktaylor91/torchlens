@@ -521,8 +521,10 @@ def posthoc_perturb_check(
 
     # Constant output — function is structurally constant-valued
     # (e.g., softmax on a dimension with size 1 always produces all-ones).
-    if output_tensor.numel() > 0 and len(torch.unique(output_tensor)) == 1:
-        return True
+    if output_tensor.numel() > 0:
+        flat_output = output_tensor.reshape(-1)
+        if torch.equal(flat_output, flat_output[0].expand_as(flat_output)):
+            return True
 
     # All-inf / all-NaN output — extreme values
     num_inf = torch.isinf(output_tensor.abs()).int().sum()
