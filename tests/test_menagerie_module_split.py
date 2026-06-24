@@ -28,11 +28,11 @@ SAMPLE_MODEL_IDS = (
     244,
     249,
     252,
+    274,
     275,
-    281,
-    283,
-    285,
-    289,
+    276,
+    298,
+    305,
     311,
     312,
     315,
@@ -108,8 +108,8 @@ def test_catalog_build_counts_are_stable() -> None:
     """The rebuilt catalog keeps the module-split parity counts."""
 
     rows = load_rows()
-    assert len(rows) == 11641
-    assert sum(row.source == "classics" for row in rows) == 3212
+    assert len(rows) == 11655
+    assert sum(row.source == "classics" for row in rows) == 3226
 
 
 def test_generate_menagerie_legacy_import_surface_is_preserved() -> None:
