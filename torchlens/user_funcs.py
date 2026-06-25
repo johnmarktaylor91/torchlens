@@ -4465,6 +4465,31 @@ def _validate_forward_pass_torch(
     state_dict = _clone_state_dict_with_metadata(model)
     trace: Trace | None = None
     outs_are_valid = False
+    # Determinism stabilizer for the capture + replay + perturbation region.
+    #
+    # The replay-validation drift between an op's value captured INLINE in the
+    # full forward and the value recomputed by ISOLATED per-op replay is, for
+    # most ops, float-reduction-ORDER non-determinism in parallel CPU kernels
+    # (multi-threaded conv/matmul, atomic-add scatter) -- NOT randomness (RNG is
+    # already seeded above). Forcing deterministic algorithms makes the
+    # ground-truth forward, the TorchLens capture, and the per-op replay use the
+    # same reduction order, which removes the nondeterministic in-place-scatter
+    # PERTURBATION flake (the GNN/molecular "regression" class: a wrong value
+    # injected into a scatter destination sometimes produced an output
+    # indistinguishable from the original under a thread race, spuriously failing
+    # the sensitivity check). warn_only=True so no op raises if it lacks a
+    # deterministic impl (CPU scatter_add IS deterministic in torch 2.8, so this
+    # is not even exercised there, but it keeps the stabilizer safe on any op).
+    #
+    # We deliberately do NOT force torch.set_num_threads(1): that is a real
+    # throughput cost on large CNNs, and the determinism probe confirmed that
+    # deterministic-algorithms alone removes the perturbation flake. It does NOT
+    # make deep CPU conv replay bit-exact (the residual is oneDNN inline-vs-
+    # isolated kernel selection, not threading) -- that residual is exactly what
+    # the band-C reduction-depth tolerance in validation/core.py covers.
+    prior_deterministic = torch.are_deterministic_algorithms_enabled()
+    prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(True, warn_only=True)
     try:
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
         from .backends.torch.ops import _walk_output_tensors_with_paths
@@ -4529,6 +4554,7 @@ def _validate_forward_pass_torch(
         if _trace_observer is not None:
             _trace_observer(trace)
     finally:
+        torch.use_deterministic_algorithms(prior_deterministic, warn_only=prior_warn_only)
         model.load_state_dict(state_dict)
         if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()

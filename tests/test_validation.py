@@ -175,6 +175,73 @@ def test_validate_forward_pass_importable():
     assert callable(validate_forward_pass)
 
 
+class _ScatterAggregationModel(nn.Module):
+    """A message-passing-style model whose forward aggregates messages into a
+    destination tensor with an in-place ``index_add_`` (the GNN/molecular pattern).
+
+    Under multi-threading, an in-place scatter perturbation can race so the
+    perturbed output is indistinguishable from the original, spuriously failing
+    the sensitivity check. The determinism stabilizer in ``_validate_forward_pass_torch``
+    makes the perturbation reproducible so validation is stably True.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+        messages = self.lin(x)
+        aggregated = torch.zeros(4, 8)
+        aggregated.index_add_(0, index, messages)
+        return aggregated.sum(dim=1)
+
+
+def test_validation_determinism_stabilizes_inplace_scatter_perturbation() -> None:
+    """A scatter-aggregation model validates stably True across repeated runs.
+
+    Exercises the determinism stabilizer (``torch.use_deterministic_algorithms(
+    True, warn_only=True)`` around capture + replay + perturbation): the
+    nondeterministic in-place-scatter perturbation flake (the GNN "regression"
+    class) must not surface, so validation does not flake to False.
+    """
+
+    model = _ScatterAggregationModel().eval()
+    x = torch.randn(10, 8)
+    index = torch.tensor([0, 0, 0, 1, 1, 2, 2, 3, 3, 3])
+
+    results = [validate_forward_pass(model, (x, index)) for _ in range(5)]
+    assert all(results), results
+
+
+def test_validation_restores_prior_deterministic_algorithms_setting() -> None:
+    """The determinism stabilizer must save and restore the prior torch setting.
+
+    Validation flips ``use_deterministic_algorithms`` on for its own capture +
+    replay, but it must leave the process-wide setting exactly as it found it
+    (both the enabled flag AND the warn_only flag) so it does not leak into the
+    caller's environment.
+    """
+
+    model = _ScatterAggregationModel().eval()
+    x = torch.randn(10, 8)
+    index = torch.tensor([0, 0, 0, 1, 1, 2, 2, 3, 3, 3])
+
+    prior_enabled = torch.are_deterministic_algorithms_enabled()
+    prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    try:
+        validate_forward_pass(model, (x, index))
+        assert torch.are_deterministic_algorithms_enabled() is prior_enabled
+        assert torch.is_deterministic_algorithms_warn_only_enabled() is prior_warn_only
+
+        # And it restores a non-default prior setting (enabled, not warn_only) too.
+        torch.use_deterministic_algorithms(True, warn_only=False)
+        validate_forward_pass(model, (x, index))
+        assert torch.are_deterministic_algorithms_enabled() is True
+        assert torch.is_deterministic_algorithms_warn_only_enabled() is False
+    finally:
+        torch.use_deterministic_algorithms(prior_enabled, warn_only=prior_warn_only)
+
+
 def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     """Replay args use live parameters only when saved snapshots still match."""
 
