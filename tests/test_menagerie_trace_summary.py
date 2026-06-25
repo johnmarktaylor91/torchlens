@@ -56,6 +56,33 @@ class SmallResidualNet(nn.Module):
         return self.head(pooled)
 
 
+class ParallelAddNet(nn.Module):
+    """Small model with a non-residual same-depth elementwise add."""
+
+    def __init__(self) -> None:
+        """Initialize parallel linear branches."""
+
+        super().__init__()
+        self.left = nn.Linear(4, 4)
+        self.right = nn.Linear(4, 4)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Add two sibling branch outputs.
+
+        Parameters
+        ----------
+        inputs:
+            Input feature batch.
+
+        Returns
+        -------
+        torch.Tensor
+            Same-depth branch sum.
+        """
+
+        return self.left(inputs) + self.right(inputs)
+
+
 def _json_column(row: dict[str, Any], key: str) -> Any:
     """Decode one persisted JSON column.
 
@@ -168,3 +195,20 @@ def test_trace_summary_resnet18_is_deterministic() -> None:
     assert summary_a["pct_conv"] > 0.0
     assert summary_a["total_flops_forward"] > 0
     assert isinstance(summary_a["forward_peak_memory_bytes"], int)
+
+
+def test_same_depth_elementwise_add_is_not_residual() -> None:
+    """A sibling branch add is not classified as a residual connection."""
+
+    model = ParallelAddNet()
+    example = torch.randn(1, 4)
+
+    summary = summarize_model(
+        "parallel_add",
+        model,
+        example,
+        "recipe",
+        compute_identity_hashes=False,
+    )
+
+    assert summary["has_residual"] is False

@@ -541,6 +541,50 @@ def test_completeness_audit_dep_skip_not_terminal_for_assigned_island(
     assert complete.terminal_by_status == {"env_unavailable": 1}
 
 
+@pytest.mark.parametrize("latest_status", ["skipped", "deferred"])
+def test_completeness_audit_latest_skipped_or_deferred_is_not_complete(
+    tmp_path: Path, latest_status: str
+) -> None:
+    """A latest skipped/deferred row leaves the catalog row incomplete."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [_row(model_id=1, display_index=1, stable_id="m1", name="PendingNet")],
+    )
+    ledger_db = tmp_path / "verification.db"
+    conn = connect(ledger_db)
+    append_verification_run(conn, _run(run_id="old-pass", stable_id="m1", name="PendingNet"))
+    append_verification_run(
+        conn,
+        _run(
+            run_id=f"latest-{latest_status}",
+            stable_id="m1",
+            name="PendingNet",
+            status=latest_status,
+            forward_pass=None,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class=latest_status,
+            error_message="not terminal for completeness",
+            finished_at="2026-06-22T00:00:02+00:00",
+        ),
+    )
+
+    completeness = build_completeness_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+        run_dir=tmp_path / f"run-{latest_status}",
+    )
+
+    assert completeness.terminal_current_recipe_models == 0
+    assert completeness.terminal_by_status == {}
+    assert [issue.issue for issue in completeness.issues] == ["stale_identity_tuple"]
+    assert completeness.issues[0].stale_status == latest_status
+
+
 def test_completeness_audit_passes_when_all_rows_are_terminal(tmp_path: Path) -> None:
     """Completeness exits successfully when every catalog row has a terminal row."""
 

@@ -238,24 +238,24 @@ def verified_hashes(
     _load_verification_targets(ledger_conn, targets)
     rows = ledger_conn.execute(
         """
-        SELECT verification_runs.stable_id, verification_runs.graph_shape_hash
-        FROM verification_runs
+        SELECT current_verification.stable_id, current_verification.graph_shape_hash
+        FROM current_verification
         JOIN temp_current_verification_targets AS target
-          ON target.stable_id = verification_runs.stable_id
-         AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
-         AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
-         AND target.env_hash = verification_runs.env_hash
-         AND target.lock_hash = verification_runs.lock_hash
-         AND target.device_requested = verification_runs.device_requested
-         AND target.scope = verification_runs.scope
-        WHERE verification_runs.status = 'passed'
-          AND verification_runs.forward_pass = 1
-          AND verification_runs.metadata_ok = 1
-          AND verification_runs.n_ops IS NOT NULL
-          AND verification_runs.graph_shape_hash IS NOT NULL
-          AND verification_runs.torchlens_version = ?
-          AND verification_runs.torchlens_source_hash != ?
-          AND verification_runs.lock_hash != ?
+          ON target.stable_id = current_verification.stable_id
+         AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
+         AND target.torchlens_source_hash = current_verification.torchlens_source_hash
+         AND target.env_hash = current_verification.env_hash
+         AND target.lock_hash = current_verification.lock_hash
+         AND target.device_requested = current_verification.device_requested
+         AND target.scope = current_verification.scope
+        WHERE current_verification.status = 'passed'
+          AND current_verification.forward_pass = 1
+          AND current_verification.metadata_ok = 1
+          AND current_verification.n_ops IS NOT NULL
+          AND current_verification.graph_shape_hash IS NOT NULL
+          AND current_verification.torchlens_version = ?
+          AND current_verification.torchlens_source_hash != ?
+          AND current_verification.lock_hash != ?
         """,
         (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
     ).fetchall()

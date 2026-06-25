@@ -24,7 +24,6 @@ from menagerie.catalog import (
     load_rows,
 )
 from menagerie.ledger import (
-    STATUS_VALUES,
     VERIFICATION_DB,
     VerificationTarget,
     Scope,
@@ -60,7 +59,17 @@ CATALOG_SNAPSHOT_COLUMNS = (
     "source",
     "assigned_env",
 )
-TERMINAL_STATUSES = STATUS_VALUES
+TERMINAL_STATUSES = (
+    "passed",
+    "failed",
+    "timeout",
+    "not_applicable",
+    "install_failed",
+    "env_unavailable",
+    "oom",
+    "native_crash",
+    "killed",
+)
 
 
 @dataclass(frozen=True)
@@ -850,44 +859,26 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
     rows = conn.execute(
         f"""
         WITH current_terminal AS (
-            SELECT stable_id, recipe_revision_sha256, status
-            FROM (
-                SELECT
-                    verification_runs.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY verification_runs.stable_id
-                        ORDER BY finished_at DESC, run_id DESC
-                    ) AS rn
-                FROM verification_runs
-                JOIN temp_current_verification_targets AS target
-                  ON target.stable_id = verification_runs.stable_id
-                 AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
-                 AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
-                 AND target.env_hash = verification_runs.env_hash
-                 AND target.lock_hash = verification_runs.lock_hash
-                 AND target.device_requested = verification_runs.device_requested
-                 AND target.scope = verification_runs.scope
-                WHERE verification_runs.scope = 'forward'
-                  AND verification_runs.status IN ({placeholders})
-                  AND verification_runs.torchlens_source_hash != 'legacy-unknown'
-                  AND verification_runs.lock_hash != 'legacy-unknown'
-            )
-            WHERE rn = 1
+            SELECT
+                current_verification.stable_id,
+                current_verification.recipe_revision_sha256,
+                current_verification.status
+            FROM current_verification
+            JOIN temp_current_verification_targets AS target
+              ON target.stable_id = current_verification.stable_id
+             AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
+             AND target.torchlens_source_hash = current_verification.torchlens_source_hash
+             AND target.env_hash = current_verification.env_hash
+             AND target.lock_hash = current_verification.lock_hash
+             AND target.device_requested = current_verification.device_requested
+             AND target.scope = current_verification.scope
+            WHERE current_verification.status IN ({placeholders})
+              AND current_verification.torchlens_source_hash != 'legacy-unknown'
+              AND current_verification.lock_hash != 'legacy-unknown'
         ),
-        stale_terminal AS (
+        latest_run AS (
             SELECT stable_id, recipe_revision_sha256, status
-            FROM (
-                SELECT
-                    verification_runs.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY stable_id
-                        ORDER BY finished_at DESC, run_id DESC
-                    ) AS rn
-                FROM verification_runs
-                WHERE verification_runs.scope = 'forward'
-                  AND verification_runs.status IN ({placeholders})
-            )
-            WHERE rn = 1
+            FROM current_verification
         )
         SELECT
             catalog_snapshot.stable_id,
@@ -897,23 +888,23 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
             catalog_snapshot.source,
             catalog_snapshot.assigned_env,
             CASE
-                WHEN stale_terminal.stable_id IS NULL THEN 'missing_terminal'
-                WHEN stale_terminal.recipe_revision_sha256 = catalog_snapshot.recipe_revision_sha256
+                WHEN latest_run.stable_id IS NULL THEN 'missing_terminal'
+                WHEN latest_run.recipe_revision_sha256 = catalog_snapshot.recipe_revision_sha256
                     THEN 'stale_identity_tuple'
                 ELSE 'stale_recipe_revision'
             END AS issue,
-            COALESCE(stale_terminal.recipe_revision_sha256, '') AS stale_recipe_revision_sha256,
-            COALESCE(stale_terminal.status, '') AS stale_status
+            COALESCE(latest_run.recipe_revision_sha256, '') AS stale_recipe_revision_sha256,
+            COALESCE(latest_run.status, '') AS stale_status
         FROM catalog_snapshot
         LEFT JOIN current_terminal
           ON current_terminal.stable_id = catalog_snapshot.stable_id
          AND current_terminal.recipe_revision_sha256 = catalog_snapshot.recipe_revision_sha256
-        LEFT JOIN stale_terminal
-          ON stale_terminal.stable_id = catalog_snapshot.stable_id
+        LEFT JOIN latest_run
+          ON latest_run.stable_id = catalog_snapshot.stable_id
         WHERE current_terminal.stable_id IS NULL
         ORDER BY catalog_snapshot.stable_id
         """,
-        (*TERMINAL_STATUSES, *TERMINAL_STATUSES),
+        TERMINAL_STATUSES,
     ).fetchall()
     return [
         CompletenessIssue(
@@ -949,29 +940,22 @@ def _terminal_by_status(conn: sqlite3.Connection) -> dict[str, int]:
     rows = conn.execute(
         f"""
         WITH current_terminal AS (
-            SELECT stable_id, recipe_revision_sha256, status
-            FROM (
-                SELECT
-                    verification_runs.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY verification_runs.stable_id
-                        ORDER BY finished_at DESC, run_id DESC
-                    ) AS rn
-                FROM verification_runs
-                JOIN temp_current_verification_targets AS target
-                  ON target.stable_id = verification_runs.stable_id
-                 AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
-                 AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
-                 AND target.env_hash = verification_runs.env_hash
-                 AND target.lock_hash = verification_runs.lock_hash
-                 AND target.device_requested = verification_runs.device_requested
-                 AND target.scope = verification_runs.scope
-                WHERE verification_runs.scope = 'forward'
-                  AND verification_runs.status IN ({placeholders})
-                  AND verification_runs.torchlens_source_hash != 'legacy-unknown'
-                  AND verification_runs.lock_hash != 'legacy-unknown'
-            )
-            WHERE rn = 1
+            SELECT
+                current_verification.stable_id,
+                current_verification.recipe_revision_sha256,
+                current_verification.status
+            FROM current_verification
+            JOIN temp_current_verification_targets AS target
+              ON target.stable_id = current_verification.stable_id
+             AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
+             AND target.torchlens_source_hash = current_verification.torchlens_source_hash
+             AND target.env_hash = current_verification.env_hash
+             AND target.lock_hash = current_verification.lock_hash
+             AND target.device_requested = current_verification.device_requested
+             AND target.scope = current_verification.scope
+            WHERE current_verification.status IN ({placeholders})
+              AND current_verification.torchlens_source_hash != 'legacy-unknown'
+              AND current_verification.lock_hash != 'legacy-unknown'
         )
         SELECT current_terminal.status, COUNT(*) AS count
         FROM catalog_snapshot

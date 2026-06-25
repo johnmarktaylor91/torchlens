@@ -24,7 +24,7 @@ VERIFICATION_DB = DATA_DIR / "verification.db"
 BUSY_TIMEOUT_MS = 30_000
 LEGACY_UNKNOWN = "legacy-unknown"
 BASE_LOCK_HASH = "base-no-lock"
-Scope = Literal["forward", "backward"]
+Scope = Literal["forward", "forward+backward", "backward"]
 Status = Literal[
     "passed",
     "failed",
@@ -100,7 +100,7 @@ class VerificationRun:
     variant:
         Optional natural-key discriminator.
     scope:
-        Verification scope, ``"forward"`` or ``"backward"``.
+        Verification scope, ``"forward"``, ``"forward+backward"``, or ``"backward"``.
     status:
         Verification status.
     forward_pass:
@@ -400,7 +400,7 @@ def initialize(conn: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             zoo TEXT NOT NULL,
             variant TEXT NOT NULL DEFAULT '',
-            scope TEXT NOT NULL CHECK(scope IN ('forward','backward')),
+            scope TEXT NOT NULL CHECK(scope IN ('forward','forward+backward','backward')),
             status TEXT NOT NULL CHECK(
                 status IN (
                     'passed',
@@ -450,6 +450,36 @@ def initialize(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_vr_torchlens_version
             ON verification_runs(torchlens_version);
 
+        CREATE TRIGGER IF NOT EXISTS verification_runs_no_update
+        BEFORE UPDATE ON verification_runs
+        BEGIN
+            SELECT RAISE(ABORT, 'verification_runs is append-only');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS verification_runs_no_delete
+        BEFORE DELETE ON verification_runs
+        BEGIN
+            SELECT RAISE(ABORT, 'verification_runs is append-only');
+        END;
+        """
+    )
+    _migrate_peak_rss_column(conn)
+    _migrate_identity_columns(conn)
+    _migrate_status_constraint(conn)
+    _create_current_verification_view(conn)
+
+
+def _create_current_verification_view(conn: sqlite3.Connection) -> None:
+    """Create the canonical latest verification row view.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    conn.executescript(
+        """
         DROP VIEW IF EXISTS current_verification;
         CREATE VIEW current_verification AS
         WITH ranked AS (
@@ -460,7 +490,6 @@ def initialize(conn: sqlite3.Connection) -> None:
                     ORDER BY finished_at DESC, run_id DESC
                 ) AS rn
             FROM verification_runs
-            WHERE scope = 'forward'
         )
         SELECT
             run_id,
@@ -496,23 +525,8 @@ def initialize(conn: sqlite3.Connection) -> None:
             error_message
         FROM ranked
         WHERE rn = 1;
-
-        CREATE TRIGGER IF NOT EXISTS verification_runs_no_update
-        BEFORE UPDATE ON verification_runs
-        BEGIN
-            SELECT RAISE(ABORT, 'verification_runs is append-only');
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS verification_runs_no_delete
-        BEFORE DELETE ON verification_runs
-        BEGIN
-            SELECT RAISE(ABORT, 'verification_runs is append-only');
-        END;
         """
     )
-    _migrate_peak_rss_column(conn)
-    _migrate_identity_columns(conn)
-    _migrate_status_constraint(conn)
 
 
 def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
@@ -581,7 +595,7 @@ def _migrate_identity_columns(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
-    """Recreate legacy ledger tables whose status check lacks new terminal statuses.
+    """Recreate legacy ledgers whose status or scope checks lack current values.
 
     Parameters
     ----------
@@ -600,10 +614,27 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     if row is None:
         return
     table_sql = str(row["sql"] if isinstance(row, sqlite3.Row) else row[0])
-    if all(f"'{status}'" in table_sql for status in STATUS_VALUES):
+    if (
+        all(f"'{status}'" in table_sql for status in STATUS_VALUES)
+        and "'forward+backward'" in table_sql
+    ):
         return
+    existing_columns = {
+        str(row["name"] if isinstance(row, sqlite3.Row) else row[1])
+        for row in conn.execute("PRAGMA table_info(verification_runs)").fetchall()
+    }
+    lock_hash_expr = (
+        "lock_hash" if "lock_hash" in existing_columns else f"'{LEGACY_UNKNOWN}' AS lock_hash"
+    )
+    source_hash_expr = (
+        "torchlens_source_hash"
+        if "torchlens_source_hash" in existing_columns
+        else f"'{LEGACY_UNKNOWN}' AS torchlens_source_hash"
+    )
+    input_scale_expr = "input_scale" if "input_scale" in existing_columns else "NULL AS input_scale"
+    peak_rss_column = "peak_rss_mb" if "peak_rss_mb" in existing_columns else "NULL AS peak_rss_mb"
     conn.executescript(
-        """
+        f"""
         DROP VIEW IF EXISTS current_verification;
         DROP TRIGGER IF EXISTS verification_runs_no_update;
         DROP TRIGGER IF EXISTS verification_runs_no_delete;
@@ -617,7 +648,7 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             zoo TEXT NOT NULL,
             variant TEXT NOT NULL DEFAULT '',
-            scope TEXT NOT NULL CHECK(scope IN ('forward','backward')),
+            scope TEXT NOT NULL CHECK(scope IN ('forward','forward+backward','backward')),
             status TEXT NOT NULL CHECK(
                 status IN (
                     'passed',
@@ -714,14 +745,14 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             device_requested,
             device_actual,
             env_hash,
-            'legacy-unknown' AS lock_hash,
-            'legacy-unknown' AS torchlens_source_hash,
-            NULL AS input_scale,
+            {lock_hash_expr},
+            {source_hash_expr},
+            {input_scale_expr},
             runner_host,
             started_at,
             finished_at,
             duration_sec,
-            peak_rss_mb,
+            {peak_rss_column},
             error_class,
             error_message
         FROM verification_runs_legacy_status_check;
@@ -973,24 +1004,24 @@ def verified_count(
     _load_verification_targets(conn, targets)
     row = conn.execute(
         """
-        SELECT COUNT(DISTINCT verification_runs.stable_id)
-        FROM verification_runs
+        SELECT COUNT(DISTINCT current_verification.stable_id)
+        FROM current_verification
         JOIN temp_current_verification_targets AS target
-          ON target.stable_id = verification_runs.stable_id
-         AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
-         AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
-         AND target.env_hash = verification_runs.env_hash
-         AND target.lock_hash = verification_runs.lock_hash
-         AND target.device_requested = verification_runs.device_requested
-         AND target.scope = verification_runs.scope
-        WHERE verification_runs.status = 'passed'
-          AND verification_runs.forward_pass = 1
-          AND verification_runs.metadata_ok = 1
-          AND verification_runs.n_ops IS NOT NULL
-          AND verification_runs.graph_shape_hash IS NOT NULL
-          AND verification_runs.torchlens_version = ?
-          AND verification_runs.torchlens_source_hash != ?
-          AND verification_runs.lock_hash != ?
+          ON target.stable_id = current_verification.stable_id
+         AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
+         AND target.torchlens_source_hash = current_verification.torchlens_source_hash
+         AND target.env_hash = current_verification.env_hash
+         AND target.lock_hash = current_verification.lock_hash
+         AND target.device_requested = current_verification.device_requested
+         AND target.scope = current_verification.scope
+        WHERE current_verification.status = 'passed'
+          AND current_verification.forward_pass = 1
+          AND current_verification.metadata_ok = 1
+          AND current_verification.n_ops IS NOT NULL
+          AND current_verification.graph_shape_hash IS NOT NULL
+          AND current_verification.torchlens_version = ?
+          AND current_verification.torchlens_source_hash != ?
+          AND current_verification.lock_hash != ?
         """,
         (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
     ).fetchone()

@@ -17,11 +17,13 @@ from menagerie.validate_menagerie import (
     ValidationResult,
     _ledger_status,
     _resolve_scheduler_memory_budget_gb,
+    append_validation_ledger,
     append_manifest,
     build_parser,
     manifest_records,
     validate_with_timeout,
 )
+from menagerie.ledger import connect
 
 
 def _row(**overrides: object) -> CatalogRow:
@@ -175,6 +177,10 @@ def test_parent_accepts_normal_worker_result_with_cap(
         (-signal.SIGKILL, "terminated by administrator", "failed:killed"),
         (-signal.SIGSEGV, "segmentation fault", "failed:native_crash"),
         (-signal.SIGABRT, "abort trap", "failed:native_crash"),
+        (-signal.SIGBUS, "bus error", "failed:native_crash"),
+        (-signal.SIGTERM, "terminated by scheduler", "failed:killed"),
+        (-signal.SIGHUP, "hangup", "failed:killed"),
+        (-signal.SIGINT, "interrupted", "failed:killed"),
         (17, "Traceback: boom", "failed:exception"),
     ],
 )
@@ -207,12 +213,82 @@ def test_worker_returncode_classification_is_signal_based(
     assert result.status == expected_status
 
 
+def test_bare_oom_substring_does_not_route_to_oom(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Words containing oom are not OOM evidence for SIGKILL classification."""
+
+    row = _row()
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Return a SIGKILL with non-OOM words in stderr."""
+
+        del kwargs
+        return subprocess.CompletedProcess(
+            command,
+            -signal.SIGKILL,
+            stdout="",
+            stderr="zoom bloom room doom",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = validate_with_timeout(
+        row,
+        dry_run=False,
+        scope="forward",
+        device="cpu",
+        timeout_sec=5.0,
+    )
+
+    assert result.status == "failed:killed"
+
+
 def test_signal_failure_statuses_survive_ledger_mapping() -> None:
     """Specific signal-derived failure statuses are not collapsed to failed."""
 
     assert _ledger_status("failed:oom") == "oom"
     assert _ledger_status("failed:native_crash") == "native_crash"
     assert _ledger_status("failed:killed") == "killed"
+
+
+def test_forward_backward_validation_result_persists_scope_and_backward_pass(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Forward-plus-backward validation writes a distinct ledger identity scope."""
+
+    ledger_db = tmp_path / "verification.db"
+
+    def connect_test_ledger() -> Any:
+        """Connect append_validation_ledger to a temporary test ledger."""
+
+        return connect(ledger_db)
+
+    row = _row(stable_id="backward-scope", recipe_revision_sha256="recipe-bw")
+    result = ValidationResult(
+        row.name,
+        row.model_id,
+        "validated",
+        3,
+        True,
+        "forward+backward",
+        0.25,
+        "unit-zoo",
+        "forward=True; backward=True",
+        "shape",
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        input_scale=1.0,
+    )
+    monkeypatch.setattr("menagerie.validate_menagerie.connect_ledger", connect_test_ledger)
+
+    append_validation_ledger(row, result, "cpu", result.input_scale)
+    conn = connect(ledger_db)
+    stored = conn.execute(
+        "SELECT scope, forward_pass, backward_pass FROM verification_runs"
+    ).fetchone()
+
+    assert dict(stored) == {"scope": "forward+backward", "forward_pass": 1, "backward_pass": 1}
 
 
 def test_worker_under_memory_cap_validates() -> None:

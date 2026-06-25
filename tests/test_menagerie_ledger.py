@@ -203,6 +203,80 @@ def test_identity_columns_migrate_existing_ledger(tmp_path: Path) -> None:
     }
 
 
+def test_status_constraint_migration_preserves_identity_columns(tmp_path: Path) -> None:
+    """Re-running the status migration preserves real identity tuple values."""
+
+    db_path = tmp_path / "verification.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE verification_runs(
+            run_id TEXT PRIMARY KEY,
+            stable_id TEXT NOT NULL,
+            recipe_revision_sha256 TEXT NOT NULL,
+            name TEXT NOT NULL,
+            zoo TEXT NOT NULL,
+            variant TEXT NOT NULL DEFAULT '',
+            scope TEXT NOT NULL CHECK(scope IN ('forward','backward')),
+            status TEXT NOT NULL CHECK(status IN ('passed','failed')),
+            forward_pass INTEGER,
+            backward_pass INTEGER,
+            backward_na_reason TEXT,
+            metadata_ok INTEGER,
+            n_ops INTEGER,
+            graph_shape_hash TEXT,
+            svg_sha256 TEXT,
+            torchlens_version TEXT NOT NULL,
+            torch_version TEXT NOT NULL,
+            python_version TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            device_actual TEXT,
+            env_hash TEXT,
+            lock_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            input_scale REAL,
+            runner_host TEXT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            duration_sec REAL NOT NULL,
+            peak_rss_mb INTEGER,
+            error_class TEXT,
+            error_message TEXT
+        );
+        INSERT INTO verification_runs(
+            run_id, stable_id, recipe_revision_sha256, name, zoo, scope, status,
+            forward_pass, metadata_ok, n_ops, graph_shape_hash, torchlens_version,
+            torch_version, python_version, device_requested, env_hash, lock_hash,
+            torchlens_source_hash, input_scale, started_at, finished_at, duration_sec
+        )
+        VALUES (
+            'real-identity-run', 'm1', 'recipe-a', 'ToyNet', 'unit-zoo', 'forward', 'passed',
+            1, 1, 4, 'shape-a', 'tl-current', 'torch-test', 'py-test', 'cpu',
+            'real-env', 'real-lock', 'real-source', 0.00001,
+            '2026-06-22T00:00:00+00:00', '2026-06-22T00:00:01+00:00', 1.0
+        );
+        """
+    )
+    conn.close()
+
+    migrated = connect(db_path)
+    row = migrated.execute(
+        """
+        SELECT env_hash, lock_hash, torchlens_source_hash, input_scale
+        FROM verification_runs
+        WHERE run_id = 'real-identity-run'
+        """
+    ).fetchone()
+
+    assert dict(row) == {
+        "env_hash": "real-env",
+        "lock_hash": "real-lock",
+        "torchlens_source_hash": "real-source",
+        "input_scale": 0.00001,
+    }
+
+
 def test_new_terminal_statuses_round_trip(tmp_path: Path) -> None:
     """Island terminal statuses are accepted and stored by the ledger."""
 
@@ -325,8 +399,8 @@ def test_update_and_delete_are_rejected_by_trigger(tmp_path: Path) -> None:
         conn.execute("DELETE FROM verification_runs")
 
 
-def test_current_verification_returns_latest_forward_per_stable_id(tmp_path: Path) -> None:
-    """The current view keeps the latest forward row for each stable model."""
+def test_current_verification_returns_latest_row_per_stable_id(tmp_path: Path) -> None:
+    """The current view keeps the latest row for each stable model."""
 
     conn = connect(tmp_path / "verification.db")
     append_verification_run(
@@ -400,7 +474,7 @@ def test_verified_count_requires_catalog_current_recipe_revision(tmp_path: Path)
 
 
 def test_verified_count_requires_full_identity_tuple(tmp_path: Path) -> None:
-    """Passes with stale source, env, lock, or device policy do not count."""
+    """Only the latest row can satisfy the full verified identity tuple."""
 
     conn = connect(tmp_path / "verification.db")
     append_verification_run(
@@ -448,34 +522,76 @@ def test_verified_count_requires_full_identity_tuple(tmp_path: Path) -> None:
 
     append_verification_run(
         conn,
-        _run(run_id="current-identity", finished_at="2026-06-22T00:00:06+00:00"),
+        _run(
+            run_id="current-recipe-b",
+            recipe_revision_sha256="recipe-b",
+            graph_shape_hash="shape-b",
+            finished_at="2026-06-22T00:00:06+00:00",
+        ),
     )
 
-    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
+    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 1
 
     append_verification_run(
         conn,
         _run(
-            run_id="run-recipe-b",
-            recipe_revision_sha256="recipe-b",
-            graph_shape_hash="shape-b",
+            run_id="newer-recipe-a-fail",
+            recipe_revision_sha256="recipe-a",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="RuntimeError",
+            error_message="regressed",
+            finished_at="2026-06-22T00:00:07+00:00",
+        ),
+    )
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 0
+
+
+def test_verified_count_rejects_newer_failure_at_same_identity(tmp_path: Path) -> None:
+    """An old pass does not verify a model after the latest matching identity failed."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(conn, _run(run_id="old-pass"))
+    append_verification_run(
+        conn,
+        _run(
+            run_id="new-fail",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="RuntimeError",
+            error_message="regressed",
             finished_at="2026-06-22T00:00:02+00:00",
         ),
     )
 
-    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 1
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 0
 
+
+def test_forward_backward_scope_round_trips(tmp_path: Path) -> None:
+    """Forward-only and forward-plus-backward rows are distinct ledger scopes."""
+
+    conn = connect(tmp_path / "verification.db")
     append_verification_run(
         conn,
         _run(
-            run_id="run-stale-rerun",
-            recipe_revision_sha256="recipe-a",
-            graph_shape_hash="shape-a-rerun",
-            finished_at="2026-06-22T00:00:03+00:00",
+            run_id="forward-backward",
+            scope="forward+backward",
+            backward_pass=1,
         ),
     )
 
-    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 1
+    row = conn.execute(
+        "SELECT scope, forward_pass, backward_pass FROM verification_runs"
+    ).fetchone()
+
+    assert dict(row) == {"scope": "forward+backward", "forward_pass": 1, "backward_pass": 1}
 
 
 def test_concurrent_appends_from_two_threads_both_land(tmp_path: Path) -> None:

@@ -51,6 +51,7 @@ from menagerie.runtime import (
     unrenderable_reason,
 )
 from menagerie.ledger import (
+    Scope,
     VerificationRun,
     Status,
     append_verification_run,
@@ -153,6 +154,8 @@ class ValidationResult:
         Frozen recipe fingerprint for the row's current construction recipe.
     peak_rss_mb:
         Peak resident set size observed by the isolated worker process, in MB.
+    input_scale:
+        Input scaling factor used for this validation.
     """
 
     name: str
@@ -168,6 +171,7 @@ class ValidationResult:
     stable_id: str = ""
     recipe_revision_sha256: str = ""
     peak_rss_mb: int | None = None
+    input_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -308,7 +312,7 @@ def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
                 result.error.replace("\n", " | "),
                 result.graph_shape_hash,
                 "" if result.peak_rss_mb is None else result.peak_rss_mb,
-                _input_scale_from_error(result.error),
+                result.input_scale,
             )
         )
 
@@ -394,24 +398,57 @@ def _ledger_status(status: str) -> str:
     return "error"
 
 
-def _input_scale_from_error(error: str) -> float:
-    """Extract the recorded input scale from a result note.
+def _forward_pass_value(result: ValidationResult, passed: bool, ledger_status: str) -> int | None:
+    """Return the ledger forward-pass value for a validation result.
 
     Parameters
     ----------
-    error:
-        Result note text.
+    result:
+        Validation result.
+    passed:
+        Whether the ledger status is a pass.
+    ledger_status:
+        Ledger status string.
 
     Returns
     -------
-    float
-        Recorded input scale, defaulting to ``1.0`` when no reduced-input note is present.
+    int | None
+        ``1`` when forward validation passed, ``0`` when it failed, otherwise ``None``.
     """
 
-    match = re.search(r"(?:^|; )input_scale=([0-9.]+)", error)
-    if match is None:
-        return 1.0
-    return float(match.group(1))
+    if passed:
+        return 1
+    if ledger_status == "skipped":
+        return None
+    if result.scope == "forward+backward" and result.validate_metadata_ok:
+        return 1
+    return 0
+
+
+def _backward_pass_value(result: ValidationResult, passed: bool) -> int | None:
+    """Return the ledger backward-pass value for a validation result.
+
+    Parameters
+    ----------
+    result:
+        Validation result.
+    passed:
+        Whether the full requested validation passed.
+
+    Returns
+    -------
+    int | None
+        ``1`` when backward validation passed, ``0`` when it was attempted and failed, otherwise
+        ``None``.
+    """
+
+    if result.scope != "forward+backward":
+        return None
+    if passed:
+        return 1
+    if result.validate_metadata_ok and "backward" in result.error.casefold():
+        return 0
+    return None
 
 
 def _actual_device(result: ValidationResult, requested_device: str) -> str:
@@ -469,10 +506,10 @@ def append_validation_ledger(
                 name=row.name,
                 zoo=row.zoo,
                 variant=row.variant,
-                scope="forward",
+                scope=cast(Scope, result.scope),
                 status=cast(Status, ledger_status),
-                forward_pass=1 if passed else (None if ledger_status == "skipped" else 0),
-                backward_pass=None,
+                forward_pass=_forward_pass_value(result, passed, ledger_status),
+                backward_pass=_backward_pass_value(result, passed),
                 backward_na_reason=None,
                 metadata_ok=(
                     int(result.validate_metadata_ok)
@@ -534,6 +571,7 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         stable_id=str(payload.get("stable_id", "")),
         recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
         peak_rss_mb=peak_rss_mb,
+        input_scale=float(payload.get("input_scale", 1.0) or 1.0),
     )
 
 
@@ -1114,6 +1152,7 @@ def _memory_cap_result(
     cap_gb: float,
     peak_rss_bytes: int,
     elapsed: float,
+    input_scale: float = 1.0,
 ) -> ValidationResult:
     """Build the honest failure result for a worker RSS cap breach.
 
@@ -1129,6 +1168,8 @@ def _memory_cap_result(
         Highest RSS observed by the monitor, in bytes.
     elapsed:
         Elapsed worker time in seconds.
+    input_scale:
+        Input scaling factor used for this validation.
 
     Returns
     -------
@@ -1151,6 +1192,7 @@ def _memory_cap_result(
         stable_id=row.stable_id,
         recipe_revision_sha256=row.recipe_revision_sha256,
         peak_rss_mb=peak_rss_mb,
+        input_scale=input_scale,
     )
 
 
@@ -1172,17 +1214,20 @@ def _has_oom_evidence(stdout: str, stderr: str) -> bool:
 
     evidence = f"{stdout}\n{stderr}".casefold()
     patterns = (
-        "out of memory",
-        "oom",
-        "oom-kill",
-        "oom_kill",
-        "oom killed",
-        "killed process",
-        "memory cgroup",
-        "cuda error: out of memory",
-        "slurmstepd: error: detected",
+        r"\bout of memory\b",
+        r"\boom\b",
+        r"\boom-kill\b",
+        r"\boom_kill\b",
+        r"\boom killed\b",
+        r"\boom-killer\b",
+        r"\bcuda error: out of memory\b",
+        r"\bkilled process\b",
+        r"\bmemory cgroup\b",
+        r"\bcgroup out of memory\b",
+        r"\bslurmstepd: error: detected\b.*\boom\b",
+        r"\bslurmstepd: error:.*out[ -]of[ -]memory\b",
     )
-    return any(pattern in evidence for pattern in patterns)
+    return any(re.search(pattern, evidence) is not None for pattern in patterns)
 
 
 def _worker_exit_status(returncode: int, stdout: str, stderr: str) -> str:
@@ -1205,8 +1250,10 @@ def _worker_exit_status(returncode: int, stdout: str, stderr: str) -> str:
 
     if returncode == -signal.SIGKILL:
         return "failed:oom" if _has_oom_evidence(stdout, stderr) else "failed:killed"
-    if returncode in {-signal.SIGSEGV, -signal.SIGABRT}:
+    if returncode in {-signal.SIGSEGV, -signal.SIGABRT, -signal.SIGBUS}:
         return "failed:native_crash"
+    if returncode < 0:
+        return "failed:killed"
     if returncode > 0:
         return "failed:exception"
     return "failed:exception"
@@ -1257,6 +1304,7 @@ def _start_worker_memory_monitor(
     scope: str,
     cap_gb: float | None,
     start_time: float,
+    input_scale: float = 1.0,
 ) -> threading.Thread | None:
     """Start a daemon RSS monitor that records memory-cap failures.
 
@@ -1270,6 +1318,8 @@ def _start_worker_memory_monitor(
         Per-worker RSS cap in GB, or ``None`` to disable the monitor.
     start_time:
         Worker monotonic start time.
+    input_scale:
+        Input scaling factor used for this validation.
 
     Returns
     -------
@@ -1304,6 +1354,7 @@ def _start_worker_memory_monitor(
                     cap_gb,
                     peak_rss_bytes,
                     time.monotonic() - start_time,
+                    input_scale,
                 )
                 _emit_worker_result(result)
                 os._exit(WORKER_MEMORY_CAP_EXIT_CODE)
@@ -1374,6 +1425,7 @@ def _annotate_input_scale(result: ValidationResult, input_scale: float) -> Valid
         stable_id=result.stable_id,
         recipe_revision_sha256=result.recipe_revision_sha256,
         peak_rss_mb=result.peak_rss_mb,
+        input_scale=input_scale,
     )
 
 
@@ -1459,6 +1511,7 @@ def _validate_one_unscaled_note(
             skip_reason,
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
+            input_scale=input_scale,
         )
     try:
         input_tensor = _build_input(row, input_scale)
@@ -1708,6 +1761,8 @@ def _validate_one_unscaled_note(
                 cpu_result.graph_shape_hash,
                 stable_id=cpu_result.stable_id,
                 recipe_revision_sha256=cpu_result.recipe_revision_sha256,
+                peak_rss_mb=cpu_result.peak_rss_mb,
+                input_scale=cpu_result.input_scale,
             )
         return cpu_result
 
@@ -1816,6 +1871,7 @@ def validate_with_timeout(
             worker_memory_cap_gb,
             0,
             0.0,
+            input_scale,
         )
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
@@ -1834,6 +1890,7 @@ def validate_with_timeout(
             message,
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
+            input_scale=input_scale,
         )
     return ValidationResult(
         row.name,
@@ -1847,6 +1904,7 @@ def validate_with_timeout(
         "worker did not emit a worker_result event",
         stable_id=row.stable_id,
         recipe_revision_sha256=row.recipe_revision_sha256,
+        input_scale=input_scale,
     )
 
 
@@ -2100,6 +2158,7 @@ def run(args: argparse.Namespace) -> int:
                     install_error,
                     stable_id=row.stable_id,
                     recipe_revision_sha256=row.recipe_revision_sha256,
+                    input_scale=args.input_scale,
                 )
                 append_validation_ledger(row, result, args.device, args.input_scale)
                 append_manifest(
@@ -2461,7 +2520,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.worker_row_json:
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         worker_start = time.monotonic()
-        _start_worker_memory_monitor(row, args.scope, args.worker_memory_cap_gb, worker_start)
+        _start_worker_memory_monitor(
+            row,
+            args.scope,
+            args.worker_memory_cap_gb,
+            worker_start,
+            args.input_scale,
+        )
         worker_test_allocations = _run_worker_test_allocation_from_env()
         try:
             result = validate_one(row, args.dry_run, args.scope, args.device, args.input_scale)
@@ -2479,6 +2544,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"{error!r}\n{traceback.format_exc(limit=8)}",
                 stable_id=row.stable_id,
                 recipe_revision_sha256=row.recipe_revision_sha256,
+                input_scale=args.input_scale,
             )
         result = ValidationResult(
             result.name,
@@ -2494,6 +2560,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result.stable_id,
             result.recipe_revision_sha256,
             _peak_rss_mb(),
+            result.input_scale,
         )
         if worker_test_allocations:
             worker_test_allocations.clear()

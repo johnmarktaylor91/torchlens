@@ -328,6 +328,10 @@ def classify_activation_type(func_name: str | None, module_class_name: str | Non
 def classify_op(func_name: str | None, module_class_name: str | None = None) -> str:
     """Classify a Torch operation into the closed menagerie op taxonomy.
 
+    Module-class tokens are intentionally checked before function names. A semantic wrapper
+    such as an attention or convolution block can therefore classify internal primitive calls
+    by the owning module category when both signals are present.
+
     Parameters
     ----------
     func_name:
