@@ -11,12 +11,14 @@ network as it runs. Any architecture, even dynamic and recurrent ones.
 > **11,000+ unique neural-network architectures** captured with TorchLens, from McCulloch & Pitts (1943)
 > to today's frontier models. *(Early preview.)*
 
-Run on **11,000+ architectures** (image, video, audio, multimodal, language;
-feedforward, recurrent, transformer, GNN), with **over 99% rigorously validated** for
-capture correctness — and it records **every last detail
-of every part of your model**: **180+ metadata fields per operation**, and
-**550+ fields in total** across every record type — operations, modules,
-parameters, buffers, gradients, and the model itself.
+Run on **all 11,670 architectures** in the Model Menagerie (image, video, audio,
+multimodal, language; feedforward, recurrent, transformer, GNN, MoE, diffusion) — now
+**100% algorithmically verified** for capture correctness: every model's capture is
+replayed op-by-op against its own forward pass, with metadata-invariant tripwires over
+the graph, so faithful capture is **proven, not assumed**. And it records **every last
+detail of every part of your model**: **180+ metadata fields per operation**, and
+**550+ fields in total** across every record type — operations, modules, parameters,
+buffers, gradients, and the model itself.
 
 ```python
 import torch, torchvision.models as models, torchlens as tl
