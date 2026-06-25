@@ -1050,13 +1050,14 @@ def _op_reduction_depth(layer: Op) -> int:
       out-channel axis is ``shape[0]``).
     - ``conv_transpose*``: transposed-conv weight is
       ``[in_channels, out_channels/groups, *kernel]`` -- the IN-channel axis is
-      ``shape[0]`` and the OUT-channel axis is ``shape[1]``. The forward formula
-      ``weight.numel() // weight.shape[0]`` would wrongly read
-      ``out_channels/groups * prod(kernel)`` and over-report depth (e.g.
-      ``ConvTranspose2d(1, 128, 1)`` -> 128). The true per-output accumulation
-      depth is ``in_channels * prod(kernel)`` = ``weight.shape[0] *
-      prod(weight.shape[2:])``, so a ``1x1`` transpose with 1 input channel is
-      correctly shallow (depth 1).
+      ``shape[0]``. The true per-output accumulation depth is
+      ``in_channels/groups * prod(kernel)`` = ``weight.shape[0] // groups *
+      prod(weight.shape[2:])``, with ``groups`` read from positional arg 6 / kwarg
+      ``groups`` (default 1; an unreadable or non-dividing ``groups`` returns 0,
+      fail-toward-strict). The forward formula ``weight.numel() // weight.shape[0]``
+      would read ``out_channels/groups * prod(kernel)``, and omitting the
+      ``// groups`` divisor over-reports a grouped transpose (e.g.
+      ``ConvTranspose2d(128, 128, 1, groups=128)`` is depth 1, not 128).
     - ``linear`` / ``addmm`` / ``mm`` / ``matmul`` / ``bmm`` / ``baddbmm``:
       the contracted dimension ``K`` of the first matrix operand.
     - ``scatter_add*`` / additive ``scatter_reduce*`` (``reduce="sum"``/``"mean"``)
@@ -1093,16 +1094,23 @@ def _op_reduction_depth(layer: Op) -> int:
 
     # conv_transpose* (checked FIRST -- "conv_transpose" also startswith "conv"):
     # transposed weight is [in_channels, out_channels/groups, *kernel], so the true
-    # per-output accumulation depth is in_channels * prod(kernel) = shape[0] *
-    # prod(shape[2:]). Reusing the forward formula would read shape[1] (out/groups)
-    # and over-report (the ConvTranspose2d(1,128,1) -> 128 false positive).
+    # per-output accumulation depth is in_channels/groups * prod(kernel) =
+    # shape[0] // groups * prod(shape[2:]). groups is read from positional arg 6 /
+    # kwarg "groups" (default 1). Omitting the // groups divisor over-reports a
+    # grouped transpose (ConvTranspose2d(128,128,1,groups=128) is depth 1, not 128);
+    # an unreadable / non-dividing groups returns 0 (fail-toward-strict).
     if func_name.startswith(_CONV_TRANSPOSE_FUNC_PREFIX):
         weight = _operand(1, "weight")
-        if isinstance(weight, torch.Tensor) and weight.dim() >= 2:
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
             kernel_numel = 1
             for kdim in weight.shape[2:]:
                 kernel_numel *= int(kdim)
-            return int(weight.shape[0]) * kernel_numel
+            groups = _operand(6, "groups")
+            if groups is None:
+                groups = 1
+            if not isinstance(groups, int) or groups <= 0 or int(weight.shape[0]) % groups != 0:
+                return 0
+            return (int(weight.shape[0]) // groups) * kernel_numel
         return 0
 
     # forward conv*: weight is [out_channels, in_channels/groups, *kernel], so depth

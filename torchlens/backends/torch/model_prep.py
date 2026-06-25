@@ -1291,7 +1291,20 @@ def _ensure_module_output_tensor_logged(
     }
     address = _module_address(module)
     module_call_index = trace._mod_call_index[id(module)]
-    modules = [(address, module_call_index)] if address else []
+    if is_internal_source:
+        # A synthesized internal-source op must carry the FULL exhaustive module
+        # stack -- exactly like every real op (see sources.py / ops.py) -- not just
+        # its innermost frame. Truncating to [(address, idx)] mis-parented a
+        # deeply-nested internal source (e.g. esmfold's trunk.structure_module.ipa,
+        # synthesized when a vmap/state-leaked tensor enters a module untagged 2+
+        # levels deep) to the ROOT, breaking the [module_hierarchy] bidirectionality
+        # invariant. The intervention-replacement path keeps its explicit innermost
+        # frame (a forward-hook replacement fires with its own module context).
+        from .sources import _snapshot_exhaustive_module_stack
+
+        modules = _snapshot_exhaustive_module_stack(trace)
+    else:
+        modules = [(address, module_call_index)] if address else []
     equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
     module_args, module_kwargs = trace._module_forward_args.get(
         (address, module_call_index), ((), {})
