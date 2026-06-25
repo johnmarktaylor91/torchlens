@@ -848,6 +848,25 @@ def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
     )
 
 
+def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) -> None:
+    """Hook the live in-place result so its gradient is captured under ``raw_label``.
+
+    In-place ops log their output against a ``safe_copy`` whose grad_fn is a
+    dead-end ``CloneBackward`` node. When same-object identity is preserved the
+    live tensor (the original, in-place-modified one) is what downstream ops
+    consume, so the real gradient flows through it -- not the logged copy. This
+    registers the standard backward grad hook on the live tensor so the grad is
+    captured. ``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and
+    only hooks autograd-participating tensors, so the call is safe and cheap.
+    """
+
+    if not isinstance(tensor, torch.Tensor):
+        return
+    from .tensor_tracking import _add_tensor_backward_hook
+
+    _add_tensor_backward_hook(trace, tensor, raw_label)
+
+
 def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[..., Any]:
     """Wrap a single torch function with toggle-gated logging.
 
@@ -1013,6 +1032,13 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             or func_name.startswith("__i")
             or func_name in {"__setitem__", "__delitem__"}
         )
+        # The internal identity-forcing decorator (_state._decorated_identity)
+        # exists precisely to MINT a distinct logged tensor at module boundaries
+        # (nn.Identity / pass-through outputs). Unlike user-visible no-ops such as
+        # x.contiguous(), it must NOT preserve the input's Python object identity,
+        # otherwise the module exit re-reads the input's label and the boundary
+        # node (e.g. identity_1_2) never attaches to the module's output_ops.
+        force_distinct_return = func_name == "identity"
         if same_object_returned:
             # Create a distinct tensor object for logging — otherwise attaching
             # _tl.label_raw on the output would clobber the input's label.
@@ -1061,6 +1087,18 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     set_tensor_label(args[0], out_label)
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
+                    # The op is logged against out_orig (a safe_copy whose grad_fn
+                    # is a dead-end CloneBackward node). When same-object identity
+                    # is preserved, downstream ops consume the LIVE tensor
+                    # (return_value / args[0]) instead, so the live graph carries
+                    # the real gradient. Register the backward grad hook on the
+                    # live tensor too (idempotent, keyed by (label, id)) so grads
+                    # flowing through the live in-place result are captured under
+                    # this op's label -- otherwise modules whose output descends
+                    # from an in-place op (e.g. ResNet residual `out += identity`)
+                    # silently lose grad attribution.
+                    _register_inplace_live_grad_hook(trace, return_value, out_label)
+                    _register_inplace_live_grad_hook(trace, args[0], out_label)
 
         producer_label = None
         if isinstance(out_orig, torch.Tensor):
@@ -1071,6 +1109,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
 
         if out_orig is not out_before_hooks:
+            return out_orig
+        if force_distinct_return:
             return out_orig
         return return_value
 
