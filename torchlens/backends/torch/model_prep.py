@@ -535,6 +535,19 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     if not hasattr(trace, "_param_log_by_pid"):
         raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
 
+    # Fast (save_new_outs / second-pass) capture reuses the exhaustive-pass
+    # graph, so the Param log objects -- and the cross-reference metadata
+    # populated on them during the exhaustive pass (used_by_ops, used_by_layers,
+    # num_calls, co_parent_params) -- must be preserved. Rebuilding fresh Param
+    # objects here would (a) drop that metadata, leaving used_by_layers empty,
+    # and (b) desync trace.param_logs from the Op._param_logs that still point at
+    # the exhaustive-pass objects -- exactly the asymmetry the param
+    # cross-reference invariant flags. Re-tag the live tensors with their
+    # existing barcode/address instead of allocating new logs.
+    if trace.capture_mode == "fast" and len(trace.param_logs):
+        _retag_existing_session_param_logs(trace, model)
+        return
+
     optimized_param_ids: set[int] = set()
     if optimizer is not None:
         for group in optimizer.param_groups:
@@ -598,6 +611,56 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
 
     trace._param_log_by_pid = param_id_to_address
     trace.param_logs = ParamAccessor(param_logs)
+
+
+def _retag_existing_session_param_logs(trace: "Trace", model: nn.Module) -> None:
+    """Re-tag live parameters for a fast pass without rebuilding Param logs.
+
+    Mirrors the live-tensor side effects of :func:`_create_session_param_logs`
+    (force ``requires_grad`` outside ``backward_ready``, set ``_tl`` param meta,
+    refresh ``Param._param_ref``, rebuild ``_param_log_by_pid``) but keeps the
+    existing :class:`Param` objects so their exhaustive-pass cross-reference
+    metadata survives the second pass. Aliased/shared parameters resolve through
+    each Param's ``all_addresses``.
+    """
+
+    existing_by_address: dict[str, Param] = {pl.address: pl for pl in trace.param_logs}
+    alias_to_primary: dict[str, str] = {}
+    for primary_address, param_log in existing_by_address.items():
+        for alias in getattr(param_log, "all_addresses", []) or [primary_address]:
+            alias_to_primary[alias] = primary_address
+
+    param_id_to_address: dict[int, str] = {}
+    seen_param_ids: set[int] = set()
+    for module in model.modules():
+        address = _module_address(module)
+        for param_name, param in module._parameters.items():
+            if param is None:
+                continue
+            pid = id(param)
+            param_address = f"{address}.{param_name}" if address else param_name
+            primary_address = alias_to_primary.get(param_address, param_address)
+            param_log = existing_by_address.get(primary_address)
+            if param_log is None:
+                # Unexpected new parameter on the fast pass: the graph changed.
+                # Leave it untagged; downstream fast-pass alignment checks will
+                # surface the divergence rather than silently mis-saving.
+                continue
+            if pid not in seen_param_ids:
+                seen_param_ids.add(pid)
+                param_id_to_address[pid] = primary_address
+                requires_grad_before = param.requires_grad
+                if not getattr(trace, "backward_ready", False):
+                    param.requires_grad = True
+                set_param_meta(
+                    param,
+                    barcode=param_log.barcode,
+                    address=primary_address,
+                    requires_grad_before=requires_grad_before,
+                )
+                param_log._param_ref = param
+
+    trace._param_log_by_pid = param_id_to_address
 
 
 # ---------------------------------------------------------------------------
