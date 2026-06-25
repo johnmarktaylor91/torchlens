@@ -50,26 +50,62 @@ from .exemptions import (
 # where the value space may be small (e.g., a single-element int tensor).
 MAX_PERTURB_ATTEMPTS = 100
 
-# Deep convolutional models can replay the same FP32 op with tiny differences
-# after many accumulated reductions. Keep this local to validation replay so
-# global tensor equality stays strict for graph bookkeeping and lower-tier tests.
-DEEP_NUMERIC_REPLAY_FUNCS = frozenset(
+# Deep reduction ops can replay the same FP32 op with tiny differences after
+# many accumulated multiply-adds. Keep this local to validation replay so global
+# tensor equality stays strict for graph bookkeeping and lower-tier tests.
+#
+# Band-C (deep-numeric) eligibility is the FAITHFUL reduction depth, not a graph-
+# position or func-allowlist proxy: an op qualifies iff it is a REDUCTION whose
+# per-output accumulation depth (FP32 multiply-adds summed into each output
+# element) is at least DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH. FP32 reorder
+# drift is driven by the contraction length, not by where the op sits in the
+# graph (a wide channel-expansion conv accumulates hundreds of products per
+# output whether it is op #41 or op #870) nor by a hand-picked conv/matmul list
+# (a high-degree scatter/segment aggregation drifts by the same physics). This
+# replaces BOTH the earlier DEEP_NUMERIC_REPLAY_FUNCS allowlist and the
+# step_index >= 100 position proxy, which together mis-gated physically-deep
+# early ops AND lent band C to shallow late ops (a bug-masking hole). The
+# acceptance tolerances below are UNCHANGED, so a genuinely wrong replay still
+# fails; only the qualification predicate is now the faithful depth measure.
+#
+# Depth 0 means the depth could not be determined; such ops are INELIGIBLE
+# (fail-toward-strict) so band C is withheld and global tolerance stays strict.
+DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH = 64
+
+# Reduction-category func-name groups, used only to compute the per-output
+# accumulation depth (NOT to gate eligibility -- a shallow op in any category
+# below depth 64 stays strict). "Reduction" here means any op that sums many
+# inputs into a single output element; everything else (elementwise, view,
+# structural, copy) has depth 1 and never reaches the threshold.
+_CONV_FUNC_PREFIX = "conv"  # conv1d/2d/3d + conv_transpose1d/2d/3d
+_MATMUL_LINEAR_FUNCS = frozenset({"addmm", "baddbmm", "bmm", "linear", "matmul", "mm"})
+_SCATTER_REDUCE_FUNCS = frozenset(
     {
-        "addmm",
-        "baddbmm",
-        "bmm",
-        "conv1d",
-        "conv2d",
-        "conv3d",
-        "conv_transpose1d",
-        "conv_transpose2d",
-        "conv_transpose3d",
-        "linear",
-        "matmul",
-        "mm",
+        "scatter",
+        "scatter_",
+        "scatter_add",
+        "scatter_add_",
+        "scatter_reduce",
+        "scatter_reduce_",
+        "segment_reduce",
+        "index_add",
+        "index_add_",
     }
 )
-DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM = 100
+_DIM_REDUCE_FUNCS = frozenset(
+    {
+        "sum",
+        "mean",
+        "prod",
+        "norm",
+        "var",
+        "std",
+        "nansum",
+        "nanmean",
+        "logsumexp",
+    }
+)
+
 DEEP_NUMERIC_REPLAY_RTOL = 1e-3
 DEEP_NUMERIC_REPLAY_ATOL = 1e-4
 DEEP_NUMERIC_REPLAY_OUTLIER_RTOL = 5e-2
@@ -946,6 +982,176 @@ def _index_recomputed_output_component(output: Any, component: OutputPathCompone
     raise TypeError(f"Unsupported output path component {component!r}.")
 
 
+def _reduced_numel_over_dims(tensor: torch.Tensor, dim: Any, default_all: bool) -> int:
+    """Return how many input elements are summed into each output element.
+
+    For a dimension-reducing op (``sum``/``mean``/...), the per-output
+    accumulation depth is the product of the reduced dimension sizes. ``dim``
+    follows torch's reduce conventions: ``None`` reduces over every dimension
+    (when ``default_all``), an int or sequence of ints names the reduced dims.
+    """
+
+    if dim is None:
+        return int(tensor.numel()) if default_all else 1
+    if isinstance(dim, int):
+        dims: tuple[int, ...] = (dim,)
+    else:
+        try:
+            dims = tuple(int(d) for d in dim)
+        except TypeError:
+            return 0
+    if not dims:
+        return int(tensor.numel()) if default_all else 1
+    ndim = tensor.dim()
+    depth = 1
+    for d in dims:
+        depth *= int(tensor.shape[d % ndim]) if ndim else 1
+    return depth
+
+
+def _op_reduction_depth(layer: Op) -> int:
+    """Return the per-output FP32 accumulation depth for a replay op.
+
+    The reduction depth is the number of multiply-adds summed into each output
+    element, which is what drives accumulation-order round-off between an original
+    op and its faithful replay. It is read from the op's saved operand shapes /
+    indices, consulting BOTH ``saved_args`` and ``saved_kwargs`` so that operands
+    passed by keyword (``conv2d(x, weight=w)``, ``matmul(a, other=b)``,
+    ``scatter_add(out, dim=d, index=idx, src=s)``) are still measured correctly --
+    reading positionally only would drop the operand to depth 0 and wrongly
+    withhold band C, a fresh false-negative.
+
+    Depth by category:
+
+    - ``conv*`` / ``conv_transpose*``: ``in_channels/groups * prod(kernel_size)``
+      = ``weight.numel() / weight.shape[0]`` products per output element.
+    - ``linear`` / ``addmm`` / ``mm`` / ``matmul`` / ``bmm`` / ``baddbmm``:
+      the contracted dimension ``K`` of the first matrix operand.
+    - ``scatter*`` / ``scatter_add*`` / ``scatter_reduce*`` / ``segment_reduce`` /
+      ``index_add``: the max number of source elements aggregated into a single
+      destination position (the graph fan-in = max duplicate index count). A
+      depth-2 scatter (two duplicate indices) stays well below threshold.
+    - ``sum`` / ``mean`` / ``prod`` / ``norm`` / ``var`` / ``std`` and other
+      dimension reductions: the numel of the reduced dimension(s).
+    - elementwise / copy / view / structural ops: 1.
+
+    Returns
+    -------
+    int
+        Per-output accumulation depth, or ``0`` when it cannot be determined.
+        A return of ``0`` conservatively withholds band C (fail-toward-strict).
+    """
+
+    saved_args = getattr(layer, "saved_args", None) or ()
+    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    func_name = layer.func_name
+
+    def _operand(index: int, *kwarg_names: str) -> Any:
+        """Read an operand positionally, falling back to its keyword names."""
+        if index < len(saved_args):
+            return saved_args[index]
+        for name in kwarg_names:
+            if name in saved_kwargs:
+                return saved_kwargs[name]
+        return None
+
+    # conv* / conv_transpose*: depth = in_channels/groups * prod(kernel).
+    if func_name.startswith(_CONV_FUNC_PREFIX):
+        weight = _operand(1, "weight")
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
+            return int(weight.numel() // weight.shape[0])
+        return 0
+
+    # matmul / linear family: depth = contracted dimension K.
+    if func_name in _MATMUL_LINEAR_FUNCS:
+        if func_name == "linear":
+            weight = _operand(1, "weight")
+            if isinstance(weight, torch.Tensor) and weight.dim() >= 1:
+                return int(weight.shape[-1])
+            first = _operand(0, "input")
+            if isinstance(first, torch.Tensor) and first.dim() >= 1:
+                return int(first.shape[-1])
+            return 0
+        if func_name == "addmm":
+            mat1 = _operand(1, "mat1")
+            if isinstance(mat1, torch.Tensor) and mat1.dim() >= 1:
+                return int(mat1.shape[-1])
+            return 0
+        if func_name == "baddbmm":
+            first_matrix = _operand(1, "batch1")
+        elif func_name in {"mm", "bmm"}:
+            first_matrix = _operand(0, "input", "mat1")
+        else:  # matmul
+            first_matrix = _operand(0, "input")
+        if isinstance(first_matrix, torch.Tensor) and first_matrix.dim() >= 1:
+            return int(first_matrix.shape[-1])
+        return 0
+
+    # scatter / segment / index_add: depth = max duplicate-index count (fan-in).
+    if func_name in _SCATTER_REDUCE_FUNCS:
+        return _scatter_fan_in_depth(func_name, saved_args, saved_kwargs)
+
+    # dimension reductions (sum/mean/...): depth = numel of reduced dims.
+    if func_name in _DIM_REDUCE_FUNCS:
+        tensor = _operand(0, "input")
+        if not isinstance(tensor, torch.Tensor):
+            return 0
+        dim = saved_kwargs.get("dim", None)
+        if dim is None:
+            dim = _operand(1, "dim")
+        # sum/mean/prod with no dim reduce over all elements; var/std/norm too.
+        return _reduced_numel_over_dims(tensor, dim, default_all=True)
+
+    # Everything else (elementwise, view, structural, copy) has depth 1: a single
+    # value flows through per output element, so no FP32 reorder drift accrues.
+    return 1
+
+
+def _scatter_fan_in_depth(
+    func_name: str,
+    saved_args: Any,
+    saved_kwargs: Dict[str, Any],
+) -> int:
+    """Return the max number of source elements aggregated per destination slot.
+
+    For ``scatter_add``-family ops the per-output accumulation depth is the graph
+    fan-in: the maximum number of source elements that land on a single
+    destination position (the max duplicate-index multiplicity along the scatter
+    dimension). Tiny molecular graphs fan in 2-4; high-degree aggregations fan in
+    hundreds. ``index_add`` aggregates by a 1-D index over one dim.
+    """
+
+    def _arg(index: int, *kwarg_names: str) -> Any:
+        if index < len(saved_args):
+            return saved_args[index]
+        for name in kwarg_names:
+            if name in saved_kwargs:
+                return saved_kwargs[name]
+        return None
+
+    if func_name.startswith("index_add"):
+        # index_add(input, dim, index, source): 1-D index; fan-in = max repeat.
+        index = _arg(2, "index")
+    elif func_name == "segment_reduce":
+        # segment_reduce(data, reduce, lengths=...): fan-in = max segment length.
+        lengths = saved_kwargs.get("lengths", None)
+        if isinstance(lengths, torch.Tensor) and lengths.numel() > 0:
+            return int(lengths.max().item())
+        return 0
+    else:
+        # scatter*/scatter_add*/scatter_reduce*: index is the 3rd operand.
+        index = _arg(2, "index")
+
+    if not isinstance(index, torch.Tensor) or index.numel() == 0:
+        return 0
+    try:
+        flat = index.reshape(-1).to(torch.int64)
+        counts = torch.bincount(flat - flat.min())
+        return int(counts.max().item())
+    except (RuntimeError, ValueError):
+        return 0
+
+
 def _deep_numeric_replay_matches_saved(
     layer: Op,
     recomputed_output: torch.Tensor,
@@ -953,10 +1159,14 @@ def _deep_numeric_replay_matches_saved(
     """Return whether a deep numeric replay matches within local relaxed tolerance.
 
     The standard validation tolerance remains the default for every layer. This
-    fallback is intentionally narrow: it only applies to later convolution-like
-    numeric ops, first tries a modest ``allclose`` relaxation, then allows a
-    tiny fraction of stricter-check outliers only when the overall scaled error
-    is still very small.
+    fallback is intentionally narrow: it only applies to REDUCTION ops whose
+    per-output accumulation depth is at least
+    ``DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH`` (a deep conv/matmul/scatter/sum,
+    where FP32 reorder round-off genuinely accrues). It first tries a modest
+    ``allclose`` relaxation, then allows a tiny fraction of stricter-check
+    outliers only when the overall scaled error is still very small. A shallow
+    op (depth < 64) -- or any op whose depth cannot be determined (depth 0) --
+    is INELIGIBLE and stays on the strict global tolerance (fail-toward-strict).
 
     Parameters
     ----------
@@ -974,9 +1184,8 @@ def _deep_numeric_replay_matches_saved(
     saved_output = layer.out
     if saved_output is None:
         return False
-    if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
-        return False
-    if layer.step_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+    depth = _op_reduction_depth(layer)
+    if depth < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH:
         return False
     if recomputed_output.shape != saved_output.shape:
         return False
@@ -1098,9 +1307,21 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         )
         if parent_has_inplace_rng:
             return True
+        # Surface the computed reduction depth so a band-C miss is diagnosable:
+        # depth < 64 means the op was (correctly) ineligible for the deep-numeric
+        # tolerance; a large depth that still failed points at a real replay bug.
+        reduction_depth = (
+            _op_reduction_depth(layer) if isinstance(recomputed_output, torch.Tensor) else None
+        )
+        depth_note = (
+            f" (reduction_depth={reduction_depth}, band-C eligibility threshold="
+            f"{DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH})"
+            if reduction_depth is not None
+            else ""
+        )
         print(
             f"Saved outs for layer {layer_to_validate_parents_for_label} do not match the "
-            f"values computed based on the parent layers {layer.parents}."
+            f"values computed based on the parent layers {layer.parents}{depth_note}."
         )
         return False
 

@@ -38,6 +38,9 @@ from torchlens.validation.core import (
     _execute_func_with_restored_state,
     _check_perturbation_exemptions,
     _restore_live_parameter_args_for_replay,
+    _op_reduction_depth,
+    _deep_numeric_replay_matches_saved,
+    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     MAX_PERTURB_ATTEMPTS,
 )
 from torchlens.validation.status import (
@@ -1380,6 +1383,229 @@ def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
     matches = [layer for layer in trace.layer_list if layer.func_name == func_name]
     assert len(matches) == 1
     return matches[0]
+
+
+# ---------------------------------------------------------------------------
+# Reduction-depth band-C eligibility predicate (validation/core.py)
+#
+# Band C grants a relaxed deep-numeric replay tolerance ONLY to ops that are
+# reductions with per-output accumulation depth >= 64 (the depth at which FP32
+# reorder round-off genuinely accrues). The eligibility is the FAITHFUL reduction
+# depth, NOT a graph-position (step_index) proxy NOR a conv/matmul func allowlist.
+# The tests below are the LOAD-BEARING gate: every injected-error case on a shallow
+# op MUST be caught (the predicate must NOT mask it), and a gross error on a deep
+# eligible op MUST still fail via band C's numeric caps. If any false-positive case
+# below ever returns True, the tripwire is disarmed -- DO NOT loosen the test.
+# ---------------------------------------------------------------------------
+
+
+def _make_deep_numeric_layer(
+    func_name: str,
+    saved_args: list[Any],
+    out: torch.Tensor,
+    saved_kwargs: dict[str, Any] | None = None,
+) -> Any:
+    """Build a minimal op stand-in for deep-numeric replay tests.
+
+    ``_op_reduction_depth`` and ``_deep_numeric_replay_matches_saved`` read only
+    ``func_name``, ``saved_args``, ``saved_kwargs`` and ``out``, so a namespace
+    suffices and keeps the predicate tests fast and capture-independent.
+    """
+
+    return SimpleNamespace(
+        func_name=func_name,
+        saved_args=saved_args,
+        saved_kwargs=saved_kwargs or {},
+        out=out,
+    )
+
+
+def test_op_reduction_depth_reads_all_reduction_categories() -> None:
+    """Per-output accumulation depth is read for every reduction category."""
+
+    # conv2d: weight (out=4, in/groups=8, kH=3, kW=3) -> 8*3*3 = 72 accumulations.
+    conv_layer = _make_deep_numeric_layer(
+        "conv2d", [torch.zeros(1, 8, 5, 5), torch.zeros(4, 8, 3, 3)], torch.zeros(1, 4, 3, 3)
+    )
+    assert _op_reduction_depth(conv_layer) == 72
+
+    # linear: weight (out=16, in=128) -> contracted K = 128.
+    linear_layer = _make_deep_numeric_layer(
+        "linear", [torch.zeros(2, 128), torch.zeros(16, 128)], torch.zeros(2, 16)
+    )
+    assert _op_reduction_depth(linear_layer) == 128
+
+    # matmul: (n, K) @ (K, m); first operand last dim is K = 64.
+    matmul_layer = _make_deep_numeric_layer(
+        "matmul", [torch.zeros(3, 64), torch.zeros(64, 5)], torch.zeros(3, 5)
+    )
+    assert _op_reduction_depth(matmul_layer) == 64
+
+    # scatter_add: max duplicate-index fan-in. Index 0 appears 1024 times -> 1024.
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    scatter_layer = _make_deep_numeric_layer(
+        "scatter_add", [torch.zeros(5), 0, deep_index, torch.ones(1024)], torch.zeros(5)
+    )
+    assert _op_reduction_depth(scatter_layer) == 1024
+
+    # sum over a dim: numel of the reduced dim.
+    sum_layer = _make_deep_numeric_layer("sum", [torch.zeros(3, 128)], torch.zeros(3), {"dim": 1})
+    assert _op_reduction_depth(sum_layer) == 128
+
+    # elementwise / structural ops have depth 1 and never reach the threshold.
+    assert (
+        _op_reduction_depth(_make_deep_numeric_layer("relu", [torch.zeros(4)], torch.zeros(4))) == 1
+    )
+    assert (
+        _op_reduction_depth(_make_deep_numeric_layer("add", [torch.zeros(4)], torch.zeros(4))) == 1
+    )
+
+
+def test_op_reduction_depth_reads_keyword_passed_operands() -> None:
+    """Depth must read operands passed by keyword, not just positionally.
+
+    A ``conv2d(x, weight=w)`` / ``matmul(a, other=b)`` / ``scatter_add(out, dim,
+    index=idx, src=s)`` call leaves the positional slot empty; reading positionally
+    only would drop depth to 0 and wrongly withhold band C (a fresh false-negative).
+    """
+
+    conv_layer = _make_deep_numeric_layer(
+        "conv2d",
+        [torch.zeros(1, 8, 5, 5)],
+        torch.zeros(1, 4, 3, 3),
+        saved_kwargs={"weight": torch.zeros(4, 8, 3, 3)},
+    )
+    assert _op_reduction_depth(conv_layer) == 72
+
+    linear_layer = _make_deep_numeric_layer(
+        "linear",
+        [torch.zeros(2, 128)],
+        torch.zeros(2, 16),
+        saved_kwargs={"weight": torch.zeros(16, 128)},
+    )
+    assert _op_reduction_depth(linear_layer) == 128
+
+    matmul_layer = _make_deep_numeric_layer(
+        "matmul",
+        [torch.zeros(3, 64)],
+        torch.zeros(3, 5),
+        saved_kwargs={"other": torch.zeros(64, 5)},
+    )
+    assert _op_reduction_depth(matmul_layer) == 64
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    scatter_layer = _make_deep_numeric_layer(
+        "scatter_add",
+        [torch.zeros(5), 0],
+        torch.zeros(5),
+        saved_kwargs={"index": deep_index, "src": torch.ones(1024)},
+    )
+    assert _op_reduction_depth(scatter_layer) == 1024
+
+
+def test_op_reduction_depth_undeterminable_is_zero_fail_toward_strict() -> None:
+    """When depth cannot be determined the predicate returns 0 (ineligible)."""
+
+    assert _op_reduction_depth(_make_deep_numeric_layer("conv2d", [], torch.zeros(1))) == 0
+    assert _op_reduction_depth(_make_deep_numeric_layer("matmul", [], torch.zeros(1))) == 0
+    # scatter with no index operand cannot be measured.
+    assert (
+        _op_reduction_depth(
+            _make_deep_numeric_layer("scatter_add", [torch.zeros(5), 0], torch.zeros(5))
+        )
+        == 0
+    )
+
+
+def test_deep_numeric_replay_recovers_deep_conv_cancellation_drift() -> None:
+    """A physically-deep conv accepts sub-1e-4 replay drift (the resnet recovery).
+
+    Mirrors the BiT ResNet-v2 (resnetv2_50x3_bit) false-negative: a wide,
+    high-channel conv replays to FP32 round-off (abs error well under the
+    deep-numeric atol of 1e-4 at activation scale ~90), concentrated on near-zero
+    cancelling outputs. This is the LEGIT deep-conv cancellation drifter that MUST
+    pass; the old step_index gate refused band C for the early such convs.
+    """
+
+    weight = torch.zeros(1536, 256, 1, 1)  # depth 256 >> threshold.
+    saved_out = torch.empty(1, 1536, 8, 8).uniform_(-90.0, 90.0)
+    recomputed = saved_out + torch.empty_like(saved_out).uniform_(-8.0e-5, 8.0e-5)
+    layer = _make_deep_numeric_layer("conv2d", [torch.zeros(1, 256, 8, 8), weight], saved_out)
+
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    # Strict band B (allow_tolerance) rejects this drift...
+    assert not tensor_nanequal(recomputed, saved_out, allow_tolerance=True)
+    # ...but band C accepts it for a deep conv (the recovery).
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is True
+
+
+def test_deep_numeric_replay_false_positive_shallow_scatter_depth2() -> None:
+    """LOAD-BEARING: a depth-2 scatter + ~5e-5 injection must NOT be masked.
+
+    Codex's exact false-positive case. A scatter with a single duplicate index has
+    fan-in depth 2 -- far below the threshold -- so band C is withheld and the
+    injected error is caught by strict band B. (The category-arm predicate that
+    granted band C to every scatter regardless of depth is what masked this; the
+    depth-over-all-reductions predicate does not.)
+    """
+
+    index = torch.tensor([0, 0, 1, 2])  # index 0 duplicated -> fan-in depth 2.
+    saved_out = torch.empty(3, 1).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0, 0] += 5.0e-5  # injected capture error.
+    layer = _make_deep_numeric_layer(
+        "scatter_add_", [torch.zeros(3, 1), 0, index.unsqueeze(1), torch.ones(4, 1)], saved_out
+    )
+
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_deep_numeric_replay_false_positive_shallow_linear_depth16() -> None:
+    """LOAD-BEARING: a depth-16 linear + 5e-5 injection must NOT be masked.
+
+    A late shallow linear (the GNN bug-masking population the old step_index gate
+    parachuted) is depth 16 < 64 -> band C withheld -> the injected error is caught.
+    """
+
+    saved_out = torch.empty(2, 8).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0, 0] += 5.0e-5
+    layer = _make_deep_numeric_layer("linear", [torch.zeros(2, 16), torch.zeros(8, 16)], saved_out)
+
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_deep_numeric_replay_gross_error_on_deep_scatter_still_fails() -> None:
+    """LOAD-BEARING: a deep ELIGIBLE scatter (depth 1024) + gross +10 still fails.
+
+    Eligibility (depth >= 64) does NOT make band C unbounded: its outlier-fraction
+    and scaled-diff caps reject a gross injected error even on a deep op.
+    """
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    saved_out = torch.empty(64).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed += 10.0  # gross error on every element.
+    layer = _make_deep_numeric_layer(
+        "scatter_add", [torch.zeros(64), 0, deep_index, torch.ones(1024)], saved_out
+    )
+
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_deep_numeric_replay_gross_error_on_deep_conv_still_fails() -> None:
+    """LOAD-BEARING: a deep ELIGIBLE conv (depth 1536) + gross +10 still fails."""
+
+    weight = torch.zeros(64, 1536, 1, 1)  # depth 1536 >> threshold.
+    saved_out = torch.empty(1, 64, 4, 4).uniform_(-1.0, 1.0)
+    recomputed = saved_out + 10.0
+    layer = _make_deep_numeric_layer("conv2d", [torch.zeros(1, 1536, 4, 4), weight], saved_out)
+
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
 def test_validation_with_getitem_tensor_index():
