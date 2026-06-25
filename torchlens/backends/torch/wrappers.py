@@ -1079,26 +1079,35 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 func_call_id,
             )
 
-            # For true in-place ops, propagate the newly assigned label back
-            # to the original tensor so subsequent operations see it.
-            if was_inplace and not isinstance(args[0], torch.nn.Parameter):
+            # Same-object returns are logged against out_orig (a safe_copy with
+            # the op's new label). When Python object identity is preserved we
+            # actually return the LIVE tensor (return_value / args[0]), which
+            # still carries its OLD label and OLD autograd grad_fn -- so without
+            # repair the live graph bypasses this op entirely:
+            #  * label: downstream ops would see the input's label, so the op
+            #    (e.g. an eval-mode Dropout no-op, or in-place add_) drops out of
+            #    the graph and the model output traces straight back to the input
+            #    -- which then spuriously trips the module-boundary identity-node
+            #    synthesis, inflating the node count.
+            #  * grad: the op's grad hook sits on the dead safe_copy, so any
+            #    module whose output descends from it loses grad attribution.
+            # Propagate the op's label onto the live tensor(s) and hook them so
+            # both the forward graph and backward grads stay attached. Only do
+            # this when we will actually hand back the live tensor (the default
+            # for same-object returns that no hook replaced); when out_orig is
+            # returned instead the safe_copy already carries everything.
+            propagate_to_live = (
+                same_object_returned and out_orig is out_before_hooks and not force_distinct_return
+            )
+            if propagate_to_live and not isinstance(args[0], torch.nn.Parameter):
                 out_label = get_tensor_label(out_orig)
                 if out_label is not None:
-                    set_tensor_label(args[0], out_label)
+                    if was_inplace:
+                        set_tensor_label(args[0], out_label)
+                        _register_inplace_live_grad_hook(trace, args[0], out_label)
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
-                    # The op is logged against out_orig (a safe_copy whose grad_fn
-                    # is a dead-end CloneBackward node). When same-object identity
-                    # is preserved, downstream ops consume the LIVE tensor
-                    # (return_value / args[0]) instead, so the live graph carries
-                    # the real gradient. Register the backward grad hook on the
-                    # live tensor too (idempotent, keyed by (label, id)) so grads
-                    # flowing through the live in-place result are captured under
-                    # this op's label -- otherwise modules whose output descends
-                    # from an in-place op (e.g. ResNet residual `out += identity`)
-                    # silently lose grad attribution.
-                    _register_inplace_live_grad_hook(trace, return_value, out_label)
-                    _register_inplace_live_grad_hook(trace, args[0], out_label)
+                        _register_inplace_live_grad_hook(trace, return_value, out_label)
 
         producer_label = None
         if isinstance(out_orig, torch.Tensor):
