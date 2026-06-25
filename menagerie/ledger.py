@@ -5,6 +5,7 @@ from __future__ import annotations
 import platform
 import socket
 import sqlite3
+import subprocess
 import sys
 import uuid
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Mapping
 
 if TYPE_CHECKING:
     from menagerie.catalog import CatalogRow
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 DATA_DIR = Path(__file__).resolve().parent / "data"
 VERIFICATION_DB = DATA_DIR / "verification.db"
 BUSY_TIMEOUT_MS = 30_000
+LEGACY_UNKNOWN = "legacy-unknown"
+BASE_LOCK_HASH = "base-no-lock"
 Scope = Literal["forward", "backward"]
 Status = Literal[
     "passed",
@@ -32,6 +35,9 @@ Status = Literal[
     "error",
     "install_failed",
     "env_unavailable",
+    "oom",
+    "native_crash",
+    "killed",
 ]
 STATUS_VALUES: tuple[str, ...] = (
     "passed",
@@ -43,7 +49,38 @@ STATUS_VALUES: tuple[str, ...] = (
     "error",
     "install_failed",
     "env_unavailable",
+    "oom",
+    "native_crash",
+    "killed",
 )
+
+
+@dataclass(frozen=True)
+class VerificationTarget:
+    """Current verification identity target for one catalog row.
+
+    Parameters
+    ----------
+    recipe_revision_sha256:
+        Current catalog recipe revision.
+    torchlens_source_hash:
+        Current TorchLens source hash.
+    env_hash:
+        Current assigned validation environment hash.
+    lock_hash:
+        Current assigned validation environment lock hash.
+    device_requested:
+        Requested device policy for the run.
+    scope:
+        Verification scope.
+    """
+
+    recipe_revision_sha256: str
+    torchlens_source_hash: str
+    env_hash: str
+    lock_hash: str
+    device_requested: str
+    scope: Scope = "forward"
 
 
 @dataclass(frozen=True)
@@ -92,6 +129,13 @@ class VerificationRun:
         Actual execution device.
     env_hash:
         Optional environment hash.
+    lock_hash:
+        Validation environment lock hash.
+    torchlens_source_hash:
+        Hash of the editable TorchLens source used for validation.
+    input_scale:
+        Input scaling factor used for validation; ``None`` for legacy rows where
+        the value was not recorded.
     runner_host:
         Hostname or runner identifier.
     started_at:
@@ -130,6 +174,9 @@ class VerificationRun:
     device_requested: str
     device_actual: str | None
     env_hash: str | None
+    lock_hash: str
+    torchlens_source_hash: str
+    input_scale: float | None
     runner_host: str | None
     started_at: str
     finished_at: str
@@ -219,6 +266,86 @@ def base_env_hash() -> str:
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
+def base_lock_hash() -> str:
+    """Return the lock-hash sentinel for the mutable base validation environment.
+
+    Returns
+    -------
+    str
+        Base-environment lock-hash sentinel.
+    """
+
+    return BASE_LOCK_HASH
+
+
+def torchlens_source_hash(repo_root: Path | None = None) -> str:
+    """Return a reproducibility hash for the local TorchLens checkout.
+
+    The hash includes the Git HEAD, tracked source diff, and untracked source
+    files under ``torchlens`` and ``menagerie``. This makes editable-checkout
+    validation rows stale when either committed or uncommitted source changes.
+
+    Parameters
+    ----------
+    repo_root:
+        Repository root. Defaults to the parent of the ``menagerie`` package.
+
+    Returns
+    -------
+    str
+        SHA-256 source hash, or ``"legacy-unknown"`` when Git metadata cannot be read.
+    """
+
+    root = repo_root or Path(__file__).resolve().parents[1]
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+        ).stdout.strip()
+        diff = subprocess.run(
+            ["git", "-C", str(root), "diff", "--binary", "--", "torchlens", "menagerie"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30.0,
+        ).stdout
+        untracked = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "--",
+                "torchlens",
+                "menagerie",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+        ).stdout.splitlines()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return LEGACY_UNKNOWN
+    digest = sha256()
+    digest.update(head.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(diff.encode("utf-8"))
+    for relative_path in sorted(untracked):
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        digest.update(b"\0")
+        digest.update(relative_path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
 def connect(db_path: Path = VERIFICATION_DB) -> sqlite3.Connection:
     """Open and initialize a verification ledger connection.
 
@@ -284,7 +411,10 @@ def initialize(conn: sqlite3.Connection) -> None:
                     'deferred',
                     'error',
                     'install_failed',
-                    'env_unavailable'
+                    'env_unavailable',
+                    'oom',
+                    'native_crash',
+                    'killed'
                 )
             ),
             forward_pass INTEGER,
@@ -300,6 +430,9 @@ def initialize(conn: sqlite3.Connection) -> None:
             device_requested TEXT NOT NULL,
             device_actual TEXT,
             env_hash TEXT,
+            lock_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            input_scale REAL,
             runner_host TEXT,
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
@@ -351,6 +484,9 @@ def initialize(conn: sqlite3.Connection) -> None:
             device_requested,
             device_actual,
             env_hash,
+            lock_hash,
+            torchlens_source_hash,
+            input_scale,
             runner_host,
             started_at,
             finished_at,
@@ -374,8 +510,9 @@ def initialize(conn: sqlite3.Connection) -> None:
         END;
         """
     )
-    _migrate_status_constraint(conn)
     _migrate_peak_rss_column(conn)
+    _migrate_identity_columns(conn)
+    _migrate_status_constraint(conn)
 
 
 def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
@@ -414,6 +551,35 @@ def _migrate_peak_rss_column(conn: sqlite3.Connection) -> None:
     initialize(conn)
 
 
+def _migrate_identity_columns(conn: sqlite3.Connection) -> None:
+    """Add identity/provenance columns to legacy verification ledgers.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    migrated = False
+    if not _has_column(conn, "verification_runs", "lock_hash"):
+        conn.execute(
+            "ALTER TABLE verification_runs "
+            f"ADD COLUMN lock_hash TEXT NOT NULL DEFAULT '{LEGACY_UNKNOWN}'"
+        )
+        migrated = True
+    if not _has_column(conn, "verification_runs", "torchlens_source_hash"):
+        conn.execute(
+            "ALTER TABLE verification_runs "
+            f"ADD COLUMN torchlens_source_hash TEXT NOT NULL DEFAULT '{LEGACY_UNKNOWN}'"
+        )
+        migrated = True
+    if not _has_column(conn, "verification_runs", "input_scale"):
+        conn.execute("ALTER TABLE verification_runs ADD COLUMN input_scale REAL")
+        migrated = True
+    if migrated:
+        initialize(conn)
+
+
 def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     """Recreate legacy ledger tables whose status check lacks new terminal statuses.
 
@@ -434,7 +600,7 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     if row is None:
         return
     table_sql = str(row["sql"] if isinstance(row, sqlite3.Row) else row[0])
-    if "install_failed" in table_sql and "env_unavailable" in table_sql:
+    if all(f"'{status}'" in table_sql for status in STATUS_VALUES):
         return
     conn.executescript(
         """
@@ -462,7 +628,10 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
                     'deferred',
                     'error',
                     'install_failed',
-                    'env_unavailable'
+                    'env_unavailable',
+                    'oom',
+                    'native_crash',
+                    'killed'
                 )
             ),
             forward_pass INTEGER,
@@ -478,6 +647,9 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             device_requested TEXT NOT NULL,
             device_actual TEXT,
             env_hash TEXT,
+            lock_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            input_scale REAL,
             runner_host TEXT,
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
@@ -509,6 +681,9 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             device_requested,
             device_actual,
             env_hash,
+            lock_hash,
+            torchlens_source_hash,
+            input_scale,
             runner_host,
             started_at,
             finished_at,
@@ -539,11 +714,14 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             device_requested,
             device_actual,
             env_hash,
+            'legacy-unknown' AS lock_hash,
+            'legacy-unknown' AS torchlens_source_hash,
+            NULL AS input_scale,
             runner_host,
             started_at,
             finished_at,
             duration_sec,
-            NULL AS peak_rss_mb,
+            peak_rss_mb,
             error_class,
             error_message
         FROM verification_runs_legacy_status_check;
@@ -605,6 +783,9 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             device_requested,
             device_actual,
             env_hash,
+            lock_hash,
+            torchlens_source_hash,
+            input_scale,
             runner_host,
             started_at,
             finished_at,
@@ -634,6 +815,9 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             :device_requested,
             :device_actual,
             :env_hash,
+            :lock_hash,
+            :torchlens_source_hash,
+            :input_scale,
             :runner_host,
             :started_at,
             :finished_at,
@@ -651,10 +835,113 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
     return run_id
 
 
+def _default_verification_targets(
+    current_revisions: Mapping[str, str],
+    source_hash: str | None = None,
+    env_hash_value: str | None = None,
+    lock_hash_value: str | None = None,
+    device_requested: str = "cpu",
+    scope: Scope = "forward",
+) -> dict[str, VerificationTarget]:
+    """Build same-environment verification targets from current recipe revisions.
+
+    Parameters
+    ----------
+    current_revisions:
+        Catalog mapping from stable ID to the current recipe revision hash.
+    source_hash:
+        Source hash to require. Defaults to the current checkout hash.
+    env_hash_value:
+        Environment hash to require. Defaults to the current base environment hash.
+    lock_hash_value:
+        Lock hash to require. Defaults to the base no-lock sentinel.
+    device_requested:
+        Requested device policy to require.
+    scope:
+        Verification scope to require.
+
+    Returns
+    -------
+    dict[str, VerificationTarget]
+        Verification targets keyed by stable ID.
+    """
+
+    resolved_source = source_hash or torchlens_source_hash()
+    resolved_env = env_hash_value or base_env_hash()
+    resolved_lock = lock_hash_value or base_lock_hash()
+    return {
+        stable_id: VerificationTarget(
+            recipe_revision_sha256=recipe_revision,
+            torchlens_source_hash=resolved_source,
+            env_hash=resolved_env,
+            lock_hash=resolved_lock,
+            device_requested=device_requested,
+            scope=scope,
+        )
+        for stable_id, recipe_revision in current_revisions.items()
+    }
+
+
+def _load_verification_targets(
+    conn: sqlite3.Connection, current_targets: Mapping[str, VerificationTarget]
+) -> None:
+    """Load current verification targets into a temporary SQLite table.
+
+    Parameters
+    ----------
+    conn:
+        Initialized SQLite connection.
+    current_targets:
+        Current verification targets keyed by stable ID.
+    """
+
+    conn.execute(
+        """
+        CREATE TEMP TABLE IF NOT EXISTS temp_current_verification_targets(
+            stable_id TEXT PRIMARY KEY,
+            recipe_revision_sha256 TEXT NOT NULL,
+            torchlens_source_hash TEXT NOT NULL,
+            env_hash TEXT NOT NULL,
+            lock_hash TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            scope TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("DELETE FROM temp_current_verification_targets")
+    conn.executemany(
+        """
+        INSERT INTO temp_current_verification_targets(
+            stable_id,
+            recipe_revision_sha256,
+            torchlens_source_hash,
+            env_hash,
+            lock_hash,
+            device_requested,
+            scope
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (
+                stable_id,
+                target.recipe_revision_sha256,
+                target.torchlens_source_hash,
+                target.env_hash,
+                target.lock_hash,
+                target.device_requested,
+                target.scope,
+            )
+            for stable_id, target in current_targets.items()
+        ),
+    )
+
+
 def verified_count(
     conn: sqlite3.Connection,
     torchlens_version: str,
-    current_revisions: dict[str, str],
+    current_revisions: Mapping[str, str],
+    current_targets: Mapping[str, VerificationTarget] | None = None,
 ) -> int:
     """Return the current-recipe, current-version verified architecture count.
 
@@ -666,6 +953,9 @@ def verified_count(
         TorchLens version that must match current verification rows.
     current_revisions:
         Catalog mapping from stable ID to the current recipe revision hash.
+    current_targets:
+        Optional full identity targets keyed by stable ID. When omitted, the
+        current base environment identity is used for all revisions.
 
     Returns
     -------
@@ -673,39 +963,36 @@ def verified_count(
         Count of distinct stable IDs satisfying the full honesty predicate.
     """
 
-    if not current_revisions:
+    targets = (
+        dict(current_targets)
+        if current_targets is not None
+        else _default_verification_targets(current_revisions)
+    )
+    if not targets:
         return 0
-    conn.execute(
-        """
-        CREATE TEMP TABLE IF NOT EXISTS temp_current_catalog_revisions(
-            stable_id TEXT PRIMARY KEY,
-            recipe_revision_sha256 TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute("DELETE FROM temp_current_catalog_revisions")
-    conn.executemany(
-        """
-        INSERT INTO temp_current_catalog_revisions(stable_id, recipe_revision_sha256)
-        VALUES (?, ?)
-        """,
-        current_revisions.items(),
-    )
+    _load_verification_targets(conn, targets)
     row = conn.execute(
         """
-        SELECT COUNT(DISTINCT current_verification.stable_id)
-        FROM current_verification
-        JOIN temp_current_catalog_revisions
-          ON temp_current_catalog_revisions.stable_id = current_verification.stable_id
-         AND temp_current_catalog_revisions.recipe_revision_sha256 =
-             current_verification.recipe_revision_sha256
-        WHERE current_verification.forward_pass = 1
-          AND current_verification.metadata_ok = 1
-          AND current_verification.n_ops IS NOT NULL
-          AND current_verification.graph_shape_hash IS NOT NULL
-          AND current_verification.torchlens_version = ?
+        SELECT COUNT(DISTINCT verification_runs.stable_id)
+        FROM verification_runs
+        JOIN temp_current_verification_targets AS target
+          ON target.stable_id = verification_runs.stable_id
+         AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
+         AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
+         AND target.env_hash = verification_runs.env_hash
+         AND target.lock_hash = verification_runs.lock_hash
+         AND target.device_requested = verification_runs.device_requested
+         AND target.scope = verification_runs.scope
+        WHERE verification_runs.status = 'passed'
+          AND verification_runs.forward_pass = 1
+          AND verification_runs.metadata_ok = 1
+          AND verification_runs.n_ops IS NOT NULL
+          AND verification_runs.graph_shape_hash IS NOT NULL
+          AND verification_runs.torchlens_version = ?
+          AND verification_runs.torchlens_source_hash != ?
+          AND verification_runs.lock_hash != ?
         """,
-        (torchlens_version,),
+        (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
     ).fetchone()
     return int(row[0])
 
@@ -754,6 +1041,9 @@ def seed_from_legacy(conn: sqlite3.Connection, rows: list[CatalogRow]) -> int:
                 device_requested="legacy-unknown",
                 device_actual=None,
                 env_hash=None,
+                lock_hash=LEGACY_UNKNOWN,
+                torchlens_source_hash=LEGACY_UNKNOWN,
+                input_scale=None,
                 runner_host="legacy-seed",
                 started_at=now,
                 finished_at=now,

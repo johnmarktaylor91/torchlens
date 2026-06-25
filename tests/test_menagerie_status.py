@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from menagerie import envs
 from menagerie.catalog import CatalogRow, write_catalog
-from menagerie.ledger import VerificationRun, append_verification_run, connect
+from menagerie.ledger import (
+    VerificationRun,
+    append_verification_run,
+    base_env_hash,
+    base_lock_hash,
+    connect,
+    torchlens_source_hash,
+)
 import menagerie.status as status_module
 from menagerie.status import build_completeness_status, build_status, main
 from menagerie.tools.distinct_report import build_distinct_report
@@ -87,7 +96,10 @@ def _run(**overrides: object) -> VerificationRun:
         "python_version": "py-test",
         "device_requested": "cpu",
         "device_actual": "cpu",
-        "env_hash": None,
+        "env_hash": base_env_hash(),
+        "lock_hash": base_lock_hash(),
+        "torchlens_source_hash": torchlens_source_hash(),
+        "input_scale": 1.0,
         "runner_host": "unit-host",
         "started_at": "2026-06-22T00:00:00+00:00",
         "finished_at": "2026-06-22T00:00:01+00:00",
@@ -119,6 +131,31 @@ def _write_catalog(tmp_path: Path, rows: list[CatalogRow]) -> Path:
     catalog_db = tmp_path / "catalog.db"
     write_catalog(rows, canonical_tsv=tmp_path / "catalog.tsv", db_path=catalog_db)
     return catalog_db
+
+
+def _registry_with_manifest(tmp_path: Path, manifest_text: str) -> envs.EnvRegistry:
+    """Return the real env registry redirected to a test empirical manifest.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary test directory.
+    manifest_text:
+        TSV manifest content.
+
+    Returns
+    -------
+    envs.EnvRegistry
+        Registry using the test manifest and cache root.
+    """
+
+    manifest_path = tmp_path / "base_manifest.tsv"
+    manifest_path.write_text(manifest_text, encoding="utf-8")
+    return replace(
+        envs.load_registry(),
+        empirical_manifest=manifest_path,
+        cache_root=tmp_path / "envs",
+    )
 
 
 def test_status_funnel_tiers_are_consistent(tmp_path: Path) -> None:
@@ -387,6 +424,121 @@ def test_completeness_audit_flags_missing_and_stale_rows(tmp_path: Path) -> None
         )
         == 1
     )
+
+
+def test_completeness_audit_excludes_stale_identity_rows(tmp_path: Path) -> None:
+    """Terminal rows with stale source/env identity do not satisfy completeness."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [_row(model_id=1, display_index=1, stable_id="m1", name="IdentityNet")],
+    )
+    ledger_db = tmp_path / "verification.db"
+    conn = connect(ledger_db)
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-stale-source",
+            stable_id="m1",
+            name="IdentityNet",
+            torchlens_source_hash="stale-source",
+        ),
+    )
+
+    completeness = build_completeness_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+        run_dir=tmp_path / "run-stale-identity",
+    )
+
+    assert completeness.terminal_current_recipe_models == 0
+    assert completeness.missing_terminal_models == 0
+    assert completeness.stale_recipe_models == 0
+    assert [issue.issue for issue in completeness.issues] == ["stale_identity_tuple"]
+    assert completeness.funnel.verified_models == 0
+
+
+def test_completeness_audit_dep_skip_not_terminal_for_assigned_island(
+    tmp_path: Path,
+) -> None:
+    """A base dependency skip cannot complete an island-assigned catalog row."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [_row(model_id=2, display_index=2, stable_id="m2", name="ForecastNet")],
+    )
+    registry = _registry_with_manifest(
+        tmp_path,
+        "\t".join(("stable_id", "status", "dependency_cluster"))
+        + "\n"
+        + "\t".join(("m2", "skipped:dependency_unavailable", "neuralforecast+torch"))
+        + "\n",
+    )
+    ledger_db = tmp_path / "verification.db"
+    conn = connect(ledger_db)
+    append_verification_run(
+        conn,
+        _run(
+            run_id="base-dep-skip",
+            stable_id="m2",
+            name="ForecastNet",
+            status="skipped",
+            forward_pass=None,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="skipped:dependency_unavailable",
+            error_message="missing neuralforecast",
+        ),
+    )
+
+    incomplete = build_completeness_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+        run_dir=tmp_path / "run-island-missing",
+        env_registry=registry,
+    )
+
+    assert incomplete.terminal_current_recipe_models == 0
+    assert [issue.issue for issue in incomplete.issues] == ["stale_identity_tuple"]
+    assert incomplete.issues[0].assigned_env == "forecast_tab"
+
+    lock_hash = envs.current_lock_hash("forecast_tab")
+    append_verification_run(
+        conn,
+        _run(
+            run_id="assigned-env-terminal",
+            stable_id="m2",
+            name="ForecastNet",
+            status="env_unavailable",
+            forward_pass=None,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            env_hash=envs.current_env_hash("forecast_tab", lock_hash),
+            lock_hash=lock_hash,
+            error_class="env_unavailable",
+            error_message="disk_floor",
+            finished_at="2026-06-22T00:00:02+00:00",
+        ),
+    )
+
+    complete = build_completeness_status(
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        torchlens_version="tl-test",
+        render_manifest=tmp_path / "missing.tsv",
+        run_dir=tmp_path / "run-island-complete",
+        env_registry=registry,
+    )
+
+    assert complete.issues == []
+    assert complete.terminal_current_recipe_models == 1
+    assert complete.terminal_by_status == {"env_unavailable": 1}
 
 
 def test_completeness_audit_passes_when_all_rows_are_terminal(tmp_path: Path) -> None:

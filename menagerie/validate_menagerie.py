@@ -8,6 +8,7 @@ import json
 import os
 import re
 import resource
+import signal
 import subprocess
 import sys
 import threading
@@ -22,6 +23,7 @@ from pathlib import Path
 from typing import Any, ContextManager, Mapping, Sequence, cast
 
 from menagerie.catalog import CatalogRow, load_rows
+from menagerie import envs
 from menagerie.recipe import (
     build_input_for_row,
     instantiate_model,
@@ -52,10 +54,12 @@ from menagerie.ledger import (
     VerificationRun,
     Status,
     append_verification_run,
+    base_lock_hash,
     base_env_hash,
     connect as connect_ledger,
     python_version,
     runner_host,
+    torchlens_source_hash,
     utc_now,
 )
 
@@ -81,6 +85,22 @@ WORKER_MEMORY_CAP_EXIT_CODE = 99
 WORKER_MEMORY_CAP_POLL_INTERVAL_SEC = 0.5
 WORKER_MEMORY_CAP_AS_BACKSTOP_MULTIPLIER = 1.5
 WORKER_MEMORY_TEST_ALLOC_ENV = "TORCHLENS_MENAGERIE_WORKER_TEST_ALLOC_MB"
+MANIFEST_STATUS_VALUES = frozenset(
+    {
+        "validated",
+        "failed:exception",
+        "failed:killed",
+        "failed:memory_cap",
+        "failed:native_crash",
+        "failed:oom",
+        "failed:replay",
+        "failed:timeout",
+        "failed:trace_summary",
+        "skipped:dependency_unavailable",
+        "skipped:dry_run",
+        "skipped:unsupported_input_recipe",
+    }
+)
 MANIFEST_COLUMNS = (
     "name",
     "model_id",
@@ -95,6 +115,7 @@ MANIFEST_COLUMNS = (
     "error",
     "graph_shape_hash",
     "peak_rss_mb",
+    "input_scale",
 )
 SUMMARY_JSON = "validation_summary.json"
 REPORT_MD = "VALIDATION_REPORT.md"
@@ -287,6 +308,7 @@ def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
                 result.error.replace("\n", " | "),
                 result.graph_shape_hash,
                 "" if result.peak_rss_mb is None else result.peak_rss_mb,
+                _input_scale_from_error(result.error),
             )
         )
 
@@ -359,11 +381,37 @@ def _ledger_status(status: str) -> str:
         return "passed"
     if status == "failed:timeout":
         return "timeout"
+    if status == "failed:oom":
+        return "oom"
+    if status == "failed:native_crash":
+        return "native_crash"
+    if status == "failed:killed":
+        return "killed"
     if status.startswith("skipped:"):
         return "skipped"
     if status.startswith("failed:"):
         return "failed"
     return "error"
+
+
+def _input_scale_from_error(error: str) -> float:
+    """Extract the recorded input scale from a result note.
+
+    Parameters
+    ----------
+    error:
+        Result note text.
+
+    Returns
+    -------
+    float
+        Recorded input scale, defaulting to ``1.0`` when no reduced-input note is present.
+    """
+
+    match = re.search(r"(?:^|; )input_scale=([0-9.]+)", error)
+    if match is None:
+        return 1.0
+    return float(match.group(1))
 
 
 def _actual_device(result: ValidationResult, requested_device: str) -> str:
@@ -388,7 +436,9 @@ def _actual_device(result: ValidationResult, requested_device: str) -> str:
     return "cpu" if requested_device in {"cpu", "auto"} else requested_device
 
 
-def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: str) -> None:
+def append_validation_ledger(
+    row: CatalogRow, result: ValidationResult, device: str, input_scale: float
+) -> None:
     """Append one validation result to the verification ledger.
 
     Parameters
@@ -399,10 +449,14 @@ def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: 
         Validation result.
     device:
         Requested validation device.
+    input_scale:
+        Input scaling factor used for this validation.
     """
 
     ledger_status = _ledger_status(result.status)
     env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
+    lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
+    source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
     passed = ledger_status == "passed"
     started_at = utc_now()
     finished_at = utc_now()
@@ -434,6 +488,9 @@ def append_validation_ledger(row: CatalogRow, result: ValidationResult, device: 
                 device_requested=device,
                 device_actual=_actual_device(result, device),
                 env_hash=env_hash,
+                lock_hash=lock_hash,
+                torchlens_source_hash=source_hash,
+                input_scale=input_scale,
                 runner_host=runner_host(),
                 started_at=started_at,
                 finished_at=finished_at,
@@ -1097,6 +1154,64 @@ def _memory_cap_result(
     )
 
 
+def _has_oom_evidence(stdout: str, stderr: str) -> bool:
+    """Return whether worker output contains OOM evidence.
+
+    Parameters
+    ----------
+    stdout:
+        Worker standard output.
+    stderr:
+        Worker standard error.
+
+    Returns
+    -------
+    bool
+        ``True`` when output indicates kernel, cgroup, CUDA, or scheduler OOM.
+    """
+
+    evidence = f"{stdout}\n{stderr}".casefold()
+    patterns = (
+        "out of memory",
+        "oom",
+        "oom-kill",
+        "oom_kill",
+        "oom killed",
+        "killed process",
+        "memory cgroup",
+        "cuda error: out of memory",
+        "slurmstepd: error: detected",
+    )
+    return any(pattern in evidence for pattern in patterns)
+
+
+def _worker_exit_status(returncode: int, stdout: str, stderr: str) -> str:
+    """Classify a worker process exit status from its return code.
+
+    Parameters
+    ----------
+    returncode:
+        Subprocess return code.
+    stdout:
+        Worker standard output.
+    stderr:
+        Worker standard error.
+
+    Returns
+    -------
+    str
+        Manifest validation status.
+    """
+
+    if returncode == -signal.SIGKILL:
+        return "failed:oom" if _has_oom_evidence(stdout, stderr) else "failed:killed"
+    if returncode in {-signal.SIGSEGV, -signal.SIGABRT}:
+        return "failed:native_crash"
+    if returncode > 0:
+        return "failed:exception"
+    return "failed:exception"
+
+
 def _emit_worker_result(result: ValidationResult) -> None:
     """Emit one JSON worker result event.
 
@@ -1704,16 +1819,19 @@ def validate_with_timeout(
         )
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
+        stdout_tail = " | ".join(completed.stdout.strip().splitlines()[-5:])
+        status = _worker_exit_status(completed.returncode, completed.stdout, completed.stderr)
+        message = stderr_tail or stdout_tail or f"worker exited with code {completed.returncode}"
         return ValidationResult(
             row.name,
             row.model_id,
-            "failed:exception",
+            status,
             0,
             False,
             scope,
             0.0,
             plan.cluster_key,
-            stderr_tail or f"worker exited with code {completed.returncode}",
+            message,
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
@@ -1857,6 +1975,44 @@ def write_reports(out_dir: Path, manifest_path: Path, rows: Sequence[CatalogRow]
     (out_dir / REPORT_MD).write_text("\n".join(lines) + "\n")
 
 
+def _island_validator_args(args: argparse.Namespace) -> list[str]:
+    """Return validator CLI arguments forwarded inside an assigned island.
+
+    Parameters
+    ----------
+    args:
+        Parent validator arguments.
+
+    Returns
+    -------
+    list[str]
+        Extra CLI arguments for ``menagerie.validate_menagerie`` in the island env.
+    """
+
+    forwarded = [
+        "--base-env-only",
+        "--scope",
+        str(args.scope),
+        "--timeout-sec",
+        f"{args.timeout_sec:.6f}",
+        "--out-dir",
+        str(args.out_dir),
+        "--min-free-gb",
+        f"{args.min_free_gb:.6f}",
+        "--input-scale",
+        f"{args.input_scale:.6f}",
+    ]
+    if args.manifest is not None:
+        forwarded.extend(("--manifest", str(args.manifest)))
+    if args.dry_run:
+        forwarded.append("--dry-run")
+    if args.keep_cache:
+        forwarded.append("--keep-cache")
+    if args.revalidate_failed:
+        forwarded.append("--revalidate-failed")
+    return forwarded
+
+
 def run(args: argparse.Namespace) -> int:
     """Run the dependency-aware disk-safe validator.
 
@@ -1893,6 +2049,36 @@ def run(args: argparse.Namespace) -> int:
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
+    if not args.base_env_only:
+        registry = envs.load_registry(args.env_registry)
+        assignments = envs.assign(rows, registry)
+        island_rows: dict[str, list[CatalogRow]] = defaultdict(list)
+        base_rows: list[CatalogRow] = []
+        for row in rows:
+            env_key = assignments[row.stable_id]
+            if env_key == "base":
+                base_rows.append(row)
+            else:
+                island_rows[env_key].append(row)
+        for env_key, assigned_rows in sorted(island_rows.items()):
+            stable_ids = [row.stable_id for row in assigned_rows]
+            log_event("island_start", env_key=env_key, rows=len(stable_ids))
+            result = envs.run_validate(
+                env_key,
+                stable_ids,
+                registry,
+                extra_args=_island_validator_args(args),
+                worker_memory_cap_gb=args.worker_memory_cap_gb,
+                jobs=args.jobs,
+            )
+            log_event(
+                "island_done",
+                env_key=env_key,
+                rows=len(stable_ids),
+                returncode=result.returncode,
+                message=" | ".join((result.stdout + result.stderr).splitlines()[-5:]),
+            )
+        rows = base_rows
 
     # Phase 1: install dependencies per cluster (serial -- installs mutate the
     # shared interpreter/site-packages and must precede their rows). Clusters
@@ -1915,7 +2101,7 @@ def run(args: argparse.Namespace) -> int:
                     stable_id=row.stable_id,
                     recipe_revision_sha256=row.recipe_revision_sha256,
                 )
-                append_validation_ledger(row, result, args.device)
+                append_validation_ledger(row, result, args.device, args.input_scale)
                 append_manifest(
                     manifest_path,
                     result,
@@ -2082,7 +2268,7 @@ def run(args: argparse.Namespace) -> int:
                 result, removed = future.result()
                 if result.peak_rss_mb is not None and result.peak_rss_mb > 0:
                     _refresh_pending_estimates(pending, row.stable_id, result.peak_rss_mb)
-                append_validation_ledger(row, result, args.device)
+                append_validation_ledger(row, result, args.device, args.input_scale)
                 append_manifest(manifest_path, result)
                 after_free_gb = disk_free_gb(out_dir)
                 log_event(
@@ -2219,6 +2405,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--db", type=Path, default=Path(__file__).resolve().parent / "data" / "catalog.db"
     )
+    parser.add_argument("--env-registry", type=Path, default=envs.REGISTRY_PATH)
+    parser.add_argument("--base-env-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--min-free-gb", type=float, default=15.0)
     parser.add_argument("--keep-cache", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

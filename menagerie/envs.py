@@ -20,12 +20,16 @@ from typing import Any, Callable, Literal, Sequence
 
 from menagerie.catalog import CatalogRow, build_canonical_rows
 from menagerie.ledger import (
+    LEGACY_UNKNOWN,
     Status,
     VerificationRun,
+    base_env_hash,
+    base_lock_hash,
     append_verification_run,
     connect as connect_ledger,
     python_version,
     runner_host,
+    torchlens_source_hash,
     utc_now,
 )
 from menagerie.recipe import build_input_for_row, instantiate_model
@@ -890,6 +894,51 @@ def compute_lock_hash(manifest_path: Path, lock_path: Path) -> str:
     return digest.hexdigest()
 
 
+def current_lock_hash(env_key: str) -> str:
+    """Return the current committed lock hash for an environment.
+
+    Parameters
+    ----------
+    env_key:
+        Island key, or ``"base"`` for the mutable base environment.
+
+    Returns
+    -------
+    str
+        Current lock hash, or ``"legacy-unknown"`` when a non-base lock is absent.
+    """
+
+    if env_key == "base":
+        return base_lock_hash()
+    manifest_path = _manifest_path(env_key)
+    lock_path = _lock_path(env_key)
+    if not manifest_path.exists() or not lock_path.exists():
+        return LEGACY_UNKNOWN
+    return compute_lock_hash(manifest_path, lock_path)
+
+
+def current_env_hash(env_key: str, lock_hash: str | None = None) -> str:
+    """Return the current expected ledger environment hash for an environment.
+
+    Parameters
+    ----------
+    env_key:
+        Island key, or ``"base"`` for the mutable base environment.
+    lock_hash:
+        Optional precomputed lock hash.
+
+    Returns
+    -------
+    str
+        Environment hash expected in current ledger rows.
+    """
+
+    if env_key == "base":
+        return base_env_hash()
+    resolved_lock_hash = lock_hash or current_lock_hash(env_key)
+    return env_hash(env_key, resolved_lock_hash)
+
+
 def env_hash(env_key: str, lock_hash: str) -> str:
     """Return the ledger environment hash string.
 
@@ -1504,6 +1553,7 @@ def append_env_status_rows(
     stable_ids: Sequence[str],
     status: Status,
     env_hash_value: str,
+    lock_hash: str,
     reason: str,
     device: str = "cpu",
 ) -> int:
@@ -1517,6 +1567,8 @@ def append_env_status_rows(
         Ledger terminal status.
     env_hash_value:
         Environment hash to store.
+    lock_hash:
+        Environment lock hash to store.
     reason:
         Failure or unavailable reason.
     device:
@@ -1529,6 +1581,7 @@ def append_env_status_rows(
     """
 
     rows = _rows_by_stable_id(stable_ids)
+    source_hash = torchlens_source_hash()
     started_at = utc_now()
     finished_at = utc_now()
     with connect_ledger() as conn:
@@ -1556,6 +1609,9 @@ def append_env_status_rows(
                     device_requested=device,
                     device_actual=None,
                     env_hash=env_hash_value,
+                    lock_hash=lock_hash,
+                    torchlens_source_hash=source_hash,
+                    input_scale=None,
                     runner_host=runner_host(),
                     started_at=started_at,
                     finished_at=finished_at,
@@ -1606,6 +1662,7 @@ def run_validate(
             stable_ids,
             ledger_status,
             build_result.env_hash,
+            build_result.lock_hash,
             build_result.message,
             active_registry.islands[env_key].expected_device,
         )
@@ -1634,7 +1691,11 @@ def run_validate(
     )
     return _run_command(
         command,
-        env={"TORCHLENS_MENAGERIE_ENV_HASH": build_result.env_hash},
+        env={
+            "TORCHLENS_MENAGERIE_ENV_HASH": build_result.env_hash,
+            "TORCHLENS_MENAGERIE_LOCK_HASH": build_result.lock_hash,
+            "TORCHLENS_SOURCE_HASH": torchlens_source_hash(),
+        },
         timeout=None,
     )
 

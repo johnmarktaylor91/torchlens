@@ -12,13 +12,25 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence, cast
 
-from menagerie.catalog import CATALOG_DB, DEFERRED_JSONL, SOURCE_JSONL, ensure_catalog
+from menagerie import envs
+from menagerie.catalog import (
+    CATALOG_DB,
+    DEFERRED_JSONL,
+    SOURCE_JSONL,
+    CatalogRow,
+    ensure_catalog,
+    load_rows,
+)
 from menagerie.ledger import (
     STATUS_VALUES,
     VERIFICATION_DB,
+    VerificationTarget,
+    Scope,
+    _load_verification_targets,
     connect as connect_ledger,
+    torchlens_source_hash,
     verified_count,
 )
 from menagerie.provenance import SweepProvenance, read_sweeps
@@ -40,7 +52,14 @@ DEFAULT_RENDER_MANIFEST = Path("/tmp/torchlens_menagerie_gallery/manifest.tsv")
 DEFERRAL_REASON_RE = re.compile(r"deferral_reason=([^;]+)")
 CRAWL_HISTORY = Path(__file__).resolve().parent / "data" / "crawl_history.json"
 DEFAULT_COMPLETENESS_ROOT = Path("/tmp/torchlens_menagerie_status")
-CATALOG_SNAPSHOT_COLUMNS = ("stable_id", "recipe_revision_sha256", "name", "zoo", "source")
+CATALOG_SNAPSHOT_COLUMNS = (
+    "stable_id",
+    "recipe_revision_sha256",
+    "name",
+    "zoo",
+    "source",
+    "assigned_env",
+)
 TERMINAL_STATUSES = STATUS_VALUES
 
 
@@ -186,6 +205,8 @@ class CompletenessIssue:
         Catalog source zoo.
     source:
         Catalog source stream.
+    assigned_env:
+        Validation environment assigned to this catalog row.
     issue:
         Audit issue class.
     stale_recipe_revision_sha256:
@@ -199,6 +220,7 @@ class CompletenessIssue:
     name: str
     zoo: str
     source: str
+    assigned_env: str
     issue: str
     stale_recipe_revision_sha256: str = ""
     stale_status: str = ""
@@ -519,6 +541,9 @@ def build_status(
     ledger_db: Path = VERIFICATION_DB,
     torchlens_version: str | None = None,
     render_manifest: Path = DEFAULT_RENDER_MANIFEST,
+    source_hash: str | None = None,
+    device_requested: str = "cpu",
+    env_registry: envs.EnvRegistry | None = None,
 ) -> FunnelStatus:
     """Build the honest menagerie status funnel.
 
@@ -532,6 +557,12 @@ def build_status(
         TorchLens version for the verified predicate. Defaults to installed TorchLens.
     render_manifest:
         Render manifest path for render coverage.
+    source_hash:
+        TorchLens source hash to require. Defaults to the current checkout hash.
+    device_requested:
+        Requested device policy to require.
+    env_registry:
+        Optional loaded validation environment registry.
 
     Returns
     -------
@@ -553,9 +584,23 @@ def build_status(
     quarantined = [status for status in statuses.values() if status.quarantine]
     code_execution = [status for status in statuses.values() if status.code_execution]
     current_revisions = current_revisions_from_catalog(catalog_db)
+    catalog_rows = load_rows(db_path=catalog_db)
+    registry = env_registry or envs.load_registry()
+    assignments = _assignment_map(catalog_rows, registry)
+    current_targets = _verification_targets_for_rows(
+        catalog_rows,
+        assignments,
+        source_hash or torchlens_source_hash(),
+        device_requested,
+        "forward",
+    )
     with connect_ledger(ledger_db) as ledger_conn:
-        verified_by_stable_id = verified_hashes(ledger_conn, torchlens_version, current_revisions)
-        verified_total = verified_count(ledger_conn, torchlens_version, current_revisions)
+        verified_by_stable_id = verified_hashes(
+            ledger_conn, torchlens_version, current_revisions, current_targets
+        )
+        verified_total = verified_count(
+            ledger_conn, torchlens_version, current_revisions, current_targets
+        )
     verified_ids = set(verified_by_stable_id)
     real_input_verified = sum(
         1
@@ -571,6 +616,7 @@ def build_status(
         ledger_db=ledger_db,
         torchlens_version=torchlens_version,
         manifest_paths=[render_manifest] if render_manifest.exists() else (),
+        current_targets=current_targets,
     )
     return FunnelStatus(
         catalog_db=str(catalog_db),
@@ -608,13 +654,79 @@ def _default_completeness_run_dir() -> Path:
     return DEFAULT_COMPLETENESS_ROOT / timestamp
 
 
-def _write_catalog_snapshot(rows: list[sqlite3.Row], run_dir: Path) -> Path:
+def _assignment_map(rows: Sequence[CatalogRow], registry: envs.EnvRegistry) -> dict[str, str]:
+    """Return validation environment assignments keyed by stable ID.
+
+    Parameters
+    ----------
+    rows:
+        Catalog rows to assign.
+    registry:
+        Loaded environment registry.
+
+    Returns
+    -------
+    dict[str, str]
+        Assigned environment key by stable ID.
+    """
+
+    return envs.assign(rows, registry)
+
+
+def _verification_targets_for_rows(
+    rows: Sequence[CatalogRow],
+    assignments: Mapping[str, str],
+    source_hash: str,
+    device_requested: str,
+    scope: str,
+) -> dict[str, VerificationTarget]:
+    """Build current full-identity verification targets for catalog rows.
+
+    Parameters
+    ----------
+    rows:
+        Catalog rows to target.
+    assignments:
+        Assigned environment key by stable ID.
+    source_hash:
+        Current TorchLens source hash.
+    device_requested:
+        Requested device policy.
+    scope:
+        Verification scope.
+
+    Returns
+    -------
+    dict[str, VerificationTarget]
+        Verification targets keyed by stable ID.
+    """
+
+    targets: dict[str, VerificationTarget] = {}
+    for row in rows:
+        env_key = assignments[row.stable_id]
+        lock_hash = envs.current_lock_hash(env_key)
+        targets[row.stable_id] = VerificationTarget(
+            recipe_revision_sha256=row.recipe_revision_sha256,
+            torchlens_source_hash=source_hash,
+            env_hash=envs.current_env_hash(env_key, lock_hash),
+            lock_hash=lock_hash,
+            device_requested=device_requested,
+            scope=cast(Scope, scope),
+        )
+    return targets
+
+
+def _write_catalog_snapshot(
+    rows: list[sqlite3.Row], assignments: Mapping[str, str], run_dir: Path
+) -> Path:
     """Write the current catalog snapshot artifact.
 
     Parameters
     ----------
     rows:
         Current catalog rows.
+    assignments:
+        Assigned environment key by stable ID.
     run_dir:
         Completeness audit run directory.
 
@@ -637,6 +749,7 @@ def _write_catalog_snapshot(rows: list[sqlite3.Row], run_dir: Path) -> Path:
                     row["name"],
                     row["zoo"],
                     row["source"],
+                    assignments[str(row["stable_id"])],
                 )
             )
     with snapshot_path.open(encoding="utf-8") as handle:
@@ -648,7 +761,9 @@ def _write_catalog_snapshot(rows: list[sqlite3.Row], run_dir: Path) -> Path:
     return snapshot_path
 
 
-def _load_catalog_snapshot(conn: sqlite3.Connection, rows: list[sqlite3.Row]) -> None:
+def _load_catalog_snapshot(
+    conn: sqlite3.Connection, rows: list[sqlite3.Row], assignments: Mapping[str, str]
+) -> None:
     """Load catalog rows into a temporary audit table.
 
     Parameters
@@ -657,6 +772,8 @@ def _load_catalog_snapshot(conn: sqlite3.Connection, rows: list[sqlite3.Row]) ->
         Ledger SQLite connection.
     rows:
         Current catalog rows.
+    assignments:
+        Assigned environment key by stable ID.
     """
 
     conn.execute(
@@ -666,15 +783,23 @@ def _load_catalog_snapshot(conn: sqlite3.Connection, rows: list[sqlite3.Row]) ->
             recipe_revision_sha256 TEXT NOT NULL,
             name TEXT NOT NULL,
             zoo TEXT NOT NULL,
-            source TEXT NOT NULL
+            source TEXT NOT NULL,
+            assigned_env TEXT NOT NULL
         )
         """
     )
     conn.execute("DELETE FROM catalog_snapshot")
     conn.executemany(
         """
-        INSERT INTO catalog_snapshot(stable_id, recipe_revision_sha256, name, zoo, source)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO catalog_snapshot(
+            stable_id,
+            recipe_revision_sha256,
+            name,
+            zoo,
+            source,
+            assigned_env
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             (
@@ -683,6 +808,7 @@ def _load_catalog_snapshot(conn: sqlite3.Connection, rows: list[sqlite3.Row]) ->
                 str(row["name"]),
                 str(row["zoo"]),
                 str(row["source"]),
+                assignments[str(row["stable_id"])],
             )
             for row in rows
         ),
@@ -729,12 +855,22 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
                 SELECT
                     verification_runs.*,
                     ROW_NUMBER() OVER (
-                        PARTITION BY stable_id, recipe_revision_sha256
+                        PARTITION BY verification_runs.stable_id
                         ORDER BY finished_at DESC, run_id DESC
                     ) AS rn
                 FROM verification_runs
-                WHERE scope = 'forward'
-                  AND status IN ({placeholders})
+                JOIN temp_current_verification_targets AS target
+                  ON target.stable_id = verification_runs.stable_id
+                 AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
+                 AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
+                 AND target.env_hash = verification_runs.env_hash
+                 AND target.lock_hash = verification_runs.lock_hash
+                 AND target.device_requested = verification_runs.device_requested
+                 AND target.scope = verification_runs.scope
+                WHERE verification_runs.scope = 'forward'
+                  AND verification_runs.status IN ({placeholders})
+                  AND verification_runs.torchlens_source_hash != 'legacy-unknown'
+                  AND verification_runs.lock_hash != 'legacy-unknown'
             )
             WHERE rn = 1
         ),
@@ -748,8 +884,8 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
                         ORDER BY finished_at DESC, run_id DESC
                     ) AS rn
                 FROM verification_runs
-                WHERE scope = 'forward'
-                  AND status IN ({placeholders})
+                WHERE verification_runs.scope = 'forward'
+                  AND verification_runs.status IN ({placeholders})
             )
             WHERE rn = 1
         )
@@ -759,8 +895,11 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
             catalog_snapshot.name,
             catalog_snapshot.zoo,
             catalog_snapshot.source,
+            catalog_snapshot.assigned_env,
             CASE
                 WHEN stale_terminal.stable_id IS NULL THEN 'missing_terminal'
+                WHEN stale_terminal.recipe_revision_sha256 = catalog_snapshot.recipe_revision_sha256
+                    THEN 'stale_identity_tuple'
                 ELSE 'stale_recipe_revision'
             END AS issue,
             COALESCE(stale_terminal.recipe_revision_sha256, '') AS stale_recipe_revision_sha256,
@@ -783,6 +922,7 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
             name=str(row["name"]),
             zoo=str(row["zoo"]),
             source=str(row["source"]),
+            assigned_env=str(row["assigned_env"]),
             issue=str(row["issue"]),
             stale_recipe_revision_sha256=str(row["stale_recipe_revision_sha256"]),
             stale_status=str(row["stale_status"]),
@@ -814,12 +954,22 @@ def _terminal_by_status(conn: sqlite3.Connection) -> dict[str, int]:
                 SELECT
                     verification_runs.*,
                     ROW_NUMBER() OVER (
-                        PARTITION BY stable_id, recipe_revision_sha256
+                        PARTITION BY verification_runs.stable_id
                         ORDER BY finished_at DESC, run_id DESC
                     ) AS rn
                 FROM verification_runs
-                WHERE scope = 'forward'
-                  AND status IN ({placeholders})
+                JOIN temp_current_verification_targets AS target
+                  ON target.stable_id = verification_runs.stable_id
+                 AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
+                 AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
+                 AND target.env_hash = verification_runs.env_hash
+                 AND target.lock_hash = verification_runs.lock_hash
+                 AND target.device_requested = verification_runs.device_requested
+                 AND target.scope = verification_runs.scope
+                WHERE verification_runs.scope = 'forward'
+                  AND verification_runs.status IN ({placeholders})
+                  AND verification_runs.torchlens_source_hash != 'legacy-unknown'
+                  AND verification_runs.lock_hash != 'legacy-unknown'
             )
             WHERE rn = 1
         )
@@ -842,6 +992,9 @@ def build_completeness_status(
     torchlens_version: str | None = None,
     render_manifest: Path = DEFAULT_RENDER_MANIFEST,
     run_dir: Path | None = None,
+    source_hash: str | None = None,
+    device_requested: str = "cpu",
+    env_registry: envs.EnvRegistry | None = None,
 ) -> CompletenessStatus:
     """Build the auditable terminal-status completeness report.
 
@@ -857,6 +1010,12 @@ def build_completeness_status(
         Render manifest path for the underlying funnel.
     run_dir:
         Directory for audit artifacts. Defaults to a timestamped directory under ``/tmp``.
+    source_hash:
+        TorchLens source hash to require. Defaults to the current checkout hash.
+    device_requested:
+        Requested device policy to require.
+    env_registry:
+        Optional loaded validation environment registry.
 
     Returns
     -------
@@ -870,20 +1029,39 @@ def build_completeness_status(
         torchlens_version = str(tl.__version__)
     resolved_run_dir = run_dir or _default_completeness_run_dir()
     catalog_rows = _catalog_rows(catalog_db)
-    snapshot_path = _write_catalog_snapshot(catalog_rows, resolved_run_dir)
+    catalog_model_rows = load_rows(db_path=catalog_db)
+    registry = env_registry or envs.load_registry()
+    assignments = _assignment_map(catalog_model_rows, registry)
+    current_targets = _verification_targets_for_rows(
+        catalog_model_rows,
+        assignments,
+        source_hash or torchlens_source_hash(),
+        device_requested,
+        "forward",
+    )
+    snapshot_path = _write_catalog_snapshot(catalog_rows, assignments, resolved_run_dir)
     funnel = build_status(
         catalog_db=catalog_db,
         ledger_db=ledger_db,
         torchlens_version=torchlens_version,
         render_manifest=render_manifest,
+        source_hash=source_hash,
+        device_requested=device_requested,
+        env_registry=registry,
     )
     with connect_ledger(ledger_db) as ledger_conn:
-        _load_catalog_snapshot(ledger_conn, catalog_rows)
+        _load_catalog_snapshot(ledger_conn, catalog_rows, assignments)
+        _load_verification_targets(ledger_conn, current_targets)
         issues = _completeness_issues(ledger_conn)
         terminal_by_status = _terminal_by_status(ledger_conn)
     missing = sum(1 for issue in issues if issue.issue == "missing_terminal")
     stale = sum(1 for issue in issues if issue.issue == "stale_recipe_revision")
     terminal_total = sum(terminal_by_status.values())
+    if terminal_total + len(issues) != len(catalog_rows):
+        raise RuntimeError(
+            "completeness audit row-count mismatch: "
+            f"terminal={terminal_total}, issues={len(issues)}, snapshot={len(catalog_rows)}"
+        )
     return CompletenessStatus(
         catalog_db=str(catalog_db),
         ledger_db=str(ledger_db),

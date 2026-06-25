@@ -12,8 +12,11 @@ from menagerie.catalog import CatalogRow
 from menagerie.ledger import (
     VerificationRun,
     append_verification_run,
+    base_env_hash,
+    base_lock_hash,
     connect,
     seed_from_legacy,
+    torchlens_source_hash,
     verified_count,
 )
 
@@ -52,7 +55,10 @@ def _run(**overrides: object) -> VerificationRun:
         "python_version": "py-test",
         "device_requested": "cpu",
         "device_actual": "cpu",
-        "env_hash": None,
+        "env_hash": base_env_hash(),
+        "lock_hash": base_lock_hash(),
+        "torchlens_source_hash": torchlens_source_hash(),
+        "input_scale": 1.0,
         "runner_host": "unit-host",
         "started_at": "2026-06-22T00:00:00+00:00",
         "finished_at": "2026-06-22T00:00:01+00:00",
@@ -109,7 +115,11 @@ def test_append_round_trip_and_verified_count(tmp_path: Path) -> None:
 
     run_id = append_verification_run(conn, _run())
     stored = conn.execute(
-        "SELECT run_id, stable_id, n_ops, graph_shape_hash FROM verification_runs"
+        """
+        SELECT run_id, stable_id, n_ops, graph_shape_hash, lock_hash,
+               torchlens_source_hash, input_scale
+        FROM verification_runs
+        """
     ).fetchone()
 
     assert run_id == "run-a"
@@ -118,8 +128,79 @@ def test_append_round_trip_and_verified_count(tmp_path: Path) -> None:
         "stable_id": "m1",
         "n_ops": 4,
         "graph_shape_hash": "shape-a",
+        "lock_hash": base_lock_hash(),
+        "torchlens_source_hash": torchlens_source_hash(),
+        "input_scale": 1.0,
     }
     assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
+
+
+def test_identity_columns_migrate_existing_ledger(tmp_path: Path) -> None:
+    """Legacy ledgers gain identity columns with non-current sentinels."""
+
+    db_path = tmp_path / "verification.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE verification_runs(
+            run_id TEXT PRIMARY KEY,
+            stable_id TEXT NOT NULL,
+            recipe_revision_sha256 TEXT NOT NULL,
+            name TEXT NOT NULL,
+            zoo TEXT NOT NULL,
+            variant TEXT NOT NULL DEFAULT '',
+            scope TEXT NOT NULL CHECK(scope IN ('forward','backward')),
+            status TEXT NOT NULL CHECK(status IN ('passed','failed')),
+            forward_pass INTEGER,
+            backward_pass INTEGER,
+            backward_na_reason TEXT,
+            metadata_ok INTEGER,
+            n_ops INTEGER,
+            graph_shape_hash TEXT,
+            svg_sha256 TEXT,
+            torchlens_version TEXT NOT NULL,
+            torch_version TEXT NOT NULL,
+            python_version TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            device_actual TEXT,
+            env_hash TEXT,
+            runner_host TEXT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            duration_sec REAL NOT NULL,
+            error_class TEXT,
+            error_message TEXT
+        );
+        INSERT INTO verification_runs(
+            run_id, stable_id, recipe_revision_sha256, name, zoo, scope, status,
+            forward_pass, metadata_ok, n_ops, graph_shape_hash, torchlens_version,
+            torch_version, python_version, device_requested, started_at, finished_at,
+            duration_sec
+        )
+        VALUES (
+            'legacy-run', 'm1', 'recipe-a', 'ToyNet', 'unit-zoo', 'forward', 'passed',
+            1, 1, 4, 'shape-a', 'tl-current', 'torch-test', 'py-test', 'cpu',
+            '2026-06-22T00:00:00+00:00', '2026-06-22T00:00:01+00:00', 1.0
+        );
+        """
+    )
+    conn.close()
+
+    migrated = connect(db_path)
+    row = migrated.execute(
+        """
+        SELECT lock_hash, torchlens_source_hash, input_scale
+        FROM verification_runs
+        WHERE run_id = 'legacy-run'
+        """
+    ).fetchone()
+
+    assert dict(row) == {
+        "lock_hash": "legacy-unknown",
+        "torchlens_source_hash": "legacy-unknown",
+        "input_scale": None,
+    }
 
 
 def test_new_terminal_statuses_round_trip(tmp_path: Path) -> None:
@@ -153,13 +234,55 @@ def test_new_terminal_statuses_round_trip(tmp_path: Path) -> None:
             error_message="disk floor",
         ),
     )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-oom",
+            stable_id="m3",
+            status="oom",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="failed:oom",
+            error_message="oom-kill",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-native-crash",
+            stable_id="m4",
+            status="native_crash",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="failed:native_crash",
+            error_message="segfault",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-killed",
+            stable_id="m5",
+            status="killed",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            graph_shape_hash=None,
+            error_class="failed:killed",
+            error_message="sigkill",
+        ),
+    )
 
     statuses = {
         str(row["status"])
         for row in conn.execute("SELECT status FROM verification_runs").fetchall()
     }
 
-    assert statuses == {"install_failed", "env_unavailable"}
+    assert statuses == {"env_unavailable", "install_failed", "killed", "native_crash", "oom"}
 
 
 def test_verified_count_rises_after_real_torchlens_trace(tmp_path: Path) -> None:
@@ -275,6 +398,61 @@ def test_verified_count_requires_catalog_current_recipe_revision(tmp_path: Path)
     assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
     assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 0
 
+
+def test_verified_count_requires_full_identity_tuple(tmp_path: Path) -> None:
+    """Passes with stale source, env, lock, or device policy do not count."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(
+        conn,
+        _run(
+            run_id="stale-source",
+            torchlens_source_hash="stale-source",
+            finished_at="2026-06-22T00:00:01+00:00",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="stale-env",
+            env_hash="stale-env",
+            finished_at="2026-06-22T00:00:02+00:00",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="stale-lock",
+            lock_hash="stale-lock",
+            finished_at="2026-06-22T00:00:03+00:00",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="wrong-device",
+            device_requested="cuda",
+            finished_at="2026-06-22T00:00:04+00:00",
+        ),
+    )
+    append_verification_run(
+        conn,
+        _run(
+            run_id="legacy-source",
+            torchlens_source_hash="legacy-unknown",
+            finished_at="2026-06-22T00:00:05+00:00",
+        ),
+    )
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 0
+
+    append_verification_run(
+        conn,
+        _run(run_id="current-identity", finished_at="2026-06-22T00:00:06+00:00"),
+    )
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
+
     append_verification_run(
         conn,
         _run(
@@ -297,7 +475,7 @@ def test_verified_count_requires_catalog_current_recipe_revision(tmp_path: Path)
         ),
     )
 
-    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 0
+    assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 1
 
 
 def test_concurrent_appends_from_two_threads_both_land(tmp_path: Path) -> None:

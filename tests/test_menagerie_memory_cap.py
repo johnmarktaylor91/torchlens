@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import signal
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from menagerie.validate_menagerie import (
     WORKER_MEMORY_CAP_STATUS,
     WORKER_MEMORY_TEST_ALLOC_ENV,
     ValidationResult,
+    _ledger_status,
     _resolve_scheduler_memory_budget_gb,
     append_manifest,
     build_parser,
@@ -164,6 +166,53 @@ def test_parent_accepts_normal_worker_result_with_cap(
     assert result == expected
     assert "--worker-memory-cap-gb" in captured_command
     assert "2.000000" in captured_command
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stderr", "expected_status"),
+    [
+        (-signal.SIGKILL, "kernel: oom-kill: killed process", "failed:oom"),
+        (-signal.SIGKILL, "terminated by administrator", "failed:killed"),
+        (-signal.SIGSEGV, "segmentation fault", "failed:native_crash"),
+        (-signal.SIGABRT, "abort trap", "failed:native_crash"),
+        (17, "Traceback: boom", "failed:exception"),
+    ],
+)
+def test_worker_returncode_classification_is_signal_based(
+    monkeypatch: pytest.MonkeyPatch,
+    returncode: int,
+    stderr: str,
+    expected_status: str,
+) -> None:
+    """Parent classifies worker failures by signal before generic exceptions."""
+
+    row = _row()
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Return a scripted worker process failure."""
+
+        del kwargs
+        return subprocess.CompletedProcess(command, returncode, stdout="", stderr=stderr)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = validate_with_timeout(
+        row,
+        dry_run=False,
+        scope="forward",
+        device="cpu",
+        timeout_sec=5.0,
+    )
+
+    assert result.status == expected_status
+
+
+def test_signal_failure_statuses_survive_ledger_mapping() -> None:
+    """Specific signal-derived failure statuses are not collapsed to failed."""
+
+    assert _ledger_status("failed:oom") == "oom"
+    assert _ledger_status("failed:native_crash") == "native_crash"
+    assert _ledger_status("failed:killed") == "killed"
 
 
 def test_worker_under_memory_cap_validates() -> None:

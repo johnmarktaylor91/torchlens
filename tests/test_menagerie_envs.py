@@ -219,7 +219,9 @@ def test_run_validate_threads_memory_cap_and_jobs(
     )
 
     assert result.returncode == 0
-    assert captured["env"] == {"TORCHLENS_MENAGERIE_ENV_HASH": "forecast_tab-test"}
+    assert captured["env"]["TORCHLENS_MENAGERIE_ENV_HASH"] == "forecast_tab-test"
+    assert captured["env"]["TORCHLENS_MENAGERIE_LOCK_HASH"] == "lock-test"
+    assert captured["env"]["TORCHLENS_SOURCE_HASH"]
     command = captured["command"]
     assert "--worker-memory-cap-gb" in command
     assert command[command.index("--worker-memory-cap-gb") + 1] == "22.000000"

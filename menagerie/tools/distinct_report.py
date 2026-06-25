@@ -11,7 +11,14 @@ from typing import Sequence
 
 from menagerie.catalog import CATALOG_DB, ensure_catalog
 from menagerie.dedup_report import HashRecord, read_manifest_records
-from menagerie.ledger import VERIFICATION_DB, connect as connect_ledger
+from menagerie.ledger import (
+    LEGACY_UNKNOWN,
+    VERIFICATION_DB,
+    VerificationTarget,
+    _default_verification_targets,
+    _load_verification_targets,
+    connect as connect_ledger,
+)
 
 
 @dataclass(frozen=True)
@@ -196,7 +203,10 @@ def all_hash_records(
 
 
 def verified_hashes(
-    ledger_conn: sqlite3.Connection, torchlens_version: str, current_revisions: dict[str, str]
+    ledger_conn: sqlite3.Connection,
+    torchlens_version: str,
+    current_revisions: dict[str, str],
+    current_targets: dict[str, VerificationTarget] | None = None,
 ) -> dict[str, str]:
     """Return verified graph hashes keyed by stable ID.
 
@@ -208,6 +218,9 @@ def verified_hashes(
         TorchLens version that must match current verification rows.
     current_revisions:
         Catalog mapping from stable ID to current recipe revision.
+    current_targets:
+        Optional full identity targets keyed by stable ID. When omitted, the
+        current base environment identity is used for all revisions.
 
     Returns
     -------
@@ -215,39 +228,36 @@ def verified_hashes(
         Verified graph-shape hash by stable model ID.
     """
 
-    if not current_revisions:
+    targets = (
+        current_targets
+        if current_targets is not None
+        else _default_verification_targets(current_revisions)
+    )
+    if not targets:
         return {}
-    ledger_conn.execute(
-        """
-        CREATE TEMP TABLE IF NOT EXISTS temp_current_catalog_revisions(
-            stable_id TEXT PRIMARY KEY,
-            recipe_revision_sha256 TEXT NOT NULL
-        )
-        """
-    )
-    ledger_conn.execute("DELETE FROM temp_current_catalog_revisions")
-    ledger_conn.executemany(
-        """
-        INSERT INTO temp_current_catalog_revisions(stable_id, recipe_revision_sha256)
-        VALUES (?, ?)
-        """,
-        current_revisions.items(),
-    )
+    _load_verification_targets(ledger_conn, targets)
     rows = ledger_conn.execute(
         """
-        SELECT current_verification.stable_id, current_verification.graph_shape_hash
-        FROM current_verification
-        JOIN temp_current_catalog_revisions
-          ON temp_current_catalog_revisions.stable_id = current_verification.stable_id
-         AND temp_current_catalog_revisions.recipe_revision_sha256 =
-             current_verification.recipe_revision_sha256
-        WHERE current_verification.forward_pass = 1
-          AND current_verification.metadata_ok = 1
-          AND current_verification.n_ops IS NOT NULL
-          AND current_verification.graph_shape_hash IS NOT NULL
-          AND current_verification.torchlens_version = ?
+        SELECT verification_runs.stable_id, verification_runs.graph_shape_hash
+        FROM verification_runs
+        JOIN temp_current_verification_targets AS target
+          ON target.stable_id = verification_runs.stable_id
+         AND target.recipe_revision_sha256 = verification_runs.recipe_revision_sha256
+         AND target.torchlens_source_hash = verification_runs.torchlens_source_hash
+         AND target.env_hash = verification_runs.env_hash
+         AND target.lock_hash = verification_runs.lock_hash
+         AND target.device_requested = verification_runs.device_requested
+         AND target.scope = verification_runs.scope
+        WHERE verification_runs.status = 'passed'
+          AND verification_runs.forward_pass = 1
+          AND verification_runs.metadata_ok = 1
+          AND verification_runs.n_ops IS NOT NULL
+          AND verification_runs.graph_shape_hash IS NOT NULL
+          AND verification_runs.torchlens_version = ?
+          AND verification_runs.torchlens_source_hash != ?
+          AND verification_runs.lock_hash != ?
         """,
-        (torchlens_version,),
+        (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
     ).fetchall()
     return {str(row["stable_id"]): str(row["graph_shape_hash"]) for row in rows}
 
@@ -257,6 +267,7 @@ def build_distinct_report(
     ledger_db: Path = VERIFICATION_DB,
     torchlens_version: str | None = None,
     manifest_paths: Sequence[Path] = (),
+    current_targets: dict[str, VerificationTarget] | None = None,
 ) -> DistinctArchitectureReport:
     """Build the distinct-architecture summary.
 
@@ -270,6 +281,8 @@ def build_distinct_report(
         TorchLens version for the verified subset. Defaults to the installed package version.
     manifest_paths:
         Optional render or validation manifests used as fallback hash sources.
+    current_targets:
+        Optional full identity targets keyed by stable ID.
 
     Returns
     -------
@@ -284,7 +297,9 @@ def build_distinct_report(
     current_revisions = current_revisions_from_catalog(catalog_db)
     with connect_ledger(ledger_db) as ledger_conn:
         records_by_key, source = all_hash_records(ledger_conn, manifest_paths)
-        verified_by_stable_id = verified_hashes(ledger_conn, torchlens_version, current_revisions)
+        verified_by_stable_id = verified_hashes(
+            ledger_conn, torchlens_version, current_revisions, current_targets
+        )
     all_hashes = {
         record.graph_shape_hash.strip()
         for record in records_by_key.values()
