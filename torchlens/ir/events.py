@@ -381,10 +381,13 @@ class ModuleExitEvent:
     forward_duration: float
     output_structure: object | None
     output_tensor_labels_raw: tuple[str, ...]
-    output_paths: tuple[tuple[object, ...], ...]
     has_user_forward_hooks: bool
     per_output_atomic: tuple[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None], ...]
     output_names: tuple[str | None, ...] = ()
+    # Typed container paths for each captured module output tensor. Optional with
+    # an empty-tuple default so the field stays trailing (defaulted) and all
+    # consumers guard on a falsy value; absent == "no paths captured".
+    output_paths: tuple[tuple[object, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
