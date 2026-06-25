@@ -1,5 +1,9 @@
 # Generated binary catalog; rebuild from tracked TSV/code.
 data/catalog.db
+# Generated trace-summary metadata store; rebuilt by the trace_summary exporter.
+data/trace_summary.db*
+# Stray catalog-build candidate files.
+data/*.candidate
 # Canonical catalog is regenerated from master_catalog.tsv via `catalog build`.
 data/catalog_canonical.tsv
 

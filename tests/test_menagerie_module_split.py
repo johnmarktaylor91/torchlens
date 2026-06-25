@@ -105,11 +105,16 @@ def _trace_signature(row: CatalogRow) -> tuple[str, int]:
 
 
 def test_catalog_build_counts_are_stable() -> None:
-    """The rebuilt catalog keeps the module-split parity counts."""
+    """The rebuilt catalog keeps the module-split parity counts.
+
+    Snapshot bumped 2026-06-25: the campaign registered +57 classics past the
+    2026-06-23 literal (3226 -> 3283 classics; 11655 -> 11712 rows). Verified
+    deterministic and duplicate-free (11712 rows == 11712 unique stable_ids).
+    """
 
     rows = load_rows()
-    assert len(rows) == 11655
-    assert sum(row.source == "classics" for row in rows) == 3226
+    assert len(rows) == 11712
+    assert sum(row.source == "classics" for row in rows) == 3283
 
 
 def test_generate_menagerie_legacy_import_surface_is_preserved() -> None:

@@ -177,3 +177,6 @@ benchmarks/.perf_cells/
 
 # Menagerie verification ledger is environment-specific append-only run state.
 menagerie/data/verification.db*
+
+# Codex CLI per-session working directory.
+.codex/
