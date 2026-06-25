@@ -1465,6 +1465,110 @@ def test_validation_with_setitem_slice_full_overwrite() -> None:
         trace.cleanup()
 
 
+def test_validation_with_index_put_destination_full_overwrite() -> None:
+    """Perturbing a fully overwritten ``index_put_`` destination is exempt.
+
+    The destination's every row is overwritten by ``index_put_`` (accumulate
+    False), so its prior value is provably irrelevant -- the exact analogue of
+    the ``__setitem__`` destination-overwrite carve-out. Perturbing the VALUE
+    parent must NOT be exempt.
+    """
+
+    class IndexPutOverwriteModel(nn.Module):
+        """Model that fully overwrites a destination tensor via ``index_put_``."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite every destination row with a replacement tensor.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after a full ``index_put_`` overwrite.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x[torch.arange(x.shape[0])] + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutOverwriteModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        destination_parent = index_put_layer.parent_arg_positions["args"][0]
+        replacement_parent = index_put_layer.parent_arg_positions["args"][2]
+
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
+            is True
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [destination_parent]) is True
+        assert _check_perturbation_exemptions(trace, index_put_layer, [replacement_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
+    """A genuinely-influential ``index_put_`` destination must still be perturbed.
+
+    Only one row is overwritten; the un-indexed rows keep their prior value and
+    flow to the output, so the destination is influential. The exemption must NOT
+    fire (tripwire), and validation must still detect real sensitivity.
+    """
+
+    class IndexPutPartialModel(nn.Module):
+        """Model that overwrites only part of its ``index_put_`` destination."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite a single destination row, leaving the rest intact.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)`` with ``rows > 1``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination with one overwritten row and surviving prior rows.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.tensor([0])
+            replacement = x[[0]] + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutPartialModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        destination_parent = index_put_layer.parent_arg_positions["args"][0]
+
+        # Tripwire: the influential (partially-surviving) destination is NOT exempt.
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
+            is False
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [destination_parent]) is False
+    finally:
+        trace.cleanup()
+
+
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
     """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
 
