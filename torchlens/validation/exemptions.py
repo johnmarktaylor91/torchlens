@@ -210,9 +210,36 @@ def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: List[st
     and the written positions are fully overwritten; it must NOT exempt a perturbed
     VALUE or INDEX parent (those genuinely influence the output), and it must NOT
     exempt the accumulating case (where the prior destination value IS added in).
+
+    The destination is identified by ARG POSITION (``parent_arg_positions["args"][0]
+    == layers_to_perturb[0]``), not solely by tensor-content equality: a value-parent
+    whose contents happen to equal the destination would otherwise be falsely
+    exempted by the downstream ``torch.equal`` check. Requiring the perturbed parent
+    to occupy arg slot 0 mirrors how the ``__mod__`` divisor exemption keys off
+    ``parent_arg_positions``.
     """
+    if not _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0):
+        return False
     perturbed_tensor = self[layers_to_perturb[0]].out
     return _index_put_destination_is_fully_overwritten(perturbed_tensor, layer)
+
+
+def _perturbed_parent_is_arg_position(
+    layer: Op,
+    layers_to_perturb: List[str],
+    position: int,
+) -> bool:
+    """Return whether the perturbed parent occupies positional arg ``position``.
+
+    Reads ``layer.parent_arg_positions["args"]`` (arg index -> parent layer label)
+    and checks the perturbed label is the parent registered at ``position``. Used to
+    confirm a perturbed parent is the DESTINATION (slot 0) by structure rather than
+    by tensor-content equality, which can collide when a value-parent's contents
+    match the destination.
+    """
+
+    arg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    return arg_positions.get(position) == layers_to_perturb[0]
 
 
 def _index_put_destination_is_fully_overwritten(

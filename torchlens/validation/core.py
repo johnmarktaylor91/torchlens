@@ -15,7 +15,7 @@ delegated to the registries in ``exemptions.py``.
 """
 
 from collections import defaultdict, deque
-from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union, cast
+from typing import Optional, Any, Dict, List, Sequence, Set, TYPE_CHECKING, Union, cast
 
 import torch
 
@@ -78,11 +78,19 @@ DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH = 64
 # inputs into a single output element; everything else (elementwise, view,
 # structural, copy) has depth 1 and never reaches the threshold.
 _CONV_FUNC_PREFIX = "conv"  # conv1d/2d/3d + conv_transpose1d/2d/3d
+_CONV_TRANSPOSE_FUNC_PREFIX = "conv_transpose"  # conv_transpose1d/2d/3d
 _MATMUL_LINEAR_FUNCS = frozenset({"addmm", "baddbmm", "bmm", "linear", "matmul", "mm"})
+# Scatter/segment/index aggregations that are band-C-eligible ONLY when they are
+# ADDITIVE/mean accumulators -- i.e. they sum many FP32 source elements into one
+# destination slot, so summation-order round-off genuinely accrues. Plain
+# overwrite ``scatter``/``scatter_`` (no FP accumulation -- the last write wins)
+# and ``max``/``min``/``amax``/``amin`` reductions (no summation-order drift)
+# are EXCLUDED here and stay on the strict global tolerance. ``scatter_reduce*``
+# is conditionally additive: only its ``reduce="sum"``/``"mean"`` modes accumulate
+# (its ``"prod"``/``"amax"``/``"amin"`` modes do not), so it is gated dynamically
+# inside the depth predicate rather than by membership here.
 _SCATTER_REDUCE_FUNCS = frozenset(
     {
-        "scatter",
-        "scatter_",
         "scatter_add",
         "scatter_add_",
         "scatter_reduce",
@@ -92,6 +100,8 @@ _SCATTER_REDUCE_FUNCS = frozenset(
         "index_add_",
     }
 )
+# scatter_reduce reduce-modes that ADD (FP reorder drift) vs that select/overwrite.
+_ADDITIVE_SCATTER_REDUCE_MODES = frozenset({"sum", "mean"})
 _DIM_REDUCE_FUNCS = frozenset(
     {
         "sum",
@@ -989,6 +999,15 @@ def _reduced_numel_over_dims(tensor: torch.Tensor, dim: Any, default_all: bool) 
     accumulation depth is the product of the reduced dimension sizes. ``dim``
     follows torch's reduce conventions: ``None`` reduces over every dimension
     (when ``default_all``), an int or sequence of ints names the reduced dims.
+
+    Runtime-verified torch behavior for an EXPLICIT empty ``dim=()`` (torch 2.x):
+    for the reduce family this predicate gates (``sum``/``mean``/``nansum``/
+    ``nanmean``/``var``/``std``/``norm``/``amax``/``amin``), ``dim=()`` is NOT an
+    identity/no-op -- it reduces over EVERY dimension and returns a scalar (e.g.
+    ``torch.sum(x, dim=()).shape == ()``). So ``dim=()`` is treated as reduce-all
+    (depth = ``numel``), the same as ``dim=None`` with ``default_all`` -- not depth
+    1. (``prod``/``logsumexp`` reject a tuple ``dim`` outright at runtime, so a
+    captured op there will not present ``dim=()`` to this path.)
     """
 
     if dim is None:
@@ -1001,6 +1020,8 @@ def _reduced_numel_over_dims(tensor: torch.Tensor, dim: Any, default_all: bool) 
         except TypeError:
             return 0
     if not dims:
+        # Empty dim. For default_all reducers an explicit dim=() reduces over all
+        # dims (runtime-verified scalar output), matching dim=None's reduce-all.
         return int(tensor.numel()) if default_all else 1
     ndim = tensor.dim()
     depth = 1
@@ -1023,14 +1044,29 @@ def _op_reduction_depth(layer: Op) -> int:
 
     Depth by category:
 
-    - ``conv*`` / ``conv_transpose*``: ``in_channels/groups * prod(kernel_size)``
-      = ``weight.numel() / weight.shape[0]`` products per output element.
+    - forward ``conv*``: ``in_channels/groups * prod(kernel_size)`` =
+      ``weight.numel() / weight.shape[0]`` products per output element (forward
+      conv weight is ``[out_channels, in_channels/groups, *kernel]``, so the
+      out-channel axis is ``shape[0]``).
+    - ``conv_transpose*``: transposed-conv weight is
+      ``[in_channels, out_channels/groups, *kernel]`` -- the IN-channel axis is
+      ``shape[0]`` and the OUT-channel axis is ``shape[1]``. The forward formula
+      ``weight.numel() // weight.shape[0]`` would wrongly read
+      ``out_channels/groups * prod(kernel)`` and over-report depth (e.g.
+      ``ConvTranspose2d(1, 128, 1)`` -> 128). The true per-output accumulation
+      depth is ``in_channels * prod(kernel)`` = ``weight.shape[0] *
+      prod(weight.shape[2:])``, so a ``1x1`` transpose with 1 input channel is
+      correctly shallow (depth 1).
     - ``linear`` / ``addmm`` / ``mm`` / ``matmul`` / ``bmm`` / ``baddbmm``:
       the contracted dimension ``K`` of the first matrix operand.
-    - ``scatter*`` / ``scatter_add*`` / ``scatter_reduce*`` / ``segment_reduce`` /
-      ``index_add``: the max number of source elements aggregated into a single
-      destination position (the graph fan-in = max duplicate index count). A
-      depth-2 scatter (two duplicate indices) stays well below threshold.
+    - ``scatter_add*`` / additive ``scatter_reduce*`` (``reduce="sum"``/``"mean"``)
+      / ``segment_reduce`` / ``index_add``: the max number of source elements
+      summed into a single destination COORDINATE (the graph fan-in = max
+      duplicate destination-tuple count, counted per actual destination position,
+      NOT per raw index value). Plain overwrite ``scatter``/``scatter_`` and
+      ``max``/``min``/``amax``/``amin``/``prod`` reduce-modes do not accumulate and
+      are not in the eligible set, so they stay strict. A depth-2 scatter (two
+      sources per destination) stays well below threshold.
     - ``sum`` / ``mean`` / ``prod`` / ``norm`` / ``var`` / ``std`` and other
       dimension reductions: the numel of the reduced dimension(s).
     - elementwise / copy / view / structural ops: 1.
@@ -1042,8 +1078,8 @@ def _op_reduction_depth(layer: Op) -> int:
         A return of ``0`` conservatively withholds band C (fail-toward-strict).
     """
 
-    saved_args = getattr(layer, "saved_args", None) or ()
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    saved_args: Sequence[Any] = getattr(layer, "saved_args", None) or ()
+    saved_kwargs: Dict[str, Any] = getattr(layer, "saved_kwargs", None) or {}
     func_name = layer.func_name
 
     def _operand(index: int, *kwarg_names: str) -> Any:
@@ -1055,7 +1091,22 @@ def _op_reduction_depth(layer: Op) -> int:
                 return saved_kwargs[name]
         return None
 
-    # conv* / conv_transpose*: depth = in_channels/groups * prod(kernel).
+    # conv_transpose* (checked FIRST -- "conv_transpose" also startswith "conv"):
+    # transposed weight is [in_channels, out_channels/groups, *kernel], so the true
+    # per-output accumulation depth is in_channels * prod(kernel) = shape[0] *
+    # prod(shape[2:]). Reusing the forward formula would read shape[1] (out/groups)
+    # and over-report (the ConvTranspose2d(1,128,1) -> 128 false positive).
+    if func_name.startswith(_CONV_TRANSPOSE_FUNC_PREFIX):
+        weight = _operand(1, "weight")
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 2:
+            kernel_numel = 1
+            for kdim in weight.shape[2:]:
+                kernel_numel *= int(kdim)
+            return int(weight.shape[0]) * kernel_numel
+        return 0
+
+    # forward conv*: weight is [out_channels, in_channels/groups, *kernel], so depth
+    # = in_channels/groups * prod(kernel) = weight.numel() // weight.shape[0].
     if func_name.startswith(_CONV_FUNC_PREFIX):
         weight = _operand(1, "weight")
         if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
@@ -1087,8 +1138,19 @@ def _op_reduction_depth(layer: Op) -> int:
             return int(first_matrix.shape[-1])
         return 0
 
-    # scatter / segment / index_add: depth = max duplicate-index count (fan-in).
+    # Additive scatter / segment / index_add: depth = max per-coordinate fan-in.
+    # scatter_reduce* is conditionally additive -- only its sum/mean modes accumulate;
+    # a prod/amax/amin reduce-mode does not drift and is withheld (depth 0).
     if func_name in _SCATTER_REDUCE_FUNCS:
+        if func_name.startswith("scatter_reduce"):
+            # scatter_reduce(input, dim, index, src, reduce, *, include_self): the
+            # reduce mode arrives as kwarg "reduce" (TorchLens-captured form) or as
+            # positional arg 4 (free-function torch.scatter_reduce(..., reduce)).
+            reduce_mode = saved_kwargs.get("reduce", None)
+            if reduce_mode is None and len(saved_args) > 4:
+                reduce_mode = saved_args[4]
+            if reduce_mode not in _ADDITIVE_SCATTER_REDUCE_MODES:
+                return 0
         return _scatter_fan_in_depth(func_name, saved_args, saved_kwargs)
 
     # dimension reductions (sum/mean/...): depth = numel of reduced dims.
@@ -1115,10 +1177,20 @@ def _scatter_fan_in_depth(
     """Return the max number of source elements aggregated per destination slot.
 
     For ``scatter_add``-family ops the per-output accumulation depth is the graph
-    fan-in: the maximum number of source elements that land on a single
-    destination position (the max duplicate-index multiplicity along the scatter
-    dimension). Tiny molecular graphs fan in 2-4; high-degree aggregations fan in
-    hundreds. ``index_add`` aggregates by a 1-D index over one dim.
+    fan-in: the maximum number of source elements that sum into a single
+    destination COORDINATE. This MUST be counted per actual destination position,
+    not per raw index value: a row-/feature-wise scatter writes many independent
+    destinations at index ``0``, and counting the duplicate raw index value ``0``
+    globally would conflate those independent destinations into one huge fan-in and
+    wrongly grant band C to a genuinely shallow (e.g. depth-2) scatter.
+
+    For an n-D ``scatter_add``/``scatter_reduce`` (``self``, ``index`` and ``src``
+    all share rank), the destination coordinate of source element at position
+    ``(i_0, ..., i_{n-1})`` is ``index[...]`` along the scatter ``dim`` and the
+    SOURCE position ``i_d`` along every other dim. We rebuild the full destination
+    tuple per source element and count the max number of identical tuples. A
+    1-D ``index_add`` (index value IS the whole destination coordinate) and
+    ``segment_reduce`` (max segment length) are already per-coordinate.
     """
 
     def _arg(index: int, *kwarg_names: str) -> Any:
@@ -1130,23 +1202,75 @@ def _scatter_fan_in_depth(
         return None
 
     if func_name.startswith("index_add"):
-        # index_add(input, dim, index, source): 1-D index; fan-in = max repeat.
+        # index_add(input, dim, index, source): 1-D index value IS the full
+        # destination coordinate along the indexed dim, so each raw index value
+        # already names a distinct destination -- count raw duplicates directly.
         index = _arg(2, "index")
-    elif func_name == "segment_reduce":
+        return _max_raw_index_multiplicity(index)
+    if func_name == "segment_reduce":
         # segment_reduce(data, reduce, lengths=...): fan-in = max segment length.
         lengths = saved_kwargs.get("lengths", None)
         if isinstance(lengths, torch.Tensor) and lengths.numel() > 0:
             return int(lengths.max().item())
         return 0
-    else:
-        # scatter*/scatter_add*/scatter_reduce*: index is the 3rd operand.
-        index = _arg(2, "index")
+
+    # scatter_add*/scatter_reduce*: index is the 3rd operand, dim the 2nd.
+    index = _arg(2, "index")
+    if not isinstance(index, torch.Tensor) or index.numel() == 0:
+        return 0
+    dim = _arg(1, "dim")
+    if not isinstance(dim, int):
+        return 0
+    return _max_destination_coordinate_fan_in(index, dim)
+
+
+def _max_raw_index_multiplicity(index: Any) -> int:
+    """Return the max count of any repeated raw index value (1-D index_add fan-in)."""
 
     if not isinstance(index, torch.Tensor) or index.numel() == 0:
         return 0
     try:
         flat = index.reshape(-1).to(torch.int64)
         counts = torch.bincount(flat - flat.min())
+        return int(counts.max().item())
+    except (RuntimeError, ValueError):
+        return 0
+
+
+def _max_destination_coordinate_fan_in(index: torch.Tensor, dim: int) -> int:
+    """Return the max number of n-D scatter source elements per destination tuple.
+
+    Builds, for each source element, the full destination coordinate -- ``index``
+    along the (normalized) scatter ``dim`` and the source position along every other
+    dim -- then counts the largest group of identical destination coordinates. Two
+    sources landing on the same destination report depth 2 no matter how many other
+    destinations also happen to be indexed at the same raw value.
+    """
+
+    try:
+        ndim = index.dim()
+        if ndim == 0:
+            return int(index.numel())
+        scatter_dim = dim % ndim
+        idx64 = index.to(torch.int64)
+        # Per-axis destination coordinate: the index value along the scatter dim,
+        # the source position (arange, broadcast) along every other dim.
+        coord_axes = []
+        for axis in range(ndim):
+            if axis == scatter_dim:
+                coord_axes.append(idx64.reshape(-1))
+            else:
+                shape = [1] * ndim
+                shape[axis] = index.shape[axis]
+                axis_positions = (
+                    torch.arange(index.shape[axis], dtype=torch.int64)
+                    .reshape(shape)
+                    .expand_as(index)
+                    .reshape(-1)
+                )
+                coord_axes.append(axis_positions)
+        dest_tuples = torch.stack(coord_axes, dim=1)
+        _, counts = torch.unique(dest_tuples, dim=0, return_counts=True)
         return int(counts.max().item())
     except (RuntimeError, ValueError):
         return 0

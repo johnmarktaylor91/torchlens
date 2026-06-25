@@ -1675,6 +1675,127 @@ def test_deep_numeric_replay_gross_error_on_deep_conv_still_fails() -> None:
     assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
+def test_op_reduction_depth_scatter_fan_in_is_per_destination_coordinate() -> None:
+    """LOAD-BEARING: an n-D scatter fan-in is counted PER destination coordinate.
+
+    Codex's exact false-positive: a row-/feature-wise ``scatter_add`` writes many
+    INDEPENDENT depth-2 destinations all at raw index ``0``. Counting the duplicate
+    raw index value ``0`` GLOBALLY conflates them into one huge fan-in and wrongly
+    grants band C to a genuinely shallow (depth-2) scatter, masking the ~5e-5 error
+    class. Counting per actual destination COORDINATE reports depth 2 -> ineligible.
+    """
+
+    destination = torch.zeros(100, 3)
+    index = torch.zeros(100, 2, dtype=torch.long)  # every row scatters to col 0.
+    src = torch.ones(100, 2)
+    saved_out = destination.scatter_add(1, index, src)  # each row col0 == 2.0.
+    recomputed = saved_out.clone()
+    recomputed[0, 0] += 5.0e-5  # injected capture error.
+    layer = _make_deep_numeric_layer("scatter_add", [destination, 1, index, src], saved_out)
+
+    # Two sources per destination -> depth 2 regardless of 200 raw duplicate zeros.
+    assert _op_reduction_depth(layer) == 2
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+    # A genuinely deep per-coordinate fan-in stays eligible.
+    deep_index = torch.zeros(10, 200, dtype=torch.long)
+    deep_src = torch.ones(10, 200)
+    deep_dst = torch.zeros(10, 3)
+    deep_out = deep_dst.scatter_add(1, deep_index, deep_src)
+    deep_layer = _make_deep_numeric_layer(
+        "scatter_add", [deep_dst, 1, deep_index, deep_src], deep_out
+    )
+    assert _op_reduction_depth(deep_layer) == 200  # 200 sources per (row, 0).
+    assert _op_reduction_depth(deep_layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+
+def test_op_reduction_depth_conv_transpose_is_shallow() -> None:
+    """LOAD-BEARING: transposed-conv depth uses the transposed weight layout.
+
+    ``conv_transpose`` weight is ``[in_channels, out_channels/groups, *kernel]``;
+    reusing the forward formula ``weight.numel() // weight.shape[0]`` reads the
+    out-channel axis and over-reports. ``ConvTranspose2d(1, 128, 1)`` accumulates
+    only ONE input element per output (depth 1), so it must be shallow/ineligible.
+    """
+
+    conv_t = nn.ConvTranspose2d(1, 128, kernel_size=1)
+    saved_out = torch.empty(1, 128, 8, 8).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed.view(-1)[0] += 5.0e-5
+    layer = _make_deep_numeric_layer(
+        "conv_transpose2d", [torch.zeros(1, 1, 8, 8), conv_t.weight], saved_out
+    )
+
+    assert _op_reduction_depth(layer) == 1  # in_channels(1) * prod(kernel)(1).
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+    # A genuinely deep transposed conv (many in-channels) stays eligible.
+    deep_conv_t = nn.ConvTranspose2d(256, 4, kernel_size=3)  # weight [256, 4, 3, 3].
+    deep_out = torch.empty(1, 4, 10, 10).uniform_(-1.0, 1.0)
+    deep_layer = _make_deep_numeric_layer(
+        "conv_transpose2d", [torch.zeros(1, 256, 8, 8), deep_conv_t.weight], deep_out
+    )
+    assert _op_reduction_depth(deep_layer) == 256 * 9  # in_channels * prod(kernel).
+    assert _op_reduction_depth(deep_layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+
+def test_op_reduction_depth_overwrite_scatter_is_ineligible() -> None:
+    """LOAD-BEARING: plain overwrite ``scatter``/``scatter_`` get no band C.
+
+    A plain scatter OVERWRITES the destination (last write wins) -- there is no FP32
+    accumulation, so its replay must stay on the strict global tolerance. The deep
+    duplicate-index pattern that would qualify an additive scatter must NOT qualify
+    an overwrite scatter; it falls through to depth 1.
+    """
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    saved_out = torch.empty(64).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0] += 5.0e-5
+    for func_name in ("scatter", "scatter_"):
+        layer = _make_deep_numeric_layer(
+            func_name, [torch.zeros(64), 0, deep_index, torch.ones(1024)], saved_out
+        )
+        assert _op_reduction_depth(layer) == 1, func_name
+        assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_op_reduction_depth_non_additive_scatter_reduce_is_ineligible() -> None:
+    """LOAD-BEARING: ``scatter_reduce`` max/min/prod modes get no band C.
+
+    Only the ADDITIVE ``sum``/``mean`` reduce-modes accumulate FP32 products and
+    drift with summation order; ``amax``/``amin``/``prod`` select or multiply and do
+    NOT exhibit accumulation-order round-off, so they stay strict (depth 0). The
+    additive modes remain eligible. The reduce mode is read from the ``reduce``
+    keyword (TorchLens-captured form) or positional arg 4 (free-function form).
+    """
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    saved_out = torch.empty(64).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0] += 5.0e-5
+    base_args = [torch.zeros(64), 0, deep_index, torch.ones(1024)]
+
+    for mode in ("amax", "amin", "prod"):
+        kw_layer = _make_deep_numeric_layer(
+            "scatter_reduce", list(base_args), saved_out, saved_kwargs={"reduce": mode}
+        )
+        assert _op_reduction_depth(kw_layer) == 0, f"{mode} kwarg"
+        assert _deep_numeric_replay_matches_saved(kw_layer, recomputed) is False
+        pos_layer = _make_deep_numeric_layer("scatter_reduce", [*base_args, mode], saved_out)
+        assert _op_reduction_depth(pos_layer) == 0, f"{mode} positional"
+
+    for mode in ("sum", "mean"):
+        kw_layer = _make_deep_numeric_layer(
+            "scatter_reduce", list(base_args), saved_out, saved_kwargs={"reduce": mode}
+        )
+        assert _op_reduction_depth(kw_layer) == 1024, f"{mode} kwarg eligible"
+        pos_layer = _make_deep_numeric_layer("scatter_reduce", [*base_args, mode], saved_out)
+        assert _op_reduction_depth(pos_layer) == 1024, f"{mode} positional eligible"
+
+
 def test_validation_with_getitem_tensor_index():
     model = _GetItemTensorIndex()
     x = torch.randn(5, 3)
@@ -1858,6 +1979,71 @@ def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
             is False
         )
         assert _check_perturbation_exemptions(trace, index_put_layer, [destination_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
+    """LOAD-BEARING: a VALUE parent equal to the destination must still be perturbed.
+
+    The index_put exemption identified its destination via ``torch.equal(perturbed,
+    destination)`` alone; if a value-parent's CONTENTS happen to equal the
+    destination, perturbing the value-parent was falsely exempted -- masking a
+    genuine sensitivity. The exemption must require the perturbed parent to be the
+    destination by ARG POSITION (``parent_arg_positions["args"][0]``), mirroring how
+    ``__setitem__`` identifies its destination. Here destination and value share
+    identical contents, so only arg-position disambiguates them.
+    """
+
+    class IndexPutValueEqualsDestModel(nn.Module):
+        """Overwrite a destination with a value tensor of identical contents."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Build destination and values with EQUAL contents, then overwrite.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after a full ``index_put_`` overwrite by an
+                equal-content value parent.
+            """
+
+            base = x * 0.0 + 3.0
+            destination = base.clone()
+            values = base.clone()  # value-parent CONTENTS equal the destination.
+            idx = torch.arange(x.shape[0])
+            destination.index_put_((idx,), values)
+            return destination
+
+    model = IndexPutValueEqualsDestModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        arg_positions = index_put_layer.parent_arg_positions["args"]
+        destination_parent = arg_positions[0]
+        value_parent = arg_positions[2]
+
+        # The value parent occupies arg slot 2, NOT 0 -- it must NOT be exempt even
+        # though its contents equal the destination (the false-exemption tripwire).
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [value_parent]) is False
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [value_parent]) is False
+
+        # The true destination (arg slot 0) remains a legitimate full-overwrite exempt.
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
+            is True
+        )
     finally:
         trace.cleanup()
 
