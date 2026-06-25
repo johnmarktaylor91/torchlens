@@ -817,7 +817,16 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
     for label in output_labels:
         op = trace.ops[label]
         container = container_from_op(op)
-        if container is not None and container.root_kind == "final_output":
+        # A path-only final-output view (supports_reconstruct=False) means the
+        # container path was retained for replay validation but the structural
+        # spec was never persisted because capture_container_structure was off.
+        # Such a view cannot be rebuilt; fall through to the informative error
+        # rather than raising the opaque "path-only" message.
+        if (
+            container is not None
+            and container.root_kind == "final_output"
+            and container.supports_reconstruct
+        ):
             return container.reconstruct(values=values)
     if len(output_labels) == 1:
         return trace.ops[output_labels[0]].out

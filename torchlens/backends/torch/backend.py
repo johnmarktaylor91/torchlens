@@ -398,6 +398,14 @@ class TorchBackend:
 
         self_trace = cast("Trace", session)
         output_entries = list(_walk_output_tensors_with_paths(outputs))
+        # The container_spec is only user-facing metadata when explicitly opted
+        # into via capture_container_structure (or implied by intervention_ready);
+        # with the default OFF it must stay None on output layers. The container
+        # *path*, however, is always preserved so forward-replay validation can
+        # slice multi-output containers back to the right leaf.
+        persist_container_spec = getattr(self_trace, "intervention_ready", False) or getattr(
+            self_trace, "_capture_container_structure", False
+        )
         if output_entries:
             output_tensors_w_addresses_all = [
                 (tensor, _container_path_to_address(path), None)
@@ -409,16 +417,14 @@ class TorchBackend:
                 if _label_raw is not None:
                     output_specs_by_raw_label[_label_raw] = (
                         path,
-                        container_spec,
+                        container_spec if persist_container_spec else None,
                     )
             setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
         else:
             output_tensors_w_addresses_all = []
-        if output_entries and (
-            getattr(self_trace, "intervention_ready", False)
-            or getattr(self_trace, "_capture_container_structure", False)
-        ):
+        if output_entries and persist_container_spec:
             _register_model_output_container_snapshot(self_trace, outputs, output_entries)
+        # (container_path is stored above for validation replay even when the spec is None)
         if not output_entries:
             output_tensors_w_addresses_all = get_vars_of_type_from_obj(
                 outputs,
