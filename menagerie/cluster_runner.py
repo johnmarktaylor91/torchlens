@@ -1,0 +1,1822 @@
+"""SLURM cluster runner helpers for RAM-heavy menagerie validation."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import re
+import shutil
+import socket
+import sqlite3
+import subprocess
+import sys
+from collections import defaultdict
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import asdict, dataclass
+from hashlib import sha256
+from pathlib import Path
+from typing import Any
+
+from menagerie.catalog import CATALOG_DB, CatalogRow
+from menagerie.ledger import (
+    VERIFICATION_DB,
+    LEGACY_UNKNOWN,
+    VerificationRun,
+    VerificationTarget,
+    append_verification_run,
+    connect as connect_ledger,
+    utc_now,
+)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CLUSTER_ARTIFACT_ROOT = Path("/tmp/torchlens_menagerie_cluster")
+CATALOG_COLUMNS = (
+    "model_id",
+    "display_index",
+    "stable_id",
+    "name",
+    "variant",
+    "family",
+    "family_normalized",
+    "domain",
+    "zoo",
+    "constructor_call",
+    "input_shape",
+    "input_dtype",
+    "era",
+    "verified",
+    "notes",
+    "source",
+    "recipe_revision_sha256",
+    "input_is_real",
+    "verification_expectation",
+    "quarantine",
+)
+TERMINAL_STATUSES = frozenset(
+    {
+        "passed",
+        "failed",
+        "skipped",
+        "timeout",
+        "not_applicable",
+        "deferred",
+        "error",
+        "install_failed",
+        "env_unavailable",
+        "oom",
+        "native_crash",
+        "killed",
+    }
+)
+LOCAL_RAM_THRESHOLD_GB = 125.0
+MB_PER_GB = 1024
+GIANT_HEURISTIC_PATTERNS = (
+    "depth_pro",
+    "efficientdet_d5",
+    "efficientdet_d6",
+    "efficientdet_d7",
+    "eva_giant",
+    "eva02_enormous",
+    "vit_so400m",
+    "beit_large_patch16_512",
+    "mixture-of-experts",
+    "mixture of experts",
+    "moe",
+    "longcat",
+    "deepseek_vl",
+    "outetts",
+    "ettin",
+)
+
+
+@dataclass(frozen=True)
+class GiantRegistryEntry:
+    """Static first-contact routing record for a RAM-heavy model.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    name:
+        Human-readable model name.
+    measured_peak_rss_mb:
+        Campaign-measured peak RSS in MB when known.
+    node_mem_gb:
+        Initial SLURM memory tier to request.
+    reason:
+        Evidence or conservative rationale for cluster routing.
+    worker_memory_cap_gb:
+        Per-model validator RSS cap. Defaults to ``node_mem_gb - 10``.
+    partition:
+        Optional preferred SLURM partition for this size tier.
+    force_cluster:
+        Whether the static seed routes to cluster even before ledger evidence.
+    """
+
+    stable_id: str
+    name: str
+    measured_peak_rss_mb: int | None
+    node_mem_gb: int
+    reason: str
+    worker_memory_cap_gb: int | None = None
+    partition: str | None = None
+    force_cluster: bool = True
+
+
+@dataclass(frozen=True)
+class NodeTier:
+    """SLURM memory tier used for right-sized dispatch.
+
+    Parameters
+    ----------
+    mem_gb:
+        Requested SLURM memory in GiB.
+    worker_memory_cap_gb:
+        Validator worker RSS cap in GiB.
+    partition:
+        SLURM partition for this tier.
+    max_peak_rss_gb:
+        Largest measured peak normally assigned to this tier.
+    """
+
+    mem_gb: int
+    worker_memory_cap_gb: int
+    partition: str
+    max_peak_rss_gb: int
+
+
+@dataclass(frozen=True)
+class ClusterConfig:
+    """Cluster connection and SLURM defaults.
+
+    Parameters
+    ----------
+    host:
+        SSH host or alias.
+    account:
+        SLURM account.
+    partition:
+        Default SLURM partition.
+    remote_repo:
+        Repository path on the cluster.
+    remote_artifact_root:
+        Artifact root on the cluster.
+    pixi_env:
+        Committed pixi lock prefix under ``menagerie/locks``.
+    cpus_per_task:
+        CPUs requested for each array task.
+    time_limit:
+        SLURM time limit.
+    array_concurrency:
+        Maximum concurrent array tasks.
+    node_tiers:
+        Ordered memory tiers. The default uses 180 -> 250 -> 500 GiB.
+    """
+
+    host: str = "axon"
+    account: str = "nklab"
+    partition: str = "nklab"
+    remote_repo: str = "~/projects/torchlens"
+    remote_artifact_root: str = "~/projects/torchlens/.cluster_runner"
+    pixi_env: str = "misc"
+    cpus_per_task: int = 8
+    time_limit: str = "12:00:00"
+    array_concurrency: int = 4
+    node_tiers: tuple[NodeTier, ...] = (
+        NodeTier(180, 170, "nklab", 130),
+        NodeTier(250, 230, "u19moc3", 210),
+        NodeTier(500, 480, "naplab", 420),
+    )
+
+
+@dataclass(frozen=True)
+class ClusterAssignment:
+    """One stable ID assigned to one SLURM array task.
+
+    Parameters
+    ----------
+    campaign_id:
+        Campaign key used for fail-loud merge idempotency.
+    attempt_id:
+        Attempt key used for fail-loud merge idempotency.
+    assignment_id:
+        Stable assignment key unique within a campaign attempt.
+    stable_id:
+        Durable model identity.
+    array_index:
+        SLURM array task index.
+    node_mem_gb:
+        Requested SLURM memory in GiB.
+    worker_memory_cap_gb:
+        Validator worker RSS cap in GiB.
+    partition:
+        SLURM partition.
+    reason:
+        Routing evidence.
+    expected_row_count:
+        Expected result rows for this task.
+    """
+
+    campaign_id: str
+    attempt_id: str
+    assignment_id: str
+    stable_id: str
+    array_index: int
+    node_mem_gb: int
+    worker_memory_cap_gb: int
+    partition: str
+    reason: str
+    expected_row_count: int = 1
+
+
+@dataclass(frozen=True)
+class DispatchResult:
+    """Result of preparing and optionally submitting a cluster campaign.
+
+    Parameters
+    ----------
+    campaign_id:
+        Campaign key.
+    attempt_id:
+        Attempt key.
+    assignments:
+        Submitted task assignments.
+    local_artifact_dir:
+        Local dispatch artifact directory.
+    remote_artifact_dir:
+        Remote dispatch artifact directory.
+    sbatch_job_ids:
+        Parsed SLURM job IDs. Empty for dry-run/no-parse submissions.
+    commands:
+        Commands executed or prepared.
+    dry_run:
+        Whether commands were prepared without execution.
+    """
+
+    campaign_id: str
+    attempt_id: str
+    assignments: tuple[ClusterAssignment, ...]
+    local_artifact_dir: Path
+    remote_artifact_dir: str
+    sbatch_job_ids: tuple[str, ...]
+    commands: tuple[tuple[str, ...], ...]
+    dry_run: bool = False
+
+
+@dataclass(frozen=True)
+class MergeReport:
+    """Summary of an idempotent cluster result merge.
+
+    Parameters
+    ----------
+    campaign_id:
+        Campaign key.
+    attempt_id:
+        Attempt key.
+    inserted:
+        Number of new verification rows inserted.
+    duplicates:
+        Number of already-imported identical result rows skipped.
+    assignments:
+        Number of assignments verified against expected counts and checksums.
+    """
+
+    campaign_id: str
+    attempt_id: str
+    inserted: int
+    duplicates: int
+    assignments: int
+
+
+@dataclass(frozen=True)
+class ClusterResultRow:
+    """One exported cluster verification row plus merge keys.
+
+    Parameters
+    ----------
+    campaign_id:
+        Campaign key.
+    attempt_id:
+        Attempt key.
+    assignment_id:
+        Assignment key.
+    run:
+        Verification ledger row produced by the worker.
+    """
+
+    campaign_id: str
+    attempt_id: str
+    assignment_id: str
+    run: VerificationRun
+
+
+CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
+
+
+class ClusterMergeConflict(RuntimeError):
+    """Raised when a cluster merge key maps to non-identical payloads."""
+
+
+class ClusterResultIntegrityError(RuntimeError):
+    """Raised when cluster result counts or checksums do not match the manifest."""
+
+
+GIANT_REGISTRY: dict[str, GiantRegistryEntry] = {
+    "m920": GiantRegistryEntry(
+        "m920", "Ettin-decoder-1b", None, 250, "param-monster first-contact seed"
+    ),
+    "m2064": GiantRegistryEntry(
+        "m2064", "OuteTTS", None, 250, "param-heavy audio language model seed"
+    ),
+    "m3635": GiantRegistryEntry(
+        "m3635", "beit_large_patch16_512", 48 * MB_PER_GB, 180, "axon peak about 48 GiB"
+    ),
+    "m4165": GiantRegistryEntry(
+        "m4165", "deepseek_vl_hybrid", None, 500, "MoE / multimodal param-monster seed"
+    ),
+    "m4246": GiantRegistryEntry(
+        "m4246", "depth_pro", 176 * MB_PER_GB, 250, "axon rerun needed >170 GiB"
+    ),
+    "m4494": GiantRegistryEntry(
+        "m4494", "effdet_efficientdet_d5", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+    ),
+    "m4495": GiantRegistryEntry(
+        "m4495", "effdet_efficientdet_d5", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+    ),
+    "m4523": GiantRegistryEntry(
+        "m4523", "effdet_tf_efficientdet_d5", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+    ),
+    "m4524": GiantRegistryEntry(
+        "m4524", "effdet_tf_efficientdet_d5_ap", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+    ),
+    "m4525": GiantRegistryEntry(
+        "m4525", "effdet_tf_efficientdet_d5_ap6", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+    ),
+    "m4526": GiantRegistryEntry(
+        "m4526", "effdet_tf_efficientdet_d6", 128 * MB_PER_GB, 180, "axon peak about 128 GiB"
+    ),
+    "m4527": GiantRegistryEntry(
+        "m4527", "effdet_tf_efficientdet_d7", None, 250, "d7 exceeded 180 GiB campaign tier"
+    ),
+    "m4797": GiantRegistryEntry(
+        "m4797", "eva02_enormous", None, 500, "enormous ViT first-contact seed"
+    ),
+    "m4808": GiantRegistryEntry(
+        "m4808", "eva_giant_560", 80 * MB_PER_GB, 180, "axon peak about 80 GiB"
+    ),
+    "m5187": GiantRegistryEntry(
+        "m5187", "gigagan_unet_upsampler", None, 250, "large generative upsampler seed"
+    ),
+    "m5651": GiantRegistryEntry(
+        "m5651", "longcat_flash", None, 500, "longcat 560B MoE first-contact seed"
+    ),
+    "m11112": GiantRegistryEntry(
+        "m11112", "vit_so400m_896", 98 * MB_PER_GB, 180, "axon peak about 98 GiB"
+    ),
+}
+
+
+def default_command_runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess command with captured text output.
+
+    Parameters
+    ----------
+    command:
+        Command arguments.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Completed command.
+    """
+
+    return subprocess.run(command, check=True, capture_output=True, text=True)
+
+
+def load_catalog_rows_ro(
+    db_path: Path = CATALOG_DB, stable_ids: Sequence[str] = ()
+) -> list[CatalogRow]:
+    """Load catalog rows from an existing SQLite snapshot in read-only mode.
+
+    Parameters
+    ----------
+    db_path:
+        Existing catalog database snapshot.
+    stable_ids:
+        Optional stable IDs to restrict.
+
+    Returns
+    -------
+    list[CatalogRow]
+        Catalog rows ordered by ``model_id``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the catalog snapshot does not exist.
+    """
+
+    if not db_path.exists():
+        raise FileNotFoundError(f"catalog snapshot not found: {db_path}")
+    uri = f"file:{db_path}?mode=ro"
+    clauses: list[str] = []
+    params: list[str] = []
+    if stable_ids:
+        placeholders = ",".join("?" for _ in stable_ids)
+        clauses.append(f"stable_id IN ({placeholders})")
+        params.extend(stable_ids)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"SELECT {', '.join(CATALOG_COLUMNS)} FROM models {where} ORDER BY model_id"
+    with sqlite3.connect(uri, uri=True) as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_catalog_row_from_sql(row) for row in rows]
+
+
+def is_giant(
+    row: CatalogRow | Mapping[str, object],
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
+    *,
+    local_ram_threshold_gb: float = LOCAL_RAM_THRESHOLD_GB,
+) -> bool:
+    """Return whether a row must be routed to the cluster.
+
+    Native crashes are never cluster-routed. OOM rows are cluster-routed. Known static
+    giants and conservative first-contact heuristics route to the cluster when no
+    local-safe measurement exists.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping.
+    ledger:
+        Ledger connection/path, or a stable-ID to peak-RSS mapping.
+    local_ram_threshold_gb:
+        Local machine RSS threshold in GiB.
+
+    Returns
+    -------
+    bool
+        Whether the model should be handled by the cluster runner.
+    """
+
+    stable_id = _row_value(row, "stable_id")
+    status, peak_rss_mb = _latest_status_and_peak(stable_id, ledger)
+    if status == "native_crash":
+        return False
+    if status == "oom":
+        return True
+    if peak_rss_mb is not None and peak_rss_mb >= int(local_ram_threshold_gb * MB_PER_GB):
+        return True
+    entry = GIANT_REGISTRY.get(stable_id)
+    if entry is not None and entry.force_cluster:
+        return True
+    if peak_rss_mb is not None:
+        return False
+    return _matches_first_contact_heuristic(row)
+
+
+def route_giants(
+    rows: Sequence[CatalogRow],
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
+    *,
+    local_ram_threshold_gb: float = LOCAL_RAM_THRESHOLD_GB,
+) -> tuple[CatalogRow, ...]:
+    """Return rows that should be routed to the cluster.
+
+    Parameters
+    ----------
+    rows:
+        Candidate catalog rows.
+    ledger:
+        Ledger connection/path, or a stable-ID to peak-RSS mapping.
+    local_ram_threshold_gb:
+        Local machine RSS threshold in GiB.
+
+    Returns
+    -------
+    tuple[CatalogRow, ...]
+        Cluster-routed rows in input order.
+    """
+
+    return tuple(
+        row
+        for row in rows
+        if is_giant(row, ledger=ledger, local_ram_threshold_gb=local_ram_threshold_gb)
+    )
+
+
+def node_tier_for_row(
+    row: CatalogRow | Mapping[str, object],
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
+    *,
+    config: ClusterConfig | None = None,
+) -> NodeTier:
+    """Return the right-sized SLURM memory tier for a row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping.
+    ledger:
+        Ledger connection/path, or a stable-ID to peak-RSS mapping.
+    config:
+        Cluster defaults.
+
+    Returns
+    -------
+    NodeTier
+        Selected memory tier.
+    """
+
+    active_config = config or ClusterConfig()
+    stable_id = _row_value(row, "stable_id")
+    entry = GIANT_REGISTRY.get(stable_id)
+    measured_peak_mb = _latest_status_and_peak(stable_id, ledger)[1]
+    if measured_peak_mb is None and entry is not None:
+        measured_peak_mb = entry.measured_peak_rss_mb
+    if entry is not None and measured_peak_mb is None:
+        return _tier_from_entry(entry, active_config)
+    if measured_peak_mb is None:
+        measured_peak_mb = _heuristic_peak_mb(row)
+    peak_gb = max(1, (measured_peak_mb + MB_PER_GB - 1) // MB_PER_GB)
+    for tier in active_config.node_tiers:
+        if peak_gb <= tier.max_peak_rss_gb:
+            return tier
+    return active_config.node_tiers[-1]
+
+
+def pending_assignments_for_resume(
+    assignments: Sequence[ClusterAssignment],
+    targets: Mapping[str, VerificationTarget],
+    *,
+    ledger_db: Path = VERIFICATION_DB,
+) -> tuple[ClusterAssignment, ...]:
+    """Filter assignments using the ledger as the only completion source.
+
+    Parameters
+    ----------
+    assignments:
+        Candidate cluster assignments.
+    targets:
+        Current identity targets keyed by stable ID.
+    ledger_db:
+        Verification ledger path.
+
+    Returns
+    -------
+    tuple[ClusterAssignment, ...]
+        Assignments lacking a current terminal ledger row.
+    """
+
+    completed = ledger_completed_stable_ids(targets, ledger_db=ledger_db)
+    return tuple(assignment for assignment in assignments if assignment.stable_id not in completed)
+
+
+def ledger_completed_stable_ids(
+    targets: Mapping[str, VerificationTarget],
+    *,
+    ledger_db: Path = VERIFICATION_DB,
+) -> set[str]:
+    """Return stable IDs completed for the current ledger identity tuple.
+
+    Parameters
+    ----------
+    targets:
+        Current identity targets keyed by stable ID.
+    ledger_db:
+        Verification ledger path.
+
+    Returns
+    -------
+    set[str]
+        Stable IDs with matching terminal rows.
+    """
+
+    if not targets:
+        return set()
+    with connect_ledger(ledger_db) as conn:
+        conn.execute(
+            """
+            CREATE TEMP TABLE IF NOT EXISTS temp_cluster_targets(
+                stable_id TEXT PRIMARY KEY,
+                recipe_revision_sha256 TEXT NOT NULL,
+                torchlens_source_hash TEXT NOT NULL,
+                env_hash TEXT NOT NULL,
+                lock_hash TEXT NOT NULL,
+                device_requested TEXT NOT NULL,
+                scope TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("DELETE FROM temp_cluster_targets")
+        conn.executemany(
+            """
+            INSERT INTO temp_cluster_targets(
+                stable_id,
+                recipe_revision_sha256,
+                torchlens_source_hash,
+                env_hash,
+                lock_hash,
+                device_requested,
+                scope
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    stable_id,
+                    target.recipe_revision_sha256,
+                    target.torchlens_source_hash,
+                    target.env_hash,
+                    target.lock_hash,
+                    target.device_requested,
+                    target.scope,
+                )
+                for stable_id, target in targets.items()
+            ),
+        )
+        rows = conn.execute(
+            """
+            SELECT current_verification.stable_id
+            FROM current_verification
+            JOIN temp_cluster_targets AS target
+              ON target.stable_id = current_verification.stable_id
+             AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
+             AND target.torchlens_source_hash = current_verification.torchlens_source_hash
+             AND target.env_hash = current_verification.env_hash
+             AND target.lock_hash = current_verification.lock_hash
+             AND target.device_requested = current_verification.device_requested
+             AND target.scope = current_verification.scope
+            WHERE current_verification.status IN (
+                'passed',
+                'failed',
+                'skipped',
+                'timeout',
+                'not_applicable',
+                'deferred',
+                'error',
+                'install_failed',
+                'env_unavailable',
+                'oom',
+                'native_crash',
+                'killed'
+            )
+              AND current_verification.torchlens_source_hash != ?
+              AND current_verification.lock_hash != ?
+            """,
+            (LEGACY_UNKNOWN, LEGACY_UNKNOWN),
+        ).fetchall()
+    return {str(row["stable_id"]) for row in rows}
+
+
+def dispatch_giants(
+    stable_ids: Sequence[str],
+    *,
+    catalog_db: Path = CATALOG_DB,
+    ledger_db: Path = VERIFICATION_DB,
+    repo_root: Path = REPO_ROOT,
+    local_artifact_root: Path = CLUSTER_ARTIFACT_ROOT,
+    config: ClusterConfig | None = None,
+    command_runner: CommandRunner = default_command_runner,
+    campaign_id: str | None = None,
+    attempt_id: str | None = None,
+    dry_run: bool = False,
+) -> DispatchResult:
+    """Prepare and submit a SLURM array for giant model validation.
+
+    Parameters
+    ----------
+    stable_ids:
+        Stable IDs to dispatch.
+    catalog_db:
+        Existing catalog snapshot. It is copied and opened read-only by workers.
+    ledger_db:
+        Local verification ledger used for routing estimates.
+    repo_root:
+        Local repository root to rsync.
+    local_artifact_root:
+        Local dispatch artifact root.
+    config:
+        Cluster defaults.
+    command_runner:
+        Injectable subprocess runner for rsync/ssh/sbatch calls.
+    campaign_id:
+        Optional campaign key. Defaults to a timestamped key.
+    attempt_id:
+        Optional attempt key. Defaults to ``"attempt-1"``.
+    dry_run:
+        Prepare artifacts and commands without executing them.
+
+    Returns
+    -------
+    DispatchResult
+        Dispatch artifact and submission metadata.
+    """
+
+    if not stable_ids:
+        raise ValueError("stable_ids must not be empty")
+    active_config = config or ClusterConfig()
+    resolved_campaign = campaign_id or f"cluster-{utc_now().replace(':', '').replace('+', 'Z')}"
+    resolved_attempt = attempt_id or "attempt-1"
+    artifact_dir = local_artifact_root / resolved_campaign / resolved_attempt
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    catalog_snapshot = artifact_dir / "catalog.db"
+    _copy_catalog_snapshot(catalog_db, catalog_snapshot)
+    rows = load_catalog_rows_ro(catalog_snapshot, stable_ids=stable_ids)
+    rows_by_id = {row.stable_id: row for row in rows}
+    missing = sorted(set(stable_ids).difference(rows_by_id))
+    if missing:
+        raise ValueError(f"stable IDs missing from catalog snapshot: {missing!r}")
+    assignments = tuple(
+        _assignment_for_row(
+            row=rows_by_id[stable_id],
+            index=index,
+            ledger_db=ledger_db,
+            config=active_config,
+            campaign_id=resolved_campaign,
+            attempt_id=resolved_attempt,
+        )
+        for index, stable_id in enumerate(stable_ids)
+    )
+    assignment_path = artifact_dir / "assignments.json"
+    write_assignment_manifest(assignments, assignment_path)
+    remote_artifact_dir = (
+        f"{active_config.remote_artifact_root.rstrip('/')}/{resolved_campaign}/{resolved_attempt}"
+    )
+    sbatch_paths = _write_sbatch_scripts(
+        assignments,
+        artifact_dir=artifact_dir,
+        config=active_config,
+        remote_artifact_dir=remote_artifact_dir,
+    )
+    commands = _dispatch_commands(
+        repo_root=repo_root,
+        artifact_dir=artifact_dir,
+        remote_artifact_dir=remote_artifact_dir,
+        config=active_config,
+        sbatch_paths=sbatch_paths,
+    )
+    sbatch_job_ids: list[str] = []
+    if not dry_run:
+        setup_command_count = 3
+        for command in commands[:setup_command_count]:
+            command_runner(command)
+        for command in commands[setup_command_count:]:
+            result = command_runner(command)
+            job_id = _parse_sbatch_job_id(result.stdout)
+            if job_id is not None:
+                sbatch_job_ids.append(job_id)
+    return DispatchResult(
+        campaign_id=resolved_campaign,
+        attempt_id=resolved_attempt,
+        assignments=assignments,
+        local_artifact_dir=artifact_dir,
+        remote_artifact_dir=remote_artifact_dir,
+        sbatch_job_ids=tuple(sbatch_job_ids),
+        commands=tuple(tuple(command) for command in commands),
+        dry_run=dry_run,
+    )
+
+
+def render_sbatch_script(
+    assignments: Sequence[ClusterAssignment],
+    *,
+    config: ClusterConfig,
+    remote_artifact_dir: str,
+) -> str:
+    """Render a self-contained SLURM array script.
+
+    Parameters
+    ----------
+    assignments:
+        Cluster assignments.
+    config:
+        Cluster defaults.
+    remote_artifact_dir:
+        Remote directory containing dispatch artifacts.
+
+    Returns
+    -------
+    str
+        Bash sbatch script text.
+    """
+
+    if not assignments:
+        raise ValueError("assignments must not be empty")
+    indexes = ",".join(str(assignment.array_index) for assignment in assignments)
+    default_tier = assignments[0]
+    manifest = f"{remote_artifact_dir}/assignments.json"
+    return f"""#!/usr/bin/env bash
+#SBATCH --job-name=tl_cluster_giants
+#SBATCH --account={config.account}
+#SBATCH --partition={default_tier.partition or config.partition}
+#SBATCH --mem={default_tier.node_mem_gb}G
+#SBATCH --cpus-per-task={config.cpus_per_task}
+#SBATCH --time={config.time_limit}
+#SBATCH --array={indexes}%{config.array_concurrency}
+#SBATCH --output={remote_artifact_dir}/logs/giant_%A_%a.log
+#SBATCH --error={remote_artifact_dir}/logs/giant_%A_%a.err
+
+set -euo pipefail
+cd {config.remote_repo}
+mkdir -p {remote_artifact_dir}/logs {remote_artifact_dir}/results
+PROJECT_ROOT="${{TORCHLENS_CLUSTER_PIXI_ROOT:-$HOME/.cache/torchlens/menagerie/cluster-pixi}}"
+LOCK_HASH="$(python -m menagerie.cluster_runner lock-hash --pixi-env {config.pixi_env})"
+PROJECT_DIR="$PROJECT_ROOT/{config.pixi_env}-${{LOCK_HASH:0:16}}"
+mkdir -p "$PROJECT_DIR"
+cp "menagerie/locks/{config.pixi_env}.pixi.toml" "$PROJECT_DIR/pixi.toml"
+cp "menagerie/locks/{config.pixi_env}.pixi.lock" "$PROJECT_DIR/pixi.lock"
+pixi install --manifest-path "$PROJECT_DIR/pixi.toml" --locked
+pixi run --manifest-path "$PROJECT_DIR/pixi.toml" --frozen -- \\
+    python -u -m menagerie.cluster_runner worker \\
+    --assignment-manifest {manifest} \\
+    --task-index "$SLURM_ARRAY_TASK_ID" \\
+    --repo-root {config.remote_repo} \\
+    --result-dir {remote_artifact_dir}/results
+"""
+
+
+def write_assignment_manifest(assignments: Sequence[ClusterAssignment], path: Path) -> None:
+    """Write dispatch assignments as JSON.
+
+    Parameters
+    ----------
+    assignments:
+        Assignments to write.
+    path:
+        Destination JSON path.
+    """
+
+    if not assignments:
+        raise ValueError("assignments must not be empty")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "campaign_id": assignments[0].campaign_id,
+        "attempt_id": assignments[0].attempt_id,
+        "assignments": [asdict(assignment) for assignment in assignments],
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def load_assignment_manifest(path: Path) -> tuple[ClusterAssignment, ...]:
+    """Load dispatch assignments from JSON.
+
+    Parameters
+    ----------
+    path:
+        Assignment manifest path.
+
+    Returns
+    -------
+    tuple[ClusterAssignment, ...]
+        Loaded assignments.
+    """
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(ClusterAssignment(**item) for item in payload["assignments"])
+
+
+def run_worker_assignment(
+    assignment_manifest: Path,
+    task_index: int,
+    *,
+    repo_root: Path = REPO_ROOT,
+    result_dir: Path,
+    command_runner: CommandRunner = default_command_runner,
+) -> ClusterResultRow:
+    """Run one cluster assignment and export its result row.
+
+    Parameters
+    ----------
+    assignment_manifest:
+        Assignment manifest path.
+    task_index:
+        SLURM array task index.
+    repo_root:
+        Repository root on the worker host.
+    result_dir:
+        Directory where result JSONL and host-contract files are written.
+    command_runner:
+        Injectable command runner.
+
+    Returns
+    -------
+    ClusterResultRow
+        Exported cluster result row.
+    """
+
+    assignments = load_assignment_manifest(assignment_manifest)
+    by_index = {assignment.array_index: assignment for assignment in assignments}
+    if task_index not in by_index:
+        raise ValueError(f"no assignment for task index {task_index}")
+    assignment = by_index[task_index]
+    result_dir.mkdir(parents=True, exist_ok=True)
+    record_host_contract(result_dir / f"{assignment.assignment_id}.host.json")
+    command = [
+        sys.executable,
+        "-u",
+        "-m",
+        "menagerie.validate_menagerie",
+        "--stable-ids",
+        assignment.stable_id,
+        "--jobs",
+        "1",
+        "--worker-memory-cap-gb",
+        str(assignment.worker_memory_cap_gb),
+        "--timeout-sec",
+        "14400",
+        "--min-free-gb",
+        "10",
+        "--out-dir",
+        str(result_dir / assignment.stable_id),
+        "--db",
+        str(assignment_manifest.parent / "catalog.db"),
+    ]
+    command_runner(command)
+    row = latest_verification_run_for_stable_id(
+        assignment.stable_id,
+        ledger_db=repo_root / "menagerie" / "data" / "verification.db",
+    )
+    result = ClusterResultRow(
+        campaign_id=assignment.campaign_id,
+        attempt_id=assignment.attempt_id,
+        assignment_id=assignment.assignment_id,
+        run=row,
+    )
+    result_path = result_dir / f"{assignment.assignment_id}.jsonl"
+    write_result_rows_jsonl((result,), result_path)
+    write_result_manifest((result,), result_dir / f"{assignment.assignment_id}.manifest.json")
+    return result
+
+
+def latest_verification_run_for_stable_id(
+    stable_id: str, *, ledger_db: Path = VERIFICATION_DB
+) -> VerificationRun:
+    """Return the latest verification run for a stable ID.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    ledger_db:
+        Verification ledger path.
+
+    Returns
+    -------
+    VerificationRun
+        Latest verification run.
+    """
+
+    with connect_ledger(ledger_db) as conn:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM current_verification
+            WHERE stable_id = ?
+            """,
+            (stable_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError(f"no verification row for stable_id {stable_id}")
+    return _verification_run_from_row(row)
+
+
+def write_result_rows_jsonl(rows: Sequence[ClusterResultRow], path: Path) -> None:
+    """Write exported cluster result rows as JSONL.
+
+    Parameters
+    ----------
+    rows:
+        Result rows.
+    path:
+        Destination JSONL path.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(_cluster_result_payload(row), sort_keys=True) + "\n")
+
+
+def load_result_rows_jsonl(path: Path) -> tuple[ClusterResultRow, ...]:
+    """Load exported cluster result rows from JSONL.
+
+    Parameters
+    ----------
+    path:
+        Source JSONL path.
+
+    Returns
+    -------
+    tuple[ClusterResultRow, ...]
+        Result rows.
+    """
+
+    rows: list[ClusterResultRow] = []
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            rows.append(
+                ClusterResultRow(
+                    campaign_id=str(payload["campaign_id"]),
+                    attempt_id=str(payload["attempt_id"]),
+                    assignment_id=str(payload["assignment_id"]),
+                    run=VerificationRun(**payload["run"]),
+                )
+            )
+    return tuple(rows)
+
+
+def write_result_manifest(rows: Sequence[ClusterResultRow], path: Path) -> None:
+    """Write expected counts and checksums for exported result rows.
+
+    Parameters
+    ----------
+    rows:
+        Result rows.
+    path:
+        Destination manifest path.
+    """
+
+    if not rows:
+        raise ValueError("rows must not be empty")
+    grouped: dict[tuple[str, str, str], list[ClusterResultRow]] = defaultdict(list)
+    for row in rows:
+        grouped[(row.campaign_id, row.attempt_id, row.assignment_id)].append(row)
+    assignments = [
+        {
+            "campaign_id": campaign_id,
+            "attempt_id": attempt_id,
+            "assignment_id": assignment_id,
+            "expected_row_count": len(group),
+            "result_checksum": _assignment_result_checksum(group),
+        }
+        for (campaign_id, attempt_id, assignment_id), group in sorted(grouped.items())
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"assignments": assignments}, indent=2, sort_keys=True), "utf-8")
+
+
+def merge_cluster_results(
+    result_rows_path: Path,
+    result_manifest_path: Path,
+    *,
+    local_ledger_db: Path = VERIFICATION_DB,
+) -> MergeReport:
+    """Merge cluster results into the local ledger idempotently and fail-loud.
+
+    Parameters
+    ----------
+    result_rows_path:
+        JSONL rows exported by cluster workers.
+    result_manifest_path:
+        Manifest carrying per-assignment expected row counts and checksums.
+    local_ledger_db:
+        Local verification ledger path.
+
+    Returns
+    -------
+    MergeReport
+        Merge counts.
+
+    Raises
+    ------
+    ClusterMergeConflict
+        If an existing merge key or run ID maps to a different payload.
+    ClusterResultIntegrityError
+        If expected counts or checksums do not match the rows.
+    """
+
+    rows = load_result_rows_jsonl(result_rows_path)
+    expected = _load_result_expectations(result_manifest_path)
+    _verify_result_expectations(rows, expected)
+    if not rows:
+        raise ClusterResultIntegrityError("result rows must not be empty")
+    campaign_ids = {row.campaign_id for row in rows}
+    attempt_ids = {row.attempt_id for row in rows}
+    if len(campaign_ids) != 1 or len(attempt_ids) != 1:
+        raise ClusterResultIntegrityError("result rows must share one campaign and attempt")
+    inserted = 0
+    duplicates = 0
+    with connect_ledger(local_ledger_db) as conn:
+        _initialize_cluster_merge_tables(conn)
+        for row in rows:
+            checksum = _verification_run_checksum(row.run)
+            existing = _existing_merge_row(conn, row)
+            if existing is not None:
+                if existing["row_checksum"] != checksum:
+                    raise ClusterMergeConflict(
+                        f"conflicting payload for {row.campaign_id}/"
+                        f"{row.attempt_id}/{row.assignment_id}/{row.run.run_id}"
+                    )
+                duplicates += 1
+                continue
+            if _existing_run_id_is_compatible(conn, row.run, checksum):
+                conn.execute(
+                    """
+                    INSERT INTO cluster_result_imports(
+                        campaign_id,
+                        attempt_id,
+                        assignment_id,
+                        source_run_id,
+                        row_checksum,
+                        imported_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row.campaign_id,
+                        row.attempt_id,
+                        row.assignment_id,
+                        row.run.run_id,
+                        checksum,
+                        utc_now(),
+                    ),
+                )
+                duplicates += 1
+                continue
+            append_verification_run(conn, row.run)
+            conn.execute(
+                """
+                INSERT INTO cluster_result_imports(
+                    campaign_id,
+                    attempt_id,
+                    assignment_id,
+                    source_run_id,
+                    row_checksum,
+                    imported_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row.campaign_id,
+                    row.attempt_id,
+                    row.assignment_id,
+                    row.run.run_id,
+                    checksum,
+                    utc_now(),
+                ),
+            )
+            inserted += 1
+    return MergeReport(
+        campaign_id=next(iter(campaign_ids)),
+        attempt_id=next(iter(attempt_ids)),
+        inserted=inserted,
+        duplicates=duplicates,
+        assignments=len(expected),
+    )
+
+
+def collect_cluster_results(
+    dispatch_result: DispatchResult,
+    *,
+    config: ClusterConfig | None = None,
+    command_runner: CommandRunner = default_command_runner,
+    local_result_dir: Path | None = None,
+    dry_run: bool = False,
+) -> tuple[Path, Path]:
+    """Collect and verify runner-host-stamped cluster result artifacts.
+
+    Parameters
+    ----------
+    dispatch_result:
+        Dispatch metadata returned by :func:`dispatch_giants`.
+    config:
+        Cluster defaults.
+    command_runner:
+        Injectable command runner for rsync.
+    local_result_dir:
+        Optional destination directory. Defaults under the dispatch artifact directory.
+    dry_run:
+        Skip rsync and only combine already-present local artifacts.
+
+    Returns
+    -------
+    tuple[pathlib.Path, pathlib.Path]
+        Aggregate result JSONL path and aggregate result-manifest path.
+    """
+
+    active_config = config or ClusterConfig()
+    result_dir = local_result_dir or (dispatch_result.local_artifact_dir / "results")
+    result_dir.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        command_runner(
+            (
+                "rsync",
+                "-az",
+                f"{active_config.host}:{dispatch_result.remote_artifact_dir.rstrip('/')}/results/",
+                str(result_dir).rstrip("/") + "/",
+            )
+        )
+    rows = _load_and_verify_collected_results(result_dir)
+    aggregate_rows = dispatch_result.local_artifact_dir / "cluster_results.jsonl"
+    aggregate_manifest = dispatch_result.local_artifact_dir / "cluster_results.manifest.json"
+    write_result_rows_jsonl(rows, aggregate_rows)
+    write_result_manifest(rows, aggregate_manifest)
+    return aggregate_rows, aggregate_manifest
+
+
+def record_host_contract(path: Path) -> dict[str, str]:
+    """Record host facts needed to interpret cluster rows.
+
+    Parameters
+    ----------
+    path:
+        Destination JSON path.
+
+    Returns
+    -------
+    dict[str, str]
+        Recorded host contract.
+    """
+
+    contract = {
+        "hostname": socket.gethostname(),
+        "platform": platform.platform(),
+        "python": platform.python_version(),
+        "glibc": ".".join(platform.libc_ver()),
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
+        "slurm_array_task_id": os.environ.get("SLURM_ARRAY_TASK_ID", ""),
+        "cuda_driver": _optional_command_output(
+            ("nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader")
+        ),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(contract, indent=2, sort_keys=True), encoding="utf-8")
+    return contract
+
+
+def compute_lock_hash_for_env(pixi_env: str, *, locks_dir: Path | None = None) -> str:
+    """Return a SHA-256 hash for a committed pixi manifest and lock.
+
+    Parameters
+    ----------
+    pixi_env:
+        Lock prefix under ``menagerie/locks``.
+    locks_dir:
+        Optional locks directory.
+
+    Returns
+    -------
+    str
+        SHA-256 digest.
+    """
+
+    resolved_locks = locks_dir or Path(__file__).resolve().parent / "locks"
+    manifest = resolved_locks / f"{pixi_env}.pixi.toml"
+    lock = resolved_locks / f"{pixi_env}.pixi.lock"
+    if not manifest.exists() or not lock.exists():
+        raise FileNotFoundError(f"missing committed pixi lock inputs for {pixi_env!r}")
+    digest = sha256()
+    digest.update(manifest.read_bytes())
+    digest.update(b"\0")
+    digest.update(lock.read_bytes())
+    return digest.hexdigest()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the cluster-runner command parser.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        CLI parser.
+    """
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    worker = subparsers.add_parser("worker")
+    worker.add_argument("--assignment-manifest", type=Path, required=True)
+    worker.add_argument("--task-index", type=int, required=True)
+    worker.add_argument("--repo-root", type=Path, default=REPO_ROOT)
+    worker.add_argument("--result-dir", type=Path, required=True)
+    lock_hash = subparsers.add_parser("lock-hash")
+    lock_hash.add_argument("--pixi-env", default="misc")
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the cluster-runner CLI.
+
+    Parameters
+    ----------
+    argv:
+        Optional argument list.
+
+    Returns
+    -------
+    int
+        Process exit code.
+    """
+
+    args = build_parser().parse_args(argv)
+    if args.command == "worker":
+        run_worker_assignment(
+            args.assignment_manifest,
+            args.task_index,
+            repo_root=args.repo_root,
+            result_dir=args.result_dir,
+        )
+        return 0
+    if args.command == "lock-hash":
+        print(compute_lock_hash_for_env(args.pixi_env))
+        return 0
+    raise AssertionError(f"unhandled command {args.command!r}")
+
+
+def _catalog_row_from_sql(row: Sequence[Any]) -> CatalogRow:
+    """Build a catalog row from SQLite values."""
+
+    return CatalogRow(
+        model_id=int(row[0]),
+        display_index=int(row[1]),
+        stable_id=str(row[2]),
+        name=str(row[3]),
+        variant=str(row[4]),
+        family=str(row[5]),
+        family_normalized=str(row[6]),
+        domain=str(row[7]),
+        zoo=str(row[8]),
+        constructor_call=str(row[9]),
+        input_shape=str(row[10]),
+        input_dtype=str(row[11]),
+        era=str(row[12]),
+        verified=bool(row[13]),
+        notes=str(row[14]),
+        source=str(row[15]),
+        recipe_revision_sha256=str(row[16]),
+        input_is_real=bool(row[17]),
+        verification_expectation=str(row[18]),
+        quarantine=bool(row[19]),
+    )
+
+
+def _row_value(row: CatalogRow | Mapping[str, object], field: str) -> str:
+    """Return a string field from a catalog row or mapping."""
+
+    if isinstance(row, Mapping):
+        return str(row.get(field, ""))
+    return str(getattr(row, field))
+
+
+def _latest_status_and_peak(
+    stable_id: str,
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None,
+) -> tuple[str | None, int | None]:
+    """Return latest ledger status and peak RSS for a stable ID."""
+
+    if ledger is None:
+        return None, None
+    if isinstance(ledger, Mapping):
+        peak = ledger.get(stable_id)
+        return None, int(peak) if peak is not None else None
+    if isinstance(ledger, Path):
+        with connect_ledger(ledger) as conn:
+            return _latest_status_and_peak(stable_id, conn)
+    row = ledger.execute(
+        """
+        SELECT status, peak_rss_mb
+        FROM current_verification
+        WHERE stable_id = ?
+        """,
+        (stable_id,),
+    ).fetchone()
+    if row is None:
+        return None, None
+    return str(row["status"]), None if row["peak_rss_mb"] is None else int(row["peak_rss_mb"])
+
+
+def _matches_first_contact_heuristic(row: CatalogRow | Mapping[str, object]) -> bool:
+    """Return whether row metadata is too risky for local first contact."""
+
+    haystack = " ".join(
+        _row_value(row, field)
+        for field in ("name", "family", "family_normalized", "domain", "zoo", "notes")
+    ).casefold()
+    if any(pattern in haystack for pattern in GIANT_HEURISTIC_PATTERNS):
+        return True
+    if _param_count_is_giant(haystack):
+        return True
+    return _input_shape_is_large(_row_value(row, "input_shape"))
+
+
+def _param_count_is_giant(haystack: str) -> bool:
+    """Return whether text contains a giant model-size marker."""
+
+    for value, suffix in re.findall(r"(\d+(?:\.\d+)?)\s*(b|bn|billion|m|mm)\b", haystack):
+        count = float(value)
+        if suffix in {"b", "bn", "billion"} and count >= 1.0:
+            return True
+        if suffix in {"m", "mm"} and count >= 400.0:
+            return True
+    return False
+
+
+def _input_shape_is_large(input_shape: str) -> bool:
+    """Return whether an input-shape string suggests unsafe local first contact."""
+
+    dims = [int(value) for value in re.findall(r"\d+", input_shape)]
+    if len(dims) < 3:
+        return False
+    product = 1
+    for dim in dims:
+        product *= max(1, dim)
+    return max(dims) >= 512 and product >= 512 * 512 * 3
+
+
+def _heuristic_peak_mb(row: CatalogRow | Mapping[str, object]) -> int:
+    """Return a conservative first-contact peak estimate."""
+
+    haystack = " ".join(
+        _row_value(row, field) for field in ("name", "family", "family_normalized", "notes")
+    ).casefold()
+    if "moe" in haystack or "longcat" in haystack or "deepseek" in haystack:
+        return 360 * MB_PER_GB
+    if _param_count_is_giant(haystack):
+        return 220 * MB_PER_GB
+    if _input_shape_is_large(_row_value(row, "input_shape")):
+        return 180 * MB_PER_GB
+    return 160 * MB_PER_GB
+
+
+def _tier_from_entry(entry: GiantRegistryEntry, config: ClusterConfig) -> NodeTier:
+    """Return a tier matching a static registry entry."""
+
+    partition = entry.partition
+    worker_cap = entry.worker_memory_cap_gb
+    for tier in config.node_tiers:
+        if tier.mem_gb >= entry.node_mem_gb:
+            return NodeTier(
+                mem_gb=entry.node_mem_gb,
+                worker_memory_cap_gb=worker_cap or max(1, entry.node_mem_gb - 10),
+                partition=partition or tier.partition,
+                max_peak_rss_gb=tier.max_peak_rss_gb,
+            )
+    tier = config.node_tiers[-1]
+    return NodeTier(
+        mem_gb=tier.mem_gb,
+        worker_memory_cap_gb=worker_cap or tier.worker_memory_cap_gb,
+        partition=partition or tier.partition,
+        max_peak_rss_gb=tier.max_peak_rss_gb,
+    )
+
+
+def _assignment_for_row(
+    *,
+    row: CatalogRow,
+    index: int,
+    ledger_db: Path,
+    config: ClusterConfig,
+    campaign_id: str,
+    attempt_id: str,
+) -> ClusterAssignment:
+    """Build one cluster assignment for a row."""
+
+    tier = node_tier_for_row(row, ledger=ledger_db, config=config)
+    entry = GIANT_REGISTRY.get(row.stable_id)
+    return ClusterAssignment(
+        campaign_id=campaign_id,
+        attempt_id=attempt_id,
+        assignment_id=f"{campaign_id}:{attempt_id}:{index}:{row.stable_id}",
+        stable_id=row.stable_id,
+        array_index=index,
+        node_mem_gb=tier.mem_gb,
+        worker_memory_cap_gb=tier.worker_memory_cap_gb,
+        partition=tier.partition,
+        reason=entry.reason if entry is not None else "cold-start heuristic",
+    )
+
+
+def _copy_catalog_snapshot(source: Path, destination: Path) -> None:
+    """Copy an existing catalog database snapshot."""
+
+    if not source.exists():
+        raise FileNotFoundError(f"catalog database must already exist: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+
+def _dispatch_commands(
+    *,
+    repo_root: Path,
+    artifact_dir: Path,
+    remote_artifact_dir: str,
+    config: ClusterConfig,
+    sbatch_paths: Sequence[Path],
+) -> tuple[tuple[str, ...], ...]:
+    """Return rsync, mkdir, and sbatch commands for dispatch.
+
+    Parameters
+    ----------
+    repo_root:
+        Local repository root.
+    artifact_dir:
+        Local artifact directory.
+    remote_artifact_dir:
+        Remote artifact directory.
+    config:
+        Cluster defaults.
+    sbatch_paths:
+        Local sbatch scripts to submit.
+
+    Returns
+    -------
+    tuple[tuple[str, ...], ...]
+        Commands in execution order.
+    """
+
+    remote = f"{config.host}:{config.remote_repo.rstrip('/')}/"
+    artifact_remote = f"{config.host}:{remote_artifact_dir.rstrip('/')}/"
+    setup_commands = (
+        (
+            "rsync",
+            "-az",
+            "--delete",
+            "--exclude",
+            ".git",
+            "--exclude",
+            ".research",
+            "--exclude",
+            "__pycache__",
+            "--exclude",
+            "menagerie/data/verification.db*",
+            str(repo_root).rstrip("/") + "/",
+            remote,
+        ),
+        ("ssh", config.host, f"mkdir -p {remote_artifact_dir}/logs {remote_artifact_dir}/results"),
+        ("rsync", "-az", str(artifact_dir).rstrip("/") + "/", artifact_remote),
+    )
+    sbatch_commands = tuple(
+        ("ssh", config.host, f"sbatch {remote_artifact_dir}/{sbatch_path.name}")
+        for sbatch_path in sbatch_paths
+    )
+    return (*setup_commands, *sbatch_commands)
+
+
+def _write_sbatch_scripts(
+    assignments: Sequence[ClusterAssignment],
+    *,
+    artifact_dir: Path,
+    config: ClusterConfig,
+    remote_artifact_dir: str,
+) -> tuple[Path, ...]:
+    """Write one sbatch script per memory/partition tier.
+
+    Parameters
+    ----------
+    assignments:
+        Cluster assignments.
+    artifact_dir:
+        Local artifact directory.
+    config:
+        Cluster defaults.
+    remote_artifact_dir:
+        Remote artifact directory.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Written sbatch script paths.
+    """
+
+    groups: dict[tuple[str, int], list[ClusterAssignment]] = defaultdict(list)
+    for assignment in assignments:
+        groups[(assignment.partition, assignment.node_mem_gb)].append(assignment)
+    paths: list[Path] = []
+    for (partition, mem_gb), group in sorted(groups.items(), key=lambda item: item[0]):
+        path = artifact_dir / f"cluster_runner_{partition}_{mem_gb}g.sbatch"
+        path.write_text(
+            render_sbatch_script(
+                group,
+                config=config,
+                remote_artifact_dir=remote_artifact_dir,
+            ),
+            encoding="utf-8",
+        )
+        paths.append(path)
+    return tuple(paths)
+
+
+def _parse_sbatch_job_id(stdout: str) -> str | None:
+    """Parse an sbatch job ID from command output."""
+
+    match = re.search(r"Submitted batch job\s+(\S+)", stdout)
+    return match.group(1) if match else None
+
+
+def _verification_run_from_row(row: sqlite3.Row) -> VerificationRun:
+    """Build a verification run from a SQLite row."""
+
+    return VerificationRun(
+        stable_id=str(row["stable_id"]),
+        recipe_revision_sha256=str(row["recipe_revision_sha256"]),
+        name=str(row["name"]),
+        zoo=str(row["zoo"]),
+        variant=str(row["variant"]),
+        scope=row["scope"],
+        status=row["status"],
+        forward_pass=row["forward_pass"],
+        backward_pass=row["backward_pass"],
+        backward_na_reason=row["backward_na_reason"],
+        metadata_ok=row["metadata_ok"],
+        n_ops=row["n_ops"],
+        graph_shape_hash=row["graph_shape_hash"],
+        svg_sha256=row["svg_sha256"],
+        torchlens_version=str(row["torchlens_version"]),
+        torch_version=str(row["torch_version"]),
+        python_version=str(row["python_version"]),
+        device_requested=str(row["device_requested"]),
+        device_actual=row["device_actual"],
+        env_hash=row["env_hash"],
+        lock_hash=str(row["lock_hash"]),
+        torchlens_source_hash=str(row["torchlens_source_hash"]),
+        input_scale=row["input_scale"],
+        runner_host=row["runner_host"],
+        started_at=str(row["started_at"]),
+        finished_at=str(row["finished_at"]),
+        duration_sec=float(row["duration_sec"]),
+        peak_rss_mb=row["peak_rss_mb"],
+        error_class=row["error_class"],
+        error_message=row["error_message"],
+        run_id=str(row["run_id"]),
+    )
+
+
+def _cluster_result_payload(row: ClusterResultRow) -> dict[str, object]:
+    """Return a JSON-compatible cluster result payload."""
+
+    return {
+        "campaign_id": row.campaign_id,
+        "attempt_id": row.attempt_id,
+        "assignment_id": row.assignment_id,
+        "run": asdict(row.run),
+    }
+
+
+def _verification_run_checksum(run: VerificationRun) -> str:
+    """Return a stable checksum for a verification run payload."""
+
+    payload = json.dumps(asdict(run), sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _assignment_result_checksum(rows: Sequence[ClusterResultRow]) -> str:
+    """Return a stable checksum for all rows in one assignment."""
+
+    digest = sha256()
+    for row in sorted(rows, key=lambda item: item.run.run_id):
+        digest.update(_verification_run_checksum(row.run).encode("ascii"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _load_result_expectations(path: Path) -> dict[tuple[str, str, str], tuple[int, str]]:
+    """Load expected result counts and checksums."""
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    expectations: dict[tuple[str, str, str], tuple[int, str]] = {}
+    for item in payload["assignments"]:
+        key = (str(item["campaign_id"]), str(item["attempt_id"]), str(item["assignment_id"]))
+        expectations[key] = (int(item["expected_row_count"]), str(item["result_checksum"]))
+    return expectations
+
+
+def _verify_result_expectations(
+    rows: Sequence[ClusterResultRow],
+    expectations: Mapping[tuple[str, str, str], tuple[int, str]],
+) -> None:
+    """Verify result rows against expected counts and checksums."""
+
+    grouped: dict[tuple[str, str, str], list[ClusterResultRow]] = defaultdict(list)
+    for row in rows:
+        grouped[(row.campaign_id, row.attempt_id, row.assignment_id)].append(row)
+    if set(grouped) != set(expectations):
+        raise ClusterResultIntegrityError(
+            f"result assignment keys {sorted(grouped)} do not match manifest {sorted(expectations)}"
+        )
+    for key, group in grouped.items():
+        expected_count, expected_checksum = expectations[key]
+        actual_checksum = _assignment_result_checksum(group)
+        if len(group) != expected_count:
+            raise ClusterResultIntegrityError(
+                f"{key} expected {expected_count} rows, got {len(group)}"
+            )
+        if actual_checksum != expected_checksum:
+            raise ClusterResultIntegrityError(f"{key} checksum mismatch")
+
+
+def _load_and_verify_collected_results(result_dir: Path) -> tuple[ClusterResultRow, ...]:
+    """Load and verify per-task result artifacts from a directory.
+
+    Parameters
+    ----------
+    result_dir:
+        Directory containing per-task ``*.jsonl`` and ``*.manifest.json`` files.
+
+    Returns
+    -------
+    tuple[ClusterResultRow, ...]
+        Verified result rows.
+    """
+
+    all_rows: list[ClusterResultRow] = []
+    manifest_paths = sorted(result_dir.glob("*.manifest.json"))
+    if not manifest_paths:
+        raise ClusterResultIntegrityError(f"no result manifests found in {result_dir}")
+    for manifest_path in manifest_paths:
+        rows_path = manifest_path.with_suffix("").with_suffix(".jsonl")
+        if not rows_path.exists():
+            raise ClusterResultIntegrityError(f"missing rows for manifest {manifest_path}")
+        rows = load_result_rows_jsonl(rows_path)
+        expectations = _load_result_expectations(manifest_path)
+        _verify_result_expectations(rows, expectations)
+        all_rows.extend(rows)
+    if not all_rows:
+        raise ClusterResultIntegrityError(f"no result rows found in {result_dir}")
+    return tuple(all_rows)
+
+
+def _initialize_cluster_merge_tables(conn: sqlite3.Connection) -> None:
+    """Create cluster merge idempotency tables."""
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cluster_result_imports(
+            campaign_id TEXT NOT NULL,
+            attempt_id TEXT NOT NULL,
+            assignment_id TEXT NOT NULL,
+            source_run_id TEXT NOT NULL,
+            row_checksum TEXT NOT NULL,
+            imported_at TEXT NOT NULL,
+            PRIMARY KEY(campaign_id, attempt_id, assignment_id, source_run_id)
+        )
+        """
+    )
+
+
+def _existing_merge_row(conn: sqlite3.Connection, row: ClusterResultRow) -> sqlite3.Row | None:
+    """Return an existing merge row for a cluster result key."""
+
+    return conn.execute(
+        """
+        SELECT row_checksum
+        FROM cluster_result_imports
+        WHERE campaign_id = ?
+          AND attempt_id = ?
+          AND assignment_id = ?
+          AND source_run_id = ?
+        """,
+        (row.campaign_id, row.attempt_id, row.assignment_id, row.run.run_id),
+    ).fetchone()
+
+
+def _existing_run_id_is_compatible(
+    conn: sqlite3.Connection, run: VerificationRun, checksum: str
+) -> bool:
+    """Return whether an existing verification run ID has identical content.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    run:
+        Incoming verification run.
+    checksum:
+        Incoming run checksum.
+
+    Returns
+    -------
+    bool
+        ``True`` when the run ID already exists with identical payload.
+
+    Raises
+    ------
+    ClusterMergeConflict
+        If the run ID exists with different content.
+    """
+
+    existing = conn.execute(
+        "SELECT * FROM verification_runs WHERE run_id = ?", (run.run_id,)
+    ).fetchone()
+    if existing is None:
+        return False
+    existing_checksum = _verification_run_checksum(_verification_run_from_row(existing))
+    if existing_checksum != checksum:
+        raise ClusterMergeConflict(f"run_id {run.run_id} already exists with different payload")
+    return True
+
+
+def _optional_command_output(command: Sequence[str]) -> str:
+    """Return command output or an empty string when unavailable."""
+
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
