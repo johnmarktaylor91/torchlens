@@ -227,7 +227,7 @@ def _build_root_module_log(
         output_ops=list(self.output_layers),
         output_structure=_first_output_structure(self, list(self.output_layers)),
         call_parent=None,
-        call_children=[m for m in mbd["top_level_module_ops"] if m != "self:1"],
+        call_children=_root_call_children(mbd),
         all_addresses=root_meta.get("all_addresses", ["self"]),
         cls=root_meta.get("cls"),
         class_name=root_meta.get("class_name", self.model_class_name),
@@ -243,6 +243,37 @@ def _build_root_module_log(
     pass_dict["self:1"] = root_pass
 
     return root_module
+
+
+def _root_call_children(mbd: dict[str, Any]) -> list[str]:
+    """Resolve the root ``self:1`` ModuleCall's direct call children.
+
+    Two capture shapes feed this:
+
+    * Function-root traces (``self`` is synthetic and never appears in an op's
+      module stack): the direct children are the outermost real module calls,
+      recorded in ``top_level_module_ops`` while ``module_pass_children['self:1']``
+      stays empty.
+    * Object-module / explicit-self traces (``self`` is itself a traced module,
+      so ops carry ``['self:1', child:1, ...]`` stacks): the outermost call IS
+      ``self:1`` itself, so ``top_level_module_ops`` collapses to ``['self:1']``
+      and the real direct children land in ``module_pass_children['self:1']``.
+
+    Unioning both sources (preserving order, dropping the self-reference) yields
+    the correct children in both shapes. Previously only ``top_level_module_ops``
+    was consulted, so the explicit-self shape silently dropped every child of
+    ``self:1`` -- an asymmetric call-tree the module-hierarchy invariant rightly
+    flags (parent lists no children while children point back to ``self:1``).
+    """
+
+    children: list[str] = []
+    for label in mbd.get("top_level_module_ops", []):
+        if label != "self:1" and label not in children:
+            children.append(label)
+    for label in mbd.get("module_pass_children", {}).get("self:1", []):
+        if label != "self:1" and label not in children:
+            children.append(label)
+    return children
 
 
 def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module") -> None:

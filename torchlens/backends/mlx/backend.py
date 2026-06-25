@@ -1606,6 +1606,7 @@ class MLXBackend:
         """
 
         seen_param_barcodes: set[str] = set()
+        layers_with_params_seen: set[str] = set()
         for raw_index, (label, op_log) in enumerate(trace._raw_layer_dict.items()):
             pass_label = f"{label}:1"
             op_log._label_raw = label
@@ -1627,6 +1628,8 @@ class MLXBackend:
             trace._lookup_keys_to_layer_num_dict[label] = raw_index
             trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
             _attach_mlx_op_params(op_log, trace.param_logs, seen_param_barcodes)
+            if getattr(op_log, "_param_logs", []):
+                layers_with_params_seen.add(op_log.layer_label)
             for param in getattr(op_log, "_param_logs", []):
                 if op_log.label not in param.used_by_ops:
                     param.used_by_ops.append(op_log.label)
@@ -1643,6 +1646,12 @@ class MLXBackend:
             for op_log in trace.layer_list
             if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
         )
+        # Distinct layers carrying parameters. The torch path tallies this in the
+        # labeling pass; MLX finalizes its own layer logs, so mirror that count
+        # here (deduplicated by layer_label) instead of leaving the field at its
+        # init default of 0 -- otherwise the param cross-reference invariant flags
+        # a layers_with_params mismatch against the non-zero num_params total.
+        trace.num_layers_with_params = len(layers_with_params_seen)
         trace._layers_logged = True
         trace._layers_saved = True
         trace._tracing_finished = True
