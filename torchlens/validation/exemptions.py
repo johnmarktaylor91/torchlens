@@ -199,119 +199,6 @@ def _setitem_destination_slice_is_fully_overwritten(
     return tuple(selected.shape) == tuple(replacement.shape)
 
 
-def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
-    """Exempt ``index_put``/``index_put_`` when the destination is fully overwritten.
-
-    The exact analogue of :func:`_check_setitem_exempt` Case 4 for the
-    ``index_put`` family. ``index_put(input, indices, values, accumulate=False)``
-    overwrites ``input[indices]`` with ``values`` when ``accumulate`` is False, so
-    the destination's prior value at those positions is provably irrelevant. This
-    exemption fires ONLY when the perturbed parent IS the destination (``args[0]``)
-    and the written positions are fully overwritten; it must NOT exempt a perturbed
-    VALUE or INDEX parent (those genuinely influence the output), and it must NOT
-    exempt the accumulating case (where the prior destination value IS added in).
-    """
-    perturbed_tensor = self[layers_to_perturb[0]].out
-    return _index_put_destination_is_fully_overwritten(perturbed_tensor, layer)
-
-
-def _index_put_destination_is_fully_overwritten(
-    perturbed_tensor: torch.Tensor | None,
-    layer: Op,
-) -> bool:
-    """Return whether an ``index_put`` call overwrites the perturbed destination.
-
-    Parameters
-    ----------
-    perturbed_tensor:
-        Tensor selected for perturbation.
-    layer:
-        Captured ``index_put``/``index_put_`` op.
-
-    Returns
-    -------
-    bool
-        True only when the perturbed tensor is the destination (``args[0]``), the
-        call is non-accumulating, and the indexed positions cover the ENTIRE
-        destination and are exactly written by the broadcast ``values`` (so the
-        destination's prior value is wholly irrelevant). Returns False for any
-        perturbed VALUE/INDEX parent, for the accumulating case, and for a
-        partial overwrite (where un-indexed destination elements still flow
-        through).
-    """
-
-    args = layer.saved_args
-    if not isinstance(perturbed_tensor, torch.Tensor):
-        return False
-    if args is None or len(args) < 3:
-        return False
-    destination, indices, values = args[0], args[1], args[2]
-    if not isinstance(destination, torch.Tensor) or not isinstance(values, torch.Tensor):
-        return False
-    # Narrow: the perturbed parent must be the DESTINATION, never the values/index.
-    if not torch.equal(perturbed_tensor, destination):
-        return False
-    # accumulate=True adds the value to the prior destination, so the prior value
-    # is NOT irrelevant -- never exempt that case. accumulate may arrive as a
-    # positional arg (index 3) or as a keyword.
-    accumulate = False
-    if len(args) > 3:
-        accumulate = bool(args[3])
-    elif "accumulate" in (layer.saved_kwargs or {}):
-        accumulate = bool(layer.saved_kwargs["accumulate"])
-    if accumulate:
-        return False
-    # index_put indices are an advanced-indexing tuple/list of LongTensors.
-    if isinstance(indices, list):
-        index = tuple(indices)
-    elif isinstance(indices, tuple):
-        index = indices
-    else:
-        index = (indices,)
-    try:
-        selected = destination[index]
-    except (IndexError, TypeError, RuntimeError):
-        return False
-    # The written slice must broadcast the replacement exactly (every selected
-    # element is overwritten, none left at its prior value).
-    try:
-        broadcast_shape = torch.broadcast_shapes(tuple(selected.shape), tuple(values.shape))
-    except RuntimeError:
-        return False
-    if tuple(broadcast_shape) != tuple(selected.shape):
-        return False
-    # The exemption is only sound when the WHOLE destination is overwritten: any
-    # un-indexed element keeps its prior value and so still influences the output
-    # (the partial-overwrite false-exemption guard). Require the indexed region to
-    # cover every destination element, with no duplicate indices inflating the
-    # count -- duplicates would match the numel without covering everything.
-    if not _index_put_indices_are_unique(index):
-        return False
-    return int(selected.numel()) == int(destination.numel())
-
-
-def _index_put_indices_are_unique(index: tuple[Any, ...]) -> bool:
-    """Return whether advanced ``index_put`` indices address distinct positions.
-
-    Duplicate indices would let ``selected.numel()`` reach ``destination.numel()``
-    without actually covering every destination element, so the full-overwrite
-    coverage check would be fooled. This conservatively requires each integer
-    index tensor to hold unique values; a non-integer (e.g. boolean mask) or any
-    structure it cannot verify returns False so the exemption is withheld.
-    """
-
-    for component in index:
-        if not isinstance(component, torch.Tensor):
-            return False
-        if component.dtype == torch.bool:
-            # A bool mask selects each True position once -> inherently unique.
-            continue
-        flattened = component.reshape(-1)
-        if int(flattened.numel()) != int(torch.unique(flattened).numel()):
-            return False
-    return True
-
-
 def _check_lstm_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
     """Exempt lstm when the perturbed layer is a hidden/cell state arg."""
     perturbed_tensor = self[layers_to_perturb[0]].out
@@ -462,8 +349,6 @@ def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) 
 CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", Op, List[str]], bool]] = {
     "__getitem__": _check_getitem_exempt,
     "__setitem__": _check_setitem_exempt,
-    "index_put": _check_index_put_exempt,
-    "index_put_": _check_index_put_exempt,
     "lstm": _check_lstm_exempt,
     "interpolate": _check_interpolate_exempt,
     "scatter": _check_scatter_exempt,

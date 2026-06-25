@@ -771,17 +771,5 @@ def _merge_buffer_entries(self: "Trace", source_buffer: Op, buffer_to_remove: Op
         if buffer_to_remove._label_raw in layer.internal_source_ancestors:
             layer.internal_source_ancestors.remove(buffer_to_remove._label_raw)
             layer.internal_source_ancestors.add(source_buffer._label_raw)
-        # Repoint any op whose scalar ``buffer_source`` still names the removed
-        # buffer to the value-identical survivor. Unlike parents/children, the
-        # ``buffer_source`` field (and its arg-0 mirror in ``parent_arg_positions``)
-        # is NOT rewritten above and is absent from the raw->final rename + scrub
-        # lists, so without this it dangles -- the buffer-merge analogue of the
-        # campaign's "scrub removed buffer graph references" fix (e.g. speechbrain
-        # CRDNN LiGRU per-forward ``drop_mask_te.to(device)`` reassign buffers).
-        if layer.buffer_source == buffer_to_remove._label_raw:
-            layer.buffer_source = source_buffer._label_raw
-            arg_positions = layer.parent_arg_positions.get("args")
-            if arg_positions is not None and arg_positions.get(0) == buffer_to_remove._label_raw:
-                arg_positions[0] = source_buffer._label_raw
 
     self._remove_log_entry(buffer_to_remove, remove_references=True)
