@@ -976,6 +976,22 @@ def _walk_supported_output_container(
                 root_spec=root_spec,
                 path=(*path, TupleIndex(index)),
             )
+        return
+    # Unrecognized nested container (e.g. transformers DynamicCache nested inside
+    # an HF ModelOutput). The structured walk cannot assign stable paths through
+    # it, but the tensors it holds are still real model outputs that MUST be
+    # discovered -- otherwise capture silently drops them (e.g. GPT-2's
+    # past_key_values), shrinking the output set from 3 tensors to 1. Fall back to
+    # a BFS over this subtree, yielding tensors without a stable container path.
+    # search_depth=5 matches the legacy whole-output BFS fallback; DynamicCache's
+    # tensors live at depth ~5 and are missed by the default depth of 3.
+    for tensor in get_vars_of_type_from_obj(
+        out,
+        which_type=torch.Tensor,
+        subclass_exceptions=[torch.nn.Parameter],
+        search_depth=5,
+    ):
+        yield tensor, path, None
 
 
 def _walk_output_tensors_with_paths(
