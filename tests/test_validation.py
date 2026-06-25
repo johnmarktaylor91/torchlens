@@ -38,6 +38,9 @@ from torchlens.validation.core import (
     _execute_func_with_restored_state,
     _check_perturbation_exemptions,
     _restore_live_parameter_args_for_replay,
+    _deep_numeric_replay_matches_saved,
+    _op_reduction_depth,
+    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     MAX_PERTURB_ATTEMPTS,
 )
 from torchlens.validation.status import (
@@ -203,6 +206,132 @@ def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     _restore_live_parameter_args_for_replay(stale_args, cast(Any, stale_layer))
 
     assert stale_args["args"][0] is stale_snapshot
+
+
+def _make_deep_numeric_layer(
+    func_name: str,
+    saved_args: list[Any],
+    out: torch.Tensor,
+    saved_kwargs: dict[str, Any] | None = None,
+) -> Any:
+    """Build a minimal op stand-in for deep-numeric replay tests."""
+
+    return SimpleNamespace(
+        func_name=func_name,
+        saved_args=saved_args,
+        saved_kwargs=saved_kwargs or {},
+        out=out,
+    )
+
+
+def test_op_reduction_depth_reads_conv_and_matmul_contractions() -> None:
+    """Reduction depth equals the contracted dimension for conv / matmul ops."""
+
+    # conv2d: weight (out=4, in/groups=8, kH=3, kW=3) -> 8*3*3 = 72 accumulations.
+    conv_weight = torch.zeros(4, 8, 3, 3)
+    conv_layer = _make_deep_numeric_layer(
+        "conv2d", [torch.zeros(1, 8, 5, 5), conv_weight], torch.zeros(1, 4, 3, 3)
+    )
+    assert _op_reduction_depth(conv_layer, torch.zeros(1, 4, 3, 3)) == 72
+
+    # linear: weight (out_features=16, in_features=128) -> K = 128.
+    linear_layer = _make_deep_numeric_layer(
+        "linear", [torch.zeros(2, 128), torch.zeros(16, 128)], torch.zeros(2, 16)
+    )
+    assert _op_reduction_depth(linear_layer, torch.zeros(2, 16)) == 128
+
+    # matmul: (n, K) @ (K, m); first operand last dim is K = 64.
+    matmul_layer = _make_deep_numeric_layer(
+        "matmul", [torch.zeros(3, 64), torch.zeros(64, 5)], torch.zeros(3, 5)
+    )
+    assert _op_reduction_depth(matmul_layer, torch.zeros(3, 5)) == 64
+
+
+def test_op_reduction_depth_reads_keyword_passed_operands() -> None:
+    """Reduction depth must also read operands passed by keyword, not just positionally.
+
+    A ``conv2d(x, weight=w)`` / ``matmul(a, other=b)`` call leaves the operand's
+    positional ``saved_args`` slot empty; if depth were read positionally only it
+    would fall to 0 and the deep-numeric band would be wrongly withheld (a fresh
+    false-negative). The depth must match the equivalent positional call.
+    """
+
+    # conv2d called with weight= kwarg -> 8*3*3 = 72 accumulations (same as positional).
+    conv_weight = torch.zeros(4, 8, 3, 3)
+    conv_layer = _make_deep_numeric_layer(
+        "conv2d",
+        [torch.zeros(1, 8, 5, 5)],
+        torch.zeros(1, 4, 3, 3),
+        saved_kwargs={"weight": conv_weight},
+    )
+    assert _op_reduction_depth(conv_layer, torch.zeros(1, 4, 3, 3)) == 72
+
+    # linear called with weight= kwarg -> K = 128.
+    linear_layer = _make_deep_numeric_layer(
+        "linear",
+        [torch.zeros(2, 128)],
+        torch.zeros(2, 16),
+        saved_kwargs={"weight": torch.zeros(16, 128)},
+    )
+    assert _op_reduction_depth(linear_layer, torch.zeros(2, 16)) == 128
+
+    # matmul called with the second operand by keyword still contracts the first
+    # operand's last dim K = 64 (the first matrix is positional here).
+    matmul_layer = _make_deep_numeric_layer(
+        "matmul",
+        [torch.zeros(3, 64)],
+        torch.zeros(3, 5),
+        saved_kwargs={"other": torch.zeros(64, 5)},
+    )
+    assert _op_reduction_depth(matmul_layer, torch.zeros(3, 5)) == 64
+
+
+def test_deep_numeric_replay_accepts_deep_early_conv_sub_ulp_drift() -> None:
+    """A physically-deep conv accepts sub-ULP replay drift regardless of graph position.
+
+    Mirrors the BiT ResNet-v2 (weight-standardized) failure: an early, very wide
+    conv replays to FP32 round-off (abs error well under the deep-numeric atol of
+    1e-4 at activation scale ~90). The old ``step_index >= 100`` gate wrongly
+    rejected such early ops; the reduction-depth gate accepts them.
+    """
+
+    weight = torch.zeros(1536, 256, 1, 1)  # in/groups * kH * kW = 256 >> threshold.
+    saved_out = torch.empty(1, 1536, 8, 8).uniform_(-90.0, 90.0)
+    # Recomputed output differs only by sub-ULP drift at activation scale.
+    drift = torch.empty_like(saved_out).uniform_(-8.0e-5, 8.0e-5)
+    recomputed = saved_out + drift
+    layer = _make_deep_numeric_layer("conv2d", [torch.zeros(1, 256, 8, 8), weight], saved_out)
+
+    assert _op_reduction_depth(layer, recomputed) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    # Plain strict equality (allow_tolerance) would reject this drift...
+    assert not tensor_nanequal(recomputed, saved_out, allow_tolerance=True)
+    # ...but the deep-numeric replay tolerance accepts it for a deep conv.
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is True
+
+
+def test_deep_numeric_replay_tripwire_still_fails_on_wrong_output() -> None:
+    """The deep-numeric tolerance must NOT mask a genuinely wrong replay."""
+
+    weight = torch.zeros(1536, 256, 1, 1)
+    saved_out = torch.empty(1, 1536, 8, 8).uniform_(-90.0, 90.0)
+    # A real capture bug yields a grossly different output, not sub-ULP drift.
+    wrong = saved_out + 25.0
+    layer = _make_deep_numeric_layer("conv2d", [torch.zeros(1, 256, 8, 8), weight], saved_out)
+
+    assert _op_reduction_depth(layer, wrong) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, wrong) is False
+
+
+def test_deep_numeric_replay_withheld_from_shallow_reduction_op() -> None:
+    """A tiny-contraction matmul does not get the relaxed deep-numeric tolerance."""
+
+    # K = 2 contraction: far below the reduction-depth threshold.
+    saved_out = torch.empty(4, 4).uniform_(-90.0, 90.0)
+    recomputed = saved_out + torch.empty_like(saved_out).uniform_(-8.0e-5, 8.0e-5)
+    layer = _make_deep_numeric_layer("matmul", [torch.zeros(4, 2), torch.zeros(2, 4)], saved_out)
+
+    assert _op_reduction_depth(layer, recomputed) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
 def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:

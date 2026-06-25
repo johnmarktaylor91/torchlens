@@ -69,7 +69,17 @@ DEEP_NUMERIC_REPLAY_FUNCS = frozenset(
         "mm",
     }
 )
-DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM = 100
+# Minimum per-output-element accumulation depth (number of FP32 multiply-adds
+# summed into each output element) for an op to qualify for the deep-numeric
+# replay tolerance. FP32 conv/matmul drift is driven by the *reduction depth* of
+# the contraction, not by where the op sits in the graph: a wide channel-
+# expansion conv accumulates hundreds of products per output whether it is op #87
+# (e.g. BiT ResNet-v2 weight-standardized stem-adjacent conv) or op #870. This
+# replaces the earlier ``step_index >= 100`` position proxy, which mis-gated
+# physically-deep early ops. The acceptance tolerances below are unchanged, so a
+# genuinely wrong replay still fails; only the qualification predicate is now the
+# faithful depth measure rather than a graph-position heuristic.
+DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH = 64
 DEEP_NUMERIC_REPLAY_RTOL = 1e-3
 DEEP_NUMERIC_REPLAY_ATOL = 1e-4
 DEEP_NUMERIC_REPLAY_OUTLIER_RTOL = 5e-2
@@ -946,6 +956,91 @@ def _index_recomputed_output_component(output: Any, component: OutputPathCompone
     raise TypeError(f"Unsupported output path component {component!r}.")
 
 
+def _op_reduction_depth(layer: Op, recomputed_output: torch.Tensor) -> int:
+    """Return the per-output accumulation depth for a deep-numeric replay op.
+
+    The reduction depth is the number of FP32 multiply-adds summed into each
+    output element, which is what drives accumulation-order round-off between an
+    original op and its faithful replay. It is read from the op's saved weight /
+    operand argument shapes:
+
+    - ``conv*`` weights have shape ``(out_channels, in_channels/groups, *kernel)``;
+      each output element accumulates ``in_channels/groups * prod(kernel)`` =
+      ``weight.numel() / weight.shape[0]`` products.
+    - ``linear`` / ``addmm`` / ``mm`` / ``matmul`` / ``bmm`` contract the last
+      dimension of their first matrix operand (``... x K`` @ ``K x ...``), so the
+      depth is that ``K``.
+
+    Parameters
+    ----------
+    layer:
+        Operation being replayed.
+    recomputed_output:
+        Output produced by the replay (used only as a conservative fallback).
+
+    Returns
+    -------
+    int
+        Estimated per-output accumulation depth, or ``0`` when it cannot be
+        determined (which conservatively withholds the deep-numeric tolerance).
+    """
+
+    saved_args = getattr(layer, "saved_args", None) or ()
+    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    func_name = layer.func_name
+
+    def _operand(index: int, *kwarg_names: str) -> Any:
+        """Read a contraction operand from positional args, falling back to kwargs.
+
+        Torch ops can be called with the weight / matrix operand passed by
+        keyword (``conv2d(x, weight=w)``, ``matmul(a, other=b)``), in which case
+        the positional ``saved_args`` slot is absent. Consulting ``saved_kwargs``
+        too keeps the reduction depth correct for those calls; without it the
+        depth falls to ``0`` and the deep-numeric band is wrongly withheld,
+        producing a fresh false-negative.
+        """
+
+        if index < len(saved_args):
+            return saved_args[index]
+        for name in kwarg_names:
+            if name in saved_kwargs:
+                return saved_kwargs[name]
+        return None
+
+    if func_name.startswith("conv"):
+        # conv*: weight is the second positional arg (or weight= kwarg).
+        weight = _operand(1, "weight")
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
+            return int(weight.numel() // weight.shape[0])
+        return 0
+    if func_name == "linear":
+        # linear(input, weight, bias): weight is (out_features, in_features).
+        weight = _operand(1, "weight")
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 1:
+            return int(weight.shape[-1])
+        first = _operand(0, "input")
+        if isinstance(first, torch.Tensor) and first.dim() >= 1:
+            return int(first.shape[-1])
+        return 0
+    if func_name == "addmm":
+        # addmm(bias, mat1, mat2): mat1 is (n, K).
+        mat1 = _operand(1, "mat1")
+        if isinstance(mat1, torch.Tensor) and mat1.dim() >= 1:
+            return int(mat1.shape[-1])
+        return 0
+    # mm / matmul / bmm / baddbmm: contract the last dim of the first matrix.
+    if func_name == "baddbmm":
+        first_matrix = _operand(1, "batch1")
+    elif func_name in {"mm", "bmm"}:
+        first_matrix = _operand(0, "input", "mat1")
+    else:
+        # matmul: first matrix is ``input``; second is ``other``.
+        first_matrix = _operand(0, "input")
+    if isinstance(first_matrix, torch.Tensor) and first_matrix.dim() >= 1:
+        return int(first_matrix.shape[-1])
+    return 0
+
+
 def _deep_numeric_replay_matches_saved(
     layer: Op,
     recomputed_output: torch.Tensor,
@@ -953,10 +1048,12 @@ def _deep_numeric_replay_matches_saved(
     """Return whether a deep numeric replay matches within local relaxed tolerance.
 
     The standard validation tolerance remains the default for every layer. This
-    fallback is intentionally narrow: it only applies to later convolution-like
-    numeric ops, first tries a modest ``allclose`` relaxation, then allows a
-    tiny fraction of stricter-check outliers only when the overall scaled error
-    is still very small.
+    fallback is intentionally narrow: it only applies to large-reduction
+    convolution / matmul ops (``DEEP_NUMERIC_REPLAY_FUNCS`` whose per-output
+    accumulation depth is at least ``DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH``),
+    first tries a modest ``allclose`` relaxation, then allows a tiny fraction of
+    stricter-check outliers only when the overall scaled error is still very
+    small.
 
     Parameters
     ----------
@@ -976,7 +1073,7 @@ def _deep_numeric_replay_matches_saved(
         return False
     if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
         return False
-    if layer.step_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+    if _op_reduction_depth(layer, recomputed_output) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH:
         return False
     if recomputed_output.shape != saved_output.shape:
         return False
