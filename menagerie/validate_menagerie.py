@@ -851,21 +851,108 @@ def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
     )
 
 
-def _build_input(row: CatalogRow) -> Any:
+MIN_SCALED_SPATIAL_DIM = 32
+
+
+def _build_input(row: CatalogRow, input_scale: float = 1.0) -> Any:
     """Build the example input for a catalog row.
 
     Parameters
     ----------
     row:
         Catalog row.
+    input_scale:
+        Spatial down-scaling factor applied to the built example input. ``1.0``
+        (the default) leaves the input untouched. A value ``< 1.0`` shrinks the
+        spatial dimensions so models that are too large at full resolution can be
+        validated at reduced input size. The recipe/identity is NOT affected: the
+        input is excluded from ``recipe_revision_sha256``.
 
     Returns
     -------
     Any
-        Example input.
+        Example input, spatially down-scaled when ``input_scale < 1.0``.
     """
 
-    return build_input_for_row(row)
+    example_input = build_input_for_row(row)
+    if input_scale >= 1.0:
+        return example_input
+    return _scale_example_input(example_input, input_scale)
+
+
+def _scaled_spatial_size(size: int, input_scale: float) -> int:
+    """Return one down-scaled spatial dimension, clamped to a safe minimum.
+
+    Parameters
+    ----------
+    size:
+        Original spatial dimension length.
+    input_scale:
+        Scaling factor in ``(0, 1)``.
+
+    Returns
+    -------
+    int
+        Scaled length, rounded and clamped to at least ``MIN_SCALED_SPATIAL_DIM``
+        (never larger than the original, so scaling only ever shrinks).
+    """
+
+    scaled = int(round(size * input_scale))
+    scaled = max(MIN_SCALED_SPATIAL_DIM, scaled)
+    return min(size, scaled)
+
+
+def _scale_example_input(example_input: Any, input_scale: float) -> Any:
+    """Down-scale the spatial dimensions of an example input tree.
+
+    Tensors with at least three dimensions are treated as having a leading batch
+    dim (0) and channel dim (1); every dimension from index 2 onward is a spatial
+    dimension and is scaled down. For a 4D image tensor ``(N, C, H, W)`` this
+    scales ``H`` and ``W`` while keeping ``N`` and ``C``. Containers (tuple, list,
+    dict) are scaled element-wise; everything else is returned unchanged.
+
+    A fresh tensor of the reduced shape is allocated with the original dtype and
+    device (example inputs are random placeholders, so values are irrelevant) --
+    this avoids interpolation constraints on integer / non-image tensors.
+
+    Parameters
+    ----------
+    example_input:
+        Example input object or nested container thereof.
+    input_scale:
+        Scaling factor in ``(0, 1)``.
+
+    Returns
+    -------
+    Any
+        Spatially down-scaled copy of the input tree.
+    """
+
+    import torch
+
+    if isinstance(example_input, torch.Tensor):
+        if example_input.dim() < 3:
+            return example_input
+        new_shape = list(example_input.shape)
+        for dim_index in range(2, example_input.dim()):
+            new_shape[dim_index] = _scaled_spatial_size(new_shape[dim_index], input_scale)
+        if tuple(new_shape) == tuple(example_input.shape):
+            return example_input
+        scaled = torch.zeros(new_shape, dtype=example_input.dtype, device=example_input.device)
+        # requires_grad is only valid for floating/complex tensors; preserve it
+        # when the original carried it and the dtype supports autograd.
+        if example_input.requires_grad and (scaled.is_floating_point() or scaled.is_complex()):
+            scaled.requires_grad_(True)
+        return scaled
+    if isinstance(example_input, tuple):
+        return tuple(_scale_example_input(item, input_scale) for item in example_input)
+    if isinstance(example_input, list):
+        return [_scale_example_input(item, input_scale) for item in example_input]
+    if isinstance(example_input, dict):
+        return {
+            key: _scale_example_input(value, input_scale) for key, value in example_input.items()
+        }
+    return example_input
 
 
 def _sum_float_outputs(output: Any) -> Any:
@@ -1136,7 +1223,52 @@ def _run_worker_test_allocation_from_env() -> list[bytearray]:
     return chunks
 
 
-def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> ValidationResult:
+def _annotate_input_scale(result: ValidationResult, input_scale: float) -> ValidationResult:
+    """Prepend an ``input_scale`` note to a result for reduced-input auditability.
+
+    Parameters
+    ----------
+    result:
+        Validation result to annotate.
+    input_scale:
+        Spatial scaling factor applied to the example input.
+
+    Returns
+    -------
+    ValidationResult
+        The result unchanged when ``input_scale`` is the full-resolution ``1.0``,
+        otherwise a copy whose ``error`` note records the scaling so the manifest
+        makes reduced-input validations auditable.
+    """
+
+    if input_scale >= 1.0:
+        return result
+    note = f"input_scale={input_scale:g}"
+    annotated_error = combine_notes(note, result.error)
+    return ValidationResult(
+        result.name,
+        result.model_id,
+        result.status,
+        result.n_ops,
+        result.validate_metadata_ok,
+        result.scope,
+        result.elapsed,
+        result.dependency_cluster,
+        annotated_error,
+        result.graph_shape_hash,
+        stable_id=result.stable_id,
+        recipe_revision_sha256=result.recipe_revision_sha256,
+        peak_rss_mb=result.peak_rss_mb,
+    )
+
+
+def validate_one(
+    row: CatalogRow,
+    dry_run: bool,
+    scope: str,
+    device: str,
+    input_scale: float = 1.0,
+) -> ValidationResult:
     """Instantiate and validate one menagerie model.
 
     Parameters
@@ -1149,11 +1281,51 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
         Validation scope, ``"forward"`` or ``"forward+backward"``.
     device:
         Device mode, one of ``"cpu"``, ``"cuda"``, or ``"auto"``.
+    input_scale:
+        Spatial down-scaling factor for the built example input (``1.0`` = full
+        resolution). Values ``< 1.0`` validate too-large models at reduced input
+        size; the scaling is recorded in the result note for auditability and does
+        not alter the recipe identity (input is excluded from
+        ``recipe_revision_sha256``).
 
     Returns
     -------
     ValidationResult
         Validation result.
+    """
+
+    return _annotate_input_scale(
+        _validate_one_unscaled_note(row, dry_run, scope, device, input_scale),
+        input_scale,
+    )
+
+
+def _validate_one_unscaled_note(
+    row: CatalogRow,
+    dry_run: bool,
+    scope: str,
+    device: str,
+    input_scale: float,
+) -> ValidationResult:
+    """Instantiate and validate one model; the input-scale note is added by the caller.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    dry_run:
+        Build recipe only when true.
+    scope:
+        Validation scope.
+    device:
+        Device mode.
+    input_scale:
+        Spatial down-scaling factor for the built example input.
+
+    Returns
+    -------
+    ValidationResult
+        Validation result without the input-scale audit note.
     """
 
     start = time.monotonic()
@@ -1174,7 +1346,7 @@ def validate_one(row: CatalogRow, dry_run: bool, scope: str, device: str) -> Val
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
     try:
-        input_tensor = _build_input(row)
+        input_tensor = _build_input(row, input_scale)
     except Exception as error:
         return ValidationResult(
             row.name,
@@ -1435,6 +1607,7 @@ def validate_with_timeout(
     timeout_sec: float,
     tmp_dir: Path | None = None,
     worker_memory_cap_gb: float | None = None,
+    input_scale: float = 1.0,
 ) -> ValidationResult:
     """Run one validation in an isolated child process with a timeout.
 
@@ -1457,6 +1630,9 @@ def validate_with_timeout(
         get an isolated scratch directory without mutating shared state.
     worker_memory_cap_gb:
         Optional per-worker RSS cap in GB enforced inside the child process.
+    input_scale:
+        Spatial down-scaling factor for the example input, forwarded to the worker
+        via ``--input-scale`` (``1.0`` = full resolution).
 
     Returns
     -------
@@ -1480,6 +1656,8 @@ def validate_with_timeout(
         command.append("--dry-run")
     if worker_memory_cap_gb is not None:
         command.extend(("--worker-memory-cap-gb", f"{worker_memory_cap_gb:.6f}"))
+    if input_scale != 1.0:
+        command.extend(("--input-scale", f"{input_scale:.6f}"))
     child_env = None
     if tmp_dir is not None:
         tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -1704,7 +1882,12 @@ def run(args: argparse.Namespace) -> int:
 
     run_cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
     start_free_gb = disk_free_gb(out_dir)
-    log_event("validation_run_start", out_dir=str(out_dir), free_gb=round(start_free_gb, 3))
+    log_event(
+        "validation_run_start",
+        out_dir=str(out_dir),
+        free_gb=round(start_free_gb, 3),
+        input_scale=args.input_scale,
+    )
     assert_min_free(out_dir, args.min_free_gb)
 
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
@@ -1802,6 +1985,7 @@ def run(args: argparse.Namespace) -> int:
                 args.timeout_sec,
                 tmp_dir=tmp_dir,
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
+                input_scale=args.input_scale,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
         return result, removed
@@ -1934,6 +2118,34 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _input_scale_arg(value: str) -> float:
+    """Parse and bound-check the ``--input-scale`` CLI value.
+
+    Parameters
+    ----------
+    value:
+        Raw CLI string.
+
+    Returns
+    -------
+    float
+        Scaling factor in the half-open range ``(0, 1]``.
+
+    Raises
+    ------
+    argparse.ArgumentTypeError
+        When the value is not a number in ``(0, 1]``.
+    """
+
+    try:
+        scale = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"input-scale must be a number, got {value!r}") from error
+    if not 0.0 < scale <= 1.0:
+        raise argparse.ArgumentTypeError(f"input-scale must be in (0, 1], got {scale}")
+    return scale
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the validator CLI parser.
 
@@ -2012,6 +2224,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-models", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--device", choices=("cpu", "cuda", "auto"), default="cpu")
+    parser.add_argument(
+        "--input-scale",
+        type=_input_scale_arg,
+        default=1.0,
+        help=(
+            "spatial down-scaling factor in (0, 1] for the example input "
+            "(default 1.0 = full resolution); values < 1.0 validate too-large "
+            "models at reduced input size without changing the recipe identity"
+        ),
+    )
     parser.add_argument("--timeout-sec", type=float, default=240.0)
     parser.add_argument("--install-timeout", type=float, default=600.0)
     parser.add_argument(
@@ -2054,7 +2276,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _start_worker_memory_monitor(row, args.scope, args.worker_memory_cap_gb, worker_start)
         worker_test_allocations = _run_worker_test_allocation_from_env()
         try:
-            result = validate_one(row, args.dry_run, args.scope, args.device)
+            result = validate_one(row, args.dry_run, args.scope, args.device, args.input_scale)
         except Exception as error:
             plan = dependency_plan(row)
             result = ValidationResult(
