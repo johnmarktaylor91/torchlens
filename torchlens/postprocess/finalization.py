@@ -955,8 +955,15 @@ def _build_layer_logs(self: "Trace") -> None:
         for pass_log in layer_log.ops.values():
             linked_labels = []
             for param_log in getattr(pass_log, "_param_logs", []):
-                for linked_address in getattr(param_log, "co_parent_params", []):
-                    linked_labels.append(f"{param_log.address} → {linked_address}")
+                # Tied/shared parameters expose every aliasing address through
+                # ``all_addresses`` (the primary is ``param_log.address`` == all_addresses[0]).
+                # Emit ``primary -> alias`` for each additional address that shares the
+                # underlying tensor storage. (Co-occurrence of distinct tensors in one op
+                # is tracked separately by ``co_parent_params`` and is NOT tying.)
+                for alias_address in getattr(param_log, "all_addresses", []):
+                    if alias_address == param_log.address:
+                        continue
+                    linked_labels.append(f"{param_log.address} → {alias_address}")
             if linked_labels:
                 pass_log.annotations["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [
