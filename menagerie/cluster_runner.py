@@ -162,12 +162,15 @@ class NodeTier:
         SLURM partition for this tier.
     max_peak_rss_gb:
         Largest measured peak normally assigned to this tier.
+    gpu:
+        Whether this tier requests one GPU via SLURM ``--gres``.
     """
 
     mem_gb: int
     worker_memory_cap_gb: int
     partition: str
     max_peak_rss_gb: int
+    gpu: bool = False
 
 
 @dataclass(frozen=True)
@@ -204,6 +207,9 @@ class ClusterConfig:
         Maximum concurrent array tasks.
     node_tiers:
         Ordered memory tiers. The default uses 180 -> 250 -> 500 -> 1000 GiB.
+    gpu_node_tier:
+        Placeholder GPU tier for future CUDA-required cluster rows. Disabled in
+        practice while ``REQUIRES_CUDA`` is empty pending confirmed stable IDs.
     sbatch_wait_timeout_sec:
         Maximum wall-clock seconds to wait for a blocking ``sbatch --wait`` command.
     """
@@ -225,6 +231,9 @@ class ClusterConfig:
         NodeTier(500, 480, "naplab", 420),
         NodeTier(1000, 960, "naplab", 900),
     )
+    # TODO(Q3): confirm a40/l40 partition+account+gres syntax before enabling
+    # cluster-gpu dispatch with non-empty REQUIRES_CUDA rows.
+    gpu_node_tier: NodeTier = NodeTier(180, 170, "TODO_Q3_GPU_PARTITION", 130, gpu=True)
     sbatch_wait_timeout_sec: float = 43_200.0
 
 
@@ -258,6 +267,8 @@ class ClusterAssignment:
         Validator timeout for this assignment.
     input_scale:
         Validator input scale for this assignment.
+    gpu:
+        Whether this assignment uses a GPU SLURM tier.
     """
 
     campaign_id: str
@@ -272,6 +283,7 @@ class ClusterAssignment:
     expected_row_count: int = 1
     timeout_sec: float = 14400.0
     input_scale: float = 1.0
+    gpu: bool = False
 
 
 @dataclass(frozen=True)
@@ -357,6 +369,36 @@ class ClusterResultRow:
     attempt_id: str
     assignment_id: str
     run: VerificationRun
+
+
+@dataclass(frozen=True)
+class ResourceRoute:
+    """Operational routing decision for one validation row.
+
+    Parameters
+    ----------
+    lane:
+        Route lane: ``local-cpu``, ``local-gpu``, ``cluster-gpu``, or
+        ``cluster-ram``.
+    device:
+        Explicit worker device, either ``cpu`` or ``cuda``.
+    cluster:
+        Whether the row should be dispatched to the cluster.
+    reason:
+        Human-readable routing reason.
+    """
+
+    lane: str
+    device: str
+    cluster: bool
+    reason: str
+
+
+# Populate only with catalog-confirmed hard-CUDA stable IDs, such as rows whose
+# honest validation failure says "Nvidia GPU with CUDA" or install failures for
+# CUDA-only tinycudann stacks. Empty is the safe local-first default: every
+# CPU-traceable row stays local CPU unless measured RAM evidence routes it.
+REQUIRES_CUDA: dict[str, str] = {}
 
 
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
@@ -816,6 +858,159 @@ def route_giants(
     )
 
 
+def requires_cuda(
+    row: CatalogRow | Mapping[str, object],
+    *,
+    requires_cuda_set: Mapping[str, str] | None = None,
+) -> bool:
+    """Return whether a row is known to require CUDA to validate.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping.
+    requires_cuda_set:
+        Stable-ID mapping of catalog-confirmed CUDA-required rows.
+
+    Returns
+    -------
+    bool
+        ``True`` only for explicitly cataloged hard-CUDA rows.
+    """
+
+    active_set = REQUIRES_CUDA if requires_cuda_set is None else requires_cuda_set
+    return _row_value(row, "stable_id") in active_set
+
+
+def gpu_mem_fit_estimate(
+    row: CatalogRow | Mapping[str, object],
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
+) -> int:
+    """Return a coarse GPU memory fit estimate in bytes.
+
+    This estimate is operational routing input only. It never validates a model
+    and never escalates a CPU-eligible row; callers use it only after
+    ``requires_cuda(row)`` is already true.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping.
+    ledger:
+        Optional ledger evidence. Currently unused; reserved for future measured
+        CUDA memory estimates without changing the public helper shape.
+
+    Returns
+    -------
+    int
+        Coarse estimated GPU memory requirement in bytes.
+    """
+
+    del ledger
+    haystack = " ".join(
+        _row_value(row, field) for field in ("name", "family", "family_normalized", "notes")
+    )
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([bmk])\b", haystack, flags=re.IGNORECASE)
+    if match is None:
+        return 1 * 1024**3
+    value = float(match.group(1))
+    suffix = match.group(2).casefold()
+    multiplier = {"b": 1_000_000_000, "m": 1_000_000, "k": 1_000}[suffix]
+    param_bytes = int(value * multiplier * 4)
+    return max(1 * 1024**3, param_bytes * 3)
+
+
+def route_resources(
+    row: CatalogRow | Mapping[str, object],
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
+    *,
+    local_gpu_vram_bytes: int | None = None,
+    config: ClusterConfig | None = None,
+) -> ResourceRoute:
+    """Return the operational resource route for one validation row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping.
+    ledger:
+        Ledger evidence used by the existing RAM-giant router.
+    local_gpu_vram_bytes:
+        Probed local GPU VRAM in bytes, or ``None`` when no local GPU is usable.
+    config:
+        Cluster config placeholder for future GPU tier policy. Accepted to keep
+        routing call sites explicit; currently unused.
+
+    Returns
+    -------
+    ResourceRoute
+        Explicit lane, worker device, cluster flag, and reason.
+    """
+
+    del config
+    if requires_cuda(row):
+        required_bytes = gpu_mem_fit_estimate(row, ledger)
+        if (
+            local_gpu_vram_bytes is not None
+            and local_gpu_vram_bytes > 0
+            and required_bytes <= int(0.8 * local_gpu_vram_bytes)
+        ):
+            return ResourceRoute(
+                "local-gpu",
+                "cuda",
+                False,
+                f"requires_cuda; estimated_vram_bytes={required_bytes}",
+            )
+        return ResourceRoute(
+            "cluster-gpu",
+            "cuda",
+            True,
+            f"requires_cuda; estimated_vram_bytes={required_bytes}",
+        )
+    if is_giant(row, ledger=ledger):
+        return ResourceRoute("cluster-ram", "cpu", True, "measured_or_static_ram_giant")
+    return ResourceRoute("local-cpu", "cpu", False, "local_first_default")
+
+
+def probe_local_gpu_vram_bytes(command_runner: CommandRunner | None = None) -> int | None:
+    """Return local GPU VRAM bytes using ``nvidia-smi`` without importing torch.
+
+    Parameters
+    ----------
+    command_runner:
+        Injectable command runner for tests. Defaults to the module subprocess
+        runner when omitted.
+
+    Returns
+    -------
+    int | None
+        First GPU total memory in bytes, or ``None`` when unavailable.
+    """
+
+    command = (
+        "nvidia-smi",
+        "--query-gpu=memory.total",
+        "--format=csv,noheader,nounits",
+    )
+    try:
+        if command_runner is None:
+            result = default_command_runner(command, timeout=2.0)
+        else:
+            result = command_runner(command)
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    first_line = (result.stdout or "").splitlines()[0:1]
+    if not first_line:
+        return None
+    try:
+        mib = int(first_line[0].strip())
+    except ValueError:
+        return None
+    return mib * 1024**2
+
+
 def node_tier_for_row(
     row: CatalogRow | Mapping[str, object],
     ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
@@ -840,6 +1035,8 @@ def node_tier_for_row(
     """
 
     active_config = config or ClusterConfig()
+    if requires_cuda(row):
+        return active_config.gpu_node_tier
     stable_id = _row_value(row, "stable_id")
     entry = GIANT_REGISTRY.get(stable_id)
     status, measured_peak_mb = _latest_status_and_peak(stable_id, ledger)
@@ -1198,6 +1395,7 @@ def render_sbatch_script(
         )
     lock_hash = compute_lock_hash_for_env(config.pixi_env)
     pixi_bin = _expand_remote_path(config.remote_pixi_bin, resolved_home)
+    gres_line = "#SBATCH --gres=gpu:1\n" if default_tier.gpu else ""
     return f"""#!/usr/bin/env bash
 #SBATCH --job-name=tl_cluster_giants
 #SBATCH --account={config.account}
@@ -1205,6 +1403,7 @@ def render_sbatch_script(
 #SBATCH --mem={default_tier.node_mem_gb}G
 #SBATCH --cpus-per-task={config.cpus_per_task}
 #SBATCH --time={config.time_limit}
+{gres_line.rstrip()}
 #SBATCH --array={indexes}%{config.array_concurrency}
 #SBATCH --output={log_dir}/giant_%A_%a.log
 #SBATCH --error={log_dir}/giant_%A_%a.err
@@ -1358,6 +1557,8 @@ def run_worker_assignment(
         "--verification-db",
         str(resolved_verification_db),
     ]
+    if assignment.gpu:
+        command.extend(("--device", "cuda"))
     previous_verification_db = os.environ.get(ENV_VERIFICATION_DB)
     os.environ[ENV_VERIFICATION_DB] = str(resolved_verification_db)
     try:
@@ -2369,9 +2570,16 @@ def _assignment_for_row(
         node_mem_gb=tier.mem_gb,
         worker_memory_cap_gb=tier.worker_memory_cap_gb,
         partition=tier.partition,
-        reason=entry.reason if entry is not None else "cold-start heuristic",
+        reason=(
+            REQUIRES_CUDA[row.stable_id]
+            if row.stable_id in REQUIRES_CUDA
+            else entry.reason
+            if entry is not None
+            else "cold-start heuristic"
+        ),
         timeout_sec=timeout_sec,
         input_scale=input_scale,
+        gpu=tier.gpu,
     )
 
 
@@ -2485,12 +2693,13 @@ def _write_sbatch_scripts(
         Written sbatch script paths.
     """
 
-    groups: dict[tuple[str, int], list[ClusterAssignment]] = defaultdict(list)
+    groups: dict[tuple[str, int, bool], list[ClusterAssignment]] = defaultdict(list)
     for assignment in assignments:
-        groups[(assignment.partition, assignment.node_mem_gb)].append(assignment)
+        groups[(assignment.partition, assignment.node_mem_gb, assignment.gpu)].append(assignment)
     paths: list[Path] = []
-    for (partition, mem_gb), group in sorted(groups.items(), key=lambda item: item[0]):
-        path = artifact_dir / f"cluster_runner_{partition}_{mem_gb}g.sbatch"
+    for (partition, mem_gb, gpu), group in sorted(groups.items(), key=lambda item: item[0]):
+        suffix = "_gpu" if gpu else ""
+        path = artifact_dir / f"cluster_runner_{partition}_{mem_gb}g{suffix}.sbatch"
         path.write_text(
             render_sbatch_script(
                 group,

@@ -877,6 +877,7 @@ def _cluster_candidate_rows(
     *,
     ledger_db: Path | None = None,
     env_registry: Path | None = None,
+    local_gpu_vram_bytes: int | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return rows that are candidates for cluster handling.
 
@@ -894,6 +895,8 @@ def _cluster_candidate_rows(
         Optional verification ledger path.
     env_registry:
         Optional environment registry path used to identify island rows.
+    local_gpu_vram_bytes:
+        Probed local GPU VRAM for CUDA-required routing.
 
     Returns
     -------
@@ -905,10 +908,15 @@ def _cluster_candidate_rows(
         return ()
     base_rows = _base_env_rows(rows, env_registry=env_registry)
     if runner == "auto":
-        return cluster_runner.route_giants(
-            base_rows,
-            ledger=_resolve_verification_db(ledger_db),
-            local_ram_threshold_gb=cluster_runner.LOCAL_RAM_THRESHOLD_GB,
+        ledger = _resolve_verification_db(ledger_db)
+        return tuple(
+            row
+            for row in base_rows
+            if cluster_runner.route_resources(
+                row,
+                ledger=ledger,
+                local_gpu_vram_bytes=local_gpu_vram_bytes,
+            ).cluster
         )
     if runner == "cluster":
         return tuple(
@@ -961,6 +969,7 @@ def _cluster_route_rows(
     device: str = "cpu",
     ledger_db: Path | None = None,
     env_registry: Path | None = None,
+    local_gpu_vram_bytes: int | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return ledger-pending rows that should be dispatched to the cluster.
 
@@ -978,6 +987,8 @@ def _cluster_route_rows(
         Optional verification ledger path.
     env_registry:
         Optional environment registry path used to exclude pixi-island rows.
+    local_gpu_vram_bytes:
+        Probed local GPU VRAM for CUDA-required routing.
 
     Returns
     -------
@@ -986,7 +997,11 @@ def _cluster_route_rows(
     """
 
     candidates = _cluster_candidate_rows(
-        rows, runner, ledger_db=ledger_db, env_registry=env_registry
+        rows,
+        runner,
+        ledger_db=ledger_db,
+        env_registry=env_registry,
+        local_gpu_vram_bytes=local_gpu_vram_bytes,
     )
     completed = {
         row.stable_id
@@ -1365,6 +1380,11 @@ def _run_cluster_validation(
         return
     stable_ids = [row.stable_id for row in rows]
     row_settings = smoke_settings or {}
+    timeout_base_sec = getattr(
+        args,
+        "resolved_timeout_base_sec",
+        args.timeout_base_sec if args.timeout_base_sec is not None else args.timeout_sec,
+    )
     log_event("cluster_dispatch_start", rows=len(stable_ids), stable_ids=stable_ids)
     try:
         dispatch = cluster_runner.dispatch_giants(
@@ -1376,7 +1396,7 @@ def _run_cluster_validation(
                 row.stable_id: _case_timeout(
                     row,
                     row_settings,
-                    args.resolved_timeout_base_sec,
+                    timeout_base_sec,
                     duration_estimates,
                     args.timeout_scale,
                     args.timeout_ceiling_sec,
@@ -3375,6 +3395,7 @@ def run(args: argparse.Namespace) -> int:
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
     duration_estimates = latest_duration_estimates(args.verification_db)
+    local_gpu_vram_bytes = cluster_runner.probe_local_gpu_vram_bytes()
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
     # Base-env-only mode runs inside an island pixi env or the cluster worker;
     # those subprocesses validate their assigned rows in place and must never
@@ -3388,6 +3409,7 @@ def run(args: argparse.Namespace) -> int:
             args.runner,
             ledger_db=args.verification_db,
             env_registry=args.env_registry,
+            local_gpu_vram_bytes=local_gpu_vram_bytes,
         )
     completed_cluster_rows = _completed_cluster_rows(
         cluster_candidates,
@@ -3401,6 +3423,8 @@ def run(args: argparse.Namespace) -> int:
     )
     cluster_candidate_stable_ids = {row.stable_id for row in cluster_candidates}
     local_rows = [row for row in rows if row.stable_id not in cluster_candidate_stable_ids]
+    local_stable_ids = {row.stable_id for row in local_rows}
+    assert cluster_candidate_stable_ids.isdisjoint(local_stable_ids)
     log_event(
         "runner_routing",
         runner=args.runner,
@@ -3498,9 +3522,18 @@ def run(args: argparse.Namespace) -> int:
     # selected. The main thread does ALL manifest appends and disk bookkeeping
     # single-threaded as futures complete.
     jobs = max(1, args.jobs)
-    use_gpu_cap = args.device in {"cuda", "auto"}
+    route_ledger = _resolve_verification_db(args.verification_db)
+    local_routes = {
+        row.stable_id: cluster_runner.route_resources(
+            row,
+            ledger=route_ledger,
+            local_gpu_vram_bytes=local_gpu_vram_bytes,
+        )
+        for _plan, row in runnable
+    }
+    use_gpu_cap = any(route.lane == "local-gpu" for route in local_routes.values())
     gpu_jobs = max(1, args.gpu_jobs)
-    effective_jobs = min(jobs, gpu_jobs) if use_gpu_cap else jobs
+    effective_jobs = jobs
     gpu_semaphore = threading.Semaphore(gpu_jobs) if use_gpu_cap else None
     memory_budget_gb = _resolve_scheduler_memory_budget_gb(
         args.memory_budget_gb,
@@ -3537,7 +3570,12 @@ def run(args: argparse.Namespace) -> int:
 
         cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
         tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
-        gate: ContextManager[Any] = gpu_semaphore if gpu_semaphore is not None else nullcontext()
+        route = local_routes[row.stable_id]
+        gate: ContextManager[Any]
+        if route.lane == "local-gpu" and gpu_semaphore is not None:
+            gate = gpu_semaphore
+        else:
+            gate = nullcontext()
         with gate:
             row_timeout = _case_timeout(
                 row,
@@ -3552,7 +3590,7 @@ def run(args: argparse.Namespace) -> int:
                 row,
                 args.dry_run,
                 args.scope,
-                args.device,
+                route.device,
                 row_timeout,
                 tmp_dir=tmp_dir,
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
@@ -3660,7 +3698,7 @@ def run(args: argparse.Namespace) -> int:
                 append_validation_ledger(
                     row,
                     result,
-                    args.device,
+                    local_routes[row.stable_id].device,
                     result.input_scale,
                     args.verification_db,
                 )

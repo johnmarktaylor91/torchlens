@@ -6,13 +6,20 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from menagerie import validate_menagerie
 from menagerie.catalog import CatalogRow, write_catalog
 from menagerie.cluster_runner import (
     ClusterAssignment,
+    ClusterConfig,
     CollectedClusterResults,
     DispatchResult,
     MergeReport,
+    NodeTier,
+    probe_local_gpu_vram_bytes,
+    render_sbatch_script,
+    route_resources,
 )
 from menagerie.ledger import VerificationRun, append_verification_run, connect
 from menagerie.runtime import DependencyPlan
@@ -86,6 +93,155 @@ def _row(**overrides: object) -> CatalogRow:
     }
     data.update(overrides)
     return CatalogRow(**data)
+
+
+def test_resource_route_plain_small_row_is_local_cpu() -> None:
+    """Rows without CUDA or RAM-giant evidence stay on local CPU."""
+
+    route = route_resources(_row(stable_id="m-small"), ledger={})
+
+    assert route.lane == "local-cpu"
+    assert route.device == "cpu"
+    assert route.cluster is False
+
+
+def test_resource_route_cuda_required_fits_local_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CUDA-required rows use local GPU only when the estimate fits local VRAM."""
+
+    from menagerie import cluster_runner
+
+    monkeypatch.setattr(cluster_runner, "REQUIRES_CUDA", {"m-cuda": "unit cuda"})
+    route = route_resources(
+        _row(stable_id="m-cuda", name="CudaNet 100M"),
+        ledger={},
+        local_gpu_vram_bytes=11 * 1024**3,
+    )
+
+    assert route.lane == "local-gpu"
+    assert route.device == "cuda"
+    assert route.cluster is False
+
+
+def test_resource_route_cuda_required_no_fit_uses_cluster_gpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CUDA-required rows that do not fit locally route to the GPU cluster lane."""
+
+    from menagerie import cluster_runner
+
+    monkeypatch.setattr(cluster_runner, "REQUIRES_CUDA", {"m-cuda-big": "unit cuda"})
+    route = route_resources(
+        _row(stable_id="m-cuda-big", name="CudaNet 70B"),
+        ledger={},
+        local_gpu_vram_bytes=11 * 1024**3,
+    )
+    no_vram_route = route_resources(
+        _row(stable_id="m-cuda-big", name="CudaNet 70B"),
+        ledger={},
+        local_gpu_vram_bytes=None,
+    )
+
+    assert route.lane == "cluster-gpu"
+    assert route.device == "cuda"
+    assert route.cluster is True
+    assert no_vram_route.lane == "cluster-gpu"
+
+
+def test_resource_route_cuda_giant_prefers_cluster_gpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CUDA-required RAM giants route cluster-gpu before the RAM cluster rule."""
+
+    from menagerie import cluster_runner
+
+    monkeypatch.setattr(cluster_runner, "REQUIRES_CUDA", {"m4527": "unit cuda"})
+    route = route_resources(
+        _row(stable_id="m4527", name="effdet_tf_efficientdet_d7"),
+        ledger={},
+        local_gpu_vram_bytes=None,
+    )
+
+    assert route.lane == "cluster-gpu"
+    assert route.device == "cuda"
+    assert route.cluster is True
+
+
+def test_resource_route_giant_only_uses_cluster_ram() -> None:
+    """RAM giants without CUDA requirement route to the CPU RAM cluster lane."""
+
+    route = route_resources(_row(stable_id="m4527", name="effdet_tf_efficientdet_d7"), ledger={})
+
+    assert route.lane == "cluster-ram"
+    assert route.device == "cpu"
+    assert route.cluster is True
+
+
+def test_resource_route_local_first_ignores_large_vram_estimate() -> None:
+    """Large-looking CPU-eligible rows are never escalated by the VRAM estimate."""
+
+    route = route_resources(
+        _row(stable_id="m-huge-local", name="HugeLocalNet 70B"),
+        ledger={},
+        local_gpu_vram_bytes=11 * 1024**3,
+    )
+
+    assert route.lane == "local-cpu"
+    assert route.device == "cpu"
+    assert route.cluster is False
+
+
+def test_gpu_tier_sbatch_requests_gres_but_ram_tier_does_not() -> None:
+    """Only GPU-tier sbatch scripts include a GPU GRES directive."""
+
+    config = ClusterConfig(
+        remote_home="/home/unit",
+        gpu_node_tier=NodeTier(180, 170, "gpu-test", 130, gpu=True),
+    )
+    ram_assignment = _assignment("m-ram", 0)
+    gpu_assignment = _assignment("m-gpu", 0, partition="gpu-test", gpu=True)
+
+    ram_script = render_sbatch_script(
+        [ram_assignment],
+        config=config,
+        remote_artifact_dir="~/cluster/campaign/attempt",
+        verification_db=Path("/tmp/verification.db"),
+    )
+    gpu_script = render_sbatch_script(
+        [gpu_assignment],
+        config=config,
+        remote_artifact_dir="~/cluster/campaign/attempt",
+        verification_db=Path("/tmp/verification.db"),
+    )
+
+    assert "#SBATCH --gres=gpu:1" not in ram_script
+    assert "#SBATCH --gres=gpu:1" in gpu_script
+
+
+def test_probe_local_gpu_vram_bytes_parses_nvidia_smi_and_handles_missing() -> None:
+    """VRAM probe returns bytes on a MiB line and None when nvidia-smi is absent."""
+
+    def ok_runner(command: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+        """Return fake nvidia-smi output."""
+
+        return subprocess.CompletedProcess(command, 0, stdout="11264\n", stderr="")
+
+    def missing_runner(command: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+        """Simulate missing nvidia-smi."""
+
+        raise FileNotFoundError(command[0])
+
+    assert probe_local_gpu_vram_bytes(ok_runner) == 11264 * 1024**2
+    assert probe_local_gpu_vram_bytes(missing_runner) is None
+
+
+def test_resource_routing_does_not_initialize_torch_cuda() -> None:
+    """Route calculation must not initialize CUDA in the orchestrator process."""
+
+    torch = pytest.importorskip("torch")
+
+    route_resources(_row(stable_id="m-small"), ledger={}, local_gpu_vram_bytes=None)
+
+    assert torch.cuda.is_initialized() is False
 
 
 def _run(**overrides: object) -> VerificationRun:
@@ -196,7 +352,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     giant = _row(stable_id="m4527", name="effdet_tf_efficientdet_d7")
     local = _row(model_id=2, display_index=2, stable_id="m_local", name="SmallNet")
     dispatch_calls: list[tuple[str, ...]] = []
-    local_calls: list[str] = []
+    local_calls: list[tuple[str, str]] = []
     merge_calls: list[tuple[Path, Path]] = []
 
     def fake_dispatch(stable_ids: list[str], **_: object) -> DispatchResult:
@@ -260,12 +416,12 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
 
     def fake_validate_with_timeout(
         row: CatalogRow,
-        *_: object,
+        *args: object,
         **__: object,
     ) -> validate_menagerie.ValidationResult:
         """Capture local validation calls."""
 
-        local_calls.append(row.stable_id)
+        local_calls.append((row.stable_id, str(args[2])))
         return validate_menagerie.ValidationResult(
             row.name,
             row.model_id,
@@ -308,7 +464,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     )
 
     assert dispatch_calls == [("m4527",)]
-    assert local_calls == ["m_local"]
+    assert local_calls == [("m_local", "cpu")]
     assert len(merge_calls) == 1
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
     assert set(records) == {"m4527", "m_local"}
