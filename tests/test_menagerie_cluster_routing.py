@@ -191,7 +191,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
         merge_calls.append((rows_path, manifest_path))
         return MergeReport("campaign-a", "attempt-a", inserted=1, duplicates=0, assignments=1)
 
-    def fake_append_cluster(rows: list[CatalogRow], manifest_path: Path) -> None:
+    def fake_append_cluster(rows: list[CatalogRow], manifest_path: Path, **_: object) -> None:
         """Append a manifest row for mocked cluster results."""
 
         for row in rows:
@@ -252,7 +252,12 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     monkeypatch.setattr(validate_menagerie, "validate_with_timeout", fake_validate_with_timeout)
     monkeypatch.setattr(validate_menagerie, "append_validation_ledger", lambda *_: None)
 
-    assert validate_menagerie.run(_args(tmp_path)) == 0
+    assert (
+        validate_menagerie.run(
+            _args(tmp_path, "--verification-db", str(tmp_path / "verification.db"))
+        )
+        == 0
+    )
 
     assert dispatch_calls == [("m3635",)]
     assert local_calls == ["m_local"]
@@ -277,12 +282,13 @@ def test_auto_runner_uses_cold_start_and_peak_rss_giant_routes(
                 peak_rss_mb=130 * validate_menagerie.MB_PER_GB,
             ),
         )
-    monkeypatch.setattr(validate_menagerie.cluster_runner, "VERIFICATION_DB", ledger_db)
     cold_start = _row(stable_id="cold-start", name="Research 2B MoE")
     peak = _row(stable_id="peak-model", name="MeasuredGiant")
     small = _row(stable_id="small", name="SmallNet")
 
-    routed = validate_menagerie._cluster_route_rows([cold_start, peak, small], "auto")
+    routed = validate_menagerie._cluster_route_rows(
+        [cold_start, peak, small], "auto", ledger_db=ledger_db
+    )
 
     assert [row.stable_id for row in routed] == ["cold-start", "peak-model"]
 
@@ -319,11 +325,10 @@ def test_auto_runner_routes_oom_but_not_native_crash(
                 peak_rss_mb=None,
             ),
         )
-    monkeypatch.setattr(validate_menagerie.cluster_runner, "VERIFICATION_DB", ledger_db)
     oom = _row(stable_id="oom-model", name="OOMNet")
     crash = _row(stable_id="crash-model", name="CrashNet")
 
-    routed = validate_menagerie._cluster_route_rows([oom, crash], "auto")
+    routed = validate_menagerie._cluster_route_rows([oom, crash], "auto", ledger_db=ledger_db)
 
     assert [row.stable_id for row in routed] == ["oom-model"]
 
@@ -397,13 +402,12 @@ def test_cluster_routing_resume_uses_ledger_not_manifest(
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
 
-    monkeypatch.setattr(validate_menagerie.cluster_runner, "VERIFICATION_DB", ledger_db)
     monkeypatch.setattr(validate_menagerie, "select_rows", lambda _: [giant])
     monkeypatch.setattr(validate_menagerie.cluster_runner, "dispatch_giants", fail_dispatch)
     monkeypatch.setattr(validate_menagerie, "validate_with_timeout", fake_validate_with_timeout)
     monkeypatch.setattr(validate_menagerie, "write_reports", lambda *_args, **_kwargs: None)
 
-    assert validate_menagerie.run(_args(tmp_path)) == 0
+    assert validate_menagerie.run(_args(tmp_path, "--verification-db", str(ledger_db))) == 0
 
     assert local_calls == []
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
@@ -431,11 +435,15 @@ def test_cluster_unreachable_writes_terminal_rows_and_continues(
             stderr="ssh: connect failed",
         )
 
-    monkeypatch.setattr(validate_menagerie.cluster_runner, "VERIFICATION_DB", ledger_db)
     monkeypatch.setattr(validate_menagerie, "select_rows", lambda _: [giant])
     monkeypatch.setattr(validate_menagerie.cluster_runner, "dispatch_giants", fail_dispatch)
 
-    assert validate_menagerie.run(_args(tmp_path, "--db", str(catalog_db))) == 0
+    assert (
+        validate_menagerie.run(
+            _args(tmp_path, "--db", str(catalog_db), "--verification-db", str(ledger_db))
+        )
+        == 0
+    )
 
     with connect(ledger_db) as conn:
         row = conn.execute(
@@ -463,11 +471,15 @@ def test_cluster_timeout_writes_terminal_rows_and_continues(
 
         raise subprocess.TimeoutExpired(("ssh", "axon", "sbatch --wait"), timeout=1.0)
 
-    monkeypatch.setattr(validate_menagerie.cluster_runner, "VERIFICATION_DB", ledger_db)
     monkeypatch.setattr(validate_menagerie, "select_rows", lambda _: [giant])
     monkeypatch.setattr(validate_menagerie.cluster_runner, "dispatch_giants", timeout_dispatch)
 
-    assert validate_menagerie.run(_args(tmp_path, "--db", str(catalog_db))) == 0
+    assert (
+        validate_menagerie.run(
+            _args(tmp_path, "--db", str(catalog_db), "--verification-db", str(ledger_db))
+        )
+        == 0
+    )
 
     with connect(ledger_db) as conn:
         row = conn.execute(

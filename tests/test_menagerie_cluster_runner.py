@@ -31,6 +31,7 @@ from menagerie.cluster_runner import (
     write_result_rows_jsonl,
 )
 from menagerie.ledger import (
+    ENV_VERIFICATION_DB,
     LEGACY_UNKNOWN,
     VerificationRun,
     VerificationTarget,
@@ -372,6 +373,12 @@ def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -
     assert sum("sbatch" in command[-1] for command in commands) == 2
     assert (result.local_artifact_dir / "catalog.db").exists()
     assert (result.local_artifact_dir / "assignments.json").exists()
+    sbatch_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in result.local_artifact_dir.glob("cluster_runner_*.sbatch")
+    )
+    assert f"export {ENV_VERIFICATION_DB}=" in sbatch_text
+    assert f'--verification-db "{ledger_db}"' in sbatch_text
 
 
 def test_merge_is_idempotent_and_conflicts_fail_loud(tmp_path: Path) -> None:
@@ -539,8 +546,11 @@ def test_worker_forwards_no_build_catalog_to_validator(tmp_path: Path) -> None:
         0,
         repo_root=tmp_path,
         result_dir=tmp_path / "results",
+        verification_db=ledger_db,
         command_runner=fake_runner,
     )
 
     assert commands
     assert "--no-build-catalog" in commands[0]
+    assert "--verification-db" in commands[0]
+    assert str(ledger_db) in commands[0]

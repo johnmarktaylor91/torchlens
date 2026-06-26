@@ -6,7 +6,8 @@ pixi:
   disk_free_reserve_gib: 25
 assignment:
   invariant: "Every catalog row is assigned to exactly one island; base-capable rows assign to base."
-  empirical_manifest: "/tmp/menagerie_base_sweep/manifest.tsv"
+  empirical_manifest: "menagerie/data/routing_manifest.tsv"
+  empirical_manifest_sha256: "c0075fe1c0e93ccb984537c4df617b971bffe48564c13f3e67b0cc5f225ada22"  # pragma: allowlist secret
   dependency_unavailable_status: "skipped:dependency_unavailable"
   base_modules:
     - builtins

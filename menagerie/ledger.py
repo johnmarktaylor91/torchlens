@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import platform
+import os
 import socket
 import sqlite3
 import subprocess
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 VERIFICATION_DB = DATA_DIR / "verification.db"
+ENV_VERIFICATION_DB = "TORCHLENS_MENAGERIE_VERIFICATION_DB"
 BUSY_TIMEOUT_MS = 30_000
 LEGACY_UNKNOWN = "legacy-unknown"
 BASE_LOCK_HASH = "base-no-lock"
@@ -346,13 +348,38 @@ def torchlens_source_hash(repo_root: Path | None = None) -> str:
     return digest.hexdigest()
 
 
-def connect(db_path: Path = VERIFICATION_DB) -> sqlite3.Connection:
+def _resolve_verification_db(db_path: Path | None = None) -> Path:
+    """Resolve the active verification ledger path at connection time.
+
+    Parameters
+    ----------
+    db_path:
+        Explicit SQLite database path. When omitted, the
+        ``TORCHLENS_MENAGERIE_VERIFICATION_DB`` environment override is honored
+        before falling back to the committed production ledger.
+
+    Returns
+    -------
+    pathlib.Path
+        Verification ledger path.
+    """
+
+    if db_path is not None:
+        return Path(db_path)
+    override = os.environ.get(ENV_VERIFICATION_DB)
+    if override:
+        return Path(override).expanduser()
+    return VERIFICATION_DB
+
+
+def connect(db_path: Path | None = None) -> sqlite3.Connection:
     """Open and initialize a verification ledger connection.
 
     Parameters
     ----------
     db_path:
-        SQLite database path.
+        SQLite database path. Defaults to the resolved verification ledger,
+        honoring ``TORCHLENS_MENAGERIE_VERIFICATION_DB`` at connect time.
 
     Returns
     -------
@@ -360,8 +387,9 @@ def connect(db_path: Path = VERIFICATION_DB) -> sqlite3.Connection:
         Initialized SQLite connection with WAL and busy timeout enabled.
     """
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=BUSY_TIMEOUT_MS / 1000, isolation_level=None)
+    resolved_db_path = _resolve_verification_db(db_path)
+    resolved_db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(resolved_db_path, timeout=BUSY_TIMEOUT_MS / 1000, isolation_level=None)
     conn.row_factory = sqlite3.Row
     configure_connection(conn)
     initialize(conn)

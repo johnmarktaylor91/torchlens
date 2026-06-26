@@ -1107,6 +1107,7 @@ def export_menagerie_csvs(
     schema_path: Path = DEFAULT_SCHEMA_PATH,
     dictionary_path: Path | None = None,
     limit: int | None = None,
+    stable_ids: Sequence[str] | None = None,
 ) -> dict[str, Path]:
     """Export the flagship CSV, side-tables, and data dictionary.
 
@@ -1126,6 +1127,9 @@ def export_menagerie_csvs(
         Optional data dictionary path. Defaults inside ``out_dir``.
     limit:
         Optional catalog row limit for tests and smoke subsets.
+    stable_ids:
+        Optional curated stable-ID subset. When supplied, output rows are
+        restricted to this set in the given order.
 
     Returns
     -------
@@ -1136,6 +1140,12 @@ def export_menagerie_csvs(
     out_dir.mkdir(parents=True, exist_ok=True)
     schema_columns = parse_flagship_schema(schema_path)
     catalog_rows = load_rows(limit=limit, db_path=catalog_db)
+    if stable_ids is not None:
+        by_stable_id = {row.stable_id: row for row in catalog_rows}
+        missing = [stable_id for stable_id in stable_ids if stable_id not in by_stable_id]
+        if missing:
+            raise ValueError(f"stable IDs missing from catalog DB: {', '.join(missing)}")
+        catalog_rows = [by_stable_id[stable_id] for stable_id in stable_ids]
     ledger_rows = load_current_verification_rows(verification_db)
     raw_trace_rows = load_trace_summary_rows(trace_summary_db)
     current_version = _current_torchlens_version()
@@ -1221,6 +1231,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Optional data dictionary Markdown path.",
     )
     parser.add_argument("--limit", type=int, default=None, help="Optional row limit.")
+    parser.add_argument(
+        "--stable-ids",
+        nargs="+",
+        help="optional curated stable-ID subset to export in the requested order",
+    )
     return parser
 
 
@@ -1247,6 +1262,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         schema_path=args.schema_path,
         dictionary_path=args.dictionary_path,
         limit=args.limit,
+        stable_ids=args.stable_ids,
     )
     return 0
 

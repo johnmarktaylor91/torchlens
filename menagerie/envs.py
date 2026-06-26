@@ -40,7 +40,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = Path(__file__).resolve().parent / "data" / "validation_envs.yml"
 LOCKS_DIR = Path(__file__).resolve().parent / "locks"
 DEFAULT_CACHE_ROOT = Path.home() / ".cache" / "torchlens" / "menagerie" / "envs"
-DEFAULT_BASE_SWEEP_MANIFEST = Path("/tmp/menagerie_base_sweep/manifest.tsv")
+DEFAULT_BASE_SWEEP_MANIFEST = Path(__file__).resolve().parent / "data" / "routing_manifest.tsv"
+ENV_CACHE_ROOT = "TORCHLENS_MENAGERIE_ENV_CACHE_ROOT"
+ENV_SMOKE_LOCKS_READONLY = "TORCHLENS_MENAGERIE_SMOKE_LOCKS_READONLY"
 BUILD_MARKER = "torchlens_env_build.json"
 LOCK_MANIFEST_SUFFIX = ".pixi.toml"
 LOCK_FILE_SUFFIX = ".pixi.lock"
@@ -144,6 +146,8 @@ class EnvRegistry:
         Top-level modules considered base-capable.
     empirical_manifest:
         Base-sweep manifest that identifies the dependency-gated rows.
+    empirical_manifest_sha256:
+        Expected SHA-256 checksum for the pinned empirical manifest, if known.
     dependency_unavailable_status:
         Status in the base-sweep manifest used to identify island rows.
     cluster_envs:
@@ -159,6 +163,7 @@ class EnvRegistry:
     disk_free_reserve_gib: float
     base_modules: frozenset[str]
     empirical_manifest: Path
+    empirical_manifest_sha256: str | None
     dependency_unavailable_status: str
     cluster_envs: dict[str, str]
     fallback_dependency_env: str
@@ -279,6 +284,57 @@ def _expand_path(path: str | Path) -> Path:
     return Path(path).expanduser()
 
 
+def _file_sha256(path: Path) -> str:
+    """Return a file SHA-256 checksum.
+
+    Parameters
+    ----------
+    path:
+        File path to hash.
+
+    Returns
+    -------
+    str
+        Hex SHA-256 digest.
+    """
+
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_empirical_manifest(path: Path, expected_sha256: str | None) -> None:
+    """Fail loudly when the empirical routing manifest is absent or stale.
+
+    Parameters
+    ----------
+    path:
+        Empirical manifest path.
+    expected_sha256:
+        Optional expected SHA-256 checksum.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the manifest path does not exist.
+    ValueError
+        If the checksum does not match.
+    """
+
+    if not path.exists():
+        raise FileNotFoundError(f"empirical base-sweep manifest not found: {path}")
+    if expected_sha256 is None:
+        return
+    actual_sha256 = _file_sha256(path)
+    if actual_sha256 != expected_sha256:
+        raise ValueError(
+            f"empirical base-sweep manifest checksum mismatch: {path} "
+            f"expected={expected_sha256} actual={actual_sha256}"
+        )
+
+
 def load_registry(path: Path = REGISTRY_PATH) -> EnvRegistry:
     """Load the validation environment registry.
 
@@ -301,15 +357,23 @@ def load_registry(path: Path = REGISTRY_PATH) -> EnvRegistry:
     islands = {
         key: _normalize_env_spec(key, value) for key, value in payload.get("islands", {}).items()
     }
-    cache_root = _expand_path(pixi.get("managed_cache_root", DEFAULT_CACHE_ROOT))
+    cache_root_override = os.environ.get(ENV_CACHE_ROOT)
+    cache_root = _expand_path(
+        cache_root_override or pixi.get("managed_cache_root", DEFAULT_CACHE_ROOT)
+    )
+    empirical_manifest = _expand_path(
+        assignment.get("empirical_manifest", DEFAULT_BASE_SWEEP_MANIFEST)
+    )
+    empirical_manifest_sha256 = assignment.get("empirical_manifest_sha256")
+    expected_sha256 = str(empirical_manifest_sha256) if empirical_manifest_sha256 else None
+    _validate_empirical_manifest(empirical_manifest, expected_sha256)
     return EnvRegistry(
         path=path,
         cache_root=cache_root,
         disk_free_reserve_gib=float(pixi.get("disk_free_reserve_gib", 25.0)),
         base_modules=frozenset(str(item) for item in assignment.get("base_modules", [])),
-        empirical_manifest=_expand_path(
-            assignment.get("empirical_manifest", DEFAULT_BASE_SWEEP_MANIFEST)
-        ),
+        empirical_manifest=empirical_manifest,
+        empirical_manifest_sha256=expected_sha256,
         dependency_unavailable_status=str(
             assignment.get("dependency_unavailable_status", "skipped:dependency_unavailable")
         ),
@@ -1011,6 +1075,43 @@ def lock(env_key: str, registry: EnvRegistry | None = None) -> LockResult:
     )
 
 
+def _readonly_committed_lock(env_key: str) -> LockResult:
+    """Return the committed lock identity without mutating lock files.
+
+    Parameters
+    ----------
+    env_key:
+        Island key.
+
+    Returns
+    -------
+    LockResult
+        Read-only lock result. ``returncode`` is nonzero when committed inputs
+        are missing.
+    """
+
+    manifest_path = _manifest_path(env_key)
+    lock_path = _lock_path(env_key)
+    missing = [str(path) for path in (manifest_path, lock_path) if not path.exists()]
+    if missing:
+        return LockResult(
+            env_key=env_key,
+            manifest_path=manifest_path,
+            lock_path=lock_path,
+            lock_hash=LEGACY_UNKNOWN,
+            returncode=1,
+            message="missing committed lock input(s): " + ", ".join(missing),
+        )
+    return LockResult(
+        env_key=env_key,
+        manifest_path=manifest_path,
+        lock_path=lock_path,
+        lock_hash=compute_lock_hash(manifest_path, lock_path),
+        returncode=0,
+        message="committed lock reused read-only",
+    )
+
+
 def _project_dir(cache_root: Path, env_key: str, lock_hash: str) -> Path:
     """Return the managed project directory for a cache key.
 
@@ -1294,7 +1395,11 @@ def build(env_key: str, registry: EnvRegistry | None = None) -> BuildResult:
 
     active_registry = registry or load_registry()
     spec = active_registry.islands[env_key]
-    lock_result = lock(env_key, active_registry)
+    lock_result = (
+        _readonly_committed_lock(env_key)
+        if os.environ.get(ENV_SMOKE_LOCKS_READONLY) == "1"
+        else lock(env_key, active_registry)
+    )
     lock_hash = lock_result.lock_hash
     project_dir = _project_dir(active_registry.cache_root, env_key, lock_hash)
     disk = enforce_disk_lru(
@@ -1623,6 +1728,105 @@ def append_env_status_rows(
     return len(rows)
 
 
+def _extra_arg_value(extra_args: Sequence[str], flag: str) -> str | None:
+    """Return the value following a forwarded validator flag.
+
+    Parameters
+    ----------
+    extra_args:
+        Forwarded validator CLI arguments.
+    flag:
+        Flag to search for.
+
+    Returns
+    -------
+    str | None
+        Flag value, or ``None`` when absent.
+    """
+
+    for index, value in enumerate(extra_args[:-1]):
+        if value == flag:
+            return extra_args[index + 1]
+    return None
+
+
+def _append_build_failure_manifest_rows(
+    stable_ids: Sequence[str],
+    *,
+    env_key: str,
+    reason: str,
+    extra_args: Sequence[str],
+) -> int:
+    """Append validation-manifest rows for an island build failure.
+
+    Parameters
+    ----------
+    stable_ids:
+        Stable IDs that could not run because the island was unavailable.
+    env_key:
+        Island key.
+    reason:
+        Build or install failure detail.
+    extra_args:
+        Forwarded validator CLI arguments containing manifest context.
+
+    Returns
+    -------
+    int
+        Number of manifest rows appended.
+    """
+
+    manifest_value = _extra_arg_value(extra_args, "--manifest")
+    if manifest_value is None:
+        return 0
+    rows = _rows_by_stable_id(stable_ids)
+    manifest_path = Path(manifest_value)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not manifest_path.exists()
+    scope = _extra_arg_value(extra_args, "--scope") or "forward"
+    input_scale = _extra_arg_value(extra_args, "--input-scale") or "1.0"
+    columns = (
+        "name",
+        "model_id",
+        "stable_id",
+        "recipe_revision_sha256",
+        "status",
+        "n_ops",
+        "validate_metadata_ok",
+        "scope",
+        "elapsed",
+        "dependency_cluster",
+        "error",
+        "graph_shape_hash",
+        "peak_rss_mb",
+        "input_scale",
+    )
+    with manifest_path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        if write_header:
+            writer.writerow(columns)
+        for row in rows:
+            writer.writerow(
+                (
+                    row.name,
+                    row.model_id,
+                    row.stable_id,
+                    row.recipe_revision_sha256,
+                    "skipped:dependency_unavailable",
+                    0,
+                    False,
+                    scope,
+                    "0.000",
+                    env_key,
+                    reason,
+                    "",
+                    "",
+                    input_scale,
+                )
+            )
+    return len(rows)
+
+
 def run_validate(
     env_key: str,
     stable_ids: Sequence[str],
@@ -1665,6 +1869,12 @@ def run_validate(
             build_result.lock_hash,
             build_result.message,
             active_registry.islands[env_key].expected_device,
+        )
+        _append_build_failure_manifest_rows(
+            stable_ids,
+            env_key=env_key,
+            reason=build_result.message,
+            extra_args=extra_args,
         )
         return CommandResult(1, "", build_result.message)
     spec = active_registry.islands[env_key]

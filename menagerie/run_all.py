@@ -9,11 +9,14 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import importlib
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
 import time
 from typing import Any
+
+from menagerie.ledger import ENV_VERIFICATION_DB
 
 
 DEFAULT_OUT_ROOT = Path("/tmp/torchlens_menagerie_run_all")
@@ -325,7 +328,9 @@ def _validation_args(args: argparse.Namespace, validation_dir: Path) -> list[str
     """
 
     forwarded = _common_selection_args(args) + _common_runtime_args(args)
-    _append_repeated(forwarded, "--stable-ids", args.stable_ids)
+    if args.stable_ids:
+        forwarded.append("--stable-ids")
+        forwarded.extend(str(value) for value in args.stable_ids)
     _append_option(forwarded, "--scope", args.scope)
     _append_option(forwarded, "--memory-budget-gb", args.memory_budget_gb)
     _append_option(forwarded, "--memory-floor-gb", args.memory_floor_gb)
@@ -333,6 +338,8 @@ def _validation_args(args: argparse.Namespace, validation_dir: Path) -> list[str
     _append_option(forwarded, "--runner", args.runner)
     _append_option(forwarded, "--input-scale", args.input_scale)
     _append_option(forwarded, "--env-registry", args.env_registry)
+    _append_option(forwarded, "--verification-db", args.verification_db)
+    _append_option(forwarded, "--smoke-manifest", args.smoke_manifest)
     if args.revalidate_failed:
         forwarded.append("--revalidate-failed")
     forwarded.extend(
@@ -370,6 +377,8 @@ def _render_args(
     _append_option(forwarded, "--db", args.db)
     _append_repeated(forwarded, "--model-id", model_ids)
     _append_option(forwarded, "--file-format", args.file_format)
+    _append_repeated(forwarded, "--vis-option", args.vis_option)
+    _append_option(forwarded, "--smoke-manifest", args.smoke_manifest)
     if args.force:
         forwarded.append("--force")
     forwarded.extend(
@@ -491,6 +500,111 @@ def _validated_stable_ids(validation_dir: Path) -> list[str]:
     return [row["stable_id"] for row in _validated_rows(validation_dir) if row.get("stable_id")]
 
 
+def _manifest_stable_ids(validation_dir: Path) -> list[str]:
+    """Return all stable IDs from the validation manifest.
+
+    Parameters
+    ----------
+    validation_dir:
+        Validation output directory.
+
+    Returns
+    -------
+    list[str]
+        Stable IDs in manifest order.
+    """
+
+    return [
+        row["stable_id"]
+        for row in _read_validation_manifest(validation_dir / "validation_manifest.tsv")
+        if row.get("stable_id")
+    ]
+
+
+def _read_smoke_manifest(smoke_manifest: Path | None) -> list[dict[str, Any]]:
+    """Return smoke manifest rows, or an empty list when absent.
+
+    Parameters
+    ----------
+    smoke_manifest:
+        Optional smoke-manifest JSONL path.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Parsed smoke manifest rows.
+    """
+
+    if smoke_manifest is None or not Path(smoke_manifest).exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with Path(smoke_manifest).open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if stripped:
+                rows.append(json.loads(stripped))
+    return rows
+
+
+def _smoke_synthetic_stable_ids(smoke_manifest: Path | None) -> set[str]:
+    """Return synthetic stable IDs declared in the smoke manifest.
+
+    Synthetic smoke rows exist only to exercise validation status paths; they
+    have no real architecture to re-trace or render, so downstream metadata and
+    render steps must skip them.
+
+    Parameters
+    ----------
+    smoke_manifest:
+        Optional smoke-manifest JSONL path.
+
+    Returns
+    -------
+    set[str]
+        Synthetic stable IDs.
+    """
+
+    return {
+        str(row["stable_id"])
+        for row in _read_smoke_manifest(smoke_manifest)
+        if bool(row.get("synthetic", False)) and row.get("stable_id")
+    }
+
+
+def _smoke_excluded_stable_ids(smoke_manifest: Path | None, field: str) -> set[str]:
+    """Return stable IDs the smoke manifest opts out of a downstream step.
+
+    A smoke row is excluded from the render / metadata step when it is
+    synthetic, when ``field`` (``"render"`` / ``"metadata"``) is explicitly
+    false, or when it is routed to a non-base island. Render and metadata run in
+    the base environment and re-instantiate the model, so an island model whose
+    dependencies are absent from the base env cannot be re-traced there; its
+    in-island validation is the coverage for that case.
+
+    Parameters
+    ----------
+    smoke_manifest:
+        Optional smoke-manifest JSONL path.
+    field:
+        Manifest field gating the step (``"render"`` or ``"metadata"``).
+
+    Returns
+    -------
+    set[str]
+        Excluded stable IDs.
+    """
+
+    excluded: set[str] = set()
+    for row in _read_smoke_manifest(smoke_manifest):
+        stable_id = row.get("stable_id")
+        if not stable_id:
+            continue
+        non_base_env = str(row.get("expected_env", "base")) != "base"
+        if bool(row.get("synthetic", False)) or not bool(row.get(field, True)) or non_base_env:
+            excluded.add(str(stable_id))
+    return excluded
+
+
 def _validated_model_ids(validation_dir: Path) -> list[int]:
     """Return validated model IDs from the validation manifest.
 
@@ -546,7 +660,12 @@ def _run_render(args: argparse.Namespace, validation_dir: Path, visuals_dir: Pat
 
     from menagerie import generate_menagerie
 
-    model_ids = _validated_model_ids(validation_dir)
+    excluded = _smoke_excluded_stable_ids(args.smoke_manifest, "render")
+    model_ids = [
+        int(row["model_id"])
+        for row in _validated_rows(validation_dir)
+        if row.get("model_id") and row.get("stable_id") not in excluded
+    ]
     if not model_ids:
         visuals_dir.mkdir(parents=True, exist_ok=True)
         (visuals_dir / "manifest.tsv").write_text(
@@ -595,6 +714,9 @@ def _csv_export_note(metadata_dir: Path, args: argparse.Namespace) -> str:
         csv_args.extend(("--catalog-db", str(args.db)))
     if args.verification_db is not None:
         csv_args.extend(("--verification-db", str(args.verification_db)))
+    stable_ids = _manifest_stable_ids(metadata_dir.parent / VALIDATION_DIR)
+    if stable_ids:
+        csv_args.extend(("--stable-ids", *stable_ids))
     if args.csv_limit is not None:
         csv_args.extend(("--limit", str(args.csv_limit)))
     exit_code = csv_export.main(csv_args)
@@ -623,7 +745,12 @@ def _run_metadata(args: argparse.Namespace, validation_dir: Path, metadata_dir: 
 
     from menagerie import trace_summary
 
-    stable_ids = _validated_stable_ids(validation_dir)
+    excluded = _smoke_excluded_stable_ids(args.smoke_manifest, "metadata")
+    stable_ids = [
+        stable_id
+        for stable_id in _validated_stable_ids(validation_dir)
+        if stable_id not in excluded
+    ]
     metadata_dir.mkdir(parents=True, exist_ok=True)
     db_path = metadata_dir / "trace_summary.db"
     if stable_ids:
@@ -841,7 +968,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-scale", type=float)
     parser.add_argument("--env-registry", type=Path)
     parser.add_argument("--file-format", default="svg")
+    parser.add_argument(
+        "--vis-option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="extra Trace.draw() keyword argument forwarded to generate_menagerie",
+    )
     parser.add_argument("--verification-db", type=Path)
+    parser.add_argument("--smoke", action="store_true", help="run with smoke isolation env vars")
+    parser.add_argument("--smoke-manifest", type=Path)
     parser.add_argument("--csv-limit", type=int)
     return parser
 
@@ -861,55 +997,73 @@ def run(args: argparse.Namespace) -> CombinedReport:
     """
 
     total_start = time.perf_counter()
-    out_dir = (args.out_dir or _unique_timestamped_dir(args.out_root)).resolve()
-    validation_dir = out_dir / VALIDATION_DIR
-    visuals_dir = out_dir / VISUALS_DIR
-    metadata_dir = out_dir / METADATA_DIR
-    out_dir.mkdir(parents=True, exist_ok=True)
-    timings = [
-        _timed_step(
-            "validation",
-            lambda: _validation_outputs_exist(validation_dir),
-            lambda: _run_validation(args, validation_dir),
-            force=args.force,
-        ),
-        _timed_step(
-            "render",
-            lambda: _render_outputs_exist(visuals_dir),
-            lambda: _run_render(args, validation_dir, visuals_dir),
-            force=args.force,
-        ),
-    ]
-    csv_note = "not run"
+    env_keys = (
+        ENV_VERIFICATION_DB,
+        "TORCHLENS_MENAGERIE_SMOKE_LOCKS_READONLY",
+        "TORCHLENS_MENAGERIE_ENV_CACHE_ROOT",
+    )
+    previous_env = {key: os.environ.get(key) for key in env_keys}
+    if args.verification_db is not None:
+        os.environ[ENV_VERIFICATION_DB] = str(args.verification_db)
+    try:
+        out_dir = (args.out_dir or _unique_timestamped_dir(args.out_root)).resolve()
+        if args.smoke:
+            os.environ.setdefault("TORCHLENS_MENAGERIE_SMOKE_LOCKS_READONLY", "1")
+            os.environ.setdefault("TORCHLENS_MENAGERIE_ENV_CACHE_ROOT", str(out_dir / "envs_cache"))
+        validation_dir = out_dir / VALIDATION_DIR
+        visuals_dir = out_dir / VISUALS_DIR
+        metadata_dir = out_dir / METADATA_DIR
+        out_dir.mkdir(parents=True, exist_ok=True)
+        timings = [
+            _timed_step(
+                "validation",
+                lambda: _validation_outputs_exist(validation_dir),
+                lambda: _run_validation(args, validation_dir),
+                force=args.force,
+            ),
+            _timed_step(
+                "render",
+                lambda: _render_outputs_exist(visuals_dir),
+                lambda: _run_render(args, validation_dir, visuals_dir),
+                force=args.force,
+            ),
+        ]
+        csv_note = "not run"
 
-    def run_metadata() -> None:
-        """Run metadata and record its CSV status."""
+        def run_metadata() -> None:
+            """Run metadata and record its CSV status."""
 
-        nonlocal csv_note
-        csv_note = _run_metadata(args, validation_dir, metadata_dir)
+            nonlocal csv_note
+            csv_note = _run_metadata(args, validation_dir, metadata_dir)
 
-    timings.append(
-        _timed_step(
-            "metadata",
-            lambda: _metadata_outputs_exist(metadata_dir),
-            run_metadata,
-            force=args.force,
+        timings.append(
+            _timed_step(
+                "metadata",
+                lambda: _metadata_outputs_exist(metadata_dir),
+                run_metadata,
+                force=args.force,
+            )
         )
-    )
-    if timings[-1].skipped:
-        csv_note = "skipped: metadata output already exists"
-    report = CombinedReport(
-        out_dir=str(out_dir),
-        validation=_validation_numbers(validation_dir),
-        render_count=_render_count(visuals_dir),
-        metadata_row_count=_metadata_row_count(metadata_dir),
-        timings=timings,
-        total_elapsed_sec=round(time.perf_counter() - total_start, 6),
-        csv_export=csv_note,
-    )
-    _write_report(report, out_dir)
-    _print_report(report)
-    return report
+        if timings[-1].skipped:
+            csv_note = "skipped: metadata output already exists"
+        report = CombinedReport(
+            out_dir=str(out_dir),
+            validation=_validation_numbers(validation_dir),
+            render_count=_render_count(visuals_dir),
+            metadata_row_count=_metadata_row_count(metadata_dir),
+            timings=timings,
+            total_elapsed_sec=round(time.perf_counter() - total_start, 6),
+            csv_export=csv_note,
+        )
+        _write_report(report, out_dir)
+        _print_report(report)
+        return report
+    finally:
+        for key, value in previous_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def main(argv: Sequence[str] | None = None) -> int:

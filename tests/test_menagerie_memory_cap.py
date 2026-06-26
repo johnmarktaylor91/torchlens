@@ -303,7 +303,7 @@ def test_worker_under_memory_cap_validates() -> None:
         worker_memory_cap_gb=4.0,
     )
 
-    assert result.status == "validated"
+    assert result.status == "validated", result.error
     assert result.peak_rss_mb is not None
     assert result.peak_rss_mb < 4096
 

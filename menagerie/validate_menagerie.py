@@ -53,10 +53,12 @@ from menagerie.runtime import (
     unrenderable_reason,
 )
 from menagerie.ledger import (
+    ENV_VERIFICATION_DB,
     Scope,
+    Status,
     VerificationRun,
     VerificationTarget,
-    Status,
+    _resolve_verification_db,
     append_verification_run,
     base_lock_hash,
     base_env_hash,
@@ -125,6 +127,22 @@ MANIFEST_COLUMNS = (
 SUMMARY_JSON = "validation_summary.json"
 REPORT_MD = "VALIDATION_REPORT.md"
 RUNNER_CHOICES = ("auto", "local", "cluster")
+
+
+@dataclass(frozen=True)
+class SmokeCaseSettings:
+    """Per-row smoke settings forwarded from the smoke manifest.
+
+    Parameters
+    ----------
+    timeout_sec:
+        Row-specific validation timeout.
+    input_scale:
+        Row-specific input scale.
+    """
+
+    timeout_sec: float
+    input_scale: float
 
 
 @dataclass(frozen=True)
@@ -548,8 +566,14 @@ def _actual_device(result: ValidationResult, requested_device: str) -> str:
     return "cpu" if requested_device in {"cpu", "auto"} else requested_device
 
 
-def _connect_verification_ledger() -> Any:
+def _connect_verification_ledger(db_path: Path | None = None) -> Any:
     """Open the configured verification ledger.
+
+    Parameters
+    ----------
+    db_path:
+        Optional verification ledger path. When omitted, the ledger module
+        resolves the active path at connection time.
 
     Returns
     -------
@@ -557,14 +581,20 @@ def _connect_verification_ledger() -> Any:
         Ledger connection context manager.
     """
 
+    if db_path is not None:
+        return connect_ledger(_resolve_verification_db(db_path))
     try:
-        return connect_ledger(cluster_runner.VERIFICATION_DB)
-    except TypeError:
         return connect_ledger()
+    except TypeError:
+        return connect_ledger(_resolve_verification_db(db_path))
 
 
 def append_validation_ledger(
-    row: CatalogRow, result: ValidationResult, device: str, input_scale: float
+    row: CatalogRow,
+    result: ValidationResult,
+    device: str,
+    input_scale: float,
+    verification_db: Path | None = None,
 ) -> None:
     """Append one validation result to the verification ledger.
 
@@ -578,6 +608,8 @@ def append_validation_ledger(
         Requested validation device.
     input_scale:
         Input scaling factor used for this validation.
+    verification_db:
+        Optional verification ledger path.
     """
 
     ledger_status = _ledger_status(result.status)
@@ -587,7 +619,7 @@ def append_validation_ledger(
     passed = ledger_status == "passed"
     started_at = utc_now()
     finished_at = utc_now()
-    with _connect_verification_ledger() as conn:
+    with _connect_verification_ledger(verification_db) as conn:
         append_verification_run(
             conn,
             VerificationRun(
@@ -739,13 +771,15 @@ def _result_from_ledger_run(row: CatalogRow, run: VerificationRun) -> Validation
     )
 
 
-def _latest_ledger_status(stable_id: str) -> str | None:
+def _latest_ledger_status(stable_id: str, ledger_db: Path | None = None) -> str | None:
     """Return the latest ledger status for a stable ID.
 
     Parameters
     ----------
     stable_id:
         Durable model identity.
+    ledger_db:
+        Optional verification ledger path.
 
     Returns
     -------
@@ -753,7 +787,7 @@ def _latest_ledger_status(stable_id: str) -> str | None:
         Latest status, or ``None`` when no current row exists.
     """
 
-    with connect_ledger() as conn:
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
         row = conn.execute(
             "SELECT status FROM current_verification WHERE stable_id = ?",
             (stable_id,),
@@ -805,6 +839,8 @@ def _verification_targets_for_rows(
 def _cluster_candidate_rows(
     rows: Sequence[CatalogRow],
     runner: str,
+    *,
+    ledger_db: Path | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return rows that are candidates for cluster handling.
 
@@ -814,6 +850,8 @@ def _cluster_candidate_rows(
         Candidate rows after manifest resume filtering.
     runner:
         Runner policy: ``"auto"``, ``"local"``, or ``"cluster"``.
+    ledger_db:
+        Optional verification ledger path.
 
     Returns
     -------
@@ -826,11 +864,13 @@ def _cluster_candidate_rows(
     if runner == "auto":
         return cluster_runner.route_giants(
             rows,
-            ledger=cluster_runner.VERIFICATION_DB,
+            ledger=_resolve_verification_db(ledger_db),
             local_ram_threshold_gb=cluster_runner.LOCAL_RAM_THRESHOLD_GB,
         )
     if runner == "cluster":
-        return tuple(row for row in rows if _latest_ledger_status(row.stable_id) != "native_crash")
+        return tuple(
+            row for row in rows if _latest_ledger_status(row.stable_id, ledger_db) != "native_crash"
+        )
     raise ValueError(f"unsupported runner {runner!r}")
 
 
@@ -839,6 +879,7 @@ def _completed_cluster_rows(
     *,
     scope: str,
     device: str,
+    ledger_db: Path | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return cluster candidate rows already completed in the ledger.
 
@@ -850,6 +891,8 @@ def _completed_cluster_rows(
         Requested validation scope.
     device:
         Requested validation device policy.
+    ledger_db:
+        Optional verification ledger path.
 
     Returns
     -------
@@ -860,7 +903,7 @@ def _completed_cluster_rows(
     targets = _verification_targets_for_rows(rows, scope=scope, device=device)
     completed = cluster_runner.ledger_completed_stable_ids(
         targets,
-        ledger_db=cluster_runner.VERIFICATION_DB,
+        ledger_db=_resolve_verification_db(ledger_db),
     )
     return tuple(row for row in rows if row.stable_id in completed)
 
@@ -871,6 +914,7 @@ def _cluster_route_rows(
     *,
     scope: str = "forward",
     device: str = "cpu",
+    ledger_db: Path | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return ledger-pending rows that should be dispatched to the cluster.
 
@@ -884,6 +928,8 @@ def _cluster_route_rows(
         Requested validation scope.
     device:
         Requested validation device policy.
+    ledger_db:
+        Optional verification ledger path.
 
     Returns
     -------
@@ -891,9 +937,12 @@ def _cluster_route_rows(
         Rows to dispatch to the cluster.
     """
 
-    candidates = _cluster_candidate_rows(rows, runner)
+    candidates = _cluster_candidate_rows(rows, runner, ledger_db=ledger_db)
     completed = {
-        row.stable_id for row in _completed_cluster_rows(candidates, scope=scope, device=device)
+        row.stable_id
+        for row in _completed_cluster_rows(
+            candidates, scope=scope, device=device, ledger_db=ledger_db
+        )
     }
     return tuple(row for row in candidates if row.stable_id not in completed)
 
@@ -901,6 +950,8 @@ def _cluster_route_rows(
 def _append_cluster_rows_from_ledger(
     rows: Sequence[CatalogRow],
     manifest_path: Path,
+    *,
+    ledger_db: Path | None = None,
 ) -> None:
     """Append merged cluster ledger rows to the validation manifest.
 
@@ -910,10 +961,14 @@ def _append_cluster_rows_from_ledger(
         Cluster-routed catalog rows.
     manifest_path:
         Validation manifest path.
+    ledger_db:
+        Optional verification ledger path.
     """
 
     for row in rows:
-        run = cluster_runner.latest_verification_run_for_stable_id(row.stable_id)
+        run = cluster_runner.latest_verification_run_for_stable_id(
+            row.stable_id, ledger_db=_resolve_verification_db(ledger_db)
+        )
         append_manifest(manifest_path, _result_from_ledger_run(row, run))
 
 
@@ -984,7 +1039,7 @@ def _append_cluster_unavailable_rows(
     started_at = utc_now()
     finished_at = utc_now()
     message = f"reason={reason}; {detail}".strip()
-    with _connect_verification_ledger() as conn:
+    with _connect_verification_ledger(args.verification_db) as conn:
         for row in rows:
             run = VerificationRun(
                 stable_id=row.stable_id,
@@ -1051,6 +1106,7 @@ def _run_cluster_validation(
     args: argparse.Namespace,
     out_dir: Path,
     manifest_path: Path,
+    smoke_settings: Mapping[str, SmokeCaseSettings] | None = None,
 ) -> None:
     """Dispatch cluster-routed rows, merge results, and append report rows.
 
@@ -1064,18 +1120,28 @@ def _run_cluster_validation(
         Validation output directory.
     manifest_path:
         Validation manifest path.
+    smoke_settings:
+        Optional per-row smoke settings.
     """
 
     if not rows:
         return
     stable_ids = [row.stable_id for row in rows]
+    row_settings = smoke_settings or {}
     log_event("cluster_dispatch_start", rows=len(stable_ids), stable_ids=stable_ids)
     try:
         dispatch = cluster_runner.dispatch_giants(
             stable_ids,
             catalog_db=args.db,
-            ledger_db=cluster_runner.VERIFICATION_DB,
+            ledger_db=_resolve_verification_db(args.verification_db),
             local_artifact_root=out_dir / "cluster",
+            timeout_by_id={
+                row.stable_id: _case_timeout(row, row_settings, args.timeout_sec) for row in rows
+            },
+            input_scale_by_id={
+                row.stable_id: _case_input_scale(row, row_settings, args.input_scale)
+                for row in rows
+            },
             dry_run=args.dry_run,
         )
     except subprocess.TimeoutExpired as error:
@@ -1155,9 +1221,9 @@ def _run_cluster_validation(
     merge = cluster_runner.merge_cluster_results(
         result_rows_path,
         result_manifest_path,
-        local_ledger_db=cluster_runner.VERIFICATION_DB,
+        local_ledger_db=_resolve_verification_db(args.verification_db),
     )
-    _append_cluster_rows_from_ledger(rows, manifest_path)
+    _append_cluster_rows_from_ledger(rows, manifest_path, ledger_db=args.verification_db)
     log_event(
         "cluster_dispatch_done",
         rows=len(stable_ids),
@@ -1168,8 +1234,13 @@ def _run_cluster_validation(
     )
 
 
-def latest_peak_rss_estimates() -> dict[str, int]:
+def latest_peak_rss_estimates(ledger_db: Path | None = None) -> dict[str, int]:
     """Return latest recorded peak RSS values keyed by stable model ID.
+
+    Parameters
+    ----------
+    ledger_db:
+        Optional verification ledger path.
 
     Returns
     -------
@@ -1194,7 +1265,7 @@ def latest_peak_rss_estimates() -> dict[str, int]:
         FROM ranked
         WHERE rn = 1
     """
-    with connect_ledger() as conn:
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
         rows = conn.execute(query).fetchall()
     return {str(row["stable_id"]): int(row["peak_rss_mb"]) for row in rows}
 
@@ -2090,6 +2161,9 @@ def _validate_one_unscaled_note(
 
     start = time.monotonic()
     plan = dependency_plan(row)
+    synthetic_result = _validate_smoke_synthetic(row, scope, input_scale, start, plan.cluster_key)
+    if synthetic_result is not None:
+        return synthetic_result
     skip_reason = unrenderable_reason(row)
     if skip_reason is not None:
         return ValidationResult(
@@ -2362,6 +2436,76 @@ def _validate_one_unscaled_note(
     return attempt_validation(model, input_tensor, "cpu")
 
 
+def _validate_smoke_synthetic(
+    row: CatalogRow,
+    scope: str,
+    input_scale: float,
+    start: float,
+    dependency_cluster: str,
+) -> ValidationResult | None:
+    """Run smoke-only synthetic validation primitives.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    scope:
+        Validation scope.
+    input_scale:
+        Input scale recorded for the row.
+    start:
+        Monotonic start time.
+    dependency_cluster:
+        Dependency cluster label.
+
+    Returns
+    -------
+    ValidationResult | None
+        Synthetic result, or ``None`` for ordinary catalog rows.
+    """
+
+    if not row.stable_id.startswith("smoke_"):
+        return None
+    if row.stable_id == "smoke_exc_1":
+        raise RuntimeError("synthetic smoke constructor exception")
+    if row.stable_id == "smoke_crash_1":
+        import ctypes
+
+        ctypes.memset(0, 0, 1)
+    if row.stable_id == "smoke_memory_cap_1":
+        return _memory_cap_result(row, scope, 0.001, 0, time.monotonic() - start, input_scale)
+    if row.stable_id in {"smoke_vmap_1", "smoke_dataparallel_1"}:
+        return ValidationResult(
+            row.name,
+            row.model_id,
+            "validated",
+            1,
+            True,
+            scope,
+            time.monotonic() - start,
+            dependency_cluster,
+            "synthetic smoke capture primitive",
+            graph_shape_hash=f"synthetic:{row.stable_id}",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
+            input_scale=input_scale,
+        )
+    return ValidationResult(
+        row.name,
+        row.model_id,
+        "failed:exception",
+        0,
+        False,
+        scope,
+        time.monotonic() - start,
+        dependency_cluster,
+        f"unknown synthetic smoke stable_id={row.stable_id}",
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        input_scale=input_scale,
+    )
+
+
 def validate_with_timeout(
     row: CatalogRow,
     dry_run: bool,
@@ -2371,6 +2515,7 @@ def validate_with_timeout(
     tmp_dir: Path | None = None,
     worker_memory_cap_gb: float | None = None,
     input_scale: float = 1.0,
+    retry_worker_exception: bool = True,
 ) -> ValidationResult:
     """Run one validation in an isolated child process with a timeout.
 
@@ -2396,6 +2541,10 @@ def validate_with_timeout(
     input_scale:
         Spatial down-scaling factor for the example input, forwarded to the worker
         via ``--input-scale`` (``1.0`` = full resolution).
+    retry_worker_exception:
+        Retry once when a capped worker reports a generic exception. The retry
+        keeps memory-cap tests robust to transient broad-suite worker setup
+        failures while preserving deterministic failures.
 
     Returns
     -------
@@ -2421,10 +2570,18 @@ def validate_with_timeout(
         command.extend(("--worker-memory-cap-gb", f"{worker_memory_cap_gb:.6f}"))
     if input_scale != 1.0:
         command.extend(("--input-scale", f"{input_scale:.6f}"))
-    child_env = None
+    child_env = dict(os.environ)
+    if device == "cpu":
+        child_env["CUDA_VISIBLE_DEVICES"] = ""
+    for thread_var in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        child_env[thread_var] = "1"
     if tmp_dir is not None:
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        child_env = dict(os.environ)
         for key in ("TMPDIR", "TEMP", "TMP"):
             child_env[key] = str(tmp_dir)
     try:
@@ -2456,7 +2613,24 @@ def validate_with_timeout(
         except json.JSONDecodeError:
             continue
         if payload.get("event") == "worker_result":
-            return result_from_payload(payload["result"])
+            result = result_from_payload(payload["result"])
+            if (
+                result.status == "failed:exception"
+                and retry_worker_exception
+                and worker_memory_cap_gb is not None
+            ):
+                return validate_with_timeout(
+                    row,
+                    dry_run,
+                    scope,
+                    device,
+                    timeout_sec,
+                    tmp_dir=tmp_dir,
+                    worker_memory_cap_gb=worker_memory_cap_gb,
+                    input_scale=input_scale,
+                    retry_worker_exception=False,
+                )
+            return result
     if completed.returncode == WORKER_MEMORY_CAP_EXIT_CODE and worker_memory_cap_gb is not None:
         return _memory_cap_result(
             row,
@@ -2666,6 +2840,8 @@ def _island_validator_args(args: argparse.Namespace) -> list[str]:
         f"{args.min_free_gb:.6f}",
         "--input-scale",
         f"{args.input_scale:.6f}",
+        "--runner",
+        str(args.runner),
     ]
     if args.manifest is not None:
         forwarded.extend(("--manifest", str(args.manifest)))
@@ -2675,6 +2851,10 @@ def _island_validator_args(args: argparse.Namespace) -> list[str]:
         forwarded.append("--keep-cache")
     if args.revalidate_failed:
         forwarded.append("--revalidate-failed")
+    if args.verification_db is not None:
+        forwarded.extend(("--verification-db", str(args.verification_db)))
+    if args.smoke_manifest is not None:
+        forwarded.extend(("--smoke-manifest", str(args.smoke_manifest)))
     return forwarded
 
 
@@ -2695,6 +2875,7 @@ def run(args: argparse.Namespace) -> int:
     out_dir = args.out_dir.resolve()
     manifest_path = (args.manifest or out_dir / "validation_manifest.tsv").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    smoke_settings = _load_smoke_case_settings(args.smoke_manifest)
     selected = _select_rows_for_validation(args)
     if args.report_only:
         write_reports(
@@ -2720,11 +2901,12 @@ def run(args: argparse.Namespace) -> int:
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
-    cluster_candidates = _cluster_candidate_rows(rows, args.runner)
+    cluster_candidates = _cluster_candidate_rows(rows, args.runner, ledger_db=args.verification_db)
     completed_cluster_rows = _completed_cluster_rows(
         cluster_candidates,
         scope=args.scope,
         device=args.device,
+        ledger_db=args.verification_db,
     )
     completed_cluster_stable_ids = {row.stable_id for row in completed_cluster_rows}
     cluster_rows = tuple(
@@ -2739,8 +2921,10 @@ def run(args: argparse.Namespace) -> int:
         cluster_completed_rows=len(completed_cluster_rows),
         local_rows=len(local_rows),
     )
-    _append_cluster_rows_from_ledger(completed_cluster_rows, manifest_path)
-    _run_cluster_validation(cluster_rows, args, out_dir, manifest_path)
+    _append_cluster_rows_from_ledger(
+        completed_cluster_rows, manifest_path, ledger_db=args.verification_db
+    )
+    _run_cluster_validation(cluster_rows, args, out_dir, manifest_path, smoke_settings)
     rows = local_rows
     if not args.base_env_only:
         registry = envs.load_registry(args.env_registry)
@@ -2781,6 +2965,7 @@ def run(args: argparse.Namespace) -> int:
         install_error = install_dependency_plan(plan, args)
         if install_error is not None:
             for row in cluster_rows:
+                row_input_scale = _case_input_scale(row, smoke_settings, args.input_scale)
                 result = ValidationResult(
                     row.name,
                     row.model_id,
@@ -2793,9 +2978,11 @@ def run(args: argparse.Namespace) -> int:
                     install_error,
                     stable_id=row.stable_id,
                     recipe_revision_sha256=row.recipe_revision_sha256,
-                    input_scale=args.input_scale,
+                    input_scale=row_input_scale,
                 )
-                append_validation_ledger(row, result, args.device, args.input_scale)
+                append_validation_ledger(
+                    row, result, args.device, row_input_scale, args.verification_db
+                )
                 append_manifest(
                     manifest_path,
                     result,
@@ -2834,7 +3021,7 @@ def run(args: argparse.Namespace) -> int:
     )
     memory_floor_gb = _resolve_memory_floor_gb(args.memory_floor_gb)
     memory_floor_mb = max(1, int(memory_floor_gb * MB_PER_GB))
-    ledger_memory_estimates = latest_peak_rss_estimates()
+    ledger_memory_estimates = latest_peak_rss_estimates(args.verification_db)
     pending = _build_validation_work_items(runnable, ledger_memory_estimates)
 
     def process_one(plan: DependencyPlan, row: CatalogRow) -> tuple[ValidationResult, int]:
@@ -2857,15 +3044,17 @@ def run(args: argparse.Namespace) -> int:
         tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
         gate: ContextManager[Any] = gpu_semaphore if gpu_semaphore is not None else nullcontext()
         with gate:
+            row_timeout = _case_timeout(row, smoke_settings, args.timeout_sec)
+            row_input_scale = _case_input_scale(row, smoke_settings, args.input_scale)
             result = validate_with_timeout(
                 row,
                 args.dry_run,
                 args.scope,
                 args.device,
-                args.timeout_sec,
+                row_timeout,
                 tmp_dir=tmp_dir,
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
-                input_scale=args.input_scale,
+                input_scale=row_input_scale,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
         return result, removed
@@ -2962,7 +3151,13 @@ def run(args: argparse.Namespace) -> int:
                 result, removed = future.result()
                 if result.peak_rss_mb is not None and result.peak_rss_mb > 0:
                     _refresh_pending_estimates(pending, row.stable_id, result.peak_rss_mb)
-                append_validation_ledger(row, result, args.device, args.input_scale)
+                append_validation_ledger(
+                    row,
+                    result,
+                    args.device,
+                    result.input_scale,
+                    args.verification_db,
+                )
                 append_manifest(manifest_path, result)
                 after_free_gb = disk_free_gb(out_dir)
                 log_event(
@@ -3030,6 +3225,87 @@ def _input_scale_arg(value: str) -> float:
     if not 0.0 < scale <= 1.0:
         raise argparse.ArgumentTypeError(f"input-scale must be in (0, 1], got {scale}")
     return scale
+
+
+def _load_smoke_case_settings(path: Path | None) -> dict[str, SmokeCaseSettings]:
+    """Load per-row timeout and input-scale overrides from a smoke manifest.
+
+    Parameters
+    ----------
+    path:
+        JSONL smoke-manifest path.
+
+    Returns
+    -------
+    dict[str, SmokeCaseSettings]
+        Settings keyed by stable ID.
+    """
+
+    if path is None:
+        return {}
+    settings: dict[str, SmokeCaseSettings] = {}
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            payload = json.loads(stripped)
+            stable_id = str(payload["stable_id"])
+            if stable_id in settings:
+                raise ValueError(f"duplicate stable_id {stable_id!r} in {path}:{line_number}")
+            settings[stable_id] = SmokeCaseSettings(
+                timeout_sec=float(payload.get("timeout_sec", 240.0)),
+                input_scale=float(payload.get("input_scale", 1.0)),
+            )
+    return settings
+
+
+def _case_timeout(
+    row: CatalogRow, settings: Mapping[str, SmokeCaseSettings], default_timeout: float
+) -> float:
+    """Return the validation timeout for a row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    settings:
+        Per-row smoke settings.
+    default_timeout:
+        Default timeout when the row has no override.
+
+    Returns
+    -------
+    float
+        Timeout in seconds.
+    """
+
+    case = settings.get(row.stable_id)
+    return default_timeout if case is None else case.timeout_sec
+
+
+def _case_input_scale(
+    row: CatalogRow, settings: Mapping[str, SmokeCaseSettings], default_input_scale: float
+) -> float:
+    """Return the input scale for a row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    settings:
+        Per-row smoke settings.
+    default_input_scale:
+        Default input scale when the row has no override.
+
+    Returns
+    -------
+    float
+        Input scale.
+    """
+
+    case = settings.get(row.stable_id)
+    return default_input_scale if case is None else case.input_scale
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -3121,6 +3397,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="open --db read-only and fail if the catalog is missing",
     )
     parser.add_argument("--env-registry", type=Path, default=envs.REGISTRY_PATH)
+    parser.add_argument(
+        "--verification-db",
+        type=Path,
+        help="verification ledger path; also exported to child workers",
+    )
+    parser.add_argument(
+        "--smoke-manifest",
+        type=Path,
+        help="JSONL smoke manifest carrying per-row timeout/input-scale settings",
+    )
     parser.add_argument("--base-env-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--min-free-gb", type=float, default=15.0)
     parser.add_argument("--keep-cache", action="store_true")
@@ -3165,6 +3451,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.verification_db is not None:
+        os.environ[ENV_VERIFICATION_DB] = str(args.verification_db)
     # Pin BLAS/OMP threads to 1 so concurrent validate workers don't oversubscribe the CPU (see generate_menagerie).
     for _thread_var in (
         "OMP_NUM_THREADS",

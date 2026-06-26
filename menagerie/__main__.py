@@ -33,7 +33,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from menagerie.run_all import main as run_all_main
 
         return run_all_main(args[1:])
-    print("usage: python -m menagerie {env,validate,run-all} ...", file=sys.stderr)
+    if args and args[0] == "smoke-test":
+        from menagerie.smoke_test import main as smoke_main
+
+        return smoke_main(args[1:])
+    print("usage: python -m menagerie {env,validate,run-all,smoke-test} ...", file=sys.stderr)
     return 2
 
 

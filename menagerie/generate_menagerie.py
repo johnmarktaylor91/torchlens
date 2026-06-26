@@ -71,6 +71,7 @@ MANIFEST_COLUMNS = (
     "dependency_cluster",
     "error",
     "graph_shape_hash",
+    "visual_mode",
 )
 
 
@@ -102,6 +103,8 @@ class RenderResult:
         Opaque durable model identity.
     recipe_revision_sha256:
         Frozen recipe fingerprint for the row's current construction recipe.
+    visual_mode:
+        Compact rendering mode derived from forwarded visualization options.
     """
 
     name: str
@@ -115,6 +118,35 @@ class RenderResult:
     graph_shape_hash: str = ""
     stable_id: str = ""
     recipe_revision_sha256: str = ""
+    visual_mode: str = "default"
+
+
+def visual_mode_from_options(options: Mapping[str, Any] | None) -> str:
+    """Return a compact visual-mode label for render manifests.
+
+    Parameters
+    ----------
+    options:
+        Trace.draw keyword arguments.
+
+    Returns
+    -------
+    str
+        Visual mode label.
+    """
+
+    draw_options = dict(options or {})
+    collapse = draw_options.get("collapse")
+    if collapse not in (None, False, "", "none"):
+        return f"collapsed:{collapse}"
+    view = draw_options.get("view")
+    if view not in (None, False, "", "default"):
+        return str(view)
+    if draw_options.get("roll") is True or draw_options.get("rolled") is True:
+        return "rolled"
+    if draw_options.get("unroll") is True or draw_options.get("unrolled") is True:
+        return "unrolled"
+    return "default"
 
 
 def parse_vis_option_value(value: str) -> Any:
@@ -174,6 +206,42 @@ def parse_vis_options(pairs: Sequence[str]) -> dict[str, Any]:
             raise ValueError(f"empty key in --vis-option {pair!r}")
         options[key] = parse_vis_option_value(raw_value)
     return options
+
+
+def load_smoke_vis_options(smoke_manifest: Path | None) -> dict[str, list[str]]:
+    """Return per-stable-id ``--vis-option`` strings from a smoke manifest.
+
+    Each smoke manifest row may carry a ``vis_option`` object of draw() keyword
+    arguments specific to that case (e.g. ``{"view": "rolled"}``). They are
+    converted to ``KEY=VALUE`` strings so the render worker applies the right
+    visual mode per model rather than one global mode for the whole batch.
+
+    Parameters
+    ----------
+    smoke_manifest:
+        Optional smoke-manifest JSONL path.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Mapping of stable ID to ``KEY=VALUE`` vis-option strings.
+    """
+
+    if smoke_manifest is None or not Path(smoke_manifest).exists():
+        return {}
+    per_row: dict[str, list[str]] = {}
+    with Path(smoke_manifest).open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            row = json.loads(stripped)
+            stable_id = row.get("stable_id")
+            vis_option = row.get("vis_option")
+            if not stable_id or not isinstance(vis_option, dict) or not vis_option:
+                continue
+            per_row[str(stable_id)] = [f"{key}={value}" for key, value in vis_option.items()]
+    return per_row
 
 
 def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
@@ -249,6 +317,7 @@ def append_manifest(manifest_path: Path, result: RenderResult) -> None:
                 result.dependency_cluster,
                 result.error,
                 result.graph_shape_hash,
+                result.visual_mode,
             )
         )
 
@@ -478,6 +547,7 @@ def render_one(
             graph_shape_hash,
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
+            visual_mode=visual_mode_from_options(draw_kwargs),
         )
 
     if device == "cuda":
@@ -561,6 +631,7 @@ def render_result_from_payload(payload: Mapping[str, Any]) -> RenderResult:
         graph_shape_hash=str(payload.get("graph_shape_hash", "")),
         stable_id=str(payload.get("stable_id", "")),
         recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
+        visual_mode=str(payload.get("visual_mode", "default")),
     )
 
 
@@ -1128,6 +1199,7 @@ def run(args: argparse.Namespace) -> int:
     vis_options = parse_vis_options(args.vis_option)
     if vis_options:
         log_event("vis_options", options={key: str(value) for key, value in vis_options.items()})
+    smoke_vis_options = load_smoke_vis_options(getattr(args, "smoke_manifest", None))
 
     # Phase 1: install dependencies per cluster (serial -- installs mutate the
     # shared interpreter/site-packages and must precede their rows). Clusters
@@ -1191,6 +1263,9 @@ def run(args: argparse.Namespace) -> int:
         cache_snapshots = [snapshot_cache(root) for root in CACHE_ROOTS]
         tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
         gate: ContextManager[Any] = gpu_semaphore if gpu_semaphore is not None else nullcontext()
+        # Per-row vis-options (e.g. a recurrent model rendered rolled) override the
+        # global ones for that stable id; later KEY=VALUE entries win in the worker.
+        row_vis_options = list(args.vis_option) + smoke_vis_options.get(row.stable_id, [])
         with gate:
             result = render_with_timeout(
                 row,
@@ -1199,7 +1274,7 @@ def run(args: argparse.Namespace) -> int:
                 args.file_format,
                 args.device,
                 args.timeout_sec,
-                vis_options=args.vis_option,
+                vis_options=row_vis_options,
                 tmp_dir=tmp_dir,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
@@ -1374,6 +1449,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disk-log-every", type=int, default=10)
     parser.add_argument("--drift-tolerance-gb", type=float, default=0.25)
     parser.add_argument("--max-monotonic-down-steps", type=int, default=10)
+    parser.add_argument(
+        "--smoke-manifest",
+        type=Path,
+        help="optional smoke-manifest JSONL providing per-stable-id vis_option overrides",
+    )
     parser.add_argument("--worker-row-json", help=argparse.SUPPRESS)
     return parser
 

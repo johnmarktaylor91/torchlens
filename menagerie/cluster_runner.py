@@ -21,10 +21,11 @@ from typing import Any
 
 from menagerie.catalog import CATALOG_DB, CatalogRow
 from menagerie.ledger import (
-    VERIFICATION_DB,
+    ENV_VERIFICATION_DB,
     LEGACY_UNKNOWN,
     VerificationRun,
     VerificationTarget,
+    _resolve_verification_db,
     append_verification_run,
     connect as connect_ledger,
     utc_now,
@@ -222,6 +223,10 @@ class ClusterAssignment:
         Routing evidence.
     expected_row_count:
         Expected result rows for this task.
+    timeout_sec:
+        Validator timeout for this assignment.
+    input_scale:
+        Validator input scale for this assignment.
     """
 
     campaign_id: str
@@ -234,6 +239,8 @@ class ClusterAssignment:
     partition: str
     reason: str
     expected_row_count: int = 1
+    timeout_sec: float = 14400.0
+    input_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -571,7 +578,7 @@ def pending_assignments_for_resume(
     assignments: Sequence[ClusterAssignment],
     targets: Mapping[str, VerificationTarget],
     *,
-    ledger_db: Path = VERIFICATION_DB,
+    ledger_db: Path | None = None,
 ) -> tuple[ClusterAssignment, ...]:
     """Filter assignments using the ledger as the only completion source.
 
@@ -597,7 +604,7 @@ def pending_assignments_for_resume(
 def ledger_completed_stable_ids(
     targets: Mapping[str, VerificationTarget],
     *,
-    ledger_db: Path = VERIFICATION_DB,
+    ledger_db: Path | None = None,
 ) -> set[str]:
     """Return stable IDs completed for the current ledger identity tuple.
 
@@ -616,7 +623,7 @@ def ledger_completed_stable_ids(
 
     if not targets:
         return set()
-    with connect_ledger(ledger_db) as conn:
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
         conn.execute(
             """
             CREATE TEMP TABLE IF NOT EXISTS temp_cluster_targets(
@@ -696,13 +703,15 @@ def dispatch_giants(
     stable_ids: Sequence[str],
     *,
     catalog_db: Path = CATALOG_DB,
-    ledger_db: Path = VERIFICATION_DB,
+    ledger_db: Path | None = None,
     repo_root: Path = REPO_ROOT,
     local_artifact_root: Path = CLUSTER_ARTIFACT_ROOT,
     config: ClusterConfig | None = None,
     command_runner: CommandRunner = default_command_runner,
     campaign_id: str | None = None,
     attempt_id: str | None = None,
+    timeout_by_id: Mapping[str, float] | None = None,
+    input_scale_by_id: Mapping[str, float] | None = None,
     dry_run: bool = False,
 ) -> DispatchResult:
     """Prepare and submit a SLURM array for giant model validation.
@@ -727,6 +736,10 @@ def dispatch_giants(
         Optional campaign key. Defaults to a timestamped key.
     attempt_id:
         Optional attempt key. Defaults to ``"attempt-1"``.
+    timeout_by_id:
+        Optional per-stable-ID validator timeout overrides.
+    input_scale_by_id:
+        Optional per-stable-ID input-scale overrides.
     dry_run:
         Prepare artifacts and commands without executing them.
 
@@ -750,14 +763,17 @@ def dispatch_giants(
     missing = sorted(set(stable_ids).difference(rows_by_id))
     if missing:
         raise ValueError(f"stable IDs missing from catalog snapshot: {missing!r}")
+    resolved_ledger_db = _resolve_verification_db(ledger_db)
     assignments = tuple(
         _assignment_for_row(
             row=rows_by_id[stable_id],
             index=index,
-            ledger_db=ledger_db,
+            ledger_db=resolved_ledger_db,
             config=active_config,
             campaign_id=resolved_campaign,
             attempt_id=resolved_attempt,
+            timeout_sec=(timeout_by_id or {}).get(stable_id, 14400.0),
+            input_scale=(input_scale_by_id or {}).get(stable_id, 1.0),
         )
         for index, stable_id in enumerate(stable_ids)
     )
@@ -771,6 +787,7 @@ def dispatch_giants(
         artifact_dir=artifact_dir,
         config=active_config,
         remote_artifact_dir=remote_artifact_dir,
+        verification_db=resolved_ledger_db,
     )
     commands = _dispatch_commands(
         repo_root=repo_root,
@@ -810,6 +827,7 @@ def render_sbatch_script(
     *,
     config: ClusterConfig,
     remote_artifact_dir: str,
+    verification_db: Path | None = None,
 ) -> str:
     """Render a self-contained SLURM array script.
 
@@ -821,6 +839,8 @@ def render_sbatch_script(
         Cluster defaults.
     remote_artifact_dir:
         Remote directory containing dispatch artifacts.
+    verification_db:
+        Verification ledger path to export and pass to the worker.
 
     Returns
     -------
@@ -833,6 +853,7 @@ def render_sbatch_script(
     indexes = ",".join(str(assignment.array_index) for assignment in assignments)
     default_tier = assignments[0]
     manifest = f"{remote_artifact_dir}/assignments.json"
+    resolved_verification_db = _resolve_verification_db(verification_db)
     return f"""#!/usr/bin/env bash
 #SBATCH --job-name=tl_cluster_giants
 #SBATCH --account={config.account}
@@ -847,6 +868,7 @@ def render_sbatch_script(
 set -euo pipefail
 cd {config.remote_repo}
 mkdir -p {remote_artifact_dir}/logs {remote_artifact_dir}/results
+export {ENV_VERIFICATION_DB}="{resolved_verification_db}"
 PROJECT_ROOT="${{TORCHLENS_CLUSTER_PIXI_ROOT:-$HOME/.cache/torchlens/menagerie/cluster-pixi}}"
 LOCK_HASH="$(python -m menagerie.cluster_runner lock-hash --pixi-env {config.pixi_env})"
 PROJECT_DIR="$PROJECT_ROOT/{config.pixi_env}-${{LOCK_HASH:0:16}}"
@@ -859,7 +881,8 @@ pixi run --manifest-path "$PROJECT_DIR/pixi.toml" --frozen -- \\
     --assignment-manifest {manifest} \\
     --task-index "$SLURM_ARRAY_TASK_ID" \\
     --repo-root {config.remote_repo} \\
-    --result-dir {remote_artifact_dir}/results
+    --result-dir {remote_artifact_dir}/results \\
+    --verification-db "{resolved_verification_db}"
 """
 
 
@@ -909,6 +932,7 @@ def run_worker_assignment(
     *,
     repo_root: Path = REPO_ROOT,
     result_dir: Path,
+    verification_db: Path | None = None,
     command_runner: CommandRunner = default_command_runner,
 ) -> ClusterResultRow:
     """Run one cluster assignment and export its result row.
@@ -923,6 +947,8 @@ def run_worker_assignment(
         Repository root on the worker host.
     result_dir:
         Directory where result JSONL and host-contract files are written.
+    verification_db:
+        Verification ledger path used by the child validator and latest-row read.
     command_runner:
         Injectable command runner.
 
@@ -939,6 +965,7 @@ def run_worker_assignment(
     assignment = by_index[task_index]
     result_dir.mkdir(parents=True, exist_ok=True)
     record_host_contract(result_dir / f"{assignment.assignment_id}.host.json")
+    resolved_verification_db = _resolve_verification_db(verification_db)
     command = [
         sys.executable,
         "-u",
@@ -951,7 +978,9 @@ def run_worker_assignment(
         "--worker-memory-cap-gb",
         str(assignment.worker_memory_cap_gb),
         "--timeout-sec",
-        "14400",
+        str(assignment.timeout_sec),
+        "--input-scale",
+        str(assignment.input_scale),
         "--min-free-gb",
         "10",
         "--out-dir",
@@ -959,11 +988,21 @@ def run_worker_assignment(
         "--db",
         str(assignment_manifest.parent / "catalog.db"),
         "--no-build-catalog",
+        "--verification-db",
+        str(resolved_verification_db),
     ]
-    command_runner(command)
+    previous_verification_db = os.environ.get(ENV_VERIFICATION_DB)
+    os.environ[ENV_VERIFICATION_DB] = str(resolved_verification_db)
+    try:
+        command_runner(command)
+    finally:
+        if previous_verification_db is None:
+            os.environ.pop(ENV_VERIFICATION_DB, None)
+        else:
+            os.environ[ENV_VERIFICATION_DB] = previous_verification_db
     row = latest_verification_run_for_stable_id(
         assignment.stable_id,
-        ledger_db=repo_root / "menagerie" / "data" / "verification.db",
+        ledger_db=resolved_verification_db,
     )
     result = ClusterResultRow(
         campaign_id=assignment.campaign_id,
@@ -978,7 +1017,7 @@ def run_worker_assignment(
 
 
 def latest_verification_run_for_stable_id(
-    stable_id: str, *, ledger_db: Path = VERIFICATION_DB
+    stable_id: str, *, ledger_db: Path | None = None
 ) -> VerificationRun:
     """Return the latest verification run for a stable ID.
 
@@ -995,7 +1034,7 @@ def latest_verification_run_for_stable_id(
         Latest verification run.
     """
 
-    with connect_ledger(ledger_db) as conn:
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
         row = conn.execute(
             """
             SELECT *
@@ -1091,7 +1130,7 @@ def merge_cluster_results(
     result_rows_path: Path,
     result_manifest_path: Path,
     *,
-    local_ledger_db: Path = VERIFICATION_DB,
+    local_ledger_db: Path | None = None,
 ) -> MergeReport:
     """Merge cluster results into the local ledger idempotently and fail-loud.
 
@@ -1129,7 +1168,7 @@ def merge_cluster_results(
     inserted = 0
     duplicates = 0
     run_id_collisions = 0
-    with connect_ledger(local_ledger_db) as conn:
+    with connect_ledger(_resolve_verification_db(local_ledger_db)) as conn:
         _initialize_cluster_merge_tables(conn)
         for row in rows:
             checksum = _verification_run_checksum(row.run)
@@ -1304,6 +1343,7 @@ def build_parser() -> argparse.ArgumentParser:
     worker.add_argument("--task-index", type=int, required=True)
     worker.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     worker.add_argument("--result-dir", type=Path, required=True)
+    worker.add_argument("--verification-db", type=Path)
     lock_hash = subparsers.add_parser("lock-hash")
     lock_hash.add_argument("--pixi-env", default="misc")
     return parser
@@ -1330,6 +1370,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.task_index,
             repo_root=args.repo_root,
             result_dir=args.result_dir,
+            verification_db=args.verification_db,
         )
         return 0
     if args.command == "lock-hash":
@@ -1559,6 +1600,8 @@ def _assignment_for_row(
     config: ClusterConfig,
     campaign_id: str,
     attempt_id: str,
+    timeout_sec: float = 14400.0,
+    input_scale: float = 1.0,
 ) -> ClusterAssignment:
     """Build one cluster assignment for a row."""
 
@@ -1574,6 +1617,8 @@ def _assignment_for_row(
         worker_memory_cap_gb=tier.worker_memory_cap_gb,
         partition=tier.partition,
         reason=entry.reason if entry is not None else "cold-start heuristic",
+        timeout_sec=timeout_sec,
+        input_scale=input_scale,
     )
 
 
@@ -1649,6 +1694,7 @@ def _write_sbatch_scripts(
     artifact_dir: Path,
     config: ClusterConfig,
     remote_artifact_dir: str,
+    verification_db: Path | None = None,
 ) -> tuple[Path, ...]:
     """Write one sbatch script per memory/partition tier.
 
@@ -1662,6 +1708,8 @@ def _write_sbatch_scripts(
         Cluster defaults.
     remote_artifact_dir:
         Remote artifact directory.
+    verification_db:
+        Verification ledger path to export in each sbatch script.
 
     Returns
     -------
@@ -1680,6 +1728,7 @@ def _write_sbatch_scripts(
                 group,
                 config=config,
                 remote_artifact_dir=remote_artifact_dir,
+                verification_db=verification_db,
             ),
             encoding="utf-8",
         )

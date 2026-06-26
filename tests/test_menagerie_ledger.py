@@ -10,6 +10,7 @@ import pytest
 
 from menagerie.catalog import CatalogRow
 from menagerie.ledger import (
+    ENV_VERIFICATION_DB,
     LEGACY_UNKNOWN,
     VerificationRun,
     VerificationTarget,
@@ -108,6 +109,23 @@ def _row(**overrides: object) -> CatalogRow:
     }
     data.update(overrides)
     return CatalogRow(**data)
+
+
+def test_connect_resolves_verification_db_env_at_connect_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default ledger connection honors the env override lazily."""
+
+    ledger_db = tmp_path / "smoke" / "verification.db"
+    monkeypatch.setenv(ENV_VERIFICATION_DB, str(ledger_db))
+
+    with connect() as conn:
+        append_verification_run(conn, _run())
+
+    assert ledger_db.exists()
+    with sqlite3.connect(ledger_db) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM verification_runs").fetchone()[0]
+    assert count == 1
 
 
 def test_append_round_trip_and_verified_count(tmp_path: Path) -> None:
