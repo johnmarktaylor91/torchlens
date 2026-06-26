@@ -12,8 +12,10 @@ import pytest
 from menagerie.catalog import CatalogRow, write_catalog
 from menagerie.cluster_runner import (
     GIANT_REGISTRY,
+    REPO_ROOT,
     ClusterAssignment,
     ClusterConfig,
+    ClusterJobFailed,
     DispatchResult,
     ClusterMergeConflict,
     ClusterResultIntegrityError,
@@ -25,6 +27,7 @@ from menagerie.cluster_runner import (
     merge_cluster_results,
     node_tier_for_row,
     pending_assignments_for_resume,
+    render_sbatch_script,
     run_worker_assignment,
     write_assignment_manifest,
     write_result_manifest,
@@ -354,6 +357,8 @@ def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -
 
         command_tuple = tuple(str(item) for item in command)
         commands.append(command_tuple)
+        if command_tuple[:2] == ("ssh", "axon-test") and command_tuple[-1] == "echo $HOME":
+            return subprocess.CompletedProcess(command_tuple, 0, stdout="/home/jt3295\n", stderr="")
         stdout = "Submitted batch job 12345\n" if "sbatch" in command_tuple[-1] else ""
         return subprocess.CompletedProcess(command_tuple, 0, stdout=stdout, stderr="")
 
@@ -378,7 +383,14 @@ def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -
         for path in result.local_artifact_dir.glob("cluster_runner_*.sbatch")
     )
     assert f"export {ENV_VERIFICATION_DB}=" in sbatch_text
-    assert f'--verification-db "{ledger_db}"' in sbatch_text
+    # SLURM #SBATCH log paths must be absolute (no literal '~'); home is resolved.
+    assert "#SBATCH --output=/home/jt3295/out/" in sbatch_text
+    assert "#SBATCH --error=/home/jt3295/out/" in sbatch_text
+    assert "#SBATCH --output=~/" not in sbatch_text
+    # The ledger path here lives outside the repo (like a /tmp smoke ledger), so
+    # the worker writes to a node-local ledger under the remote artifact dir.
+    assert f'--verification-db "{ledger_db}"' not in sbatch_text
+    assert "/worker_ledger/" in sbatch_text
 
 
 def test_merge_is_idempotent_and_conflicts_fail_loud(tmp_path: Path) -> None:
@@ -554,3 +566,261 @@ def test_worker_forwards_no_build_catalog_to_validator(tmp_path: Path) -> None:
     assert "--no-build-catalog" in commands[0]
     assert "--verification-db" in commands[0]
     assert str(ledger_db) in commands[0]
+    # The worker validates in-place; it must force local + base-env-only so the
+    # child validator does not re-route the giant back to the cluster (an
+    # infinite nested dispatch that records env_unavailable instead of running).
+    worker_cmd = commands[0]
+    runner_idx = worker_cmd.index("--runner")
+    assert worker_cmd[runner_idx + 1] == "local"
+    assert "--base-env-only" in worker_cmd
+
+
+def _giant_assignment() -> ClusterAssignment:
+    """Return a base-env giant assignment fixture."""
+
+    return ClusterAssignment(
+        "campaign-a", "attempt-a", "assign-a", "m3635", 1, 180, 170, "nklab", "seed"
+    )
+
+
+def test_render_sbatch_expands_tilde_in_slurm_log_directives() -> None:
+    """SLURM #SBATCH log paths are absolute; SLURM does not expand '~' itself."""
+
+    config = ClusterConfig(remote_home="/home/jt3295")
+    script = render_sbatch_script(
+        [_giant_assignment()],
+        config=config,
+        remote_artifact_dir="~/projects/torchlens/.cluster_runner/c/att",
+        verification_db=Path("/tmp/smoke/verification_smoke.db"),
+    )
+
+    assert "#SBATCH --output=~/" not in script
+    assert "#SBATCH --error=~/" not in script
+    assert (
+        "#SBATCH --output=/home/jt3295/projects/torchlens/.cluster_runner/c/att/logs/"
+        "giant_%A_%a.log" in script
+    )
+    assert (
+        "#SBATCH --error=/home/jt3295/projects/torchlens/.cluster_runner/c/att/logs/"
+        "giant_%A_%a.err" in script
+    )
+
+
+def test_render_sbatch_redirects_offrepo_worker_ledger_to_node_local_path() -> None:
+    """A smoke /tmp ledger (absent on the node) is redirected to a node-local path."""
+
+    config = ClusterConfig(remote_home="/home/jt3295")
+    script = render_sbatch_script(
+        [_giant_assignment()],
+        config=config,
+        remote_artifact_dir="~/projects/torchlens/.cluster_runner/c/att",
+        verification_db=Path("/tmp/smoke/verification_smoke.db"),
+    )
+
+    expected = (
+        "/home/jt3295/projects/torchlens/.cluster_runner/c/att/worker_ledger/verification_smoke.db"
+    )
+    assert f'--verification-db "{expected}"' in script
+    assert f'export TORCHLENS_MENAGERIE_VERIFICATION_DB="{expected}"' in script
+    # No bash-unsafe quoted tilde survives into the worker ledger usages.
+    assert '"/tmp/smoke/verification_smoke.db"' not in script
+
+
+def test_render_sbatch_reroots_repo_ledger_to_remote_repo() -> None:
+    """A repo-relative ledger maps to the REMOTE repo root, not the local path."""
+
+    config = ClusterConfig(remote_home="/home/jt3295", remote_repo="~/projects/torchlens")
+    repo_ledger = REPO_ROOT / "menagerie" / "data" / "verification.db"
+    script = render_sbatch_script(
+        [_giant_assignment()],
+        config=config,
+        remote_artifact_dir="~/projects/torchlens/.cluster_runner/c/att",
+        verification_db=repo_ledger,
+    )
+
+    expected = "/home/jt3295/projects/torchlens/menagerie/data/verification.db"
+    assert f'--verification-db "{expected}"' in script
+    assert str(repo_ledger) not in script
+
+
+def test_render_sbatch_bakes_lock_hash_without_remote_python() -> None:
+    """The lock hash is baked in; no bare remote `python` runs before the pixi env.
+
+    The cluster nodes ship only Python 2.7 as ``python`` (no ``python3``), so a
+    remote ``python -m menagerie.cluster_runner lock-hash`` invocation raised a
+    SyntaxError and failed the job before any validation ran. The hash is now
+    computed locally from the committed lock files and emitted literally.
+    """
+
+    from menagerie.cluster_runner import compute_lock_hash_for_env
+
+    config = ClusterConfig(remote_home="/home/jt3295", pixi_env="misc")
+    script = render_sbatch_script(
+        [_giant_assignment()],
+        config=config,
+        remote_artifact_dir="~/projects/torchlens/.cluster_runner/c/att",
+        verification_db=Path("/tmp/smoke/verification_smoke.db"),
+    )
+
+    expected_hash = compute_lock_hash_for_env("misc")
+    assert f'LOCK_HASH="{expected_hash}"' in script
+    # No command substitution runs a bare remote python before the pixi env exists.
+    assert "$(python -m menagerie.cluster_runner lock-hash" not in script
+    assert "LOCK_HASH=$(" not in script
+
+
+def test_render_sbatch_invokes_pixi_by_absolute_path() -> None:
+    """Pixi is invoked by absolute staged path; the cluster has no pixi on PATH."""
+
+    config = ClusterConfig(
+        remote_home="/home/jt3295", remote_pixi_bin="~/.cache/torchlens/bin/pixi"
+    )
+    script = render_sbatch_script(
+        [_giant_assignment()],
+        config=config,
+        remote_artifact_dir="~/projects/torchlens/.cluster_runner/c/att",
+        verification_db=Path("/tmp/smoke/verification_smoke.db"),
+    )
+
+    assert 'PIXI_BIN="/home/jt3295/.cache/torchlens/bin/pixi"' in script
+    assert '"$PIXI_BIN" install --manifest-path' in script
+    assert '"$PIXI_BIN" run --manifest-path' in script
+    # No bare `pixi install` / `pixi run` that would hit an absent PATH entry.
+    assert "\npixi install" not in script
+    assert "\npixi run" not in script
+
+
+def test_dispatch_stages_pixi_binary_to_cluster(tmp_path: Path, monkeypatch: Any) -> None:
+    """Dispatch rsyncs the local pixi binary to the cluster before submitting."""
+
+    from menagerie import cluster_runner
+
+    fake_pixi = tmp_path / "pixi"
+    fake_pixi.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_runner, "_local_pixi_bin", lambda: fake_pixi)
+
+    catalog_db = _write_catalog(
+        tmp_path, [_row(model_id=1, stable_id="m3635", name="beit_large_patch16_512")]
+    )
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+    commands: list[tuple[str, ...]] = []
+
+    def fake_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Capture commands; resolve $HOME and accept sbatch."""
+
+        command_tuple = tuple(str(item) for item in command)
+        commands.append(command_tuple)
+        if command_tuple[-1] == "echo $HOME":
+            return subprocess.CompletedProcess(command_tuple, 0, stdout="/home/jt3295\n", stderr="")
+        stdout = "Submitted batch job 999\n" if "sbatch" in command_tuple[-1] else ""
+        return subprocess.CompletedProcess(command_tuple, 0, stdout=stdout, stderr="")
+
+    dispatch_giants(
+        ["m3635"],
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        repo_root=tmp_path,
+        local_artifact_root=tmp_path / "cluster",
+        config=ClusterConfig(host="axon-test", remote_home="/home/jt3295"),
+        command_runner=fake_runner,
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+    )
+
+    staged = [
+        command
+        for command in commands
+        if command[0] == "rsync" and command[-1].endswith(":~/.cache/torchlens/bin/pixi")
+    ]
+    assert staged == [("rsync", "-az", str(fake_pixi), "axon-test:~/.cache/torchlens/bin/pixi")]
+
+
+def test_render_sbatch_requires_remote_home() -> None:
+    """Rendering without a resolved remote home fails loud (no silent literal '~')."""
+
+    with pytest.raises(ValueError, match="remote_home is required"):
+        render_sbatch_script(
+            [_giant_assignment()],
+            config=ClusterConfig(),
+            remote_artifact_dir="~/out",
+            verification_db=Path("/tmp/x.db"),
+        )
+
+
+def test_dispatch_submitted_then_failed_raises_cluster_job_failed(tmp_path: Path) -> None:
+    """A submitted job that runs and exits non-zero raises ClusterJobFailed, not a skip."""
+
+    catalog_db = _write_catalog(
+        tmp_path, [_row(model_id=1, stable_id="m3635", name="beit_large_patch16_512")]
+    )
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+
+    def fake_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Resolve $HOME, then fail the sbatch --wait after the job was accepted."""
+
+        command_tuple = tuple(str(item) for item in command)
+        if command_tuple[-1] == "echo $HOME":
+            return subprocess.CompletedProcess(command_tuple, 0, stdout="/home/jt3295\n", stderr="")
+        if "sbatch" in command_tuple[-1]:
+            # sbatch --wait printed a job ID (accepted) but the array task failed.
+            raise subprocess.CalledProcessError(
+                1,
+                command_tuple,
+                output="Submitted batch job 6013771\n",
+                stderr="slurmstepd: task 0 exited with non-zero status",
+            )
+        return subprocess.CompletedProcess(command_tuple, 0, stdout="", stderr="")
+
+    with pytest.raises(ClusterJobFailed) as excinfo:
+        dispatch_giants(
+            ["m3635"],
+            catalog_db=catalog_db,
+            ledger_db=ledger_db,
+            repo_root=tmp_path,
+            local_artifact_root=tmp_path / "cluster",
+            config=ClusterConfig(host="axon-test", remote_home="/home/jt3295"),
+            command_runner=fake_runner,
+            campaign_id="campaign-a",
+            attempt_id="attempt-a",
+        )
+
+    assert excinfo.value.job_ids == ("6013771",)
+    assert "returncode=1" in excinfo.value.detail
+    assert excinfo.value.dispatch is not None
+
+
+def test_dispatch_submit_rejected_propagates_transport_error(tmp_path: Path) -> None:
+    """A genuine submit rejection (no job ID) stays a transport error, not a job failure."""
+
+    catalog_db = _write_catalog(
+        tmp_path, [_row(model_id=1, stable_id="m3635", name="beit_large_patch16_512")]
+    )
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+
+    def fake_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Resolve $HOME, then reject the submission outright."""
+
+        command_tuple = tuple(str(item) for item in command)
+        if command_tuple[-1] == "echo $HOME":
+            return subprocess.CompletedProcess(command_tuple, 0, stdout="/home/jt3295\n", stderr="")
+        if "sbatch" in command_tuple[-1]:
+            raise subprocess.CalledProcessError(
+                1, command_tuple, output="", stderr="sbatch: error: invalid partition"
+            )
+        return subprocess.CompletedProcess(command_tuple, 0, stdout="", stderr="")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        dispatch_giants(
+            ["m3635"],
+            catalog_db=catalog_db,
+            ledger_db=ledger_db,
+            repo_root=tmp_path,
+            local_artifact_root=tmp_path / "cluster",
+            config=ClusterConfig(host="axon-test", remote_home="/home/jt3295"),
+            command_runner=fake_runner,
+            campaign_id="campaign-a",
+            attempt_id="attempt-a",
+        )

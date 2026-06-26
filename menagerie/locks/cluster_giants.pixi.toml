@@ -1,0 +1,39 @@
+[workspace]
+name = "torchlens-menagerie-cluster-giants"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[system-requirements]
+# The axon cluster nodes run an old userland (glibc 2.17). Cap the solver so it
+# resolves manylinux_2_17-compatible wheels; without this it picks
+# manylinux_2_27/2_28 wheels (e.g. pillow 12) that the nodes cannot load.
+libc = { family = "glibc", version = "2.17" }
+
+[dependencies]
+"python" = "3.11.*"
+"pip" = "*"
+"setuptools" = "<74"
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cpu"]
+index-strategy = "unsafe-best-match"
+
+[pypi-dependencies]
+# Pin numpy/pandas to versions that ship prebuilt manylinux_2_17 wheels; newer
+# releases (numpy 2.4, pandas 3.x) are source-only here and try to build from
+# source on the cluster, which has no GCC/meson toolchain.
+"numpy" = ">=1.26,<2.2"
+"packaging" = "*"
+"graphviz" = "*"
+"safetensors" = ">=0.4"
+"tqdm" = "*"
+"typing_extensions" = ">=4.0"
+"pillow" = ">=9"
+"psutil" = ">=5.9"
+"pydantic" = ">=2"
+"pandas" = ">=2.0,<2.3"
+"torch" = "==2.4.1"
+"torchvision" = "==0.19.1"
+"timm" = ">=1.0.11"
+"transformers" = ">=4.46,<5"

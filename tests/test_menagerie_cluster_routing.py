@@ -142,7 +142,6 @@ def _args(tmp_path: Path, *extra: str) -> Any:
             str(tmp_path / "manifest.tsv"),
             "--db",
             str(tmp_path / "catalog.db"),
-            "--base-env-only",
             "--jobs",
             "1",
             *extra,
@@ -487,3 +486,37 @@ def test_cluster_timeout_writes_terminal_rows_and_continues(
         ).fetchone()
     assert row["status"] == "env_unavailable"
     assert "reason=cluster_timeout" in row["error_message"]
+
+
+def test_cluster_candidates_exclude_pixi_island_giants() -> None:
+    """A pixi-island giant (deps absent on the cluster) is never cluster-routed.
+
+    Bug: m7069 (mmseg:ann) is RAM-classified as a giant but assigned to the
+    mmlab_core island. Routing it to the cluster sends it to a node lacking its
+    island dependencies. It must validate locally in its island env instead,
+    while base-env giants (m3635, m5651) still route to the cluster.
+    """
+
+    from menagerie import envs
+    from menagerie.catalog import CATALOG_DB
+    from menagerie.cluster_runner import is_giant, load_catalog_rows_ro
+
+    rows = load_catalog_rows_ro(CATALOG_DB, stable_ids=["m3635", "m5651", "m7069"])
+    assignments = envs.assign(rows)
+    by_id = {row.stable_id: row for row in rows}
+
+    # Precondition: m7069 is both a RAM giant AND a non-base island assignment.
+    assert is_giant(by_id["m7069"])
+    assert assignments["m7069"] != "base"
+    assert assignments["m3635"] == "base"
+    assert assignments["m5651"] == "base"
+
+    candidates = validate_menagerie._cluster_candidate_rows(rows, "auto", ledger_db=None)
+    routed = {row.stable_id for row in candidates}
+
+    assert "m7069" not in routed
+    assert routed == {"m3635", "m5651"}
+
+    # Explicit --runner cluster must also exclude the island giant.
+    forced = validate_menagerie._cluster_candidate_rows(rows, "cluster", ledger_db=None)
+    assert "m7069" not in {row.stable_id for row in forced}

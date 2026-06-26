@@ -836,13 +836,51 @@ def _verification_targets_for_rows(
     }
 
 
+def _base_env_rows(
+    rows: Sequence[CatalogRow],
+    *,
+    env_registry: Path | None = None,
+) -> tuple[CatalogRow, ...]:
+    """Return only rows assigned to the base environment (no pixi island).
+
+    Pixi-island models depend on packages that are intentionally absent from the
+    base/cluster environment, so they MUST validate locally in their island env
+    and can never be routed to the cluster. Filtering them out here keeps both
+    ``auto`` and explicit ``cluster`` routing from sending an island model to a
+    node that lacks its dependencies.
+
+    Parameters
+    ----------
+    rows:
+        Candidate catalog rows.
+    env_registry:
+        Optional environment registry path.
+
+    Returns
+    -------
+    tuple[CatalogRow, ...]
+        Rows whose island assignment is the base environment.
+    """
+
+    if not rows:
+        return ()
+    registry = envs.load_registry(env_registry) if env_registry else envs.load_registry()
+    assignments = envs.assign(rows, registry)
+    return tuple(row for row in rows if assignments.get(row.stable_id, "base") == "base")
+
+
 def _cluster_candidate_rows(
     rows: Sequence[CatalogRow],
     runner: str,
     *,
     ledger_db: Path | None = None,
+    env_registry: Path | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return rows that are candidates for cluster handling.
+
+    Pixi-island rows are excluded before any RAM-based giant routing: an island
+    model's dependencies are not present on the cluster, so it must validate in
+    its island env locally regardless of its memory footprint.
 
     Parameters
     ----------
@@ -852,6 +890,8 @@ def _cluster_candidate_rows(
         Runner policy: ``"auto"``, ``"local"``, or ``"cluster"``.
     ledger_db:
         Optional verification ledger path.
+    env_registry:
+        Optional environment registry path used to identify island rows.
 
     Returns
     -------
@@ -861,15 +901,18 @@ def _cluster_candidate_rows(
 
     if runner == "local":
         return ()
+    base_rows = _base_env_rows(rows, env_registry=env_registry)
     if runner == "auto":
         return cluster_runner.route_giants(
-            rows,
+            base_rows,
             ledger=_resolve_verification_db(ledger_db),
             local_ram_threshold_gb=cluster_runner.LOCAL_RAM_THRESHOLD_GB,
         )
     if runner == "cluster":
         return tuple(
-            row for row in rows if _latest_ledger_status(row.stable_id, ledger_db) != "native_crash"
+            row
+            for row in base_rows
+            if _latest_ledger_status(row.stable_id, ledger_db) != "native_crash"
         )
     raise ValueError(f"unsupported runner {runner!r}")
 
@@ -915,6 +958,7 @@ def _cluster_route_rows(
     scope: str = "forward",
     device: str = "cpu",
     ledger_db: Path | None = None,
+    env_registry: Path | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return ledger-pending rows that should be dispatched to the cluster.
 
@@ -930,6 +974,8 @@ def _cluster_route_rows(
         Requested validation device policy.
     ledger_db:
         Optional verification ledger path.
+    env_registry:
+        Optional environment registry path used to exclude pixi-island rows.
 
     Returns
     -------
@@ -937,7 +983,9 @@ def _cluster_route_rows(
         Rows to dispatch to the cluster.
     """
 
-    candidates = _cluster_candidate_rows(rows, runner, ledger_db=ledger_db)
+    candidates = _cluster_candidate_rows(
+        rows, runner, ledger_db=ledger_db, env_registry=env_registry
+    )
     completed = {
         row.stable_id
         for row in _completed_cluster_rows(
@@ -1077,6 +1125,88 @@ def _append_cluster_unavailable_rows(
             append_manifest(manifest_path, _result_from_ledger_run(row, run))
 
 
+def _append_cluster_job_failed_rows(
+    rows: Sequence[CatalogRow],
+    manifest_path: Path,
+    args: argparse.Namespace,
+    *,
+    detail: str,
+) -> None:
+    """Append honest failure rows for a submitted cluster job that exited non-zero.
+
+    Unlike a transport/submit failure (which is a legitimate
+    ``skipped:cluster_unavailable``), a job that was submitted, ran, and exited
+    non-zero is a real job/validation failure and MUST surface honestly. Only
+    giants that did not already produce a merged terminal ledger row receive a
+    synthesized ``failed:cluster_job_failed`` row; giants whose worker wrote an
+    honest status already have their real result merged.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    manifest_path:
+        Validation manifest path.
+    args:
+        Parsed validator arguments.
+    detail:
+        Job failure detail (return code, stderr/stdout tail).
+    """
+
+    env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
+    lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
+    source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
+    started_at = utc_now()
+    finished_at = utc_now()
+    message = f"cluster job failed; {detail}".strip()
+    targets = _verification_targets_for_rows(rows, scope=args.scope, device=args.device)
+    already_merged = cluster_runner.ledger_completed_stable_ids(
+        targets, ledger_db=_resolve_verification_db(args.verification_db)
+    )
+    with _connect_verification_ledger(args.verification_db) as conn:
+        for row in rows:
+            if row.stable_id in already_merged:
+                run = cluster_runner.latest_verification_run_for_stable_id(
+                    row.stable_id, ledger_db=_resolve_verification_db(args.verification_db)
+                )
+                append_manifest(manifest_path, _result_from_ledger_run(row, run))
+                continue
+            run = VerificationRun(
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
+                name=row.name,
+                zoo=row.zoo,
+                variant=row.variant,
+                scope=cast(Scope, args.scope),
+                status="failed",
+                forward_pass=None,
+                backward_pass=None,
+                backward_na_reason=None,
+                metadata_ok=None,
+                n_ops=None,
+                graph_shape_hash=None,
+                svg_sha256=None,
+                torchlens_version=_torchlens_version(),
+                torch_version=_torch_version(),
+                python_version=python_version(),
+                device_requested=args.device,
+                device_actual=None,
+                env_hash=env_hash,
+                lock_hash=lock_hash,
+                torchlens_source_hash=source_hash,
+                input_scale=args.input_scale,
+                runner_host=runner_host(),
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_sec=0.0,
+                peak_rss_mb=None,
+                error_class="failed:cluster_job_failed",
+                error_message=message,
+            )
+            append_verification_run(conn, run)
+            append_manifest(manifest_path, _result_from_ledger_run(row, run))
+
+
 def _cluster_transport_failure_detail(error: BaseException) -> str:
     """Return a compact transport failure detail string.
 
@@ -1160,6 +1290,19 @@ def _run_cluster_validation(
             error=detail,
         )
         return
+    except cluster_runner.ClusterJobFailed as error:
+        # The job was SUBMITTED and RAN but exited non-zero. This is a real
+        # job/validation failure, never a benign cluster-unavailable skip. Try
+        # to collect any honest result rows the worker wrote, then surface an
+        # honest failure for giants that produced nothing.
+        _surface_cluster_job_failure(rows, args, manifest_path, error)
+        log_event(
+            "cluster_job_failed",
+            rows=len(stable_ids),
+            job_ids=list(error.job_ids),
+            error=error.detail,
+        )
+        return
     except (OSError, subprocess.CalledProcessError) as error:
         detail = _cluster_transport_failure_detail(error)
         _append_cluster_unavailable_rows(
@@ -1232,6 +1375,59 @@ def _run_cluster_validation(
         assignments=merge.assignments,
         artifact_dir=str(dispatch.local_artifact_dir),
     )
+
+
+def _surface_cluster_job_failure(
+    rows: Sequence[CatalogRow],
+    args: argparse.Namespace,
+    manifest_path: Path,
+    error: cluster_runner.ClusterJobFailed,
+) -> None:
+    """Surface an honest failure for a submitted cluster job that exited non-zero.
+
+    A best-effort result collection runs first: if the worker wrote honest
+    result rows before the job failed, they are merged so the giant's real
+    status (which may itself be a faithful ``failed`` from validation) lands in
+    the ledger. Any giant lacking a merged row then receives an honest
+    ``failed:cluster_job_failed`` row. Under no circumstance is a submitted +
+    run + failed job recorded as ``skipped:cluster_unavailable``.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    args:
+        Parsed validator arguments.
+    manifest_path:
+        Validation manifest path.
+    error:
+        The raised job-failure exception, carrying best-effort dispatch context.
+    """
+
+    dispatch = error.dispatch
+    if dispatch is not None:
+        try:
+            result_rows_path, result_manifest_path = cluster_runner.collect_cluster_results(
+                dispatch
+            )
+            cluster_runner.merge_cluster_results(
+                result_rows_path,
+                result_manifest_path,
+                local_ledger_db=_resolve_verification_db(args.verification_db),
+            )
+        except (
+            OSError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            cluster_runner.ClusterResultIntegrityError,
+            cluster_runner.ClusterMergeConflict,
+        ) as collect_error:
+            log_event(
+                "cluster_job_failed_collect_skipped",
+                rows=len(rows),
+                error=repr(collect_error),
+            )
+    _append_cluster_job_failed_rows(rows, manifest_path, args, detail=error.detail)
 
 
 def latest_peak_rss_estimates(ledger_db: Path | None = None) -> dict[str, int]:
@@ -2901,7 +3097,19 @@ def run(args: argparse.Namespace) -> int:
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
-    cluster_candidates = _cluster_candidate_rows(rows, args.runner, ledger_db=args.verification_db)
+    # Base-env-only mode runs inside an island pixi env or the cluster worker;
+    # those subprocesses validate their assigned rows in place and must never
+    # re-route to the cluster (which would also import the env registry/yaml,
+    # absent from minimal island envs). Skip cluster candidate routing entirely.
+    if args.base_env_only:
+        cluster_candidates: tuple[CatalogRow, ...] = ()
+    else:
+        cluster_candidates = _cluster_candidate_rows(
+            rows,
+            args.runner,
+            ledger_db=args.verification_db,
+            env_registry=args.env_registry,
+        )
     completed_cluster_rows = _completed_cluster_rows(
         cluster_candidates,
         scope=args.scope,

@@ -165,6 +165,14 @@ class ClusterConfig:
         Repository path on the cluster.
     remote_artifact_root:
         Artifact root on the cluster.
+    remote_home:
+        Absolute remote home directory used to expand ``~`` in SLURM ``#SBATCH``
+        directives, which SLURM does not expand itself. Resolved once per
+        dispatch via ``ssh <host> 'echo $HOME'`` when left ``None``.
+    remote_pixi_bin:
+        Remote path where the pixi binary is staged. The cluster nodes do not
+        ship pixi on ``PATH``, so the local pixi binary is rsync'd here once per
+        dispatch and the sbatch script invokes it by absolute path.
     pixi_env:
         Committed pixi lock prefix under ``menagerie/locks``.
     cpus_per_task:
@@ -184,7 +192,9 @@ class ClusterConfig:
     partition: str = "nklab"
     remote_repo: str = "~/projects/torchlens"
     remote_artifact_root: str = "~/projects/torchlens/.cluster_runner"
-    pixi_env: str = "misc"
+    remote_home: str | None = None
+    remote_pixi_bin: str = "~/.cache/torchlens/bin/pixi"
+    pixi_env: str = "cluster_giants"
     cpus_per_task: int = 8
     time_limit: str = "12:00:00"
     array_concurrency: int = 4
@@ -339,6 +349,37 @@ class ClusterResultIntegrityError(RuntimeError):
     """Raised when cluster result counts or checksums do not match the manifest."""
 
 
+class ClusterJobFailed(RuntimeError):
+    """Raised when a SLURM job was submitted and ran but exited non-zero.
+
+    This is distinct from a transport/submit failure: the job reached the
+    cluster, was accepted by sbatch (a job ID was returned), and then failed
+    while running. Callers MUST surface this as an honest job/validation failure
+    rather than masking it behind a benign ``cluster_unavailable`` skip.
+
+    Parameters
+    ----------
+    job_ids:
+        Parsed SLURM job IDs for the failed submissions.
+    detail:
+        Human-readable failure detail (return code, stderr/stdout tail).
+    dispatch:
+        Best-effort dispatch context so callers can still collect any honest
+        result rows the worker wrote before failing.
+    """
+
+    def __init__(
+        self,
+        job_ids: Sequence[str],
+        detail: str,
+        dispatch: DispatchResult | None = None,
+    ) -> None:
+        self.job_ids = tuple(job_ids)
+        self.detail = detail
+        self.dispatch = dispatch
+        super().__init__(f"cluster job(s) {','.join(self.job_ids) or '<unknown>'} failed: {detail}")
+
+
 GIANT_REGISTRY: dict[str, GiantRegistryEntry] = {
     "m920": GiantRegistryEntry(
         "m920", "Ettin-decoder-1b", None, 250, "param-monster first-contact seed"
@@ -413,6 +454,127 @@ def default_command_runner(
     """
 
     return subprocess.run(command, check=True, capture_output=True, text=True, timeout=timeout)
+
+
+CLUSTER_PIXI_BIN_ENV = "TORCHLENS_CLUSTER_PIXI_BIN"
+DEFAULT_CLUSTER_PIXI_BIN = Path("/tmp/tlpixi-cluster/bin/pixi")
+
+
+def _local_pixi_bin() -> Path:
+    """Return the pixi binary to stage on the cluster.
+
+    The cluster runs an old userland (glibc 2.17, OpenSSL 1.0.x) that cannot load
+    the workstation's glibc/OpenSSL-3 pixi build (it fails with
+    ``libssl.so.3: cannot open shared object file``). A cluster-compatible,
+    self-contained pixi build (the official ``x86_64-unknown-linux-musl``
+    release) must be staged instead. Discovery order:
+
+    1. ``$TORCHLENS_CLUSTER_PIXI_BIN`` -- explicit override.
+    2. ``/tmp/tlpixi-cluster/bin/pixi`` -- conventional musl staging path.
+    3. ``envs.pixi_bin()`` -- the local island pixi, as a last resort (works only
+       when the workstation and cluster share a compatible userland).
+
+    Returns
+    -------
+    pathlib.Path
+        Local pixi executable path to rsync to the cluster.
+    """
+
+    override = os.environ.get(CLUSTER_PIXI_BIN_ENV)
+    if override and Path(override).exists():
+        return Path(override)
+    if DEFAULT_CLUSTER_PIXI_BIN.exists():
+        return DEFAULT_CLUSTER_PIXI_BIN
+    from menagerie import envs
+
+    return envs.pixi_bin()
+
+
+def resolve_remote_home(
+    config: ClusterConfig,
+    command_runner: CommandRunner = default_command_runner,
+) -> str:
+    """Return the absolute remote home directory for ``config.host``.
+
+    SLURM does not expand ``~`` or ``$HOME`` inside ``#SBATCH`` directives, so a
+    literal absolute home is resolved once per dispatch and substituted into the
+    log paths. The resolved value is cached on ``config.remote_home`` by callers.
+
+    Parameters
+    ----------
+    config:
+        Cluster defaults.
+    command_runner:
+        Injectable command runner for the ``ssh ... echo $HOME`` probe.
+
+    Returns
+    -------
+    str
+        Absolute remote home directory (no trailing slash).
+    """
+
+    if config.remote_home:
+        return config.remote_home.rstrip("/")
+    result = _run_cluster_command(("ssh", config.host, "echo $HOME"), command_runner, timeout=60.0)
+    home = result.stdout.strip().splitlines()[0].strip() if result.stdout.strip() else ""
+    if not home or not home.startswith("/"):
+        raise RuntimeError(
+            f"could not resolve absolute remote home for host {config.host!r}: {home!r}"
+        )
+    return home.rstrip("/")
+
+
+def _expand_remote_path(path: str, remote_home: str) -> str:
+    """Expand a leading ``~`` / ``$HOME`` against an absolute remote home.
+
+    Parameters
+    ----------
+    path:
+        Remote path that may begin with ``~`` or ``$HOME``.
+    remote_home:
+        Absolute remote home directory.
+
+    Returns
+    -------
+    str
+        Path with a leading home reference replaced by ``remote_home``.
+    """
+
+    home = remote_home.rstrip("/")
+    if path == "~" or path == "$HOME":
+        return home
+    if path.startswith("~/"):
+        return f"{home}/{path[2:]}"
+    if path.startswith("$HOME/"):
+        return f"{home}/{path[len('$HOME/') :]}"
+    return path
+
+
+def _path_relative_to_repo(path: Path) -> str | None:
+    """Return a path's POSIX location relative to the local repo, or ``None``.
+
+    The local repo (``REPO_ROOT``) is rsync'd to the cluster each dispatch, so a
+    ledger path under the local repo root is present on the cluster -- but at the
+    REMOTE repo root, not the local absolute path. This returns the relative
+    component so callers can re-root it under ``config.remote_repo``. A path
+    outside the repo (for example a ``/tmp`` smoke ledger) returns ``None``.
+
+    Parameters
+    ----------
+    path:
+        Absolute local verification-db path.
+
+    Returns
+    -------
+    str | None
+        POSIX relative path under the repo, or ``None`` when outside the repo.
+    """
+
+    try:
+        relative = path.resolve().relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        return None
+    return relative.as_posix()
 
 
 def load_catalog_rows_ro(
@@ -782,12 +944,20 @@ def dispatch_giants(
     remote_artifact_dir = (
         f"{active_config.remote_artifact_root.rstrip('/')}/{resolved_campaign}/{resolved_attempt}"
     )
+    # Resolve the absolute remote home once so SLURM #SBATCH log directives are
+    # not written with a literal '~' (which SLURM does not expand, causing the
+    # job to fail instantly with no .err log). Dry-run renders without SSH.
+    if dry_run:
+        remote_home = active_config.remote_home or "$HOME"
+    else:
+        remote_home = resolve_remote_home(active_config, command_runner)
     sbatch_paths = _write_sbatch_scripts(
         assignments,
         artifact_dir=artifact_dir,
         config=active_config,
         remote_artifact_dir=remote_artifact_dir,
         verification_db=resolved_ledger_db,
+        remote_home=remote_home,
     )
     commands = _dispatch_commands(
         repo_root=repo_root,
@@ -798,16 +968,31 @@ def dispatch_giants(
     )
     sbatch_job_ids: list[str] = []
     if not dry_run:
-        setup_command_count = 3
+        # Setup commands are everything before the per-tier sbatch submissions;
+        # derive the count instead of hardcoding it so adding setup steps (e.g.
+        # the pixi-bootstrap rsync) cannot silently desynchronize the split.
+        setup_command_count = len(commands) - len(sbatch_paths)
         for command in commands[:setup_command_count]:
             _run_cluster_command(command, command_runner, timeout=None)
         for command in commands[setup_command_count:]:
-            result = _run_cluster_command(
-                command,
-                command_runner,
-                timeout=active_config.sbatch_wait_timeout_sec,
-            )
-            job_id = _parse_sbatch_job_id(result.stdout)
+            try:
+                result, job_id = _run_sbatch_command(
+                    command,
+                    command_runner,
+                    timeout=active_config.sbatch_wait_timeout_sec,
+                )
+            except ClusterJobFailed as error:
+                error.dispatch = DispatchResult(
+                    campaign_id=resolved_campaign,
+                    attempt_id=resolved_attempt,
+                    assignments=assignments,
+                    local_artifact_dir=artifact_dir,
+                    remote_artifact_dir=remote_artifact_dir,
+                    sbatch_job_ids=tuple(sbatch_job_ids),
+                    commands=tuple(tuple(cmd) for cmd in commands),
+                    dry_run=dry_run,
+                )
+                raise
             if job_id is not None:
                 sbatch_job_ids.append(job_id)
     return DispatchResult(
@@ -828,6 +1013,7 @@ def render_sbatch_script(
     config: ClusterConfig,
     remote_artifact_dir: str,
     verification_db: Path | None = None,
+    remote_home: str | None = None,
 ) -> str:
     """Render a self-contained SLURM array script.
 
@@ -841,6 +1027,10 @@ def render_sbatch_script(
         Remote directory containing dispatch artifacts.
     verification_db:
         Verification ledger path to export and pass to the worker.
+    remote_home:
+        Absolute remote home used to expand ``~`` for the SLURM ``#SBATCH``
+        ``--output`` / ``--error`` directives, which SLURM does not expand.
+        Defaults to ``config.remote_home`` when omitted.
 
     Returns
     -------
@@ -850,10 +1040,37 @@ def render_sbatch_script(
 
     if not assignments:
         raise ValueError("assignments must not be empty")
+    resolved_home = remote_home or config.remote_home
+    if not resolved_home:
+        raise ValueError(
+            "remote_home is required to render SLURM #SBATCH log paths; SLURM does "
+            "not expand '~' or '$HOME' in #SBATCH directives"
+        )
     indexes = ",".join(str(assignment.array_index) for assignment in assignments)
     default_tier = assignments[0]
     manifest = f"{remote_artifact_dir}/assignments.json"
     resolved_verification_db = _resolve_verification_db(verification_db)
+    remote_repo = _expand_remote_path(config.remote_repo, resolved_home)
+    # SLURM #SBATCH directives are parsed before the job shell runs and do not
+    # perform tilde/$HOME expansion, so the log paths must be absolute.
+    log_dir = _expand_remote_path(f"{remote_artifact_dir}/logs", resolved_home)
+    # The worker writes its verification ledger on the cluster node. A ledger
+    # path under the rsync'd repo is present on the node (mapped to the REMOTE
+    # repo root); any other local path (e.g. a /tmp smoke ledger) is not, so it
+    # is redirected to a node-local path under the remote artifact dir. The
+    # emitted path is always absolute -- bash does NOT expand a leading '~'
+    # inside the double-quoted export/CLI values. Results are rsync'd back and
+    # merged into the caller's ledger regardless, so this redirect loses no rows.
+    repo_relative = _path_relative_to_repo(Path(resolved_verification_db))
+    if repo_relative is not None:
+        worker_verification_db = f"{remote_repo}/{repo_relative}"
+    else:
+        worker_verification_db = _expand_remote_path(
+            f"{remote_artifact_dir}/worker_ledger/{Path(resolved_verification_db).name}",
+            resolved_home,
+        )
+    lock_hash = compute_lock_hash_for_env(config.pixi_env)
+    pixi_bin = _expand_remote_path(config.remote_pixi_bin, resolved_home)
     return f"""#!/usr/bin/env bash
 #SBATCH --job-name=tl_cluster_giants
 #SBATCH --account={config.account}
@@ -862,27 +1079,42 @@ def render_sbatch_script(
 #SBATCH --cpus-per-task={config.cpus_per_task}
 #SBATCH --time={config.time_limit}
 #SBATCH --array={indexes}%{config.array_concurrency}
-#SBATCH --output={remote_artifact_dir}/logs/giant_%A_%a.log
-#SBATCH --error={remote_artifact_dir}/logs/giant_%A_%a.err
+#SBATCH --output={log_dir}/giant_%A_%a.log
+#SBATCH --error={log_dir}/giant_%A_%a.err
 
 set -euo pipefail
 cd {config.remote_repo}
 mkdir -p {remote_artifact_dir}/logs {remote_artifact_dir}/results
-export {ENV_VERIFICATION_DB}="{resolved_verification_db}"
-PROJECT_ROOT="${{TORCHLENS_CLUSTER_PIXI_ROOT:-$HOME/.cache/torchlens/menagerie/cluster-pixi}}"
-LOCK_HASH="$(python -m menagerie.cluster_runner lock-hash --pixi-env {config.pixi_env})"
+mkdir -p "$(dirname "{worker_verification_db}")"
+export {ENV_VERIFICATION_DB}="{worker_verification_db}"
+# The pixi env install prefix and package cache must live on a filesystem that
+# supports file locking (flock). The cluster $HOME is on NFS/Lustre where flock
+# fails with ENOLCK ("No locks available", os error 37), so default both to
+# node-local /tmp. PIXI_CACHE_DIR moves the global package cache off NFS.
+PROJECT_ROOT="${{TORCHLENS_CLUSTER_PIXI_ROOT:-/tmp/torchlens-cluster-pixi-$USER}}"
+export PIXI_CACHE_DIR="${{PIXI_CACHE_DIR:-/tmp/pixi-cache-$USER}}"
+# The lock hash is baked in at render time from the committed, rsync'd lock
+# files (byte-identical on the node). Computing it here avoids invoking a bare
+# `python` before the pixi env exists -- the cluster login/compute node ships
+# only Python 2.7 as `python` and has no `python3`, so a remote
+# `python -m menagerie.cluster_runner lock-hash` raised a SyntaxError and failed
+# the job before any validation ran.
+LOCK_HASH="{lock_hash}"
 PROJECT_DIR="$PROJECT_ROOT/{config.pixi_env}-${{LOCK_HASH:0:16}}"
 mkdir -p "$PROJECT_DIR"
 cp "menagerie/locks/{config.pixi_env}.pixi.toml" "$PROJECT_DIR/pixi.toml"
 cp "menagerie/locks/{config.pixi_env}.pixi.lock" "$PROJECT_DIR/pixi.lock"
-pixi install --manifest-path "$PROJECT_DIR/pixi.toml" --locked
-pixi run --manifest-path "$PROJECT_DIR/pixi.toml" --frozen -- \\
+# The cluster nodes do not ship pixi on PATH; it is staged at PIXI_BIN by the
+# dispatch setup. Invoke it by absolute path.
+PIXI_BIN="{pixi_bin}"
+"$PIXI_BIN" install --manifest-path "$PROJECT_DIR/pixi.toml" --locked
+"$PIXI_BIN" run --manifest-path "$PROJECT_DIR/pixi.toml" --frozen -- \\
     python -u -m menagerie.cluster_runner worker \\
     --assignment-manifest {manifest} \\
     --task-index "$SLURM_ARRAY_TASK_ID" \\
     --repo-root {config.remote_repo} \\
     --result-dir {remote_artifact_dir}/results \\
-    --verification-db "{resolved_verification_db}"
+    --verification-db "{worker_verification_db}"
 """
 
 
@@ -983,6 +1215,14 @@ def run_worker_assignment(
         str(assignment.input_scale),
         "--min-free-gb",
         "10",
+        # The worker IS the cluster node; validate the giant in-place. Without
+        # --runner local the child validator defaults to --runner auto and
+        # re-routes the giant straight back to the cluster (an infinite nested
+        # dispatch that records env_unavailable instead of validating).
+        # --base-env-only stops it re-routing into a pixi island env too.
+        "--runner",
+        "local",
+        "--base-env-only",
         "--out-dir",
         str(result_dir / assignment.stable_id),
         "--db",
@@ -1345,7 +1585,7 @@ def build_parser() -> argparse.ArgumentParser:
     worker.add_argument("--result-dir", type=Path, required=True)
     worker.add_argument("--verification-db", type=Path)
     lock_hash = subparsers.add_parser("lock-hash")
-    lock_hash.add_argument("--pixi-env", default="misc")
+    lock_hash.add_argument("--pixi-env", default="cluster_giants")
     return parser
 
 
@@ -1662,6 +1902,7 @@ def _dispatch_commands(
 
     remote = f"{config.host}:{config.remote_repo.rstrip('/')}/"
     artifact_remote = f"{config.host}:{remote_artifact_dir.rstrip('/')}/"
+    pixi_bin_dir = config.remote_pixi_bin.rsplit("/", 1)[0]
     setup_commands = (
         (
             "rsync",
@@ -1680,6 +1921,16 @@ def _dispatch_commands(
         ),
         ("ssh", config.host, f"mkdir -p {remote_artifact_dir}/logs {remote_artifact_dir}/results"),
         ("rsync", "-az", str(artifact_dir).rstrip("/") + "/", artifact_remote),
+        # The cluster nodes do not ship pixi on PATH, so stage the local pixi
+        # binary to a known remote path and invoke it by absolute path in the
+        # sbatch script. -p preserves the executable bit.
+        ("ssh", config.host, f"mkdir -p {pixi_bin_dir}"),
+        (
+            "rsync",
+            "-az",
+            str(_local_pixi_bin()),
+            f"{config.host}:{config.remote_pixi_bin}",
+        ),
     )
     sbatch_commands = tuple(
         ("ssh", config.host, f"sbatch --wait {remote_artifact_dir}/{sbatch_path.name}")
@@ -1695,6 +1946,7 @@ def _write_sbatch_scripts(
     config: ClusterConfig,
     remote_artifact_dir: str,
     verification_db: Path | None = None,
+    remote_home: str | None = None,
 ) -> tuple[Path, ...]:
     """Write one sbatch script per memory/partition tier.
 
@@ -1710,6 +1962,9 @@ def _write_sbatch_scripts(
         Remote artifact directory.
     verification_db:
         Verification ledger path to export in each sbatch script.
+    remote_home:
+        Absolute remote home used to expand ``~`` in SLURM ``#SBATCH`` log
+        directives.
 
     Returns
     -------
@@ -1729,6 +1984,7 @@ def _write_sbatch_scripts(
                 config=config,
                 remote_artifact_dir=remote_artifact_dir,
                 verification_db=verification_db,
+                remote_home=remote_home,
             ),
             encoding="utf-8",
         )
@@ -1989,6 +2245,61 @@ def _run_cluster_command(
     if command_runner is default_command_runner:
         return default_command_runner(command, timeout=timeout)
     return command_runner(command)
+
+
+def _run_sbatch_command(
+    command: Sequence[str],
+    command_runner: CommandRunner,
+    *,
+    timeout: float | None,
+) -> tuple[subprocess.CompletedProcess[str], str | None]:
+    """Run a blocking ``sbatch --wait`` command and classify its outcome.
+
+    A non-zero return code from ``sbatch --wait`` is ambiguous: it can mean the
+    submission itself was rejected (a genuine transport/submit failure) or that
+    the job was accepted, ran, and then failed. The two are disambiguated by
+    whether sbatch printed a ``Submitted batch job N`` line: if it did, the job
+    reached the cluster and ran, so the non-zero status is an honest job/
+    validation failure (``ClusterJobFailed``), NEVER a benign cluster-unavailable
+    skip. If it did not, the original transport error is re-raised so the caller
+    records a legitimate cluster-unavailable row.
+
+    Parameters
+    ----------
+    command:
+        sbatch transport command.
+    command_runner:
+        Injectable command runner.
+    timeout:
+        Optional timeout in seconds for the default runner.
+
+    Returns
+    -------
+    tuple[subprocess.CompletedProcess[str], str | None]
+        The completed process and the parsed SLURM job ID (or ``None``).
+
+    Raises
+    ------
+    ClusterJobFailed
+        If sbatch accepted the job (a job ID was printed) but it exited non-zero.
+    subprocess.CalledProcessError
+        If the submission itself failed before a job ID was assigned.
+    """
+
+    try:
+        result = _run_cluster_command(command, command_runner, timeout=timeout)
+    except subprocess.CalledProcessError as error:
+        stdout = error.stdout or ""
+        job_id = _parse_sbatch_job_id(stdout)
+        if job_id is not None:
+            stderr = (error.stderr or "").strip()
+            tail = stderr or stdout.strip() or repr(error.cmd)
+            raise ClusterJobFailed(
+                (job_id,),
+                f"sbatch --wait returncode={error.returncode}; {tail}",
+            ) from error
+        raise
+    return result, _parse_sbatch_job_id(result.stdout)
 
 
 def _optional_command_output(command: Sequence[str]) -> str:
