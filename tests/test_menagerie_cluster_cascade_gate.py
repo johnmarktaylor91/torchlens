@@ -40,6 +40,7 @@ from menagerie.cluster_runner import (
     write_result_manifest,
     write_result_rows_jsonl,
 )
+from menagerie.validate_menagerie import ClusterDispatchHandle
 from menagerie.ledger import (
     CASCADE_ARTIFACT_ERROR_CLASS,
     VerificationRun,
@@ -510,4 +511,148 @@ def test_golden_chaos_merge_conflict_mid_collect_does_not_cascade(
     assert ledger["m-keep"][0] == "passed"
     assert ledger["m-conflict"][0] == "failed"
     assert ledger["m-conflict"][1] in {"failed:exception", "failed:cluster_task_failed"}
+    _assert_no_cascade_rows_ever(ledger_db)
+
+
+def test_running_array_at_deadline_does_not_stamp_in_progress_rows_failed(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """C1-1 gate: a still-RUNNING array does not get its in-progress rows failed.
+
+    REVIEW_scheduling.md C1-1 (HIGH): ``collect_cluster_async`` polled
+    ``poll_cluster_terminal`` but attributed UNCONDITIONALLY -- so when the local
+    lane finished and the poll timed out with the array still RUNNING, every row
+    without an artifact yet was stamped ``failed:cluster_task_failed``. A 4-hour
+    giant still executing on axon was thus masked as a hard failure.
+
+    This drives the REAL collector against a partial on-disk array where one task
+    has FINISHED (artifact present) and one is still RUNNING (no artifact), with
+    ``poll_cluster_terminal`` returning False (deadline reached, array not
+    terminal). The finished row keeps its real status; the in-progress row is
+    LEFT PENDING -- absent from the ledger and never stamped failed -- resumable
+    by a later collect.
+    """
+
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_ENV_HASH", "env-a")
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_LOCK_HASH", "lock-a")
+    monkeypatch.setenv("TORCHLENS_SOURCE_HASH", "source-a")
+
+    finished = _row("m-finished", 1, "FinishedGiant")
+    running = _row("m-running", 2, "RunningGiant")
+    rows = (finished, running)
+
+    finished_assign = _assignment("m-finished", 0)
+    running_assign = _assignment("m-running", 1)
+    dispatch_result = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(finished_assign, running_assign),
+        local_artifact_dir=tmp_path / "cluster",
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6014999",),
+        commands=(),
+        dry_run=True,
+    )
+    # Only the finished task has written its artifact; the running task has none.
+    result_dir = dispatch_result.local_artifact_dir / "results"
+    (dispatch_result.local_artifact_dir / "logs").mkdir(parents=True, exist_ok=True)
+    _write_task_artifact(
+        result_dir, finished_assign, _run("m-finished", "FinishedGiant", status="passed")
+    )
+
+    # The array is still RUNNING at the collect deadline: poll returns False.
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner,
+        "poll_cluster_terminal",
+        lambda *_, **__: False,
+    )
+    real_collect = functools.partial(collect_cluster_results_partial, dry_run=True)
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner, "collect_cluster_results_partial", real_collect
+    )
+
+    args = _args(tmp_path, ledger_db)
+    manifest_path = tmp_path / "manifest.tsv"
+    handle = ClusterDispatchHandle(rows, dispatch_result, tmp_path / "handle.json")
+
+    validate_menagerie.collect_cluster_async(handle, args, manifest_path)
+
+    ledger = _ledger_snapshot(ledger_db)
+    # The finished task keeps its real per-model status.
+    assert ledger["m-finished"][0] == "passed"
+    # The still-running task is LEFT PENDING: never written, never stamped failed.
+    assert "m-running" not in ledger
+    _assert_no_cascade_rows_ever(ledger_db)
+
+    # And the manifest never carries a false failure for the in-progress giant.
+    records = validate_menagerie.manifest_records(manifest_path)
+    assert records["m-finished"]["status"] == "validated"
+    assert "m-running" not in records
+
+
+def test_terminal_array_still_attributes_missing_task_failed(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The C1-1 guard must NOT mask a genuine cluster failure on a TERMINAL array.
+
+    The narrow carve-out is "do not attribute a still-RUNNING task as failed."
+    Once the array is TERMINAL (poll returns True), a task that produced no valid
+    result IS a genuine failure and must still surface ``failed:cluster_task_
+    failed`` -- the tripwire stays armed.
+    """
+
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_ENV_HASH", "env-a")
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_LOCK_HASH", "lock-a")
+    monkeypatch.setenv("TORCHLENS_SOURCE_HASH", "source-a")
+
+    finished = _row("m-finished", 1, "FinishedGiant")
+    failed = _row("m-failed", 2, "FailedGiant")
+    rows = (finished, failed)
+
+    finished_assign = _assignment("m-finished", 0)
+    failed_assign = _assignment("m-failed", 1)
+    dispatch_result = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(finished_assign, failed_assign),
+        local_artifact_dir=tmp_path / "cluster",
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6015000",),
+        commands=(),
+        dry_run=True,
+    )
+    result_dir = dispatch_result.local_artifact_dir / "results"
+    (dispatch_result.local_artifact_dir / "logs").mkdir(parents=True, exist_ok=True)
+    _write_task_artifact(
+        result_dir, finished_assign, _run("m-finished", "FinishedGiant", status="passed")
+    )
+    # m-failed crashed terminally and left no artifact.
+
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner,
+        "poll_cluster_terminal",
+        lambda *_, **__: True,
+    )
+    real_collect = functools.partial(collect_cluster_results_partial, dry_run=True)
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner, "collect_cluster_results_partial", real_collect
+    )
+
+    args = _args(tmp_path, ledger_db)
+    manifest_path = tmp_path / "manifest.tsv"
+    handle = ClusterDispatchHandle(rows, dispatch_result, tmp_path / "handle.json")
+
+    validate_menagerie.collect_cluster_async(handle, args, manifest_path)
+
+    ledger = _ledger_snapshot(ledger_db)
+    assert ledger["m-finished"][0] == "passed"
+    # Terminal + no result -> genuine honest failure (tripwire armed).
+    assert ledger["m-failed"][0] == "failed"
+    assert ledger["m-failed"][1] == "failed:cluster_task_failed"
     _assert_no_cascade_rows_ever(ledger_db)

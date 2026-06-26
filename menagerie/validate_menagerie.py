@@ -1279,6 +1279,7 @@ def _attribute_cluster_results_per_model(
     *,
     detail: str,
     job_ids: Sequence[str] = (),
+    attribute_missing_as_failed: bool = True,
 ) -> bool:
     """Collect, merge, and attribute cluster results PER-MODEL.
 
@@ -1291,7 +1292,17 @@ def _attribute_cluster_results_per_model(
       (validated, or its honest per-model ``failed:*``).
     * A model whose task produced no valid result -> an honest per-model
       ``failed:cluster_task_failed`` carrying that task's own ``.err`` tail when
-      available.
+      available -- ONLY when ``attribute_missing_as_failed`` is True.
+
+    ``attribute_missing_as_failed`` is the C1-1 guard (REVIEW_scheduling.md): a
+    missing artifact means "no valid result" only once the array has reached a
+    TERMINAL state. If the array is still RUNNING at the collect deadline, a row
+    with no artifact yet is IN PROGRESS, not failed -- stamping it
+    ``failed:cluster_task_failed`` would mask a still-running giant as a hard
+    failure. So when the caller has NOT confirmed terminality, pass
+    ``attribute_missing_as_failed=False``: present rows keep their real merged
+    status and missing rows are LEFT PENDING (logged, resumable by a later
+    collect), never attributed as failed.
 
     Parameters
     ----------
@@ -1307,6 +1318,10 @@ def _attribute_cluster_results_per_model(
         Compact context for the fallback message (array return code / tail).
     job_ids:
         SLURM array job IDs used to locate per-task ``.err`` logs.
+    attribute_missing_as_failed:
+        When True (terminal state confirmed), a row with no valid result is
+        attributed ``failed:cluster_task_failed``. When False (array not known
+        terminal), missing rows are left pending and never stamped failed.
 
     Returns
     -------
@@ -1337,6 +1352,19 @@ def _attribute_cluster_results_per_model(
         for assignment in collected.missing_assignments
         if assignment.stable_id in rows_by_id
     ]
+    if not attribute_missing_as_failed:
+        # Array not confirmed terminal: missing rows are IN PROGRESS, not failed.
+        # Leave them pending (no ledger/manifest write) for a later collect. This
+        # is the C1-1 fix -- never stamp a still-running task failed:cluster_task_
+        # failed just because the local lane finished and the poll timed out.
+        if missing_rows:
+            log_event(
+                "cluster_tasks_pending",
+                rows=len(missing_rows),
+                stable_ids=[row.stable_id for row in missing_rows],
+                detail=detail,
+            )
+        return bool(collected.present_assignments) or bool(collected.missing_assignments)
     error_message_by_stable_id: dict[str, str] = {}
     for assignment in collected.missing_assignments:
         task_error = cluster_runner.read_task_error_log(
@@ -1544,10 +1572,16 @@ def collect_cluster_async(
     detail = (
         "sacct terminal state reached"
         if terminal
-        else "sacct terminal poll timeout; collecting partial artifacts"
+        else "sacct terminal poll timeout; collecting present artifacts, leaving rest pending"
     )
     # Writer isolation: collection runs only after the local ThreadPool exits.
     # The parent/main thread remains the single ledger and manifest writer.
+    #
+    # C1-1 (REVIEW_scheduling.md): only attribute a missing artifact as a hard
+    # failure when the array reached a TERMINAL state. When the poll timed out
+    # (terminal is False) the array is still RUNNING -- present rows still get
+    # their real merged status, but in-progress rows are LEFT PENDING, never
+    # stamped failed:cluster_task_failed. A later collect resolves them.
     try:
         attributed = _attribute_cluster_results_per_model(
             rows,
@@ -1556,6 +1590,7 @@ def collect_cluster_async(
             handle.dispatch,
             detail=detail,
             job_ids=handle.dispatch.sbatch_job_ids,
+            attribute_missing_as_failed=terminal,
         )
     except subprocess.TimeoutExpired as error:
         detail = _cluster_transport_failure_detail(error)
@@ -1590,6 +1625,18 @@ def collect_cluster_async(
         )
         return
     if not attributed:
+        if not terminal:
+            # The array is still RUNNING and nothing has come back yet. These are
+            # in-progress, not failed: leave ALL rows pending for a later collect
+            # (C1-1). Do not write env_unavailable -- that would be a false
+            # terminal failure for a still-running array.
+            log_event(
+                "cluster_tasks_pending",
+                rows=len(stable_ids),
+                stable_ids=stable_ids,
+                detail="array not terminal; no artifacts yet; left pending",
+            )
+            return
         _append_cluster_unavailable_rows(
             rows,
             manifest_path,
