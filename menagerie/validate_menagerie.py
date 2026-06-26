@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import re
 import resource
@@ -89,6 +90,7 @@ HEAVY_MEMORY_PATTERNS = (
 WORKER_MEMORY_CAP_STATUS = "failed:memory_cap"
 WORKER_MEMORY_CAP_EXIT_CODE = 99
 WORKER_MEMORY_CAP_POLL_INTERVAL_SEC = 0.5
+WORKER_TIMEOUT_POLL_INTERVAL_SEC = 0.5
 WORKER_MEMORY_CAP_AS_BACKSTOP_MULTIPLIER = 1.5
 WORKER_MEMORY_TEST_ALLOC_ENV = "TORCHLENS_MENAGERIE_WORKER_TEST_ALLOC_MB"
 MANIFEST_STATUS_VALUES = frozenset(
@@ -1339,6 +1341,7 @@ def _run_cluster_validation(
     out_dir: Path,
     manifest_path: Path,
     smoke_settings: Mapping[str, SmokeCaseSettings] | None = None,
+    duration_estimates: Mapping[str, float] | None = None,
 ) -> None:
     """Dispatch cluster-routed rows, merge results, and append report rows.
 
@@ -1354,6 +1357,8 @@ def _run_cluster_validation(
         Validation manifest path.
     smoke_settings:
         Optional per-row smoke settings.
+    duration_estimates:
+        Optional latest measured validation durations keyed by stable ID.
     """
 
     if not rows:
@@ -1368,7 +1373,15 @@ def _run_cluster_validation(
             ledger_db=_resolve_verification_db(args.verification_db),
             local_artifact_root=out_dir / "cluster",
             timeout_by_id={
-                row.stable_id: _case_timeout(row, row_settings, args.timeout_sec) for row in rows
+                row.stable_id: _case_timeout(
+                    row,
+                    row_settings,
+                    args.resolved_timeout_base_sec,
+                    duration_estimates,
+                    args.timeout_scale,
+                    args.timeout_ceiling_sec,
+                )
+                for row in rows
             },
             input_scale_by_id={
                 row.stable_id: _case_input_scale(row, row_settings, args.input_scale)
@@ -1601,6 +1614,42 @@ def latest_peak_rss_estimates(ledger_db: Path | None = None) -> dict[str, int]:
     with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
         rows = conn.execute(query).fetchall()
     return {str(row["stable_id"]): int(row["peak_rss_mb"]) for row in rows}
+
+
+def latest_duration_estimates(ledger_db: Path | None = None) -> dict[str, float]:
+    """Return latest recorded durations keyed by stable model ID.
+
+    Parameters
+    ----------
+    ledger_db:
+        Optional verification ledger path.
+
+    Returns
+    -------
+    dict[str, float]
+        Latest non-null forward validation durations from the verification ledger.
+    """
+
+    query = """
+        WITH ranked AS (
+            SELECT
+                stable_id,
+                duration_sec,
+                ROW_NUMBER() OVER (
+                    PARTITION BY stable_id
+                    ORDER BY finished_at DESC, run_id DESC
+                ) AS rn
+            FROM verification_runs
+            WHERE duration_sec IS NOT NULL
+              AND scope = 'forward'
+        )
+        SELECT stable_id, duration_sec
+        FROM ranked
+        WHERE rn = 1
+    """
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
+        rows = conn.execute(query).fetchall()
+    return {str(row["stable_id"]): float(row["duration_sec"]) for row in rows}
 
 
 def _looks_memory_heavy(row: CatalogRow) -> bool:
@@ -2936,29 +2985,72 @@ def validate_with_timeout(
         tmp_dir.mkdir(parents=True, exist_ok=True)
         for key in ("TMPDIR", "TEMP", "TMP"):
             child_env[key] = str(tmp_dir)
+    timeout_start = time.monotonic()
+    peak_rss_mb: int | None = None
     try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            env=child_env,
-        )
-    except subprocess.TimeoutExpired:
-        return ValidationResult(
-            row.name,
-            row.model_id,
-            "failed:timeout",
-            0,
-            False,
-            scope,
-            timeout_sec,
-            plan.cluster_key,
-            f"timed out after {timeout_sec:.1f}s",
-            stable_id=row.stable_id,
-            recipe_revision_sha256=row.recipe_revision_sha256,
-        )
+        import psutil
+    except Exception:
+        psutil = None
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=child_env,
+    )
+    psutil_proc = None
+    if psutil is not None:
+        try:
+            psutil_proc = psutil.Process(proc.pid)
+        except Exception:
+            psutil_proc = None
+    while proc.poll() is None:
+        if psutil_proc is not None:
+            try:
+                rss_bytes = psutil_proc.memory_info().rss
+                for child in psutil_proc.children(recursive=True):
+                    try:
+                        rss_bytes += child.memory_info().rss
+                    except Exception:
+                        continue
+                sampled_mb = int(rss_bytes // (1024**2))
+                peak_rss_mb = max(peak_rss_mb or 0, sampled_mb)
+            except Exception:
+                psutil_proc = None
+        if time.monotonic() - timeout_start >= timeout_sec:
+            try:
+                proc.kill()
+            finally:
+                stdout, stderr = proc.communicate()
+            del stdout, stderr
+            return ValidationResult(
+                row.name,
+                row.model_id,
+                "failed:timeout",
+                0,
+                False,
+                scope,
+                timeout_sec,
+                plan.cluster_key,
+                f"timed out after {timeout_sec:.1f}s",
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
+                peak_rss_mb=peak_rss_mb,
+                input_scale=input_scale,
+            )
+        time.sleep(WORKER_TIMEOUT_POLL_INTERVAL_SEC)
+    stdout, stderr = proc.communicate()
+    completed = subprocess.CompletedProcess(
+        command,
+        proc.returncode,
+        stdout,
+        stderr,
+    )
+    if peak_rss_mb is None and psutil_proc is not None:
+        try:
+            peak_rss_mb = int(psutil_proc.memory_info().rss // (1024**2))
+        except Exception:
+            peak_rss_mb = None
     for line in reversed(completed.stdout.splitlines()):
         try:
             payload = json.loads(line)
@@ -3186,6 +3278,12 @@ def _island_validator_args(args: argparse.Namespace) -> list[str]:
         str(args.scope),
         "--timeout-sec",
         f"{args.timeout_sec:.6f}",
+        "--timeout-base-sec",
+        f"{args.resolved_timeout_base_sec:.6f}",
+        "--timeout-scale",
+        f"{args.timeout_scale:.6f}",
+        "--timeout-ceiling-sec",
+        f"{args.timeout_ceiling_sec:.6f}",
         "--out-dir",
         str(args.out_dir),
         "--min-free-gb",
@@ -3229,6 +3327,9 @@ def run(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     smoke_settings = _load_smoke_case_settings(args.smoke_manifest)
     selected = _select_rows_for_validation(args)
+    args.resolved_timeout_base_sec = (
+        args.timeout_base_sec if args.timeout_base_sec is not None else args.timeout_sec
+    )
     if args.report_only:
         write_reports(
             out_dir,
@@ -3252,6 +3353,7 @@ def run(args: argparse.Namespace) -> int:
 
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
+    duration_estimates = latest_duration_estimates(args.verification_db)
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
     # Base-env-only mode runs inside an island pixi env or the cluster worker;
     # those subprocesses validate their assigned rows in place and must never
@@ -3288,7 +3390,14 @@ def run(args: argparse.Namespace) -> int:
     _append_cluster_rows_from_ledger(
         completed_cluster_rows, manifest_path, ledger_db=args.verification_db
     )
-    _run_cluster_validation(cluster_rows, args, out_dir, manifest_path, smoke_settings)
+    _run_cluster_validation(
+        cluster_rows,
+        args,
+        out_dir,
+        manifest_path,
+        smoke_settings,
+        duration_estimates,
+    )
     rows = local_rows
     if not args.base_env_only:
         registry = envs.load_registry(args.env_registry)
@@ -3408,7 +3517,14 @@ def run(args: argparse.Namespace) -> int:
         tmp_dir = out_dir / "_tmp" / f"{row.model_id:05d}_{safe_path_part(row.name)}"
         gate: ContextManager[Any] = gpu_semaphore if gpu_semaphore is not None else nullcontext()
         with gate:
-            row_timeout = _case_timeout(row, smoke_settings, args.timeout_sec)
+            row_timeout = _case_timeout(
+                row,
+                smoke_settings,
+                args.resolved_timeout_base_sec,
+                duration_estimates,
+                args.timeout_scale,
+                args.timeout_ceiling_sec,
+            )
             row_input_scale = _case_input_scale(row, smoke_settings, args.input_scale)
             result = validate_with_timeout(
                 row,
@@ -3625,7 +3741,12 @@ def _load_smoke_case_settings(path: Path | None) -> dict[str, SmokeCaseSettings]
 
 
 def _case_timeout(
-    row: CatalogRow, settings: Mapping[str, SmokeCaseSettings], default_timeout: float
+    row: CatalogRow,
+    settings: Mapping[str, SmokeCaseSettings],
+    default_timeout: float,
+    duration_estimates: Mapping[str, float] | None = None,
+    timeout_scale: float = 1.5,
+    timeout_ceiling_sec: float = 1800.0,
 ) -> float:
     """Return the validation timeout for a row.
 
@@ -3637,6 +3758,12 @@ def _case_timeout(
         Per-row smoke settings.
     default_timeout:
         Default timeout when the row has no override.
+    duration_estimates:
+        Optional latest measured validation durations keyed by stable ID.
+    timeout_scale:
+        Multiplier applied to prior duration estimates.
+    timeout_ceiling_sec:
+        Maximum computed timeout.
 
     Returns
     -------
@@ -3645,7 +3772,13 @@ def _case_timeout(
     """
 
     case = settings.get(row.stable_id)
-    return default_timeout if case is None else case.timeout_sec
+    if case is not None:
+        return case.timeout_sec
+    prior_duration = (duration_estimates or {}).get(row.stable_id)
+    if prior_duration is None:
+        return default_timeout
+    scaled_timeout = math.ceil(timeout_scale * prior_duration)
+    return max(default_timeout, min(scaled_timeout, timeout_ceiling_sec))
 
 
 def _case_input_scale(
@@ -3788,6 +3921,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--timeout-sec", type=float, default=240.0)
+    parser.add_argument("--timeout-base-sec", type=float, default=None)
+    parser.add_argument("--timeout-scale", type=float, default=1.5)
+    parser.add_argument("--timeout-ceiling-sec", type=float, default=1800.0)
     parser.add_argument("--install-timeout", type=float, default=600.0)
     parser.add_argument(
         "--pip-args", action="append", default=[], help="extra argument for pip install"
