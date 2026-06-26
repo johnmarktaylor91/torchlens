@@ -1125,40 +1125,52 @@ def _append_cluster_unavailable_rows(
             append_manifest(manifest_path, _result_from_ledger_run(row, run))
 
 
-def _append_cluster_job_failed_rows(
+def _append_cluster_task_failed_rows(
     rows: Sequence[CatalogRow],
     manifest_path: Path,
     args: argparse.Namespace,
     *,
     detail: str,
+    error_message_by_stable_id: Mapping[str, str] | None = None,
 ) -> None:
-    """Append honest failure rows for a submitted cluster job that exited non-zero.
+    """Append honest per-model failure rows for cluster tasks with no valid result.
 
-    Unlike a transport/submit failure (which is a legitimate
-    ``skipped:cluster_unavailable``), a job that was submitted, ran, and exited
-    non-zero is a real job/validation failure and MUST surface honestly. Only
-    giants that did not already produce a merged terminal ledger row receive a
-    synthesized ``failed:cluster_job_failed`` row; giants whose worker wrote an
-    honest status already have their real result merged.
+    Each model passed here is attributed by its OWN task outcome, never by the
+    array-job-level return code: it produced no valid, verified result artifact,
+    so it failed/crashed/never-started on the cluster. The recorded message is the
+    task's own ``.err`` tail when available (``error_message_by_stable_id``),
+    falling back to the compact array ``detail`` only when the task left no log.
+
+    A model whose worker DID write an honest result (already merged into the
+    ledger for the current identity tuple) is never overwritten -- its real
+    per-model status (validated, or its honest ``failed:*``) is reflected
+    straight from the ledger. The tripwire stays armed: a genuine validation
+    failure on the cluster still surfaces its honest ``failed:*``.
 
     Parameters
     ----------
     rows:
-        Cluster-routed catalog rows.
+        Cluster-routed catalog rows whose tasks produced no valid result.
     manifest_path:
         Validation manifest path.
     args:
         Parsed validator arguments.
     detail:
-        Job failure detail (return code, stderr/stdout tail).
+        Fallback failure detail (return code / array-level tail) used only when a
+        task left no usable ``.err`` log.
+    error_message_by_stable_id:
+        Optional per-model honest error message recovered from the task's own
+        ``.err`` log.
     """
 
+    if not rows:
+        return
     env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
     lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
     source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
     started_at = utc_now()
     finished_at = utc_now()
-    message = f"cluster job failed; {detail}".strip()
+    per_model = error_message_by_stable_id or {}
     targets = _verification_targets_for_rows(rows, scope=args.scope, device=args.device)
     already_merged = cluster_runner.ledger_completed_stable_ids(
         targets, ledger_db=_resolve_verification_db(args.verification_db)
@@ -1171,6 +1183,11 @@ def _append_cluster_job_failed_rows(
                 )
                 append_manifest(manifest_path, _result_from_ledger_run(row, run))
                 continue
+            task_error = per_model.get(row.stable_id)
+            if task_error:
+                message = f"cluster task failed; {task_error}".strip()
+            else:
+                message = f"cluster task failed; no result returned; {detail}".strip()
             run = VerificationRun(
                 stable_id=row.stable_id,
                 recipe_revision_sha256=row.recipe_revision_sha256,
@@ -1200,11 +1217,96 @@ def _append_cluster_job_failed_rows(
                 finished_at=finished_at,
                 duration_sec=0.0,
                 peak_rss_mb=None,
-                error_class="failed:cluster_job_failed",
+                error_class="failed:cluster_task_failed",
                 error_message=message,
             )
             append_verification_run(conn, run)
             append_manifest(manifest_path, _result_from_ledger_run(row, run))
+
+
+def _attribute_cluster_results_per_model(
+    rows: Sequence[CatalogRow],
+    args: argparse.Namespace,
+    manifest_path: Path,
+    dispatch: cluster_runner.DispatchResult,
+    *,
+    detail: str,
+    job_ids: Sequence[str] = (),
+) -> bool:
+    """Collect, merge, and attribute cluster results PER-MODEL.
+
+    This is the single source of truth for turning a dispatched array into ledger
+    rows, used both when ``sbatch --wait`` returned zero AND when it returned
+    non-zero (a partial array failure). Attribution is per-model, by each task's
+    own artifact -- never by the array-job-level return code:
+
+    * A model whose task wrote a valid, verified result -> its real merged status
+      (validated, or its honest per-model ``failed:*``).
+    * A model whose task produced no valid result -> an honest per-model
+      ``failed:cluster_task_failed`` carrying that task's own ``.err`` tail when
+      available.
+
+    Parameters
+    ----------
+    rows:
+        All cluster-routed catalog rows for this dispatch.
+    args:
+        Parsed validator arguments.
+    manifest_path:
+        Validation manifest path.
+    dispatch:
+        Dispatch metadata (assignments + remote artifact dir).
+    detail:
+        Compact context for the fallback message (array return code / tail).
+    job_ids:
+        SLURM array job IDs used to locate per-task ``.err`` logs.
+
+    Returns
+    -------
+    bool
+        ``True`` when at least one per-task result artifact was collected (the
+        normal partial/full case). ``False`` when ZERO results returned -- the
+        caller decides whether that is a genuine transport failure.
+
+    Raises
+    ------
+    cluster_runner.ClusterMergeConflict
+        If a present result conflicts with an existing ledger payload (fail-loud).
+    """
+
+    collected = cluster_runner.collect_cluster_results_partial(dispatch)
+    if collected.result_rows_path is not None and collected.result_manifest_path is not None:
+        cluster_runner.merge_cluster_results(
+            collected.result_rows_path,
+            collected.result_manifest_path,
+            local_ledger_db=_resolve_verification_db(args.verification_db),
+        )
+    rows_by_id = {row.stable_id: row for row in rows}
+    present_ids = {assignment.stable_id for assignment in collected.present_assignments}
+    present_rows = [row for row in rows if row.stable_id in present_ids]
+    _append_cluster_rows_from_ledger(present_rows, manifest_path, ledger_db=args.verification_db)
+    missing_rows = [
+        rows_by_id[assignment.stable_id]
+        for assignment in collected.missing_assignments
+        if assignment.stable_id in rows_by_id
+    ]
+    error_message_by_stable_id: dict[str, str] = {}
+    for assignment in collected.missing_assignments:
+        task_error = cluster_runner.read_task_error_log(
+            collected.log_dir,
+            job_ids,
+            assignment.array_index,
+        )
+        if task_error:
+            error_message_by_stable_id[assignment.stable_id] = task_error
+    _append_cluster_task_failed_rows(
+        missing_rows,
+        manifest_path,
+        args,
+        detail=detail,
+        error_message_by_stable_id=error_message_by_stable_id,
+    )
+    return bool(collected.present_assignments) or bool(collected.missing_assignments)
 
 
 def _cluster_transport_failure_detail(error: BaseException) -> str:
@@ -1327,8 +1429,20 @@ def _run_cluster_validation(
             artifact_dir=str(dispatch.local_artifact_dir),
         )
         return
+    # The array `sbatch --wait` returned zero, but that is a BATCH-level signal;
+    # attribute per-model anyway so a task that failed while the batch reported
+    # success (or a partially-collected result tree) is still surfaced honestly,
+    # never blanket-validated. Transport failures while collecting are the only
+    # path to cluster_unavailable.
     try:
-        result_rows_path, result_manifest_path = cluster_runner.collect_cluster_results(dispatch)
+        attributed = _attribute_cluster_results_per_model(
+            rows,
+            args,
+            manifest_path,
+            dispatch,
+            detail="sbatch --wait returncode=0",
+            job_ids=dispatch.sbatch_job_ids,
+        )
     except subprocess.TimeoutExpired as error:
         detail = _cluster_transport_failure_detail(error)
         _append_cluster_unavailable_rows(
@@ -1361,18 +1475,26 @@ def _run_cluster_validation(
             error=detail,
         )
         return
-    merge = cluster_runner.merge_cluster_results(
-        result_rows_path,
-        result_manifest_path,
-        local_ledger_db=_resolve_verification_db(args.verification_db),
-    )
-    _append_cluster_rows_from_ledger(rows, manifest_path, ledger_db=args.verification_db)
+    if not attributed:
+        # Zero results came back despite a clean submit -- treat as a transport/
+        # collection failure rather than blanket-failing every model.
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_no_results",
+            detail="no per-model result artifacts returned from the cluster",
+        )
+        log_event(
+            "cluster_collect_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_no_results",
+            error="no result artifacts returned",
+        )
+        return
     log_event(
         "cluster_dispatch_done",
         rows=len(stable_ids),
-        inserted=merge.inserted,
-        duplicates=merge.duplicates,
-        assignments=merge.assignments,
         artifact_dir=str(dispatch.local_artifact_dir),
     )
 
@@ -1383,14 +1505,22 @@ def _surface_cluster_job_failure(
     manifest_path: Path,
     error: cluster_runner.ClusterJobFailed,
 ) -> None:
-    """Surface an honest failure for a submitted cluster job that exited non-zero.
+    """Surface honest PER-MODEL results for an array job that exited non-zero.
 
-    A best-effort result collection runs first: if the worker wrote honest
-    result rows before the job failed, they are merged so the giant's real
-    status (which may itself be a faithful ``failed`` from validation) lands in
-    the ledger. Any giant lacking a merged row then receives an honest
-    ``failed:cluster_job_failed`` row. Under no circumstance is a submitted +
-    run + failed job recorded as ``skipped:cluster_unavailable``.
+    A non-zero ``sbatch --wait`` for a SLURM ARRAY means at least one task failed,
+    NOT that every dispatched model failed: other tasks may have validated and
+    written honest result artifacts. Results are therefore collected and
+    attributed per-model regardless of the array-job return code:
+
+    * a model whose task wrote a valid result keeps its real merged status, and
+    * a model whose task produced no valid result gets an honest per-model
+      ``failed:cluster_task_failed`` carrying that task's own ``.err`` tail.
+
+    Only when the dispatch carried no usable context, or ZERO results came back,
+    does this fall back to a single honest batch-level failure. Under no
+    circumstance is a submitted + run array recorded as
+    ``skipped:cluster_unavailable``, and a model that genuinely failed validation
+    on the cluster still surfaces its honest ``failed:*``.
 
     Parameters
     ----------
@@ -1405,29 +1535,36 @@ def _surface_cluster_job_failure(
     """
 
     dispatch = error.dispatch
-    if dispatch is not None:
-        try:
-            result_rows_path, result_manifest_path = cluster_runner.collect_cluster_results(
-                dispatch
-            )
-            cluster_runner.merge_cluster_results(
-                result_rows_path,
-                result_manifest_path,
-                local_ledger_db=_resolve_verification_db(args.verification_db),
-            )
-        except (
-            OSError,
-            subprocess.CalledProcessError,
-            subprocess.TimeoutExpired,
-            cluster_runner.ClusterResultIntegrityError,
-            cluster_runner.ClusterMergeConflict,
-        ) as collect_error:
-            log_event(
-                "cluster_job_failed_collect_skipped",
-                rows=len(rows),
-                error=repr(collect_error),
-            )
-    _append_cluster_job_failed_rows(rows, manifest_path, args, detail=error.detail)
+    if dispatch is None:
+        # No dispatch context to collect per-model results from; fall back to a
+        # single honest batch-level failure for every dispatched model.
+        _append_cluster_task_failed_rows(rows, manifest_path, args, detail=error.detail)
+        return
+    job_ids = error.job_ids or dispatch.sbatch_job_ids
+    try:
+        _attribute_cluster_results_per_model(
+            rows,
+            args,
+            manifest_path,
+            dispatch,
+            detail=error.detail,
+            job_ids=job_ids,
+        )
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        cluster_runner.ClusterResultIntegrityError,
+        cluster_runner.ClusterMergeConflict,
+    ) as collect_error:
+        # Could not collect/merge per-model results at all; surface one honest
+        # batch-level failure rather than masking it behind a benign skip.
+        log_event(
+            "cluster_job_failed_collect_skipped",
+            rows=len(rows),
+            error=repr(collect_error),
+        )
+        _append_cluster_task_failed_rows(rows, manifest_path, args, detail=error.detail)
 
 
 def latest_peak_rss_estimates(ledger_db: Path | None = None) -> dict[str, int]:

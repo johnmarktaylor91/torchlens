@@ -1509,6 +1509,255 @@ def collect_cluster_results(
     return aggregate_rows, aggregate_manifest
 
 
+@dataclass(frozen=True)
+class CollectedClusterResults:
+    """Per-model cluster collection outcome tolerant of partial array failures.
+
+    A SLURM array job is a per-task contract, not an all-or-nothing one: when one
+    task fails ``sbatch --wait`` returns non-zero for the whole array, but every
+    other task may have validated and written an honest result artifact. This
+    record separates the two so the caller attributes results PER-MODEL by each
+    task's own outcome -- never by the array-job-level return code.
+
+    Parameters
+    ----------
+    present_assignments:
+        Assignments whose task wrote a valid, verified per-model result row.
+    missing_assignments:
+        Assignments whose task produced no valid result (failed, OOM'd, crashed,
+        or never started). These get an honest per-model ``failed:*`` row.
+    result_rows_path:
+        Aggregate JSONL of the present result rows, or ``None`` when none were
+        present (write inputs to :func:`merge_cluster_results` require >= 1 row).
+    result_manifest_path:
+        Aggregate manifest for the present result rows, or ``None`` when none were
+        present.
+    result_dir:
+        Local directory the per-task result artifacts were collected into.
+    log_dir:
+        Local directory the per-task ``logs/`` artifacts were collected into.
+        Used to read a failed task's ``.err`` log for its honest message.
+    """
+
+    present_assignments: tuple[ClusterAssignment, ...]
+    missing_assignments: tuple[ClusterAssignment, ...]
+    result_rows_path: Path | None
+    result_manifest_path: Path | None
+    result_dir: Path
+    log_dir: Path
+
+
+def collect_cluster_results_partial(
+    dispatch_result: DispatchResult,
+    *,
+    config: ClusterConfig | None = None,
+    command_runner: CommandRunner = default_command_runner,
+    local_result_dir: Path | None = None,
+    local_log_dir: Path | None = None,
+    dry_run: bool = False,
+) -> CollectedClusterResults:
+    """Collect per-model cluster results, tolerating partial array failures.
+
+    Unlike :func:`collect_cluster_results` (which fails loud when ANY expected
+    artifact is absent), this collects whatever valid per-task result artifacts
+    came back and reports the remainder as missing assignments. A partial array
+    failure -- some tasks validated, some failed -- is the normal case this
+    handles: the present tasks keep their real per-model status and the missing
+    ones are surfaced honestly by the caller, NEVER cascaded from the array-job
+    return code.
+
+    Each present artifact is still verified individually against its own
+    per-task manifest (count + checksum), so a present-but-corrupt result is
+    treated as missing rather than silently trusted -- the tripwire stays armed
+    for the rows it can see.
+
+    Parameters
+    ----------
+    dispatch_result:
+        Dispatch metadata returned by :func:`dispatch_giants`.
+    config:
+        Cluster defaults.
+    command_runner:
+        Injectable command runner for rsync.
+    local_result_dir:
+        Optional destination directory for per-task ``results/`` artifacts.
+    local_log_dir:
+        Optional destination directory for per-task ``logs/`` artifacts (the
+        ``giant_<jobid>_<taskidx>.err`` files used to recover a failed task's
+        honest message).
+    dry_run:
+        Skip rsync and only combine already-present local artifacts.
+
+    Returns
+    -------
+    CollectedClusterResults
+        Present (validated) and missing assignments with collection paths.
+    """
+
+    active_config = config or ClusterConfig()
+    result_dir = local_result_dir or (dispatch_result.local_artifact_dir / "results")
+    log_dir = local_log_dir or (dispatch_result.local_artifact_dir / "logs")
+    result_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        remote = dispatch_result.remote_artifact_dir.rstrip("/")
+        # rsync the results and logs trees independently. A missing remote logs
+        # tree (e.g. nothing failed) must not abort result collection, so the
+        # logs rsync is best-effort.
+        command_runner(
+            (
+                "rsync",
+                "-az",
+                f"{active_config.host}:{remote}/results/",
+                str(result_dir).rstrip("/") + "/",
+            )
+        )
+        try:
+            command_runner(
+                (
+                    "rsync",
+                    "-az",
+                    f"{active_config.host}:{remote}/logs/",
+                    str(log_dir).rstrip("/") + "/",
+                )
+            )
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            # Logs are only needed to enrich a failed task's message; their
+            # absence never blocks attributing the present results.
+            pass
+    present_rows, present_assignment_ids = _load_present_collected_results(
+        result_dir, dispatch_result.assignments
+    )
+    present_assignments = tuple(
+        assignment
+        for assignment in dispatch_result.assignments
+        if assignment.assignment_id in present_assignment_ids
+    )
+    missing_assignments = tuple(
+        assignment
+        for assignment in dispatch_result.assignments
+        if assignment.assignment_id not in present_assignment_ids
+    )
+    rows_path: Path | None = None
+    manifest_path: Path | None = None
+    if present_rows:
+        rows_path = dispatch_result.local_artifact_dir / "cluster_results.jsonl"
+        manifest_path = dispatch_result.local_artifact_dir / "cluster_results.manifest.json"
+        write_result_rows_jsonl(present_rows, rows_path)
+        write_result_manifest(present_rows, manifest_path)
+    return CollectedClusterResults(
+        present_assignments=present_assignments,
+        missing_assignments=missing_assignments,
+        result_rows_path=rows_path,
+        result_manifest_path=manifest_path,
+        result_dir=result_dir,
+        log_dir=log_dir,
+    )
+
+
+def read_task_error_log(
+    log_dir: Path,
+    job_ids: Sequence[str],
+    array_index: int,
+    *,
+    max_chars: int = 600,
+) -> str | None:
+    """Return the tail of a failed array task's ``.err`` log, if present.
+
+    SLURM writes per-task error logs as ``giant_<jobid>_<taskidx>.err`` (from the
+    ``#SBATCH --error`` directive). This recovers the task's OWN failure detail so
+    a missing-result model surfaces its real error, not the generic batch message.
+
+    Parameters
+    ----------
+    log_dir:
+        Local directory the ``logs/`` tree was collected into.
+    job_ids:
+        Candidate SLURM array job IDs (``%A``).
+    array_index:
+        SLURM array task index (``%a``).
+    max_chars:
+        Maximum trailing characters to return.
+
+    Returns
+    -------
+    str | None
+        Compact non-empty error tail, or ``None`` when no log is available.
+    """
+
+    candidates: list[Path] = []
+    for job_id in job_ids:
+        candidates.append(log_dir / f"giant_{job_id}_{array_index}.err")
+    # Fall back to any matching task index when the job ID is unknown/mismatched.
+    candidates.extend(sorted(log_dir.glob(f"giant_*_{array_index}.err")))
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if not candidate.exists():
+            continue
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            continue
+        if not text:
+            continue
+        compact = " ".join(text.splitlines()[-12:]).strip()
+        if len(compact) > max_chars:
+            compact = compact[-max_chars:]
+        return compact or None
+    return None
+
+
+def _load_present_collected_results(
+    result_dir: Path, assignments: Sequence[ClusterAssignment]
+) -> tuple[tuple[ClusterResultRow, ...], set[str]]:
+    """Load and verify whichever per-task result artifacts are present.
+
+    Each ``<assignment_id>.manifest.json`` / ``.jsonl`` pair is loaded and
+    verified against its own manifest independently. A pair that is absent,
+    unreadable, or fails its own integrity check is treated as missing (the
+    assignment is simply absent from the returned ID set) rather than aborting
+    collection of the valid siblings.
+
+    Parameters
+    ----------
+    result_dir:
+        Directory containing per-task ``*.jsonl`` and ``*.manifest.json`` files.
+    assignments:
+        Dispatched assignments. Only artifacts whose assignment ID is among these
+        are accepted, so a stray file cannot inject an unexpected row.
+
+    Returns
+    -------
+    tuple[tuple[ClusterResultRow, ...], set[str]]
+        Verified present result rows and the set of present assignment IDs.
+    """
+
+    known_ids = {assignment.assignment_id for assignment in assignments}
+    present_rows: list[ClusterResultRow] = []
+    present_ids: set[str] = set()
+    for manifest_path in sorted(result_dir.glob("*.manifest.json")):
+        rows_path = manifest_path.with_suffix("").with_suffix(".jsonl")
+        if not rows_path.exists():
+            continue
+        try:
+            rows = load_result_rows_jsonl(rows_path)
+            expectations = _load_result_expectations(manifest_path)
+            _verify_result_expectations(rows, expectations)
+        except (OSError, json.JSONDecodeError, KeyError, ClusterResultIntegrityError):
+            # A corrupt or self-inconsistent artifact is NOT trusted; the task is
+            # left missing so the caller surfaces an honest per-model failure.
+            continue
+        artifact_ids = {row.assignment_id for row in rows}
+        if not artifact_ids.issubset(known_ids):
+            continue
+        present_rows.extend(rows)
+        present_ids.update(artifact_ids)
+    return tuple(present_rows), present_ids
+
+
 def record_host_contract(path: Path) -> dict[str, str]:
     """Record host facts needed to interpret cluster rows.
 

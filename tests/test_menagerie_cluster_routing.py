@@ -8,9 +8,47 @@ from typing import Any
 
 from menagerie import validate_menagerie
 from menagerie.catalog import CatalogRow, write_catalog
-from menagerie.cluster_runner import DispatchResult, MergeReport
+from menagerie.cluster_runner import (
+    ClusterAssignment,
+    CollectedClusterResults,
+    DispatchResult,
+    MergeReport,
+)
 from menagerie.ledger import VerificationRun, append_verification_run, connect
 from menagerie.runtime import DependencyPlan
+
+
+def _assignment(stable_id: str, array_index: int, **overrides: object) -> ClusterAssignment:
+    """Build a compact cluster assignment fixture.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    array_index:
+        SLURM array task index.
+    overrides:
+        Assignment field overrides.
+
+    Returns
+    -------
+    ClusterAssignment
+        Cluster assignment.
+    """
+
+    data = {
+        "campaign_id": "campaign-a",
+        "attempt_id": "attempt-a",
+        "assignment_id": f"campaign-a:attempt-a:{array_index}:{stable_id}",
+        "stable_id": stable_id,
+        "array_index": array_index,
+        "node_mem_gb": 180,
+        "worker_memory_cap_gb": 170,
+        "partition": "nklab",
+        "reason": "unit",
+    }
+    data.update(overrides)
+    return ClusterAssignment(**data)  # type: ignore[arg-type]
 
 
 def _row(**overrides: object) -> CatalogRow:
@@ -168,21 +206,30 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
         return DispatchResult(
             campaign_id="campaign-a",
             attempt_id="attempt-a",
-            assignments=(),
+            assignments=tuple(
+                _assignment(stable_id, index) for index, stable_id in enumerate(stable_ids)
+            ),
             local_artifact_dir=tmp_path / "cluster",
             remote_artifact_dir="~/cluster",
             sbatch_job_ids=("123",),
             commands=(),
         )
 
-    def fake_collect(_: DispatchResult) -> tuple[Path, Path]:
-        """Return placeholder collected result paths."""
+    def fake_collect(dispatch: DispatchResult, **_: object) -> CollectedClusterResults:
+        """Return per-model collection with every task present (validated)."""
 
         rows_path = tmp_path / "cluster_results.jsonl"
         manifest_path = tmp_path / "cluster_results.manifest.json"
         rows_path.write_text("", encoding="utf-8")
         manifest_path.write_text("{}", encoding="utf-8")
-        return rows_path, manifest_path
+        return CollectedClusterResults(
+            present_assignments=dispatch.assignments,
+            missing_assignments=(),
+            result_rows_path=rows_path,
+            result_manifest_path=manifest_path,
+            result_dir=tmp_path / "cluster" / "results",
+            log_dir=tmp_path / "cluster" / "logs",
+        )
 
     def fake_merge(rows_path: Path, manifest_path: Path, **_: object) -> MergeReport:
         """Capture cluster merge calls."""
@@ -235,7 +282,9 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
 
     monkeypatch.setattr(validate_menagerie, "select_rows", lambda _: [giant, local])
     monkeypatch.setattr(validate_menagerie.cluster_runner, "dispatch_giants", fake_dispatch)
-    monkeypatch.setattr(validate_menagerie.cluster_runner, "collect_cluster_results", fake_collect)
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner, "collect_cluster_results_partial", fake_collect
+    )
     monkeypatch.setattr(validate_menagerie.cluster_runner, "merge_cluster_results", fake_merge)
     monkeypatch.setattr(
         validate_menagerie,
@@ -263,6 +312,153 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     assert len(merge_calls) == 1
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
     assert set(records) == {"m3635", "m_local"}
+
+
+def test_cluster_array_partial_failure_attributes_per_model_not_cascade(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """A partial array failure attributes per-model, NEVER a blanket cascade.
+
+    Regression for the cluster result-handling cascade: array job 6014456 had
+    82 tasks validate + 30 fail, but the batch-level ``sbatch --wait`` non-zero
+    return code was stamped onto ALL ~290 dispatched models. The fix attributes
+    each model by its OWN task outcome:
+
+    * the task that validated -> ``validated``,
+    * the task that honestly failed validation -> its real ``failed:*`` (the
+      tripwire stays armed; the failure is surfaced, not masked),
+    * the task that crashed with no result -> an honest
+      ``failed:cluster_task_failed`` carrying its own ``.err`` tail,
+
+    and NONE are recorded as a benign ``skipped:cluster_unavailable``.
+    """
+
+    from menagerie.cluster_runner import ClusterJobFailed, CollectedClusterResults
+    from menagerie.cluster_runner import write_result_manifest, write_result_rows_jsonl
+    from menagerie.cluster_runner import ClusterResultRow
+
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_ENV_HASH", "env-a")
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_LOCK_HASH", "lock-a")
+    monkeypatch.setenv("TORCHLENS_SOURCE_HASH", "source-a")
+
+    good = _row(stable_id="m-good", name="GoodGiant")
+    bad_validation = _row(model_id=2, display_index=2, stable_id="m-bad", name="BadGiant")
+    crashed = _row(model_id=3, display_index=3, stable_id="m-crash", name="CrashGiant")
+    rows = [good, bad_validation, crashed]
+
+    good_assign = _assignment("m-good", 0)
+    bad_assign = _assignment("m-bad", 1)
+    crash_assign = _assignment("m-crash", 2)
+    dispatch_result = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(good_assign, bad_assign, crash_assign),
+        local_artifact_dir=tmp_path / "cluster",
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6014456",),
+        commands=(),
+    )
+
+    def fail_dispatch(*_: object, **__: object) -> DispatchResult:
+        """Simulate a submitted array where one task failed (non-zero --wait)."""
+
+        raise ClusterJobFailed(
+            ("6014456",),
+            "sbatch --wait returncode=1; Submitted batch job 6014456",
+            dispatch=dispatch_result,
+        )
+
+    def fake_collect(_: DispatchResult, **__: object) -> CollectedClusterResults:
+        """Return per-model results: two tasks present, one crashed/missing."""
+
+        result_dir = dispatch_result.local_artifact_dir / "results"
+        log_dir = dispatch_result.local_artifact_dir / "logs"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        good_row = ClusterResultRow(
+            campaign_id="campaign-a",
+            attempt_id="attempt-a",
+            assignment_id=good_assign.assignment_id,
+            run=_run(
+                run_id="run-good",
+                stable_id="m-good",
+                name="GoodGiant",
+                status="passed",
+                runner_host="axon-test",
+            ),
+        )
+        bad_row = ClusterResultRow(
+            campaign_id="campaign-a",
+            attempt_id="attempt-a",
+            assignment_id=bad_assign.assignment_id,
+            run=_run(
+                run_id="run-bad",
+                stable_id="m-bad",
+                name="BadGiant",
+                status="failed",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                peak_rss_mb=None,
+                runner_host="axon-test",
+                error_class="failed:replay",
+                error_message="replay mismatch at op 7",
+            ),
+        )
+        rows_path = dispatch_result.local_artifact_dir / "cluster_results.jsonl"
+        manifest_path = dispatch_result.local_artifact_dir / "cluster_results.manifest.json"
+        write_result_rows_jsonl((good_row, bad_row), rows_path)
+        write_result_manifest((good_row, bad_row), manifest_path)
+        (log_dir / "giant_6014456_2.err").write_text(
+            "slurmstepd: error: Detected 1 oom-kill event\nMemoryError: tensor alloc\n",
+            encoding="utf-8",
+        )
+        return CollectedClusterResults(
+            present_assignments=(good_assign, bad_assign),
+            missing_assignments=(crash_assign,),
+            result_rows_path=rows_path,
+            result_manifest_path=manifest_path,
+            result_dir=result_dir,
+            log_dir=log_dir,
+        )
+
+    monkeypatch.setattr(validate_menagerie.cluster_runner, "dispatch_giants", fail_dispatch)
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner, "collect_cluster_results_partial", fake_collect
+    )
+
+    args = _args(tmp_path, "--verification-db", str(ledger_db))
+    validate_menagerie._run_cluster_validation(
+        rows, args, tmp_path / "out", tmp_path / "manifest.tsv"
+    )
+
+    with connect(ledger_db) as conn:
+        ledger = {
+            row["stable_id"]: (row["status"], row["error_class"], row["error_message"])
+            for row in conn.execute(
+                "SELECT stable_id, status, error_class, error_message FROM current_verification"
+            )
+        }
+    # Per-model attribution: validated, honest validation-failure, honest crash.
+    assert ledger["m-good"][0] == "passed"
+    assert ledger["m-bad"][0] == "failed"
+    assert ledger["m-bad"][1] == "failed:replay"  # honest failure NOT masked
+    assert ledger["m-crash"][0] == "failed"
+    assert ledger["m-crash"][1] == "failed:cluster_task_failed"
+    # The crashed model's message is its OWN .err tail, not the batch message.
+    assert "MemoryError" in ledger["m-crash"][2]
+    assert "Submitted batch job 6014456" not in ledger["m-crash"][2]
+    # Nothing was cascaded to a benign cluster-unavailable skip.
+    statuses = {value[0] for value in ledger.values()}
+    assert "env_unavailable" not in statuses
+
+    records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
+    assert records["m-good"]["status"] == "validated"
+    assert records["m-bad"]["status"] == "failed:replay"
+    assert records["m-crash"]["status"] == "failed:exception"
 
 
 def test_auto_runner_uses_cold_start_and_peak_rss_giant_routes(

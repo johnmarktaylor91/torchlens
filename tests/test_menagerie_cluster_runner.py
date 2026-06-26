@@ -469,6 +469,172 @@ def test_collect_cluster_results_verifies_and_aggregates_local_artifacts(tmp_pat
     assert report.inserted == 1
 
 
+def _assignment(stable_id: str, array_index: int, **overrides: object) -> ClusterAssignment:
+    """Build a compact cluster assignment fixture.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    array_index:
+        SLURM array task index.
+    overrides:
+        Field overrides for the default assignment.
+
+    Returns
+    -------
+    ClusterAssignment
+        Cluster assignment.
+    """
+
+    data = {
+        "campaign_id": "campaign-a",
+        "attempt_id": "attempt-a",
+        "assignment_id": f"campaign-a:attempt-a:{array_index}:{stable_id}",
+        "stable_id": stable_id,
+        "array_index": array_index,
+        "node_mem_gb": 180,
+        "worker_memory_cap_gb": 170,
+        "partition": "nklab",
+        "reason": "unit",
+    }
+    data.update(overrides)
+    return ClusterAssignment(**data)  # type: ignore[arg-type]
+
+
+def _write_task_result(
+    result_dir: Path, assignment: ClusterAssignment, run: VerificationRun
+) -> None:
+    """Write one task's per-assignment result + manifest artifacts.
+
+    Parameters
+    ----------
+    result_dir:
+        Directory the worker writes per-task ``*.jsonl`` / ``*.manifest.json`` to.
+    assignment:
+        The assignment whose task produced the result.
+    run:
+        The verification run the worker recorded.
+    """
+
+    result_dir.mkdir(parents=True, exist_ok=True)
+    row = ClusterResultRow(
+        campaign_id=assignment.campaign_id,
+        attempt_id=assignment.attempt_id,
+        assignment_id=assignment.assignment_id,
+        run=run,
+    )
+    write_result_rows_jsonl((row,), result_dir / f"{assignment.assignment_id}.jsonl")
+    write_result_manifest((row,), result_dir / f"{assignment.assignment_id}.manifest.json")
+
+
+def test_collect_partial_attributes_mixed_outcomes_per_task(tmp_path: Path) -> None:
+    """A mixed array (some tasks present, some missing) is split per-model.
+
+    This is the regression for the cluster cascade: a non-zero array
+    ``sbatch --wait`` must NOT blanket-fail every model. Each present task keeps
+    its own validated/honest-failed result; each missing task is reported as a
+    missing assignment so the caller can surface its honest per-model failure.
+    """
+
+    from menagerie.cluster_runner import collect_cluster_results_partial, read_task_error_log
+
+    good = _assignment("m-good", 0)
+    bad_validation = _assignment("m-bad-validation", 1)
+    crashed = _assignment("m-crashed", 2)
+    dispatch_result = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(good, bad_validation, crashed),
+        local_artifact_dir=tmp_path / "dispatch",
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6014456",),
+        commands=(),
+        dry_run=True,
+    )
+    result_dir = dispatch_result.local_artifact_dir / "results"
+    log_dir = dispatch_result.local_artifact_dir / "logs"
+    # Task 0 validated; task 1 produced an HONEST failed result (a real
+    # validation failure must still surface, not be masked); task 2 crashed and
+    # left only a SLURM .err log with no result artifact.
+    _write_task_result(
+        result_dir,
+        good,
+        _run(run_id="run-good", stable_id="m-good", status="passed"),
+    )
+    _write_task_result(
+        result_dir,
+        bad_validation,
+        _run(
+            run_id="run-bad",
+            stable_id="m-bad-validation",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=0,
+            n_ops=None,
+            error_class="failed:replay",
+            error_message="replay mismatch at op 3",
+        ),
+    )
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / "giant_6014456_2.err").write_text(
+        "Traceback (most recent call last):\nMemoryError: out of memory allocating tensor\n",
+        encoding="utf-8",
+    )
+
+    collected = collect_cluster_results_partial(dispatch_result, dry_run=True)
+
+    present_ids = {assignment.stable_id for assignment in collected.present_assignments}
+    missing_ids = {assignment.stable_id for assignment in collected.missing_assignments}
+    # The validated AND the honestly-failed task both come back as present rows
+    # (the honest failure is NOT masked); only the crashed task is missing.
+    assert present_ids == {"m-good", "m-bad-validation"}
+    assert missing_ids == {"m-crashed"}
+    assert collected.result_rows_path is not None
+    assert collected.result_manifest_path is not None
+    # The crashed task's real error is recoverable from its own .err log, so its
+    # honest per-model message is its actual failure, not the batch message.
+    err_tail = read_task_error_log(collected.log_dir, ("6014456",), 2)
+    assert err_tail is not None
+    assert "MemoryError" in err_tail
+
+
+def test_collect_partial_rejects_corrupt_artifact_as_missing(tmp_path: Path) -> None:
+    """A present-but-corrupt result artifact is treated as missing, not trusted."""
+
+    from menagerie.cluster_runner import collect_cluster_results_partial
+
+    good = _assignment("m-good", 0)
+    corrupt = _assignment("m-corrupt", 1)
+    dispatch_result = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(good, corrupt),
+        local_artifact_dir=tmp_path / "dispatch",
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6014456",),
+        commands=(),
+        dry_run=True,
+    )
+    result_dir = dispatch_result.local_artifact_dir / "results"
+    _write_task_result(
+        result_dir, good, _run(run_id="run-good", stable_id="m-good", status="passed")
+    )
+    # Corrupt task: a manifest whose checksum no longer matches the rows.
+    _write_task_result(
+        result_dir, corrupt, _run(run_id="run-corrupt", stable_id="m-corrupt", status="passed")
+    )
+    corrupt_manifest = result_dir / f"{corrupt.assignment_id}.manifest.json"
+    payload = json.loads(corrupt_manifest.read_text(encoding="utf-8"))
+    payload["assignments"][0]["result_checksum"] = "tampered"
+    corrupt_manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    collected = collect_cluster_results_partial(dispatch_result, dry_run=True)
+
+    assert {a.stable_id for a in collected.present_assignments} == {"m-good"}
+    assert {a.stable_id for a in collected.missing_assignments} == {"m-corrupt"}
+
+
 def test_ledger_keyed_resume_uses_identity_tuple(tmp_path: Path) -> None:
     """Resume derives completion from current ledger identity targets."""
 
