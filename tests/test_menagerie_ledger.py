@@ -10,6 +10,7 @@ import pytest
 
 from menagerie.catalog import CatalogRow
 from menagerie.ledger import (
+    CASCADE_ARTIFACT_ERROR_CLASS,
     ENV_VERIFICATION_DB,
     LEGACY_UNKNOWN,
     VerificationRun,
@@ -17,11 +18,51 @@ from menagerie.ledger import (
     append_verification_run,
     base_env_hash,
     base_lock_hash,
+    cascade_suppressed_count,
+    cascade_suppressed_stable_ids,
     connect,
     seed_from_legacy,
     torchlens_source_hash,
     verified_count,
 )
+
+
+def _cascade_artifact(**overrides: object) -> VerificationRun:
+    """Build a synthesized pre-fix batch-cascade artifact row.
+
+    Mirrors the exact signature of the 290 job-6014456 rows: status=failed,
+    ``CASCADE_ARTIFACT_ERROR_CLASS``, zero duration, started==finished, NULL
+    n_ops/graph_shape_hash, written on a non-cluster orchestrator host.
+
+    Parameters
+    ----------
+    overrides:
+        Field overrides for the default artifact.
+
+    Returns
+    -------
+    VerificationRun
+        Cascade-artifact verification run.
+    """
+
+    data: dict[str, object] = {
+        "status": "failed",
+        "forward_pass": None,
+        "metadata_ok": None,
+        "n_ops": None,
+        "graph_shape_hash": None,
+        "svg_sha256": None,
+        "duration_sec": 0.0,
+        "started_at": "2026-06-26T08:37:54+00:00",
+        "finished_at": "2026-06-26T08:37:54+00:00",
+        "runner_host": "zmachine",
+        "error_class": CASCADE_ARTIFACT_ERROR_CLASS,
+        "error_message": (
+            "cluster job failed; sbatch --wait returncode=1; Submitted batch job 6014456"
+        ),
+    }
+    data.update(overrides)
+    return _run(**data)
 
 
 def _run(**overrides: object) -> VerificationRun:
@@ -678,3 +719,146 @@ def test_concurrent_appends_from_two_threads_both_land(tmp_path: Path) -> None:
 
     assert run_ids == ["run-1", "run-2"]
     assert count == 2
+
+
+def test_cascade_artifact_does_not_mask_real_prior_outcome(tmp_path: Path) -> None:
+    """A synthesized cascade row never depresses a model's honest current status.
+
+    The standard ``current_verification`` view shows the (later) cascade artifact
+    as the model's current row, but ``current_verification_real`` skips it and
+    surfaces the real earlier failure. Suppression is an HONESTY fix: it shows the
+    model's true outcome, it does not flip anything to passed.
+    """
+
+    conn = connect(tmp_path / "verification.db")
+    # Real earlier outcome: an honest replay failure (a tripwire firing).
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-real",
+            stable_id="m1",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            duration_sec=12.0,
+            started_at="2026-06-25T00:00:00+00:00",
+            finished_at="2026-06-25T00:00:12+00:00",
+            error_class="failed:replay",
+            error_message="False",
+        ),
+    )
+    # Later synthesized cascade artifact (would otherwise be the rn=1 current row).
+    append_verification_run(conn, _cascade_artifact(run_id="run-cascade", stable_id="m1"))
+
+    standard = conn.execute(
+        "SELECT status, error_class FROM current_verification WHERE stable_id = 'm1'"
+    ).fetchone()
+    assert standard["error_class"] == CASCADE_ARTIFACT_ERROR_CLASS
+
+    real = conn.execute(
+        "SELECT status, error_class FROM current_verification_real WHERE stable_id = 'm1'"
+    ).fetchone()
+    assert real["status"] == "failed"
+    assert real["error_class"] == "failed:replay"
+
+
+def test_cascade_only_model_falls_out_never_promoted(tmp_path: Path) -> None:
+    """A model whose ONLY current row is a cascade artifact has no honest row.
+
+    Critically it is NOT promoted to passed -- suppression removes the synthesized
+    failure from the honest denominator, it never invents a success.
+    """
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(conn, _cascade_artifact(run_id="run-cascade", stable_id="m1"))
+
+    assert (
+        conn.execute("SELECT COUNT(*) FROM current_verification WHERE stable_id = 'm1'").fetchone()[
+            0
+        ]
+        == 1
+    )
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM current_verification_real WHERE stable_id = 'm1'"
+        ).fetchone()[0]
+        == 0
+    )
+
+
+def test_cascade_suppression_never_touches_genuine_failures(tmp_path: Path) -> None:
+    """Real failures that share the marker error_class but ran a trace are kept.
+
+    Defense-in-depth: the structural clauses (zero duration, NULL n_ops) mean a
+    genuine failure is never suppressed even if it carried the marker string, so
+    the tripwire stays armed. The honest per-model post-fix status
+    ``failed:cluster_task_failed`` is also untouched.
+    """
+
+    conn = connect(tmp_path / "verification.db")
+    # Honest post-fix per-model cluster failure: different error_class, real duration.
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-task",
+            stable_id="m1",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            duration_sec=5.0,
+            started_at="2026-06-26T00:00:00+00:00",
+            finished_at="2026-06-26T00:00:05+00:00",
+            error_class="failed:cluster_task_failed",
+            error_message="task .err tail",
+        ),
+    )
+    # A row carrying the marker string but with a REAL trace duration: NOT an
+    # artifact (the structural clauses exclude it), so it must stay visible.
+    append_verification_run(
+        conn,
+        _run(
+            run_id="run-marker-real",
+            stable_id="m2",
+            status="failed",
+            forward_pass=0,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            duration_sec=9.0,
+            started_at="2026-06-26T00:00:00+00:00",
+            finished_at="2026-06-26T00:00:09+00:00",
+            error_class=CASCADE_ARTIFACT_ERROR_CLASS,
+            error_message="real failure that happens to carry the marker",
+        ),
+    )
+
+    m1 = conn.execute(
+        "SELECT error_class FROM current_verification_real WHERE stable_id = 'm1'"
+    ).fetchone()
+    assert m1["error_class"] == "failed:cluster_task_failed"
+
+    m2 = conn.execute(
+        "SELECT error_class FROM current_verification_real WHERE stable_id = 'm2'"
+    ).fetchone()
+    assert m2 is not None
+    assert m2["error_class"] == CASCADE_ARTIFACT_ERROR_CLASS
+
+    assert cascade_suppressed_count(conn) == 0
+    assert cascade_suppressed_stable_ids(conn) == []
+
+
+def test_cascade_suppressed_helpers_report_masked_models(tmp_path: Path) -> None:
+    """The suppression helpers enumerate exactly the masked models."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(conn, _cascade_artifact(run_id="run-c1", stable_id="m1"))
+    append_verification_run(conn, _cascade_artifact(run_id="run-c2", stable_id="m2"))
+    # A clean passing model is never reported.
+    append_verification_run(conn, _run(run_id="run-ok", stable_id="m3"))
+
+    assert cascade_suppressed_stable_ids(conn) == ["m1", "m2"]
+    assert cascade_suppressed_count(conn) == 2

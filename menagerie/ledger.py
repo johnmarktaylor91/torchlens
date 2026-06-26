@@ -26,6 +26,40 @@ ENV_VERIFICATION_DB = "TORCHLENS_MENAGERIE_VERIFICATION_DB"
 BUSY_TIMEOUT_MS = 30_000
 LEGACY_UNKNOWN = "legacy-unknown"
 BASE_LOCK_HASH = "base-no-lock"
+
+# Frozen pre-fix batch-cascade artifact marker. A SLURM-array partial failure
+# (some tasks validated, some failed) once cascaded the batch-level
+# ``sbatch --wait`` returncode onto EVERY dispatched model, synthesizing rows
+# with this ``error_class`` on the orchestrator host (job 6014456 stamped ~290
+# such rows on 2026-06-26). The de-cascade fix (8e9dd386) removed every code path
+# that writes this ``error_class``: current code attributes per-model and uses
+# ``failed:cluster_task_failed`` for genuinely-missing task artifacts. So any row
+# carrying ``failed:cluster_job_failed`` is, by definition, a frozen pre-fix
+# cascade artifact -- a synthesized row whose REAL per-model outcome must be
+# re-derived (re-attributed or re-run), never trusted as the model's status.
+#
+# These rows are append-only (the triggers forbid UPDATE/DELETE), so they cannot
+# be removed; instead the ``current_verification_real`` view skips them when
+# resolving each model's current row, so a frozen cascade artifact does not
+# depress the headline while its real outcome is re-derived. Suppression NEVER
+# promotes anything to ``passed`` -- a model whose only current row is a cascade
+# artifact simply has no real current row (it falls out of the honest view).
+CASCADE_ARTIFACT_ERROR_CLASS = "failed:cluster_job_failed"
+
+# Full synthesized-artifact signature, used as defense-in-depth so suppression can
+# never reach a genuine failure even if the marker string were ever reused. A
+# real cascade artifact is status=failed, zero-duration, started==finished, with
+# NULL n_ops / graph_shape_hash (it never ran a trace). All 290 known artifacts
+# match every clause; a genuine ``failed:replay`` / ``failed:exception`` row has a
+# real duration and is excluded by these structural clauses, not just the marker.
+CASCADE_ARTIFACT_PREDICATE = (
+    f"error_class = '{CASCADE_ARTIFACT_ERROR_CLASS}'\n"
+    "          AND status = 'failed'\n"
+    "          AND duration_sec = 0.0\n"
+    "          AND started_at = finished_at\n"
+    "          AND n_ops IS NULL\n"
+    "          AND graph_shape_hash IS NULL"
+)
 Scope = Literal["forward", "forward+backward", "backward"]
 Status = Literal[
     "passed",
@@ -495,6 +529,7 @@ def initialize(conn: sqlite3.Connection) -> None:
     _migrate_identity_columns(conn)
     _migrate_status_constraint(conn)
     _create_current_verification_view(conn)
+    _create_current_verification_real_view(conn)
 
 
 def _create_current_verification_view(conn: sqlite3.Connection) -> None:
@@ -518,6 +553,81 @@ def _create_current_verification_view(conn: sqlite3.Connection) -> None:
                     ORDER BY finished_at DESC, run_id DESC
                 ) AS rn
             FROM verification_runs
+        )
+        SELECT
+            run_id,
+            stable_id,
+            recipe_revision_sha256,
+            name,
+            zoo,
+            variant,
+            scope,
+            status,
+            forward_pass,
+            backward_pass,
+            backward_na_reason,
+            metadata_ok,
+            n_ops,
+            graph_shape_hash,
+            svg_sha256,
+            torchlens_version,
+            torch_version,
+            python_version,
+            device_requested,
+            device_actual,
+            env_hash,
+            lock_hash,
+            torchlens_source_hash,
+            input_scale,
+            runner_host,
+            started_at,
+            finished_at,
+            duration_sec,
+            peak_rss_mb,
+            error_class,
+            error_message
+        FROM ranked
+        WHERE rn = 1;
+        """
+    )
+
+
+def _create_current_verification_real_view(conn: sqlite3.Connection) -> None:
+    """Create the cascade-suppressed current verification view.
+
+    This is the HONEST-DENOMINATOR sibling of ``current_verification``. It ranks
+    rows identically (latest ``finished_at``, then ``run_id``, per ``stable_id``)
+    but EXCLUDES frozen pre-fix batch-cascade artifact rows
+    (``CASCADE_ARTIFACT_ERROR_CLASS`` with the full synthesized signature) before
+    selecting the current row. A synthesized cascade row therefore never masks a
+    model's real prior outcome, and a model whose ONLY current row is a cascade
+    artifact simply has no row here (it falls out -- it is never promoted to a
+    pass). Real failures (``failed:replay`` / ``failed:cluster_task_failed`` /
+    ``failed:exception`` / ``timeout`` / ...) are untouched: the structural clauses
+    (zero duration, NULL ``n_ops``/``graph_shape_hash``) exclude every genuine
+    failure, so the tripwire stays armed.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    conn.executescript(
+        f"""
+        DROP VIEW IF EXISTS current_verification_real;
+        CREATE VIEW current_verification_real AS
+        WITH ranked AS (
+            SELECT
+                verification_runs.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY stable_id
+                    ORDER BY finished_at DESC, run_id DESC
+                ) AS rn
+            FROM verification_runs
+            WHERE NOT (
+                {CASCADE_ARTIFACT_PREDICATE}
+            )
         )
         SELECT
             run_id,
@@ -1056,6 +1166,54 @@ def verified_count(
         (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
     ).fetchone()
     return int(row[0])
+
+
+def cascade_suppressed_stable_ids(conn: sqlite3.Connection) -> list[str]:
+    """Return stable IDs whose current row is a suppressed cascade artifact.
+
+    A stable ID is suppressed when its latest row in ``current_verification`` is a
+    frozen pre-fix batch-cascade artifact, so ``current_verification_real`` shows a
+    different (or no) row for it. These are exactly the models whose REAL outcome
+    is pending re-derivation (re-attribution or re-run); the honest view hides the
+    synthesized failure rather than depressing the headline with it.
+
+    Parameters
+    ----------
+    conn:
+        Initialized SQLite connection.
+
+    Returns
+    -------
+    list[str]
+        Sorted stable IDs currently masked by a cascade artifact.
+    """
+
+    rows = conn.execute(
+        f"""
+        SELECT stable_id
+        FROM current_verification
+        WHERE {CASCADE_ARTIFACT_PREDICATE}
+        ORDER BY stable_id
+        """
+    ).fetchall()
+    return [str(row["stable_id"]) for row in rows]
+
+
+def cascade_suppressed_count(conn: sqlite3.Connection) -> int:
+    """Return how many models are currently masked by a cascade artifact.
+
+    Parameters
+    ----------
+    conn:
+        Initialized SQLite connection.
+
+    Returns
+    -------
+    int
+        Count of stable IDs whose current row is a suppressed cascade artifact.
+    """
+
+    return len(cascade_suppressed_stable_ids(conn))
 
 
 def seed_from_legacy(conn: sqlite3.Connection, rows: list[CatalogRow]) -> int:
