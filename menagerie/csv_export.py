@@ -17,127 +17,27 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import InvalidVersion, Version
 
-from menagerie.catalog import CATALOG_DB, CatalogRow, load_rows
-from menagerie.csv_dictionary import DEFAULT_SCHEMA_PATH, SchemaColumn, parse_flagship_schema
+from menagerie.catalog import CATALOG_DB, DEFERRED_JSONL, SOURCE_JSONL, CatalogRow, load_rows
+from menagerie.csv_dictionary import (
+    ARTIFACTS_COLUMNS,
+    DEFAULT_SCHEMA_PATH,
+    LINEAGE_COLUMNS,
+    PAPERS_COLUMNS,
+    TRACE_HISTOGRAM_COLUMNS,
+    TRACE_METRICS_COLUMNS,
+    SchemaColumn,
+    parse_flagship_schema,
+)
 from menagerie.ledger import STATUS_VALUES, VERIFICATION_DB
+from menagerie.op_taxonomy import OP_TAXONOMY_VERSION
+from menagerie.runtime import dependency_plan, safe_path_part, unrenderable_reason
+from menagerie.schema import load_jsonl
 from menagerie.trace_summary import TRACE_SUMMARY_DB
 
 
 DATASET_SCHEMA_VERSION = "2.0"
-TRACE_METRICS_COLUMNS: tuple[str, ...] = (
-    "stable_id",
-    "n_compute_ops",
-    "n_unique_op_types",
-    "n_inplace_ops",
-    "has_custom_op",
-    "dominant_op_type",
-    "pct_conv",
-    "pct_linear",
-    "pct_attention",
-    "pct_norm",
-    "pct_elementwise",
-    "pct_reduction",
-    "pct_reshape",
-    "pct_embedding",
-    "pct_pooling",
-    "graph_depth",
-    "graph_max_width",
-    "branching_factor",
-    "max_fan_out",
-    "max_fan_in",
-    "is_branching",
-    "is_recurrent",
-    "max_recurrence_iters",
-    "n_recurrent_layers",
-    "has_conditional_branching",
-    "n_conditionals",
-    "is_dynamic_graph",
-    "n_modules",
-    "n_module_calls",
-    "module_max_depth",
-    "n_top_level_modules",
-    "n_unique_module_types",
-    "model_class_name",
-    "model_class_qualname",
-    "n_params",
-    "n_params_trainable",
-    "n_params_frozen",
-    "n_param_tensors",
-    "param_memory_bytes",
-    "primary_param_dtype",
-    "param_dtype_set_json",
-    "quantized_param_tensor_count",
-    "has_frozen_params",
-    "n_buffers",
-    "buffer_memory_bytes",
-    "buffer_overwrite_count",
-    "total_flops_forward",
-    "total_macs_forward",
-    "total_flops_backward",
-    "total_macs_backward",
-    "flops_coverage_pct",
-    "n_unknown_flops_ops",
-    "activation_memory_bytes",
-    "forward_peak_memory_bytes",
-    "largest_activation_bytes",
-    "param_memory_mb",
-    "activation_memory_mb",
-    "forward_peak_memory_mb",
-)
-TRACE_HISTOGRAM_COLUMNS: tuple[str, ...] = (
-    "stable_id",
-    "op_type_histogram",
-    "module_type_histogram",
-    "top_module_types_json",
-    "top_level_block_sequence_json",
-    "flops_by_op_type",
-    "macs_by_op_type",
-    "structural_barcode",
-)
-PAPERS_COLUMNS: tuple[str, ...] = (
-    "stable_id",
-    "paper_title",
-    "paper_url",
-    "arxiv_id",
-    "doi",
-    "publication_venue",
-    "venue_type",
-    "authors_json",
-    "first_author",
-    "first_preprint_date",
-    "first_publication_date",
-    "huggingface_id",
-    "model_card_url",
-    "semantic_scholar_paper_id",
-    "n_citations",
-    "citations_snapshot_date",
-    "citation_tier",
-    "is_milestone",
-)
-LINEAGE_COLUMNS: tuple[str, ...] = (
-    "stable_id",
-    "relation",
-    "related_stable_id",
-    "related_name",
-    "variant_dimension",
-    "is_canonical_variant",
-    "source_note",
-)
-ARTIFACTS_COLUMNS: tuple[str, ...] = (
-    "stable_id",
-    "model_page_url",
-    "svg_path",
-    "svg_url",
-    "svg_sha256",
-    "has_svg",
-    "tlspec_path",
-    "model_card_url",
-    "added_wave",
-    "row_quality_flags_json",
-    "dataset_schema_version",
-    "dataset_as_of_date",
-    "csv_generation_commit_sha",
-)
+ARTIFACT_SVG_ROOT = Path("graphs")
+_LEGACY_COMPATIBLE_TORCHLENS_VERSIONS: frozenset[str] = frozenset()
 _FLAGSHIP_TRACE_COLUMNS = {
     "modality_primary": None,
     "architecture_paradigm": None,
@@ -223,13 +123,17 @@ def _current_torchlens_version() -> str:
     Returns
     -------
     str
-        Installed package version, or an empty string when unavailable.
+        Installed package version, module ``__version__``, or an empty string when unavailable.
     """
 
     try:
         return version("torchlens")
     except PackageNotFoundError:
-        return ""
+        try:
+            import torchlens as tl
+        except ImportError:
+            return ""
+        return str(getattr(tl, "__version__", "") or "")
 
 
 def _git_commit() -> str:
@@ -495,8 +399,8 @@ def _model_scale_bucket(n_params: Any) -> str:
     return "1B+"
 
 
-def _install_difficulty(row: CatalogRow) -> str:
-    """Infer install-difficulty from catalog dependency hints.
+def _install_difficulty(row: CatalogRow) -> str | None:
+    """Return install difficulty from ``menagerie.runtime`` dependency policy.
 
     Parameters
     ----------
@@ -505,17 +409,26 @@ def _install_difficulty(row: CatalogRow) -> str:
 
     Returns
     -------
-    str
-        Schema install-difficulty enum.
+    str | None
+        Schema install-difficulty enum, or ``None`` when runtime classification is unavailable.
     """
 
-    if row.source == "classics" or row.zoo in {"torchvision", "torchvision.models"}:
-        return "core"
-    if row.quarantine:
-        return "source-build"
-    if row.verified:
+    try:
+        reason = unrenderable_reason(row)
+        if reason in {"local_source_unavailable", "source_only_recipe"}:
+            return "source-build"
+        if reason is not None:
+            return "unavailable"
+        plan = dependency_plan(row)
+    except (ImportError, ValueError, RuntimeError, SyntaxError):
+        return None
+    if plan.recipe_parse_error:
+        return "unavailable"
+    if plan.packages:
         return "pip"
-    return "unavailable"
+    if plan.top_modules:
+        return "core"
+    return "core"
 
 
 def _row_quality_flags(ledger_row: Mapping[str, Any] | None, has_svg: bool) -> list[str]:
@@ -544,6 +457,112 @@ def _row_quality_flags(ledger_row: Mapping[str, Any] | None, has_svg: bool) -> l
     return flags
 
 
+def _catalog_wave_lookup(
+    source_jsonl: Path = SOURCE_JSONL,
+    deferred_jsonl: Path = DEFERRED_JSONL,
+) -> dict[tuple[str, str, str], str]:
+    """Load typed catalog ``added_wave`` values by natural catalog key.
+
+    Parameters
+    ----------
+    source_jsonl:
+        Forward-required typed catalog source.
+    deferred_jsonl:
+        Deferred typed catalog source.
+
+    Returns
+    -------
+    dict[tuple[str, str, str], str]
+        Non-empty ``added_wave`` values keyed by ``(name, zoo, variant)``.
+    """
+
+    lookup: dict[tuple[str, str, str], str] = {}
+    paths = [source_jsonl, deferred_jsonl]
+    for path in paths:
+        if not path.exists():
+            continue
+        for record in load_jsonl(path):
+            if record.added_wave:
+                lookup.setdefault((record.name, record.zoo, record.variant), record.added_wave)
+    return lookup
+
+
+def _added_wave(row: CatalogRow, wave_lookup: Mapping[tuple[str, str, str], str]) -> str | None:
+    """Return the catalog discovery wave for one row when provable.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    wave_lookup:
+        Typed catalog wave lookup keyed by natural key.
+
+    Returns
+    -------
+    str | None
+        Catalog ``added_wave`` or ``None``.
+    """
+
+    return wave_lookup.get((row.name, row.zoo, row.variant))
+
+
+def _svg_path(row: CatalogRow, has_svg: bool) -> str:
+    """Return the relative SVG artifact path for a row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    has_svg:
+        Whether the row has an SVG artifact hash.
+
+    Returns
+    -------
+    str
+        Relative SVG path, or an empty string when no SVG exists.
+    """
+
+    if not has_svg:
+        return ""
+    if row.source == "classics":
+        path = (
+            ARTIFACT_SVG_ROOT
+            / "history"
+            / safe_path_part(row.era)
+            / safe_path_part(row.family_normalized)
+            / f"{row.model_id:05d}_{safe_path_part(row.name)}.svg"
+        )
+    else:
+        path = (
+            ARTIFACT_SVG_ROOT
+            / safe_path_part(row.domain)
+            / safe_path_part(row.family_normalized)
+            / f"{row.model_id:05d}_{safe_path_part(row.name)}.svg"
+        )
+    return path.as_posix()
+
+
+def _svg_url(svg_path: str, svg_sha256: str) -> str:
+    """Return the public SVG URL from artifact path and content hash.
+
+    Parameters
+    ----------
+    svg_path:
+        Relative SVG path.
+    svg_sha256:
+        SVG content hash.
+
+    Returns
+    -------
+    str
+        Public relative URL, or an empty string when no SVG exists.
+    """
+
+    if not svg_path or not svg_sha256:
+        return ""
+    return f"{svg_path}?sha256={svg_sha256}"
+
+
 def _compatible_version(ledger_version: Any, current_version: str) -> bool:
     """Return whether a ledger TorchLens version is compatibility-trusted.
 
@@ -560,14 +579,77 @@ def _compatible_version(ledger_version: Any, current_version: str) -> bool:
         Whether the versions are treated as compatible.
     """
 
-    if ledger_version in (None, ""):
+    if ledger_version in (None, "") or current_version in (None, ""):
         return False
+    if str(ledger_version) in _LEGACY_COMPATIBLE_TORCHLENS_VERSIONS:
+        return True
     try:
         ledger_parsed = Version(str(ledger_version))
         current_parsed = Version(current_version)
     except InvalidVersion:
-        return True
+        return False
     return ledger_parsed.major == current_parsed.major
+
+
+def _trace_summary_is_current(
+    row: CatalogRow,
+    trace_row: Mapping[str, Any] | None,
+    current_version: str,
+) -> bool:
+    """Return whether a trace summary matches the current catalog recipe and version policy.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    trace_row:
+        Trace-summary row.
+    current_version:
+        Current TorchLens version.
+
+    Returns
+    -------
+    bool
+        Whether trace-derived measurements may be exported authoritatively.
+    """
+
+    if trace_row is None:
+        return False
+    return trace_row.get(
+        "recipe_revision_sha256"
+    ) == row.recipe_revision_sha256 and _compatible_version(
+        trace_row.get("torchlens_version"), current_version
+    )
+
+
+def _current_trace_rows(
+    catalog_rows: Sequence[CatalogRow],
+    trace_rows: Mapping[str, Mapping[str, Any]],
+    current_version: str,
+) -> dict[str, Mapping[str, Any]]:
+    """Filter trace summaries to provenance-current, version-compatible rows.
+
+    Parameters
+    ----------
+    catalog_rows:
+        Catalog rows that define the export universe.
+    trace_rows:
+        Raw trace-summary rows keyed by stable ID.
+    current_version:
+        Current TorchLens version.
+
+    Returns
+    -------
+    dict[str, Mapping[str, Any]]
+        Trusted trace-summary rows keyed by stable ID.
+    """
+
+    current_rows: dict[str, Mapping[str, Any]] = {}
+    for row in catalog_rows:
+        trace_row = trace_rows.get(row.stable_id)
+        if _trace_summary_is_current(row, trace_row, current_version):
+            current_rows[row.stable_id] = trace_row
+    return current_rows
 
 
 def _is_trustworthy(ledger_row: Mapping[str, Any] | None, current_version: str) -> bool:
@@ -759,8 +841,9 @@ def build_flagship_row(
         ),
         "catalog_verified_hint": row.verified,
         "dedup_architecture_key": _stable_trace_value(trace_row, "graph_shape_hash"),
-        "svg_url": "",
     }
+    svg_sha256 = "" if ledger_row is None else str(ledger_row.get("svg_sha256") or "")
+    values["svg_url"] = _svg_url(_svg_path(row, bool(svg_sha256)), svg_sha256)
     for column, trace_key in _FLAGSHIP_TRACE_COLUMNS.items():
         values[column] = _stable_trace_value(trace_row, trace_key)
     values["model_scale_bucket"] = _model_scale_bucket(values.get("n_params"))
@@ -962,6 +1045,7 @@ def write_trace_histograms(
 def build_artifact_rows(
     catalog_rows: Sequence[CatalogRow],
     ledger_rows: Mapping[str, Mapping[str, Any]],
+    wave_lookup: Mapping[tuple[str, str, str], str],
     *,
     dataset_as_of_date: str,
     git_commit: str,
@@ -974,6 +1058,8 @@ def build_artifact_rows(
         Catalog rows.
     ledger_rows:
         Ledger rows keyed by stable ID.
+    wave_lookup:
+        Typed catalog ``added_wave`` values keyed by natural key.
     dataset_as_of_date:
         Build date.
     git_commit:
@@ -990,21 +1076,23 @@ def build_artifact_rows(
         ledger_row = ledger_rows.get(row.stable_id)
         svg_sha256 = "" if ledger_row is None else str(ledger_row.get("svg_sha256") or "")
         has_svg = bool(svg_sha256)
+        svg_path = _svg_path(row, has_svg)
         rows.append(
             {
                 "stable_id": row.stable_id,
                 "model_page_url": "",
-                "svg_path": "",
-                "svg_url": "",
+                "svg_path": svg_path,
+                "svg_url": _svg_url(svg_path, svg_sha256),
                 "svg_sha256": svg_sha256,
                 "has_svg": has_svg,
                 "tlspec_path": "",
                 "model_card_url": "",
-                "added_wave": row.source,
+                "added_wave": _added_wave(row, wave_lookup),
                 "row_quality_flags_json": _json_dumps(_row_quality_flags(ledger_row, has_svg)),
                 "dataset_schema_version": DATASET_SCHEMA_VERSION,
                 "dataset_as_of_date": dataset_as_of_date,
                 "csv_generation_commit_sha": git_commit,
+                "op_taxonomy_version": OP_TAXONOMY_VERSION,
             }
         )
     return rows
@@ -1049,8 +1137,10 @@ def export_menagerie_csvs(
     schema_columns = parse_flagship_schema(schema_path)
     catalog_rows = load_rows(limit=limit, db_path=catalog_db)
     ledger_rows = load_current_verification_rows(verification_db)
-    trace_rows = load_trace_summary_rows(trace_summary_db)
+    raw_trace_rows = load_trace_summary_rows(trace_summary_db)
     current_version = _current_torchlens_version()
+    trace_rows = _current_trace_rows(catalog_rows, raw_trace_rows, current_version)
+    wave_lookup = _catalog_wave_lookup()
     dataset_as_of_date = datetime.now(UTC).date().isoformat()
     git_commit = _git_commit()
     flagship_rows = [
@@ -1084,6 +1174,7 @@ def export_menagerie_csvs(
             build_artifact_rows(
                 catalog_rows,
                 ledger_rows,
+                wave_lookup,
                 dataset_as_of_date=dataset_as_of_date,
                 git_commit=git_commit,
             ),

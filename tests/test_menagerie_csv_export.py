@@ -11,7 +11,7 @@ from typing import Any
 import pyarrow.parquet as pq
 
 from menagerie.catalog import CatalogRow, write_catalog
-from menagerie.csv_dictionary import DEFAULT_SCHEMA_PATH, parse_flagship_schema
+from menagerie.csv_dictionary import DEFAULT_SCHEMA_PATH, SIDE_TABLE_COLUMNS, parse_flagship_schema
 from menagerie.csv_export import (
     ARTIFACTS_COLUMNS,
     LINEAGE_COLUMNS,
@@ -19,7 +19,9 @@ from menagerie.csv_export import (
     TRACE_HISTOGRAM_COLUMNS,
     TRACE_METRICS_COLUMNS,
     export_menagerie_csvs,
+    _is_trustworthy,
 )
+from menagerie.op_taxonomy import OP_TAXONOMY_VERSION
 
 
 def _fixture_rows() -> list[CatalogRow]:
@@ -224,17 +226,23 @@ def _write_verification_db(path: Path) -> None:
         )
 
 
-def _write_trace_summary_db(path: Path) -> None:
+def _write_trace_summary_db(path: Path, recipe_sha256: str = "current-recipe") -> None:
     """Write a fixture trace-summary database with only m8840 populated.
 
     Parameters
     ----------
     path:
         SQLite database path.
+    recipe_sha256:
+        Recipe revision hash stamped on the trace summary.
     """
 
     columns = [
         "stable_id",
+        "trace_summary_version",
+        "op_taxonomy_version",
+        "recipe_revision_sha256",
+        "torchlens_version",
         "n_params_source",
         "n_compute_ops",
         "n_unique_op_types",
@@ -320,6 +328,10 @@ def _write_trace_summary_db(path: Path) -> None:
     values.update(
         {
             "stable_id": "m8840",
+            "trace_summary_version": "1.0.0",
+            "op_taxonomy_version": OP_TAXONOMY_VERSION,
+            "recipe_revision_sha256": recipe_sha256,
+            "torchlens_version": "2.27.0",
             "n_params_source": "traced",
             "n_compute_ops": 69,
             "n_unique_op_types": 8,
@@ -472,6 +484,7 @@ def test_public_csv_export_schema_join_and_dictionary(tmp_path: Path) -> None:
     assert resnet["graph_depth"] == "63"
     assert resnet["has_conv"] == "1"
     assert resnet["dedup_architecture_key"] == "graph-hash"
+    assert resnet["svg_url"].endswith("?sha256=svg-hash")
 
     assert missing["validation_status"] == "oom"
     assert missing["is_trustworthy"] == "0"
@@ -504,9 +517,69 @@ def test_public_csv_export_schema_join_and_dictionary(tmp_path: Path) -> None:
     )
     artifact_rows = {row["stable_id"]: row for row in _read_csv(paths["artifacts"])}
     assert artifact_rows["m8840"]["has_svg"] == "1"
+    assert artifact_rows["m8840"]["svg_url"].endswith("?sha256=svg-hash")
+    assert artifact_rows["m8840"]["added_wave"] == ""
+    assert artifact_rows["m8840"]["op_taxonomy_version"] == OP_TAXONOMY_VERSION
     assert artifact_rows["m_missing"]["has_svg"] == "0"
 
     dictionary = paths["dictionary"].read_text(encoding="utf-8")
-    assert dictionary.count("\n## ") == 78
+    emitted_side_columns = {
+        f"`{table}.{column}`" for table, columns in SIDE_TABLE_COLUMNS.items() for column in columns
+    }
+    assert dictionary.count("\n## ") == 78 + sum(
+        len(columns) for columns in SIDE_TABLE_COLUMNS.values()
+    )
+    for column_entry in emitted_side_columns:
+        assert column_entry in dictionary
     assert "graph_depth = max(op.max_distance_from_input)" in dictionary
     assert "is_trustworthy = forward_pass=1" in dictionary
+    assert "display_name = catalog name with underscores replaced by spaces" in dictionary
+    assert "install_difficulty = runtime dependency classification" in dictionary
+
+
+def test_stale_trace_summary_nulls_retrace_fields_and_side_tables(tmp_path: Path) -> None:
+    """Stale trace summaries must not populate authoritative retrace-derived measurements."""
+
+    catalog_db = tmp_path / "catalog.db"
+    verification_db = tmp_path / "verification.db"
+    trace_summary_db = tmp_path / "trace_summary.db"
+    write_catalog(_fixture_rows(), canonical_tsv=tmp_path / "catalog.tsv", db_path=catalog_db)
+    _write_verification_db(verification_db)
+    _write_trace_summary_db(trace_summary_db, recipe_sha256="old-recipe")
+
+    paths = export_menagerie_csvs(
+        tmp_path / "out",
+        catalog_db=catalog_db,
+        verification_db=verification_db,
+        trace_summary_db=trace_summary_db,
+    )
+
+    rows = {row["stable_id"]: row for row in _read_csv(paths["menagerie"])}
+    assert rows["m8840"]["is_trustworthy"] == "1"
+    assert rows["m8840"]["n_ops"] == "69"
+    assert rows["m8840"]["n_params"] == ""
+    assert rows["m8840"]["n_params_source"] == ""
+    assert rows["m8840"]["graph_depth"] == ""
+    assert rows["m8840"]["has_conv"] == ""
+    assert rows["m8840"]["dedup_architecture_key"] == ""
+
+    metric_table = pq.read_table(paths["trace_metrics"])
+    assert metric_table.column("stable_id").to_pylist() == ["m8840", "m_missing"]
+    assert metric_table.column("n_params").to_pylist() == [None, None]
+    assert metric_table.column("graph_depth").to_pylist() == [None, None]
+    assert paths["trace_histograms"].read_text(encoding="utf-8") == ""
+
+
+def test_version_compat_trust_gate_rejects_missing_and_invalid_versions() -> None:
+    """Trust gating fails closed for missing or invalid TorchLens versions."""
+
+    base_row: dict[str, Any] = {
+        "forward_pass": 1,
+        "metadata_ok": 1,
+        "n_ops": 1,
+        "graph_shape_hash": "graph-hash",
+    }
+
+    assert not _is_trustworthy({**base_row, "torchlens_version": ""}, "2.27.0")
+    assert not _is_trustworthy({**base_row, "torchlens_version": "not-a-version"}, "2.27.0")
+    assert not _is_trustworthy({**base_row, "torchlens_version": "2.27.0"}, "")
