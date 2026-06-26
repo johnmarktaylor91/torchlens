@@ -23,11 +23,7 @@ from menagerie.op_taxonomy import (
     classify_op,
 )
 from menagerie.recipe import build_input_for_row, instantiate_model
-from menagerie.structural_digest import (
-    _trace_for_digest,
-    architecture_distinctness_hash,
-    structural_fingerprint,
-)
+from menagerie.structural_digest import _trace_for_digest
 
 TRACE_SUMMARY_VERSION = "1.0.0"
 TRACE_SUMMARY_DB = Path(__file__).resolve().parent / "data" / "trace_summary.db"
@@ -820,6 +816,59 @@ def summarize_model(
     """
 
     trace = _trace_for_digest(model, example_input)
+    return summarize_trace(
+        stable_id,
+        trace,
+        recipe_sha256,
+        compute_identity_hashes=compute_identity_hashes,
+    )
+
+
+def summarize_trace(
+    stable_id: str,
+    trace: Any,
+    recipe_sha256: str = "",
+    *,
+    compute_identity_hashes: bool = False,
+) -> dict[str, Any]:
+    """Build the complete trace-summary record from an ALREADY-CAPTURED trace.
+
+    This is the single-trace sibling of :func:`summarize_model`. It derives every
+    structural metadata field -- including both identity hashes -- from one trace
+    object, so the menagerie validation observer can produce the metadata row off
+    the trace it already built for forward-replay validation, instead of
+    re-instantiating the model and re-tracing it two-to-three more times.
+
+    Both identity hashes are deterministic functions of the trace
+    (``Trace.graph_shape_hash`` and ``Trace._raw_event_shape_hash``); reading them
+    here is byte-identical to the public ``architecture_distinctness_hash`` /
+    ``structural_fingerprint`` entry points WHENEVER the supplied trace was built
+    with the same capture configuration those entry points use (CPU,
+    ``inference_only=True``). Bucket A's field-equivalence audit
+    (``menagerie.trace_equivalence_audit``) is the gate that proves this holds for
+    the validation-config trace before this path is wired into the observer.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable menagerie model id.
+    trace:
+        Completed TorchLens trace.
+    recipe_sha256:
+        Recipe revision hash for provenance.
+    compute_identity_hashes:
+        Retained for signature parity with :func:`summarize_model`. The two
+        identity hashes are always read off the supplied trace; this flag only
+        controls whether a missing hash raises (parity with the public hash entry
+        points) instead of recording an empty string. Defaults to ``False`` so the
+        observer path is non-raising.
+
+    Returns
+    -------
+    dict[str, Any]
+        Summary row keyed by ``TRACE_SUMMARY_COLUMNS``.
+    """
+
     compute_ops = _compute_ops(trace)
     op_type_histogram, category_histogram = _op_histograms(trace, compute_ops)
     module_type_histogram = _module_histogram(trace)
@@ -925,12 +974,19 @@ def summarize_model(
         "pooling_type": _pooling_type(trace, compute_ops),
     }
     row["structural_barcode_json"] = _structural_barcode(row)
+    # Both hashes are deterministic functions of THIS trace -- read them off the
+    # single captured trace rather than re-tracing (kills the two extra metadata
+    # re-traces). ``compute_identity_hashes`` only controls whether a genuinely
+    # missing hash raises (public-entry-point parity) or records an empty string.
+    graph_shape_hash = getattr(trace, "graph_shape_hash", None)
+    raw_event_hash = getattr(trace, "_raw_event_shape_hash", None)
     if compute_identity_hashes:
-        row["graph_shape_hash"] = architecture_distinctness_hash(model, example_input)
-        row["structural_fingerprint_hash"] = structural_fingerprint(model, example_input)
-    else:
-        row["graph_shape_hash"] = str(getattr(trace, "graph_shape_hash", "") or "")
-        row["structural_fingerprint_hash"] = str(getattr(trace, "_raw_event_shape_hash", "") or "")
+        if not graph_shape_hash:
+            raise RuntimeError("TorchLens trace did not expose graph_shape_hash")
+        if not raw_event_hash:
+            raise RuntimeError("TorchLens trace did not expose _raw_event_shape_hash")
+    row["graph_shape_hash"] = str(graph_shape_hash or "")
+    row["structural_fingerprint_hash"] = str(raw_event_hash or "")
     return {column: row.get(column) for column in TRACE_SUMMARY_COLUMNS}
 
 
