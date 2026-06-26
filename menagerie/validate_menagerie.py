@@ -91,6 +91,17 @@ WORKER_MEMORY_CAP_STATUS = "failed:memory_cap"
 WORKER_MEMORY_CAP_EXIT_CODE = 99
 WORKER_MEMORY_CAP_POLL_INTERVAL_SEC = 0.5
 WORKER_TIMEOUT_POLL_INTERVAL_SEC = 0.5
+# Timeout policy (JMT directive 2026-06-26): the validation timeout is a
+# HANG-CATCHER, never a throughput-limiter. A model that timed out once (or was
+# never measured) must get enough room to actually finish on the rerun, so it is
+# routed to the GENEROUS lane below -- never 1.5x a truncated cap value. Only a
+# real PASS prior anchors a scaled timeout. See
+# .research/post-sweep-sharpening/TIMEOUT_POLICY.md.
+TIMEOUT_CEILING_FLOOR_SEC = 10800.0  # ceiling never drops below 3hr
+TIMEOUT_CEILING_MIN_SEC = 14400.0  # default ceiling is at least 4hr
+TIMEOUT_CEILING_CORPUS_MULTIPLIER = 3.0  # ceiling >= 3x slowest measured PASS
+TIMEOUT_GENEROUS_MIN_SEC = 3600.0  # timed-out/unmeasured priors get >= 1hr
+TIMEOUT_DEFAULT_SCALE = 3.0  # real-PASS priors scale by >= 3x
 WORKER_MEMORY_CAP_AS_BACKSTOP_MULTIPLIER = 1.5
 WORKER_MEMORY_TEST_ALLOC_ENV = "TORCHLENS_MENAGERIE_WORKER_TEST_ALLOC_MB"
 MANIFEST_STATUS_VALUES = frozenset(
@@ -1423,7 +1434,8 @@ def dispatch_cluster_async(
                     timeout_base_sec,
                     duration_estimates,
                     args.timeout_scale,
-                    args.timeout_ceiling_sec,
+                    _resolved_timeout_ceiling_from_args(args),
+                    _resolved_timeout_generous_from_args(args),
                 )
                 for row in rows
             },
@@ -1649,7 +1661,8 @@ def _run_cluster_validation(
                     timeout_base_sec,
                     duration_estimates,
                     args.timeout_scale,
-                    args.timeout_ceiling_sec,
+                    _resolved_timeout_ceiling_from_args(args),
+                    _resolved_timeout_generous_from_args(args),
                 )
                 for row in rows
             },
@@ -1920,6 +1933,121 @@ def latest_duration_estimates(ledger_db: Path | None = None) -> dict[str, float]
     with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
         rows = conn.execute(query).fetchall()
     return {str(row["stable_id"]): float(row["duration_sec"]) for row in rows}
+
+
+def latest_passed_duration_estimates(ledger_db: Path | None = None) -> dict[str, float]:
+    """Return latest recorded PASS durations keyed by stable model ID.
+
+    Unlike :func:`latest_duration_estimates`, this restricts to rows whose latest
+    forward run actually ``passed``. A timed-out prior records the *truncated cap*
+    as its ``duration_sec`` (status ``timeout``); scaling that truncated value
+    would re-kill a model that timed out once -- exactly the trap the timeout
+    policy forbids. So ONLY a real PASS prior anchors a scaled timeout; every
+    other prior (timeout, killed, oom, crash, or unmeasured) falls through to the
+    generous lane in :func:`_case_timeout`.
+
+    Parameters
+    ----------
+    ledger_db:
+        Optional verification ledger path.
+
+    Returns
+    -------
+    dict[str, float]
+        Latest forward-PASS validation durations keyed by stable ID.
+    """
+
+    query = """
+        WITH ranked AS (
+            SELECT
+                stable_id,
+                duration_sec,
+                status,
+                ROW_NUMBER() OVER (
+                    PARTITION BY stable_id
+                    ORDER BY finished_at DESC, run_id DESC
+                ) AS rn
+            FROM verification_runs
+            WHERE duration_sec IS NOT NULL
+              AND scope = 'forward'
+        )
+        SELECT stable_id, duration_sec
+        FROM ranked
+        WHERE rn = 1
+          AND status = 'passed'
+    """
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
+        rows = conn.execute(query).fetchall()
+    return {str(row["stable_id"]): float(row["duration_sec"]) for row in rows}
+
+
+def corpus_max_passed_duration_sec(ledger_db: Path | None = None) -> float:
+    """Return the slowest measured PASS duration across the whole ledger.
+
+    Used to calibrate a GENEROUS, data-driven timeout ceiling: the ceiling must
+    sit well above the slowest *known* finisher so a slow-but-traceable model is
+    never killed for merely being slow.
+
+    Parameters
+    ----------
+    ledger_db:
+        Optional verification ledger path.
+
+    Returns
+    -------
+    float
+        Maximum passed forward ``duration_sec``, or ``0.0`` when none recorded.
+    """
+
+    query = """
+        SELECT MAX(duration_sec) AS max_dur
+        FROM verification_runs
+        WHERE status = 'passed'
+          AND scope = 'forward'
+          AND duration_sec IS NOT NULL
+    """
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
+        row = conn.execute(query).fetchone()
+    if row is None or row["max_dur"] is None:
+        return 0.0
+    return float(row["max_dur"])
+
+
+def resolve_timeout_ceiling_sec(
+    configured_ceiling_sec: float | None,
+    corpus_max_passed_sec: float,
+) -> float:
+    """Return the generous, data-calibrated timeout ceiling.
+
+    The ceiling is a hang-catcher cap, not a throughput limiter. It is at least
+    ``max(TIMEOUT_CEILING_MIN_SEC, 3x corpus-max-passed)`` and never below the
+    3hr floor. An explicitly configured ceiling may raise it further but is
+    clamped UP to the floor so a future "optimization" cannot tighten it back
+    into a throughput limiter.
+
+    Parameters
+    ----------
+    configured_ceiling_sec:
+        User/CLI-configured ceiling, or ``None`` to use the calibrated default.
+    corpus_max_passed_sec:
+        Slowest measured PASS duration in the ledger.
+
+    Returns
+    -------
+    float
+        Resolved ceiling in seconds.
+    """
+
+    calibrated = max(
+        TIMEOUT_CEILING_MIN_SEC,
+        TIMEOUT_CEILING_CORPUS_MULTIPLIER * max(0.0, corpus_max_passed_sec),
+    )
+    if configured_ceiling_sec is not None:
+        # Honor a higher explicit ceiling; never let it drop below the 3hr floor.
+        resolved = max(configured_ceiling_sec, calibrated)
+    else:
+        resolved = calibrated
+    return max(TIMEOUT_CEILING_FLOOR_SEC, resolved)
 
 
 def _looks_memory_heavy(row: CatalogRow) -> bool:
@@ -3574,7 +3702,9 @@ def _island_validator_args(args: argparse.Namespace) -> list[str]:
         "--timeout-scale",
         f"{args.timeout_scale:.6f}",
         "--timeout-ceiling-sec",
-        f"{args.timeout_ceiling_sec:.6f}",
+        f"{_resolved_timeout_ceiling_from_args(args):.6f}",
+        "--timeout-generous-sec",
+        f"{_resolved_timeout_generous_from_args(args):.6f}",
         "--out-dir",
         str(args.out_dir),
         "--min-free-gb",
@@ -3621,6 +3751,16 @@ def run(args: argparse.Namespace) -> int:
     args.resolved_timeout_base_sec = (
         args.timeout_base_sec if args.timeout_base_sec is not None else args.timeout_sec
     )
+    # Resolve the GENEROUS, data-calibrated timeout ceiling once (hang-catcher
+    # cap; see TIMEOUT_POLICY.md). The configured ceiling may raise but never
+    # lowers it below max(14400, 3x slowest-measured-PASS) / the 3hr floor.
+    args.resolved_timeout_ceiling_sec = resolve_timeout_ceiling_sec(
+        args.timeout_ceiling_sec,
+        corpus_max_passed_duration_sec(args.verification_db),
+    )
+    args.resolved_timeout_generous_sec = getattr(
+        args, "timeout_generous_sec", TIMEOUT_GENEROUS_MIN_SEC
+    )
     if args.report_only:
         write_reports(
             out_dir,
@@ -3644,7 +3784,12 @@ def run(args: argparse.Namespace) -> int:
 
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
+    # ``duration_estimates`` (ALL latest forward durations) drives only the LPT
+    # scheduling sort key. ``pass_duration_estimates`` (PASS-only) drives the
+    # timeout: only a real PASS prior anchors a scaled timeout, so a truncated
+    # timeout cap can never re-kill a model on the rerun (TIMEOUT_POLICY.md).
     duration_estimates = latest_duration_estimates(args.verification_db)
+    pass_duration_estimates = latest_passed_duration_estimates(args.verification_db)
     local_gpu_vram_bytes = cluster_runner.probe_local_gpu_vram_bytes()
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
     # Base-env-only mode runs inside an island pixi env or the cluster worker;
@@ -3691,7 +3836,7 @@ def run(args: argparse.Namespace) -> int:
         out_dir,
         manifest_path,
         smoke_settings,
-        duration_estimates,
+        pass_duration_estimates,
     )
     rows = local_rows
     if not args.base_env_only:
@@ -3831,9 +3976,10 @@ def run(args: argparse.Namespace) -> int:
                 row,
                 smoke_settings,
                 args.resolved_timeout_base_sec,
-                duration_estimates,
+                pass_duration_estimates,
                 args.timeout_scale,
-                args.timeout_ceiling_sec,
+                args.resolved_timeout_ceiling_sec,
+                args.resolved_timeout_generous_sec,
             )
             row_input_scale = _case_input_scale(row, smoke_settings, args.input_scale)
             result = validate_with_timeout(
@@ -4055,15 +4201,86 @@ def _load_smoke_case_settings(path: Path | None) -> dict[str, SmokeCaseSettings]
     return settings
 
 
+def _resolved_timeout_ceiling_from_args(args: argparse.Namespace) -> float:
+    """Return the resolved generous timeout ceiling for ``args``.
+
+    Falls back to a data-calibrated ceiling when ``run`` has not stashed
+    ``resolved_timeout_ceiling_sec`` (e.g. unit tests building args by hand), so
+    the generous policy holds even off the main ``run`` path.
+
+    Parameters
+    ----------
+    args:
+        Parsed validator arguments.
+
+    Returns
+    -------
+    float
+        Resolved timeout ceiling in seconds.
+    """
+
+    resolved = getattr(args, "resolved_timeout_ceiling_sec", None)
+    if resolved is not None:
+        return float(resolved)
+    return resolve_timeout_ceiling_sec(
+        getattr(args, "timeout_ceiling_sec", None),
+        corpus_max_passed_duration_sec(getattr(args, "verification_db", None)),
+    )
+
+
+def _resolved_timeout_generous_from_args(args: argparse.Namespace) -> float:
+    """Return the resolved generous-lane wall for ``args``.
+
+    Parameters
+    ----------
+    args:
+        Parsed validator arguments.
+
+    Returns
+    -------
+    float
+        Generous-lane timeout in seconds.
+    """
+
+    return float(
+        getattr(
+            args,
+            "resolved_timeout_generous_sec",
+            getattr(args, "timeout_generous_sec", TIMEOUT_GENEROUS_MIN_SEC),
+        )
+    )
+
+
 def _case_timeout(
     row: CatalogRow,
     settings: Mapping[str, SmokeCaseSettings],
     default_timeout: float,
     duration_estimates: Mapping[str, float] | None = None,
-    timeout_scale: float = 1.5,
-    timeout_ceiling_sec: float = 1800.0,
+    timeout_scale: float = TIMEOUT_DEFAULT_SCALE,
+    timeout_ceiling_sec: float = TIMEOUT_CEILING_MIN_SEC,
+    generous_sec: float = TIMEOUT_GENEROUS_MIN_SEC,
 ) -> float:
-    """Return the validation timeout for a row.
+    """Return the validation timeout for a row -- as a HANG-CATCHER, not a limiter.
+
+    Per the JMT timeout policy (2026-06-26): a timeout must NEVER kill a model
+    that plausibly would finish. The point is to run 100% in ONE pass, not to run
+    some and rerun some. So the policy errs generous on every axis:
+
+    * A smoke override (``settings``) wins -- explicit per-row config is honored.
+    * A **real-PASS prior** (``duration_estimates`` must be the *passed-only*
+      durations from :func:`latest_passed_duration_estimates`) anchors a scaled
+      timeout: ``timeout_scale * prior`` (scale >= 3.0 so a model that passed at
+      ``D`` but runs slower this time from load/GC/path variation is not killed),
+      floored at the generous minimum and clamped to the ceiling.
+    * **No real-PASS prior** -- the row previously TIMED OUT (its recorded
+      duration is a *truncated cap*, NOT a finish time), or it was never measured
+      -- routes to the GENEROUS lane (``generous_sec``, >= 3600s, clamped to the
+      ceiling). It is NEVER ``1.5x`` a truncated value; a model that timed out
+      once gets real room to finish on the rerun.
+
+    ``duration_estimates`` MUST exclude non-PASS priors (the caller passes the
+    passed-only map); a timed-out prior leaking in here would re-create the
+    "rerun some after" trap this policy exists to kill.
 
     Parameters
     ----------
@@ -4072,13 +4289,15 @@ def _case_timeout(
     settings:
         Per-row smoke settings.
     default_timeout:
-        Default timeout when the row has no override.
+        Floor for a scaled real-PASS timeout (the small-model base wall).
     duration_estimates:
-        Optional latest measured validation durations keyed by stable ID.
+        Latest measured forward-PASS durations keyed by stable ID (passed-only).
     timeout_scale:
-        Multiplier applied to prior duration estimates.
+        Multiplier applied to a real-PASS prior duration (>= 3.0 by policy).
     timeout_ceiling_sec:
-        Maximum computed timeout.
+        Hard ceiling -- a genuine non-terminating hang still dies here.
+    generous_sec:
+        The generous-lane wall for timed-out/unmeasured rows (>= 3600s).
 
     Returns
     -------
@@ -4089,10 +4308,13 @@ def _case_timeout(
     case = settings.get(row.stable_id)
     if case is not None:
         return case.timeout_sec
-    prior_duration = (duration_estimates or {}).get(row.stable_id)
-    if prior_duration is None:
-        return default_timeout
-    scaled_timeout = math.ceil(timeout_scale * prior_duration)
+    generous_floor = min(max(generous_sec, default_timeout), timeout_ceiling_sec)
+    prior_pass_duration = (duration_estimates or {}).get(row.stable_id)
+    if prior_pass_duration is None:
+        # Timed-out (truncated-cap) prior OR never measured -> GENEROUS lane.
+        # Crucially we do NOT scale a truncated duration here.
+        return generous_floor
+    scaled_timeout = math.ceil(timeout_scale * prior_pass_duration)
     return max(default_timeout, min(scaled_timeout, timeout_ceiling_sec))
 
 
@@ -4237,8 +4459,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--timeout-sec", type=float, default=240.0)
     parser.add_argument("--timeout-base-sec", type=float, default=None)
-    parser.add_argument("--timeout-scale", type=float, default=1.5)
-    parser.add_argument("--timeout-ceiling-sec", type=float, default=1800.0)
+    parser.add_argument(
+        "--timeout-scale",
+        type=float,
+        default=TIMEOUT_DEFAULT_SCALE,
+        help=(
+            "multiplier applied to a real-PASS prior duration (>= 3.0 by policy "
+            "so a model that passed once is never killed for running slower)"
+        ),
+    )
+    parser.add_argument(
+        "--timeout-ceiling-sec",
+        type=float,
+        default=None,
+        help=(
+            "hard timeout ceiling (hang-catcher cap). Default is data-calibrated "
+            "to max(14400, 3x slowest-measured-PASS) and never below the 3hr floor; "
+            "pass a higher value to extend it. The timeout is a HANG-CATCHER, not a "
+            "throughput limiter -- it only kills a genuine non-terminating hang."
+        ),
+    )
+    parser.add_argument(
+        "--timeout-generous-sec",
+        type=float,
+        default=TIMEOUT_GENEROUS_MIN_SEC,
+        help=(
+            "wall granted to a previously-timed-out or never-measured row (>= 3600s "
+            "by policy) so it gets real room to finish on the rerun; never 1.5x a "
+            "truncated cap value"
+        ),
+    )
     parser.add_argument("--install-timeout", type=float, default=600.0)
     parser.add_argument(
         "--pip-args", action="append", default=[], help="extra argument for pip install"

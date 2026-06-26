@@ -25,6 +25,11 @@ from menagerie.ledger import (
     torchlens_source_hash,
     verified_count,
 )
+from menagerie.validate_menagerie import (
+    corpus_max_passed_duration_sec,
+    latest_duration_estimates,
+    latest_passed_duration_estimates,
+)
 
 
 def _cascade_artifact(**overrides: object) -> VerificationRun:
@@ -862,3 +867,89 @@ def test_cascade_suppressed_helpers_report_masked_models(tmp_path: Path) -> None
 
     assert cascade_suppressed_stable_ids(conn) == ["m1", "m2"]
     assert cascade_suppressed_count(conn) == 2
+
+
+def test_pass_only_durations_exclude_timed_out_truncated_caps(tmp_path: Path) -> None:
+    """Only real-PASS durations anchor a scaled timeout (TIMEOUT_POLICY.md).
+
+    A timed-out row records the *truncated cap* (e.g. 240s) as its duration_sec
+    with status='timeout'. ``latest_passed_duration_estimates`` MUST exclude it so
+    a scaled timeout never re-kills a model that timed out once; the truncated
+    cap still appears in ``latest_duration_estimates`` (the all-durations map used
+    only for the LPT scheduling sort).
+    """
+
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        # A genuine PASS at 900s -> anchors a scaled timeout.
+        append_verification_run(
+            conn,
+            _run(
+                run_id="pass-900",
+                stable_id="m-pass",
+                status="passed",
+                duration_sec=900.0,
+                finished_at="2026-06-22T00:15:00+00:00",
+            ),
+        )
+        # A model whose ONLY history is a timeout at the truncated 240s cap.
+        append_verification_run(
+            conn,
+            _run(
+                run_id="timeout-240",
+                stable_id="m-timed-out",
+                status="timeout",
+                forward_pass=0,
+                metadata_ok=None,
+                n_ops=None,
+                graph_shape_hash=None,
+                duration_sec=240.0,
+                error_class="failed:timeout",
+                finished_at="2026-06-22T00:10:00+00:00",
+            ),
+        )
+
+    pass_only = latest_passed_duration_estimates(ledger_db)
+    all_durations = latest_duration_estimates(ledger_db)
+
+    # The real PASS is present in both maps.
+    assert pass_only.get("m-pass") == 900.0
+    assert all_durations.get("m-pass") == 900.0
+    # The timed-out truncated cap is EXCLUDED from the pass-only map (so it cannot
+    # anchor a 1.5x-of-240 scaled retry) but is visible in the all-durations map.
+    assert "m-timed-out" not in pass_only
+    assert all_durations.get("m-timed-out") == 240.0
+
+
+def test_corpus_max_passed_duration_uses_only_passes(tmp_path: Path) -> None:
+    """The ceiling-calibration max ignores timed-out/failed truncated durations."""
+
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                run_id="pass-2868",
+                stable_id="m-effdet",
+                status="passed",
+                duration_sec=2868.0,
+            ),
+        )
+        # A timeout with a LARGER recorded duration must NOT inflate the ceiling
+        # basis -- it is a truncated cap, not a finish time.
+        append_verification_run(
+            conn,
+            _run(
+                run_id="timeout-99999",
+                stable_id="m-hang",
+                status="timeout",
+                forward_pass=0,
+                metadata_ok=None,
+                n_ops=None,
+                graph_shape_hash=None,
+                duration_sec=99999.0,
+                error_class="failed:timeout",
+            ),
+        )
+
+    assert corpus_max_passed_duration_sec(ledger_db) == 2868.0
