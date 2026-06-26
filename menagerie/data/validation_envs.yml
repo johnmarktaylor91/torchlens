@@ -7,7 +7,7 @@ pixi:
 assignment:
   invariant: "Every catalog row is assigned to exactly one island; base-capable rows assign to base."
   empirical_manifest: "menagerie/data/routing_manifest.tsv"
-  empirical_manifest_sha256: "c0075fe1c0e93ccb984537c4df617b971bffe48564c13f3e67b0cc5f225ada22"  # pragma: allowlist secret
+  empirical_manifest_sha256: "83b2a66167e4b5361816bdc7d28eed2963b38107fe353fd2fd0b05303e1e0c41"  # pragma: allowlist secret
   dependency_unavailable_status: "skipped:dependency_unavailable"
   base_modules:
     - builtins
