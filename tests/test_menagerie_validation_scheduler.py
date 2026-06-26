@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -365,11 +367,28 @@ def test_validate_with_timeout_records_peak_rss_on_timeout(
 ) -> None:
     """Timeout kill path returns the sampled worker peak RSS."""
 
+    class FakePipe:
+        """Minimal readable text pipe that is already at EOF."""
+
+        def readline(self) -> str:
+            """Return EOF immediately."""
+
+            return ""
+
+        def close(self) -> None:
+            """No-op close."""
+
     class FakeProcess:
         """Minimal ``Popen`` stand-in that never exits before timeout."""
 
         pid = 12345
         returncode = None
+
+        def __init__(self) -> None:
+            """Provide drainable stdout/stderr pipes for the reader threads."""
+
+            self.stdout = FakePipe()
+            self.stderr = FakePipe()
 
         def poll(self) -> int | None:
             """Return no exit status before the timeout branch kills the process."""
@@ -381,10 +400,10 @@ def test_validate_with_timeout_records_peak_rss_on_timeout(
 
             self.returncode = -9
 
-        def communicate(self) -> tuple[str, str]:
-            """Return empty captured worker output."""
+        def wait(self, timeout: float | None = None) -> int:
+            """Return the (post-kill) exit status."""
 
-            return "", ""
+            return self.returncode or 0
 
     class FakePsutilProcess:
         """Minimal psutil process with deterministic RSS."""
@@ -420,6 +439,68 @@ def test_validate_with_timeout_records_peak_rss_on_timeout(
 
     assert result.status == "failed:timeout"
     assert result.peak_rss_mb == 12
+
+
+def test_validate_with_timeout_drains_chatty_stderr_without_false_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A worker that floods stderr (>64KB) past the pipe buffer must still PASS.
+
+    REGRESSION for W3a-1 (REVIEW_scheduling.md): the Popen+poll loop never drained
+    stdout/stderr until exit, so a chatty worker (torch/torchlens warnings) that
+    wrote past the ~64KB OS pipe buffer BLOCKED on write() -> never finished ->
+    false ``failed:timeout``. This drives the REAL chatty path: a genuine
+    subprocess writes ~256KB to stderr then emits a passing ``worker_result`` line
+    on stdout and exits 0. With concurrent reader-thread drains it PASSES; without
+    them the worker deadlocks on the full pipe and this times out.
+    """
+
+    payload = {
+        "name": "ChattyNet",
+        "model_id": 1,
+        "status": "validated",
+        "validate_metadata_ok": True,
+        "scope": "forward",
+        "elapsed": 0.01,
+        "dependency_cluster": "unit",
+        "error": "",
+        "stable_id": "m-chatty",
+        "recipe_revision_sha256": "recipe-a",
+        "n_ops": 3,
+        "graph_shape_hash": "shape-chatty",
+        "input_scale": 1.0,
+    }
+    event_line = json.dumps({"event": "worker_result", "result": payload})
+    # A real worker that floods stderr WELL past the 64KB pipe buffer, then writes
+    # its small result line to stdout and exits cleanly.
+    worker_src = (
+        "import sys\n"
+        "sys.stderr.write('W' * (256 * 1024))\n"
+        "sys.stderr.flush()\n"
+        f"sys.stdout.write({event_line!r} + chr(10))\n"
+        "sys.stdout.flush()\n"
+    )
+    real_popen = subprocess.Popen
+
+    def chatty_popen(_command: object, **kwargs: object) -> subprocess.Popen:
+        """Replace the worker command with the real chatty subprocess."""
+
+        return real_popen([sys.executable, "-c", worker_src], **kwargs)
+
+    monkeypatch.setattr("menagerie.validate_menagerie.subprocess.Popen", chatty_popen)
+
+    result = validate_with_timeout(
+        _row(stable_id="m-chatty", name="ChattyNet"),
+        dry_run=True,
+        scope="forward",
+        device="cpu",
+        timeout_sec=30.0,
+        tmp_dir=tmp_path,
+    )
+
+    assert result.status == "validated", result.status
+    assert result.n_ops == 3
 
 
 def test_lpt_sort_front_loads_giants_by_memory_then_duration() -> None:

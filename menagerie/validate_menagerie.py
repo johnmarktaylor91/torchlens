@@ -3417,6 +3417,35 @@ def validate_with_timeout(
         text=True,
         env=child_env,
     )
+    # Drain stdout AND stderr CONCURRENTLY on reader threads while we poll RSS and
+    # the timeout. The previous Popen+poll loop never read the pipes until exit;
+    # a chatty worker (torch/torchlens emit warnings on stderr) that wrote past
+    # the ~64KB OS pipe buffer would BLOCK on write(), never finish, and the loop
+    # would only escape via the timeout branch -- recording a false failed:timeout
+    # for a model that would have PASSED. subprocess.run(capture_output=True) does
+    # not have this bug precisely because it spawns reader threads; we restore
+    # that drain here while keeping the per-0.5s RSS sampler.
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+
+    def _drain(stream: Any, sink: list[str]) -> None:
+        """Read a worker pipe to EOF into ``sink`` (prevents pipe-buffer deadlock)."""
+
+        try:
+            for chunk in iter(stream.readline, ""):
+                sink.append(chunk)
+        except Exception:
+            pass
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+    stdout_reader = threading.Thread(target=_drain, args=(proc.stdout, stdout_chunks), daemon=True)
+    stderr_reader = threading.Thread(target=_drain, args=(proc.stderr, stderr_chunks), daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
     psutil_proc = None
     if psutil is not None:
         try:
@@ -3440,8 +3469,11 @@ def validate_with_timeout(
             try:
                 proc.kill()
             finally:
-                stdout, stderr = proc.communicate()
-            del stdout, stderr
+                proc.wait()
+                # Readers exit at EOF once the process is dead; join briefly so we
+                # do not leak threads. Output is discarded on a genuine timeout.
+                stdout_reader.join(timeout=5.0)
+                stderr_reader.join(timeout=5.0)
             return ValidationResult(
                 row.name,
                 row.model_id,
@@ -3458,12 +3490,16 @@ def validate_with_timeout(
                 input_scale=input_scale,
             )
         time.sleep(WORKER_TIMEOUT_POLL_INTERVAL_SEC)
-    stdout, stderr = proc.communicate()
+    proc.wait()
+    # The process has exited; join the readers so every byte the worker wrote is
+    # captured (its single small JSON result line on stdout, plus any stderr).
+    stdout_reader.join()
+    stderr_reader.join()
     completed = subprocess.CompletedProcess(
         command,
         proc.returncode,
-        stdout,
-        stderr,
+        "".join(stdout_chunks),
+        "".join(stderr_chunks),
     )
     if peak_rss_mb is None and psutil_proc is not None:
         try:
