@@ -17,6 +17,7 @@ from menagerie.validate_menagerie import (
     _admit_memory_budgeted_items,
     _actual_available_memory_mb,
     _case_timeout,
+    _lpt_sort_key,
     validate_with_timeout,
 )
 
@@ -271,3 +272,46 @@ def test_validate_with_timeout_records_peak_rss_on_timeout(
 
     assert result.status == "failed:timeout"
     assert result.peak_rss_mb == 12
+
+
+def test_lpt_sort_front_loads_giants_by_memory_then_duration() -> None:
+    """LPT ordering places large and slow items before small rows."""
+
+    pending = [
+        _item(estimated_gb=2, stable_id="small-a", name="SmallA"),
+        _item(estimated_gb=12, stable_id="giant-fast", name="GiantFast"),
+        _item(estimated_gb=2, stable_id="small-b", name="SmallB"),
+        _item(estimated_gb=12, stable_id="giant-slow", name="GiantSlow"),
+        _item(estimated_gb=1, stable_id="small-c", name="SmallC"),
+    ]
+    duration_estimates = {"giant-fast": 30.0, "giant-slow": 90.0, "small-a": 1000.0}
+
+    pending.sort(key=lambda item: _lpt_sort_key(item, duration_estimates), reverse=True)
+
+    assert [item.row.stable_id for item in pending[:2]] == ["giant-slow", "giant-fast"]
+
+
+def test_lpt_sorted_admission_admits_giant_first_when_budget_allows() -> None:
+    """Greedy admission receives LPT-sorted pending and admits a giant first."""
+
+    pending = [
+        _item(estimated_gb=2, stable_id="small-a", name="SmallA"),
+        _item(estimated_gb=12, stable_id="giant-fast", name="GiantFast"),
+        _item(estimated_gb=2, stable_id="small-b", name="SmallB"),
+        _item(estimated_gb=12, stable_id="giant-slow", name="GiantSlow"),
+        _item(estimated_gb=1, stable_id="small-c", name="SmallC"),
+    ]
+    duration_estimates = {"giant-fast": 30.0, "giant-slow": 90.0}
+    pending.sort(key=lambda item: _lpt_sort_key(item, duration_estimates), reverse=True)
+
+    decision = _admit_memory_budgeted_items(
+        pending=pending,
+        in_flight_memory_mb=0,
+        in_flight_count=0,
+        budget_mb=16 * MB_PER_GB,
+        memory_floor_mb=1 * MB_PER_GB,
+        actual_available_memory_mb=64 * MB_PER_GB,
+        available_slots=2,
+    )
+
+    assert decision.admitted[0].row.stable_id == "giant-slow"

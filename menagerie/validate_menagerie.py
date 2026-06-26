@@ -1957,6 +1957,27 @@ def _refresh_pending_estimates(
         )
 
 
+def _lpt_sort_key(
+    item: ValidationWorkItem, duration_estimates: Mapping[str, float]
+) -> tuple[int, float]:
+    """Return the longest-processing-time scheduler key for a work item.
+
+    Parameters
+    ----------
+    item:
+        Validation scheduler work item.
+    duration_estimates:
+        Latest measured validation durations keyed by stable ID.
+
+    Returns
+    -------
+    tuple[int, float]
+        Estimated memory and duration, ordered largest-first by callers.
+    """
+
+    return (item.estimated_memory_mb, duration_estimates.get(item.row.stable_id, 0.0))
+
+
 def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
     """Build a catalog row from a JSON-compatible payload.
 
@@ -3496,6 +3517,7 @@ def run(args: argparse.Namespace) -> int:
     memory_floor_mb = max(1, int(memory_floor_gb * MB_PER_GB))
     ledger_memory_estimates = latest_peak_rss_estimates(args.verification_db)
     pending = _build_validation_work_items(runnable, ledger_memory_estimates)
+    pending.sort(key=lambda item: _lpt_sort_key(item, duration_estimates), reverse=True)
 
     def process_one(plan: DependencyPlan, row: CatalogRow) -> tuple[ValidationResult, int]:
         """Validate one row in a worker thread and clean up its scratch state.
@@ -3631,6 +3653,10 @@ def run(args: argparse.Namespace) -> int:
                 result, removed = future.result()
                 if result.peak_rss_mb is not None and result.peak_rss_mb > 0:
                     _refresh_pending_estimates(pending, row.stable_id, result.peak_rss_mb)
+                    pending.sort(
+                        key=lambda item: _lpt_sort_key(item, duration_estimates),
+                        reverse=True,
+                    )
                 append_validation_ledger(
                     row,
                     result,
