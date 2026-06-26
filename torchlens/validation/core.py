@@ -1568,7 +1568,32 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # there's a valid excuse (bool output, special-value args, type cast, etc.).
     # Uses exact equality (no tolerance) since any change should be detectable.
     if perturb and tensor_nanequal(recomputed_output, layer.out, allow_tolerance=False):
-        return posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
+        perturb_ok = posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
+        if not perturb_ok:
+            # ADD-ONLY: a genuine perturbation-insensitivity failure (the output
+            # did not change when a parent's value was perturbed and no posthoc
+            # excuse applied). Record the structured reason -- this NEVER changes
+            # the decision posthoc_perturb_check already returned.
+            from .diagnostics import (
+                CHECK_PERTURBATION,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_PERTURBATION,
+                    op_label=layer_to_validate_parents_for_label,
+                    func_name=getattr(layer, "func_name", None),
+                    message=(
+                        "output insensitive to perturbing parent(s) "
+                        f"{layers_to_perturb}; the parent does not influence this op's value"
+                    ),
+                    extra={"perturbed_parents": list(layers_to_perturb)},
+                ),
+            )
+        return perturb_ok
 
     return True
 
