@@ -12,13 +12,16 @@ was the perturbation check firing on a BENIGN idiom:
 Perturbing the uninitialized destination of a partial in-place write is
 meaningless -- the unwritten positions are garbage overwritten by a sibling
 write and never meaningfully consumed. The fix exempts ONLY that case (the
-perturbed parent's value traces to an uninitialized-memory source through the
-destination slot).
+perturbed parent occupies the destination slot AND is ITSELF a direct
+uninitialized-memory allocation: empty/empty_like/new_empty).
 
 LOCKED tripwire invariant under test: the exemption is NARROW. A REAL data
 tensor feeding an in-place-write destination is NOT exempted -- a genuine dropped
-dependency must still fail. ``test_real_data_destination_*`` guards that the
-exemption never widens into a bug mask.
+dependency must still fail. This INCLUDES a prior in-place write whose buffer was
+allocated by empty_like but which now holds live written data: the exemption does
+NOT chain through intermediate writes (B1 adversarial-review hole). The
+``test_real_data_destination_*`` and ``test_chained_index_copy_dropped_dest_*``
+cases guard that the exemption never widens into a bug mask.
 """
 
 from __future__ import annotations
@@ -33,7 +36,11 @@ from torchlens.user_funcs import (
     _validate_forward_pass_torch,
 )
 from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import CHECK_REPLAY, get_validation_failure
+from torchlens.validation.diagnostics import (
+    CHECK_PERTURBATION,
+    CHECK_REPLAY,
+    get_validation_failure,
+)
 from torchlens.validation.exemptions import (
     INPLACE_DESTINATION_WRITE_FUNCS,
     _uninitialized_value_origin,
@@ -71,15 +78,25 @@ def test_uninitialized_origin_true_for_direct_empty_source() -> None:
     assert _uninitialized_value_origin(trace["e"], trace) is True
 
 
-def test_uninitialized_origin_follows_inplace_write_chain() -> None:
-    """index_copy_ into new_empty traces to an uninitialized origin."""
+def test_uninitialized_origin_does_not_follow_inplace_write_chain() -> None:
+    """A chained in-place write is NOT uninitialized -- the B1 bug-mask guard.
+
+    The first ``index_copy_`` into ``new_empty`` writes REAL data into the buffer,
+    so the second write's destination parent (``ic1``) holds live values that flow
+    to the output. Classifying it as "uninitialized" by chaining back to the
+    allocation masked a real perturbation failure (B1 adversarial review,
+    ``TwoIndexCopyDim2``). Only a DIRECT allocation op is uninitialized.
+    """
 
     trace = {
         "alloc": _fake_op("new_empty"),
         "ic1": _fake_op("index_copy_", dest_label="alloc"),
         "ic2": _fake_op("index_copy_", dest_label="ic1"),
     }
-    assert _uninitialized_value_origin(trace["ic2"], trace) is True
+    # The allocation itself is uninitialized; an in-place write over it is NOT.
+    assert _uninitialized_value_origin(trace["alloc"], trace) is True
+    assert _uninitialized_value_origin(trace["ic1"], trace) is False
+    assert _uninitialized_value_origin(trace["ic2"], trace) is False
 
 
 def test_uninitialized_origin_false_for_real_data_destination() -> None:
@@ -236,5 +253,83 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
         failure = get_validation_failure(trace)
         assert failure is not None
         assert failure.check == CHECK_REPLAY
+    finally:
+        trace.cleanup()
+
+
+def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
+    """B1 BUG-MASK GUARD: a dropped destination dependency on a CHAINED in-place
+    write must still fail the perturbation check.
+
+    This is the exact masking case from the B1 adversarial review. ``out`` is
+    allocated by ``empty_like`` and written by two ``index_copy_`` calls into
+    DISJOINT-but-live columns. The second write's destination parent is the FIRST
+    write, which already holds real data in columns 1,3 that flow to the output.
+
+    A wrong replay that REBUILDS from the saved full output (ignoring the
+    destination parent) reproduces the saved value and keeps the source-value
+    sensitive, so only the PERTURBATION check on the destination parent can catch
+    the dropped dependency. The pre-fix exemption labeled the chained destination
+    "uninitialized" (following the write chain back to ``empty_like``) and waived
+    that failure -- masking a real capture bug. The fix must make this FAIL.
+    """
+
+    class TwoIndexCopyDim2(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            out = torch.empty_like(x)
+            idx1 = torch.tensor([1, 3], device=x.device)
+            idx0 = torch.tensor([0, 2], device=x.device)
+            out.index_copy_(2, idx1, x[:, :, idx1] * 2)
+            out.index_copy_(2, idx0, x[:, :, idx0] + 1)
+            return out
+
+    model = TwoIndexCopyDim2()
+    model.eval()
+    x = torch.randn(2, 3, 4)
+    gt = model(x).detach().clone()
+    trace = _run_model_and_save_specified_outs(
+        model=model,
+        input_args=(x,),
+        input_kwargs={},
+        layers_to_save="all",
+        activation_transform=None,
+        mark_layer_depths=False,
+        detach_saved_activations=False,
+        save_grads=False,
+        save_arg_values=True,
+        random_seed=0,
+        save_rng_states=True,
+    )
+    try:
+        # Locate the SECOND index_copy_ (destination parent is the first write).
+        second = None
+        for layer in trace.layer_list:
+            op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+            if op.func_name in ("index_copy_", "indexcopy_") and str(
+                op.parent_arg_positions["args"].get(0, "")
+            ).startswith("indexcopy"):
+                second = op
+        assert second is not None, "expected a chained index_copy_ op"
+
+        # Corrupt its replay so the destination-parent dependency is DROPPED:
+        # rebuild from the saved full output, then re-apply only the source slice.
+        # Normal replay still matches and the source value stays sensitive, but
+        # the destination parent no longer influences the result.
+        saved = second.out.detach().clone()
+
+        def fake_index_copy(dest, dim, index, source, _saved=saved):
+            dest.copy_(_saved)  # BUG: ignore the destination parent's value
+            dest.index_copy_(dim, index, source)  # source still honored
+            return dest
+
+        fake_index_copy.__name__ = getattr(second.func, "__name__", "index_copy_")
+        second.func = fake_index_copy
+
+        result = validate_saved_outs(trace, [gt], validate_metadata=False)
+        assert result is False, "dropped chained-dest dependency must FAIL validation"
+        failure = get_validation_failure(trace)
+        assert failure is not None
+        assert failure.check == CHECK_PERTURBATION
+        assert "indexcopy" in (failure.op_label or "")
     finally:
         trace.cleanup()

@@ -24,6 +24,7 @@ only be determined AFTER executing the function -- cases where perturbation
 genuinely doesn't change the output for valid reasons (bool output, type
 casting, special-value args like all-zeros making perturbation irrelevant).
 """
+
 # TODO: Audit PyTorch ops more exhaustively for additional exemptions.
 # Current registries cover all cases encountered in the test suite as of 2026-03.
 # When adding new model tests, if perturbation fails for a new function,
@@ -154,39 +155,33 @@ INPLACE_DESTINATION_WRITE_FUNCS: Set[str] = {
     "scatter",
 }
 
-# Maximum depth to follow a destination-write chain back to its allocation, so a
-# pathological/cyclic graph can never spin the search.
-_UNINIT_DEST_MAX_DEPTH = 64
-
 
 def _uninitialized_value_origin(op: Any, source_trace: Any, depth: int = 0) -> bool:
-    """Return whether an op's VALUE originates from uninitialized memory.
+    """Return whether an op's VALUE is itself uninitialized memory.
 
-    An op is value-from-uninitialized iff it is itself an uninitialized-memory
-    source (``empty``/``empty_like``/``new_empty``/...), OR it is an in-place
-    destination-write op whose destination (``args[0]``) chains -- transitively
-    through more in-place writes -- back to such a source. The
-    ``index_copy_(new_empty(...), ...)`` and ``empty_like(...)[...] = ...``
-    idioms partition-write all live positions into an uninitialized buffer, so
-    perturbing an intermediate uninitialized destination has no real meaning.
+    True iff ``op`` is a DIRECT uninitialized-memory source
+    (``empty``/``empty_like``/``new_empty``/...). The exemption it gates skips
+    the perturbation-insensitivity check ONLY when the perturbed destination
+    parent has no meaningful value to perturb -- i.e. it is literally
+    uninitialized allocation memory.
+
+    The walk does NOT chain through in-place destination writes. An in-place
+    write (``index_copy_``/``__setitem__``/...) produces a tensor that contains
+    REAL written data -- it is never "uninitialized memory" as a whole, even
+    when its destination buffer was allocated by ``empty_like``. Following the
+    chain back to the allocation was a tripwire hole (B1 review,
+    ``TwoIndexCopyDim2``): the second write of an
+    ``out = empty_like(x); out.index_copy_(...); out.index_copy_(...)`` idiom
+    consumes the FIRST write's live data through its destination parent, so a
+    wrong replay that drops that destination dependency must still fail the
+    perturbation check. Only a parent that is itself an allocation op is exempt;
+    the ``depth``/``source_trace`` parameters are retained for signature
+    compatibility but are no longer used to recurse.
     """
 
-    if op is None or depth > _UNINIT_DEST_MAX_DEPTH:
+    if op is None:
         return False
-    func_name = getattr(op, "func_name", None)
-    if func_name in SKIP_VALIDATION_ENTIRELY:
-        return True
-    if func_name not in INPLACE_DESTINATION_WRITE_FUNCS:
-        return False
-    parent_arg_positions = getattr(op, "parent_arg_positions", {}) or {}
-    dest_label = parent_arg_positions.get("args", {}).get(0)
-    if dest_label is None:
-        return False
-    try:
-        dest_op = source_trace[dest_label]
-    except Exception:
-        return False
-    return _uninitialized_value_origin(dest_op, source_trace, depth + 1)
+    return getattr(op, "func_name", None) in SKIP_VALIDATION_ENTIRELY
 
 
 def _perturbed_parent_is_uninitialized_setitem_dest(
@@ -196,17 +191,20 @@ def _perturbed_parent_is_uninitialized_setitem_dest(
     """Return whether a perturbed in-place-write parent is an uninitialized dest.
 
     Returns True iff EVERY perturbed parent of this in-place destination-write op
-    occupies its DESTINATION slot (``args[0]``) AND that perturbed parent's value
-    originates from uninitialized memory (``empty``/``empty_like``/``new_empty``),
-    possibly through a chain of in-place destination writes. Perturbing
-    uninitialized memory has no semantic meaning -- the unwritten positions are
-    garbage overwritten by a sibling/subsequent write -- so a "no output change"
-    result is not a capture bug.
+    occupies its DESTINATION slot (``args[0]``) AND that perturbed parent is
+    ITSELF a direct uninitialized-memory allocation
+    (``empty``/``empty_like``/``new_empty``). Perturbing literally-uninitialized
+    allocation memory has no semantic meaning -- the unwritten positions are
+    garbage overwritten by a sibling/subsequent write and never meaningfully
+    consumed -- so a "no output change" result is not a capture bug.
 
     The check is deliberately NARROW so it cannot mask a real dropped-dependency
-    bug: if the perturbed parent is a genuine data tensor (its value does NOT
-    trace to an uninitialized source) or is NOT the destination, this returns
-    False and the strict perturbation check stands.
+    bug: if the perturbed parent is a genuine data tensor -- INCLUDING a prior
+    in-place write whose buffer was allocated by ``empty_like`` but which now
+    holds real written data -- or is NOT the destination, this returns False and
+    the strict perturbation check stands. The exemption does NOT chain through
+    intermediate writes (B1 review hole: a chained ``index_copy_`` destination
+    holds live data and must stay strict).
 
     Parameters
     ----------
@@ -507,7 +505,9 @@ def _check_interpolate_exempt(self: "Trace", layer: Op, layers_to_perturb: List[
     return False
 
 
-def _get_scatter_destination_dim_index(layer: Op) -> tuple[torch.Tensor, int, torch.Tensor] | None:
+def _get_scatter_destination_dim_index(
+    layer: Op,
+) -> tuple[torch.Tensor, int, torch.Tensor] | None:
     """Return scatter destination, dim, and index tensors when they are replayable.
 
     Parameters
@@ -745,16 +745,22 @@ def posthoc_perturb_check(
     # not a real data dependency, so the perturbation check's sensitivity
     # contract does not apply.
     #
-    # NARROW + tripwire-safe: exempt ONLY when the PERTURBED parent's VALUE
-    # originates from uninitialized memory (empty/empty_like/new_empty, possibly
-    # through a chain of in-place destination writes such as chained
-    # index_copy_) AND it occupies the destination slot. A REAL data tensor
-    # feeding the destination does NOT trace to an uninitialized source and stays
-    # strict, so a genuine dropped-dependency capture bug still fails. (empty_like
-    # et al. are already nondeterministic-skipped for their OWN replay; this
-    # extends that same correctness to their consumption as the destination of an
-    # in-place index/scatter write.) Covers the RoPE / normalizing-flow /
-    # torch_geometric "partition-write into an uninitialized buffer" idiom.
+    # NARROW + tripwire-safe: exempt ONLY when the PERTURBED parent is ITSELF a
+    # direct uninitialized-memory allocation (empty/empty_like/new_empty) AND it
+    # occupies the destination slot. A REAL data tensor feeding the destination
+    # -- INCLUDING a prior in-place write (index_copy_/__setitem__) whose buffer
+    # was allocated by empty_like but which now holds real written data -- stays
+    # strict, so a genuine dropped-dependency capture bug still fails. The
+    # exemption deliberately does NOT chain through intermediate in-place writes:
+    # the B1 adversarial review found that following the destination chain back to
+    # the allocation masked a real perturbation failure on the second write of an
+    # empty_like + chained index_copy_ idiom (the second write consumes the first
+    # write's live data). (empty_like et al. are already nondeterministic-skipped
+    # for their OWN replay; this extends that same correctness to their direct
+    # consumption as the destination of one in-place index/scatter write.) Covers
+    # the RoPE / normalizing-flow / torch_geometric "partition-write into an
+    # uninitialized buffer" idiom where the perturbed destination is the bare
+    # allocation.
     if (
         func_name in INPLACE_DESTINATION_WRITE_FUNCS
         and _perturbed_parent_is_uninitialized_setitem_dest(
