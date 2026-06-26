@@ -354,10 +354,12 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     dispatch_calls: list[tuple[str, ...]] = []
     local_calls: list[tuple[str, str]] = []
     merge_calls: list[tuple[Path, Path]] = []
+    call_log: list[str] = []
 
     def fake_dispatch(stable_ids: list[str], **_: object) -> DispatchResult:
         """Capture cluster dispatches."""
 
+        call_log.append("dispatch")
         dispatch_calls.append(tuple(stable_ids))
         return DispatchResult(
             campaign_id="campaign-a",
@@ -374,6 +376,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     def fake_collect(dispatch: DispatchResult, **_: object) -> CollectedClusterResults:
         """Return per-model collection with every task present (validated)."""
 
+        call_log.append("collect")
         rows_path = tmp_path / "cluster_results.jsonl"
         manifest_path = tmp_path / "cluster_results.manifest.json"
         rows_path.write_text("", encoding="utf-8")
@@ -421,6 +424,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     ) -> validate_menagerie.ValidationResult:
         """Capture local validation calls."""
 
+        call_log.append("local")
         local_calls.append((row.stable_id, str(args[2])))
         return validate_menagerie.ValidationResult(
             row.name,
@@ -438,6 +442,11 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
 
     monkeypatch.setattr(validate_menagerie, "select_rows", lambda _: [giant, local])
     monkeypatch.setattr(validate_menagerie.cluster_runner, "dispatch_giants", fake_dispatch)
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner,
+        "poll_cluster_terminal",
+        lambda *_args, **_kwargs: True,
+    )
     monkeypatch.setattr(
         validate_menagerie.cluster_runner, "collect_cluster_results_partial", fake_collect
     )
@@ -465,6 +474,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
 
     assert dispatch_calls == [("m4527",)]
     assert local_calls == [("m_local", "cpu")]
+    assert call_log == ["dispatch", "local", "collect"]
     assert len(merge_calls) == 1
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
     assert set(records) == {"m4527", "m_local"}

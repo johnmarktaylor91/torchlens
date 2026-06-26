@@ -200,6 +200,25 @@ class ValidationResult:
 
 
 @dataclass(frozen=True)
+class ClusterDispatchHandle:
+    """Submitted cluster validation work to collect after local validation.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed rows in this dispatch.
+    dispatch:
+        Cluster runner dispatch metadata.
+    handle_path:
+        Local JSON path where the handle was persisted for re-attachment.
+    """
+
+    rows: tuple[CatalogRow, ...]
+    dispatch: cluster_runner.DispatchResult
+    handle_path: Path
+
+
+@dataclass(frozen=True)
 class MemoryEstimate:
     """Memory estimate used by the validation scheduler.
 
@@ -1348,6 +1367,237 @@ def _cluster_transport_failure_detail(error: BaseException) -> str:
     if isinstance(error, subprocess.TimeoutExpired):
         return f"timeout={error.timeout}; cmd={error.cmd!r}"
     return repr(error)
+
+
+def dispatch_cluster_async(
+    rows: Sequence[CatalogRow],
+    args: argparse.Namespace,
+    out_dir: Path,
+    manifest_path: Path,
+    smoke_settings: Mapping[str, SmokeCaseSettings] | None = None,
+    duration_estimates: Mapping[str, float] | None = None,
+) -> ClusterDispatchHandle | None:
+    """Submit cluster-routed rows without waiting for completion.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    args:
+        Parsed validator arguments.
+    out_dir:
+        Validation output directory.
+    manifest_path:
+        Validation manifest path.
+    smoke_settings:
+        Optional per-row smoke settings.
+    duration_estimates:
+        Optional latest measured validation durations keyed by stable ID.
+
+    Returns
+    -------
+    ClusterDispatchHandle | None
+        Dispatch handle, or ``None`` for empty/dry-run/unavailable dispatches.
+    """
+
+    if not rows:
+        return None
+    stable_ids = [row.stable_id for row in rows]
+    row_settings = smoke_settings or {}
+    timeout_base_sec = getattr(
+        args,
+        "resolved_timeout_base_sec",
+        args.timeout_base_sec if args.timeout_base_sec is not None else args.timeout_sec,
+    )
+    log_event("cluster_dispatch_start", rows=len(stable_ids), stable_ids=stable_ids)
+    try:
+        dispatch = cluster_runner.dispatch_giants(
+            stable_ids,
+            catalog_db=args.db,
+            ledger_db=_resolve_verification_db(args.verification_db),
+            local_artifact_root=out_dir / "cluster",
+            timeout_by_id={
+                row.stable_id: _case_timeout(
+                    row,
+                    row_settings,
+                    timeout_base_sec,
+                    duration_estimates,
+                    args.timeout_scale,
+                    args.timeout_ceiling_sec,
+                )
+                for row in rows
+            },
+            input_scale_by_id={
+                row.stable_id: _case_input_scale(row, row_settings, args.input_scale)
+                for row in rows
+            },
+            dry_run=args.dry_run,
+            wait=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_timeout",
+            detail=detail,
+        )
+        log_event(
+            "cluster_dispatch_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_timeout",
+            error=detail,
+        )
+        return None
+    except cluster_runner.ClusterJobFailed as error:
+        _surface_cluster_job_failure(rows, args, manifest_path, error)
+        log_event(
+            "cluster_job_failed",
+            rows=len(stable_ids),
+            job_ids=list(error.job_ids),
+            error=error.detail,
+        )
+        return None
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_unreachable",
+            detail=detail,
+        )
+        log_event(
+            "cluster_dispatch_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_unreachable",
+            error=detail,
+        )
+        return None
+    if args.dry_run:
+        _append_cluster_dry_run_results(rows, manifest_path, args)
+        log_event(
+            "cluster_dispatch_dry_run",
+            rows=len(stable_ids),
+            artifact_dir=str(dispatch.local_artifact_dir),
+        )
+        return None
+    handle_path = dispatch.local_artifact_dir / "dispatch_handle.json"
+    handle_path.parent.mkdir(parents=True, exist_ok=True)
+    handle_path.write_text(
+        json.dumps(
+            {
+                "campaign_id": dispatch.campaign_id,
+                "attempt_id": dispatch.attempt_id,
+                "stable_ids": stable_ids,
+                "sbatch_job_ids": list(dispatch.sbatch_job_ids),
+                "local_artifact_dir": str(dispatch.local_artifact_dir),
+                "remote_artifact_dir": dispatch.remote_artifact_dir,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return ClusterDispatchHandle(tuple(rows), dispatch, handle_path)
+
+
+def collect_cluster_async(
+    handle: ClusterDispatchHandle | None,
+    args: argparse.Namespace,
+    manifest_path: Path,
+) -> None:
+    """Wait for an async cluster dispatch, then attribute per-model results.
+
+    Parameters
+    ----------
+    handle:
+        Dispatch handle returned by :func:`dispatch_cluster_async`.
+    args:
+        Parsed validator arguments.
+    manifest_path:
+        Validation manifest path.
+    """
+
+    if handle is None:
+        return
+    rows = handle.rows
+    stable_ids = [row.stable_id for row in rows]
+    terminal = cluster_runner.poll_cluster_terminal(
+        handle.dispatch,
+        timeout_sec=cluster_runner.ClusterConfig().sbatch_wait_timeout_sec,
+    )
+    detail = (
+        "sacct terminal state reached"
+        if terminal
+        else "sacct terminal poll timeout; collecting partial artifacts"
+    )
+    # Writer isolation: collection runs only after the local ThreadPool exits.
+    # The parent/main thread remains the single ledger and manifest writer.
+    try:
+        attributed = _attribute_cluster_results_per_model(
+            rows,
+            args,
+            manifest_path,
+            handle.dispatch,
+            detail=detail,
+            job_ids=handle.dispatch.sbatch_job_ids,
+        )
+    except subprocess.TimeoutExpired as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_timeout",
+            detail=detail,
+        )
+        log_event(
+            "cluster_collect_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_timeout",
+            error=detail,
+        )
+        return
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_unreachable",
+            detail=detail,
+        )
+        log_event(
+            "cluster_collect_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_unreachable",
+            error=detail,
+        )
+        return
+    if not attributed:
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_no_results",
+            detail="no per-model result artifacts returned from the cluster",
+        )
+        log_event(
+            "cluster_collect_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_no_results",
+            error="no result artifacts returned",
+        )
+        return
+    log_event(
+        "cluster_dispatch_done",
+        rows=len(stable_ids),
+        artifact_dir=str(handle.dispatch.local_artifact_dir),
+        handle=str(handle.handle_path),
+    )
 
 
 def _run_cluster_validation(
@@ -3435,7 +3685,7 @@ def run(args: argparse.Namespace) -> int:
     _append_cluster_rows_from_ledger(
         completed_cluster_rows, manifest_path, ledger_db=args.verification_db
     )
-    _run_cluster_validation(
+    cluster_handle = dispatch_cluster_async(
         cluster_rows,
         args,
         out_dir,
@@ -3724,8 +3974,9 @@ def run(args: argparse.Namespace) -> int:
                 except RuntimeError:
                     for snapshot in run_cache_snapshots:
                         purge_new_cache_entries(snapshot)
-                    assert_min_free(out_dir, args.min_free_gb)
+            assert_min_free(out_dir, args.min_free_gb)
 
+    collect_cluster_async(cluster_handle, args, manifest_path)
     write_reports(
         out_dir,
         manifest_path,

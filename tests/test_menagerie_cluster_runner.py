@@ -27,6 +27,7 @@ from menagerie.cluster_runner import (
     merge_cluster_results,
     node_tier_for_row,
     pending_assignments_for_resume,
+    poll_cluster_terminal,
     render_sbatch_script,
     run_worker_assignment,
     write_assignment_manifest,
@@ -424,6 +425,105 @@ def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -
     # the worker writes to a node-local ledger under the remote artifact dir.
     assert f'--verification-db "{ledger_db}"' not in sbatch_text
     assert "/worker_ledger/" in sbatch_text
+
+
+def test_dispatch_wait_false_submits_without_sbatch_wait(tmp_path: Path) -> None:
+    """Async dispatch submits plain sbatch and still records job IDs."""
+
+    catalog_db = _write_catalog(
+        tmp_path,
+        [_row(model_id=1, stable_id="m3635", name="beit_large_patch16_512")],
+    )
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+    commands: list[tuple[str, ...]] = []
+
+    def fake_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Capture commands and return a fake sbatch submission."""
+
+        command_tuple = tuple(str(item) for item in command)
+        commands.append(command_tuple)
+        if command_tuple[:2] == ("ssh", "axon-test") and command_tuple[-1] == "echo $HOME":
+            return subprocess.CompletedProcess(command_tuple, 0, stdout="/home/jt3295\n", stderr="")
+        stdout = "Submitted batch job 67890\n" if "sbatch" in command_tuple[-1] else ""
+        return subprocess.CompletedProcess(command_tuple, 0, stdout=stdout, stderr="")
+
+    result = dispatch_giants(
+        ["m3635"],
+        catalog_db=catalog_db,
+        ledger_db=ledger_db,
+        repo_root=tmp_path,
+        local_artifact_root=tmp_path / "cluster",
+        config=ClusterConfig(host="axon-test", remote_repo="~/repo", remote_artifact_root="~/out"),
+        command_runner=fake_runner,
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        wait=False,
+    )
+
+    sbatch_commands = [command for command in commands if "sbatch" in command[-1]]
+    assert result.sbatch_job_ids == ("67890",)
+    assert len(sbatch_commands) == 1
+    assert "sbatch --wait" not in sbatch_commands[0][-1]
+    assert "sbatch " in sbatch_commands[0][-1]
+
+
+def test_poll_cluster_terminal_requires_all_terminal_states() -> None:
+    """SLURM polling returns true only after every array task is terminal."""
+
+    dispatch = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(),
+        local_artifact_dir=Path("/tmp/dispatch"),
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6014456",),
+        commands=(),
+    )
+
+    def running_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Return non-terminal sacct states."""
+
+        command_tuple = tuple(str(item) for item in command)
+        return subprocess.CompletedProcess(
+            command_tuple,
+            0,
+            stdout="6014456|RUNNING\n6014456_1|PENDING\n",
+            stderr="",
+        )
+
+    def terminal_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Return terminal sacct states."""
+
+        command_tuple = tuple(str(item) for item in command)
+        return subprocess.CompletedProcess(
+            command_tuple,
+            0,
+            stdout="6014456|COMPLETED\n6014456_1|FAILED\n",
+            stderr="",
+        )
+
+    config = ClusterConfig(host="axon-test")
+    assert (
+        poll_cluster_terminal(
+            dispatch,
+            config=config,
+            command_runner=running_runner,
+            poll_interval_sec=0.0,
+            timeout_sec=0.0,
+        )
+        is False
+    )
+    assert (
+        poll_cluster_terminal(
+            dispatch,
+            config=config,
+            command_runner=terminal_runner,
+            poll_interval_sec=0.0,
+            timeout_sec=0.0,
+        )
+        is True
+    )
 
 
 def test_merge_is_idempotent_and_conflicts_fail_loud(tmp_path: Path) -> None:

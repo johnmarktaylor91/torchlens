@@ -12,6 +12,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -70,6 +71,16 @@ TERMINAL_STATUSES = frozenset(
         "oom",
         "native_crash",
         "killed",
+    }
+)
+SLURM_TERMINAL_STATES = frozenset(
+    {
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
+        "TIMEOUT",
+        "OUT_OF_MEMORY",
+        "NODE_FAIL",
     }
 )
 # Total physical RAM on the local workstation, in GiB. Retained for the legacy
@@ -1011,6 +1022,91 @@ def probe_local_gpu_vram_bytes(command_runner: CommandRunner | None = None) -> i
     return mib * 1024**2
 
 
+def poll_cluster_terminal(
+    dispatch: DispatchResult,
+    *,
+    config: ClusterConfig | None = None,
+    command_runner: CommandRunner = default_command_runner,
+    poll_interval_sec: float = 30.0,
+    timeout_sec: float | None = None,
+) -> bool:
+    """Poll SLURM until every dispatched array job reaches a terminal state.
+
+    Parameters
+    ----------
+    dispatch:
+        Cluster dispatch metadata carrying sbatch job IDs.
+    config:
+        Cluster connection defaults.
+    command_runner:
+        Injectable command runner for ``ssh sacct``.
+    poll_interval_sec:
+        Sleep interval between polls.
+    timeout_sec:
+        Maximum wall-clock polling duration. Defaults to the cluster config's
+        blocking sbatch wait timeout.
+
+    Returns
+    -------
+    bool
+        ``True`` only when every observed state is terminal before timeout.
+    """
+
+    if not dispatch.sbatch_job_ids:
+        return True
+    active_config = config or ClusterConfig()
+    deadline = time.monotonic() + (
+        active_config.sbatch_wait_timeout_sec if timeout_sec is None else timeout_sec
+    )
+    while True:
+        try:
+            states = _sacct_states(dispatch.sbatch_job_ids, active_config, command_runner)
+            if states and all(state in SLURM_TERMINAL_STATES for state in states):
+                return True
+        except Exception:
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(max(0.0, poll_interval_sec))
+
+
+def _sacct_states(
+    job_ids: Sequence[str],
+    config: ClusterConfig,
+    command_runner: CommandRunner,
+) -> tuple[str, ...]:
+    """Return normalized SLURM states for job IDs from ``sacct``.
+
+    Parameters
+    ----------
+    job_ids:
+        SLURM job IDs to inspect.
+    config:
+        Cluster connection defaults.
+    command_runner:
+        Injectable command runner.
+
+    Returns
+    -------
+    tuple[str, ...]
+        State names in sacct output order.
+    """
+
+    command = (
+        "ssh",
+        config.host,
+        "sacct -X -j " + ",".join(job_ids) + " --noheader --parsable2 --format=JobID,State",
+    )
+    result = command_runner(command)
+    states = []
+    for line in (result.stdout or "").splitlines():
+        parts = line.strip().split("|")
+        if len(parts) < 2 or not parts[1]:
+            continue
+        states.append(parts[1].split()[0].upper())
+    return tuple(states)
+
+
 def node_tier_for_row(
     row: CatalogRow | Mapping[str, object],
     ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
@@ -1199,6 +1295,7 @@ def dispatch_giants(
     timeout_by_id: Mapping[str, float] | None = None,
     input_scale_by_id: Mapping[str, float] | None = None,
     dry_run: bool = False,
+    wait: bool = True,
 ) -> DispatchResult:
     """Prepare and submit a SLURM array for giant model validation.
 
@@ -1228,6 +1325,9 @@ def dispatch_giants(
         Optional per-stable-ID input-scale overrides.
     dry_run:
         Prepare artifacts and commands without executing them.
+    wait:
+        Whether ``sbatch`` should block with ``--wait``. Defaults to the legacy
+        blocking behavior.
 
     Returns
     -------
@@ -1289,6 +1389,7 @@ def dispatch_giants(
         remote_artifact_dir=remote_artifact_dir,
         config=active_config,
         sbatch_paths=sbatch_paths,
+        wait=wait,
     )
     sbatch_job_ids: list[str] = []
     if not dry_run:
@@ -1303,7 +1404,8 @@ def dispatch_giants(
                 result, job_id = _run_sbatch_command(
                     command,
                     command_runner,
-                    timeout=active_config.sbatch_wait_timeout_sec,
+                    timeout=active_config.sbatch_wait_timeout_sec if wait else None,
+                    wait=wait,
                 )
             except ClusterJobFailed as error:
                 error.dispatch = DispatchResult(
@@ -2599,6 +2701,7 @@ def _dispatch_commands(
     remote_artifact_dir: str,
     config: ClusterConfig,
     sbatch_paths: Sequence[Path],
+    wait: bool = True,
 ) -> tuple[tuple[str, ...], ...]:
     """Return rsync, mkdir, and sbatch commands for dispatch.
 
@@ -2614,6 +2717,8 @@ def _dispatch_commands(
         Cluster defaults.
     sbatch_paths:
         Local sbatch scripts to submit.
+    wait:
+        Whether to include ``--wait`` in sbatch submission commands.
 
     Returns
     -------
@@ -2653,8 +2758,9 @@ def _dispatch_commands(
             f"{config.host}:{config.remote_pixi_bin}",
         ),
     )
+    sbatch_prefix = "sbatch --wait" if wait else "sbatch"
     sbatch_commands = tuple(
-        ("ssh", config.host, f"sbatch --wait {remote_artifact_dir}/{sbatch_path.name}")
+        ("ssh", config.host, f"{sbatch_prefix} {remote_artifact_dir}/{sbatch_path.name}")
         for sbatch_path in sbatch_paths
     )
     return (*setup_commands, *sbatch_commands)
@@ -2974,6 +3080,7 @@ def _run_sbatch_command(
     command_runner: CommandRunner,
     *,
     timeout: float | None,
+    wait: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], str | None]:
     """Run a blocking ``sbatch --wait`` command and classify its outcome.
 
@@ -2994,6 +3101,8 @@ def _run_sbatch_command(
         Injectable command runner.
     timeout:
         Optional timeout in seconds for the default runner.
+    wait:
+        Whether the command is a blocking ``sbatch --wait`` submission.
 
     Returns
     -------
@@ -3016,9 +3125,10 @@ def _run_sbatch_command(
         if job_id is not None:
             stderr = (error.stderr or "").strip()
             tail = stderr or stdout.strip() or repr(error.cmd)
+            label = "sbatch --wait" if wait else "sbatch"
             raise ClusterJobFailed(
                 (job_id,),
-                f"sbatch --wait returncode={error.returncode}; {tail}",
+                f"{label} returncode={error.returncode}; {tail}",
             ) from error
         raise
     return result, _parse_sbatch_job_id(result.stdout)
