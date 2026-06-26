@@ -2574,9 +2574,16 @@ def _validate_one_unscaled_note(
         n_ops: int | None = None
         graph_shape_hash = ""
         trace_error = ""
+        replay_failure_summary = ""
 
         def observe_validation_trace(trace: Any) -> None:
             """Record summary fields from the trace already built for validation.
+
+            Also lifts the structured replay-failure diagnostic off the live
+            trace (before cleanup) so a ``failed:replay`` row carries the ACTUAL
+            mismatch -- divergent op, shapes/dtypes, max abs/rel diff -- instead
+            of the bare ``repr(False)``. Reading the diagnostic NEVER changes the
+            pass/fail decision; it is a richer error message only.
 
             Parameters
             ----------
@@ -2584,8 +2591,17 @@ def _validate_one_unscaled_note(
                 Completed TorchLens validation trace.
             """
 
-            nonlocal graph_shape_hash, n_ops, trace_error
+            nonlocal graph_shape_hash, n_ops, trace_error, replay_failure_summary
             n_ops, graph_shape_hash, trace_error = _trace_n_ops_and_hash_from_trace(trace)
+            try:
+                from torchlens.validation.diagnostics import get_validation_failure
+
+                failure = get_validation_failure(trace)
+                if failure is not None:
+                    replay_failure_summary = failure.summary()
+            except Exception:
+                # Best-effort: a diagnostics read must never break validation.
+                replay_failure_summary = ""
 
         try:
             forward_result = _validate_forward_pass_torch(
@@ -2612,6 +2628,9 @@ def _validate_one_unscaled_note(
                 recipe_revision_sha256=row.recipe_revision_sha256,
             )
         if not bool(forward_result):
+            # Prefer the structured diagnostic captured in the observer (the real
+            # mismatch); fall back to repr(forward_result) only if it is missing.
+            replay_detail = replay_failure_summary or f"replay failed ({forward_result!r})"
             return ValidationResult(
                 row.name,
                 row.model_id,
@@ -2621,7 +2640,7 @@ def _validate_one_unscaled_note(
                 scope,
                 time.monotonic() - start,
                 plan.cluster_key,
-                combine_notes(device_note(device, actual_device), repr(forward_result)),
+                combine_notes(device_note(device, actual_device), replay_detail),
                 stable_id=row.stable_id,
                 recipe_revision_sha256=row.recipe_revision_sha256,
             )

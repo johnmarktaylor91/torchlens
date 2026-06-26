@@ -243,6 +243,20 @@ def validate_saved_outs(
     """
     _raise_if_portable_bundle_log(self)
 
+    # Diagnostics side-channel: clear any stale failure from a prior run so a
+    # report reflects THIS validation only. ADD-ONLY -- never affects the result.
+    from .diagnostics import (
+        CHECK_COMPLETENESS,
+        CHECK_GROUND_TRUTH,
+        CHECK_OUTPUT_MISSING,
+        ValidationFailure,
+        describe_tensor_mismatch,
+        record_validation_failure,
+        reset_validation_failure,
+    )
+
+    reset_validation_failure(self)
+
     # Phase 0: verify logged outputs match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
     if not getattr(self, "halted", False):
@@ -253,12 +267,31 @@ def validate_saved_outs(
             )
             if output_layer.out is None:
                 print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
+                record_validation_failure(
+                    self,
+                    ValidationFailure(
+                        check=CHECK_OUTPUT_MISSING,
+                        op_label=output_layer_label,
+                        message=f"output layer #{i} has no saved out",
+                    ),
+                )
                 return False
             if not _ground_truth_output_matches_saved(
                 output_layer.out, ground_truth_output_tensors[i]
             ):
                 print(
                     f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
+                )
+                record_validation_failure(
+                    self,
+                    describe_tensor_mismatch(
+                        output_layer.out,
+                        ground_truth_output_tensors[i],
+                        check=CHECK_GROUND_TRUTH,
+                        op_label=output_layer_label,
+                        func_name=getattr(output_layer, "func_name", None),
+                        message=f"output #{i} does not match ground truth",
+                    ),
                 )
                 return False
 
@@ -292,13 +325,43 @@ def validate_saved_outs(
             f"All saved outs were accurate, but some layers were not reached (check that "
             f"child args logged accurately): {unreached}"
         )
+        record_validation_failure(
+            self,
+            ValidationFailure(
+                check=CHECK_COMPLETENESS,
+                message=(
+                    f"BFS reached {len(validated_layers)}/{len(expected_layers)} layers; "
+                    f"{len(unreached)} unreached (e.g. {sorted(unreached)[:3]})"
+                ),
+                extra={"n_unreached": len(unreached)},
+            ),
+        )
         return False
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:
         from .invariants import check_metadata_invariants
 
-        check_metadata_invariants(self)
+        try:
+            check_metadata_invariants(self)
+        except Exception as invariant_error:
+            # ADD-ONLY: record the firing invariant on the side-channel, then
+            # RE-RAISE unchanged. The invariant remains a hard tripwire -- this
+            # only captures its identity for downstream reporting.
+            from .diagnostics import (
+                CHECK_METADATA_INVARIANT,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_METADATA_INVARIANT,
+                    message=f"{type(invariant_error).__name__}: {invariant_error}",
+                ),
+            )
+            raise
 
     return True
 
@@ -349,6 +412,17 @@ def validate_parents_of_saved_layer(
         print(
             f"Parent arguments for layer {layer_to_validate_parents_for_label} are not logged properly; "
             f"either a parent wasn't logged as an argument, or was logged an extra time"
+        )
+        from .diagnostics import CHECK_ARG_LOGGING, ValidationFailure, record_validation_failure
+
+        record_validation_failure(
+            self,
+            ValidationFailure(
+                check=CHECK_ARG_LOGGING,
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer_to_validate_parents_for, "func_name", None),
+                message="parent not logged as an argument, or logged an extra time",
+            ),
         )
         return False
 
@@ -1421,6 +1495,21 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                 f"Validation replay raised an exception for layer "
                 f"{layer_to_validate_parents_for_label}; treating as failed validation."
             )
+            from .diagnostics import (
+                CHECK_REPLAY,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_REPLAY,
+                    op_label=layer_to_validate_parents_for_label,
+                    func_name=getattr(layer, "func_name", None),
+                    message="replay re-execution raised an exception (run verbose for traceback)",
+                ),
+            )
             return False
         # Perturbed execution raised -- the perturbed values caused an invalid
         # input (e.g., wrong shape).  Treat as exempt.
@@ -1454,6 +1543,24 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         print(
             f"Saved outs for layer {layer_to_validate_parents_for_label} do not match the "
             f"values computed based on the parent layers {layer.parents}{depth_note}."
+        )
+        from .diagnostics import (
+            CHECK_REPLAY,
+            describe_tensor_mismatch,
+            record_validation_failure,
+        )
+
+        record_validation_failure(
+            self,
+            describe_tensor_mismatch(
+                layer.out,
+                recomputed_output,
+                check=CHECK_REPLAY,
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer, "func_name", None),
+                reduction_depth=reduction_depth,
+                message="isolated replay does not reproduce saved out",
+            ),
         )
         return False
 
