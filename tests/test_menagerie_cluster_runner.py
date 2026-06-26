@@ -25,10 +25,18 @@ from menagerie.cluster_runner import (
     merge_cluster_results,
     node_tier_for_row,
     pending_assignments_for_resume,
+    run_worker_assignment,
+    write_assignment_manifest,
     write_result_manifest,
     write_result_rows_jsonl,
 )
-from menagerie.ledger import VerificationRun, VerificationTarget, append_verification_run, connect
+from menagerie.ledger import (
+    LEGACY_UNKNOWN,
+    VerificationRun,
+    VerificationTarget,
+    append_verification_run,
+    connect,
+)
 
 
 def _row(**overrides: object) -> CatalogRow:
@@ -278,13 +286,52 @@ def test_is_giant_routes_static_heuristic_oom_and_blocks_native_crash(tmp_path: 
     assert not is_giant(_row(stable_id="small", name="SmallNet"), ledger={"small": 4 * 1024})
 
 
-def test_node_tier_right_sizes_incrementally_without_defaulting_to_terabyte() -> None:
-    """Node tiers step through 180, 250, and 500 GiB."""
+def test_node_tier_right_sizes_incrementally_with_terabyte_escape() -> None:
+    """Node tiers step through registered tiers and allow 1TB for huge peaks."""
 
     assert node_tier_for_row(_row(stable_id="m3635")).mem_gb == 180
     assert node_tier_for_row(_row(stable_id="m4246")).mem_gb == 250
     assert node_tier_for_row(_row(stable_id="m5651")).mem_gb == 500
-    assert node_tier_for_row(_row(stable_id="huge"), ledger={"huge": 700 * 1024}).mem_gb == 500
+    assert node_tier_for_row(_row(stable_id="huge"), ledger={"huge": 700 * 1024}).mem_gb == 1000
+
+
+def test_repeated_unregistered_moe_oom_escalates_to_terabyte(tmp_path: Path) -> None:
+    """Repeated OOMs for unregistered MoE monsters escalate to the largest tier."""
+
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                run_id="oom-1",
+                stable_id="new-moe",
+                name="Research 4B MoE",
+                status="oom",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                graph_shape_hash=None,
+                finished_at="2026-06-25T00:00:01+00:00",
+            ),
+        )
+        append_verification_run(
+            conn,
+            _run(
+                run_id="oom-2",
+                stable_id="new-moe",
+                name="Research 4B MoE",
+                status="oom",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                graph_shape_hash=None,
+                finished_at="2026-06-25T00:00:02+00:00",
+            ),
+        )
+
+    tier = node_tier_for_row(_row(stable_id="new-moe", name="Research 4B MoE"), ledger=ledger_db)
+
+    assert tier.mem_gb == 1000
 
 
 def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -> None:
@@ -348,6 +395,18 @@ def test_merge_is_idempotent_and_conflicts_fail_loud(tmp_path: Path) -> None:
     conflict_rows, conflict_manifest = _write_results(tmp_path / "conflict", [conflicting])
     with pytest.raises(ClusterMergeConflict):
         merge_cluster_results(conflict_rows, conflict_manifest, local_ledger_db=ledger_db)
+
+
+def test_merge_run_id_collision_is_not_counted_as_duplicate(tmp_path: Path) -> None:
+    """A pre-existing run ID without an import marker is a collision, not a duplicate."""
+
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(conn, _run())
+    rows_path, manifest_path = _write_results(tmp_path, [_result_row()])
+
+    with pytest.raises(ClusterMergeConflict, match="without a matching cluster import"):
+        merge_cluster_results(rows_path, manifest_path, local_ledger_db=ledger_db)
 
 
 def test_merge_checksum_mismatch_fails_loud(tmp_path: Path) -> None:
@@ -417,3 +476,71 @@ def test_ledger_keyed_resume_uses_identity_tuple(tmp_path: Path) -> None:
     assert ledger_completed_stable_ids(targets, ledger_db=ledger_db) == {"m1"}
     pending = pending_assignments_for_resume(assignments, targets, ledger_db=ledger_db)
     assert [assignment.stable_id for assignment in pending] == ["m2"]
+
+
+def test_ledger_keyed_resume_excludes_half_migrated_rows(tmp_path: Path) -> None:
+    """Half-migrated legacy rows are not counted complete for cluster resume."""
+
+    row = _row(stable_id="m1")
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                stable_id="m1",
+                torchlens_source_hash=LEGACY_UNKNOWN,
+                lock_hash="lock-a",
+            ),
+        )
+    targets = {
+        "m1": VerificationTarget(
+            recipe_revision_sha256=row.recipe_revision_sha256,
+            torchlens_source_hash=LEGACY_UNKNOWN,
+            env_hash="env-a",
+            lock_hash="lock-a",
+            device_requested="cpu",
+            scope="forward",
+        )
+    }
+
+    assert ledger_completed_stable_ids(targets, ledger_db=ledger_db) == set()
+
+
+def test_worker_forwards_no_build_catalog_to_validator(tmp_path: Path) -> None:
+    """Cluster workers invoke validation with the read-only no-build catalog flag."""
+
+    assignment = ClusterAssignment(
+        "campaign-a",
+        "attempt-a",
+        "assign-a",
+        "m1",
+        0,
+        180,
+        170,
+        "nklab",
+        "unit",
+    )
+    manifest_path = tmp_path / "assignments.json"
+    write_assignment_manifest((assignment,), manifest_path)
+    ledger_db = tmp_path / "menagerie" / "data" / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(conn, _run())
+    commands: list[tuple[str, ...]] = []
+
+    def fake_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Capture the worker validator command."""
+
+        command_tuple = tuple(str(item) for item in command)
+        commands.append(command_tuple)
+        return subprocess.CompletedProcess(command_tuple, 0, stdout="", stderr="")
+
+    run_worker_assignment(
+        manifest_path,
+        0,
+        repo_root=tmp_path,
+        result_dir=tmp_path / "results",
+        command_runner=fake_runner,
+    )
+
+    assert commands
+    assert "--no-build-catalog" in commands[0]

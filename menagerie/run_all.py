@@ -330,6 +330,7 @@ def _validation_args(args: argparse.Namespace, validation_dir: Path) -> list[str
     _append_option(forwarded, "--memory-budget-gb", args.memory_budget_gb)
     _append_option(forwarded, "--memory-floor-gb", args.memory_floor_gb)
     _append_option(forwarded, "--worker-memory-cap-gb", args.worker_memory_cap_gb)
+    _append_option(forwarded, "--runner", args.runner)
     _append_option(forwarded, "--input-scale", args.input_scale)
     _append_option(forwarded, "--env-registry", args.env_registry)
     if args.revalidate_failed:
@@ -827,6 +828,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--memory-budget-gb", type=float)
     parser.add_argument("--memory-floor-gb", type=float)
     parser.add_argument("--worker-memory-cap-gb", type=float)
+    parser.add_argument(
+        "--runner",
+        choices=("auto", "local", "cluster"),
+        default="auto",
+        help=(
+            "validation runner policy: auto routes RAM giants to the cluster, "
+            "local forces legacy local validation, cluster sends non-native-crash rows "
+            "to the cluster"
+        ),
+    )
     parser.add_argument("--input-scale", type=float)
     parser.add_argument("--env-registry", type=Path)
     parser.add_argument("--file-format", default="svg")

@@ -173,7 +173,9 @@ class ClusterConfig:
     array_concurrency:
         Maximum concurrent array tasks.
     node_tiers:
-        Ordered memory tiers. The default uses 180 -> 250 -> 500 GiB.
+        Ordered memory tiers. The default uses 180 -> 250 -> 500 -> 1000 GiB.
+    sbatch_wait_timeout_sec:
+        Maximum wall-clock seconds to wait for a blocking ``sbatch --wait`` command.
     """
 
     host: str = "axon"
@@ -189,7 +191,9 @@ class ClusterConfig:
         NodeTier(180, 170, "nklab", 130),
         NodeTier(250, 230, "u19moc3", 210),
         NodeTier(500, 480, "naplab", 420),
+        NodeTier(1000, 960, "naplab", 900),
     )
+    sbatch_wait_timeout_sec: float = 43_200.0
 
 
 @dataclass(frozen=True)
@@ -282,6 +286,9 @@ class MergeReport:
         Number of already-imported identical result rows skipped.
     assignments:
         Number of assignments verified against expected counts and checksums.
+    run_id_collisions:
+        Number of detected run-ID collisions. A non-zero value is only used for
+        diagnostics before failing loud.
     """
 
     campaign_id: str
@@ -289,6 +296,7 @@ class MergeReport:
     inserted: int
     duplicates: int
     assignments: int
+    run_id_collisions: int = 0
 
 
 @dataclass(frozen=True)
@@ -379,13 +387,17 @@ GIANT_REGISTRY: dict[str, GiantRegistryEntry] = {
 }
 
 
-def default_command_runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+def default_command_runner(
+    command: Sequence[str], *, timeout: float | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command with captured text output.
 
     Parameters
     ----------
     command:
         Command arguments.
+    timeout:
+        Optional subprocess timeout in seconds.
 
     Returns
     -------
@@ -393,7 +405,7 @@ def default_command_runner(command: Sequence[str]) -> subprocess.CompletedProces
         Completed command.
     """
 
-    return subprocess.run(command, check=True, capture_output=True, text=True)
+    return subprocess.run(command, check=True, capture_output=True, text=True, timeout=timeout)
 
 
 def load_catalog_rows_ro(
@@ -534,7 +546,14 @@ def node_tier_for_row(
     active_config = config or ClusterConfig()
     stable_id = _row_value(row, "stable_id")
     entry = GIANT_REGISTRY.get(stable_id)
-    measured_peak_mb = _latest_status_and_peak(stable_id, ledger)[1]
+    status, measured_peak_mb = _latest_status_and_peak(stable_id, ledger)
+    if (
+        status == "oom"
+        and entry is None
+        and _looks_like_unregistered_moe_monster(row)
+        and _oom_run_count(stable_id, ledger) >= 2
+    ):
+        return _largest_tier(active_config)
     if measured_peak_mb is None and entry is not None:
         measured_peak_mb = entry.measured_peak_rss_mb
     if entry is not None and measured_peak_mb is None:
@@ -663,8 +682,10 @@ def ledger_completed_stable_ids(
                 'native_crash',
                 'killed'
             )
-              AND current_verification.torchlens_source_hash != ?
-              AND current_verification.lock_hash != ?
+              AND NOT (
+                  current_verification.torchlens_source_hash = ?
+                  OR current_verification.lock_hash = ?
+              )
             """,
             (LEGACY_UNKNOWN, LEGACY_UNKNOWN),
         ).fetchall()
@@ -762,9 +783,13 @@ def dispatch_giants(
     if not dry_run:
         setup_command_count = 3
         for command in commands[:setup_command_count]:
-            command_runner(command)
+            _run_cluster_command(command, command_runner, timeout=None)
         for command in commands[setup_command_count:]:
-            result = command_runner(command)
+            result = _run_cluster_command(
+                command,
+                command_runner,
+                timeout=active_config.sbatch_wait_timeout_sec,
+            )
             job_id = _parse_sbatch_job_id(result.stdout)
             if job_id is not None:
                 sbatch_job_ids.append(job_id)
@@ -933,6 +958,7 @@ def run_worker_assignment(
         str(result_dir / assignment.stable_id),
         "--db",
         str(assignment_manifest.parent / "catalog.db"),
+        "--no-build-catalog",
     ]
     command_runner(command)
     row = latest_verification_run_for_stable_id(
@@ -1102,6 +1128,7 @@ def merge_cluster_results(
         raise ClusterResultIntegrityError("result rows must share one campaign and attempt")
     inserted = 0
     duplicates = 0
+    run_id_collisions = 0
     with connect_ledger(local_ledger_db) as conn:
         _initialize_cluster_merge_tables(conn)
         for row in rows:
@@ -1113,31 +1140,14 @@ def merge_cluster_results(
                         f"conflicting payload for {row.campaign_id}/"
                         f"{row.attempt_id}/{row.assignment_id}/{row.run.run_id}"
                     )
+                _assert_imported_run_present(conn, row.run, checksum)
                 duplicates += 1
                 continue
-            if _existing_run_id_is_compatible(conn, row.run, checksum):
-                conn.execute(
-                    """
-                    INSERT INTO cluster_result_imports(
-                        campaign_id,
-                        attempt_id,
-                        assignment_id,
-                        source_run_id,
-                        row_checksum,
-                        imported_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        row.campaign_id,
-                        row.attempt_id,
-                        row.assignment_id,
-                        row.run.run_id,
-                        checksum,
-                        utc_now(),
-                    ),
+            if _verification_run_exists(conn, row.run.run_id):
+                run_id_collisions += 1
+                raise ClusterMergeConflict(
+                    f"run_id {row.run.run_id} already exists without a matching cluster import"
                 )
-                duplicates += 1
-                continue
             append_verification_run(conn, row.run)
             conn.execute(
                 """
@@ -1159,6 +1169,7 @@ def merge_cluster_results(
                     utc_now(),
                 ),
             )
+            _assert_imported_run_present(conn, row.run, checksum)
             inserted += 1
     return MergeReport(
         campaign_id=next(iter(campaign_ids)),
@@ -1166,6 +1177,7 @@ def merge_cluster_results(
         inserted=inserted,
         duplicates=duplicates,
         assignments=len(expected),
+        run_id_collisions=run_id_collisions,
     )
 
 
@@ -1388,6 +1400,42 @@ def _latest_status_and_peak(
     return str(row["status"]), None if row["peak_rss_mb"] is None else int(row["peak_rss_mb"])
 
 
+def _oom_run_count(
+    stable_id: str,
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None,
+) -> int:
+    """Return the number of OOM ledger rows for a stable ID.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    ledger:
+        Ledger connection/path, peak-RSS mapping, or ``None``.
+
+    Returns
+    -------
+    int
+        Count of OOM verification rows for the stable ID.
+    """
+
+    if ledger is None or isinstance(ledger, Mapping):
+        return 0
+    if isinstance(ledger, Path):
+        with connect_ledger(ledger) as conn:
+            return _oom_run_count(stable_id, conn)
+    row = ledger.execute(
+        """
+        SELECT COUNT(*)
+        FROM verification_runs
+        WHERE stable_id = ?
+          AND status = 'oom'
+        """,
+        (stable_id,),
+    ).fetchone()
+    return int(row[0]) if row is not None else 0
+
+
 def _matches_first_contact_heuristic(row: CatalogRow | Mapping[str, object]) -> bool:
     """Return whether row metadata is too risky for local first contact."""
 
@@ -1400,6 +1448,29 @@ def _matches_first_contact_heuristic(row: CatalogRow | Mapping[str, object]) -> 
     if _param_count_is_giant(haystack):
         return True
     return _input_shape_is_large(_row_value(row, "input_shape"))
+
+
+def _looks_like_unregistered_moe_monster(row: CatalogRow | Mapping[str, object]) -> bool:
+    """Return whether an unregistered row looks like a large MoE family.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping.
+
+    Returns
+    -------
+    bool
+        Whether metadata names a mixture-of-experts family.
+    """
+
+    haystack = " ".join(
+        _row_value(row, field)
+        for field in ("name", "family", "family_normalized", "domain", "zoo", "notes")
+    ).casefold()
+    return any(
+        pattern in haystack for pattern in ("moe", "mixture-of-experts", "mixture of experts")
+    )
 
 
 def _param_count_is_giant(haystack: str) -> bool:
@@ -1461,6 +1532,23 @@ def _tier_from_entry(entry: GiantRegistryEntry, config: ClusterConfig) -> NodeTi
         partition=partition or tier.partition,
         max_peak_rss_gb=tier.max_peak_rss_gb,
     )
+
+
+def _largest_tier(config: ClusterConfig) -> NodeTier:
+    """Return the largest configured memory tier.
+
+    Parameters
+    ----------
+    config:
+        Cluster defaults.
+
+    Returns
+    -------
+    NodeTier
+        Configured tier with the largest requested memory.
+    """
+
+    return max(config.node_tiers, key=lambda tier: tier.mem_gb)
 
 
 def _assignment_for_row(
@@ -1549,7 +1637,7 @@ def _dispatch_commands(
         ("rsync", "-az", str(artifact_dir).rstrip("/") + "/", artifact_remote),
     )
     sbatch_commands = tuple(
-        ("ssh", config.host, f"sbatch {remote_artifact_dir}/{sbatch_path.name}")
+        ("ssh", config.host, f"sbatch --wait {remote_artifact_dir}/{sbatch_path.name}")
         for sbatch_path in sbatch_paths
     )
     return (*setup_commands, *sbatch_commands)
@@ -1772,40 +1860,86 @@ def _existing_merge_row(conn: sqlite3.Connection, row: ClusterResultRow) -> sqli
     ).fetchone()
 
 
-def _existing_run_id_is_compatible(
+def _verification_run_exists(conn: sqlite3.Connection, run_id: str) -> bool:
+    """Return whether a verification run ID already exists.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    run_id:
+        Verification run ID.
+
+    Returns
+    -------
+    bool
+        Whether the run ID is present in the ledger.
+    """
+
+    row = conn.execute("SELECT 1 FROM verification_runs WHERE run_id = ?", (run_id,)).fetchone()
+    return row is not None
+
+
+def _assert_imported_run_present(
     conn: sqlite3.Connection, run: VerificationRun, checksum: str
-) -> bool:
-    """Return whether an existing verification run ID has identical content.
+) -> None:
+    """Assert an imported cluster assignment has its ledger row.
 
     Parameters
     ----------
     conn:
         SQLite connection.
     run:
-        Incoming verification run.
+        Imported verification run payload.
     checksum:
-        Incoming run checksum.
-
-    Returns
-    -------
-    bool
-        ``True`` when the run ID already exists with identical payload.
+        Expected run checksum.
 
     Raises
     ------
+    ClusterResultIntegrityError
+        If the import marker exists without a ledger row.
     ClusterMergeConflict
-        If the run ID exists with different content.
+        If the ledger row has a different payload.
     """
 
     existing = conn.execute(
         "SELECT * FROM verification_runs WHERE run_id = ?", (run.run_id,)
     ).fetchone()
     if existing is None:
-        return False
+        raise ClusterResultIntegrityError(
+            f"cluster import for {run.run_id} has no verification ledger row"
+        )
     existing_checksum = _verification_run_checksum(_verification_run_from_row(existing))
     if existing_checksum != checksum:
         raise ClusterMergeConflict(f"run_id {run.run_id} already exists with different payload")
-    return True
+
+
+def _run_cluster_command(
+    command: Sequence[str],
+    command_runner: CommandRunner,
+    *,
+    timeout: float | None,
+) -> subprocess.CompletedProcess[str]:
+    """Run one cluster transport command with a timeout when supported.
+
+    Parameters
+    ----------
+    command:
+        Command arguments.
+    command_runner:
+        Injectable command runner.
+    timeout:
+        Optional timeout in seconds for the default runner.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Completed command.
+    """
+
+    if command_runner is default_command_runner:
+        return default_command_runner(command, timeout=timeout)
+    return command_runner(command)
 
 
 def _optional_command_output(command: Sequence[str]) -> str:

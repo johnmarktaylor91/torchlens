@@ -1020,8 +1020,10 @@ def verified_count(
           AND current_verification.n_ops IS NOT NULL
           AND current_verification.graph_shape_hash IS NOT NULL
           AND current_verification.torchlens_version = ?
-          AND current_verification.torchlens_source_hash != ?
-          AND current_verification.lock_hash != ?
+          AND NOT (
+              current_verification.torchlens_source_hash = ?
+              OR current_verification.lock_hash = ?
+          )
         """,
         (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
     ).fetchone()

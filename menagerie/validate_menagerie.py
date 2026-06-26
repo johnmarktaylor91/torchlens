@@ -22,6 +22,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ContextManager, Mapping, Sequence, cast
 
+from menagerie import cluster_runner
 from menagerie.catalog import CatalogRow, load_rows
 from menagerie import envs
 from menagerie.recipe import (
@@ -42,6 +43,7 @@ from menagerie.runtime import (
     group_by_dependency,
     install_dependency_plan,
     is_device_related_error,
+    is_featured,
     log_event,
     move_model_and_input_to_device,
     purge_new_cache_entries,
@@ -53,6 +55,7 @@ from menagerie.runtime import (
 from menagerie.ledger import (
     Scope,
     VerificationRun,
+    VerificationTarget,
     Status,
     append_verification_run,
     base_lock_hash,
@@ -97,6 +100,7 @@ MANIFEST_STATUS_VALUES = frozenset(
         "failed:replay",
         "failed:timeout",
         "failed:trace_summary",
+        "skipped:cluster_unavailable",
         "skipped:dependency_unavailable",
         "skipped:dry_run",
         "skipped:unsupported_input_recipe",
@@ -120,6 +124,7 @@ MANIFEST_COLUMNS = (
 )
 SUMMARY_JSON = "validation_summary.json"
 REPORT_MD = "VALIDATION_REPORT.md"
+RUNNER_CHOICES = ("auto", "local", "cluster")
 
 
 @dataclass(frozen=True)
@@ -278,6 +283,76 @@ def completed_stable_ids(manifest_path: Path, revalidate_failed: bool) -> set[st
     if not revalidate_failed:
         return set(records)
     return {stable_id for stable_id, row in records.items() if row.get("status") == "validated"}
+
+
+def _select_rows_for_validation(args: argparse.Namespace) -> list[CatalogRow]:
+    """Select catalog rows without building the catalog when requested.
+
+    Parameters
+    ----------
+    args:
+        Parsed validator arguments.
+
+    Returns
+    -------
+    list[CatalogRow]
+        Selected catalog rows.
+    """
+
+    if not args.no_build_catalog:
+        return select_rows(args)
+    rows = cluster_runner.load_catalog_rows_ro(args.db)
+    return _apply_catalog_filters_ro(rows, args)
+
+
+def _apply_catalog_filters_ro(
+    rows: Sequence[CatalogRow], args: argparse.Namespace
+) -> list[CatalogRow]:
+    """Apply validator catalog filters to read-only-loaded rows.
+
+    Parameters
+    ----------
+    rows:
+        Candidate catalog rows loaded from an existing database.
+    args:
+        Parsed validator arguments.
+
+    Returns
+    -------
+    list[CatalogRow]
+        Filtered rows in catalog order.
+    """
+
+    filtered = list(rows)
+    if args.family:
+        family = str(args.family).lower()
+        filtered = [row for row in filtered if family in row.family_normalized.lower()]
+    if args.domain:
+        domain = str(args.domain).lower()
+        filtered = [row for row in filtered if domain in row.domain.lower()]
+    if args.zoo:
+        zoo = str(args.zoo).lower()
+        filtered = [row for row in filtered if zoo in row.zoo.lower()]
+    if args.verified_only:
+        filtered = [row for row in filtered if row.verified]
+    if args.name:
+        terms = [term.lower() for term in args.name]
+        filtered = [row for row in filtered if any(term in row.name.lower() for term in terms)]
+    if args.model_id:
+        model_ids = set(args.model_id)
+        filtered = [row for row in filtered if row.model_id in model_ids]
+    if args.stable_ids:
+        stable_ids = set(args.stable_ids)
+        filtered = [row for row in filtered if row.stable_id in stable_ids]
+    if args.featured_only:
+        filtered = [row for row in filtered if is_featured(row)]
+    if args.since is not None:
+        filtered = [row for row in filtered if row.model_id > args.since]
+    if args.subset is not None:
+        filtered = filtered[: args.subset]
+    if args.max_models is not None:
+        filtered = filtered[: args.max_models]
+    return filtered
 
 
 def append_manifest(manifest_path: Path, result: ValidationResult) -> None:
@@ -473,6 +548,21 @@ def _actual_device(result: ValidationResult, requested_device: str) -> str:
     return "cpu" if requested_device in {"cpu", "auto"} else requested_device
 
 
+def _connect_verification_ledger() -> Any:
+    """Open the configured verification ledger.
+
+    Returns
+    -------
+    Any
+        Ledger connection context manager.
+    """
+
+    try:
+        return connect_ledger(cluster_runner.VERIFICATION_DB)
+    except TypeError:
+        return connect_ledger()
+
+
 def append_validation_ledger(
     row: CatalogRow, result: ValidationResult, device: str, input_scale: float
 ) -> None:
@@ -497,7 +587,7 @@ def append_validation_ledger(
     passed = ledger_status == "passed"
     started_at = utc_now()
     finished_at = utc_now()
-    with connect_ledger() as conn:
+    with _connect_verification_ledger() as conn:
         append_verification_run(
             conn,
             VerificationRun(
@@ -572,6 +662,509 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
         peak_rss_mb=peak_rss_mb,
         input_scale=float(payload.get("input_scale", 1.0) or 1.0),
+    )
+
+
+def _manifest_status_from_ledger_run(run: VerificationRun) -> str:
+    """Return the validation-manifest status for a ledger run.
+
+    Parameters
+    ----------
+    run:
+        Verification ledger row.
+
+    Returns
+    -------
+    str
+        Manifest status string.
+    """
+
+    if run.status == "passed":
+        return "validated"
+    if run.error_class in MANIFEST_STATUS_VALUES:
+        return str(run.error_class)
+    if run.status == "timeout":
+        return "failed:timeout"
+    if run.status == "oom":
+        return "failed:oom"
+    if run.status == "native_crash":
+        return "failed:native_crash"
+    if run.status == "killed":
+        return "failed:killed"
+    if run.status == "env_unavailable":
+        return (
+            str(run.error_class)
+            if run.error_class in MANIFEST_STATUS_VALUES
+            else "skipped:cluster_unavailable"
+        )
+    if run.status == "skipped":
+        return "skipped:dependency_unavailable"
+    if run.status == "failed":
+        return "failed:exception"
+    return "failed:exception"
+
+
+def _result_from_ledger_run(row: CatalogRow, run: VerificationRun) -> ValidationResult:
+    """Build a validation manifest result from a merged ledger row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row for model metadata not carried by the ledger.
+    run:
+        Verification ledger row.
+
+    Returns
+    -------
+    ValidationResult
+        Result suitable for appending to the validation manifest.
+    """
+
+    status = _manifest_status_from_ledger_run(run)
+    return ValidationResult(
+        name=run.name,
+        model_id=row.model_id,
+        status=status,
+        n_ops=run.n_ops,
+        validate_metadata_ok=bool(run.metadata_ok),
+        scope=run.scope,
+        elapsed=run.duration_sec,
+        dependency_cluster="cluster",
+        error=run.error_message or "",
+        graph_shape_hash=run.graph_shape_hash or "",
+        stable_id=run.stable_id,
+        recipe_revision_sha256=run.recipe_revision_sha256,
+        peak_rss_mb=run.peak_rss_mb,
+        input_scale=float(run.input_scale or 1.0),
+    )
+
+
+def _latest_ledger_status(stable_id: str) -> str | None:
+    """Return the latest ledger status for a stable ID.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+
+    Returns
+    -------
+    str | None
+        Latest status, or ``None`` when no current row exists.
+    """
+
+    with connect_ledger() as conn:
+        row = conn.execute(
+            "SELECT status FROM current_verification WHERE stable_id = ?",
+            (stable_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return str(row["status"])
+
+
+def _verification_targets_for_rows(
+    rows: Sequence[CatalogRow],
+    *,
+    scope: str,
+    device: str,
+) -> dict[str, VerificationTarget]:
+    """Build current verification identity targets for catalog rows.
+
+    Parameters
+    ----------
+    rows:
+        Catalog rows.
+    scope:
+        Requested validation scope.
+    device:
+        Requested validation device policy.
+
+    Returns
+    -------
+    dict[str, VerificationTarget]
+        Targets keyed by stable ID.
+    """
+
+    env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
+    lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
+    source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
+    return {
+        row.stable_id: VerificationTarget(
+            recipe_revision_sha256=row.recipe_revision_sha256,
+            torchlens_source_hash=source_hash,
+            env_hash=env_hash,
+            lock_hash=lock_hash,
+            device_requested=device,
+            scope=cast(Scope, scope),
+        )
+        for row in rows
+    }
+
+
+def _cluster_candidate_rows(
+    rows: Sequence[CatalogRow],
+    runner: str,
+) -> tuple[CatalogRow, ...]:
+    """Return rows that are candidates for cluster handling.
+
+    Parameters
+    ----------
+    rows:
+        Candidate rows after manifest resume filtering.
+    runner:
+        Runner policy: ``"auto"``, ``"local"``, or ``"cluster"``.
+
+    Returns
+    -------
+    tuple[CatalogRow, ...]
+        Rows that should not run locally.
+    """
+
+    if runner == "local":
+        return ()
+    if runner == "auto":
+        return cluster_runner.route_giants(
+            rows,
+            ledger=cluster_runner.VERIFICATION_DB,
+            local_ram_threshold_gb=cluster_runner.LOCAL_RAM_THRESHOLD_GB,
+        )
+    if runner == "cluster":
+        return tuple(row for row in rows if _latest_ledger_status(row.stable_id) != "native_crash")
+    raise ValueError(f"unsupported runner {runner!r}")
+
+
+def _completed_cluster_rows(
+    rows: Sequence[CatalogRow],
+    *,
+    scope: str,
+    device: str,
+) -> tuple[CatalogRow, ...]:
+    """Return cluster candidate rows already completed in the ledger.
+
+    Parameters
+    ----------
+    rows:
+        Cluster candidate rows.
+    scope:
+        Requested validation scope.
+    device:
+        Requested validation device policy.
+
+    Returns
+    -------
+    tuple[CatalogRow, ...]
+        Rows with a current terminal ledger row.
+    """
+
+    targets = _verification_targets_for_rows(rows, scope=scope, device=device)
+    completed = cluster_runner.ledger_completed_stable_ids(
+        targets,
+        ledger_db=cluster_runner.VERIFICATION_DB,
+    )
+    return tuple(row for row in rows if row.stable_id in completed)
+
+
+def _cluster_route_rows(
+    rows: Sequence[CatalogRow],
+    runner: str,
+    *,
+    scope: str = "forward",
+    device: str = "cpu",
+) -> tuple[CatalogRow, ...]:
+    """Return ledger-pending rows that should be dispatched to the cluster.
+
+    Parameters
+    ----------
+    rows:
+        Candidate rows after manifest resume filtering.
+    runner:
+        Runner policy: ``"auto"``, ``"local"``, or ``"cluster"``.
+    scope:
+        Requested validation scope.
+    device:
+        Requested validation device policy.
+
+    Returns
+    -------
+    tuple[CatalogRow, ...]
+        Rows to dispatch to the cluster.
+    """
+
+    candidates = _cluster_candidate_rows(rows, runner)
+    completed = {
+        row.stable_id for row in _completed_cluster_rows(candidates, scope=scope, device=device)
+    }
+    return tuple(row for row in candidates if row.stable_id not in completed)
+
+
+def _append_cluster_rows_from_ledger(
+    rows: Sequence[CatalogRow],
+    manifest_path: Path,
+) -> None:
+    """Append merged cluster ledger rows to the validation manifest.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    manifest_path:
+        Validation manifest path.
+    """
+
+    for row in rows:
+        run = cluster_runner.latest_verification_run_for_stable_id(row.stable_id)
+        append_manifest(manifest_path, _result_from_ledger_run(row, run))
+
+
+def _append_cluster_dry_run_results(
+    rows: Sequence[CatalogRow],
+    manifest_path: Path,
+    args: argparse.Namespace,
+) -> None:
+    """Append dry-run skips for cluster-routed rows.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    manifest_path:
+        Validation manifest path.
+    args:
+        Parsed validator arguments.
+    """
+
+    for row in rows:
+        append_manifest(
+            manifest_path,
+            ValidationResult(
+                row.name,
+                row.model_id,
+                "skipped:dry_run",
+                0,
+                False,
+                args.scope,
+                0.0,
+                "cluster",
+                "cluster dispatch dry run",
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
+                input_scale=args.input_scale,
+            ),
+        )
+
+
+def _append_cluster_unavailable_rows(
+    rows: Sequence[CatalogRow],
+    manifest_path: Path,
+    args: argparse.Namespace,
+    *,
+    reason: str,
+    detail: str,
+) -> None:
+    """Append terminal env-unavailable ledger rows for cluster transport failures.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    manifest_path:
+        Validation manifest path.
+    args:
+        Parsed validator arguments.
+    reason:
+        Stable reason code.
+    detail:
+        Transport failure detail.
+    """
+
+    env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
+    lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
+    source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
+    started_at = utc_now()
+    finished_at = utc_now()
+    message = f"reason={reason}; {detail}".strip()
+    with _connect_verification_ledger() as conn:
+        for row in rows:
+            run = VerificationRun(
+                stable_id=row.stable_id,
+                recipe_revision_sha256=row.recipe_revision_sha256,
+                name=row.name,
+                zoo=row.zoo,
+                variant=row.variant,
+                scope=cast(Scope, args.scope),
+                status="env_unavailable",
+                forward_pass=None,
+                backward_pass=None,
+                backward_na_reason=None,
+                metadata_ok=None,
+                n_ops=None,
+                graph_shape_hash=None,
+                svg_sha256=None,
+                torchlens_version=_torchlens_version(),
+                torch_version=_torch_version(),
+                python_version=python_version(),
+                device_requested=args.device,
+                device_actual=None,
+                env_hash=env_hash,
+                lock_hash=lock_hash,
+                torchlens_source_hash=source_hash,
+                input_scale=args.input_scale,
+                runner_host=runner_host(),
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_sec=0.0,
+                peak_rss_mb=None,
+                error_class="skipped:cluster_unavailable",
+                error_message=message,
+            )
+            append_verification_run(conn, run)
+            append_manifest(manifest_path, _result_from_ledger_run(row, run))
+
+
+def _cluster_transport_failure_detail(error: BaseException) -> str:
+    """Return a compact transport failure detail string.
+
+    Parameters
+    ----------
+    error:
+        Transport exception.
+
+    Returns
+    -------
+    str
+        Human-readable detail suitable for the ledger.
+    """
+
+    if isinstance(error, subprocess.CalledProcessError):
+        stderr = (error.stderr or "").strip()
+        stdout = (error.stdout or "").strip()
+        tail = stderr or stdout or repr(error.cmd)
+        return f"returncode={error.returncode}; {tail}"
+    if isinstance(error, subprocess.TimeoutExpired):
+        return f"timeout={error.timeout}; cmd={error.cmd!r}"
+    return repr(error)
+
+
+def _run_cluster_validation(
+    rows: Sequence[CatalogRow],
+    args: argparse.Namespace,
+    out_dir: Path,
+    manifest_path: Path,
+) -> None:
+    """Dispatch cluster-routed rows, merge results, and append report rows.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed catalog rows.
+    args:
+        Parsed validator arguments.
+    out_dir:
+        Validation output directory.
+    manifest_path:
+        Validation manifest path.
+    """
+
+    if not rows:
+        return
+    stable_ids = [row.stable_id for row in rows]
+    log_event("cluster_dispatch_start", rows=len(stable_ids), stable_ids=stable_ids)
+    try:
+        dispatch = cluster_runner.dispatch_giants(
+            stable_ids,
+            catalog_db=args.db,
+            ledger_db=cluster_runner.VERIFICATION_DB,
+            local_artifact_root=out_dir / "cluster",
+            dry_run=args.dry_run,
+        )
+    except subprocess.TimeoutExpired as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_timeout",
+            detail=detail,
+        )
+        log_event(
+            "cluster_dispatch_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_timeout",
+            error=detail,
+        )
+        return
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_unreachable",
+            detail=detail,
+        )
+        log_event(
+            "cluster_dispatch_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_unreachable",
+            error=detail,
+        )
+        return
+    if args.dry_run:
+        _append_cluster_dry_run_results(rows, manifest_path, args)
+        log_event(
+            "cluster_dispatch_dry_run",
+            rows=len(stable_ids),
+            artifact_dir=str(dispatch.local_artifact_dir),
+        )
+        return
+    try:
+        result_rows_path, result_manifest_path = cluster_runner.collect_cluster_results(dispatch)
+    except subprocess.TimeoutExpired as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_timeout",
+            detail=detail,
+        )
+        log_event(
+            "cluster_collect_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_timeout",
+            error=detail,
+        )
+        return
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = _cluster_transport_failure_detail(error)
+        _append_cluster_unavailable_rows(
+            rows,
+            manifest_path,
+            args,
+            reason="cluster_unreachable",
+            detail=detail,
+        )
+        log_event(
+            "cluster_collect_unavailable",
+            rows=len(stable_ids),
+            reason="cluster_unreachable",
+            error=detail,
+        )
+        return
+    merge = cluster_runner.merge_cluster_results(
+        result_rows_path,
+        result_manifest_path,
+        local_ledger_db=cluster_runner.VERIFICATION_DB,
+    )
+    _append_cluster_rows_from_ledger(rows, manifest_path)
+    log_event(
+        "cluster_dispatch_done",
+        rows=len(stable_ids),
+        inserted=merge.inserted,
+        duplicates=merge.duplicates,
+        assignments=merge.assignments,
+        artifact_dir=str(dispatch.local_artifact_dir),
     )
 
 
@@ -1929,7 +2522,14 @@ def _status_bucket(status: str) -> str:
     return "skipped"
 
 
-def write_reports(out_dir: Path, manifest_path: Path, rows: Sequence[CatalogRow]) -> None:
+def write_reports(
+    out_dir: Path,
+    manifest_path: Path,
+    rows: Sequence[CatalogRow],
+    *,
+    catalog_db: Path | None = None,
+    no_build_catalog: bool = False,
+) -> None:
     """Write validation summary JSON and Markdown reports.
 
     Parameters
@@ -1940,13 +2540,20 @@ def write_reports(out_dir: Path, manifest_path: Path, rows: Sequence[CatalogRow]
         Validation manifest path.
     rows:
         Selected catalog rows used for report context.
+    catalog_db:
+        Catalog database path for report context.
+    no_build_catalog:
+        Whether to avoid build-capable catalog loading.
     """
 
     records = manifest_records(manifest_path)
-    row_by_stable_id = {
-        row.stable_id: row
-        for row in load_rows(db_path=Path(__file__).parent / "data" / "catalog.db")
-    }
+    resolved_catalog = catalog_db or Path(__file__).parent / "data" / "catalog.db"
+    catalog_rows = (
+        cluster_runner.load_catalog_rows_ro(resolved_catalog)
+        if no_build_catalog
+        else load_rows(db_path=resolved_catalog)
+    )
+    row_by_stable_id = {row.stable_id: row for row in catalog_rows}
     row_by_stable_id.update({row.stable_id: row for row in rows})
     statuses = Counter(_status_bucket(row.get("status", "")) for row in records.values())
     by_domain: dict[str, Counter[str]] = defaultdict(Counter)
@@ -2088,9 +2695,15 @@ def run(args: argparse.Namespace) -> int:
     out_dir = args.out_dir.resolve()
     manifest_path = (args.manifest or out_dir / "validation_manifest.tsv").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    selected = select_rows(args)
+    selected = _select_rows_for_validation(args)
     if args.report_only:
-        write_reports(out_dir, manifest_path, selected)
+        write_reports(
+            out_dir,
+            manifest_path,
+            selected,
+            catalog_db=args.db,
+            no_build_catalog=args.no_build_catalog,
+        )
         log_event("report_done", manifest=str(manifest_path), out_dir=str(out_dir))
         return 0
 
@@ -2107,6 +2720,28 @@ def run(args: argparse.Namespace) -> int:
     done = completed_stable_ids(manifest_path, args.revalidate_failed)
     rows = [row for row in selected if row.stable_id not in done]
     log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
+    cluster_candidates = _cluster_candidate_rows(rows, args.runner)
+    completed_cluster_rows = _completed_cluster_rows(
+        cluster_candidates,
+        scope=args.scope,
+        device=args.device,
+    )
+    completed_cluster_stable_ids = {row.stable_id for row in completed_cluster_rows}
+    cluster_rows = tuple(
+        row for row in cluster_candidates if row.stable_id not in completed_cluster_stable_ids
+    )
+    cluster_candidate_stable_ids = {row.stable_id for row in cluster_candidates}
+    local_rows = [row for row in rows if row.stable_id not in cluster_candidate_stable_ids]
+    log_event(
+        "runner_routing",
+        runner=args.runner,
+        cluster_rows=len(cluster_rows),
+        cluster_completed_rows=len(completed_cluster_rows),
+        local_rows=len(local_rows),
+    )
+    _append_cluster_rows_from_ledger(completed_cluster_rows, manifest_path)
+    _run_cluster_validation(cluster_rows, args, out_dir, manifest_path)
+    rows = local_rows
     if not args.base_env_only:
         registry = envs.load_registry(args.env_registry)
         assignments = envs.assign(rows, registry)
@@ -2352,7 +2987,13 @@ def run(args: argparse.Namespace) -> int:
                         purge_new_cache_entries(snapshot)
                     assert_min_free(out_dir, args.min_free_gb)
 
-    write_reports(out_dir, manifest_path, selected)
+    write_reports(
+        out_dir,
+        manifest_path,
+        selected,
+        catalog_db=args.db,
+        no_build_catalog=args.no_build_catalog,
+    )
     log_event(
         "validation_run_done",
         processed=processed,
@@ -2459,10 +3100,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="per-worker RSS cap in GB; default off",
     )
+    parser.add_argument(
+        "--runner",
+        choices=RUNNER_CHOICES,
+        default="auto",
+        help=(
+            "validation runner policy: auto routes RAM giants to the cluster, "
+            "local forces legacy local validation, cluster sends non-native-crash rows "
+            "to the cluster"
+        ),
+    )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument(
         "--db", type=Path, default=Path(__file__).resolve().parent / "data" / "catalog.db"
+    )
+    parser.add_argument(
+        "--no-build-catalog",
+        action="store_true",
+        help="open --db read-only and fail if the catalog is missing",
     )
     parser.add_argument("--env-registry", type=Path, default=envs.REGISTRY_PATH)
     parser.add_argument("--base-env-only", action="store_true", help=argparse.SUPPRESS)

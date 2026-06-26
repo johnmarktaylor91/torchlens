@@ -10,7 +10,9 @@ import pytest
 
 from menagerie.catalog import CatalogRow
 from menagerie.ledger import (
+    LEGACY_UNKNOWN,
     VerificationRun,
+    VerificationTarget,
     append_verification_run,
     base_env_hash,
     base_lock_hash,
@@ -549,6 +551,32 @@ def test_verified_count_requires_full_identity_tuple(tmp_path: Path) -> None:
     )
 
     assert verified_count(conn, "tl-current", {"m1": "recipe-b"}) == 0
+
+
+def test_verified_count_excludes_half_migrated_legacy_identity(tmp_path: Path) -> None:
+    """A row with either identity field still legacy-unknown is not headline-counted."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(
+        conn,
+        _run(
+            run_id="half-migrated",
+            torchlens_source_hash=LEGACY_UNKNOWN,
+            lock_hash="lock-a",
+        ),
+    )
+    targets = {
+        "m1": VerificationTarget(
+            recipe_revision_sha256="recipe-a",
+            torchlens_source_hash=LEGACY_UNKNOWN,
+            env_hash=base_env_hash(),
+            lock_hash="lock-a",
+            device_requested="cpu",
+            scope="forward",
+        )
+    }
+
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}, targets) == 0
 
 
 def test_verified_count_rejects_newer_failure_at_same_identity(tmp_path: Path) -> None:

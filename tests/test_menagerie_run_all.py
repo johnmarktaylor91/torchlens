@@ -181,6 +181,8 @@ def test_run_all_orders_steps_and_skips_missing_csv_export(
     assert run_all.main(["--out-dir", str(out_dir), "--jobs", "2"]) == 0
 
     assert [name for name, _argv in calls] == ["validate", "render", "trace_summary"]
+    validate_argv = calls[0][1]
+    assert validate_argv[validate_argv.index("--runner") + 1] == "auto"
     assert (out_dir / "validation" / "validation_manifest.tsv").exists()
     assert (out_dir / "visuals" / "manifest.tsv").exists()
     assert (out_dir / "metadata" / "trace_summary.db").exists()
