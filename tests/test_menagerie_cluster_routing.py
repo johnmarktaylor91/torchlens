@@ -193,7 +193,7 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
 ) -> None:
     """Auto routing sends static giants to cluster and leaves normal rows local."""
 
-    giant = _row(stable_id="m3635", name="beit_large_patch16_512")
+    giant = _row(stable_id="m4527", name="effdet_tf_efficientdet_d7")
     local = _row(model_id=2, display_index=2, stable_id="m_local", name="SmallNet")
     dispatch_calls: list[tuple[str, ...]] = []
     local_calls: list[str] = []
@@ -307,11 +307,11 @@ def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
         == 0
     )
 
-    assert dispatch_calls == [("m3635",)]
+    assert dispatch_calls == [("m4527",)]
     assert local_calls == ["m_local"]
     assert len(merge_calls) == 1
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
-    assert set(records) == {"m3635", "m_local"}
+    assert set(records) == {"m4527", "m_local"}
 
 
 def test_cluster_array_partial_failure_attributes_per_model_not_cascade(
@@ -461,39 +461,112 @@ def test_cluster_array_partial_failure_attributes_per_model_not_cascade(
     assert records["m-crash"]["status"] == "failed:exception"
 
 
-def test_auto_runner_uses_cold_start_and_peak_rss_giant_routes(
+def test_local_first_routes_measured_giant_keeps_unmeasured_and_small_local(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
-    """Auto routing covers cold-start heuristics and measured peak-RSS giants."""
+    """LOCAL-FIRST: only a measured >=115 GiB peak routes; unmeasured/small stay local.
+
+    The shared axon cluster is opt-IN, not opt-OUT. A model routes there ONLY with
+    hard measured evidence it cannot fit locally:
+
+    * a MEASURED peak RSS at/above the usable-local-RAM threshold -> cluster,
+    * a model with a measured peak BELOW the threshold -> local,
+    * an UNMEASURED model -> local (never preemptively shipped to the cluster),
+      even when its name/params/shape "look" giant.
+    """
 
     ledger_db = tmp_path / "verification.db"
     with connect(ledger_db) as conn:
         append_verification_run(
             conn,
             _run(
-                run_id="peak-run",
-                stable_id="peak-model",
+                run_id="giant-run",
+                stable_id="measured-giant",
                 peak_rss_mb=130 * validate_menagerie.MB_PER_GB,
             ),
         )
-    cold_start = _row(stable_id="cold-start", name="Research 2B MoE")
-    peak = _row(stable_id="peak-model", name="MeasuredGiant")
+        append_verification_run(
+            conn,
+            _run(
+                run_id="fits-run",
+                stable_id="fits-model",
+                peak_rss_mb=90 * validate_menagerie.MB_PER_GB,
+            ),
+        )
+    measured_giant = _row(stable_id="measured-giant", name="MeasuredGiant")
+    fits_local = _row(stable_id="fits-model", name="FitsLocally")
+    # Unmeasured AND giant-LOOKING by name/params/shape -- must still stay local.
+    unmeasured = _row(
+        stable_id="unmeasured",
+        name="Research 2B MoE longcat",
+        input_shape="(1, 3, 1024, 1024)",
+    )
     small = _row(stable_id="small", name="SmallNet")
 
     routed = validate_menagerie._cluster_route_rows(
-        [cold_start, peak, small], "auto", ledger_db=ledger_db
+        [measured_giant, fits_local, unmeasured, small], "auto", ledger_db=ledger_db
     )
 
-    assert [row.stable_id for row in routed] == ["cold-start", "peak-model"]
+    assert [row.stable_id for row in routed] == ["measured-giant"]
 
 
-def test_auto_runner_routes_oom_but_not_native_crash(
+def test_local_first_routes_cluster_measured_peak_as_nonfit_evidence(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
-    """Ledger OOM evidence is cluster-eligible, but native crashes are local-only."""
+    """A >=115 GiB peak measured on the cluster is genuine local-nonfit evidence.
 
+    The latest terminal row may be a smaller cluster-validated peak; the MAX over
+    history is what proves the model is too large for the workstation, so it must
+    still route to the cluster on a resume.
+    """
+
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        # Earlier cluster run measured a 200 GiB peak (proof of nonfit) ...
+        append_verification_run(
+            conn,
+            _run(
+                run_id="cluster-peak",
+                stable_id="cluster-giant",
+                runner_host="ax17.rc.zi.columbia.edu",
+                peak_rss_mb=200 * validate_menagerie.MB_PER_GB,
+                started_at="2026-06-25T00:00:00+00:00",
+            ),
+        )
+        # ... and the LATEST terminal row carries a smaller cluster peak.
+        append_verification_run(
+            conn,
+            _run(
+                run_id="cluster-peak-2",
+                stable_id="cluster-giant",
+                runner_host="ax17.rc.zi.columbia.edu",
+                peak_rss_mb=80 * validate_menagerie.MB_PER_GB,
+                started_at="2026-06-25T01:00:00+00:00",
+            ),
+        )
+    cluster_giant = _row(stable_id="cluster-giant", name="ClusterMeasuredGiant")
+
+    routed = validate_menagerie._cluster_route_rows([cluster_giant], "auto", ledger_db=ledger_db)
+
+    assert [row.stable_id for row in routed] == ["cluster-giant"]
+
+
+def test_local_first_escalates_local_ram_failures_only_near_full_ram(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """A prior LOCAL RAM failure escalates; a small-cap kill does NOT.
+
+    * a LOCAL OOM -> cluster,
+    * a LOCAL ``failed:memory_cap`` at a cap NEAR full local RAM -> cluster,
+    * a LOCAL ``failed:memory_cap`` at a SMALL protective cap -> local (an
+      early-sweep low cap proves nothing about 115 GiB feasibility), and
+    * a native (non-RAM) crash is local-only.
+    """
+
+    monkeypatch.setattr(cluster_runner_socket(), "gethostname", lambda: "test-workstation")
     ledger_db = tmp_path / "verification.db"
     with connect(ledger_db) as conn:
         append_verification_run(
@@ -501,6 +574,7 @@ def test_auto_runner_routes_oom_but_not_native_crash(
             _run(
                 run_id="oom-run",
                 stable_id="oom-model",
+                runner_host="test-workstation",
                 status="oom",
                 forward_pass=0,
                 metadata_ok=0,
@@ -511,8 +585,39 @@ def test_auto_runner_routes_oom_but_not_native_crash(
         append_verification_run(
             conn,
             _run(
+                run_id="bigcap-run",
+                stable_id="bigcap-model",
+                runner_host="test-workstation",
+                status="failed",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                peak_rss_mb=110 * validate_menagerie.MB_PER_GB,
+                error_class="failed:memory_cap",
+                error_message="worker RSS exceeded --worker-memory-cap-gb=110.000; killed",
+            ),
+        )
+        append_verification_run(
+            conn,
+            _run(
+                run_id="smallcap-run",
+                stable_id="smallcap-model",
+                runner_host="test-workstation",
+                status="failed",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                peak_rss_mb=30 * validate_menagerie.MB_PER_GB,
+                error_class="failed:memory_cap",
+                error_message="worker RSS exceeded --worker-memory-cap-gb=30.000; killed",
+            ),
+        )
+        append_verification_run(
+            conn,
+            _run(
                 run_id="crash-run",
                 stable_id="crash-model",
+                runner_host="test-workstation",
                 status="native_crash",
                 forward_pass=0,
                 metadata_ok=0,
@@ -521,11 +626,95 @@ def test_auto_runner_routes_oom_but_not_native_crash(
             ),
         )
     oom = _row(stable_id="oom-model", name="OOMNet")
+    bigcap = _row(stable_id="bigcap-model", name="BigCapNet")
+    smallcap = _row(stable_id="smallcap-model", name="SmallCapNet")
     crash = _row(stable_id="crash-model", name="CrashNet")
 
-    routed = validate_menagerie._cluster_route_rows([oom, crash], "auto", ledger_db=ledger_db)
+    routed = validate_menagerie._cluster_route_rows(
+        [oom, bigcap, smallcap, crash], "auto", ledger_db=ledger_db
+    )
 
-    assert [row.stable_id for row in routed] == ["oom-model"]
+    assert sorted(row.stable_id for row in routed) == ["bigcap-model", "oom-model"]
+
+
+def test_local_first_remote_ram_failure_does_not_escalate(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """A memory-cap kill on a CLUSTER host is not local nonfit evidence.
+
+    Only a failure on THIS workstation proves the model cannot run locally; a
+    cluster-host memory-cap row (small peak, no >=115 GiB measurement) must keep
+    the model local-first.
+    """
+
+    monkeypatch.setattr(cluster_runner_socket(), "gethostname", lambda: "test-workstation")
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                run_id="remote-cap",
+                stable_id="remote-model",
+                runner_host="ax14.rc.zi.columbia.edu",
+                status="failed",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                peak_rss_mb=40 * validate_menagerie.MB_PER_GB,
+                error_class="failed:memory_cap",
+                error_message="worker RSS exceeded --worker-memory-cap-gb=120.000; killed",
+            ),
+        )
+    remote = _row(stable_id="remote-model", name="RemoteCapNet")
+
+    routed = validate_menagerie._cluster_route_rows([remote], "auto", ledger_db=ledger_db)
+
+    assert routed == ()
+
+
+def test_giant_registry_force_cluster_only_for_genuine_giants() -> None:
+    """Only the four measured-nonfit giants keep ``force_cluster=True``.
+
+    Every registry entry whose measured peak fits locally (<115 GiB) must be
+    local-first (``force_cluster=False``); preserving a force flag for a fittable
+    model is exactly the opt-OUT over-routing the local-first policy removes.
+    """
+
+    from menagerie.cluster_runner import (
+        GIANT_REGISTRY,
+        LOCAL_FIRST_CLUSTER_THRESHOLD_GB,
+        MB_PER_GB,
+    )
+
+    forced = {sid for sid, entry in GIANT_REGISTRY.items() if entry.force_cluster}
+    assert forced == {"m4246", "m4525", "m4526", "m4527"}
+
+    threshold_mb = int(LOCAL_FIRST_CLUSTER_THRESHOLD_GB * MB_PER_GB)
+    for sid, entry in GIANT_REGISTRY.items():
+        if entry.force_cluster:
+            assert entry.measured_peak_rss_mb is not None
+            assert entry.measured_peak_rss_mb >= threshold_mb, sid
+        elif entry.measured_peak_rss_mb is not None:
+            assert entry.measured_peak_rss_mb < threshold_mb, sid
+
+
+def cluster_runner_socket() -> Any:
+    """Return the ``socket`` module object used by the cluster runner.
+
+    The local-RAM-failure check resolves the workstation hostname via
+    ``socket.gethostname()`` inside :mod:`menagerie.cluster_runner`; tests patch
+    that module's ``socket`` so a fixture run reads as "local".
+
+    Returns
+    -------
+    Any
+        The :mod:`socket` module imported by the cluster runner.
+    """
+
+    from menagerie import cluster_runner
+
+    return cluster_runner.socket
 
 
 def test_no_build_catalog_selection_uses_read_only_loader(
@@ -559,7 +748,7 @@ def test_cluster_routing_resume_uses_ledger_not_manifest(
     """A ledger-complete giant is not dispatched or run locally without manifest state."""
 
     ledger_db = tmp_path / "verification.db"
-    giant = _row(stable_id="m3635", name="beit_large_patch16_512")
+    giant = _row(stable_id="m4527", name="effdet_tf_efficientdet_d7")
     local_calls: list[str] = []
     monkeypatch.setenv("TORCHLENS_MENAGERIE_ENV_HASH", "env-a")
     monkeypatch.setenv("TORCHLENS_MENAGERIE_LOCK_HASH", "lock-a")
@@ -567,7 +756,7 @@ def test_cluster_routing_resume_uses_ledger_not_manifest(
     with connect(ledger_db) as conn:
         append_verification_run(
             conn,
-            _run(stable_id="m3635", name="beit_large_patch16_512", runner_host="axon-test"),
+            _run(stable_id="m4527", name="effdet_tf_efficientdet_d7", runner_host="axon-test"),
         )
 
     def fail_dispatch(*_: object, **__: object) -> DispatchResult:
@@ -606,7 +795,7 @@ def test_cluster_routing_resume_uses_ledger_not_manifest(
 
     assert local_calls == []
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
-    assert records["m3635"]["status"] == "validated"
+    assert records["m4527"]["status"] == "validated"
 
 
 def test_cluster_unreachable_writes_terminal_rows_and_continues(
@@ -616,7 +805,7 @@ def test_cluster_unreachable_writes_terminal_rows_and_continues(
     """Transport failure records env_unavailable rows instead of aborting validation."""
 
     ledger_db = tmp_path / "verification.db"
-    giant = _row(stable_id="m3635", name="beit_large_patch16_512")
+    giant = _row(stable_id="m4527", name="effdet_tf_efficientdet_d7")
     catalog_db = tmp_path / "catalog.db"
     write_catalog([giant], canonical_tsv=tmp_path / "catalog.tsv", db_path=catalog_db)
 
@@ -642,12 +831,12 @@ def test_cluster_unreachable_writes_terminal_rows_and_continues(
 
     with connect(ledger_db) as conn:
         row = conn.execute(
-            "SELECT status, error_message FROM current_verification WHERE stable_id = 'm3635'"
+            "SELECT status, error_message FROM current_verification WHERE stable_id = 'm4527'"
         ).fetchone()
     records = validate_menagerie.manifest_records(tmp_path / "manifest.tsv")
     assert row["status"] == "env_unavailable"
     assert "reason=cluster_unreachable" in row["error_message"]
-    assert records["m3635"]["status"] == "skipped:cluster_unavailable"
+    assert records["m4527"]["status"] == "skipped:cluster_unavailable"
 
 
 def test_cluster_timeout_writes_terminal_rows_and_continues(
@@ -657,7 +846,7 @@ def test_cluster_timeout_writes_terminal_rows_and_continues(
     """Blocking sbatch timeouts record terminal rows instead of aborting."""
 
     ledger_db = tmp_path / "verification.db"
-    giant = _row(stable_id="m3635", name="beit_large_patch16_512")
+    giant = _row(stable_id="m4527", name="effdet_tf_efficientdet_d7")
     catalog_db = tmp_path / "catalog.db"
     write_catalog([giant], canonical_tsv=tmp_path / "catalog.tsv", db_path=catalog_db)
 
@@ -678,7 +867,7 @@ def test_cluster_timeout_writes_terminal_rows_and_continues(
 
     with connect(ledger_db) as conn:
         row = conn.execute(
-            "SELECT status, error_message FROM current_verification WHERE stable_id = 'm3635'"
+            "SELECT status, error_message FROM current_verification WHERE stable_id = 'm4527'"
         ).fetchone()
     assert row["status"] == "env_unavailable"
     assert "reason=cluster_timeout" in row["error_message"]
@@ -687,31 +876,35 @@ def test_cluster_timeout_writes_terminal_rows_and_continues(
 def test_cluster_candidates_exclude_pixi_island_giants() -> None:
     """A pixi-island giant (deps absent on the cluster) is never cluster-routed.
 
-    Bug: m7069 (mmseg:ann) is RAM-classified as a giant but assigned to the
-    mmlab_core island. Routing it to the cluster sends it to a node lacking its
-    island dependencies. It must validate locally in its island env instead,
-    while base-env giants (m3635, m5651) still route to the cluster.
+    Bug: m7069 (mmseg:ann) is a non-base island assignment. Even when it is a RAM
+    giant by MEASURED evidence (a >=115 GiB peak), routing it to the cluster sends
+    it to a node lacking its island dependencies, so it must validate locally in
+    its island env instead -- while a base-env forced giant (m4527) still routes
+    to the cluster. The island exclusion runs BEFORE the local-first giant check,
+    so it holds regardless of how m7069 became a giant.
     """
 
     from menagerie import envs
     from menagerie.catalog import CATALOG_DB
-    from menagerie.cluster_runner import is_giant, load_catalog_rows_ro
+    from menagerie.cluster_runner import MB_PER_GB, is_giant, load_catalog_rows_ro
 
-    rows = load_catalog_rows_ro(CATALOG_DB, stable_ids=["m3635", "m5651", "m7069"])
+    rows = load_catalog_rows_ro(CATALOG_DB, stable_ids=["m4527", "m7069"])
     assignments = envs.assign(rows)
     by_id = {row.stable_id: row for row in rows}
 
-    # Precondition: m7069 is both a RAM giant AND a non-base island assignment.
-    assert is_giant(by_id["m7069"])
+    # Precondition: m7069 is a non-base island assignment, and under local-first it
+    # is a RAM giant only by MEASURED evidence (a >=115 GiB peak in the ledger).
+    giant_ledger = {"m7069": 130 * MB_PER_GB}
+    assert is_giant(by_id["m7069"], ledger=giant_ledger)
     assert assignments["m7069"] != "base"
-    assert assignments["m3635"] == "base"
-    assert assignments["m5651"] == "base"
+    assert assignments["m4527"] == "base"
 
     candidates = validate_menagerie._cluster_candidate_rows(rows, "auto", ledger_db=None)
     routed = {row.stable_id for row in candidates}
 
     assert "m7069" not in routed
-    assert routed == {"m3635", "m5651"}
+    # m4527 is a base-env forced giant; it still routes to the cluster.
+    assert routed == {"m4527"}
 
     # Explicit --runner cluster must also exclude the island giant.
     forced = validate_menagerie._cluster_candidate_rows(rows, "cluster", ledger_db=None)

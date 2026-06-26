@@ -225,7 +225,12 @@ def _write_results(tmp_path: Path, rows: list[ClusterResultRow]) -> tuple[Path, 
 
 
 def test_static_registry_contains_all_axon_giant_seeds() -> None:
-    """The static registry seeds all 17 axon campaign giants."""
+    """The static registry seeds all 17 axon campaign giants.
+
+    Under the LOCAL-FIRST policy the registry retains every campaign seed for its
+    tier-sizing metadata, but only the four measured-nonfit giants (peak >=115 GiB
+    on axon) keep ``force_cluster=True``; the rest are local-first.
+    """
 
     expected = {
         "m920",
@@ -249,19 +254,37 @@ def test_static_registry_contains_all_axon_giant_seeds() -> None:
 
     assert set(GIANT_REGISTRY) == expected
     assert GIANT_REGISTRY["m4246"].node_mem_gb == 250
-    assert GIANT_REGISTRY["m5651"].node_mem_gb == 500
+    # m5651 (longcat) fits locally (~82 GiB on axon); it is local-first now.
+    assert GIANT_REGISTRY["m5651"].node_mem_gb == 180
+    assert GIANT_REGISTRY["m5651"].force_cluster is False
+    # Only the four genuine giants force-route before any measurement.
+    forced = {sid for sid, entry in GIANT_REGISTRY.items() if entry.force_cluster}
+    assert forced == {"m4246", "m4525", "m4526", "m4527"}
 
 
-def test_is_giant_routes_static_heuristic_oom_and_blocks_native_crash(tmp_path: Path) -> None:
-    """Routing honors static seeds, first-contact heuristics, OOMs, and native crashes."""
+def test_is_giant_local_first_routes_measured_and_forced_not_estimates(
+    tmp_path: Path,
+) -> None:
+    """LOCAL-FIRST routing: measured peak + forced seed route; estimates do NOT.
 
+    The shared axon cluster is opt-IN. A model routes there only on HARD measured
+    nonfit evidence (a >=115 GiB measured peak or a forced genuine-giant seed);
+    unmeasured/large-LOOKING models (by name/params/input shape) stay LOCAL, and a
+    measured peak BELOW the threshold stays LOCAL.
+    """
+
+    import socket
+
+    local_host = socket.gethostname()
     ledger_db = tmp_path / "verification.db"
     with connect(ledger_db) as conn:
+        # A LOCAL OOM -> hard RAM-failure evidence -> cluster.
         append_verification_run(
             conn,
             _run(
                 run_id="oom-run",
                 stable_id="oom-model",
+                runner_host=local_host,
                 status="oom",
                 forward_pass=0,
                 metadata_ok=0,
@@ -269,24 +292,31 @@ def test_is_giant_routes_static_heuristic_oom_and_blocks_native_crash(tmp_path: 
                 peak_rss_mb=None,
             ),
         )
+        # A measured peak >=115 GiB -> cluster.
         append_verification_run(
             conn,
-            _run(
-                run_id="crash-run",
-                stable_id="m4246",
-                status="native_crash",
-                forward_pass=0,
-                metadata_ok=0,
-                n_ops=None,
-                peak_rss_mb=None,
-            ),
+            _run(run_id="measured-run", stable_id="measured", peak_rss_mb=130 * 1024),
+        )
+        # A measured peak <115 GiB -> LOCAL.
+        append_verification_run(
+            conn,
+            _run(run_id="fits-run", stable_id="fits", peak_rss_mb=90 * 1024),
         )
 
-    assert is_giant(_row(stable_id="m3635", name="beit_large_patch16_512"), ledger=ledger_db)
+    # Forced genuine giant (m4246, depth_pro ~183 GiB on axon) -> cluster.
+    assert is_giant(_row(stable_id="m4246", name="depth_pro"), ledger=ledger_db)
+    # A fittable former-seed (m3635, ~48 GiB on axon) is local-first now.
+    assert not is_giant(_row(stable_id="m3635", name="beit_large_patch16_512"), ledger=ledger_db)
     assert is_giant(_row(stable_id="oom-model"), ledger=ledger_db)
-    assert is_giant(_row(stable_id="new-moe", name="Research 2B MoE"), ledger=ledger_db)
-    assert is_giant(_row(stable_id="large-input", input_shape="(1, 3, 1024, 1024)"))
-    assert not is_giant(_row(stable_id="m4246", name="depth_pro"), ledger=ledger_db)
+    assert is_giant(_row(stable_id="measured"), ledger=ledger_db)
+    assert not is_giant(_row(stable_id="fits"), ledger=ledger_db)
+    # Estimates (name / param-count / input-shape) never route on their own.
+    assert not is_giant(_row(stable_id="new-moe", name="Research 2B MoE"), ledger=ledger_db)
+    assert not is_giant(
+        _row(stable_id="large-input", input_shape="(1, 3, 1024, 1024)"), ledger=ledger_db
+    )
+    # Unmeasured with no evidence -> LOCAL.
+    assert not is_giant(_row(stable_id="unknown", name="Mystery"), ledger=None)
     assert not is_giant(_row(stable_id="small", name="SmallNet"), ledger={"small": 4 * 1024})
 
 
@@ -295,7 +325,8 @@ def test_node_tier_right_sizes_incrementally_with_terabyte_escape() -> None:
 
     assert node_tier_for_row(_row(stable_id="m3635")).mem_gb == 180
     assert node_tier_for_row(_row(stable_id="m4246")).mem_gb == 250
-    assert node_tier_for_row(_row(stable_id="m5651")).mem_gb == 500
+    # m5651 (longcat) fits locally (~82 GiB on axon); its seed tier is now 180.
+    assert node_tier_for_row(_row(stable_id="m5651")).mem_gb == 180
     assert node_tier_for_row(_row(stable_id="huge"), ledger={"huge": 700 * 1024}).mem_gb == 1000
 
 
@@ -341,11 +372,13 @@ def test_repeated_unregistered_moe_oom_escalates_to_terabyte(tmp_path: Path) -> 
 def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -> None:
     """Dispatch prepares rsync/ssh/sbatch commands without live cluster access."""
 
+    # Two giants in DIFFERENT seed tiers (m3635=180 GiB, m4246=250 GiB) so the
+    # dispatch produces one sbatch script per tier.
     catalog_db = _write_catalog(
         tmp_path,
         [
             _row(model_id=1, stable_id="m3635", name="beit_large_patch16_512"),
-            _row(model_id=2, display_index=2, stable_id="m5651", name="longcat_flash"),
+            _row(model_id=2, display_index=2, stable_id="m4246", name="depth_pro"),
         ],
     )
     ledger_db = tmp_path / "verification.db"
@@ -363,7 +396,7 @@ def test_dispatch_uses_mocked_commands_and_one_sbatch_per_tier(tmp_path: Path) -
         return subprocess.CompletedProcess(command_tuple, 0, stdout=stdout, stderr="")
 
     result = dispatch_giants(
-        ["m3635", "m5651"],
+        ["m3635", "m4246"],
         catalog_db=catalog_db,
         ledger_db=ledger_db,
         repo_root=tmp_path,

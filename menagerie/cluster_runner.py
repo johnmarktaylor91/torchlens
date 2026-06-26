@@ -72,7 +72,28 @@ TERMINAL_STATUSES = frozenset(
         "killed",
     }
 )
+# Total physical RAM on the local workstation, in GiB. Retained for the legacy
+# kwarg name and tier-sizing call sites.
 LOCAL_RAM_THRESHOLD_GB = 125.0
+# LOCAL-FIRST cluster-routing threshold (GiB). A model routes to the SHARED axon
+# cluster ONLY with HARD measured evidence it cannot fit locally: a measured peak
+# RSS at/above this usable-RAM threshold, or a prior LOCAL run that exhausted
+# (essentially) this much RAM and was still killed. The 10 GiB gap below the
+# 125 GiB total leaves OS/headroom. axon is a SHARED cluster for the whole lab;
+# never preemptively send an unmeasured / merely large-LOOKING model there.
+LOCAL_FIRST_CLUSTER_THRESHOLD_GB = 115.0
+# A LOCAL worker-memory-cap kill only counts as genuine "can't fit locally"
+# evidence when the cap it blew through was near full local RAM. A model killed
+# at a SMALL cap (an early-sweep protective cap, e.g. 30 GiB) proves nothing
+# about 115 GiB feasibility, so such kills must NOT escalate to the cluster.
+LOCAL_RAM_FAILURE_CAP_FLOOR_GB = 105.0
+# Local statuses that constitute a RAM-related failure (escalate to cluster). A
+# bare ``native_crash`` is deliberately EXCLUDED: a native crash is ambiguous
+# (often a code/wrapper bug, not RAM exhaustion), so shipping it to the shared
+# cluster would waste a node on a non-RAM failure. Only unambiguous resource kills
+# (the OOM killer / an explicit kill) count; a genuine RAM native-crash surfaces
+# as ``oom``/``killed`` or as a near-full-RAM ``failed:memory_cap`` instead.
+LOCAL_RAM_FAILURE_STATUSES = frozenset({"oom", "killed"})
 MB_PER_GB = 1024
 GIANT_HEURISTIC_PATTERNS = (
     "depth_pro",
@@ -380,57 +401,143 @@ class ClusterJobFailed(RuntimeError):
         super().__init__(f"cluster job(s) {','.join(self.job_ids) or '<unknown>'} failed: {detail}")
 
 
+# Static first-contact routing seeds. Under the LOCAL-FIRST policy only entries
+# with ``force_cluster=True`` preemptively route to the SHARED axon cluster before
+# any measurement -- and that flag is reserved for the few GENUINE can't-fit
+# giants whose MEASURED peak RSS is at/above local RAM (>=115 GiB). Every entry
+# whose measured peak fits locally (<115 GiB) keeps ``force_cluster=False`` so it
+# validates LOCALLY first; it is retained only for its tier-sizing metadata and
+# escalates to the cluster on its own merits (a measured >=115 GiB peak or a local
+# RAM failure) via the ledger, never preemptively. Measured peaks below reflect
+# the campaign max on axon (the four forced giants exceeded local RAM there).
 GIANT_REGISTRY: dict[str, GiantRegistryEntry] = {
     "m920": GiantRegistryEntry(
-        "m920", "Ettin-decoder-1b", None, 250, "param-monster first-contact seed"
+        "m920",
+        "Ettin-decoder-1b",
+        103 * MB_PER_GB,
+        180,
+        "axon peak ~103 GiB; fits locally",
+        force_cluster=False,
     ),
     "m2064": GiantRegistryEntry(
-        "m2064", "OuteTTS", None, 250, "param-heavy audio language model seed"
+        "m2064",
+        "OuteTTS",
+        106 * MB_PER_GB,
+        180,
+        "axon peak ~106 GiB; fits locally",
+        force_cluster=False,
     ),
     "m3635": GiantRegistryEntry(
-        "m3635", "beit_large_patch16_512", 48 * MB_PER_GB, 180, "axon peak about 48 GiB"
+        "m3635",
+        "beit_large_patch16_512",
+        48 * MB_PER_GB,
+        180,
+        "axon peak about 48 GiB",
+        force_cluster=False,
     ),
     "m4165": GiantRegistryEntry(
-        "m4165", "deepseek_vl_hybrid", None, 500, "MoE / multimodal param-monster seed"
+        "m4165",
+        "deepseek_vl_hybrid",
+        104 * MB_PER_GB,
+        180,
+        "axon peak ~104 GiB; fits locally",
+        force_cluster=False,
     ),
     "m4246": GiantRegistryEntry(
-        "m4246", "depth_pro", 176 * MB_PER_GB, 250, "axon rerun needed >170 GiB"
+        "m4246", "depth_pro", 183 * MB_PER_GB, 250, "axon peak ~183 GiB; exceeds local RAM"
     ),
     "m4494": GiantRegistryEntry(
-        "m4494", "effdet_efficientdet_d5", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+        "m4494",
+        "effdet_efficientdet_d5",
+        100 * MB_PER_GB,
+        180,
+        "axon peak about 100 GiB",
+        force_cluster=False,
     ),
     "m4495": GiantRegistryEntry(
-        "m4495", "effdet_efficientdet_d5", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+        "m4495",
+        "effdet_efficientdet_d5",
+        100 * MB_PER_GB,
+        180,
+        "axon peak about 100 GiB",
+        force_cluster=False,
     ),
     "m4523": GiantRegistryEntry(
-        "m4523", "effdet_tf_efficientdet_d5", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+        "m4523",
+        "effdet_tf_efficientdet_d5",
+        100 * MB_PER_GB,
+        180,
+        "axon peak about 100 GiB",
+        force_cluster=False,
     ),
     "m4524": GiantRegistryEntry(
-        "m4524", "effdet_tf_efficientdet_d5_ap", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+        "m4524",
+        "effdet_tf_efficientdet_d5_ap",
+        100 * MB_PER_GB,
+        180,
+        "axon peak about 100 GiB",
+        force_cluster=False,
     ),
     "m4525": GiantRegistryEntry(
-        "m4525", "effdet_tf_efficientdet_d5_ap6", 100 * MB_PER_GB, 180, "axon peak about 100 GiB"
+        "m4525",
+        "effdet_tf_efficientdet_d6",
+        128 * MB_PER_GB,
+        180,
+        "axon peak ~128 GiB; exceeds local RAM",
     ),
     "m4526": GiantRegistryEntry(
-        "m4526", "effdet_tf_efficientdet_d6", 128 * MB_PER_GB, 180, "axon peak about 128 GiB"
+        "m4526",
+        "effdet_tf_efficientdet_d6",
+        183 * MB_PER_GB,
+        250,
+        "axon peak ~183 GiB; exceeds local RAM",
     ),
     "m4527": GiantRegistryEntry(
-        "m4527", "effdet_tf_efficientdet_d7", None, 250, "d7 exceeded 180 GiB campaign tier"
+        "m4527",
+        "effdet_tf_efficientdet_d7",
+        228 * MB_PER_GB,
+        250,
+        "axon peak ~228 GiB; exceeds local RAM",
     ),
     "m4797": GiantRegistryEntry(
-        "m4797", "eva02_enormous", None, 500, "enormous ViT first-contact seed"
+        "m4797",
+        "eva02_enormous",
+        94 * MB_PER_GB,
+        180,
+        "axon peak ~94 GiB; fits locally",
+        force_cluster=False,
     ),
     "m4808": GiantRegistryEntry(
-        "m4808", "eva_giant_560", 80 * MB_PER_GB, 180, "axon peak about 80 GiB"
+        "m4808",
+        "eva_giant_560",
+        80 * MB_PER_GB,
+        180,
+        "axon peak about 80 GiB",
+        force_cluster=False,
     ),
     "m5187": GiantRegistryEntry(
-        "m5187", "gigagan_unet_upsampler", None, 250, "large generative upsampler seed"
+        "m5187",
+        "gigagan_unet_upsampler",
+        90 * MB_PER_GB,
+        180,
+        "axon peak ~90 GiB; fits locally",
+        force_cluster=False,
     ),
     "m5651": GiantRegistryEntry(
-        "m5651", "longcat_flash", None, 500, "longcat 560B MoE first-contact seed"
+        "m5651",
+        "longcat_flash",
+        82 * MB_PER_GB,
+        180,
+        "axon peak ~82 GiB; fits locally",
+        force_cluster=False,
     ),
     "m11112": GiantRegistryEntry(
-        "m11112", "vit_so400m_896", 98 * MB_PER_GB, 180, "axon peak about 98 GiB"
+        "m11112",
+        "vit_so400m_896",
+        98 * MB_PER_GB,
+        180,
+        "axon peak about 98 GiB",
+        force_cluster=False,
     ),
 }
 
@@ -620,13 +727,27 @@ def is_giant(
     row: CatalogRow | Mapping[str, object],
     ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
     *,
-    local_ram_threshold_gb: float = LOCAL_RAM_THRESHOLD_GB,
+    local_ram_threshold_gb: float = LOCAL_FIRST_CLUSTER_THRESHOLD_GB,
 ) -> bool:
-    """Return whether a row must be routed to the cluster.
+    """Return whether a row must be routed to the SHARED axon cluster.
 
-    Native crashes are never cluster-routed. OOM rows are cluster-routed. Known static
-    giants and conservative first-contact heuristics route to the cluster when no
-    local-safe measurement exists.
+    LOCAL-FIRST policy (axon is a shared lab cluster; use it only when a model
+    genuinely cannot run locally). A model routes to the cluster ONLY with HARD
+    MEASURED evidence it cannot fit in local RAM:
+
+    * its MEASURED peak RSS (from ANY prior attempt, local or cluster) is at/above
+      the usable-local-RAM threshold, OR
+    * it RAM-FAILED on a prior LOCAL attempt -- an OOM / resource kill, or a
+      worker-memory-cap kill at a cap near full local RAM.
+
+    Everything else -- unmeasured/unknown-size models, models with a measured peak
+    BELOW the threshold, and anything that merely LOOKS large by name, parameter
+    count, or input shape -- routes LOCAL. An unmeasured model is never
+    preemptively sent to the cluster: if it OOMs locally the ledger records it and
+    it escalates on a later run (the intended escalation path). Size ESTIMATES
+    (param count / FLOPs / name patterns) are deliberately NOT a routing signal --
+    only measured RAM evidence counts. The static :data:`GIANT_REGISTRY` may still
+    force-route the rare genuine can't-fit model before its first measurement.
 
     Parameters
     ----------
@@ -635,7 +756,8 @@ def is_giant(
     ledger:
         Ledger connection/path, or a stable-ID to peak-RSS mapping.
     local_ram_threshold_gb:
-        Local machine RSS threshold in GiB.
+        Usable local-RAM RSS threshold in GiB. A measured peak at/above this is
+        proof the model cannot fit locally.
 
     Returns
     -------
@@ -644,26 +766,31 @@ def is_giant(
     """
 
     stable_id = _row_value(row, "stable_id")
-    status, peak_rss_mb = _latest_status_and_peak(stable_id, ledger)
-    if status == "native_crash":
-        return False
-    if status == "oom":
+    _status, peak_rss_mb = _latest_status_and_peak(stable_id, ledger)
+    threshold_mb = int(local_ram_threshold_gb * MB_PER_GB)
+    # (1) Hard evidence: a measured peak at/above usable local RAM. The peak may
+    # have been measured on the cluster (e.g. a 228 GiB effdet_d7 run) -- that is
+    # still genuine proof the model cannot fit in local RAM.
+    measured_peak_mb = _max_measured_peak_mb(stable_id, ledger, latest_peak_mb=peak_rss_mb)
+    if measured_peak_mb is not None and measured_peak_mb >= threshold_mb:
         return True
-    if peak_rss_mb is not None and peak_rss_mb >= int(local_ram_threshold_gb * MB_PER_GB):
+    # (2) Hard evidence: the model RAM-failed on a prior LOCAL attempt (OOM /
+    # memory native crash / kill, or a memory-cap kill near full local RAM).
+    if _had_local_ram_failure(stable_id, ledger):
         return True
+    # (3) Narrow static seed for a genuine can't-fit model with no measurement yet.
     entry = GIANT_REGISTRY.get(stable_id)
     if entry is not None and entry.force_cluster:
         return True
-    if peak_rss_mb is not None:
-        return False
-    return _matches_first_contact_heuristic(row)
+    # Otherwise LOCAL-FIRST: unmeasured, small-peak, or merely large-looking.
+    return False
 
 
 def route_giants(
     rows: Sequence[CatalogRow],
     ledger: sqlite3.Connection | Path | Mapping[str, int] | None = None,
     *,
-    local_ram_threshold_gb: float = LOCAL_RAM_THRESHOLD_GB,
+    local_ram_threshold_gb: float = LOCAL_FIRST_CLUSTER_THRESHOLD_GB,
 ) -> tuple[CatalogRow, ...]:
     """Return rows that should be routed to the cluster.
 
@@ -1966,8 +2093,145 @@ def _oom_run_count(
     return int(row[0]) if row is not None else 0
 
 
+def _max_measured_peak_mb(
+    stable_id: str,
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None,
+    *,
+    latest_peak_mb: int | None = None,
+) -> int | None:
+    """Return the largest measured peak RSS (MB) for a stable ID, any host.
+
+    A measured peak is HARD non-fit evidence regardless of where it was measured:
+    a cluster-measured 228 GiB peak proves the model cannot fit in local RAM just
+    as well as a local measurement would. The max over ALL historical runs is used
+    so that a later, smaller cluster-validated peak (the latest terminal row) does
+    not erase the earlier proof that the model is too large for the workstation.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    ledger:
+        Ledger connection/path, peak-RSS mapping, or ``None``.
+    latest_peak_mb:
+        Already-known latest peak (from :func:`_latest_status_and_peak`), used as
+        a floor and as the only source for the mapping/None ledger forms.
+
+    Returns
+    -------
+    int | None
+        Largest measured peak RSS in MB, or ``None`` when never measured.
+    """
+
+    if ledger is None or isinstance(ledger, Mapping):
+        return latest_peak_mb
+    if isinstance(ledger, Path):
+        with connect_ledger(ledger) as conn:
+            return _max_measured_peak_mb(stable_id, conn, latest_peak_mb=latest_peak_mb)
+    row = ledger.execute(
+        """
+        SELECT MAX(peak_rss_mb) AS max_peak
+        FROM verification_runs
+        WHERE stable_id = ?
+          AND peak_rss_mb IS NOT NULL
+        """,
+        (stable_id,),
+    ).fetchone()
+    history_peak = None if row is None or row["max_peak"] is None else int(row["max_peak"])
+    candidates = [value for value in (latest_peak_mb, history_peak) if value is not None]
+    return max(candidates) if candidates else None
+
+
+def _had_local_ram_failure(
+    stable_id: str,
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None,
+) -> bool:
+    """Return whether a stable ID RAM-failed on a prior LOCAL attempt.
+
+    A LOCAL RAM failure is HARD evidence the model cannot run on the workstation
+    and must escalate to the cluster. It is either:
+
+    * a LOCAL run with an OOM / resource-kill status, or
+    * a LOCAL ``failed:memory_cap`` run whose worker memory cap was NEAR full local
+      RAM (>= :data:`LOCAL_RAM_FAILURE_CAP_FLOOR_GB`). A memory-cap kill at a SMALL
+      protective cap (e.g. an early-sweep 30 GiB cap) is NOT evidence the model
+      needs >115 GiB, so it must NOT escalate -- that was the original
+      over-routing trap.
+
+    "Local" means a run whose ``runner_host`` equals ``socket.gethostname()`` --
+    this workstation (the shared cluster nodes use distinct ``ax*`` hostnames).
+    Mapping / ``None`` ledger forms carry no per-run host or status detail and so
+    report no failure.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    ledger:
+        Ledger connection/path, peak-RSS mapping, or ``None``.
+
+    Returns
+    -------
+    bool
+        Whether a qualifying local RAM failure exists.
+    """
+
+    if ledger is None or isinstance(ledger, Mapping):
+        return False
+    if isinstance(ledger, Path):
+        with connect_ledger(ledger) as conn:
+            return _had_local_ram_failure(stable_id, conn)
+    local_host = socket.gethostname()
+    rows = ledger.execute(
+        """
+        SELECT status, error_class, error_message
+        FROM verification_runs
+        WHERE stable_id = ?
+          AND runner_host = ?
+        """,
+        (stable_id, local_host),
+    ).fetchall()
+    cap_floor_gb = LOCAL_RAM_FAILURE_CAP_FLOOR_GB
+    for row in rows:
+        status = str(row["status"]) if row["status"] is not None else ""
+        if status in LOCAL_RAM_FAILURE_STATUSES:
+            return True
+        error_class = str(row["error_class"]) if row["error_class"] is not None else ""
+        if error_class == "failed:memory_cap":
+            cap_gb = _parse_worker_cap_gb(row["error_message"])
+            if cap_gb is not None and cap_gb >= cap_floor_gb:
+                return True
+    return False
+
+
+def _parse_worker_cap_gb(error_message: object) -> float | None:
+    """Return the worker-memory-cap GiB embedded in a memory-cap message.
+
+    Parameters
+    ----------
+    error_message:
+        Verification ``error_message`` text, possibly ``None``.
+
+    Returns
+    -------
+    float | None
+        Parsed ``--worker-memory-cap-gb`` value, or ``None`` when absent.
+    """
+
+    if not error_message:
+        return None
+    match = re.search(r"worker-memory-cap-gb=([\d.]+)", str(error_message))
+    return float(match.group(1)) if match else None
+
+
 def _matches_first_contact_heuristic(row: CatalogRow | Mapping[str, object]) -> bool:
-    """Return whether row metadata is too risky for local first contact."""
+    """Return whether row metadata is too risky for local first contact.
+
+    NOTE: as of the LOCAL-FIRST routing policy this is NO LONGER part of the
+    cluster-routing DECISION in :func:`is_giant` -- size estimates over-route a
+    shared cluster. It is retained only as a conservative tier-sizing input for
+    models already routed to the cluster (see :func:`node_tier_for_row`).
+    """
 
     haystack = " ".join(
         _row_value(row, field)
