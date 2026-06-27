@@ -4841,7 +4841,10 @@ def _case_timeout(
     settings:
         Per-row smoke settings.
     default_timeout:
-        Floor for a scaled real-PASS timeout (the small-model base wall).
+        Lower bound contribution to the generous floor (``max(generous_sec,
+        default_timeout)``). The scaled real-PASS timeout is floored at the
+        GENEROUS minimum, not at this value, so a small PASS prior cannot yield a
+        thin wall that kills a model that would finish.
     duration_estimates:
         Latest measured forward-PASS durations keyed by stable ID (passed-only).
     timeout_scale:
@@ -4867,7 +4870,12 @@ def _case_timeout(
         # Crucially we do NOT scale a truncated duration here.
         return generous_floor
     scaled_timeout = math.ceil(timeout_scale * prior_pass_duration)
-    return max(default_timeout, min(scaled_timeout, timeout_ceiling_sec))
+    # Floor at the GENEROUS minimum (>= 3600s), matching the docstring: a model
+    # that passed fast in a PRIOR run can run much slower this time (single-thread
+    # validation pin, cold cache, GC, tracemalloc overhead, load). A small prior
+    # must NOT yield a thin ~240s wall that kills a model that would finish. The
+    # timeout is only a CEILING, so a fast model that finishes in 30s is unaffected.
+    return min(max(scaled_timeout, generous_floor), timeout_ceiling_sec)
 
 
 def _case_input_scale(

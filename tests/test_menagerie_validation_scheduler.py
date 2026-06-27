@@ -171,18 +171,19 @@ def test_case_timeout_scales_real_pass_priors() -> None:
     """
 
     row = _row(stable_id="m-slow")
-    # 3x * 900 = 2700 -- comfortably above the finish time, below the ceiling.
+    # 3x * 1500 = 4500 -- the scale dominates the generous floor (above the finish
+    # time + margin, above 3600, below the ceiling) so the scaled value is used.
     assert (
         _case_timeout(
             row,
             {},
             240.0,
-            {"m-slow": 900.0},
+            {"m-slow": 1500.0},
             timeout_scale=3.0,
             timeout_ceiling_sec=14400.0,
             generous_sec=3600.0,
         )
-        == 2700
+        == 4500
     )
     # A prior far beyond the ceiling clamps to the ceiling (hang-catcher cap).
     assert (
@@ -197,7 +198,10 @@ def test_case_timeout_scales_real_pass_priors() -> None:
         )
         == 14400.0
     )
-    # A tiny PASS prior never drops below the base wall.
+    # A tiny PASS prior is floored at the GENEROUS minimum, NOT a thin base wall:
+    # a model that passed fast in a prior run can run much slower this time
+    # (single-thread pin, cold cache, GC, load), so the floor must be generous so
+    # we never kill a finisher. 3x * 10 = 30 < 3600 -> floored at 3600.
     assert (
         _case_timeout(
             row,
@@ -208,7 +212,7 @@ def test_case_timeout_scales_real_pass_priors() -> None:
             timeout_ceiling_sec=14400.0,
             generous_sec=3600.0,
         )
-        == 240.0
+        == 3600.0
     )
 
 
@@ -361,6 +365,26 @@ def test_no_plausibly_finishing_model_is_killed() -> None:
     # Sanity: scaling the truncated cap would have produced ~360s -- which we
     # explicitly avoid.
     assert timeout != 1.5 * all_durations_with_truncated_cap["m-timed-out-prior"]
+
+    # 4) The SMALL-real-pass-prior case (the F1 regression): a model that PASSED
+    # fast (~30s) in a prior run -- recorded BEFORE this sprint's single-thread
+    # validation pin -- must NOT get a thin scaled wall (3x * 30 = 90s). The
+    # single-thread pin, cold cache, GC, and tracemalloc overhead can make the
+    # same forward several-x slower this time, so the scaled real-pass timeout is
+    # floored at the GENEROUS minimum (>= 3600s), never killed at <=4 min.
+    fast_prior = _row(stable_id="m-fast-prior")
+    timeout = _case_timeout(
+        fast_prior,
+        {},
+        240.0,
+        {"m-fast-prior": 30.0},  # genuine fast PASS prior
+        timeout_scale=TIMEOUT_DEFAULT_SCALE,
+        timeout_ceiling_sec=ceiling,
+        generous_sec=generous,
+    )
+    assert timeout >= 3600.0, timeout
+    # Explicitly NOT the thin 3x-of-30 (~90s) or the old 240s base wall.
+    assert timeout > 240.0
 
 
 def test_validate_with_timeout_records_peak_rss_on_timeout(
