@@ -935,6 +935,41 @@ def _lock_path(env_key: str) -> Path:
     return LOCKS_DIR / f"{env_key}{LOCK_FILE_SUFFIX}"
 
 
+def _is_placeholder_lock(lock_path: Path) -> bool:
+    """Return whether a committed lock file is an env-unavailable placeholder.
+
+    A deliberately empty (zero-byte) or version-less committed lock marks an
+    island whose environment genuinely cannot be built in this checkout (for
+    example a source/build-heavy dependency that does not resolve here). Such a
+    placeholder is an honest "env unavailable" bound -- distinct from a real
+    lock that pixi later rejects, which must still surface as an install
+    failure. Detection is intentionally narrow: only a missing file, a
+    zero-byte file, or a lock with no ``version:`` header counts.
+
+    Parameters
+    ----------
+    lock_path:
+        Committed pixi lock path.
+
+    Returns
+    -------
+    bool
+        ``True`` when the lock is an env-unavailable placeholder.
+    """
+
+    if not lock_path.exists():
+        return True
+    try:
+        if lock_path.stat().st_size == 0:
+            return True
+    except OSError:
+        return False
+    text = lock_path.read_text(encoding="utf-8", errors="ignore")
+    if not text.strip():
+        return True
+    return not any(line.lstrip().startswith("version:") for line in text.splitlines())
+
+
 def compute_lock_hash(manifest_path: Path, lock_path: Path) -> str:
     """Compute the environment lock hash.
 
@@ -1416,6 +1451,23 @@ def build(env_key: str, registry: EnvRegistry | None = None) -> BuildResult:
     cached = _cached_build(project_dir, env_key, lock_hash)
     if cached is not None:
         return cached
+    if _is_placeholder_lock(lock_result.lock_path):
+        # An empty/version-less committed lock is a deliberate "env unavailable"
+        # marker: the island's dependencies genuinely cannot be built in this
+        # checkout. Report it as an honest env_unavailable bound BEFORE attempting
+        # a pixi load (which would otherwise fail with a misleading "missing
+        # version field" install error). This carve-out is scoped strictly to the
+        # placeholder lock -- a real, non-empty lock that pixi rejects still falls
+        # through to the install-failed path below.
+        return BuildResult(
+            env_key,
+            "env_unavailable",
+            identity,
+            lock_hash,
+            project_dir,
+            f"committed lock for island {env_key!r} is an env-unavailable placeholder "
+            "(empty or version-less); skipping pixi build",
+        )
     if lock_result.returncode != 0:
         result = BuildResult(
             env_key,
