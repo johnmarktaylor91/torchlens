@@ -1168,6 +1168,140 @@ def verified_count(
     return int(row[0])
 
 
+def incremental_skip_stable_ids(
+    conn: sqlite3.Connection,
+    torchlens_version: str,
+    current_targets: Mapping[str, VerificationTarget],
+    input_scale_by_id: Mapping[str, float | None],
+) -> set[str]:
+    """Return stable IDs that incremental validation may PROVABLY skip.
+
+    This is the skip-eligibility predicate for the incremental-skip default
+    (FINAL_PLAN D4/D5, sprint bucket D). A stable ID is skip-eligible ONLY when
+    its CURRENT row -- selected through the cascade-aware
+    ``current_verification_real`` view (B0), so a suppressed batch-cascade
+    artifact never counts as a pass -- is a GENUINE, current-identity ``passed``
+    that matches its full identity tuple EXACTLY:
+
+    * ``recipe_revision_sha256`` (current catalog recipe revision),
+    * ``torchlens_source_hash`` (current TorchLens + menagerie source),
+    * ``env_hash`` and ``lock_hash`` (current assigned validation environment),
+    * ``device_requested`` (resolved device policy),
+    * ``scope``,
+    * ``input_scale`` (the degraded-sentinel guard: a row whose stored
+      ``input_scale`` is ``NULL`` -- the 48 degraded rows -- can NEVER equal a
+      concrete target scale, so it is never skip-eligible),
+    * ``torchlens_version``.
+
+    The honesty predicate is identical to :func:`verified_count`: only a
+    real ``passed`` with ``forward_pass=1``, ``metadata_ok=1``, non-null
+    ``n_ops``/``graph_shape_hash``, and a non-``legacy-unknown`` source/lock
+    qualifies. Everything else -- changed identity, a degraded component, ANY
+    non-``passed`` status (``failed:*`` / ``timeout`` / ``install_failed`` /
+    cascade-suppressed) -- is absent from the returned set, so the caller
+    re-validates it. This is a TRIPWIRE: a false skip would hide exactly the
+    capture regression validation exists to catch, so the match must be exact
+    across every component and only a current real pass qualifies.
+
+    A target whose ``input_scale`` is ``None`` (degraded / unknown current
+    intent) matches nothing -- when in doubt, validate.
+
+    Parameters
+    ----------
+    conn:
+        Initialized SQLite connection.
+    torchlens_version:
+        TorchLens version that must match the current verification rows.
+    current_targets:
+        Full identity targets keyed by stable ID (recipe revision, source/env/
+        lock hash, device policy, scope) -- computed the SAME way validation
+        computes them, never forked.
+    input_scale_by_id:
+        Current intended input scale per stable ID. A ``None`` value (degraded
+        / unknown) makes the row un-skippable.
+
+    Returns
+    -------
+    set[str]
+        Stable IDs that are provably current + passed and may be skipped.
+    """
+
+    if not current_targets:
+        return set()
+    conn.execute(
+        """
+        CREATE TEMP TABLE IF NOT EXISTS temp_incremental_skip_targets(
+            stable_id TEXT PRIMARY KEY,
+            recipe_revision_sha256 TEXT NOT NULL,
+            torchlens_source_hash TEXT NOT NULL,
+            env_hash TEXT NOT NULL,
+            lock_hash TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            input_scale REAL
+        )
+        """
+    )
+    conn.execute("DELETE FROM temp_incremental_skip_targets")
+    conn.executemany(
+        """
+        INSERT INTO temp_incremental_skip_targets(
+            stable_id,
+            recipe_revision_sha256,
+            torchlens_source_hash,
+            env_hash,
+            lock_hash,
+            device_requested,
+            scope,
+            input_scale
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (
+                stable_id,
+                target.recipe_revision_sha256,
+                target.torchlens_source_hash,
+                target.env_hash,
+                target.lock_hash,
+                target.device_requested,
+                target.scope,
+                input_scale_by_id.get(stable_id),
+            )
+            for stable_id, target in current_targets.items()
+        ),
+    )
+    rows = conn.execute(
+        """
+        SELECT current_verification_real.stable_id
+        FROM current_verification_real
+        JOIN temp_incremental_skip_targets AS target
+          ON target.stable_id = current_verification_real.stable_id
+         AND target.recipe_revision_sha256 = current_verification_real.recipe_revision_sha256
+         AND target.torchlens_source_hash = current_verification_real.torchlens_source_hash
+         AND target.env_hash = current_verification_real.env_hash
+         AND target.lock_hash = current_verification_real.lock_hash
+         AND target.device_requested = current_verification_real.device_requested
+         AND target.scope = current_verification_real.scope
+         AND target.input_scale IS NOT NULL
+         AND current_verification_real.input_scale IS NOT NULL
+         AND target.input_scale = current_verification_real.input_scale
+        WHERE current_verification_real.status = 'passed'
+          AND current_verification_real.forward_pass = 1
+          AND current_verification_real.metadata_ok = 1
+          AND current_verification_real.n_ops IS NOT NULL
+          AND current_verification_real.graph_shape_hash IS NOT NULL
+          AND current_verification_real.torchlens_version = ?
+          AND NOT (
+              current_verification_real.torchlens_source_hash = ?
+              OR current_verification_real.lock_hash = ?
+          )
+        """,
+        (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
+    ).fetchall()
+    return {str(row["stable_id"]) for row in rows}
+
+
 def cascade_suppressed_stable_ids(conn: sqlite3.Connection) -> list[str]:
     """Return stable IDs whose current row is a suppressed cascade artifact.
 

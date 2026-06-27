@@ -64,6 +64,7 @@ from menagerie.ledger import (
     base_lock_hash,
     base_env_hash,
     connect as connect_ledger,
+    incremental_skip_stable_ids,
     python_version,
     runner_host,
     torchlens_source_hash,
@@ -878,6 +879,117 @@ def _verification_targets_for_rows(
     }
 
 
+def _row_env_identity(env_key: str) -> tuple[str, str]:
+    """Return the ``(env_hash, lock_hash)`` a worker records for an island.
+
+    Mirrors exactly what ``append_validation_ledger`` records: a base-env row
+    uses the base environment/lock hashes; an island row uses the island's
+    committed lock + env hash. An island whose lock is absent resolves to
+    ``legacy-unknown`` -- which the skip predicate then refuses, so an
+    unpinned island is never skipped.
+
+    Parameters
+    ----------
+    env_key:
+        Island registry key, or ``"base"`` for the mutable base environment.
+
+    Returns
+    -------
+    tuple[str, str]
+        The ``(env_hash, lock_hash)`` pair for the environment.
+    """
+
+    lock_hash = envs.current_lock_hash(env_key)
+    env_hash = envs.current_env_hash(env_key, lock_hash)
+    return env_hash, lock_hash
+
+
+def _incremental_skip_stable_ids(
+    rows: Sequence[CatalogRow],
+    *,
+    scope: str,
+    device: str,
+    input_scale_by_id: Mapping[str, float],
+    env_registry: Path | None = None,
+    ledger_db: Path | None = None,
+    local_gpu_vram_bytes: int | None = None,
+) -> set[str]:
+    """Return rows the incremental-skip default may PROVABLY skip.
+
+    This is the DEFAULT skip filter (FINAL_PLAN D4/D5, sprint bucket D). A row
+    is skip-eligible ONLY when its current ledger row -- selected through the
+    cascade-aware ``current_verification_real`` view -- is a genuine,
+    current-identity ``passed`` matching its full identity tuple EXACTLY. The
+    identity is computed the SAME way validation records it: the recipe revision
+    on the row, the current ``torchlens_source_hash``, the per-island
+    ``env_hash``/``lock_hash``, the resolved route ``device_requested``, the
+    requested ``scope``, and the row's current ``input_scale``.
+
+    Everything else re-validates: a changed source/env/lock hash, a degraded
+    (``input_scale=NULL``) component, ANY non-``passed`` status
+    (``failed:*``/``timeout``/``install_failed`` -- we WANT to retry those), and
+    a cascade-suppressed row (absent from ``current_verification_real``). This is
+    a tripwire: a false skip hides a capture regression, so when in doubt the row
+    is validated.
+
+    Parameters
+    ----------
+    rows:
+        Candidate catalog rows (after manifest-resume filtering).
+    scope:
+        Requested validation scope.
+    device:
+        Requested validation device policy (the per-run fallback).
+    input_scale_by_id:
+        Current intended input scale per stable ID.
+    env_registry:
+        Optional environment registry path (resolves island env hashes).
+    ledger_db:
+        Optional verification ledger path.
+    local_gpu_vram_bytes:
+        Probed local GPU VRAM for CUDA-required device routing.
+
+    Returns
+    -------
+    set[str]
+        Stable IDs that are provably current + passed and may be skipped.
+    """
+
+    if not rows:
+        return set()
+    registry = envs.load_registry(env_registry) if env_registry else envs.load_registry()
+    assignments = envs.assign(rows, registry)
+    env_identity_cache: dict[str, tuple[str, str]] = {}
+    source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
+    ledger_path = _resolve_verification_db(ledger_db)
+    targets: dict[str, VerificationTarget] = {}
+    for row in rows:
+        env_key = assignments.get(row.stable_id, "base")
+        if env_key not in env_identity_cache:
+            env_identity_cache[env_key] = _row_env_identity(env_key)
+        env_hash, lock_hash = env_identity_cache[env_key]
+        route = cluster_runner.route_resources(
+            row,
+            ledger=ledger_path,
+            local_gpu_vram_bytes=local_gpu_vram_bytes,
+        )
+        targets[row.stable_id] = VerificationTarget(
+            recipe_revision_sha256=row.recipe_revision_sha256,
+            torchlens_source_hash=source_hash,
+            env_hash=env_hash,
+            lock_hash=lock_hash,
+            device_requested=route.device if device in {"cpu", "auto"} else device,
+            scope=cast(Scope, scope),
+        )
+    with connect_ledger(ledger_path) as conn:
+        return incremental_skip_stable_ids(
+            conn,
+            _torchlens_version(),
+            targets,
+            {row.stable_id: input_scale_by_id.get(row.stable_id) for row in rows},
+        )
+
+
 def _base_env_rows(
     rows: Sequence[CatalogRow],
     *,
@@ -1116,6 +1228,36 @@ def _append_cluster_rows_from_ledger(
 
     for row in rows:
         run = cluster_runner.latest_verification_run_for_stable_id(
+            row.stable_id, ledger_db=_resolve_verification_db(ledger_db)
+        )
+        append_manifest(manifest_path, _result_from_ledger_run(row, run))
+
+
+def _append_incremental_skip_rows(
+    rows: Sequence[CatalogRow],
+    manifest_path: Path,
+    *,
+    ledger_db: Path | None = None,
+) -> None:
+    """Record incrementally-skipped models in the validation manifest.
+
+    A skipped model is provably current + passed (verified through
+    ``current_verification_real``), so its manifest row is reconstructed from
+    that real current ledger row -- it lands as ``validated`` exactly as a fresh
+    pass would, so downstream render/metadata still process it.
+
+    Parameters
+    ----------
+    rows:
+        Incrementally-skipped catalog rows.
+    manifest_path:
+        Validation manifest path.
+    ledger_db:
+        Optional verification ledger path.
+    """
+
+    for row in rows:
+        run = cluster_runner.current_real_verification_run_for_stable_id(
             row.stable_id, ledger_db=_resolve_verification_db(ledger_db)
         )
         append_manifest(manifest_path, _result_from_ledger_run(row, run))
@@ -3965,7 +4107,53 @@ def run(args: argparse.Namespace) -> int:
     duration_estimates = latest_duration_estimates(args.verification_db)
     pass_duration_estimates = latest_passed_duration_estimates(args.verification_db)
     local_gpu_vram_bytes = cluster_runner.probe_local_gpu_vram_bytes()
-    log_event("selected", count=len(rows), skipped_existing=len(selected) - len(rows))
+    # Incremental skip is the DEFAULT (FINAL_PLAN D4/D5): a model whose CURRENT
+    # identity tuple matches a genuine current-identity ``passed`` row in the
+    # cascade-aware ``current_verification_real`` view is provably unchanged, so
+    # it is skipped (and recorded ``validated`` from its real ledger row so the
+    # rest of the pipeline still processes it). ``--force-full`` re-validates ALL
+    # selected models; ``--force`` re-validates only the selected models; both
+    # override the skip. Skip refuses any degraded/non-passed/changed-identity
+    # model -- a false skip would hide a capture regression (tripwire).
+    if getattr(args, "force_full", False) or getattr(args, "force", False):
+        skip_ids: set[str] = set()
+    else:
+        input_scale_by_id = {
+            row.stable_id: _case_input_scale(row, smoke_settings, args.input_scale) for row in rows
+        }
+        skip_ids = _incremental_skip_stable_ids(
+            rows,
+            scope=args.scope,
+            device=args.device,
+            input_scale_by_id=input_scale_by_id,
+            env_registry=args.env_registry,
+            ledger_db=args.verification_db,
+            local_gpu_vram_bytes=local_gpu_vram_bytes,
+        )
+    if skip_ids:
+        skipped_rows = [row for row in rows if row.stable_id in skip_ids]
+        for row in skipped_rows:
+            log_event(
+                "incremental_skip",
+                stable_id=row.stable_id,
+                name=row.name,
+                reason="identity-match+passed",
+            )
+        _append_incremental_skip_rows(skipped_rows, manifest_path, ledger_db=args.verification_db)
+        rows = [row for row in rows if row.stable_id not in skip_ids]
+    for row in rows:
+        log_event(
+            "incremental_validate",
+            stable_id=row.stable_id,
+            name=row.name,
+            reason="changed-identity/degraded/non-passed/forced",
+        )
+    log_event(
+        "selected",
+        count=len(rows),
+        skipped_existing=len(selected) - len(rows) - len(skip_ids),
+        skipped_incremental=len(skip_ids),
+    )
     # Base-env-only mode runs inside an island pixi env or the cluster worker;
     # those subprocesses validate their assigned rows in place and must never
     # re-route to the cluster (which would also import the env registry/yaml,
@@ -4607,6 +4795,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--revalidate-failed", action="store_true", help="retry non-validated manifest rows"
+    )
+    parser.add_argument(
+        "--force-full",
+        action="store_true",
+        help=(
+            "re-validate ALL selected models regardless of the ledger (the "
+            "acceptance + timing run); overrides the incremental-skip default"
+        ),
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "re-validate ONLY the selected models (composable with "
+            "--stable-ids/--family/etc.) regardless of the ledger; targeted "
+            "debugging/timing override of the incremental-skip default"
+        ),
     )
     parser.add_argument(
         "--jobs",

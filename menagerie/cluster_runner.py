@@ -1718,6 +1718,42 @@ def latest_verification_run_for_stable_id(
     return _verification_run_from_row(row)
 
 
+def current_real_verification_run_for_stable_id(
+    stable_id: str, *, ledger_db: Path | None = None
+) -> VerificationRun:
+    """Return the current CASCADE-SUPPRESSED verification run for a stable ID.
+
+    Reads the ``current_verification_real`` view so a frozen batch-cascade
+    artifact never shadows the model's real current row. Used to reconstruct the
+    manifest row for an incrementally-skipped (provably current + passed) model.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity.
+    ledger_db:
+        Verification ledger path.
+
+    Returns
+    -------
+    VerificationRun
+        Current cascade-suppressed verification run.
+    """
+
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM current_verification_real
+            WHERE stable_id = ?
+            """,
+            (stable_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError(f"no real verification row for stable_id {stable_id}")
+    return _verification_run_from_row(row)
+
+
 def write_result_rows_jsonl(rows: Sequence[ClusterResultRow], path: Path) -> None:
     """Write exported cluster result rows as JSONL.
 

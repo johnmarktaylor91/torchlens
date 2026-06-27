@@ -170,6 +170,46 @@ python -m menagerie.validate_menagerie \
   --out-dir /tmp/val_smoke
 ```
 
+### Incremental skip and force re-runs
+
+Validation is **incremental by default**: a model is skipped when its CURRENT
+identity tuple -- `recipe_revision_sha256`, `torchlens_source_hash` (git HEAD +
+diff + untracked over `torchlens/` and `menagerie/`), `env_hash`, `lock_hash`,
+the resolved `device_requested`, `scope`, and `input_scale` -- matches a genuine
+current-identity `passed` row in the cascade-aware `current_verification_real`
+ledger view. A skipped model is recorded `validated` from its real ledger row, so
+rendering and metadata still process it. An unchanged re-run therefore completes
+in minutes.
+
+Skip is a **tripwire**: a model is re-validated whenever ANY identity component
+changed (edited source, new env/lock, a different device or scope), whenever a
+component is degraded (`input_scale=NULL`), and whenever the current row is NOT a
+clean pass (`failed:*` / `timeout` / `install_failed` -- those are RETRIED) or is
+a suppressed batch-cascade artifact. When in doubt, it validates.
+
+Two explicit overrides re-run already-validated models (for the acceptance run,
+timing, or debugging):
+
+```bash
+# Re-validate EVERY selected model regardless of the ledger
+# (the acceptance + timing run).
+python -m menagerie.validate_menagerie --force-full \
+  --out-dir /tmp/torchlens_menagerie_validation
+
+# Re-validate ONLY the selected models regardless of the ledger
+# (targeted; composable with --stable-ids / --family / any selection filter).
+python -m menagerie.validate_menagerie --force --stable-ids m500 m4527
+```
+
+Both flags are forwarded by `run_all.py`: `--force-full` re-runs every phase AND
+re-validates all selected models; `--force` re-runs phases AND re-validates only
+the selected models against the ledger.
+
+```bash
+python -m menagerie.run_all --force-full        # full acceptance + timing run
+python -m menagerie.run_all --force --family resnet   # targeted re-run
+```
+
 ## Cross-environment rendering (rerun-safe)
 
 Some zoos require mutually incompatible dependency stacks, so `run_across_envs.py`

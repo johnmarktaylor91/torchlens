@@ -346,6 +346,10 @@ def _validation_args(args: argparse.Namespace, validation_dir: Path) -> list[str
     _append_option(forwarded, "--smoke-manifest", args.smoke_manifest)
     if args.revalidate_failed:
         forwarded.append("--revalidate-failed")
+    if getattr(args, "force_full", False):
+        forwarded.append("--force-full")
+    elif args.force:
+        forwarded.append("--force")
     forwarded.extend(
         (
             "--out-dir",
@@ -383,7 +387,7 @@ def _render_args(
     _append_option(forwarded, "--file-format", args.file_format)
     _append_repeated(forwarded, "--vis-option", args.vis_option)
     _append_option(forwarded, "--smoke-manifest", args.smoke_manifest)
-    if args.force:
+    if args.force or getattr(args, "force_full", False):
         forwarded.append("--force")
     forwarded.extend(
         (
@@ -930,7 +934,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument("--out-dir", type=Path)
-    parser.add_argument("--force", action="store_true", help="rerun steps even if output exists")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "rerun steps even if output exists AND re-validate the SELECTED "
+            "models regardless of the ledger (targeted incremental-skip override; "
+            "composable with --stable-ids/--family/etc.)"
+        ),
+    )
+    parser.add_argument(
+        "--force-full",
+        action="store_true",
+        help=(
+            "rerun every phase AND re-validate ALL selected models regardless of "
+            "the ledger (the acceptance + timing run); overrides incremental-skip"
+        ),
+    )
     parser.add_argument("--subset", type=int)
     parser.add_argument("--family")
     parser.add_argument("--domain")
@@ -1022,18 +1042,22 @@ def run(args: argparse.Namespace) -> CombinedReport:
         visuals_dir = out_dir / VISUALS_DIR
         metadata_dir = out_dir / METADATA_DIR
         out_dir.mkdir(parents=True, exist_ok=True)
+        # ``--force-full`` reruns every phase regardless of existing output (its
+        # whole purpose is the acceptance + timing re-run); ``--force`` keeps the
+        # existing per-phase output-exists override.
+        force_phases = args.force or getattr(args, "force_full", False)
         timings = [
             _timed_step(
                 "validation",
                 lambda: _validation_outputs_exist(validation_dir),
                 lambda: _run_validation(args, validation_dir),
-                force=args.force,
+                force=force_phases,
             ),
             _timed_step(
                 "render",
                 lambda: _render_outputs_exist(visuals_dir),
                 lambda: _run_render(args, validation_dir, visuals_dir),
-                force=args.force,
+                force=force_phases,
             ),
         ]
         csv_note = "not run"
@@ -1049,7 +1073,7 @@ def run(args: argparse.Namespace) -> CombinedReport:
                 "metadata",
                 lambda: _metadata_outputs_exist(metadata_dir),
                 run_metadata,
-                force=args.force,
+                force=force_phases,
             )
         )
         if timings[-1].skipped:

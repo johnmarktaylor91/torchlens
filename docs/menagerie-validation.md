@@ -207,6 +207,31 @@ python -m menagerie.validate_menagerie \
   --report-only
 ```
 
+Incremental skip is the **default** at the ledger level (independent of the
+per-run manifest): a model whose CURRENT identity tuple
+(`recipe_revision_sha256`, `torchlens_source_hash`, `env_hash`, `lock_hash`,
+resolved `device_requested`, `scope`, `input_scale`) matches a genuine
+current-identity `passed` row in the cascade-aware `current_verification_real`
+view is skipped and recorded `validated` from that real ledger row. Anything with
+a changed identity component, a degraded `input_scale=NULL`, a non-`passed`
+current status (`failed:*` / `timeout` / `install_failed` are retried), or a
+suppressed batch-cascade artifact is re-validated. A false skip would hide a
+capture regression, so the match is exact and conservative. Two flags override it:
+
+```bash
+# Re-validate ALL selected models regardless of the ledger (acceptance + timing).
+python -m menagerie.validate_menagerie --force-full \
+  --out-dir /tmp/torchlens_menagerie_validation
+
+# Re-validate ONLY the selected models regardless of the ledger (targeted),
+# composable with --stable-ids / --family / any selection filter.
+python -m menagerie.validate_menagerie --force --family resnet
+```
+
+`run_all.py` forwards both: `--force-full` re-runs every phase and re-validates
+all selected models; `--force` re-runs phases and re-validates only the selected
+models against the ledger.
+
 The validator writes:
 
 - `validation_manifest.tsv`, an append-only resumable per-run manifest;
