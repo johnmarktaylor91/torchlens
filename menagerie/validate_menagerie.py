@@ -322,7 +322,72 @@ def manifest_records(manifest_path: Path) -> dict[str, dict[str, str]]:
         return {row["stable_id"]: row for row in reader if row.get("stable_id")}
 
 
-def completed_stable_ids(manifest_path: Path, revalidate_failed: bool) -> set[str]:
+def _manifest_data_line_count(manifest_path: Path) -> int:
+    """Return the number of DATA rows in the manifest (excludes the header).
+
+    The manifest is strictly append-only (``append_manifest`` opens in ``"a"``
+    mode and never rewrites), so a row index is a stable cursor that survives a
+    crash-resume. Used by the force-baseline sidecar to separate rows a PRIOR run
+    wrote (at/below the baseline) from rows the CURRENT force run appended (above
+    it).
+
+    Parameters
+    ----------
+    manifest_path:
+        Validation manifest path.
+
+    Returns
+    -------
+    int
+        Count of data rows (0 if the manifest is absent or header-only).
+    """
+
+    if not manifest_path.exists():
+        return 0
+    with manifest_path.open(newline="") as handle:
+        reader = csv.reader(handle, delimiter="\t")
+        try:
+            next(reader)  # header
+        except StopIteration:
+            return 0
+        return sum(1 for _ in reader)
+
+
+def _manifest_stable_ids_after(manifest_path: Path, baseline_data_rows: int) -> set[str]:
+    """Return stable IDs from manifest data rows appended AFTER the baseline.
+
+    Parameters
+    ----------
+    manifest_path:
+        Validation manifest path.
+    baseline_data_rows:
+        Number of data rows the PRIOR run had written when this force run began.
+
+    Returns
+    -------
+    set[str]
+        Stable IDs the CURRENT force run has already appended (rows strictly
+        beyond ``baseline_data_rows``); these stay skippable on a crash-resume.
+    """
+
+    if not manifest_path.exists():
+        return set()
+    with manifest_path.open(newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        return {
+            row["stable_id"]
+            for index, row in enumerate(reader)
+            if index >= baseline_data_rows and row.get("stable_id")
+        }
+
+
+def completed_stable_ids(
+    manifest_path: Path,
+    revalidate_failed: bool,
+    *,
+    force: bool = False,
+    force_baseline_data_rows: int | None = None,
+) -> set[str]:
     """Return stable IDs that should be skipped for resumable validation.
 
     Parameters
@@ -331,6 +396,17 @@ def completed_stable_ids(manifest_path: Path, revalidate_failed: bool) -> set[st
         Validation manifest path.
     revalidate_failed:
         Whether non-validated rows should be retried.
+    force:
+        When ``True`` (``--force`` / ``--force-full``), a PRIOR/stale manifest
+        must NOT drop rows: force re-validates ALL selected rows regardless of a
+        previous run's manifest. Resume-WITHIN-the-current-force-run is still
+        preserved -- a row THIS force run already re-validated (a manifest row
+        appended after ``force_baseline_data_rows``) need not be redone on a
+        crash-resume.
+    force_baseline_data_rows:
+        The manifest data-row count captured when this force run first began (see
+        :func:`_manifest_data_line_count`). Rows at/below it belong to a prior run
+        and are ignored under force; rows above it are the current run's progress.
 
     Returns
     -------
@@ -338,10 +414,60 @@ def completed_stable_ids(manifest_path: Path, revalidate_failed: bool) -> set[st
         Stable IDs to skip.
     """
 
+    if force:
+        # Ignore the PRIOR/stale manifest entirely; only honor rows THIS force run
+        # has already appended (crash-resume of the current force run).
+        if force_baseline_data_rows is None:
+            return set()
+        return _manifest_stable_ids_after(manifest_path, force_baseline_data_rows)
     records = manifest_records(manifest_path)
     if not revalidate_failed:
         return set(records)
     return {stable_id for stable_id, row in records.items() if row.get("status") == "validated"}
+
+
+def _force_resume_baseline(manifest_path: Path, force_active: bool) -> int | None:
+    """Return (and persist) the prior-manifest data-row count for a force run.
+
+    F2: ``--force``/``--force-full`` must re-validate every selected row even when
+    a PRIOR run's manifest exists in a reused ``--out-dir``, while still preserving
+    resume-WITHIN-the-current-force-run on a crash. To draw the line between "a
+    prior run wrote this" and "this force run wrote this", we snapshot the
+    manifest's data-row count the FIRST time a force run touches this out-dir and
+    persist it in a sidecar next to the manifest. The append-only manifest means
+    every row beyond that cursor belongs to the current force run.
+
+    Parameters
+    ----------
+    manifest_path:
+        Validation manifest path.
+    force_active:
+        Whether ``--force`` or ``--force-full`` is set.
+
+    Returns
+    -------
+    int | None
+        The baseline data-row count for the current force run, or ``None`` when
+        force is not active.
+    """
+
+    if not force_active:
+        return None
+    sidecar = manifest_path.with_name(manifest_path.name + ".force_baseline.json")
+    if sidecar.exists():
+        # Crash-resume of an in-progress force run: reuse the original baseline so
+        # rows this run already re-validated (appended above the cursor) are not
+        # redone, while prior-run rows (at/below the cursor) keep re-validating.
+        try:
+            payload = json.loads(sidecar.read_text())
+            baseline = int(payload["baseline_data_rows"])
+        except (OSError, ValueError, KeyError, TypeError):
+            baseline = _manifest_data_line_count(manifest_path)
+        return baseline
+    baseline = _manifest_data_line_count(manifest_path)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"baseline_data_rows": baseline}))
+    return baseline
 
 
 def _select_rows_for_validation(args: argparse.Namespace) -> list[CatalogRow]:
@@ -4227,7 +4353,14 @@ def run(args: argparse.Namespace) -> int:
     )
     assert_min_free(out_dir, args.min_free_gb)
 
-    done = completed_stable_ids(manifest_path, args.revalidate_failed)
+    force_active = bool(getattr(args, "force_full", False) or getattr(args, "force", False))
+    force_baseline_data_rows = _force_resume_baseline(manifest_path, force_active)
+    done = completed_stable_ids(
+        manifest_path,
+        args.revalidate_failed,
+        force=force_active,
+        force_baseline_data_rows=force_baseline_data_rows,
+    )
     rows = [row for row in selected if row.stable_id not in done]
     # ``duration_estimates`` (ALL latest forward durations) drives only the LPT
     # scheduling sort key. ``pass_duration_estimates`` (PASS-only) drives the
@@ -4644,6 +4777,15 @@ def run(args: argparse.Namespace) -> int:
         report=str(out_dir / REPORT_MD),
         summary=str(out_dir / SUMMARY_JSON),
     )
+    # The force run completed: drop the baseline sidecar so a future, SEPARATE
+    # force invocation snapshots a fresh baseline (and does not treat this run's
+    # completed rows as a prior run to ignore). Best-effort; never fail the run.
+    if force_active:
+        sidecar = manifest_path.with_name(manifest_path.name + ".force_baseline.json")
+        try:
+            sidecar.unlink(missing_ok=True)
+        except OSError:
+            pass
     return 0
 
 

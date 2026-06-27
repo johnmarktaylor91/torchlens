@@ -37,10 +37,47 @@ from menagerie.ledger import (
 from menagerie.catalog import CatalogRow
 from menagerie.run_all import build_parser as run_all_parser
 from menagerie.validate_menagerie import (
+    ValidationResult,
+    _force_resume_baseline,
     _incremental_skip_stable_ids,
     _torchlens_version,
+    append_manifest,
     build_parser as validate_parser,
+    completed_stable_ids,
 )
+
+
+def _manifest_result(stable_id: str, status: str = "validated") -> ValidationResult:
+    """Build a minimal manifest-appendable validation result for a stable ID.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity to record.
+    status:
+        Manifest status (defaults to ``validated``).
+
+    Returns
+    -------
+    ValidationResult
+        A row suitable for :func:`append_manifest`.
+    """
+
+    return ValidationResult(
+        name=stable_id,
+        model_id=0,
+        status=status,
+        n_ops=1,
+        validate_metadata_ok=True,
+        scope="forward",
+        elapsed=1.0,
+        dependency_cluster="default",
+        error="",
+        graph_shape_hash="h",
+        stable_id=stable_id,
+        recipe_revision_sha256="r",
+        input_scale=1.0,
+    )
 
 
 def _run(**overrides: object) -> VerificationRun:
@@ -523,6 +560,87 @@ def test_f_run_all_force_forwards_force_to_validator() -> None:
     assert "--force" in forwarded
     assert "--force-full" not in forwarded
     assert "--stable-ids" in forwarded
+
+
+# ----- F2: force must bypass the PRIOR/stale manifest-resume filter -----
+
+
+def test_force_full_ignores_prior_manifest_so_row_reaches_validation(tmp_path: Path) -> None:
+    """F2 GATE: an existing PRIOR manifest row + --force-full -> the row is NOT
+    dropped by the manifest-resume filter (it reaches validation again).
+
+    The manifest-resume filter (`completed_stable_ids`) runs upstream of the
+    ledger-aware skip; before the fix it dropped any recorded stable_id BEFORE the
+    force override, so a reused out-dir falsely skipped a model even under
+    --force-full. Force now snapshots a baseline and ignores the prior manifest.
+    """
+
+    manifest_path = tmp_path / "validation_manifest.tsv"
+    append_manifest(manifest_path, _manifest_result("m1", status="validated"))
+
+    # Without force: the prior manifest row IS a resume-skip (the normal path).
+    assert "m1" in completed_stable_ids(manifest_path, revalidate_failed=False)
+
+    # With --force-full: snapshot the prior baseline, then the prior row must NOT
+    # be skipped -> it reaches validation again.
+    baseline = _force_resume_baseline(manifest_path, force_active=True)
+    assert baseline == 1
+    done = completed_stable_ids(
+        manifest_path,
+        revalidate_failed=False,
+        force=True,
+        force_baseline_data_rows=baseline,
+    )
+    assert "m1" not in done
+
+
+def test_force_targeted_ignores_prior_manifest(tmp_path: Path) -> None:
+    """F2 GATE (--force --stable-ids): same prior-manifest bypass for targeted force."""
+
+    manifest_path = tmp_path / "validation_manifest.tsv"
+    append_manifest(manifest_path, _manifest_result("m1", status="validated"))
+    append_manifest(manifest_path, _manifest_result("m2", status="failed"))
+
+    baseline = _force_resume_baseline(manifest_path, force_active=True)
+    assert baseline == 2
+    done = completed_stable_ids(
+        manifest_path,
+        revalidate_failed=False,
+        force=True,
+        force_baseline_data_rows=baseline,
+    )
+    assert done == set()  # neither prior row blocks a forced re-validation
+
+
+def test_force_preserves_resume_within_the_current_force_run(tmp_path: Path) -> None:
+    """F2 NUANCE: a row the CURRENT force run already re-validated (appended ABOVE
+    the baseline) stays skippable on a crash-resume; a PRIOR row keeps revalidating.
+    """
+
+    manifest_path = tmp_path / "validation_manifest.tsv"
+    # Prior run wrote m1 (this is the stale manifest we must ignore under force).
+    append_manifest(manifest_path, _manifest_result("m1", status="validated"))
+
+    # Force run begins -> baseline snapshots the single prior row, sidecar written.
+    baseline = _force_resume_baseline(manifest_path, force_active=True)
+    assert baseline == 1
+    sidecar = manifest_path.with_name(manifest_path.name + ".force_baseline.json")
+    assert sidecar.exists()
+
+    # The current force run completes m2 (appended above the baseline cursor).
+    append_manifest(manifest_path, _manifest_result("m2", status="validated"))
+
+    # Simulate a crash-resume: force re-invoked, sidecar reused (baseline stays 1).
+    resume_baseline = _force_resume_baseline(manifest_path, force_active=True)
+    assert resume_baseline == 1
+    done = completed_stable_ids(
+        manifest_path,
+        revalidate_failed=False,
+        force=True,
+        force_baseline_data_rows=resume_baseline,
+    )
+    # m1 (prior, at/below baseline) re-validates; m2 (this run's progress) is kept.
+    assert done == {"m2"}
 
 
 # ----- integration: the validator-side skip seam (env + device + ledger) -----
