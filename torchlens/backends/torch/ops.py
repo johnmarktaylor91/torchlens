@@ -978,20 +978,26 @@ def _walk_supported_output_container(
             )
         return
     # Unrecognized nested container (e.g. transformers DynamicCache nested inside
-    # an HF ModelOutput). The structured walk cannot assign stable paths through
-    # it, but the tensors it holds are still real model outputs that MUST be
-    # discovered -- otherwise capture silently drops them (e.g. GPT-2's
-    # past_key_values), shrinking the output set from 3 tensors to 1. Fall back to
-    # a BFS over this subtree, yielding tensors without a stable container path.
-    # search_depth=5 matches the legacy whole-output BFS fallback; DynamicCache's
-    # tensors live at depth ~5 and are missed by the default depth of 3.
+    # an HF ModelOutput, or a detectron2 Instances inside a list). The structured
+    # walk cannot descend into this subtree to assign deeper stable paths, so every
+    # tensor it holds is attributed to the path of the opaque container boundary
+    # itself -- the same depth at which ``_build_container_spec`` records the opaque
+    # slot as a childless leaf. Yielding tensors here is mandatory: otherwise
+    # capture silently drops them (e.g. GPT-2's past_key_values), shrinking the
+    # output set from 3 tensors to 1. ``root_spec`` must be propagated (not None);
+    # it is the outer container spec used as ``output_structure``, and dropping it
+    # leaves ``output_structure`` unset so it is later back-filled from an
+    # unrelated output layer, producing a structure whose leaf paths disagree with
+    # these output paths (caught by the module_hierarchy invariant). search_depth=5
+    # matches the legacy whole-output BFS fallback; DynamicCache's tensors live at
+    # depth ~5 and are missed by the default depth of 3.
     for tensor in get_vars_of_type_from_obj(
         out,
         which_type=torch.Tensor,
         subclass_exceptions=[torch.nn.Parameter],
         search_depth=5,
     ):
-        yield tensor, path, None
+        yield tensor, path, root_spec
 
 
 def _walk_output_tensors_with_paths(
