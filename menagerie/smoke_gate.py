@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import socket
 import sqlite3
@@ -14,6 +13,7 @@ from typing import Any, Sequence
 
 from menagerie.cluster_runner import GIANT_REGISTRY
 from menagerie.generate_menagerie import visual_mode_from_options
+from menagerie.smoke_test import snapshot_verification_content
 from menagerie.validate_menagerie import MANIFEST_STATUS_VALUES
 
 
@@ -27,29 +27,6 @@ def _fail(message: str) -> None:
     """
 
     raise RuntimeError(message)
-
-
-def _sha256(path: Path) -> str | None:
-    """Return a SHA-256 digest for a file.
-
-    Parameters
-    ----------
-    path:
-        File path.
-
-    Returns
-    -------
-    str | None
-        Hex digest, or ``None`` when absent.
-    """
-
-    if not path.exists() or not path.is_file():
-        return None
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -88,31 +65,6 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
         _fail(f"missing TSV: {path}")
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
-
-
-def _snapshot_current(path: Path) -> dict[str, Any]:
-    """Return current state comparable to the production snapshot.
-
-    Parameters
-    ----------
-    path:
-        Path to inspect.
-
-    Returns
-    -------
-    dict[str, Any]
-        Snapshot payload.
-    """
-
-    if not path.exists():
-        return {"exists": False, "sha256": None, "mtime_ns": None, "size": None}
-    stat = path.stat()
-    return {
-        "exists": True,
-        "sha256": _sha256(path) if path.is_file() else None,
-        "mtime_ns": stat.st_mtime_ns,
-        "size": stat.st_size,
-    }
 
 
 def _assert_validation_manifest(cases: Sequence[dict[str, Any]], out_dir: Path) -> None:
@@ -178,7 +130,40 @@ def _assert_smoke_ledger(cases: Sequence[dict[str, Any]], out_dir: Path) -> None
 def _assert_production_unchanged(
     cases: Sequence[dict[str, Any]], out_dir: Path, production_verification_db: Path
 ) -> None:
-    """Assert production artifacts were not touched.
+    """Assert the smoke added or modified NO rows in production.
+
+    The production-isolation invariant is logical, not physical: the smoke runs
+    against an isolated ledger (``TORCHLENS_MENAGERIE_VERIFICATION_DB`` repointed
+    to a per-run db), so it must touch ZERO rows in the production
+    ``verification_runs`` table. The check compares a CONTENT fingerprint of that
+    table -- ``COUNT(*)``, ``MAX(rowid)``, and a full-row hash -- captured before
+    the smoke against the same fingerprint now: they must be byte-for-byte
+    IDENTICAL.
+
+    Why this is complete given the append-only ledger
+    -------------------------------------------------
+    ``verification_runs`` is append-only: ``menagerie.ledger`` installs
+    ``verification_runs_no_update`` / ``verification_runs_no_delete`` triggers
+    that ``RAISE(ABORT)`` on any UPDATE or DELETE, so the only mutation the
+    schema permits is an INSERT (an append). An INSERT strictly raises both
+    ``COUNT(*)`` and ``MAX(rowid)`` (the newest row gets the largest rowid). So
+    "``runs_count`` unchanged AND ``max_rowid`` unchanged" PROVABLY means no row
+    was appended, and -- because UPDATE/DELETE are impossible -- no row was
+    modified or removed either. The full-row ``content_sha256`` is
+    defense-in-depth: it changes on any field change, so the check no longer even
+    relies on trusting the triggers. We additionally re-assert the original
+    ZERO-fresh-smoke-rows query (any production row for a smoke stable_id stamped
+    at/after the smoke start) as a direct, independent witness.
+
+    Why this is immune to the WAL false positive
+    --------------------------------------------
+    The earlier check compared the file's ``sha256``/``mtime_ns``/``size``. The
+    smoke only READS the production ledger, but a SQLite WAL-mode checkpoint
+    rewrites the file bytes (and mtime/size) with NO logical content change, so
+    the byte fingerprint drifted and tripped a false "changed". A content
+    fingerprint is invariant under WAL churn (and any pure-bytes perturbation)
+    while still changing on real row mutation -- a CORRECTNESS strengthening, not
+    a loosening.
 
     Parameters
     ----------
@@ -193,10 +178,15 @@ def _assert_production_unchanged(
     snapshot_path = out_dir / "production_snapshot_before.json"
     payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
     before = payload["verification_db"]
-    current = _snapshot_current(production_verification_db)
-    for key in ("exists", "sha256", "mtime_ns", "size"):
+    # Use the SAME canonical fingerprint function the producer used (never
+    # forked), so before/after are computed identically.
+    current = snapshot_verification_content(production_verification_db)
+    for key in ("exists", "runs_count", "max_rowid", "content_sha256"):
         if before.get(key) != current.get(key):
-            _fail(f"production verification.db changed | key={key}")
+            _fail(
+                f"production verification.db changed | key={key} "
+                f"before={before.get(key)!r} after={current.get(key)!r}"
+            )
     if production_verification_db.exists():
         stable_ids = [str(case["stable_id"]) for case in cases]
         placeholders = ",".join("?" for _ in stable_ids)

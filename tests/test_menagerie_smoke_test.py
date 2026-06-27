@@ -3,14 +3,102 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-from menagerie import smoke_gate, smoke_test
+from menagerie import ledger, smoke_gate, smoke_test
 from menagerie.catalog import CatalogRow, write_catalog
 from menagerie.cluster_runner import GIANT_REGISTRY
+
+
+def _verification_run(stable_id: str) -> ledger.VerificationRun:
+    """Build one minimal passing verification run for an isolated ledger.
+
+    Parameters
+    ----------
+    stable_id:
+        Stable ID for the synthetic row.
+
+    Returns
+    -------
+    ledger.VerificationRun
+        A passing forward-scope run.
+    """
+
+    return ledger.VerificationRun(
+        stable_id=stable_id,
+        recipe_revision_sha256="recipe",
+        name="n",
+        zoo="z",
+        variant="",
+        scope="forward",
+        status="passed",
+        forward_pass=1,
+        backward_pass=None,
+        backward_na_reason=None,
+        metadata_ok=1,
+        n_ops=3,
+        graph_shape_hash="shape",
+        svg_sha256=None,
+        torchlens_version="2",
+        torch_version="2",
+        python_version="3",
+        device_requested="cpu",
+        device_actual="cpu",
+        env_hash="env",
+        lock_hash="lock",
+        torchlens_source_hash="src",
+        input_scale=1.0,
+        runner_host="host",
+        started_at="2026-01-01T00:00:00+00:00",
+        finished_at="2026-01-01T00:00:01+00:00",
+        duration_sec=1.0,
+    )
+
+
+def _seed_production_ledger(db_path: Path, stable_ids: list[str]) -> None:
+    """Create an isolated production-like ledger with the given rows.
+
+    Parameters
+    ----------
+    db_path:
+        Destination ledger path.
+    stable_ids:
+        Stable IDs to append.
+    """
+
+    conn = ledger.connect(db_path)
+    try:
+        for stable_id in stable_ids:
+            ledger.append_verification_run(conn, _verification_run(stable_id))
+    finally:
+        conn.close()
+
+
+def _write_production_snapshot(out_dir: Path, production_db: Path, smoke_start: str) -> None:
+    """Write a ``production_snapshot_before.json`` like the smoke producer.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    production_db:
+        Production verification ledger to fingerprint.
+    smoke_start:
+        Smoke start timestamp recorded in the snapshot.
+    """
+
+    payload = {
+        "smoke_start": smoke_start,
+        "stable_ids": [],
+        "verification_db": smoke_test.snapshot_verification_content(production_db),
+    }
+    (out_dir / "production_snapshot_before.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _case(
@@ -176,3 +264,94 @@ def test_smoke_manifest_jsonl_is_valid() -> None:
     assert cases
     assert len({case.stable_id for case in cases}) == len(cases)
     assert all(json.dumps(case.payload) for case in cases)
+
+
+def test_snapshot_verification_content_fields(tmp_path: Path) -> None:
+    """The content fingerprint reports count, max rowid, and a row hash."""
+
+    db = tmp_path / "verification.db"
+    _seed_production_ledger(db, ["a", "b"])
+
+    fingerprint = smoke_test.snapshot_verification_content(db)
+
+    assert fingerprint["exists"] is True
+    assert fingerprint["runs_count"] == 2
+    assert fingerprint["max_rowid"] == 2
+    assert isinstance(fingerprint["content_sha256"], str)
+
+
+def test_snapshot_verification_content_missing(tmp_path: Path) -> None:
+    """An absent ledger yields a null content fingerprint."""
+
+    fingerprint = smoke_test.snapshot_verification_content(tmp_path / "absent.db")
+
+    assert fingerprint["exists"] is False
+    assert fingerprint["runs_count"] is None
+    assert fingerprint["max_rowid"] is None
+    assert fingerprint["content_sha256"] is None
+
+
+def test_production_unchanged_passes_under_wal_churn(tmp_path: Path) -> None:
+    """A WAL checkpoint + mtime bump (identical content) must NOT trip the gate.
+
+    This is the FALSE-POSITIVE regression: the smoke only READS the production
+    ledger, but a SQLite WAL checkpoint rewrites the file bytes (and mtime/size)
+    with no logical change. The byte fingerprint flagged that as "changed"; the
+    content fingerprint must pass.
+    """
+
+    production_db = tmp_path / "verification.db"
+    _seed_production_ledger(production_db, ["a", "b"])
+    out_dir = tmp_path / "smoke_out"
+    out_dir.mkdir()
+    _write_production_snapshot(out_dir, production_db, smoke_start="2026-06-01T00:00:00+00:00")
+
+    # Perturb the FILE bytes without changing content: full WAL checkpoint
+    # (rewrites/truncates the file) plus an explicit mtime bump.
+    with sqlite3.connect(production_db) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("SELECT COUNT(*) FROM verification_runs").fetchone()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    stat = production_db.stat()
+    os.utime(production_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+    # Must pass: no logical row change occurred.
+    smoke_gate._assert_production_unchanged([], out_dir, production_db)  # noqa: SLF001
+
+
+def test_production_unchanged_fails_on_injected_row(tmp_path: Path) -> None:
+    """A fresh production row (real pollution) MUST trip the gate."""
+
+    production_db = tmp_path / "verification.db"
+    _seed_production_ledger(production_db, ["a", "b"])
+    out_dir = tmp_path / "smoke_out"
+    out_dir.mkdir()
+    _write_production_snapshot(out_dir, production_db, smoke_start="2026-06-01T00:00:00+00:00")
+
+    # Simulate pollution: a smoke run leaked a row into the production ledger.
+    _seed_production_ledger(production_db, ["smoke_leak"])
+
+    with pytest.raises(RuntimeError, match="production verification.db changed"):
+        smoke_gate._assert_production_unchanged([], out_dir, production_db)  # noqa: SLF001
+
+
+def test_production_unchanged_fails_on_fresh_smoke_stable_id(tmp_path: Path) -> None:
+    """The independent fresh-smoke-rows witness still catches a stamped leak.
+
+    Even if a leak somehow matched count/rowid (it cannot, given append-only),
+    the direct query over smoke stable IDs stamped at/after the smoke start
+    remains a second, independent tripwire. Here we make the content fingerprint
+    match by snapshotting AFTER the leak, and confirm the row query still fails.
+    """
+
+    production_db = tmp_path / "verification.db"
+    _seed_production_ledger(production_db, ["a", "b"])
+    # Leak a smoke row, THEN snapshot -> content fingerprint matches current.
+    _seed_production_ledger(production_db, ["smoke_case_1"])
+    out_dir = tmp_path / "smoke_out"
+    out_dir.mkdir()
+    _write_production_snapshot(out_dir, production_db, smoke_start="2026-01-01T00:00:00+00:00")
+
+    cases = [{"stable_id": "smoke_case_1", "expected_status": "validated"}]
+    with pytest.raises(RuntimeError, match="fresh smoke rows"):
+        smoke_gate._assert_production_unchanged(cases, out_dir, production_db)  # noqa: SLF001

@@ -110,6 +110,80 @@ def _snapshot_path(path: Path) -> dict[str, Any]:
     }
 
 
+def snapshot_verification_content(path: Path) -> dict[str, Any]:
+    """Return a CONTENT fingerprint of the production verification ledger.
+
+    The smoke gate's production-isolation invariant is logical, not physical:
+    *the smoke must add or modify NO rows in production* ``verification_runs``.
+    The earlier file-byte fingerprint (``sha256``/``mtime_ns``/``size``) was a
+    brittle proxy -- the smoke only READS the production ledger, but SQLite
+    WAL-mode checkpoints rewrite the file bytes with NO logical content change,
+    so the byte fingerprint drifted intermittently and tripped a false
+    "production verification.db changed" (the magic-constant-proxy-fails-flaky
+    pattern). This helper fingerprints the table CONTENT instead, so a WAL
+    checkpoint (or any pure-bytes perturbation) leaves the fingerprint identical
+    while any real row mutation changes it.
+
+    The fingerprint is:
+
+    * ``runs_count`` -- ``COUNT(*)`` of ``verification_runs``; any INSERT raises
+      it, so an unchanged count proves no row was added.
+    * ``max_rowid`` -- ``MAX(rowid)``; the ledger only ever appends, so the
+      newest ``rowid`` strictly increases on any INSERT. Pinning it (together
+      with ``runs_count``) catches an append even in the impossible-by-trigger
+      case of a compensating delete.
+    * ``content_sha256`` -- a SHA-256 over every row (``ORDER BY rowid``), which
+      changes if ANY field of ANY row changes. This is defense-in-depth: the
+      ledger's append-only UPDATE/DELETE triggers (see
+      :mod:`menagerie.ledger`) already forbid in-place edits and deletes, so a
+      stable ``runs_count`` + ``max_rowid`` already proves no pollution; the
+      content hash makes the check independent of trusting the triggers.
+
+    Cheap by construction: it is a single ordered scan of ``verification_runs``
+    (sub-second for tens of thousands of rows) executed once per smoke run.
+
+    Parameters
+    ----------
+    path:
+        Production verification ledger path.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"path", "exists", "runs_count", "max_rowid", "content_sha256"}``;
+        the three content fields are ``None`` when the ledger is absent.
+    """
+
+    if not path.exists() or not path.is_file():
+        return {
+            "path": str(path),
+            "exists": path.exists(),
+            "runs_count": None,
+            "max_rowid": None,
+            "content_sha256": None,
+        }
+    # Read-only connection so the fingerprint scan never perturbs the production
+    # ledger (and so it works even on a read-only mount).
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        runs_count = int(connection.execute("SELECT COUNT(*) FROM verification_runs").fetchone()[0])
+        max_rowid_row = connection.execute("SELECT MAX(rowid) FROM verification_runs").fetchone()[0]
+        max_rowid = None if max_rowid_row is None else int(max_rowid_row)
+        digest = hashlib.sha256()
+        for row in connection.execute("SELECT * FROM verification_runs ORDER BY rowid"):
+            digest.update(repr(row).encode("utf-8"))
+            digest.update(b"\0")
+    finally:
+        connection.close()
+    return {
+        "path": str(path),
+        "exists": True,
+        "runs_count": runs_count,
+        "max_rowid": max_rowid,
+        "content_sha256": digest.hexdigest(),
+    }
+
+
 def load_cases(path: Path) -> list[SmokeCase]:
     """Load smoke cases from JSONL.
 
@@ -278,7 +352,13 @@ def _snapshot_production(out_dir: Path, smoke_start: str, stable_ids: Sequence[s
     payload = {
         "smoke_start": smoke_start,
         "stable_ids": list(stable_ids),
-        "verification_db": _snapshot_path(VERIFICATION_DB),
+        # CONTENT fingerprint, not file bytes: the smoke only READS this ledger,
+        # and SQLite WAL checkpoints perturb the file bytes with no logical
+        # change, so a byte fingerprint produced intermittent false "changed"
+        # gate failures. The content fingerprint pins COUNT(*)/MAX(rowid)/a
+        # full-row hash instead, which is invariant under WAL churn but changes
+        # on any real row mutation.
+        "verification_db": snapshot_verification_content(VERIFICATION_DB),
         "trace_summary_db": _snapshot_path(data_dir / "trace_summary.db"),
         "catalog_db": _snapshot_path(CATALOG_DB),
         "locks_dir": _snapshot_path(Path(__file__).resolve().parent / "locks"),
