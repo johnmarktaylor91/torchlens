@@ -834,8 +834,15 @@ def _verification_targets_for_rows(
     *,
     scope: str,
     device: str,
+    device_by_id: Mapping[str, str] | None = None,
 ) -> dict[str, VerificationTarget]:
     """Build current verification identity targets for catalog rows.
+
+    ``device`` is the per-run fallback; ``device_by_id`` (when provided) supplies
+    the row's RESOLVED route device so the verification identity tuple matches the
+    device the row actually ran on. Keeping the target's ``device_requested`` in
+    lockstep with the device the worker recorded is what makes the completed-row
+    dedup lookup find the row it wrote (R1-1: one resolved device per row).
 
     Parameters
     ----------
@@ -844,7 +851,9 @@ def _verification_targets_for_rows(
     scope:
         Requested validation scope.
     device:
-        Requested validation device policy.
+        Fallback validation device policy when a row has no resolved override.
+    device_by_id:
+        Optional per-row resolved device keyed by stable ID.
 
     Returns
     -------
@@ -855,13 +864,14 @@ def _verification_targets_for_rows(
     env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
     lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
     source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
+    resolved = device_by_id or {}
     return {
         row.stable_id: VerificationTarget(
             recipe_revision_sha256=row.recipe_revision_sha256,
             torchlens_source_hash=source_hash,
             env_hash=env_hash,
             lock_hash=lock_hash,
-            device_requested=device,
+            device_requested=resolved.get(row.stable_id, device),
             scope=cast(Scope, scope),
         )
         for row in rows
@@ -957,12 +967,52 @@ def _cluster_candidate_rows(
     raise ValueError(f"unsupported runner {runner!r}")
 
 
+def _cluster_device_by_id(
+    rows: Sequence[CatalogRow],
+    *,
+    ledger: Path | Mapping[str, int] | None = None,
+    local_gpu_vram_bytes: int | None = None,
+) -> dict[str, str]:
+    """Return the resolved route device per cluster row.
+
+    A cluster-ram row records ``cpu``; a cluster-gpu row records ``cuda``. Using
+    this per-row device for the verification identity keeps the cluster target's
+    ``device_requested`` consistent with the device the cluster worker recorded
+    (R1-1), so the completed-row dedup and the failure-row writes never split
+    from the worker's ledger row.
+
+    Parameters
+    ----------
+    rows:
+        Cluster-routed rows.
+    ledger:
+        Ledger evidence for routing (RAM-giant test).
+    local_gpu_vram_bytes:
+        Probed local GPU VRAM (unused for cluster rows; passed for parity).
+
+    Returns
+    -------
+    dict[str, str]
+        Resolved device keyed by stable ID.
+    """
+
+    return {
+        row.stable_id: cluster_runner.route_resources(
+            row,
+            ledger=ledger,
+            local_gpu_vram_bytes=local_gpu_vram_bytes,
+        ).device
+        for row in rows
+    }
+
+
 def _completed_cluster_rows(
     rows: Sequence[CatalogRow],
     *,
     scope: str,
     device: str,
     ledger_db: Path | None = None,
+    device_by_id: Mapping[str, str] | None = None,
 ) -> tuple[CatalogRow, ...]:
     """Return cluster candidate rows already completed in the ledger.
 
@@ -973,9 +1023,11 @@ def _completed_cluster_rows(
     scope:
         Requested validation scope.
     device:
-        Requested validation device policy.
+        Fallback validation device policy.
     ledger_db:
         Optional verification ledger path.
+    device_by_id:
+        Optional per-row resolved device keyed by stable ID (R1-1 provenance).
 
     Returns
     -------
@@ -983,7 +1035,9 @@ def _completed_cluster_rows(
         Rows with a current terminal ledger row.
     """
 
-    targets = _verification_targets_for_rows(rows, scope=scope, device=device)
+    targets = _verification_targets_for_rows(
+        rows, scope=scope, device=device, device_by_id=device_by_id
+    )
     completed = cluster_runner.ledger_completed_stable_ids(
         targets,
         ledger_db=_resolve_verification_db(ledger_db),
@@ -1104,6 +1158,36 @@ def _append_cluster_dry_run_results(
         )
 
 
+def _cluster_row_device(row: CatalogRow, args: argparse.Namespace) -> str:
+    """Return the resolved cluster route device for one row.
+
+    Keeps a cluster failure-row's recorded ``device_requested`` consistent with
+    the device the row would have run on under routing (cluster-ram -> ``cpu``,
+    cluster-gpu -> ``cuda``), instead of the blunt global ``args.device`` (R1-1).
+    Falls back to ``args.device`` if routing raises.
+
+    Parameters
+    ----------
+    row:
+        Cluster-routed catalog row.
+    args:
+        Parsed validator arguments.
+
+    Returns
+    -------
+    str
+        Resolved device.
+    """
+
+    try:
+        return cluster_runner.route_resources(
+            row,
+            ledger=_resolve_verification_db(args.verification_db),
+        ).device
+    except Exception:
+        return args.device
+
+
 def _append_cluster_unavailable_rows(
     rows: Sequence[CatalogRow],
     manifest_path: Path,
@@ -1154,7 +1238,7 @@ def _append_cluster_unavailable_rows(
                 torchlens_version=_torchlens_version(),
                 torch_version=_torch_version(),
                 python_version=python_version(),
-                device_requested=args.device,
+                device_requested=_cluster_row_device(row, args),
                 device_actual=None,
                 env_hash=env_hash,
                 lock_hash=lock_hash,
@@ -1218,7 +1302,14 @@ def _append_cluster_task_failed_rows(
     started_at = utc_now()
     finished_at = utc_now()
     per_model = error_message_by_stable_id or {}
-    targets = _verification_targets_for_rows(rows, scope=args.scope, device=args.device)
+    # Resolve each row's device so the completed-row identity matches what the
+    # cluster worker recorded (R1-1: one resolved device per row, not args.device).
+    cluster_devices = _cluster_device_by_id(
+        rows, ledger=_resolve_verification_db(args.verification_db)
+    )
+    targets = _verification_targets_for_rows(
+        rows, scope=args.scope, device=args.device, device_by_id=cluster_devices
+    )
     already_merged = cluster_runner.ledger_completed_stable_ids(
         targets, ledger_db=_resolve_verification_db(args.verification_db)
     )
@@ -1253,7 +1344,7 @@ def _append_cluster_task_failed_rows(
                 torchlens_version=_torchlens_version(),
                 torch_version=_torch_version(),
                 python_version=python_version(),
-                device_requested=args.device,
+                device_requested=_cluster_row_device(row, args),
                 device_actual=None,
                 env_hash=env_hash,
                 lock_hash=lock_hash,
@@ -3889,11 +3980,17 @@ def run(args: argparse.Namespace) -> int:
             env_registry=args.env_registry,
             local_gpu_vram_bytes=local_gpu_vram_bytes,
         )
+    cluster_device_by_id = _cluster_device_by_id(
+        cluster_candidates,
+        ledger=_resolve_verification_db(args.verification_db),
+        local_gpu_vram_bytes=local_gpu_vram_bytes,
+    )
     completed_cluster_rows = _completed_cluster_rows(
         cluster_candidates,
         scope=args.scope,
         device=args.device,
         ledger_db=args.verification_db,
+        device_by_id=cluster_device_by_id,
     )
     completed_cluster_stable_ids = {row.stable_id for row in completed_cluster_rows}
     cluster_rows = tuple(
@@ -3977,7 +4074,11 @@ def run(args: argparse.Namespace) -> int:
                     input_scale=row_input_scale,
                 )
                 append_validation_ledger(
-                    row, result, args.device, row_input_scale, args.verification_db
+                    row,
+                    result,
+                    _cluster_row_device(row, args),
+                    row_input_scale,
+                    args.verification_db,
                 )
                 append_manifest(
                     manifest_path,
@@ -4008,6 +4109,12 @@ def run(args: argparse.Namespace) -> int:
             local_gpu_vram_bytes=local_gpu_vram_bytes,
         )
         for _plan, row in runnable
+    }
+    # One resolved device per row -- the route's device -- used by the worker AND
+    # the ledger identity so provenance never splits (R1-1). Honors or errors an
+    # explicit --device here, before any work is dispatched.
+    local_device_by_id = {
+        stable_id: _resolve_row_device(route, args) for stable_id, route in local_routes.items()
     }
     use_gpu_cap = any(route.lane == "local-gpu" for route in local_routes.values())
     gpu_jobs = max(1, args.gpu_jobs)
@@ -4069,7 +4176,7 @@ def run(args: argparse.Namespace) -> int:
                 row,
                 args.dry_run,
                 args.scope,
-                route.device,
+                local_device_by_id[row.stable_id],
                 row_timeout,
                 tmp_dir=tmp_dir,
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
@@ -4177,7 +4284,7 @@ def run(args: argparse.Namespace) -> int:
                 append_validation_ledger(
                     row,
                     result,
-                    local_routes[row.stable_id].device,
+                    local_device_by_id[row.stable_id],
                     result.input_scale,
                     args.verification_db,
                 )
@@ -4282,6 +4389,51 @@ def _load_smoke_case_settings(path: Path | None) -> dict[str, SmokeCaseSettings]
                 input_scale=float(payload.get("input_scale", 1.0)),
             )
     return settings
+
+
+def _resolve_row_device(route: cluster_runner.ResourceRoute, args: argparse.Namespace) -> str:
+    """Return the single resolved device for one row -- the route's device.
+
+    The resource route is the SINGLE source of truth for a row's device, so the
+    worker, the ledger ``device_requested`` identity, and the cluster target all
+    agree (R1-1, REVIEW_scheduling.md). An explicit user ``--device`` is honored
+    when it matches the route and rejected loudly when it conflicts: the
+    local-first lock means a CPU-eligible row is never escalated, so silently
+    overriding an explicit ``--device cuda`` (running everything on CPU anyway)
+    would be a quiet footgun. ``--device cpu`` is the routing default and never
+    conflicts.
+
+    Parameters
+    ----------
+    route:
+        The row's resolved resource route.
+    args:
+        Parsed validator arguments (``args.device`` is the user's request).
+
+    Returns
+    -------
+    str
+        The resolved device (``"cpu"`` or ``"cuda"``).
+
+    Raises
+    ------
+    ValueError
+        When an explicit non-default ``--device`` conflicts with the route.
+    """
+
+    requested = getattr(args, "device", "cpu")
+    # "cpu" is the routing default (local-first); the route owns the real device.
+    if requested in {"cpu", "auto"}:
+        return route.device
+    if requested != route.device:
+        raise ValueError(
+            f"--device {requested!r} conflicts with the resolved route device "
+            f"{route.device!r} for lane {route.lane!r} ({route.reason}). Resource "
+            "routing owns device placement (local-first lock: CPU-eligible rows "
+            "are never escalated); rerun without an explicit --device, or only "
+            "pass --device for a backend the route honors."
+        )
+    return route.device
 
 
 def _resolved_timeout_ceiling_from_args(args: argparse.Namespace) -> float:

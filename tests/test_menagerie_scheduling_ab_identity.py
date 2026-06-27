@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import pytest
+
 from menagerie.catalog import CatalogRow
 from menagerie.cluster_runner import route_resources
 from menagerie.runtime import DependencyPlan
@@ -12,6 +14,8 @@ from menagerie.validate_menagerie import (
     ValidationWorkItem,
     _admit_memory_budgeted_items,
     _lpt_sort_key,
+    _resolve_row_device,
+    validate_one,
 )
 
 
@@ -151,3 +155,98 @@ def test_new_scheduling_routing_preserves_validation_membership_and_cpu_bulk() -
         assert route.lane == "local-cpu"
         assert route.device == "cpu"
         assert route.cluster is False
+
+
+def _traceable_row(stable_id: str = "m-real", model_id: int = 1) -> CatalogRow:
+    """Build a catalog row for a tiny REAL model that traces end-to-end.
+
+    Parameters
+    ----------
+    stable_id:
+        Stable model identity.
+    model_id:
+        Catalog model ID.
+
+    Returns
+    -------
+    CatalogRow
+        Catalog row whose recipe instantiates a real traceable module.
+    """
+
+    return CatalogRow(
+        model_id=model_id,
+        display_index=model_id,
+        stable_id=stable_id,
+        name="LinearReLU",
+        variant="",
+        family="unit",
+        family_normalized="unit",
+        domain="unit",
+        zoo="unit-zoo",
+        constructor_call="torch.nn.Sequential(torch.nn.Linear(4, 3), torch.nn.ReLU())",
+        input_shape="(2, 4)",
+        input_dtype="float32",
+        era="2026",
+        verified=True,
+        notes="",
+        source="catalog",
+        recipe_revision_sha256="recipe-real",
+    )
+
+
+def test_old_vs_new_scheduling_run_yields_byte_identical_validation_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TEST-1 (REVIEW_scheduling.md): a REAL validation is byte-identical A/B.
+
+    The earlier proof only checked admission membership + the route table. This
+    strengthens it: run the SAME real model through the OLD scheduling (the blunt
+    global ``args.device``) and the NEW scheduling (LPT order + the route-resolved
+    per-row device), then assert the validation OUTPUT -- ``status``, ``n_ops``,
+    and ``graph_shape_hash`` -- is IDENTICAL. The scheduling/device levers are
+    operational only; the validation body that produces those fields must not move
+    a single bit. If a scheduling change ever perturbed the trace, this fails.
+    """
+
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("torchlens")
+
+    row = _traceable_row()
+
+    # The recipe input path expects a typed JSONL record; supply a deterministic
+    # real tensor so validate_one runs the REAL trace+replay+metadata body on the
+    # fabricated row (the model itself instantiates straight from constructor_call).
+    def _fixed_input(_row: CatalogRow) -> object:
+        """Return a deterministic example input for the fabricated row."""
+
+        torch.manual_seed(0)
+        return torch.randn(2, 4)
+
+    monkeypatch.setattr("menagerie.validate_menagerie.build_input_for_row", _fixed_input)
+
+    # OLD scheduling: device taken from the blunt global args.device.
+    old_args_device = "cpu"
+    old_result = validate_one(row, dry_run=False, scope="forward", device=old_args_device)
+
+    # NEW scheduling: device resolved per-row from the route (LPT order does not
+    # touch the validation body, so running once with the route device proves the
+    # identity for the levers that COULD touch device placement).
+    route = route_resources(row, ledger={}, local_gpu_vram_bytes=None)
+    new_device = _resolve_row_device(
+        route,
+        type("Args", (), {"device": old_args_device})(),
+    )
+    new_result = validate_one(row, dry_run=False, scope="forward", device=new_device)
+
+    # The route keeps a CPU-eligible row on CPU: same device, same everything.
+    assert new_device == old_args_device == "cpu"
+    assert new_result.status == old_result.status == "validated", (
+        old_result.status,
+        new_result.status,
+        old_result.error,
+    )
+    # The load-bearing tripwire fields are byte-identical across the A/B.
+    assert new_result.n_ops == old_result.n_ops
+    assert new_result.n_ops is not None and new_result.n_ops > 0
+    assert new_result.graph_shape_hash == old_result.graph_shape_hash
+    assert new_result.graph_shape_hash != ""

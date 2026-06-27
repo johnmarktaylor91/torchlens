@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from menagerie.catalog import CatalogRow
+from menagerie.cluster_runner import ResourceRoute
 from menagerie.runtime import DependencyPlan
 from menagerie.validate_menagerie import (
     MB_PER_GB,
@@ -24,6 +25,7 @@ from menagerie.validate_menagerie import (
     _actual_available_memory_mb,
     _case_timeout,
     _lpt_sort_key,
+    _resolve_row_device,
     resolve_timeout_ceiling_sec,
     validate_with_timeout,
 )
@@ -501,6 +503,33 @@ def test_validate_with_timeout_drains_chatty_stderr_without_false_timeout(
 
     assert result.status == "validated", result.status
     assert result.n_ops == 3
+
+
+def test_resolve_row_device_is_route_owned_and_honors_or_errors_explicit_device() -> None:
+    """R1-1: the route owns device; an explicit --device is honored or rejected.
+
+    The route is the single source of the device used by the worker AND the
+    ledger identity, so provenance never splits. The local-first default
+    (--device cpu) defers to the route. An explicit --device that CONFLICTS with
+    the resolved route is rejected loudly instead of being silently discarded
+    (running CPU-eligible rows on CPU regardless, the quiet footgun the review
+    flagged).
+    """
+
+    cpu_route = ResourceRoute("local-cpu", "cpu", False, "local_first_default")
+    gpu_route = ResourceRoute("local-gpu", "cuda", False, "requires_cuda")
+
+    # Default --device cpu defers to the route (cpu for bulk, cuda for GPU rows).
+    assert _resolve_row_device(cpu_route, SimpleNamespace(device="cpu")) == "cpu"
+    assert _resolve_row_device(gpu_route, SimpleNamespace(device="cpu")) == "cuda"
+    # --device auto also defers to the route.
+    assert _resolve_row_device(cpu_route, SimpleNamespace(device="auto")) == "cpu"
+    # An explicit --device that MATCHES the route is honored.
+    assert _resolve_row_device(gpu_route, SimpleNamespace(device="cuda")) == "cuda"
+    # An explicit --device that CONFLICTS with the route errors loudly (never
+    # silently overridden to the route's device).
+    with pytest.raises(ValueError, match="conflicts with the resolved route device"):
+        _resolve_row_device(cpu_route, SimpleNamespace(device="cuda"))
 
 
 def test_lpt_sort_front_loads_giants_by_memory_then_duration() -> None:
