@@ -1053,15 +1053,30 @@ def poll_cluster_terminal(
     """
 
     if not dispatch.sbatch_job_ids:
-        return True
+        # No submitted job IDs (e.g. a job-ID parse failure) is NOT terminal: there
+        # is no accounting evidence that anything finished, so treating it as
+        # terminal would let collect attribute every missing artifact as a failure.
+        return False
     active_config = config or ClusterConfig()
     deadline = time.monotonic() + (
         active_config.sbatch_wait_timeout_sec if timeout_sec is None else timeout_sec
     )
     while True:
         try:
-            states = _sacct_states(dispatch.sbatch_job_ids, active_config, command_runner)
-            if states and all(state in SLURM_TERMINAL_STATES for state in states):
+            states_by_job = _sacct_states_by_job(
+                dispatch.sbatch_job_ids, active_config, command_runner
+            )
+            # Require an observed TERMINAL state for EVERY submitted job ID. A job
+            # not yet visible in SLURM accounting (routine sacct lag) produces NO
+            # line -> NOT terminal -> stay pending. This prevents a partial sacct
+            # view (job A COMPLETED while job B is still running / not yet in the
+            # accounting DB) from being read as fully terminal, which would stamp
+            # job B's still-running tasks failed:cluster_task_failed.
+            if all(
+                states_by_job.get(job_id)
+                and all(state in SLURM_TERMINAL_STATES for state in states_by_job[job_id])
+                for job_id in dispatch.sbatch_job_ids
+            ):
                 return True
         except Exception:
             pass
@@ -1070,12 +1085,18 @@ def poll_cluster_terminal(
         time.sleep(max(0.0, poll_interval_sec))
 
 
-def _sacct_states(
+def _sacct_states_by_job(
     job_ids: Sequence[str],
     config: ClusterConfig,
     command_runner: CommandRunner,
-) -> tuple[str, ...]:
-    """Return normalized SLURM states for job IDs from ``sacct``.
+) -> dict[str, tuple[str, ...]]:
+    """Return observed SLURM states grouped by SUBMITTED job ID from ``sacct``.
+
+    Each sacct JobID is mapped back to the submitted job ID it belongs to so a
+    submitted ID is "observed" iff at least one of its (allocation or array-task)
+    lines appears. A job not yet propagated to the SLURM accounting DB produces NO
+    line, so it is simply ABSENT from the returned mapping -- the caller treats an
+    absent submitted ID as non-terminal (still pending), never as terminal.
 
     Parameters
     ----------
@@ -1088,23 +1109,38 @@ def _sacct_states(
 
     Returns
     -------
-    tuple[str, ...]
-        State names in sacct output order.
+    dict[str, tuple[str, ...]]
+        Observed terminal/non-terminal state names keyed by submitted job ID
+        (array-task JobIDs ``<jobid>_<index>`` fold back onto ``<jobid>``). Only
+        submitted IDs with at least one observed line appear.
     """
 
+    submitted = tuple(job_ids)
     command = (
         "ssh",
         config.host,
-        "sacct -X -j " + ",".join(job_ids) + " --noheader --parsable2 --format=JobID,State",
+        "sacct -X -j " + ",".join(submitted) + " --noheader --parsable2 --format=JobID,State",
     )
     result = command_runner(command)
-    states = []
+    states_by_job: dict[str, list[str]] = {}
     for line in (result.stdout or "").splitlines():
         parts = line.strip().split("|")
-        if len(parts) < 2 or not parts[1]:
+        if len(parts) < 2 or not parts[0] or not parts[1]:
             continue
-        states.append(parts[1].split()[0].upper())
-    return tuple(states)
+        observed_job_id = parts[0].split()[0]
+        # Array tasks report as ``<jobid>_<index>``; fold them onto the submitted
+        # base job ID so the base is counted as observed.
+        base_job_id = observed_job_id.split("_", 1)[0].split(".", 1)[0]
+        if base_job_id in submitted:
+            target = base_job_id
+        elif observed_job_id in submitted:
+            target = observed_job_id
+        else:
+            # A JobID we did not submit (defensive); skip it.
+            continue
+        state = parts[1].split()[0].upper()
+        states_by_job.setdefault(target, []).append(state)
+    return {job_id: tuple(states) for job_id, states in states_by_job.items()}
 
 
 def node_tier_for_row(

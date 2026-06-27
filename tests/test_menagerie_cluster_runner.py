@@ -526,6 +526,118 @@ def test_poll_cluster_terminal_requires_all_terminal_states() -> None:
     )
 
 
+def test_poll_cluster_terminal_partial_sacct_visibility_stays_pending() -> None:
+    """F3 GATE: with multiple submitted job IDs, a terminal state for only ONE of
+    them (the other still running / not yet visible in accounting) is NOT terminal.
+
+    Before the fix, ``poll_cluster_terminal`` returned True whenever EVERY observed
+    state was terminal, ignoring whether every SUBMITTED job ID was observed. A
+    partial sacct view then read as fully terminal and ``collect`` stamped the
+    still-running job's missing artifacts ``failed:cluster_task_failed``. The fix
+    requires an observed terminal state for EVERY submitted job ID.
+    """
+
+    dispatch = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(),
+        local_artifact_dir=Path("/tmp/dispatch"),
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6014456", "6014457"),
+        commands=(),
+    )
+
+    def job_b_not_yet_in_accounting(command: Any) -> subprocess.CompletedProcess[str]:
+        """Only job A is COMPLETED; job B has not propagated to sacct yet."""
+
+        command_tuple = tuple(str(item) for item in command)
+        return subprocess.CompletedProcess(
+            command_tuple,
+            0,
+            stdout="6014456|COMPLETED\n",  # 6014457 absent -> not terminal
+            stderr="",
+        )
+
+    def job_b_still_running(command: Any) -> subprocess.CompletedProcess[str]:
+        """Job A COMPLETED, job B visible but RUNNING -> not terminal."""
+
+        command_tuple = tuple(str(item) for item in command)
+        return subprocess.CompletedProcess(
+            command_tuple,
+            0,
+            stdout="6014456|COMPLETED\n6014457|RUNNING\n",
+            stderr="",
+        )
+
+    def all_terminal(command: Any) -> subprocess.CompletedProcess[str]:
+        """Both submitted job IDs visible and terminal -> terminal."""
+
+        command_tuple = tuple(str(item) for item in command)
+        return subprocess.CompletedProcess(
+            command_tuple,
+            0,
+            stdout="6014456|COMPLETED\n6014457|FAILED\n",
+            stderr="",
+        )
+
+    config = ClusterConfig(host="axon-test")
+    for runner in (job_b_not_yet_in_accounting, job_b_still_running):
+        assert (
+            poll_cluster_terminal(
+                dispatch,
+                config=config,
+                command_runner=runner,
+                poll_interval_sec=0.0,
+                timeout_sec=0.0,
+            )
+            is False
+        )
+    # Only once EVERY submitted job ID is observed AND terminal does it flip True.
+    assert (
+        poll_cluster_terminal(
+            dispatch,
+            config=config,
+            command_runner=all_terminal,
+            poll_interval_sec=0.0,
+            timeout_sec=0.0,
+        )
+        is True
+    )
+
+
+def test_poll_cluster_terminal_empty_job_ids_is_not_terminal() -> None:
+    """F3 GATE: an empty ``sbatch_job_ids`` (e.g. a job-ID parse failure) is NOT
+    terminal -- there is no accounting evidence anything finished, so collect must
+    not attribute every missing artifact as a failure.
+    """
+
+    dispatch = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(),
+        local_artifact_dir=Path("/tmp/dispatch"),
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=(),
+        commands=(),
+    )
+
+    def unexpected_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """sacct must never be consulted with zero submitted job IDs."""
+
+        raise AssertionError("sacct should not run for an empty job-ID set")
+
+    assert (
+        poll_cluster_terminal(
+            dispatch,
+            config=ClusterConfig(host="axon-test"),
+            command_runner=unexpected_runner,
+            poll_interval_sec=0.0,
+            timeout_sec=0.0,
+        )
+        is False
+    )
+
+
 def test_merge_is_idempotent_and_conflicts_fail_loud(tmp_path: Path) -> None:
     """Merging duplicate rows is idempotent, but conflicting keys raise."""
 
