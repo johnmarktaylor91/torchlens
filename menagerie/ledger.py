@@ -174,6 +174,26 @@ class VerificationRun:
         the value was not recorded.
     runner_host:
         Hostname or runner identifier.
+    machine_cpu_model:
+        CPU model string of the runner (timing-normalization metadata; NOT part
+        of identity). ``None`` when unavailable / on legacy rows.
+    machine_cpu_cores_physical:
+        Physical CPU core count of the runner. ``None`` when unavailable.
+    machine_cpu_cores_logical:
+        Logical CPU core count (hardware threads) of the runner. ``None`` when
+        unavailable.
+    machine_total_ram_gb:
+        Total physical RAM of the runner in GiB. ``None`` when unavailable.
+    machine_gpu_models:
+        ``;``-joined GPU model name(s) of the runner (probed via ``nvidia-smi``,
+        never ``torch.cuda``). ``None`` when no GPU / unavailable.
+    machine_gpu_count:
+        GPU count of the runner. ``None`` when unavailable.
+    machine_platform:
+        Architecture/OS platform string of the runner. ``None`` when unavailable.
+    machine_torch_num_threads:
+        ``torch.get_num_threads()`` at run time (the per-test timing bottleneck).
+        ``None`` when unavailable.
     started_at:
         ISO-8601 UTC start timestamp.
     finished_at:
@@ -221,6 +241,53 @@ class VerificationRun:
     error_class: str | None = None
     error_message: str | None = None
     run_id: str = ""
+    # Machine/hardware fingerprint (FINAL_PLAN bucket C). Pure timing-normalization
+    # metadata: NOT part of any identity tuple, never gates a skip, never changes a
+    # comparison/replay/result. Every field is nullable -- best-effort probe, NULL
+    # on old rows and when a probe is unavailable.
+    machine_cpu_model: str | None = None
+    machine_cpu_cores_physical: int | None = None
+    machine_cpu_cores_logical: int | None = None
+    machine_total_ram_gb: float | None = None
+    machine_gpu_models: str | None = None
+    machine_gpu_count: int | None = None
+    machine_platform: str | None = None
+    machine_torch_num_threads: int | None = None
+
+
+def with_machine_metadata(run: VerificationRun) -> VerificationRun:
+    """Return a copy of ``run`` stamped with this process's machine fingerprint.
+
+    The probe is cached per process (see :func:`machine_metadata`), so this is
+    cheap to call on every row. It overlays ONLY the eight ``machine_*`` fields
+    and leaves every identity / result field untouched -- a tripwire-safe,
+    metadata-only stamp.
+
+    Parameters
+    ----------
+    run:
+        Verification run to stamp.
+
+    Returns
+    -------
+    VerificationRun
+        Copy of ``run`` with the ``machine_*`` fields populated.
+    """
+
+    from dataclasses import replace
+
+    metadata = machine_metadata()
+    return replace(
+        run,
+        machine_cpu_model=metadata.cpu_model,
+        machine_cpu_cores_physical=metadata.cpu_cores_physical,
+        machine_cpu_cores_logical=metadata.cpu_cores_logical,
+        machine_total_ram_gb=metadata.total_ram_gb,
+        machine_gpu_models=metadata.gpu_models,
+        machine_gpu_count=metadata.gpu_count,
+        machine_platform=metadata.platform_str,
+        machine_torch_num_threads=metadata.torch_num_threads,
+    )
 
 
 def utc_now() -> str:
@@ -257,6 +324,176 @@ def runner_host() -> str:
     """
 
     return socket.gethostname()
+
+
+@dataclass(frozen=True)
+class MachineMetadata:
+    """Hardware/platform fingerprint for one runner process.
+
+    Pure metadata for cross-runner timing normalization (FINAL_PLAN bucket C). It
+    is NOT part of any identity tuple: a model validated on machine A is the SAME
+    validation on machine B, so these fields never gate a skip and never change a
+    comparison/replay/result. Every field is nullable -- the probe is best-effort
+    and time-bounded, so any unavailable field stays ``None`` rather than failing
+    the run.
+
+    Parameters
+    ----------
+    cpu_model:
+        Human-readable CPU model string.
+    cpu_cores_physical:
+        Physical CPU core count.
+    cpu_cores_logical:
+        Logical CPU core count (hardware threads).
+    total_ram_gb:
+        Total physical RAM in gibibytes, rounded to three decimals.
+    gpu_models:
+        ``;``-joined GPU model name(s) probed via ``nvidia-smi`` in a throwaway
+        subprocess (NEVER ``torch.cuda`` -- a fork after CUDA init is unsafe in
+        the forking worker). ``None`` when no GPU / probe unavailable.
+    gpu_count:
+        Number of GPUs reported by ``nvidia-smi``; ``None`` when unavailable.
+    platform_str:
+        Architecture / OS platform string (``platform.platform()``).
+    torch_num_threads:
+        ``torch.get_num_threads()`` at probe time -- the documented per-test
+        timing bottleneck. ``None`` when torch is not importable here.
+    """
+
+    cpu_model: str | None = None
+    cpu_cores_physical: int | None = None
+    cpu_cores_logical: int | None = None
+    total_ram_gb: float | None = None
+    gpu_models: str | None = None
+    gpu_count: int | None = None
+    platform_str: str | None = None
+    torch_num_threads: int | None = None
+
+
+_MACHINE_METADATA_CACHE: MachineMetadata | None = None
+
+
+def _probe_cpu_model() -> str | None:
+    """Return a best-effort human-readable CPU model string.
+
+    Returns
+    -------
+    str | None
+        CPU model, or ``None`` when undiscoverable.
+    """
+
+    try:
+        if sys.platform == "linux":
+            for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+                if line.lower().startswith("model name"):
+                    return line.split(":", 1)[1].strip() or None
+    except OSError:
+        pass
+    processor = platform.processor().strip()
+    if processor:
+        return processor
+    machine = platform.machine().strip()
+    return machine or None
+
+
+def _probe_gpu_models() -> tuple[str | None, int | None]:
+    """Probe GPU model name(s) via ``nvidia-smi`` in a throwaway subprocess.
+
+    NEVER touches ``torch.cuda`` -- initializing CUDA in this process would make a
+    subsequent ``fork`` of the validation worker unsafe (the documented
+    fork-after-CUDA hazard). The probe is a short, isolated ``nvidia-smi`` call.
+
+    Returns
+    -------
+    tuple[str | None, int | None]
+        ``(joined GPU model names, gpu count)``; both ``None`` when no GPU /
+        ``nvidia-smi`` is unavailable.
+    """
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+    if result.returncode != 0:
+        return None, None
+    names = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if not names:
+        return None, None
+    return ";".join(names), len(names)
+
+
+def _probe_torch_num_threads() -> int | None:
+    """Return ``torch.get_num_threads()`` without forcing a CUDA init.
+
+    ``torch.get_num_threads()`` reads the intra-op thread pool size and does NOT
+    initialize CUDA, so it is safe to call in the forking parent.
+
+    Returns
+    -------
+    int | None
+        Intra-op thread count, or ``None`` when torch is unavailable.
+    """
+
+    try:
+        import torch
+
+        return int(torch.get_num_threads())
+    except Exception:
+        return None
+
+
+def machine_metadata() -> MachineMetadata:
+    """Return the cached hardware/platform fingerprint for this process.
+
+    Probed at most ONCE per process (cached) -- never per op/row -- and entirely
+    best-effort: every probe is wrapped so a failure yields ``None`` for that
+    field, never an exception. The GPU probe spawns a throwaway ``nvidia-smi``
+    subprocess and NEVER imports ``torch.cuda`` (fork-after-CUDA hazard).
+
+    Returns
+    -------
+    MachineMetadata
+        Best-effort machine fingerprint; unavailable fields are ``None``.
+    """
+
+    global _MACHINE_METADATA_CACHE
+    if _MACHINE_METADATA_CACHE is not None:
+        return _MACHINE_METADATA_CACHE
+    cpu_model = _probe_cpu_model()
+    try:
+        physical = os.cpu_count()
+        import psutil
+
+        cpu_cores_physical = psutil.cpu_count(logical=False)
+        cpu_cores_logical = psutil.cpu_count(logical=True) or physical
+        total_ram_gb = round(psutil.virtual_memory().total / (1024**3), 3)
+    except Exception:
+        cpu_cores_physical = None
+        cpu_cores_logical = os.cpu_count()
+        total_ram_gb = None
+    gpu_models, gpu_count = _probe_gpu_models()
+    try:
+        platform_str: str | None = platform.platform()
+    except Exception:
+        platform_str = None
+    metadata = MachineMetadata(
+        cpu_model=cpu_model,
+        cpu_cores_physical=cpu_cores_physical,
+        cpu_cores_logical=cpu_cores_logical,
+        total_ram_gb=total_ram_gb,
+        gpu_models=gpu_models,
+        gpu_count=gpu_count,
+        platform_str=platform_str,
+        torch_num_threads=_probe_torch_num_threads(),
+    )
+    _MACHINE_METADATA_CACHE = metadata
+    return metadata
 
 
 def _package_version(package: str, fallback: str) -> str:
@@ -496,6 +733,14 @@ def initialize(conn: sqlite3.Connection) -> None:
             torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
             input_scale REAL,
             runner_host TEXT,
+            machine_cpu_model TEXT,
+            machine_cpu_cores_physical INTEGER,
+            machine_cpu_cores_logical INTEGER,
+            machine_total_ram_gb REAL,
+            machine_gpu_models TEXT,
+            machine_gpu_count INTEGER,
+            machine_platform TEXT,
+            machine_torch_num_threads INTEGER,
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
             duration_sec REAL NOT NULL,
@@ -527,6 +772,7 @@ def initialize(conn: sqlite3.Connection) -> None:
     )
     _migrate_peak_rss_column(conn)
     _migrate_identity_columns(conn)
+    _migrate_machine_columns(conn)
     _migrate_status_constraint(conn)
     _create_current_verification_view(conn)
     _create_current_verification_real_view(conn)
@@ -580,6 +826,14 @@ def _create_current_verification_view(conn: sqlite3.Connection) -> None:
             torchlens_source_hash,
             input_scale,
             runner_host,
+            machine_cpu_model,
+            machine_cpu_cores_physical,
+            machine_cpu_cores_logical,
+            machine_total_ram_gb,
+            machine_gpu_models,
+            machine_gpu_count,
+            machine_platform,
+            machine_torch_num_threads,
             started_at,
             finished_at,
             duration_sec,
@@ -655,6 +909,14 @@ def _create_current_verification_real_view(conn: sqlite3.Connection) -> None:
             torchlens_source_hash,
             input_scale,
             runner_host,
+            machine_cpu_model,
+            machine_cpu_cores_physical,
+            machine_cpu_cores_logical,
+            machine_total_ram_gb,
+            machine_gpu_models,
+            machine_gpu_count,
+            machine_platform,
+            machine_torch_num_threads,
             started_at,
             finished_at,
             duration_sec,
@@ -732,6 +994,44 @@ def _migrate_identity_columns(conn: sqlite3.Connection) -> None:
         initialize(conn)
 
 
+_MACHINE_COLUMN_DDL: tuple[tuple[str, str], ...] = (
+    ("machine_cpu_model", "TEXT"),
+    ("machine_cpu_cores_physical", "INTEGER"),
+    ("machine_cpu_cores_logical", "INTEGER"),
+    ("machine_total_ram_gb", "REAL"),
+    ("machine_gpu_models", "TEXT"),
+    ("machine_gpu_count", "INTEGER"),
+    ("machine_platform", "TEXT"),
+    ("machine_torch_num_threads", "INTEGER"),
+)
+
+
+def _migrate_machine_columns(conn: sqlite3.Connection) -> None:
+    """Add the nullable machine/hardware columns to legacy verification ledgers.
+
+    Append-only and backward-compatible (FINAL_PLAN bucket C): each column is
+    added with NO default, so every pre-existing row reads ``NULL`` for the new
+    machine fields, and the append-only UPDATE/DELETE triggers are untouched (a
+    pure ``ADD COLUMN`` never rebuilds the table or drops a trigger). These are
+    timing-normalization metadata only -- never part of identity, never gating a
+    skip.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    migrated = False
+    for column, sql_type in _MACHINE_COLUMN_DDL:
+        if _has_column(conn, "verification_runs", column):
+            continue
+        conn.execute(f"ALTER TABLE verification_runs ADD COLUMN {column} {sql_type}")
+        migrated = True
+    if migrated:
+        initialize(conn)
+
+
 def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     """Recreate legacy ledgers whose status or scope checks lack current values.
 
@@ -771,6 +1071,14 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     )
     input_scale_expr = "input_scale" if "input_scale" in existing_columns else "NULL AS input_scale"
     peak_rss_column = "peak_rss_mb" if "peak_rss_mb" in existing_columns else "NULL AS peak_rss_mb"
+    # Machine/hardware columns (bucket C). Carry real values across the rebuild
+    # when present, else synthesize NULL so a legacy ledger predating the machine
+    # migration still rebuilds without dropping data.
+    machine_select_exprs = ",\n            ".join(
+        column if column in existing_columns else f"NULL AS {column}"
+        for column, _sql_type in _MACHINE_COLUMN_DDL
+    )
+    machine_insert_columns = ",\n            ".join(column for column, _ in _MACHINE_COLUMN_DDL)
     conn.executescript(
         f"""
         DROP VIEW IF EXISTS current_verification;
@@ -820,6 +1128,14 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
             input_scale REAL,
             runner_host TEXT,
+            machine_cpu_model TEXT,
+            machine_cpu_cores_physical INTEGER,
+            machine_cpu_cores_logical INTEGER,
+            machine_total_ram_gb REAL,
+            machine_gpu_models TEXT,
+            machine_gpu_count INTEGER,
+            machine_platform TEXT,
+            machine_torch_num_threads INTEGER,
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
             duration_sec REAL NOT NULL,
@@ -854,6 +1170,7 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             torchlens_source_hash,
             input_scale,
             runner_host,
+            {machine_insert_columns},
             started_at,
             finished_at,
             duration_sec,
@@ -887,6 +1204,7 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             {source_hash_expr},
             {input_scale_expr},
             runner_host,
+            {machine_select_exprs},
             started_at,
             finished_at,
             duration_sec,
@@ -956,6 +1274,14 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             torchlens_source_hash,
             input_scale,
             runner_host,
+            machine_cpu_model,
+            machine_cpu_cores_physical,
+            machine_cpu_cores_logical,
+            machine_total_ram_gb,
+            machine_gpu_models,
+            machine_gpu_count,
+            machine_platform,
+            machine_torch_num_threads,
             started_at,
             finished_at,
             duration_sec,
@@ -988,6 +1314,14 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             :torchlens_source_hash,
             :input_scale,
             :runner_host,
+            :machine_cpu_model,
+            :machine_cpu_cores_physical,
+            :machine_cpu_cores_logical,
+            :machine_total_ram_gb,
+            :machine_gpu_models,
+            :machine_gpu_count,
+            :machine_platform,
+            :machine_torch_num_threads,
             :started_at,
             :finished_at,
             :duration_sec,

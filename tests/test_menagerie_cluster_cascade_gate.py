@@ -593,6 +593,110 @@ def test_running_array_at_deadline_does_not_stamp_in_progress_rows_failed(
     assert "m-running" not in records
 
 
+def test_gate_d_pending_tasks_surface_in_summary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """GATE (d): cluster tasks left pending surface in the run summary (N1).
+
+    REVIEW_scheduling_fix.md N1: a SLURM array still running at the collect
+    deadline leaves its tasks pending (correctly NOT failed); they are absent
+    from the manifest, so they must be surfaced separately so the operator knows
+    to resume-collect. This drives the real still-running collect, then asserts:
+
+    * a ``cluster_tasks_pending.json`` sidecar is written beside the manifest,
+    * ``write_reports`` lifts it into ``validation_summary.json`` with the pending
+      stable IDs + a resume hint,
+    * run_all's reader exposes the same block.
+    """
+
+    import json
+
+    from menagerie.run_all import _cluster_tasks_pending
+
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_ENV_HASH", "env-a")
+    monkeypatch.setenv("TORCHLENS_MENAGERIE_LOCK_HASH", "lock-a")
+    monkeypatch.setenv("TORCHLENS_SOURCE_HASH", "source-a")
+
+    finished = _row("m-finished", 1, "FinishedGiant")
+    running = _row("m-running", 2, "RunningGiant")
+    rows = (finished, running)
+
+    finished_assign = _assignment("m-finished", 0)
+    running_assign = _assignment("m-running", 1)
+    dispatch_result = DispatchResult(
+        campaign_id="campaign-a",
+        attempt_id="attempt-a",
+        assignments=(finished_assign, running_assign),
+        local_artifact_dir=tmp_path / "cluster",
+        remote_artifact_dir="~/out/campaign-a/attempt-a",
+        sbatch_job_ids=("6015050",),
+        commands=(),
+        dry_run=True,
+    )
+    result_dir = dispatch_result.local_artifact_dir / "results"
+    (dispatch_result.local_artifact_dir / "logs").mkdir(parents=True, exist_ok=True)
+    _write_task_artifact(
+        result_dir, finished_assign, _run("m-finished", "FinishedGiant", status="passed")
+    )
+
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner,
+        "poll_cluster_terminal",
+        lambda *_, **__: False,
+    )
+    real_collect = functools.partial(collect_cluster_results_partial, dry_run=True)
+    monkeypatch.setattr(
+        validate_menagerie.cluster_runner, "collect_cluster_results_partial", real_collect
+    )
+
+    # The manifest lives inside out_dir here so write_reports' out_dir read also hits.
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = out_dir / "validation_manifest.tsv"
+    args = validate_menagerie.build_parser().parse_args(
+        [
+            "--out-dir",
+            str(out_dir),
+            "--manifest",
+            str(manifest_path),
+            "--db",
+            str(tmp_path / "catalog.db"),
+            "--jobs",
+            "1",
+            "--verification-db",
+            str(ledger_db),
+        ]
+    )
+    args.resolved_timeout_base_sec = args.timeout_sec
+    handle = ClusterDispatchHandle(rows, dispatch_result, tmp_path / "handle.json")
+
+    validate_menagerie.collect_cluster_async(handle, args, manifest_path)
+
+    # 1) The sidecar records the pending task beside the manifest.
+    sidecar = out_dir / validate_menagerie.CLUSTER_PENDING_JSON
+    assert sidecar.exists()
+    sidecar_payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert "m-running" in sidecar_payload["stable_ids"]
+    assert "m-finished" not in sidecar_payload["stable_ids"]
+
+    # 2) write_reports lifts it into the validation summary.
+    validate_menagerie.write_reports(out_dir, manifest_path, list(rows), no_build_catalog=True)
+    summary = json.loads((out_dir / validate_menagerie.SUMMARY_JSON).read_text(encoding="utf-8"))
+    pending = summary.get("cluster_tasks_pending")
+    assert pending is not None
+    assert pending["count"] == 1
+    assert pending["stable_ids"] == ["m-running"]
+    assert "resume" in pending["resume_hint"].lower()
+
+    # 3) run_all's reader exposes the same block.
+    run_all_pending = _cluster_tasks_pending(out_dir)
+    assert run_all_pending is not None
+    assert run_all_pending["stable_ids"] == ["m-running"]
+
+
 def test_terminal_array_still_attributes_missing_task_failed(
     tmp_path: Path,
     monkeypatch: Any,

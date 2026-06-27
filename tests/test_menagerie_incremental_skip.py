@@ -204,6 +204,47 @@ def test_a_empty_targets_skip_nothing(tmp_path: Path) -> None:
     assert incremental_skip_stable_ids(conn, "tl-current", {}, {}) == set()
 
 
+def test_a_machine_metadata_difference_does_not_prevent_skip(tmp_path: Path) -> None:
+    """GATE (c): machine/hardware metadata is NOT part of identity.
+
+    A model validated on machine A (one CPU/GPU/RAM fingerprint) is the SAME
+    validation on machine B. The bucket-C machine fields must NEVER enter the
+    identity tuple or the incremental-skip join: a row stamped with one machine
+    fingerprint is STILL skip-eligible from a (machine-agnostic) target whose
+    identity matches. The pass row carries fully-populated machine fields; the
+    target -- which has no machine concept at all -- still yields a skip.
+    """
+
+    from menagerie.ledger import with_machine_metadata
+
+    conn = connect(tmp_path / "verification.db")
+    # Stamp the pass row with this host's REAL machine fingerprint, then with a
+    # deliberately DIFFERENT one, to prove neither value is consulted by the join.
+    append_verification_run(conn, with_machine_metadata(_run(run_id="real-machine")))
+
+    assert _skip(conn) == {"m1"}
+
+    other_db = tmp_path / "other.db"
+    other = connect(other_db)
+    append_verification_run(
+        other,
+        _run(
+            run_id="other-machine",
+            machine_cpu_model="Totally Different CPU",
+            machine_cpu_cores_physical=128,
+            machine_cpu_cores_logical=256,
+            machine_total_ram_gb=2048.0,
+            machine_gpu_models="A100 80GB;A100 80GB;A100 80GB;A100 80GB",
+            machine_gpu_count=4,
+            machine_platform="Linux-cluster-node-x86_64",
+            machine_torch_num_threads=64,
+        ),
+    )
+
+    # Same identity target -> still skip-eligible despite the divergent machine.
+    assert _skip(other) == {"m1"}
+
+
 # ----- (b) changed source/env/lock hash -> NOT skipped -----
 
 

@@ -2863,6 +2863,29 @@ def _parse_sbatch_job_id(stdout: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _row_get(row: sqlite3.Row, column: str) -> object:
+    """Return a column from a SQLite row, or ``None`` when the column is absent.
+
+    Defensive accessor for forward/backward-compatible reads of optional columns
+    (e.g. the nullable machine/hardware fields, which a legacy or partial row may
+    lack). A real ``NULL`` and a missing column both read as ``None``.
+
+    Parameters
+    ----------
+    row:
+        SQLite row.
+    column:
+        Column name.
+
+    Returns
+    -------
+    object
+        Column value, or ``None`` when the column is not present on the row.
+    """
+
+    return row[column] if column in row.keys() else None
+
+
 def _verification_run_from_row(row: sqlite3.Row) -> VerificationRun:
     """Build a verification run from a SQLite row."""
 
@@ -2898,6 +2921,14 @@ def _verification_run_from_row(row: sqlite3.Row) -> VerificationRun:
         error_class=row["error_class"],
         error_message=row["error_message"],
         run_id=str(row["run_id"]),
+        machine_cpu_model=_row_get(row, "machine_cpu_model"),  # type: ignore[arg-type]
+        machine_cpu_cores_physical=_row_get(row, "machine_cpu_cores_physical"),  # type: ignore[arg-type]
+        machine_cpu_cores_logical=_row_get(row, "machine_cpu_cores_logical"),  # type: ignore[arg-type]
+        machine_total_ram_gb=_row_get(row, "machine_total_ram_gb"),  # type: ignore[arg-type]
+        machine_gpu_models=_row_get(row, "machine_gpu_models"),  # type: ignore[arg-type]
+        machine_gpu_count=_row_get(row, "machine_gpu_count"),  # type: ignore[arg-type]
+        machine_platform=_row_get(row, "machine_platform"),  # type: ignore[arg-type]
+        machine_torch_num_threads=_row_get(row, "machine_torch_num_threads"),  # type: ignore[arg-type]
     )
 
 

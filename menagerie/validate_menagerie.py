@@ -69,6 +69,7 @@ from menagerie.ledger import (
     runner_host,
     torchlens_source_hash,
     utc_now,
+    with_machine_metadata,
 )
 
 
@@ -140,6 +141,13 @@ MANIFEST_COLUMNS = (
 )
 SUMMARY_JSON = "validation_summary.json"
 REPORT_MD = "VALIDATION_REPORT.md"
+# Sidecar recording cluster tasks left PENDING because their SLURM array was still
+# running at the collect deadline (REVIEW_scheduling_fix.md N1). These tasks were
+# correctly NOT stamped failed (still-running != failed); they are resumable by a
+# later collect / re-run, which picks them up via incremental-skip (pending !=
+# passed -> not skip-eligible -> re-validated). The run summary surfaces this so
+# the operator knows to resume-collect rather than silently treat the run as final.
+CLUSTER_PENDING_JSON = "cluster_tasks_pending.json"
 RUNNER_CHOICES = ("auto", "local", "cluster")
 
 
@@ -652,46 +660,42 @@ def append_validation_ledger(
     passed = ledger_status == "passed"
     started_at = utc_now()
     finished_at = utc_now()
+    run = VerificationRun(
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        name=row.name,
+        zoo=row.zoo,
+        variant=row.variant,
+        scope=cast(Scope, result.scope),
+        status=cast(Status, ledger_status),
+        forward_pass=_forward_pass_value(result, passed, ledger_status),
+        backward_pass=_backward_pass_value(result, passed),
+        backward_na_reason=None,
+        metadata_ok=(
+            int(result.validate_metadata_ok) if not result.status.startswith("skipped:") else None
+        ),
+        n_ops=result.n_ops if passed else None,
+        graph_shape_hash=result.graph_shape_hash or None,
+        svg_sha256=None,
+        torchlens_version=_torchlens_version(),
+        torch_version=_torch_version(),
+        python_version=python_version(),
+        device_requested=device,
+        device_actual=_actual_device(result, device),
+        env_hash=env_hash,
+        lock_hash=lock_hash,
+        torchlens_source_hash=source_hash,
+        input_scale=input_scale,
+        runner_host=runner_host(),
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_sec=result.elapsed,
+        peak_rss_mb=result.peak_rss_mb,
+        error_class=None if passed else result.status,
+        error_message=None if passed else result.error,
+    )
     with _connect_verification_ledger(verification_db) as conn:
-        append_verification_run(
-            conn,
-            VerificationRun(
-                stable_id=row.stable_id,
-                recipe_revision_sha256=row.recipe_revision_sha256,
-                name=row.name,
-                zoo=row.zoo,
-                variant=row.variant,
-                scope=cast(Scope, result.scope),
-                status=cast(Status, ledger_status),
-                forward_pass=_forward_pass_value(result, passed, ledger_status),
-                backward_pass=_backward_pass_value(result, passed),
-                backward_na_reason=None,
-                metadata_ok=(
-                    int(result.validate_metadata_ok)
-                    if not result.status.startswith("skipped:")
-                    else None
-                ),
-                n_ops=result.n_ops if passed else None,
-                graph_shape_hash=result.graph_shape_hash or None,
-                svg_sha256=None,
-                torchlens_version=_torchlens_version(),
-                torch_version=_torch_version(),
-                python_version=python_version(),
-                device_requested=device,
-                device_actual=_actual_device(result, device),
-                env_hash=env_hash,
-                lock_hash=lock_hash,
-                torchlens_source_hash=source_hash,
-                input_scale=input_scale,
-                runner_host=runner_host(),
-                started_at=started_at,
-                finished_at=finished_at,
-                duration_sec=result.elapsed,
-                peak_rss_mb=result.peak_rss_mb,
-                error_class=None if passed else result.status,
-                error_message=None if passed else result.error,
-            ),
-        )
+        append_verification_run(conn, with_machine_metadata(run))
 
 
 def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
@@ -1394,6 +1398,7 @@ def _append_cluster_unavailable_rows(
                 error_class="skipped:cluster_unavailable",
                 error_message=message,
             )
+            run = with_machine_metadata(run)
             append_verification_run(conn, run)
             append_manifest(manifest_path, _result_from_ledger_run(row, run))
 
@@ -1500,6 +1505,7 @@ def _append_cluster_task_failed_rows(
                 error_class="failed:cluster_task_failed",
                 error_message=message,
             )
+            run = with_machine_metadata(run)
             append_verification_run(conn, run)
             append_manifest(manifest_path, _result_from_ledger_run(row, run))
 
@@ -1591,12 +1597,14 @@ def _attribute_cluster_results_per_model(
         # is the C1-1 fix -- never stamp a still-running task failed:cluster_task_
         # failed just because the local lane finished and the poll timed out.
         if missing_rows:
+            pending_ids = [row.stable_id for row in missing_rows]
             log_event(
                 "cluster_tasks_pending",
                 rows=len(missing_rows),
-                stable_ids=[row.stable_id for row in missing_rows],
+                stable_ids=pending_ids,
                 detail=detail,
             )
+            _record_cluster_tasks_pending(manifest_path, pending_ids, detail=detail)
         return bool(collected.present_assignments) or bool(collected.missing_assignments)
     error_message_by_stable_id: dict[str, str] = {}
     for assignment in collected.missing_assignments:
@@ -1639,6 +1647,88 @@ def _cluster_transport_failure_detail(error: BaseException) -> str:
     if isinstance(error, subprocess.TimeoutExpired):
         return f"timeout={error.timeout}; cmd={error.cmd!r}"
     return repr(error)
+
+
+def _record_cluster_tasks_pending(
+    manifest_path: Path,
+    stable_ids: Sequence[str],
+    *,
+    detail: str,
+) -> None:
+    """Persist cluster tasks left pending to a sidecar beside the manifest.
+
+    REVIEW_scheduling_fix.md N1: when a SLURM array is still RUNNING at the
+    collect deadline, its tasks with no artifact yet are correctly LEFT PENDING
+    (never stamped failed). They are also absent from the validation manifest, so
+    they would otherwise be invisible in the run summary. This records them
+    (UNION across multiple collects within the run, so a partial earlier collect
+    is not lost) so :func:`write_reports` can surface a ``cluster_tasks_pending``
+    block and the operator knows to resume-collect.
+
+    This is metadata only: it does NOT write the ledger or manifest, does NOT
+    stamp any status, and never promotes/demotes a row.
+
+    Parameters
+    ----------
+    manifest_path:
+        Validation manifest path; the sidecar is written in its directory.
+    stable_ids:
+        Stable IDs of the pending tasks.
+    detail:
+        Human-readable context for why the tasks are pending.
+    """
+
+    if not stable_ids:
+        return
+    sidecar = manifest_path.parent / CLUSTER_PENDING_JSON
+    existing: set[str] = set()
+    detail_text = detail
+    if sidecar.exists():
+        try:
+            prior = json.loads(sidecar.read_text(encoding="utf-8"))
+            existing = {str(value) for value in prior.get("stable_ids", [])}
+            detail_text = str(prior.get("detail", detail)) or detail
+        except (OSError, json.JSONDecodeError):
+            existing = set()
+    merged = sorted(existing | {str(value) for value in stable_ids})
+    payload = {
+        "stable_ids": merged,
+        "count": len(merged),
+        "detail": detail_text,
+        "resume_hint": (
+            "Re-run the same selection to resume-collect these tasks. They are "
+            "pending (still running), not passed, so incremental-skip re-validates "
+            "them; --force-full is not required."
+        ),
+    }
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _read_cluster_tasks_pending(out_dir: Path) -> dict[str, Any] | None:
+    """Read the cluster-tasks-pending sidecar, if present.
+
+    Parameters
+    ----------
+    out_dir:
+        Directory holding the validation manifest and sidecar.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Parsed sidecar payload, or ``None`` when no tasks were left pending.
+    """
+
+    sidecar = out_dir / CLUSTER_PENDING_JSON
+    if not sidecar.exists():
+        return None
+    try:
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not payload.get("stable_ids"):
+        return None
+    return payload
 
 
 def dispatch_cluster_async(
@@ -1863,12 +1953,14 @@ def collect_cluster_async(
             # in-progress, not failed: leave ALL rows pending for a later collect
             # (C1-1). Do not write env_unavailable -- that would be a false
             # terminal failure for a still-running array.
+            pending_detail = "array not terminal; no artifacts yet; left pending"
             log_event(
                 "cluster_tasks_pending",
                 rows=len(stable_ids),
                 stable_ids=stable_ids,
-                detail="array not terminal; no artifacts yet; left pending",
+                detail=pending_detail,
             )
+            _record_cluster_tasks_pending(manifest_path, stable_ids, detail=pending_detail)
             return
         _append_cluster_unavailable_rows(
             rows,
@@ -3933,7 +4025,16 @@ def write_reports(
         "TorchLens forward validation has algorithmically verified saved activation "
         f"replay for {statuses['validated']} menagerie models."
     )
-    summary = {
+    # N1 (REVIEW_scheduling_fix.md): surface cluster tasks left PENDING because
+    # their SLURM array was still running at the collect deadline. These are
+    # absent from the manifest (correctly NOT stamped failed), so without this the
+    # operator would not know a resume-collect is needed. The sidecar is written
+    # beside the manifest; fall back to ``out_dir`` (the common case where the
+    # manifest lives inside ``out_dir``).
+    pending = _read_cluster_tasks_pending(manifest_path.parent) or _read_cluster_tasks_pending(
+        out_dir
+    )
+    summary: dict[str, Any] = {
         "totals": {
             "validated": statuses["validated"],
             "failed": statuses["failed"],
@@ -3946,6 +4047,17 @@ def write_reports(
         "failures": failures,
         "manifest": str(manifest_path),
     }
+    if pending is not None:
+        summary["cluster_tasks_pending"] = {
+            "count": int(pending.get("count", len(pending.get("stable_ids", [])))),
+            "stable_ids": list(pending.get("stable_ids", [])),
+            "detail": pending.get("detail", ""),
+            "resume_hint": pending.get(
+                "resume_hint",
+                "Re-run the same selection to resume-collect; pending tasks are "
+                "re-validated by incremental-skip (--force-full not required).",
+            ),
+        }
     (out_dir / SUMMARY_JSON).write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     lines = [
         "# TorchLens Menagerie Validation Report",
@@ -3959,11 +4071,28 @@ def write_reports(
         f"- Skipped: {statuses['skipped']}",
         f"- Total manifest rows: {sum(statuses.values())}",
         "",
-        "## Counts by Domain",
-        "",
-        "| Domain | Validated | Failed | Skipped |",
-        "| --- | ---: | ---: | ---: |",
     ]
+    if pending is not None:
+        pending_ids = list(pending.get("stable_ids", []))
+        lines.extend(
+            [
+                "## Cluster Tasks Pending (resume-collect needed)",
+                "",
+                f"- Pending tasks: {pending.get('count', len(pending_ids))}",
+                f"- Reason: {pending.get('detail', '')}",
+                f"- Resume: {pending.get('resume_hint', '')}",
+                f"- Stable IDs: {', '.join(pending_ids)}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Counts by Domain",
+            "",
+            "| Domain | Validated | Failed | Skipped |",
+            "| --- | ---: | ---: | ---: |",
+        ]
+    )
     for domain, counts in sorted(by_domain.items()):
         lines.append(
             f"| {domain} | {counts['validated']} | {counts['failed']} | {counts['skipped']} |"

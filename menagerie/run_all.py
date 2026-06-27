@@ -73,6 +73,10 @@ class CombinedReport:
         Total run-all elapsed wall-clock seconds.
     csv_export:
         CSV export status note.
+    cluster_tasks_pending:
+        Cluster tasks left pending because their SLURM array was still running at
+        the collect deadline (REVIEW_scheduling_fix.md N1); ``None`` when none.
+        Resumable by a re-run (incremental-skip re-validates pending tasks).
     """
 
     out_dir: str
@@ -82,6 +86,7 @@ class CombinedReport:
     timings: list[StepTiming]
     total_elapsed_sec: float
     csv_export: str
+    cluster_tasks_pending: dict[str, object] | None = None
 
 
 def _utc_now() -> datetime:
@@ -805,6 +810,40 @@ def _validation_numbers(validation_dir: Path) -> dict[str, int]:
     return totals
 
 
+def _cluster_tasks_pending(validation_dir: Path) -> dict[str, object] | None:
+    """Return the cluster-tasks-pending block from the validation summary.
+
+    REVIEW_scheduling_fix.md N1: a SLURM array still running at the collect
+    deadline leaves its tasks PENDING (correctly not stamped failed); the
+    validator records them in the validation summary so the operator knows a
+    resume-collect is needed. This lifts that block into the combined run-all
+    report so it is not silently dropped.
+
+    Parameters
+    ----------
+    validation_dir:
+        Validation output directory.
+
+    Returns
+    -------
+    dict[str, object] | None
+        The pending block (count, stable_ids, detail, resume_hint), or ``None``
+        when no tasks were left pending.
+    """
+
+    summary_path = validation_dir / "validation_summary.json"
+    if not summary_path.exists():
+        return None
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    pending = summary.get("cluster_tasks_pending")
+    if not pending or not pending.get("stable_ids"):
+        return None
+    return pending
+
+
 def _render_count(visuals_dir: Path) -> int:
     """Return rendered row count from the render manifest.
 
@@ -893,6 +932,27 @@ def _write_report(report: CombinedReport, out_dir: Path) -> None:
             f"{timing.name} | {timing.skipped} | {timing.elapsed_sec:.3f} | "
             f"{timing.started_at} | {timing.finished_at} |"
         )
+    pending = report.cluster_tasks_pending
+    if pending:
+        raw_ids = pending.get("stable_ids", [])
+        pending_ids = list(raw_ids) if isinstance(raw_ids, (list, tuple)) else []
+        lines.extend(
+            [
+                "",
+                "## Cluster Tasks Pending (resume-collect needed)",
+                "",
+                f"- Pending tasks: {pending.get('count', len(pending_ids))}",
+                f"- Reason: {pending.get('detail', '')}",
+                (
+                    "- Resume path: re-run the SAME selection (e.g. "
+                    "`python -m menagerie run-all`). Pending tasks are still "
+                    "running, not passed, so they are NOT skip-eligible and "
+                    "incremental-skip re-validates them; `--force-full` is not "
+                    "required."
+                ),
+                f"- Stable IDs: {', '.join(str(value) for value in pending_ids)}",
+            ]
+        )
     (out_dir / REPORT_MD).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -917,6 +977,14 @@ def _print_report(report: CombinedReport) -> None:
     print(f"render_count: {report.render_count}")
     print(f"metadata_row_count: {report.metadata_row_count}")
     print(f"csv_export: {report.csv_export}")
+    pending = report.cluster_tasks_pending
+    if pending:
+        print(
+            "cluster_tasks_pending: "
+            f"count={pending.get('count', 0)} -- resume by re-running the same "
+            "selection (pending tasks are re-validated via incremental-skip; "
+            "--force-full not required)"
+        )
     for timing in report.timings:
         print(f"timing.{timing.name}: skipped={timing.skipped} elapsed={timing.elapsed_sec:.3f}s")
     print(f"total_elapsed: {report.total_elapsed_sec:.3f}s")
@@ -1086,6 +1154,7 @@ def run(args: argparse.Namespace) -> CombinedReport:
             timings=timings,
             total_elapsed_sec=round(time.perf_counter() - total_start, 6),
             csv_export=csv_note,
+            cluster_tasks_pending=_cluster_tasks_pending(validation_dir),
         )
         _write_report(report, out_dir)
         _print_report(report)

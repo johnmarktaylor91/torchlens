@@ -13,6 +13,7 @@ from menagerie.ledger import (
     CASCADE_ARTIFACT_ERROR_CLASS,
     ENV_VERIFICATION_DB,
     LEGACY_UNKNOWN,
+    MachineMetadata,
     VerificationRun,
     VerificationTarget,
     append_verification_run,
@@ -21,9 +22,11 @@ from menagerie.ledger import (
     cascade_suppressed_count,
     cascade_suppressed_stable_ids,
     connect,
+    machine_metadata,
     seed_from_legacy,
     torchlens_source_hash,
     verified_count,
+    with_machine_metadata,
 )
 from menagerie.validate_menagerie import (
     corpus_max_passed_duration_sec,
@@ -463,6 +466,251 @@ def test_update_and_delete_are_rejected_by_trigger(tmp_path: Path) -> None:
         conn.execute("UPDATE verification_runs SET status='failed'")
     with pytest.raises(sqlite3.IntegrityError, match="append-only"):
         conn.execute("DELETE FROM verification_runs")
+
+
+# ----- Bucket C: machine/hardware metadata (timing normalization) -----
+
+_MACHINE_COLUMNS = (
+    "machine_cpu_model",
+    "machine_cpu_cores_physical",
+    "machine_cpu_cores_logical",
+    "machine_total_ram_gb",
+    "machine_gpu_models",
+    "machine_gpu_count",
+    "machine_platform",
+    "machine_torch_num_threads",
+)
+
+
+def _fake_machine_metadata() -> MachineMetadata:
+    """Return a fully-populated machine fingerprint for deterministic gates."""
+
+    return MachineMetadata(
+        cpu_model="Test CPU @ 1GHz",
+        cpu_cores_physical=8,
+        cpu_cores_logical=16,
+        total_ram_gb=64.0,
+        gpu_models="Test GPU 24GB;Test GPU 24GB",
+        gpu_count=2,
+        platform_str="Linux-test-x86_64",
+        torch_num_threads=4,
+    )
+
+
+def test_gate_a_machine_metadata_fields_populated_in_fresh_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE (a): a fresh verification row carries the eight machine fields.
+
+    ``with_machine_metadata`` stamps the probe onto the row; the writer persists
+    every machine column; a read-back returns the stamped (non-NULL) values.
+    """
+
+    monkeypatch.setattr("menagerie.ledger.machine_metadata", _fake_machine_metadata)
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(conn, with_machine_metadata(_run(run_id="stamped")))
+
+    row = conn.execute(
+        """
+        SELECT machine_cpu_model, machine_cpu_cores_physical, machine_cpu_cores_logical,
+               machine_total_ram_gb, machine_gpu_models, machine_gpu_count,
+               machine_platform, machine_torch_num_threads
+        FROM verification_runs
+        WHERE run_id = 'stamped'
+        """
+    ).fetchone()
+
+    assert dict(row) == {
+        "machine_cpu_model": "Test CPU @ 1GHz",
+        "machine_cpu_cores_physical": 8,
+        "machine_cpu_cores_logical": 16,
+        "machine_total_ram_gb": 64.0,
+        "machine_gpu_models": "Test GPU 24GB;Test GPU 24GB",
+        "machine_gpu_count": 2,
+        "machine_platform": "Linux-test-x86_64",
+        "machine_torch_num_threads": 4,
+    }
+
+
+def test_gate_a_real_probe_is_cached_and_best_effort() -> None:
+    """The real probe is cached per process and never raises.
+
+    It must populate at least the platform string (always available) and return
+    the SAME cached object on repeat calls (probed once, never per-row).
+    """
+
+    first = machine_metadata()
+    second = machine_metadata()
+
+    assert first is second
+    assert first.platform_str is not None
+
+
+def test_gate_b_machine_columns_migrate_existing_ledger_null(tmp_path: Path) -> None:
+    """GATE (b): a legacy ledger gains NULL machine columns and stays readable.
+
+    A pre-machine-migration ledger (current status check, no machine columns) is
+    a pure ``ADD COLUMN`` migration: old rows read NULL machine fields and the
+    append-only triggers are untouched.
+    """
+
+    db_path = tmp_path / "verification.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE verification_runs(
+            run_id TEXT PRIMARY KEY,
+            stable_id TEXT NOT NULL,
+            recipe_revision_sha256 TEXT NOT NULL,
+            name TEXT NOT NULL,
+            zoo TEXT NOT NULL,
+            variant TEXT NOT NULL DEFAULT '',
+            scope TEXT NOT NULL CHECK(scope IN ('forward','forward+backward','backward')),
+            status TEXT NOT NULL CHECK(
+                status IN (
+                    'passed','failed','skipped','timeout','not_applicable','deferred',
+                    'error','install_failed','env_unavailable','oom','native_crash','killed'
+                )
+            ),
+            forward_pass INTEGER,
+            backward_pass INTEGER,
+            backward_na_reason TEXT,
+            metadata_ok INTEGER,
+            n_ops INTEGER,
+            graph_shape_hash TEXT,
+            svg_sha256 TEXT,
+            torchlens_version TEXT NOT NULL,
+            torch_version TEXT NOT NULL,
+            python_version TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            device_actual TEXT,
+            env_hash TEXT,
+            lock_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            input_scale REAL,
+            runner_host TEXT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            duration_sec REAL NOT NULL,
+            peak_rss_mb INTEGER,
+            error_class TEXT,
+            error_message TEXT
+        );
+        INSERT INTO verification_runs(
+            run_id, stable_id, recipe_revision_sha256, name, zoo, scope, status,
+            forward_pass, metadata_ok, n_ops, graph_shape_hash, torchlens_version,
+            torch_version, python_version, device_requested, started_at, finished_at,
+            duration_sec
+        )
+        VALUES (
+            'legacy-run', 'm1', 'recipe-a', 'ToyNet', 'unit-zoo', 'forward', 'passed',
+            1, 1, 4, 'shape-a', 'tl-current', 'torch-test', 'py-test', 'cpu',
+            '2026-06-22T00:00:00+00:00', '2026-06-22T00:00:01+00:00', 1.0
+        );
+        """
+    )
+    conn.close()
+
+    migrated = connect(db_path)
+    columns = {str(row["name"]) for row in migrated.execute("PRAGMA table_info(verification_runs)")}
+    assert set(_MACHINE_COLUMNS).issubset(columns)
+
+    row = migrated.execute(
+        f"SELECT {', '.join(_MACHINE_COLUMNS)} FROM verification_runs WHERE run_id = 'legacy-run'"
+    ).fetchone()
+    assert all(value is None for value in dict(row).values())
+
+    # Triggers survive the ADD COLUMN migration.
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        migrated.execute("UPDATE verification_runs SET status='failed'")
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        migrated.execute("DELETE FROM verification_runs")
+
+
+def test_gate_b_machine_columns_survive_status_constraint_rebuild(tmp_path: Path) -> None:
+    """GATE (b): the status-constraint rebuild carries machine columns + identity.
+
+    A doubly-legacy ledger (OLD status check AND no machine columns) goes through
+    the table-rebuild path. The rebuild must add the machine columns (NULL for the
+    pre-existing row), preserve the real identity tuple, and re-arm the triggers.
+    """
+
+    db_path = tmp_path / "verification.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE verification_runs(
+            run_id TEXT PRIMARY KEY,
+            stable_id TEXT NOT NULL,
+            recipe_revision_sha256 TEXT NOT NULL,
+            name TEXT NOT NULL,
+            zoo TEXT NOT NULL,
+            variant TEXT NOT NULL DEFAULT '',
+            scope TEXT NOT NULL CHECK(scope IN ('forward','backward')),
+            status TEXT NOT NULL CHECK(status IN ('passed','failed')),
+            forward_pass INTEGER,
+            backward_pass INTEGER,
+            backward_na_reason TEXT,
+            metadata_ok INTEGER,
+            n_ops INTEGER,
+            graph_shape_hash TEXT,
+            svg_sha256 TEXT,
+            torchlens_version TEXT NOT NULL,
+            torch_version TEXT NOT NULL,
+            python_version TEXT NOT NULL,
+            device_requested TEXT NOT NULL,
+            device_actual TEXT,
+            env_hash TEXT,
+            lock_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            torchlens_source_hash TEXT NOT NULL DEFAULT 'legacy-unknown',
+            input_scale REAL,
+            runner_host TEXT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            duration_sec REAL NOT NULL,
+            peak_rss_mb INTEGER,
+            error_class TEXT,
+            error_message TEXT
+        );
+        INSERT INTO verification_runs(
+            run_id, stable_id, recipe_revision_sha256, name, zoo, scope, status,
+            forward_pass, metadata_ok, n_ops, graph_shape_hash, torchlens_version,
+            torch_version, python_version, device_requested, env_hash, lock_hash,
+            torchlens_source_hash, input_scale, started_at, finished_at, duration_sec
+        )
+        VALUES (
+            'real-identity-run', 'm1', 'recipe-a', 'ToyNet', 'unit-zoo', 'forward', 'passed',
+            1, 1, 4, 'shape-a', 'tl-current', 'torch-test', 'py-test', 'cpu',
+            'real-env', 'real-lock', 'real-source', 0.5,
+            '2026-06-22T00:00:00+00:00', '2026-06-22T00:00:01+00:00', 1.0
+        );
+        """
+    )
+    conn.close()
+
+    migrated = connect(db_path)
+    row = migrated.execute(
+        """
+        SELECT env_hash, lock_hash, torchlens_source_hash, input_scale,
+               machine_cpu_model, machine_platform
+        FROM verification_runs
+        WHERE run_id = 'real-identity-run'
+        """
+    ).fetchone()
+
+    assert dict(row) == {
+        "env_hash": "real-env",
+        "lock_hash": "real-lock",
+        "torchlens_source_hash": "real-source",
+        "input_scale": 0.5,
+        "machine_cpu_model": None,
+        "machine_platform": None,
+    }
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        migrated.execute("DELETE FROM verification_runs")
 
 
 def test_current_verification_returns_latest_row_per_stable_id(tmp_path: Path) -> None:
