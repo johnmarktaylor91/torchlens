@@ -5,8 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import torch
 from pydantic import ValidationError
 
+from menagerie.catalog import SOURCE_JSONL
+from menagerie.recipe import build_input_from_record
 from menagerie.schema import (
     CallableInput,
     CatalogRecord,
@@ -163,3 +166,37 @@ def test_each_input_variant_constructs() -> None:
         "none",
         "callable",
     ]
+
+
+def test_widedeep_tabmlp_callable_input_is_in_range() -> None:
+    """m3397 WideDeep-TabMlp: callable input produces valid categorical indices.
+
+    The model has cat_embed_input=[('cat0',10,4),('cat1',20,4)], so col 0
+    must be in [0,10) and col 1 in [0,20).  The old spec ([1,13] float32)
+    caused an IndexError before TorchLens even ran; this gate verifies the
+    faithful callable override is correct.
+    """
+    records = load_jsonl(SOURCE_JSONL)
+    (m3397,) = [r for r in records if r.name == "WideDeep-TabMlp" and r.zoo.startswith("web(")]
+
+    # Input kind must be callable (not the old generic tensor spec).
+    assert m3397.input.kind == "callable", f"expected callable input, got {m3397.input.kind!r}"
+
+    # Recipe is not quarantined -- the model code contains no arbitrary exec.
+    assert m3397.recipe.quarantine is False, (
+        "WideDeep-TabMlp recipe should not be quarantined after input fix"
+    )
+
+    # Build the input and verify shape and in-range categorical indices.
+    x = build_input_from_record(m3397)
+
+    assert isinstance(x, torch.Tensor), f"expected Tensor, got {type(x)}"
+    assert x.shape == (1, 4), f"expected shape (1,4), got {x.shape}"
+
+    # cat0 column (index 0): embedding table size 10, indices must be in [0, 10).
+    cat0_val = int(x[0, 0].item())
+    assert 0 <= cat0_val < 10, f"cat0 index {cat0_val} out of range [0, 10)"
+
+    # cat1 column (index 1): embedding table size 20, indices must be in [0, 20).
+    cat1_val = int(x[0, 1].item())
+    assert 0 <= cat1_val < 20, f"cat1 index {cat1_val} out of range [0, 20)"
