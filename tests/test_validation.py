@@ -1092,6 +1092,82 @@ def test_perturbation_changes_int_tensor() -> None:
     assert perturbed.dtype == parent.dtype
 
 
+@pytest.mark.smoke
+def test_perturbation_int64_saturated_max_does_not_overflow() -> None:
+    """C1 regression: an int64 parent holding INT64_MAX must not crash randint.
+
+    A legitimately captured int64 tensor that contains ``iinfo(int64).max``
+    (common as PyG sentinel/cluster index values) used to make
+    ``parent_outs.max() + 1`` wrap to ``INT64_MIN`` and raise
+    ``RuntimeError("random_ expects 'from' to be less than 'to'...")``. The
+    perturbation must run cleanly *and* still meaningfully perturb the tensor --
+    a no-op would silently disarm the validation tripwire.
+    """
+
+    imax = torch.iinfo(torch.int64).max
+    parent = torch.tensor([0, 5, imax, 100, imax, 42], dtype=torch.int64)
+    output = torch.randn(parent.shape)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    # (a) no raise (reached here), (b) genuinely perturbed, (c) dtype/shape kept.
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.dtype == torch.int64
+    assert perturbed.shape == parent.shape
+
+
+def test_perturbation_uint8_saturated_max_does_not_overflow() -> None:
+    """C1 regression: a uint8 parent at its dtype max must clamp, not overflow."""
+
+    umax = torch.iinfo(torch.uint8).max  # 255
+    parent = torch.tensor([0, 5, umax, 10, umax], dtype=torch.uint8)
+    output = torch.randn(parent.shape)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.dtype == torch.uint8
+    assert perturbed.shape == parent.shape
+
+
+def test_sagpooling_validates_end_to_end_without_perturb_overflow() -> None:
+    """C1 golden-model gate: a PyG SAGPooling graph validates green end-to-end.
+
+    SAGPooling emits an int64 index tensor carrying ``INT64_MAX`` during its
+    top-k selection. Before the fix this made the perturbation helper raise on a
+    successfully-captured trace (a validation-machinery crash masking 21 PyG
+    models). The tripwire must now run to a real pass/fail with no crash.
+    """
+
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import GCNConv, SAGPooling
+
+    torch.manual_seed(0)
+
+    class SAGPoolNet(nn.Module):
+        """Minimal GCN + SAGPooling graph that exercises the int64 sentinel path."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv = GCNConv(8, 16)
+            self.pool = SAGPooling(16, ratio=0.5)
+
+        def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+            """Embed nodes, then pool the graph and return the pooled features."""
+
+            x = self.conv(x, edge_index).relu()
+            x, edge_index, _, _, _, _ = self.pool(x, edge_index)
+            return x
+
+    n_nodes = 10
+    x = torch.randn(n_nodes, 8)
+    edge_index = torch.randint(0, n_nodes, (2, 30), dtype=torch.long)
+
+    # Returns True: the perturbation tripwire ran end-to-end with no overflow
+    # crash and the replay/perturbation checks genuinely passed.
+    assert validate_forward_pass(SAGPoolNet(), (x, edge_index), random_seed=1)
+
+
 def test_perturbation_changes_bool_tensor():
     parent = torch.ones(10, 10, dtype=torch.bool)
     output = torch.randn(10, 10)

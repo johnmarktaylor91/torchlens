@@ -1930,8 +1930,10 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
     "wrong" values while respecting type constraints:
 
     - **Integer types**: sample uniformly from [min, max+1) of the original
-      tensor.  If the tensor is all-one-value (single unique value), widen
-      the range to [-10, 11) or [0, 11).  Retries up to
+      tensor, with the exclusive high bound clamped by ``torch.iinfo`` so the
+      ``max + 1`` cannot overflow the dtype (a saturated range widens to the
+      full valid dtype range instead).  If the tensor is all-one-value (single
+      unique value), widen the range to [-10, 11) or [0, 11).  Retries up to
       ``MAX_PERTURB_ATTEMPTS`` to avoid accidentally reproducing the original.
     - **Bool**: random 0/1, retried to ensure difference.
     - **Float/complex**: scaled random normal, where the scale is derived from
@@ -1963,11 +1965,30 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
         tensor_unique_vals = torch.unique(parent_outs)
         if len(tensor_unique_vals) > 1:
             # Multiple unique values: sample within the original range.
+            #
+            # Compute the bounds as Python ints and clamp the exclusive high
+            # bound with ``torch.iinfo`` so ``max() + 1`` can never overflow the
+            # dtype. A legitimately captured tensor holding ``iinfo.max`` (e.g.
+            # PyG sentinel/cluster index tensors carry ``INT64_MAX``) would
+            # otherwise wrap ``max() + 1`` to ``INT64_MIN`` and make
+            # ``torch.randint`` raise "random_ expects 'from' to be less than
+            # 'to'". This mirrors the ``torch.finfo`` clamping the float branch
+            # already does; it only bounds the *sampling range*, never skips the
+            # perturbation, so the tripwire stays non-vacuous.
+            int_info = torch.iinfo(parent_outs.dtype)
+            int_lo = int(parent_outs.min().item())
+            int_hi = int(parent_outs.max().item())
+            int_hi_excl = int_hi + 1 if int_hi < int_info.max else int_info.max
+            if int_lo >= int_hi_excl:
+                # Saturated range (e.g. the whole tensor sits at ``iinfo.max``):
+                # widen to the full valid dtype range so we can still draw a
+                # genuinely different value rather than degenerating to a no-op.
+                int_lo, int_hi_excl = int_info.min, int_info.max
             perturbed_outs = parent_outs.detach().clone()
             for _ in range(MAX_PERTURB_ATTEMPTS):
                 perturbed_outs = torch.randint(
-                    parent_outs.min(),  # type: ignore[call-overload]
-                    parent_outs.max() + 1,
+                    int_lo,
+                    int_hi_excl,
                     size=parent_outs.shape,
                     device=device,
                 ).type(parent_outs.dtype)
