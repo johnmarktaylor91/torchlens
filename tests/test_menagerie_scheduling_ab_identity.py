@@ -211,6 +211,13 @@ def test_old_vs_new_scheduling_run_yields_byte_identical_validation_result(
     torch = pytest.importorskip("torch")
     pytest.importorskip("torchlens")
 
+    # Keep this real-trace test hermetic: forbid CUDA so the trace cannot
+    # initialize a process-wide CUDA context that would pollute the orchestrator
+    # "route_resources does not init torch.cuda" guard test (torch reads this
+    # lazily on first cuda access; monkeypatch.setenv auto-restores, so unlike a
+    # raw os.environ write it does not leak to other tests).
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+
     row = _traceable_row()
 
     # The recipe input path expects a typed JSONL record; supply a deterministic
