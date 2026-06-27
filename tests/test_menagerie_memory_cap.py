@@ -26,6 +26,79 @@ from menagerie.validate_menagerie import (
 from menagerie.ledger import connect
 
 
+class _FakeStream:
+    """Readable text pipe over a fixed string, drained line-by-line to EOF."""
+
+    def __init__(self, text: str) -> None:
+        """Buffer the scripted stream content.
+
+        Parameters
+        ----------
+        text:
+            Full stream contents the worker would have written.
+        """
+
+        self._lines = text.splitlines(keepends=True) if text else []
+        self._index = 0
+
+    def readline(self) -> str:
+        """Return the next line, or ``""`` at EOF (matches a real text pipe)."""
+
+        if self._index >= len(self._lines):
+            return ""
+        line = self._lines[self._index]
+        self._index += 1
+        return line
+
+    def close(self) -> None:
+        """No-op close to satisfy the reader-thread cleanup."""
+
+
+class _FakePopen:
+    """Minimal already-exited ``Popen`` stand-in for the drained-pipe parent loop.
+
+    ``validate_with_timeout`` now drains stdout/stderr on reader threads (W3a-1
+    fix), so a fake must expose readable ``stdout``/``stderr`` pipes plus
+    ``poll``/``wait``/``returncode`` -- not the old ``subprocess.run`` ->
+    ``CompletedProcess`` shape. The process is reported as already complete so the
+    poll loop exits on the first check and the readers drain the scripted output.
+    """
+
+    def __init__(self, command: list[str], returncode: int, stdout: str, stderr: str) -> None:
+        """Capture the command and scripted exit state.
+
+        Parameters
+        ----------
+        command:
+            The worker command the parent built.
+        returncode:
+            The scripted worker exit code.
+        stdout:
+            Scripted stdout contents.
+        stderr:
+            Scripted stderr contents.
+        """
+
+        self.args = command
+        self.returncode = returncode
+        self.pid = 4242
+        self.stdout = _FakeStream(stdout)
+        self.stderr = _FakeStream(stderr)
+
+    def poll(self) -> int:
+        """Report the process as already exited."""
+
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        """Return the scripted exit code."""
+
+        return self.returncode
+
+    def kill(self) -> None:
+        """No-op: the fake process has already exited."""
+
+
 def _row(**overrides: object) -> CatalogRow:
     """Build a compact catalog row fixture for memory-cap tests.
 
@@ -133,7 +206,7 @@ def test_parent_accepts_normal_worker_result_with_cap(
     worker_event = json.dumps({"event": "worker_result", "result": expected.__dict__})
     captured_command: list[str] = []
 
-    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    def fake_popen(command: list[str], **kwargs: Any) -> _FakePopen:
         """Capture the worker command and return a successful worker event.
 
         Parameters
@@ -145,15 +218,15 @@ def test_parent_accepts_normal_worker_result_with_cap(
 
         Returns
         -------
-        subprocess.CompletedProcess[str]
-            Completed process with one worker result event.
+        _FakePopen
+            Already-exited fake process emitting one worker result event.
         """
 
+        del kwargs
         captured_command.extend(command)
-        assert kwargs["timeout"] == 5.0
-        return subprocess.CompletedProcess(command, 0, stdout=f"{worker_event}\n", stderr="")
+        return _FakePopen(command, 0, stdout=f"{worker_event}\n", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     result = validate_with_timeout(
         row,
@@ -194,13 +267,13 @@ def test_worker_returncode_classification_is_signal_based(
 
     row = _row()
 
-    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    def fake_popen(command: list[str], **kwargs: Any) -> _FakePopen:
         """Return a scripted worker process failure."""
 
         del kwargs
-        return subprocess.CompletedProcess(command, returncode, stdout="", stderr=stderr)
+        return _FakePopen(command, returncode, stdout="", stderr=stderr)
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     result = validate_with_timeout(
         row,
@@ -220,18 +293,18 @@ def test_bare_oom_substring_does_not_route_to_oom(
 
     row = _row()
 
-    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    def fake_popen(command: list[str], **kwargs: Any) -> _FakePopen:
         """Return a SIGKILL with non-OOM words in stderr."""
 
         del kwargs
-        return subprocess.CompletedProcess(
+        return _FakePopen(
             command,
             -signal.SIGKILL,
             stdout="",
             stderr="zoom bloom room doom",
         )
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     result = validate_with_timeout(
         row,
