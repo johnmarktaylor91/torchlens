@@ -4481,15 +4481,43 @@ def _validate_forward_pass_torch(
     # deterministic impl (CPU scatter_add IS deterministic in torch 2.8, so this
     # is not even exercised there, but it keeps the stabilizer safe on any op).
     #
-    # We deliberately do NOT force torch.set_num_threads(1): that is a real
-    # throughput cost on large CNNs, and the determinism probe confirmed that
-    # deterministic-algorithms alone removes the perturbation flake. It does NOT
-    # make deep CPU conv replay bit-exact (the residual is oneDNN inline-vs-
-    # isolated kernel selection, not threading) -- that residual is exactly what
-    # the band-C reduction-depth tolerance in validation/core.py covers.
+    # In addition to deterministic algorithms, we PIN A SINGLE INTRA-OP THREAD
+    # (save/restore, scoped to this harness only) for the duration of the
+    # validation forwards. Multi-threaded float reduction-ORDER is non-deterministic
+    # ACROSS RUNS even with deterministic algorithms enabled: two CLEAN forwards of
+    # the SAME nn.Module can disagree by ~3e-7 at the output. That straddles the
+    # strict phase-0 ground-truth bar (GROUND_TRUTH_OUTPUT_RTOL=1e-6), making the
+    # spectral-GCN family (MSTGCN / TGT-MSTGCN Chebyshev sparse aggregation) FLAKY,
+    # and the same thread non-determinism in MoE masked-gate routing makes the
+    # perturbation sensitivity check FLAKY (minimax / nllb-moe). Pinning one thread
+    # makes both bit-exact (abs diff -> exactly 0.0), so the strict bar becomes
+    # DETERMINISTIC -- this does NOT loosen any tolerance, it removes the inter-run
+    # thread non-determinism the bar was never meant to police.
+    #
+    # The earlier comment here claimed deterministic-algorithms ALONE sufficed and
+    # avoided set_num_threads(1) over a throughput concern on large CNNs. That was
+    # incomplete: the determinism probe missed the ground-truth/MoE inter-run drift.
+    # The throughput concern is addressed by SCOPING the pin to this validation
+    # harness only (save/restore around the forwards), not the user capture path --
+    # and the forward-validation timeout policy is generous, so single-threaded
+    # validation forwards are acceptable. Determinism wins.
+    #
+    # LOAD-BEARING: pinning at PROCESS start does NOT reliably fix the validation
+    # path (the capture forward and/or model internals re-parallelize); the pin must
+    # wrap the forwards INSIDE the harness, which is what this does.
+    #
+    # Deterministic algorithms remain on as well: the thread pin removes inter-run
+    # reduction-order drift, while deterministic algorithms remove intra-run scatter
+    # non-determinism. (The single-thread pin alone covers most of it, but keeping
+    # deterministic algorithms is strictly safer and free here.) The thread pin does
+    # NOT make deep CPU conv inline-vs-isolated replay bit-exact (that residual is
+    # oneDNN kernel selection, not threading) -- that is what the band-C reduction-
+    # depth tolerance in validation/core.py covers; the changes are complementary.
     prior_deterministic = torch.are_deterministic_algorithms_enabled()
     prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    prior_num_threads = torch.get_num_threads()
     torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.set_num_threads(1)
     try:
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
         from .backends.torch.ops import _walk_output_tensors_with_paths
@@ -4555,6 +4583,7 @@ def _validate_forward_pass_torch(
             _trace_observer(trace)
     finally:
         torch.use_deterministic_algorithms(prior_deterministic, warn_only=prior_warn_only)
+        torch.set_num_threads(prior_num_threads)
         model.load_state_dict(state_dict)
         if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()

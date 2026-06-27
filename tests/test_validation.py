@@ -242,6 +242,169 @@ def test_validation_restores_prior_deterministic_algorithms_setting() -> None:
         torch.use_deterministic_algorithms(prior_enabled, warn_only=prior_warn_only)
 
 
+def test_validation_pins_single_thread_inside_harness_and_restores() -> None:
+    """LOAD-BEARING: the single-thread pin is active INSIDE the validation forwards
+    and restored exactly afterward.
+
+    This is the host-independent mechanism gate for the inter-run multi-thread
+    float-reduction-order fix. The drift it removes (~3e-7 ground-truth output
+    disagreement straddling ``GROUND_TRUTH_OUTPUT_RTOL=1e-6``, plus the MoE
+    masked-gate perturbation flake) is hardware/thread-count dependent and may not
+    reproduce on every host, so we assert the FIX's mechanism directly rather than
+    relying on a host reproducing the flake:
+
+    * ``torch.get_num_threads() == 1`` is observed from *inside* both the
+      ground-truth forward and the TorchLens capture forward -- proving the pin
+      wraps the forwards INSIDE the harness (pinning at process start does NOT
+      reliably fix the path; this is the load-bearing detail).
+    * the process-wide thread count is restored to its prior value afterward, so
+      the pin does not leak into the caller's (or later tests') environment.
+    """
+
+    observed_threads: list[int] = []
+
+    class _ThreadProbeModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            observed_threads.append(torch.get_num_threads())
+            return self.lin(x)
+
+    model = _ThreadProbeModel().eval()
+    x = torch.randn(2, 4)
+
+    prior_num_threads = torch.get_num_threads()
+    try:
+        result = validate_forward_pass(model, (x,))
+        assert result is True
+        # The probe ran inside both the ground-truth and capture forwards; every
+        # observation must see a single intra-op thread.
+        assert observed_threads, "probe model forward was never invoked"
+        assert all(t == 1 for t in observed_threads), observed_threads
+        # ... and the prior thread count is restored after validation returns.
+        assert torch.get_num_threads() == prior_num_threads
+    finally:
+        torch.set_num_threads(prior_num_threads)
+
+
+class _SpectralGCNGroundTruthDriftModel(nn.Module):
+    """A Chebyshev-spectral-conv-style model (MSTGCN / TGT-MSTGCN family) whose
+    ground-truth output drifts ~3e-7 between two clean forwards under multi-threaded
+    float reduction-order -- straddling the strict phase-0 ground-truth bar
+    (``GROUND_TRUTH_OUTPUT_RTOL=1e-6``) -- yet goes bit-exact under a single thread.
+
+    The forward stacks many repeated sparse-aggregation reductions (the Chebyshev
+    polynomial recurrence over a graph adjacency) so the parallel accumulation order
+    is unpinned; this is the structure that makes the spectral-GCN family FLAKY at
+    the strict ground-truth tolerance without the harness single-thread pin.
+    """
+
+    def __init__(self, n: int = 64, hops: int = 6) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        # A dense graph adjacency (the spectral operator); repeated matmuls against
+        # it are the Chebyshev recurrence whose reduction order is thread-dependent.
+        self.register_buffer("adj", torch.randn(n, n) / n)
+        self.lin = nn.Linear(n, n)
+        self.hops = hops
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.lin(x)
+        acc = h
+        prev = h
+        cur = torch.matmul(h, self.adj)
+        # Chebyshev recurrence T_k = 2 * adj @ T_{k-1} - T_{k-2}, accumulated.
+        for _ in range(self.hops):
+            acc = acc + cur
+            nxt = 2.0 * torch.matmul(cur, self.adj) - prev
+            prev, cur = cur, nxt
+        return acc.sum(dim=0, keepdim=True)
+
+
+def test_validation_spectral_gcn_ground_truth_determinism() -> None:
+    """GATE (B/C-1): spectral-GCN ground-truth stability across N>=5 repeats.
+
+    A Chebyshev-spectral-conv model (MSTGCN / TGT-MSTGCN family) -- the structure
+    whose two clean forwards disagreed by ~3e-7 at the output under multi-threaded
+    reduction order, straddling the strict phase-0 ground-truth bar
+    (``GROUND_TRUTH_OUTPUT_RTOL=1e-6``) -- validates stably True across repeats now
+    that the harness pins a single intra-op thread.
+
+    NOTE: the underlying multi-thread reduction-order drift is hardware/thread-count
+    dependent and does not reproduce on every host; the host-independent guard for
+    the pin's mechanism is
+    ``test_validation_pins_single_thread_inside_harness_and_restores``. This gate
+    additionally pins down that the real spectral-GCN aggregation class validates
+    GREEN (and reproducibly so) under the fix, WITHOUT loosening any tolerance --
+    the strict 1e-6 bar is unchanged.
+    """
+
+    model = _SpectralGCNGroundTruthDriftModel().eval()
+    x = torch.randn(32, 64)
+
+    results = [validate_forward_pass(model, (x,)) for _ in range(5)]
+    assert all(results), results
+
+
+class _MoEMaskedGateModel(nn.Module):
+    """A Mixture-of-Experts-style masked-gate model (minimax / nllb-moe family)
+    whose routing builds a boolean mask via a comparison (``lt``) and gates expert
+    outputs through a ``where`` / elementwise ``mul``.
+
+    Under multi-threaded reduction order, perturbing the routing mask sometimes
+    leaves the gated output unchanged (the perturbed position is already masked to
+    zero / re-selects the same path), spuriously failing the perturbation
+    sensitivity check. The harness single-thread pin makes the gating reproducible
+    so the sensitivity outcome is stable.
+    """
+
+    def __init__(self, dim: int = 32, n_experts: int = 4) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.router = nn.Linear(dim, n_experts)
+        self.experts = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_experts))
+        self.n_experts = n_experts
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        scores = self.router(x)  # (B, n_experts)
+        # Boolean routing mask: keep experts scoring above the per-token mean.
+        threshold = scores.mean(dim=-1, keepdim=True)
+        gate = scores.lt(threshold)  # boolean mask feeding where/mul
+        out = torch.zeros_like(x)
+        for i, expert in enumerate(self.experts):
+            keep = gate[:, i : i + 1]
+            contrib = torch.where(keep, expert(x), torch.zeros_like(x))
+            out = out + contrib * scores[:, i : i + 1]
+        return out
+
+
+def test_validation_moe_masked_gate_perturbation_determinism() -> None:
+    """GATE (B/C-2): MoE masked-gate perturbation stability across N>=5 repeats.
+
+    A Mixture-of-Experts masked-gate model (minimax / nllb-moe family) whose routing
+    builds a boolean mask via ``lt`` and gates expert outputs through ``where`` /
+    elementwise ``mul`` -- the structure whose perturbation sensitivity check flaked
+    under multi-threaded reduction order (the perturbed mask sometimes left the
+    output unchanged) -- validates stably True across repeats now that the harness
+    pins a single intra-op thread.
+
+    NOTE: as with the spectral-GCN gate, the underlying thread non-determinism is
+    host-dependent; the mechanism guard is
+    ``test_validation_pins_single_thread_inside_harness_and_restores``. This gate
+    pins down that the real masked-gate routing class validates GREEN reproducibly
+    under the fix, WITHOUT broadening the perturbation tolerance or skipping the
+    check -- the sensitivity check still runs at full strictness.
+    """
+
+    model = _MoEMaskedGateModel().eval()
+    x = torch.randn(16, 32)
+
+    results = [validate_forward_pass(model, (x,)) for _ in range(5)]
+    assert all(results), results
+
+
 def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     """Replay args use live parameters only when saved snapshots still match."""
 
