@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import os
@@ -77,14 +78,12 @@ MB_PER_GB = 1024
 DEFAULT_UNKNOWN_MEMORY_MB = 4 * MB_PER_GB
 HEAVY_UNKNOWN_MEMORY_MB = 12 * MB_PER_GB
 DEFAULT_MEMORY_FLOOR_GB = 12.0
-AUTO_MEMORY_BUDGET_FRACTION = 0.7
+AUTO_MEMORY_BUDGET_FRACTION = 1.05
 FALLBACK_MEMORY_BUDGET_GB = 8.0
-# Validation workers are single-thread-pinned for replay determinism, so each
-# worker holds roughly one core. The default concurrency therefore scales to the
-# host (~nproc) instead of the renderer's cap-8 default, letting the small-model
-# bulk saturate every core. Memory admission (see below) independently throttles
-# big-model concurrency, so a high job ceiling is safe. --jobs stays overridable.
-VALIDATION_JOBS_CPU_HEADROOM = 2
+# Validation workers run PyTorch forwards multi-threaded by default. The default
+# worker count pairs with ``default_worker_torch_threads`` so the product lands
+# near nproc while the memory budgeter independently throttles RAM-heavy models.
+DEFAULT_VALIDATION_THREADS_PER_WORKER = 4
 # Measured ledger peaks are scaled by this headroom so a model that peaked at
 # N GB last run is budgeted at N*1.3 GB (run-to-run jitter + allocator slack).
 LEDGER_MEMORY_HEADROOM = 1.3
@@ -93,10 +92,11 @@ LEDGER_MEMORY_HEADROOM = 1.3
 # at once even if the aggregate budget would nominally admit more.
 BIG_MODEL_THRESHOLD_MB = 40 * MB_PER_GB
 # At most this many big models (estimate > BIG_MODEL_THRESHOLD_MB) run concurrently.
-MAX_CONCURRENT_BIG_MODELS = 1
+MAX_CONCURRENT_BIG_MODELS = 2
 # Hard ceiling on the scheduler memory budget, leaving the kernel OOM-killer
-# headroom below total RAM. The auto budget (70% of *available* RAM) is additionally
-# capped so the in-flight estimate never targets the full machine.
+# headroom below total RAM. The auto budget targets the total-RAM cap on a
+# mostly idle validation box but still scales down when substantial unrelated
+# memory pressure reduces available RAM.
 MEMORY_BUDGET_HEADROOM_FRACTION = 0.88
 HEAVY_MEMORY_PATTERNS = (
     "deeplab",
@@ -111,6 +111,8 @@ WORKER_MEMORY_CAP_STATUS = "failed:memory_cap"
 WORKER_MEMORY_CAP_EXIT_CODE = 99
 WORKER_MEMORY_CAP_POLL_INTERVAL_SEC = 0.5
 WORKER_TIMEOUT_POLL_INTERVAL_SEC = 0.5
+VALIDATION_SEED_MIN = 1
+VALIDATION_SEED_MAX = 4294967294
 # Timeout policy (JMT directive 2026-06-26): the validation timeout is a
 # HANG-CATCHER, never a throughput-limiter. A model that timed out once (or was
 # never measured) must get enough room to actually finish on the rerun, so it is
@@ -857,9 +859,9 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
     """
 
     raw_n_ops = payload.get("n_ops")
-    n_ops = None if raw_n_ops in {None, ""} else int(raw_n_ops)
+    n_ops = None if raw_n_ops is None or raw_n_ops == "" else int(raw_n_ops)
     raw_peak_rss_mb = payload.get("peak_rss_mb")
-    peak_rss_mb = None if raw_peak_rss_mb in {None, ""} else int(raw_peak_rss_mb)
+    peak_rss_mb = None if raw_peak_rss_mb is None or raw_peak_rss_mb == "" else int(raw_peak_rss_mb)
     return ValidationResult(
         name=str(payload["name"]),
         model_id=int(payload["model_id"]),
@@ -2673,11 +2675,11 @@ def _build_validation_work_items(
 def default_validation_jobs() -> int:
     """Return the default validation concurrency scaled to the host.
 
-    Validation workers are single-thread-pinned for replay determinism, so each
-    holds roughly one core; the default therefore scales to ``cpu_count -
-    VALIDATION_JOBS_CPU_HEADROOM`` (no cap-8 clamp) so the small-model bulk can
-    saturate every core. The memory budgeter independently throttles big-model
-    concurrency, so a high job ceiling is safe. ``--jobs`` stays overridable.
+    Validation workers run multi-threaded by default, so the default worker
+    count pairs with ``default_worker_torch_threads`` to keep
+    ``jobs * threads_per_worker`` close to the host CPU count. The memory
+    budgeter independently throttles big-model concurrency, so ``--jobs`` stays
+    overridable.
 
     Returns
     -------
@@ -2686,7 +2688,48 @@ def default_validation_jobs() -> int:
     """
 
     cpu_count = os.cpu_count() or 1
-    return max(1, cpu_count - VALIDATION_JOBS_CPU_HEADROOM)
+    return max(1, math.ceil(cpu_count / DEFAULT_VALIDATION_THREADS_PER_WORKER))
+
+
+def default_worker_torch_threads(jobs: int | None = None) -> int:
+    """Return the default per-worker PyTorch intra-op thread count.
+
+    Parameters
+    ----------
+    jobs:
+        Effective worker count. When omitted, ``default_validation_jobs()`` is
+        used.
+
+    Returns
+    -------
+    int
+        Per-worker thread count, at least one.
+    """
+
+    cpu_count = os.cpu_count() or 1
+    effective_jobs = max(1, jobs if jobs is not None else default_validation_jobs())
+    return max(1, round(cpu_count / effective_jobs))
+
+
+def resolve_worker_torch_threads(requested_threads: int | None, jobs: int | None = None) -> int:
+    """Resolve the per-worker PyTorch intra-op thread count.
+
+    Parameters
+    ----------
+    requested_threads:
+        Explicit CLI value, or ``None`` for automatic resolution.
+    jobs:
+        Effective worker count used for automatic resolution.
+
+    Returns
+    -------
+    int
+        Positive per-worker thread count.
+    """
+
+    if requested_threads is not None:
+        return max(1, requested_threads)
+    return default_worker_torch_threads(jobs)
 
 
 def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
@@ -2700,8 +2743,8 @@ def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
     Returns
     -------
     float
-        Memory budget in GB. The automatic budget is ``70%`` of currently
-        available RAM, additionally capped to
+        Memory budget in GB. The automatic budget is currently available RAM
+        scaled by ``AUTO_MEMORY_BUDGET_FRACTION``, capped to
         ``MEMORY_BUDGET_HEADROOM_FRACTION`` of total RAM so the in-flight
         estimate always leaves the kernel OOM-killer headroom below the box's
         physical memory.
@@ -3227,6 +3270,26 @@ def _trace_n_ops_and_hash_from_trace(trace: Any) -> tuple[int | None, str, str]:
     return n_ops, graph_shape_hash, ""
 
 
+def _stable_validation_seed(row: CatalogRow) -> int:
+    """Return a deterministic validation seed for a catalog row.
+
+    Parameters
+    ----------
+    row:
+        Catalog row being validated.
+
+    Returns
+    -------
+    int
+        Seed in the inclusive range accepted by TorchLens validation.
+    """
+
+    key = f"{row.stable_id}:{row.recipe_revision_sha256}".encode()
+    digest = hashlib.sha256(key).digest()
+    span = VALIDATION_SEED_MAX - VALIDATION_SEED_MIN + 1
+    return VALIDATION_SEED_MIN + (int.from_bytes(digest[:8], "big") % span)
+
+
 def _peak_rss_mb() -> int:
     """Return this process's peak resident set size in MB.
 
@@ -3381,6 +3444,40 @@ def _emit_worker_result(result: ValidationResult) -> None:
     """
 
     print(json.dumps({"event": "worker_result", "result": result.__dict__}), flush=True)
+
+
+def _add_result_note(result: ValidationResult, note: str) -> ValidationResult:
+    """Return a validation result with an additional audit note.
+
+    Parameters
+    ----------
+    result:
+        Validation result to annotate.
+    note:
+        Note to prepend to the result error field.
+
+    Returns
+    -------
+    ValidationResult
+        Annotated validation result.
+    """
+
+    return ValidationResult(
+        result.name,
+        result.model_id,
+        result.status,
+        result.n_ops,
+        result.validate_metadata_ok,
+        result.scope,
+        result.elapsed,
+        result.dependency_cluster,
+        combine_notes(note, result.error),
+        result.graph_shape_hash,
+        stable_id=result.stable_id,
+        recipe_revision_sha256=result.recipe_revision_sha256,
+        peak_rss_mb=result.peak_rss_mb,
+        input_scale=result.input_scale,
+    )
 
 
 def _set_worker_address_space_backstop(cap_bytes: int, current_vms_bytes: int) -> None:
@@ -3663,6 +3760,30 @@ def _validate_one_unscaled_note(
     if hasattr(model, "eval"):
         model.eval()
 
+    def fresh_attempt_subject(actual_device: str) -> tuple[Any, Any]:
+        """Build a fresh model/input pair for a retry on one resolved device.
+
+        Parameters
+        ----------
+        actual_device:
+            Device used by the retry, ``"cpu"`` or ``"cuda"``.
+
+        Returns
+        -------
+        tuple[Any, Any]
+            Fresh model and example input prepared for the retry device.
+        """
+
+        retry_model = instantiate_model(row)
+        if hasattr(retry_model, "eval"):
+            retry_model.eval()
+        retry_input = _build_input(row, input_scale)
+        if actual_device == "cuda":
+            retry_model, retry_input = move_model_and_input_to_device(
+                retry_model, retry_input, "cuda"
+            )
+        return retry_model, retry_input
+
     def attempt_validation(
         attempt_model: Any, attempt_input: Any, actual_device: str
     ) -> ValidationResult:
@@ -3690,6 +3811,7 @@ def _validate_one_unscaled_note(
         graph_shape_hash = ""
         trace_error = ""
         replay_failure_summary = ""
+        validation_seed = _stable_validation_seed(row)
 
         def observe_validation_trace(trace: Any) -> None:
             """Record summary fields from the trace already built for validation.
@@ -3718,13 +3840,38 @@ def _validate_one_unscaled_note(
                 # Best-effort: a diagnostics read must never break validation.
                 replay_failure_summary = ""
 
-        try:
-            forward_result = _validate_forward_pass_torch(
+        def run_forward_attempt(num_threads: int | None) -> bool:
+            """Run one forward validation attempt and refresh trace metadata.
+
+            Parameters
+            ----------
+            num_threads:
+                Optional intra-op thread count for this attempt. ``None`` uses
+                the worker process default.
+
+            Returns
+            -------
+            bool
+                Boolean forward validation result.
+            """
+
+            nonlocal graph_shape_hash, n_ops, replay_failure_summary, trace_error
+            n_ops = None
+            graph_shape_hash = ""
+            trace_error = ""
+            replay_failure_summary = ""
+            forward_value = _validate_forward_pass_torch(
                 attempt_model,
                 attempt_input,
+                random_seed=validation_seed,
                 validate_metadata=True,
+                num_threads=num_threads,
                 _trace_observer=observe_validation_trace,
             )
+            return bool(forward_value)
+
+        try:
+            forward_result = run_forward_attempt(num_threads=None)
         except Exception as error:
             return ValidationResult(
                 row.name,
@@ -3742,7 +3889,39 @@ def _validate_one_unscaled_note(
                 stable_id=row.stable_id,
                 recipe_revision_sha256=row.recipe_revision_sha256,
             )
-        if not bool(forward_result):
+        forward_retry_note = ""
+        if not forward_result:
+            log_event(
+                "forward_retry_single_thread",
+                name=row.name,
+                stable_id=row.stable_id,
+                reason=replay_failure_summary or "replay failed",
+            )
+            try:
+                retry_model, retry_input = fresh_attempt_subject(actual_device)
+                attempt_model, attempt_input = retry_model, retry_input
+                forward_result = run_forward_attempt(num_threads=1)
+            except Exception as error:
+                return ValidationResult(
+                    row.name,
+                    row.model_id,
+                    "failed:exception",
+                    0,
+                    False,
+                    scope,
+                    time.monotonic() - start,
+                    plan.cluster_key,
+                    combine_notes(
+                        device_note(device, actual_device),
+                        f"single-thread forward retry failed: {error!r}\n"
+                        f"{traceback.format_exc(limit=8)}",
+                    ),
+                    stable_id=row.stable_id,
+                    recipe_revision_sha256=row.recipe_revision_sha256,
+                )
+            if forward_result:
+                forward_retry_note = "; forward_retry=single_thread"
+        if not forward_result:
             # Prefer the structured diagnostic captured in the observer (the real
             # mismatch); fall back to repr(forward_result) only if it is missing.
             replay_detail = replay_failure_summary or f"replay failed ({forward_result!r})"
@@ -3831,7 +4010,7 @@ def _validate_one_unscaled_note(
             plan.cluster_key,
             combine_notes(
                 device_note(device, actual_device),
-                f"forward={forward_result!r}{backward_error}",
+                f"forward={forward_result!r}{forward_retry_note}{backward_error}",
             ),
             graph_shape_hash,
             stable_id=row.stable_id,
@@ -3981,8 +4160,10 @@ def validate_with_timeout(
     timeout_sec: float,
     tmp_dir: Path | None = None,
     worker_memory_cap_gb: float | None = None,
+    worker_torch_threads: int | None = None,
     input_scale: float = 1.0,
     retry_worker_exception: bool = True,
+    retry_replay_single_thread_process: bool = True,
 ) -> ValidationResult:
     """Run one validation in an isolated child process with a timeout.
 
@@ -4005,6 +4186,9 @@ def validate_with_timeout(
         get an isolated scratch directory without mutating shared state.
     worker_memory_cap_gb:
         Optional per-worker RSS cap in GB enforced inside the child process.
+    worker_torch_threads:
+        Per-worker PyTorch intra-op thread count. ``None`` resolves from the
+        parent job count.
     input_scale:
         Spatial down-scaling factor for the example input, forwarded to the worker
         via ``--input-scale`` (``1.0`` = full resolution).
@@ -4012,6 +4196,9 @@ def validate_with_timeout(
         Retry once when a capped worker reports a generic exception. The retry
         keeps memory-cap tests robust to transient broad-suite worker setup
         failures while preserving deterministic failures.
+    retry_replay_single_thread_process:
+        Retry once in a fresh single-thread worker process when a multi-threaded
+        worker reports a forward replay failure.
 
     Returns
     -------
@@ -4020,6 +4207,7 @@ def validate_with_timeout(
     """
 
     plan = dependency_plan(row)
+    resolved_worker_torch_threads = resolve_worker_torch_threads(worker_torch_threads)
     command = [
         sys.executable,
         "-m",
@@ -4030,6 +4218,8 @@ def validate_with_timeout(
         scope,
         "--device",
         device,
+        "--worker-torch-threads",
+        str(resolved_worker_torch_threads),
     ]
     if dry_run:
         command.append("--dry-run")
@@ -4046,7 +4236,7 @@ def validate_with_timeout(
         "OPENBLAS_NUM_THREADS",
         "NUMEXPR_NUM_THREADS",
     ):
-        child_env[thread_var] = "1"
+        child_env[thread_var] = str(resolved_worker_torch_threads)
     if tmp_dir is not None:
         tmp_dir.mkdir(parents=True, exist_ok=True)
         for key in ("TMPDIR", "TEMP", "TMP"):
@@ -4173,9 +4363,34 @@ def validate_with_timeout(
                     timeout_sec,
                     tmp_dir=tmp_dir,
                     worker_memory_cap_gb=worker_memory_cap_gb,
+                    worker_torch_threads=resolved_worker_torch_threads,
                     input_scale=input_scale,
                     retry_worker_exception=False,
+                    retry_replay_single_thread_process=retry_replay_single_thread_process,
                 )
+            if (
+                result.status == "failed:replay"
+                and retry_replay_single_thread_process
+                and resolved_worker_torch_threads != 1
+            ):
+                retry_result = validate_with_timeout(
+                    row,
+                    dry_run,
+                    scope,
+                    device,
+                    timeout_sec,
+                    tmp_dir=tmp_dir,
+                    worker_memory_cap_gb=worker_memory_cap_gb,
+                    worker_torch_threads=1,
+                    input_scale=input_scale,
+                    retry_worker_exception=retry_worker_exception,
+                    retry_replay_single_thread_process=False,
+                )
+                if retry_result.status == "validated":
+                    return _add_result_note(
+                        retry_result, "worker_replay_retry=single_thread_process"
+                    )
+                return retry_result
             return result
     if completed.returncode == WORKER_MEMORY_CAP_EXIT_CODE and worker_memory_cap_gb is not None:
         return _memory_cap_result(
@@ -4510,7 +4725,7 @@ def run(args: argparse.Namespace) -> int:
         force=force_active,
         force_baseline_data_rows=force_baseline_data_rows,
     )
-    rows = [row for row in selected if row.stable_id not in done]
+    rows: list[CatalogRow] = [row for row in selected if row.stable_id not in done]
     # ``duration_estimates`` (ALL latest forward durations) drives only the LPT
     # scheduling sort key. ``pass_duration_estimates`` (PASS-only) drives the
     # timeout: only a real PASS prior anchors a scaled timeout, so a truncated
@@ -4633,7 +4848,7 @@ def run(args: argparse.Namespace) -> int:
         for env_key, assigned_rows in sorted(island_rows.items()):
             stable_ids = [row.stable_id for row in assigned_rows]
             log_event("island_start", env_key=env_key, rows=len(stable_ids))
-            result = envs.run_validate(
+            island_result = envs.run_validate(
                 env_key,
                 stable_ids,
                 registry,
@@ -4645,8 +4860,8 @@ def run(args: argparse.Namespace) -> int:
                 "island_done",
                 env_key=env_key,
                 rows=len(stable_ids),
-                returncode=result.returncode,
-                message=" | ".join((result.stdout + result.stderr).splitlines()[-5:]),
+                returncode=island_result.returncode,
+                message=" | ".join((island_result.stdout + island_result.stderr).splitlines()[-5:]),
             )
         rows = base_rows
 
@@ -4654,10 +4869,10 @@ def run(args: argparse.Namespace) -> int:
     # shared interpreter/site-packages and must precede their rows). Clusters
     # whose dependencies are unavailable are recorded directly to the manifest.
     runnable: list[tuple[DependencyPlan, CatalogRow]] = []
-    for plan, cluster_rows in group_by_dependency(rows):
+    for plan, dependency_rows in group_by_dependency(rows):
         install_error = install_dependency_plan(plan, args)
         if install_error is not None:
-            for row in cluster_rows:
+            for row in dependency_rows:
                 row_input_scale = _case_input_scale(row, smoke_settings, args.input_scale)
                 result = ValidationResult(
                     row.name,
@@ -4687,11 +4902,11 @@ def run(args: argparse.Namespace) -> int:
             log_event(
                 "cluster_skipped",
                 cluster=plan.cluster_key,
-                count=len(cluster_rows),
+                count=len(dependency_rows),
                 error=install_error,
             )
             continue
-        runnable.extend((plan, row) for row in cluster_rows)
+        runnable.extend((plan, row) for row in dependency_rows)
 
     # Phase 2: validate runnable rows concurrently. Each model already runs in an
     # isolated child process (``validate_with_timeout``); threads here just
@@ -4733,6 +4948,7 @@ def run(args: argparse.Namespace) -> int:
     )
     memory_floor_gb = _resolve_memory_floor_gb(args.memory_floor_gb)
     memory_floor_mb = max(1, int(memory_floor_gb * MB_PER_GB))
+    max_concurrent_big_models = max(1, args.max_concurrent_big_models)
     ledger_memory_estimates = latest_peak_rss_estimates(args.verification_db)
     pending = _build_validation_work_items(runnable, ledger_memory_estimates)
     pending.sort(key=lambda item: _lpt_sort_key(item, duration_estimates), reverse=True)
@@ -4780,6 +4996,7 @@ def run(args: argparse.Namespace) -> int:
                 row_timeout,
                 tmp_dir=tmp_dir,
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
+                worker_torch_threads=args.worker_torch_threads,
                 input_scale=row_input_scale,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
@@ -4798,6 +5015,9 @@ def run(args: argparse.Namespace) -> int:
         ),
         worker_cap_safe_budget_gb=worker_cap_safe_budget_gb,
         memory_floor_gb=round(memory_floor_gb, 3),
+        max_concurrent_big_models=max_concurrent_big_models,
+        worker_torch_threads=args.worker_torch_threads,
+        jobs_times_worker_torch_threads=jobs * args.worker_torch_threads,
         default_unknown_memory_gb=round(DEFAULT_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         heavy_unknown_memory_gb=round(HEAVY_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         device=args.device,
@@ -4825,6 +5045,7 @@ def run(args: argparse.Namespace) -> int:
                 actual_available_memory_mb=actual_available_memory_mb,
                 available_slots=effective_jobs - len(futures),
                 in_flight_big_count=_in_flight_big_count(futures),
+                max_concurrent_big_models=max_concurrent_big_models,
             )
             for item in decision.forced_oversized:
                 log_event(
@@ -5249,8 +5470,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=default_validation_jobs(),
         help=(
             "number of models to validate concurrently (each in its own subprocess); "
-            "default auto-scales to the host (cpu_count - 2). The memory budgeter "
-            "throttles big-model concurrency below this ceiling"
+            "default auto-scales with --worker-torch-threads so jobs*threads stays "
+            "near host CPU count. The memory budgeter throttles big-model "
+            "concurrency below this ceiling"
+        ),
+    )
+    parser.add_argument(
+        "--worker-torch-threads",
+        type=int,
+        default=None,
+        help=(
+            "PyTorch intra-op threads per validation subprocess; default auto-sets "
+            "roughly cpu_count/jobs. A failed forward replay retries once with 1 "
+            "thread inside the worker"
         ),
     )
     parser.add_argument(
@@ -5265,7 +5497,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "max estimated in-flight validation RSS in GB; default auto-detects "
-            "70%% of currently available RAM"
+            "a near-total-RAM budget capped below physical RAM"
         ),
     )
     parser.add_argument(
@@ -5276,6 +5508,15 @@ def build_parser() -> argparse.ArgumentParser:
             "minimum actual free RAM required before admitting another model; "
             f"default {DEFAULT_MEMORY_FLOOR_GB:g} GB, and each model also requires "
             "headroom at least equal to its estimate"
+        ),
+    )
+    parser.add_argument(
+        "--max-concurrent-big-models",
+        type=int,
+        default=MAX_CONCURRENT_BIG_MODELS,
+        help=(
+            "secondary cap for models estimated above 40GB; aggregate memory "
+            "budget remains the hard OOM guard"
         ),
     )
     parser.add_argument(
@@ -5390,17 +5631,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    args.worker_torch_threads = resolve_worker_torch_threads(
+        args.worker_torch_threads, max(1, args.jobs)
+    )
     if args.verification_db is not None:
         os.environ[ENV_VERIFICATION_DB] = str(args.verification_db)
-    # Pin BLAS/OMP threads to 1 so concurrent validate workers don't oversubscribe the CPU (see generate_menagerie).
+    # Keep BLAS/OMP and ATen intra-op pools aligned with the per-worker thread
+    # budget before worker-side Torch imports happen.
     for _thread_var in (
         "OMP_NUM_THREADS",
         "MKL_NUM_THREADS",
         "OPENBLAS_NUM_THREADS",
         "NUMEXPR_NUM_THREADS",
     ):
-        os.environ.setdefault(_thread_var, "1")
+        os.environ[_thread_var] = str(args.worker_torch_threads)
     if args.worker_row_json:
+        import torch
+
+        torch.set_num_threads(args.worker_torch_threads)
         row = catalog_row_from_payload(json.loads(args.worker_row_json))
         worker_start = time.monotonic()
         _start_worker_memory_monitor(

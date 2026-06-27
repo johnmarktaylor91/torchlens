@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -24,6 +25,7 @@ from menagerie.validate_menagerie import (
     TIMEOUT_DEFAULT_SCALE,
     TIMEOUT_GENEROUS_MIN_SEC,
     SmokeCaseSettings,
+    ValidationResult,
     ValidationWorkItem,
     _admit_memory_budgeted_items,
     _actual_available_memory_mb,
@@ -32,8 +34,11 @@ from menagerie.validate_menagerie import (
     _memory_estimate_for_row,
     _resolve_memory_budget_gb,
     _resolve_row_device,
+    default_worker_torch_threads,
     default_validation_jobs,
+    resolve_worker_torch_threads,
     resolve_timeout_ceiling_sec,
+    validate_one,
     validate_with_timeout,
 )
 
@@ -536,6 +541,114 @@ def test_validate_with_timeout_drains_chatty_stderr_without_false_timeout(
     assert result.n_ops == 3
 
 
+def test_validate_with_timeout_retries_replay_failure_in_single_thread_worker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A replay failure in a multi-thread worker gets one fresh thread-1 process retry."""
+
+    row = _row(stable_id="m-retry-process", name="RetryNet")
+    failed = ValidationResult(
+        row.name,
+        row.model_id,
+        "failed:replay",
+        0,
+        False,
+        "forward",
+        0.1,
+        "unit-zoo",
+        "first replay failed",
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        input_scale=1.0,
+    )
+    passed = ValidationResult(
+        row.name,
+        row.model_id,
+        "validated",
+        9,
+        True,
+        "forward",
+        0.2,
+        "unit-zoo",
+        "forward=True",
+        "shape-retry",
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        input_scale=1.0,
+    )
+    events = [
+        json.dumps({"event": "worker_result", "result": failed.__dict__}) + "\n",
+        json.dumps({"event": "worker_result", "result": passed.__dict__}) + "\n",
+    ]
+    commands: list[list[str]] = []
+
+    class FakePipe:
+        """Pipe returning one scripted text payload, then EOF."""
+
+        def __init__(self, text: str) -> None:
+            """Store text as individual readable lines."""
+
+            self._lines = iter(text.splitlines(keepends=True))
+
+        def readline(self) -> str:
+            """Return the next line, or EOF."""
+
+            return next(self._lines, "")
+
+        def close(self) -> None:
+            """No-op close."""
+
+    class FakeProcess:
+        """Already-exited worker process carrying scripted stdout."""
+
+        pid = 123
+        returncode = 0
+
+        def __init__(self, stdout: str) -> None:
+            """Create stdout/stderr pipes."""
+
+            self.stdout = FakePipe(stdout)
+            self.stderr = FakePipe("")
+
+        def poll(self) -> int:
+            """Return the exit status."""
+
+            return self.returncode
+
+        def wait(self, timeout: float | None = None) -> int:
+            """Return the exit status."""
+
+            del timeout
+            return self.returncode
+
+    def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
+        """Return a failed worker first, then a passing single-thread worker."""
+
+        del kwargs
+        commands.append(command)
+        return FakeProcess(events[len(commands) - 1])
+
+    monkeypatch.setattr("menagerie.validate_menagerie.subprocess.Popen", fake_popen)
+
+    result = validate_with_timeout(
+        row,
+        dry_run=False,
+        scope="forward",
+        device="cpu",
+        timeout_sec=5.0,
+        tmp_dir=tmp_path,
+        worker_torch_threads=3,
+    )
+
+    assert result.status == "validated"
+    assert result.n_ops == 9
+    assert "worker_replay_retry=single_thread_process" in result.error
+    assert len(commands) == 2
+    assert commands[0][commands[0].index("--worker-torch-threads") + 1] == "3"
+    assert commands[1][commands[1].index("--worker-torch-threads") + 1] == "1"
+
+
 def test_resolve_row_device_is_route_owned_and_honors_or_errors_explicit_device() -> None:
     """R1-1: the route owns device; an explicit --device is honored or rejected.
 
@@ -640,19 +753,82 @@ def _big_item(
 
 
 def test_default_validation_jobs_scales_to_host(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Gate (a): the default --jobs scales to ~cpu_count-2 with no cap-8 clamp."""
+    """Gate (a): default jobs and worker threads keep jobs*threads near nproc."""
 
     monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: 20)
-    assert default_validation_jobs() == 18
+    assert default_validation_jobs() == 5
+    assert default_worker_torch_threads(default_validation_jobs()) == 4
+    assert default_validation_jobs() * default_worker_torch_threads(default_validation_jobs()) == 20
 
     monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: 64)
-    assert default_validation_jobs() == 62
+    assert default_validation_jobs() == 16
+    assert default_worker_torch_threads(default_validation_jobs()) == 4
+    assert default_validation_jobs() * default_worker_torch_threads(default_validation_jobs()) == 64
 
     # Small/unknown core counts still yield at least one worker.
     monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: 1)
     assert default_validation_jobs() == 1
+    assert default_worker_torch_threads(default_validation_jobs()) == 1
     monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: None)
     assert default_validation_jobs() == 1
+    assert default_worker_torch_threads(default_validation_jobs()) == 1
+
+
+def test_explicit_worker_torch_threads_overrides_auto() -> None:
+    """An explicit per-worker torch thread count is honored."""
+
+    assert resolve_worker_torch_threads(5, jobs=10) == 5
+
+
+def test_forward_replay_failure_retries_single_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A falsy multi-thread forward result retries once with ``num_threads=1``."""
+
+    class ProbeModel:
+        """Tiny model fixture with an ``eval`` method."""
+
+        def eval(self) -> "ProbeModel":
+            """Return self, matching ``nn.Module.eval``."""
+
+            return self
+
+    attempts: list[int | None] = []
+
+    def fake_validate_forward_pass_torch(
+        model: object,
+        input_args: object,
+        input_kwargs: dict[Any, Any] | None = None,
+        random_seed: int | None = None,
+        verbose: bool = False,
+        validate_metadata: bool = True,
+        *,
+        num_threads: int | None = None,
+        _trace_observer: object | None = None,
+    ) -> bool:
+        """Fail the default-thread attempt and pass the single-thread retry."""
+
+        del model, input_args, input_kwargs, random_seed, verbose, validate_metadata
+        attempts.append(num_threads)
+        if callable(_trace_observer):
+            suffix = "retry" if num_threads == 1 else "first"
+            _trace_observer(SimpleNamespace(num_ops=7, graph_shape_hash=f"shape-{suffix}"))
+        return num_threads == 1
+
+    monkeypatch.setattr("menagerie.validate_menagerie._build_input", lambda *_: object())
+    monkeypatch.setattr("menagerie.validate_menagerie.instantiate_model", lambda _row: ProbeModel())
+    monkeypatch.setattr(
+        "torchlens.user_funcs._validate_forward_pass_torch",
+        fake_validate_forward_pass_torch,
+    )
+
+    result = validate_one(_row(stable_id="retry-model"), False, "forward", "cpu")
+
+    assert result.status == "validated"
+    assert attempts == [None, 1]
+    assert result.n_ops == 7
+    assert result.graph_shape_hash == "shape-retry"
+    assert "forward_retry=single_thread" in result.error
 
 
 def test_ledger_peak_drives_a_high_memory_estimate_with_headroom() -> None:
@@ -679,13 +855,14 @@ def test_unmeasured_model_keeps_low_default_estimate() -> None:
     assert estimate.estimated_mb == 4 * MB_PER_GB
 
 
-def test_big_model_concurrency_cap_blocks_second_big_model() -> None:
-    """Gate (c): the >40GB big-model cap admits one big model, then throttles."""
+def test_big_model_concurrency_cap_blocks_models_beyond_cap() -> None:
+    """Gate (c): the >40GB big-model cap admits two big models, then throttles."""
 
-    # Two big models (50GB each) plus a small one, plenty of aggregate budget.
+    # Three big models (50GB each) plus a small one, plenty of aggregate budget.
     pending = [
         _big_item(50 * MB_PER_GB, stable_id="big-a", name="BigA"),
         _big_item(50 * MB_PER_GB, stable_id="big-b", name="BigB"),
+        _big_item(50 * MB_PER_GB, stable_id="big-c", name="BigC"),
         _big_item(2 * MB_PER_GB, stable_id="small-a", name="SmallA"),
     ]
 
@@ -698,23 +875,23 @@ def test_big_model_concurrency_cap_blocks_second_big_model() -> None:
         actual_available_memory_mb=200 * MB_PER_GB,
         available_slots=8,
         in_flight_big_count=0,
-        max_concurrent_big_models=1,
+        max_concurrent_big_models=MAX_CONCURRENT_BIG_MODELS,
     )
 
     admitted_ids = [item.row.stable_id for item in decision.admitted]
     big_admitted = [
         item for item in decision.admitted if item.estimated_memory_mb > BIG_MODEL_THRESHOLD_MB
     ]
-    # At most one big model is admitted even though budget+slots allow both.
-    assert len(big_admitted) == 1
-    # The small model still gets in alongside the single big model.
+    # At most two big models are admitted even though budget+slots allow all.
+    assert len(big_admitted) == MAX_CONCURRENT_BIG_MODELS
+    # The small model still gets in alongside the big models.
     assert "small-a" in admitted_ids
-    # The second big model is held back.
-    assert "big-b" in [item.row.stable_id for item in pending]
+    # The third big model is held back.
+    assert "big-c" in [item.row.stable_id for item in pending]
 
 
 def test_big_model_cap_holds_against_in_flight_big_model() -> None:
-    """Gate (c): with a big model already in flight, no further big model admits."""
+    """Gate (c): with cap-saturating big models in flight, no further big admits."""
 
     pending = [
         _big_item(50 * MB_PER_GB, stable_id="big-b", name="BigB"),
@@ -723,14 +900,14 @@ def test_big_model_cap_holds_against_in_flight_big_model() -> None:
 
     decision = _admit_memory_budgeted_items(
         pending=pending,
-        in_flight_memory_mb=50 * MB_PER_GB,
-        in_flight_count=1,
+        in_flight_memory_mb=100 * MB_PER_GB,
+        in_flight_count=MAX_CONCURRENT_BIG_MODELS,
         budget_mb=200 * MB_PER_GB,
         memory_floor_mb=1 * MB_PER_GB,
         actual_available_memory_mb=200 * MB_PER_GB,
         available_slots=7,
-        in_flight_big_count=1,
-        max_concurrent_big_models=1,
+        in_flight_big_count=MAX_CONCURRENT_BIG_MODELS,
+        max_concurrent_big_models=MAX_CONCURRENT_BIG_MODELS,
     )
 
     admitted_ids = [item.row.stable_id for item in decision.admitted]
@@ -753,7 +930,7 @@ def test_big_model_runs_alone_when_nothing_in_flight() -> None:
         actual_available_memory_mb=200 * MB_PER_GB,
         available_slots=8,
         in_flight_big_count=0,
-        max_concurrent_big_models=1,
+        max_concurrent_big_models=MAX_CONCURRENT_BIG_MODELS,
     )
 
     assert [item.row.stable_id for item in decision.admitted] == ["big-a"]
@@ -773,7 +950,7 @@ def test_small_models_keep_high_concurrency_under_big_cap() -> None:
         actual_available_memory_mb=200 * MB_PER_GB,
         available_slots=8,
         in_flight_big_count=0,
-        max_concurrent_big_models=1,
+        max_concurrent_big_models=MAX_CONCURRENT_BIG_MODELS,
     )
 
     assert len(decision.admitted) == 8
@@ -786,8 +963,8 @@ def test_auto_memory_budget_leaves_headroom_below_total_ram(
     """Gate (e): the auto budget is capped below total RAM (OOM-killer headroom)."""
 
     total_gb = 125.0
-    # Nearly-idle box: available approaches total, so 70%-of-available would be
-    # ~85GB; the headroom cap holds the budget below the machine's physical RAM.
+    # Nearly-idle box: available approaches total, so auto reaches the total-RAM
+    # headroom cap and remains below the machine's physical RAM.
     monkeypatch.setitem(
         sys.modules,
         "psutil",
@@ -802,6 +979,7 @@ def test_auto_memory_budget_leaves_headroom_below_total_ram(
     budget_gb = _resolve_memory_budget_gb(None)
 
     assert budget_gb <= total_gb * MEMORY_BUDGET_HEADROOM_FRACTION + 1e-6
+    assert budget_gb > 105.0
     assert budget_gb < total_gb  # never targets the full machine
 
 
