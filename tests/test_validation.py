@@ -242,23 +242,20 @@ def test_validation_restores_prior_deterministic_algorithms_setting() -> None:
         torch.use_deterministic_algorithms(prior_enabled, warn_only=prior_warn_only)
 
 
-def test_validation_pins_single_thread_inside_harness_and_restores() -> None:
-    """LOAD-BEARING: the single-thread pin is active INSIDE the validation forwards
-    and restored exactly afterward.
+def test_validation_default_threads_and_explicit_single_thread_pin_restore() -> None:
+    """LOAD-BEARING: default forwards use process threads; explicit pin restores.
 
     This is the host-independent mechanism gate for the inter-run multi-thread
     float-reduction-order fix. The drift it removes (~3e-7 ground-truth output
     disagreement straddling ``GROUND_TRUTH_OUTPUT_RTOL=1e-6``, plus the MoE
-    masked-gate perturbation flake) is hardware/thread-count dependent and may not
-    reproduce on every host, so we assert the FIX's mechanism directly rather than
-    relying on a host reproducing the flake:
+    masked-gate perturbation flake) is hardware/thread-count dependent and may
+    not reproduce on every host, so we assert the retry mechanism directly
+    rather than relying on a host reproducing the flake:
 
-    * ``torch.get_num_threads() == 1`` is observed from *inside* both the
-      ground-truth forward and the TorchLens capture forward -- proving the pin
-      wraps the forwards INSIDE the harness (pinning at process start does NOT
-      reliably fix the path; this is the load-bearing detail).
-    * the process-wide thread count is restored to its prior value afterward, so
-      the pin does not leak into the caller's (or later tests') environment.
+    * the default harness call does not override the process thread count;
+    * ``num_threads=1`` is observed from inside the validation forwards;
+    * the process-wide thread count is restored afterward, so the retry pin does
+      not leak into the caller's (or later tests') environment.
     """
 
     observed_threads: list[int] = []
@@ -277,14 +274,22 @@ def test_validation_pins_single_thread_inside_harness_and_restores() -> None:
 
     prior_num_threads = torch.get_num_threads()
     try:
+        torch.set_num_threads(max(2, prior_num_threads))
+        default_threads = torch.get_num_threads()
         result = validate_forward_pass(model, (x,))
         assert result is True
-        # The probe ran inside both the ground-truth and capture forwards; every
-        # observation must see a single intra-op thread.
+        assert observed_threads, "probe model forward was never invoked"
+        assert all(t == default_threads for t in observed_threads), observed_threads
+        assert torch.get_num_threads() == default_threads
+
+        observed_threads.clear()
+        result = user_funcs._validate_forward_pass_torch(model, (x,), num_threads=1)
+        assert result is True
+        # The explicit deterministic retry pin wraps both the ground-truth and
+        # capture forwards inside the harness.
         assert observed_threads, "probe model forward was never invoked"
         assert all(t == 1 for t in observed_threads), observed_threads
-        # ... and the prior thread count is restored after validation returns.
-        assert torch.get_num_threads() == prior_num_threads
+        assert torch.get_num_threads() == default_threads
     finally:
         torch.set_num_threads(prior_num_threads)
 
