@@ -37,7 +37,6 @@ from menagerie.runtime import (
     combine_notes,
     cleanup_runtime,
     cuda_is_available,
-    default_jobs,
     dependency_plan,
     device_note,
     disk_free_gb,
@@ -80,6 +79,25 @@ HEAVY_UNKNOWN_MEMORY_MB = 12 * MB_PER_GB
 DEFAULT_MEMORY_FLOOR_GB = 12.0
 AUTO_MEMORY_BUDGET_FRACTION = 0.7
 FALLBACK_MEMORY_BUDGET_GB = 8.0
+# Validation workers are single-thread-pinned for replay determinism, so each
+# worker holds roughly one core. The default concurrency therefore scales to the
+# host (~nproc) instead of the renderer's cap-8 default, letting the small-model
+# bulk saturate every core. Memory admission (see below) independently throttles
+# big-model concurrency, so a high job ceiling is safe. --jobs stays overridable.
+VALIDATION_JOBS_CPU_HEADROOM = 2
+# Measured ledger peaks are scaled by this headroom so a model that peaked at
+# N GB last run is budgeted at N*1.3 GB (run-to-run jitter + allocator slack).
+LEDGER_MEMORY_HEADROOM = 1.3
+# Models whose estimate exceeds this threshold are "big" and their concurrency is
+# capped (kernel OOM-killer protection): only a handful of 40GB+ models may run
+# at once even if the aggregate budget would nominally admit more.
+BIG_MODEL_THRESHOLD_MB = 40 * MB_PER_GB
+# At most this many big models (estimate > BIG_MODEL_THRESHOLD_MB) run concurrently.
+MAX_CONCURRENT_BIG_MODELS = 1
+# Hard ceiling on the scheduler memory budget, leaving the kernel OOM-killer
+# headroom below total RAM. The auto budget (70% of *available* RAM) is additionally
+# capped so the in-flight estimate never targets the full machine.
+MEMORY_BUDGET_HEADROOM_FRACTION = 0.88
 HEAVY_MEMORY_PATTERNS = (
     "deeplab",
     "mask2former",
@@ -2608,7 +2626,12 @@ def _memory_estimate_for_row(
 
     measured_mb = ledger_estimates_mb.get(row.stable_id)
     if measured_mb is not None and measured_mb > 0:
-        return MemoryEstimate(measured_mb, "ledger")
+        # Scale the measured prior by a headroom factor: a model that peaked at
+        # N GB last run should be budgeted above N GB (run-to-run jitter +
+        # allocator slack), so the budgeter never admits several 30-60GB models
+        # concurrently and overshoots physical RAM into the kernel OOM-killer.
+        budgeted_mb = int(round(measured_mb * LEDGER_MEMORY_HEADROOM))
+        return MemoryEstimate(budgeted_mb, "ledger")
     if _looks_memory_heavy(row):
         return MemoryEstimate(HEAVY_UNKNOWN_MEMORY_MB, "heavy_default")
     return MemoryEstimate(DEFAULT_UNKNOWN_MEMORY_MB, "default")
@@ -2647,6 +2670,25 @@ def _build_validation_work_items(
     return items
 
 
+def default_validation_jobs() -> int:
+    """Return the default validation concurrency scaled to the host.
+
+    Validation workers are single-thread-pinned for replay determinism, so each
+    holds roughly one core; the default therefore scales to ``cpu_count -
+    VALIDATION_JOBS_CPU_HEADROOM`` (no cap-8 clamp) so the small-model bulk can
+    saturate every core. The memory budgeter independently throttles big-model
+    concurrency, so a high job ceiling is safe. ``--jobs`` stays overridable.
+
+    Returns
+    -------
+    int
+        Default worker count, at least one.
+    """
+
+    cpu_count = os.cpu_count() or 1
+    return max(1, cpu_count - VALIDATION_JOBS_CPU_HEADROOM)
+
+
 def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
     """Resolve an explicit or automatic validation memory budget.
 
@@ -2658,7 +2700,11 @@ def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
     Returns
     -------
     float
-        Memory budget in GB.
+        Memory budget in GB. The automatic budget is ``70%`` of currently
+        available RAM, additionally capped to
+        ``MEMORY_BUDGET_HEADROOM_FRACTION`` of total RAM so the in-flight
+        estimate always leaves the kernel OOM-killer headroom below the box's
+        physical memory.
     """
 
     if requested_budget_gb is not None:
@@ -2666,10 +2712,14 @@ def _resolve_memory_budget_gb(requested_budget_gb: float | None) -> float:
     try:
         import psutil
 
-        available_gb = psutil.virtual_memory().available / (1024**3)
+        memory = psutil.virtual_memory()
+        available_gb = memory.available / (1024**3)
+        total_gb = memory.total / (1024**3)
     except Exception:
         return FALLBACK_MEMORY_BUDGET_GB
-    return max(0.001, available_gb * AUTO_MEMORY_BUDGET_FRACTION)
+    auto_gb = available_gb * AUTO_MEMORY_BUDGET_FRACTION
+    headroom_cap_gb = total_gb * MEMORY_BUDGET_HEADROOM_FRACTION
+    return max(0.001, min(auto_gb, headroom_cap_gb))
 
 
 def _resolve_scheduler_memory_budget_gb(
@@ -2757,6 +2807,44 @@ def _in_flight_memory_mb(
     return sum(item.estimated_memory_mb for item in in_flight.values())
 
 
+def _in_flight_big_count(
+    in_flight: Mapping[Future[tuple[ValidationResult, int]], ValidationWorkItem],
+) -> int:
+    """Return the number of currently submitted big (concurrency-capped) models.
+
+    Parameters
+    ----------
+    in_flight:
+        Future-to-work-item mapping.
+
+    Returns
+    -------
+    int
+        Count of in-flight items whose estimate exceeds
+        ``BIG_MODEL_THRESHOLD_MB``.
+    """
+
+    return sum(1 for item in in_flight.values() if _is_big_model(item))
+
+
+def _is_big_model(item: ValidationWorkItem) -> bool:
+    """Return whether a work item is a big (concurrency-capped) model.
+
+    Parameters
+    ----------
+    item:
+        Validation work item.
+
+    Returns
+    -------
+    bool
+        ``True`` when the item's estimated peak RSS exceeds
+        ``BIG_MODEL_THRESHOLD_MB``.
+    """
+
+    return item.estimated_memory_mb > BIG_MODEL_THRESHOLD_MB
+
+
 def _admit_memory_budgeted_items(
     pending: list[ValidationWorkItem],
     in_flight_memory_mb: int,
@@ -2765,6 +2853,8 @@ def _admit_memory_budgeted_items(
     memory_floor_mb: int,
     actual_available_memory_mb: int | None,
     available_slots: int,
+    in_flight_big_count: int = 0,
+    max_concurrent_big_models: int = MAX_CONCURRENT_BIG_MODELS,
 ) -> AdmissionDecision:
     """Select pending validation work that fits memory admission gates.
 
@@ -2786,6 +2876,14 @@ def _admit_memory_budgeted_items(
         Currently available system memory in MB, or ``None`` when unavailable.
     available_slots:
         Remaining concurrency slots under the hard job cap.
+    in_flight_big_count:
+        Number of submitted-and-running big models (estimate >
+        ``BIG_MODEL_THRESHOLD_MB``). Big-model concurrency is capped separately
+        from the aggregate memory budget so a burst of 40GB+ models cannot
+        co-schedule into a kernel OOM, even when the aggregate budget would
+        nominally admit them.
+    max_concurrent_big_models:
+        Maximum number of big models that may run concurrently.
 
     Returns
     -------
@@ -2800,10 +2898,38 @@ def _admit_memory_budgeted_items(
     while pending and len(admitted) < available_slots:
         admitted_memory_mb = sum(item.estimated_memory_mb for item in admitted)
         remaining_mb = budget_mb - in_flight_memory_mb - admitted_memory_mb
-        estimate_fit_indexes = [
-            index for index, item in enumerate(pending) if item.estimated_memory_mb <= remaining_mb
-        ]
+        admitted_big_count = sum(1 for item in admitted if _is_big_model(item))
+        big_count = in_flight_big_count + admitted_big_count
         force_first_job = in_flight_count == 0 and not admitted
+
+        def big_model_slot_open(item: ValidationWorkItem) -> bool:
+            """Return whether the big-model concurrency cap admits an item.
+
+            Parameters
+            ----------
+            item:
+                Candidate work item.
+
+            Returns
+            -------
+            bool
+                ``True`` for small models, or for a big model when fewer than
+                ``max_concurrent_big_models`` big models are already
+                in-flight/admitted. The deadlock-avoiding first job is always
+                allowed so a lone big model never wedges the queue.
+            """
+
+            if not _is_big_model(item):
+                return True
+            if force_first_job:
+                return True
+            return big_count < max_concurrent_big_models
+
+        estimate_fit_indexes = [
+            index
+            for index, item in enumerate(pending)
+            if item.estimated_memory_mb <= remaining_mb and big_model_slot_open(item)
+        ]
 
         def has_actual_headroom(item: ValidationWorkItem) -> bool:
             """Return whether actual free memory admits an item.
@@ -2864,13 +2990,14 @@ def _refresh_pending_estimates(
         Fresh peak RSS measurement in MB.
     """
 
+    budgeted_mb = int(round(peak_rss_mb * LEDGER_MEMORY_HEADROOM))
     for index, item in enumerate(pending):
         if item.row.stable_id != stable_id:
             continue
         pending[index] = ValidationWorkItem(
             plan=item.plan,
             row=item.row,
-            estimated_memory_mb=peak_rss_mb,
+            estimated_memory_mb=budgeted_mb,
             estimate_source="ledger",
         )
 
@@ -4697,6 +4824,7 @@ def run(args: argparse.Namespace) -> int:
                 memory_floor_mb=memory_floor_mb,
                 actual_available_memory_mb=actual_available_memory_mb,
                 available_slots=effective_jobs - len(futures),
+                in_flight_big_count=_in_flight_big_count(futures),
             )
             for item in decision.forced_oversized:
                 log_event(
@@ -5118,8 +5246,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--jobs",
         type=int,
-        default=default_jobs(),
-        help="number of models to validate concurrently (each in its own subprocess)",
+        default=default_validation_jobs(),
+        help=(
+            "number of models to validate concurrently (each in its own subprocess); "
+            "default auto-scales to the host (cpu_count - 2). The memory budgeter "
+            "throttles big-model concurrency below this ceiling"
+        ),
     )
     parser.add_argument(
         "--gpu-jobs",

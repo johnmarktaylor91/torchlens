@@ -14,7 +14,11 @@ from menagerie.catalog import CatalogRow
 from menagerie.cluster_runner import ResourceRoute
 from menagerie.runtime import DependencyPlan
 from menagerie.validate_menagerie import (
+    BIG_MODEL_THRESHOLD_MB,
+    LEDGER_MEMORY_HEADROOM,
+    MAX_CONCURRENT_BIG_MODELS,
     MB_PER_GB,
+    MEMORY_BUDGET_HEADROOM_FRACTION,
     TIMEOUT_CEILING_FLOOR_SEC,
     TIMEOUT_CEILING_MIN_SEC,
     TIMEOUT_DEFAULT_SCALE,
@@ -25,7 +29,10 @@ from menagerie.validate_menagerie import (
     _actual_available_memory_mb,
     _case_timeout,
     _lpt_sort_key,
+    _memory_estimate_for_row,
+    _resolve_memory_budget_gb,
     _resolve_row_device,
+    default_validation_jobs,
     resolve_timeout_ceiling_sec,
     validate_with_timeout,
 )
@@ -597,3 +604,208 @@ def test_lpt_sorted_admission_admits_giant_first_when_budget_allows() -> None:
     )
 
     assert decision.admitted[0].row.stable_id == "giant-slow"
+
+
+def _big_item(
+    estimated_mb: int,
+    stable_id: str,
+    name: str = "BigNet",
+    source: str = "ledger",
+) -> ValidationWorkItem:
+    """Build a work item with an explicit MB estimate and source.
+
+    Parameters
+    ----------
+    estimated_mb:
+        Estimated peak RSS in MB.
+    stable_id:
+        Stable model identity.
+    name:
+        Model name.
+    source:
+        Estimate source tag.
+
+    Returns
+    -------
+    ValidationWorkItem
+        Validation work item.
+    """
+
+    return ValidationWorkItem(
+        plan=_plan(),
+        row=_row(stable_id=stable_id, name=name),
+        estimated_memory_mb=estimated_mb,
+        estimate_source=source,
+    )
+
+
+def test_default_validation_jobs_scales_to_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gate (a): the default --jobs scales to ~cpu_count-2 with no cap-8 clamp."""
+
+    monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: 20)
+    assert default_validation_jobs() == 18
+
+    monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: 64)
+    assert default_validation_jobs() == 62
+
+    # Small/unknown core counts still yield at least one worker.
+    monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: 1)
+    assert default_validation_jobs() == 1
+    monkeypatch.setattr("menagerie.validate_menagerie.os.cpu_count", lambda: None)
+    assert default_validation_jobs() == 1
+
+
+def test_ledger_peak_drives_a_high_memory_estimate_with_headroom() -> None:
+    """Gate (b): a large measured ledger peak yields a HIGH estimate, not 4GB."""
+
+    row = _row(stable_id="tf_efficientnet_l2", name="tf_efficientnet_l2")
+    # 59 GB measured prior, like the real ledger entry for this model.
+    ledger_mb = 59 * MB_PER_GB
+    estimate = _memory_estimate_for_row(row, {"tf_efficientnet_l2": ledger_mb})
+
+    assert estimate.source == "ledger"
+    # Not the 4GB default -- the measured peak times the headroom factor.
+    assert estimate.estimated_mb == int(round(ledger_mb * LEDGER_MEMORY_HEADROOM))
+    assert estimate.estimated_mb > 70 * MB_PER_GB
+
+
+def test_unmeasured_model_keeps_low_default_estimate() -> None:
+    """Gate (d): an unmeasured, non-heavy model still gets the small default."""
+
+    row = _row(stable_id="unmeasured", name="TinyNet")
+    estimate = _memory_estimate_for_row(row, {})
+
+    assert estimate.source == "default"
+    assert estimate.estimated_mb == 4 * MB_PER_GB
+
+
+def test_big_model_concurrency_cap_blocks_second_big_model() -> None:
+    """Gate (c): the >40GB big-model cap admits one big model, then throttles."""
+
+    # Two big models (50GB each) plus a small one, plenty of aggregate budget.
+    pending = [
+        _big_item(50 * MB_PER_GB, stable_id="big-a", name="BigA"),
+        _big_item(50 * MB_PER_GB, stable_id="big-b", name="BigB"),
+        _big_item(2 * MB_PER_GB, stable_id="small-a", name="SmallA"),
+    ]
+
+    decision = _admit_memory_budgeted_items(
+        pending=pending,
+        in_flight_memory_mb=0,
+        in_flight_count=0,
+        budget_mb=200 * MB_PER_GB,
+        memory_floor_mb=1 * MB_PER_GB,
+        actual_available_memory_mb=200 * MB_PER_GB,
+        available_slots=8,
+        in_flight_big_count=0,
+        max_concurrent_big_models=1,
+    )
+
+    admitted_ids = [item.row.stable_id for item in decision.admitted]
+    big_admitted = [
+        item for item in decision.admitted if item.estimated_memory_mb > BIG_MODEL_THRESHOLD_MB
+    ]
+    # At most one big model is admitted even though budget+slots allow both.
+    assert len(big_admitted) == 1
+    # The small model still gets in alongside the single big model.
+    assert "small-a" in admitted_ids
+    # The second big model is held back.
+    assert "big-b" in [item.row.stable_id for item in pending]
+
+
+def test_big_model_cap_holds_against_in_flight_big_model() -> None:
+    """Gate (c): with a big model already in flight, no further big model admits."""
+
+    pending = [
+        _big_item(50 * MB_PER_GB, stable_id="big-b", name="BigB"),
+        _big_item(2 * MB_PER_GB, stable_id="small-a", name="SmallA"),
+    ]
+
+    decision = _admit_memory_budgeted_items(
+        pending=pending,
+        in_flight_memory_mb=50 * MB_PER_GB,
+        in_flight_count=1,
+        budget_mb=200 * MB_PER_GB,
+        memory_floor_mb=1 * MB_PER_GB,
+        actual_available_memory_mb=200 * MB_PER_GB,
+        available_slots=7,
+        in_flight_big_count=1,
+        max_concurrent_big_models=1,
+    )
+
+    admitted_ids = [item.row.stable_id for item in decision.admitted]
+    # The small model is admitted; the big one waits for the in-flight big to finish.
+    assert admitted_ids == ["small-a"]
+    assert "big-b" in [item.row.stable_id for item in pending]
+
+
+def test_big_model_runs_alone_when_nothing_in_flight() -> None:
+    """Gate (c): a lone big model is never wedged -- the first job always admits."""
+
+    pending = [_big_item(50 * MB_PER_GB, stable_id="big-a", name="BigA")]
+
+    decision = _admit_memory_budgeted_items(
+        pending=pending,
+        in_flight_memory_mb=0,
+        in_flight_count=0,
+        budget_mb=200 * MB_PER_GB,
+        memory_floor_mb=1 * MB_PER_GB,
+        actual_available_memory_mb=200 * MB_PER_GB,
+        available_slots=8,
+        in_flight_big_count=0,
+        max_concurrent_big_models=1,
+    )
+
+    assert [item.row.stable_id for item in decision.admitted] == ["big-a"]
+
+
+def test_small_models_keep_high_concurrency_under_big_cap() -> None:
+    """Gate (d): the big-model cap never throttles a batch of small models."""
+
+    pending = [_item(estimated_gb=2, stable_id=f"small-{i}", name=f"Small{i}") for i in range(8)]
+
+    decision = _admit_memory_budgeted_items(
+        pending=pending,
+        in_flight_memory_mb=0,
+        in_flight_count=0,
+        budget_mb=200 * MB_PER_GB,
+        memory_floor_mb=1 * MB_PER_GB,
+        actual_available_memory_mb=200 * MB_PER_GB,
+        available_slots=8,
+        in_flight_big_count=0,
+        max_concurrent_big_models=1,
+    )
+
+    assert len(decision.admitted) == 8
+    assert not decision.throttled
+
+
+def test_auto_memory_budget_leaves_headroom_below_total_ram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gate (e): the auto budget is capped below total RAM (OOM-killer headroom)."""
+
+    total_gb = 125.0
+    # Nearly-idle box: available approaches total, so 70%-of-available would be
+    # ~85GB; the headroom cap holds the budget below the machine's physical RAM.
+    monkeypatch.setitem(
+        sys.modules,
+        "psutil",
+        SimpleNamespace(
+            virtual_memory=lambda: SimpleNamespace(
+                available=int(122 * 1024**3),
+                total=int(total_gb * 1024**3),
+            ),
+        ),
+    )
+
+    budget_gb = _resolve_memory_budget_gb(None)
+
+    assert budget_gb <= total_gb * MEMORY_BUDGET_HEADROOM_FRACTION + 1e-6
+    assert budget_gb < total_gb  # never targets the full machine
+
+
+def test_explicit_memory_budget_overrides_auto() -> None:
+    """An explicit --memory-budget-gb is honored verbatim (override path)."""
+
+    assert _resolve_memory_budget_gb(48.0) == 48.0
