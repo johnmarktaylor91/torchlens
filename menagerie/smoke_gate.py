@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from menagerie.cluster_runner import GIANT_REGISTRY
 from menagerie.generate_menagerie import visual_mode_from_options
 from menagerie.validate_menagerie import MANIFEST_STATUS_VALUES
 
@@ -325,6 +326,17 @@ def _assert_timings(out_dir: Path) -> None:
 def _assert_cluster(cases: Sequence[dict[str, Any]], out_dir: Path) -> None:
     """Assert cluster proof rows when cluster cases are present.
 
+    The cluster-routed expectation must follow the TRUE routing policy
+    (cluster-only-when-required): a case is expected remote IFF the model
+    genuinely force-routes to the shared cluster (``force_cluster=True`` in the
+    static giant registry, the only preemptive remote route). A case tagged
+    ``expected_runner="cluster"`` for a model that actually fits locally
+    (``force_cluster=False``) is a STALE manifest expectation -- it demands a
+    remote dispatch that the policy forbids -- so the gate fails loudly rather
+    than silently. When no genuinely-forced giant is selected (the default smoke
+    under cluster-only-when-required), ``cluster_cases`` is empty and zero
+    cluster rows is the correct, passing outcome.
+
     Parameters
     ----------
     cases:
@@ -334,6 +346,17 @@ def _assert_cluster(cases: Sequence[dict[str, Any]], out_dir: Path) -> None:
     """
 
     cluster_cases = [case for case in cases if case.get("expected_runner") == "cluster"]
+    for case in cluster_cases:
+        stable_id = str(case["stable_id"])
+        entry = GIANT_REGISTRY.get(stable_id)
+        if entry is None or not entry.force_cluster:
+            _fail(
+                f"{stable_id} | stale cluster expectation: model is not a "
+                f"force_cluster giant and routes LOCAL under "
+                f"cluster-only-when-required (force_cluster="
+                f"{None if entry is None else entry.force_cluster}); "
+                "expected_runner must follow the real routing decision"
+            )
     if not cluster_cases:
         return
     ledger_db = out_dir / "ledger" / "verification_smoke.db"

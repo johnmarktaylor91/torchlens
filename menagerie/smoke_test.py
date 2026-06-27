@@ -168,6 +168,12 @@ def select_cases(
             continue
         if include == "cluster" and no_cluster:
             continue
+        # Under --no-cluster every case runs with --runner local, so any case
+        # that expects a remote cluster runner (a genuine force_cluster giant)
+        # would route local and contradict its expectation; drop it rather than
+        # fabricate a forbidden remote dispatch.
+        if no_cluster and case.payload.get("expected_runner") == "cluster":
+            continue
         selected.append(case)
     return selected
 

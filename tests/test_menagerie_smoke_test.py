@@ -6,8 +6,11 @@ import json
 import sqlite3
 from pathlib import Path
 
-from menagerie import smoke_test
+import pytest
+
+from menagerie import smoke_gate, smoke_test
 from menagerie.catalog import CatalogRow, write_catalog
+from menagerie.cluster_runner import GIANT_REGISTRY
 
 
 def _case(
@@ -84,6 +87,67 @@ def test_select_cases_respects_optional_groups() -> None:
 
     assert [case.stable_id for case in default] == ["m1", "m4"]
     assert [case.stable_id for case in extended] == ["m1", "m2", "m3"]
+
+
+def test_select_cases_drops_cluster_runner_under_no_cluster() -> None:
+    """--no-cluster drops any case that expects a remote cluster runner.
+
+    A genuine force_cluster giant is tagged include="heavy" (opt-in via
+    --with-heavy-giant) and expected_runner="cluster". Under --no-cluster the
+    run uses --runner local, so such a case must be dropped rather than routed
+    local against a remote expectation.
+    """
+
+    forced_id = next(sid for sid, entry in GIANT_REGISTRY.items() if entry.force_cluster)
+    forced = smoke_test.SmokeCase(
+        {
+            "stable_id": forced_id,
+            "include": "heavy",
+            "synthetic": False,
+            "expected_env": "base",
+            "expected_runner": "cluster",
+            "expected_status": "validated",
+        }
+    )
+    cases = [_case("m1"), forced]
+
+    with_giant = smoke_test.select_cases(
+        cases, all_islands=False, with_heavy_giant=True, no_cluster=False
+    )
+    no_cluster = smoke_test.select_cases(
+        cases, all_islands=False, with_heavy_giant=True, no_cluster=True
+    )
+
+    assert [case.stable_id for case in with_giant] == ["m1", forced_id]
+    assert [case.stable_id for case in no_cluster] == ["m1"]
+
+
+def test_smoke_manifest_cluster_cases_are_force_cluster_giants() -> None:
+    """Every committed cluster-runner expectation follows the true routing policy.
+
+    A model is expected remote IFF it genuinely force-routes to the shared
+    cluster (force_cluster=True). A stale cluster tag on a model that fits
+    locally would demand a forbidden remote dispatch.
+    """
+
+    cases = smoke_test.load_cases(smoke_test.DEFAULT_SMOKE_MANIFEST)
+    cluster_ids = [
+        case.stable_id for case in cases if case.payload.get("expected_runner") == "cluster"
+    ]
+    assert cluster_ids, "smoke manifest must retain at least one forced-cluster case"
+    for stable_id in cluster_ids:
+        entry = GIANT_REGISTRY.get(stable_id)
+        assert entry is not None, f"{stable_id} missing from GIANT_REGISTRY"
+        assert entry.force_cluster, f"{stable_id} expected remote but force_cluster=False"
+
+
+def test_smoke_gate_rejects_stale_cluster_expectation(tmp_path: Path) -> None:
+    """The gate fails loudly on a cluster expectation for a local-routing model."""
+
+    fitting_giant = next(sid for sid, entry in GIANT_REGISTRY.items() if not entry.force_cluster)
+    cases = [{"stable_id": fitting_giant, "expected_runner": "cluster"}]
+    with pytest.raises(RuntimeError, match="stale cluster expectation"):
+        smoke_gate._assert_cluster(cases, tmp_path)  # noqa: SLF001
 
 
 def test_insert_synthetic_rows_adds_smoke_catalog_rows(tmp_path: Path) -> None:
