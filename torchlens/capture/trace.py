@@ -30,6 +30,7 @@ import contextlib
 import random
 import time
 from collections import defaultdict
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -55,6 +56,108 @@ from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _timed_phase, _vprint
 
 _ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
+
+
+def _process_rss_bytes() -> int:
+    """Return the current process resident-set size in bytes, or 0 if unavailable.
+
+    Used as a coarse host-memory proxy for the CPU forward-pass peak. psutil is an
+    optional dependency; absence degrades to 0 rather than raising.
+
+    Returns
+    -------
+    int
+        Resident-set size in bytes, or 0 when psutil is unavailable.
+    """
+
+    try:
+        import psutil
+    except ImportError:
+        return 0
+    return int(psutil.Process().memory_info().rss)
+
+
+@contextlib.contextmanager
+def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
+    """Record forward-pass peak memory around the model forward call.
+
+    Stores the peak on ``trace.forward_peak_memory`` and the backend label on
+    ``trace.forward_memory_backend``. CUDA reports the true device-side peak via
+    ``max_memory_allocated`` after ``reset_peak_memory_stats``. CPU/MPS use the
+    larger of (a) a process resident-set-size delta -- which captures torch's
+    C++-allocated tensor buffers for sizeable models -- and (b) the stdlib
+    ``tracemalloc`` Python-allocation peak, which stays reliably positive for
+    small models where RSS granularity rounds the delta to zero. ``tracemalloc``
+    yields a genuine high-water mark within the bracket, not just an endpoint
+    reading.
+
+    Only the exhaustive and predicate primary passes record memory; the fast
+    second pass re-runs the model and must not clobber the measured forward peak.
+    Measurement never raises into the capture path.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving the forward memory metadata.
+    device:
+        Device the forward pass runs on.
+
+    Yields
+    ------
+    None
+        Context body in which the model forward executes.
+    """
+
+    if getattr(trace, "capture_mode", None) == "fast":
+        yield
+        return
+
+    device_type = getattr(device, "type", None)
+    if device_type == "cuda" and torch.cuda.is_available():
+        backend_label = "cuda"
+        cuda_device = cast(torch.device, device)
+        with contextlib.suppress(Exception):
+            torch.cuda.reset_peak_memory_stats(cuda_device)
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                trace.forward_peak_memory = Bytes(
+                    max(0, int(torch.cuda.max_memory_allocated(cuda_device)))
+                )
+            trace.forward_memory_backend = backend_label
+        return
+
+    if device_type == "mps" and hasattr(torch, "mps"):
+        backend_label = "mps"
+        before = int(torch.mps.current_allocated_memory())
+    else:
+        backend_label = "cpu"
+        before = _process_rss_bytes()
+
+    import tracemalloc
+
+    tracemalloc_started_here = not tracemalloc.is_tracing()
+    if tracemalloc_started_here:
+        with contextlib.suppress(Exception):
+            tracemalloc.start()
+    try:
+        yield
+    finally:
+        traced_peak = 0
+        if tracemalloc.is_tracing():
+            with contextlib.suppress(Exception):
+                _current, traced_peak = tracemalloc.get_traced_memory()
+            if tracemalloc_started_here:
+                with contextlib.suppress(Exception):
+                    tracemalloc.stop()
+        if backend_label == "mps":
+            after = int(torch.mps.current_allocated_memory())
+        else:
+            after = _process_rss_bytes()
+        rss_delta = max(0, after - before)
+        trace.forward_memory_backend = backend_label
+        trace.forward_peak_memory = Bytes(max(rss_delta, int(traced_peak)))
 
 
 def _backend_name_for_trace(trace: "Trace") -> BackendName:
@@ -753,8 +856,9 @@ def run_and_log_inputs_through_model(
                 )
                 try:
                     with _timed_phase(self, "dispatch:forward_model"):
-                        with inference_context:
-                            outputs = model(*input_args, **input_kwargs)
+                        with _forward_peak_memory_bracket(self, model_device):
+                            with inference_context:
+                                outputs = model(*input_args, **input_kwargs)
                 finally:
                     state.event_index += 1
                     exit_ctx = _build_record_context(
@@ -809,8 +913,9 @@ def run_and_log_inputs_through_model(
                     else contextlib.nullcontext()
                 )
                 with _timed_phase(self, "dispatch:forward_model"):
-                    with inference_context:
-                        outputs = model(*input_args, **input_kwargs)
+                    with _forward_peak_memory_bracket(self, model_device):
+                        with inference_context:
+                            outputs = model(*input_args, **input_kwargs)
 
         backend.finalize_forward_session(self)
 

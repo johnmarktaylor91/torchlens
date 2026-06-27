@@ -187,7 +187,14 @@ def test_trace_summary_resnet18_is_deterministic() -> None:
         compute_identity_hashes=False,
     )
 
-    assert summary_a == summary_b
+    # forward_peak_memory is a real runtime resource measurement (host RSS delta /
+    # tracemalloc peak on CPU, device peak on CUDA), so it legitimately varies run
+    # to run. Determinism is a property of the STRUCTURAL summary, not of runtime
+    # memory, so compare every field except the memory measurements.
+    _runtime_only = {"forward_peak_memory_bytes", "forward_peak_memory_mb"}
+    structural_a = {k: v for k, v in summary_a.items() if k not in _runtime_only}
+    structural_b = {k: v for k, v in summary_b.items() if k not in _runtime_only}
+    assert structural_a == structural_b
     assert summary_a["n_params"] == static_n_params(model_a)
     assert summary_a["n_params_source"] == "traced"
     assert summary_a["has_conv"] is True
@@ -195,6 +202,8 @@ def test_trace_summary_resnet18_is_deterministic() -> None:
     assert summary_a["pct_conv"] > 0.0
     assert summary_a["total_flops_forward"] > 0
     assert isinstance(summary_a["forward_peak_memory_bytes"], int)
+    # The measurement is now wired (no longer hard-zero) for real CPU traces.
+    assert summary_a["forward_peak_memory_bytes"] > 0
 
 
 def test_same_depth_elementwise_add_is_not_residual() -> None:
