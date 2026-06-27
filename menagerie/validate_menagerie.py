@@ -1043,6 +1043,7 @@ def _incremental_skip_stable_ids(
     env_registry: Path | None = None,
     ledger_db: Path | None = None,
     local_gpu_vram_bytes: int | None = None,
+    base_env_only: bool = False,
 ) -> set[str]:
     """Return rows the incremental-skip default may PROVABLY skip.
 
@@ -1078,6 +1079,13 @@ def _incremental_skip_stable_ids(
         Optional verification ledger path.
     local_gpu_vram_bytes:
         Probed local GPU VRAM for CUDA-required device routing.
+    base_env_only:
+        When ``True`` this validator is a base-env-only subprocess (an island
+        pixi worker or a cluster worker). Such a subprocess validates exactly the
+        rows it was handed in a single fixed environment whose identity is
+        provided via the ``TORCHLENS_MENAGERIE_ENV_HASH``/``LOCK_HASH`` env vars,
+        so it must NOT load the environment registry (the YAML registry, and
+        therefore ``pyyaml``, is intentionally absent from minimal island envs).
 
     Returns
     -------
@@ -1087,17 +1095,31 @@ def _incremental_skip_stable_ids(
 
     if not rows:
         return set()
-    registry = envs.load_registry(env_registry) if env_registry else envs.load_registry()
-    assignments = envs.assign(rows, registry)
-    env_identity_cache: dict[str, tuple[str, str]] = {}
     source_hash = os.environ.get("TORCHLENS_SOURCE_HASH") or torchlens_source_hash()
     ledger_path = _resolve_verification_db(ledger_db)
+    if base_env_only:
+        # Registry-free identity: the subprocess runs in one fixed env whose
+        # ``(env_hash, lock_hash)`` the worker records from the env vars
+        # (mirroring ``_targets`` / ``append_validation_ledger``). Loading the
+        # registry here would import ``pyyaml``, which minimal island pixi envs
+        # do not ship -- so resolve identity from the env vars directly.
+        env_hash = os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH") or base_env_hash()
+        lock_hash = os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH") or base_lock_hash()
+        assignments = None
+        env_identity_cache: dict[str, tuple[str, str]] = {}
+    else:
+        registry = envs.load_registry(env_registry) if env_registry else envs.load_registry()
+        assignments = envs.assign(rows, registry)
+        env_identity_cache = {}
     targets: dict[str, VerificationTarget] = {}
     for row in rows:
-        env_key = assignments.get(row.stable_id, "base")
-        if env_key not in env_identity_cache:
-            env_identity_cache[env_key] = _row_env_identity(env_key)
-        env_hash, lock_hash = env_identity_cache[env_key]
+        if assignments is None:
+            row_env_hash, row_lock_hash = env_hash, lock_hash
+        else:
+            env_key = assignments.get(row.stable_id, "base")
+            if env_key not in env_identity_cache:
+                env_identity_cache[env_key] = _row_env_identity(env_key)
+            row_env_hash, row_lock_hash = env_identity_cache[env_key]
         route = cluster_runner.route_resources(
             row,
             ledger=ledger_path,
@@ -1106,8 +1128,8 @@ def _incremental_skip_stable_ids(
         targets[row.stable_id] = VerificationTarget(
             recipe_revision_sha256=row.recipe_revision_sha256,
             torchlens_source_hash=source_hash,
-            env_hash=env_hash,
-            lock_hash=lock_hash,
+            env_hash=row_env_hash,
+            lock_hash=row_lock_hash,
             device_requested=route.device if device in {"cpu", "auto"} else device,
             scope=cast(Scope, scope),
         )
@@ -4391,6 +4413,7 @@ def run(args: argparse.Namespace) -> int:
             env_registry=args.env_registry,
             ledger_db=args.verification_db,
             local_gpu_vram_bytes=local_gpu_vram_bytes,
+            base_env_only=args.base_env_only,
         )
     if skip_ids:
         skipped_rows = [row for row in rows if row.stable_id in skip_ids]
