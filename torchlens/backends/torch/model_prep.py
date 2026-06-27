@@ -640,12 +640,17 @@ def _retag_existing_session_param_logs(trace: "Trace", model: nn.Module) -> None
             pid = id(param)
             param_address = f"{address}.{param_name}" if address else param_name
             primary_address = alias_to_primary.get(param_address, param_address)
-            param_log = existing_by_address.get(primary_address)
-            if param_log is None:
+            # Distinct local for the ``Param | None`` lookup so the loop variable
+            # ``param_log`` (bound non-optional in the ``existing_by_address``
+            # iteration above) keeps its narrowed ``Param`` type after the
+            # ``is None`` guard -- avoids a mypy variable-reuse narrowing error.
+            existing_param_log = existing_by_address.get(primary_address)
+            if existing_param_log is None:
                 # Unexpected new parameter on the fast pass: the graph changed.
                 # Leave it untagged; downstream fast-pass alignment checks will
                 # surface the divergence rather than silently mis-saving.
                 continue
+            param_log = existing_param_log
             if pid not in seen_param_ids:
                 seen_param_ids.add(pid)
                 param_id_to_address[pid] = primary_address
