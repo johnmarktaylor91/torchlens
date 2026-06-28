@@ -1601,6 +1601,146 @@ class _WhereDifferentBranchesModel(nn.Module):
         return torch.where(condition, true_branch, false_branch)
 
 
+class _WhereBranchSelectionModel(nn.Module):
+    """Model whose ``where`` condition selectedness is configurable."""
+
+    def __init__(self, condition_kind: str) -> None:
+        """Initialize the condition kind.
+
+        Parameters
+        ----------
+        condition_kind:
+            One of ``"all_true"``, ``"all_false"``, or ``"mixed"``.
+        """
+
+        super().__init__()
+        self.condition_kind = condition_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Select between distinct branches with the configured condition.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(2, 3)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of ``torch.where``.
+        """
+
+        if self.condition_kind == "all_true":
+            condition = torch.ones((), dtype=torch.bool, device=x.device)
+        elif self.condition_kind == "all_false":
+            condition = torch.zeros((), dtype=torch.bool, device=x.device)
+        elif self.condition_kind == "mixed":
+            condition = torch.tensor(
+                [[True, False, True], [False, True, False]],
+                dtype=torch.bool,
+                device=x.device,
+            )
+        else:
+            raise ValueError(f"Unknown condition kind: {self.condition_kind}")
+        true_branch = x + 10.0
+        false_branch = x - 10.0
+        return torch.where(condition, true_branch, false_branch)
+
+
+class _WhereSharedBranchModel(nn.Module):
+    """Model passing the same branch tensor to both ``where`` value slots."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply a mixed-condition ``where`` to the same branch tensor twice.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(2, 3)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of ``torch.where``.
+        """
+
+        condition = torch.tensor(
+            [[True, False, True], [False, True, False]],
+            dtype=torch.bool,
+            device=x.device,
+        )
+        branch = x + 1.0
+        return torch.where(condition, branch, branch)
+
+
+class _MaskedFillBranchSelectionModel(nn.Module):
+    """Model whose ``masked_fill`` mask selectedness is configurable."""
+
+    def __init__(self, mask_kind: str) -> None:
+        """Initialize the mask kind.
+
+        Parameters
+        ----------
+        mask_kind:
+            One of ``"all_true"``, ``"all_false"``, or ``"mixed"``.
+        """
+
+        super().__init__()
+        self.mask_kind = mask_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ``masked_fill`` with a 0-d tensor fill-value parent.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(2, 3)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of ``x.masked_fill(mask, value)``.
+        """
+
+        if self.mask_kind == "all_true":
+            mask = torch.ones_like(x, dtype=torch.bool)
+        elif self.mask_kind == "all_false":
+            mask = torch.zeros_like(x, dtype=torch.bool)
+        elif self.mask_kind == "mixed":
+            mask = torch.tensor(
+                [[True, False, True], [False, True, False]],
+                dtype=torch.bool,
+                device=x.device,
+            )
+        else:
+            raise ValueError(f"Unknown mask kind: {self.mask_kind}")
+        value = x.mean()
+        return x.masked_fill(mask, value)
+
+
+class _UnselectedWherePlaceholderModel(nn.Module):
+    """Model with an unselected ``where`` branch used for placeholder tripwires."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Route a real parent through an entirely unselected false branch.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of a ``where`` whose false branch is never selected.
+        """
+
+        condition = torch.ones_like(x, dtype=torch.bool)
+        selected = x + 1.0
+        unselected = x - 1.0
+        return torch.where(condition, selected, unselected)
+
+
 class _RemainderDividendAtLeastDivisorModel(nn.Module):
     """Model where the remainder divisor must remain value-sensitive."""
 
@@ -1694,6 +1834,42 @@ def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
     matches = [layer for layer in trace.layer_list if layer.func_name == func_name]
     assert len(matches) == 1
     return matches[0]
+
+
+def _assert_custom_exemption_for_arg(
+    model: nn.Module,
+    x: torch.Tensor,
+    func_name: str,
+    arg_position: int,
+    expected: bool,
+) -> None:
+    """Assert direct and registry perturbation exemption results for one arg.
+
+    Parameters
+    ----------
+    model:
+        Model to trace and validate.
+    x:
+        Input tensor.
+    func_name:
+        Captured function name to inspect.
+    arg_position:
+        Positional parent arg slot to perturb.
+    expected:
+        Expected exemption result.
+    """
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        layer = _only_layer_with_func_name(trace, func_name)
+        parent = layer.parent_arg_positions["args"][arg_position]
+
+        assert CUSTOM_EXEMPTION_CHECKS[func_name](trace, layer, [parent]) is expected
+        assert _check_perturbation_exemptions(trace, layer, [parent]) is expected
+    finally:
+        trace.cleanup()
 
 
 # ---------------------------------------------------------------------------
@@ -2081,6 +2257,60 @@ def test_validation_with_functional_masked_fill() -> None:
     assert validate_forward_pass(model, x)
 
 
+def test_masked_fill_mixed_mask_input_branch_is_not_exempt() -> None:
+    """A mixed ``masked_fill`` mask leaves the input branch value-sensitive."""
+
+    model = _MaskedFillBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 0, False)
+
+
+def test_masked_fill_mixed_mask_fill_value_branch_is_not_exempt() -> None:
+    """A mixed ``masked_fill`` mask leaves the fill-value branch value-sensitive."""
+
+    model = _MaskedFillBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 2, False)
+
+
+def test_masked_fill_all_true_mask_input_branch_is_exempt() -> None:
+    """An all-true saved mask overwrites every input element."""
+
+    model = _MaskedFillBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 0, True)
+
+
+def test_masked_fill_all_true_mask_fill_value_branch_is_not_exempt() -> None:
+    """An all-true saved mask selects the fill-value branch everywhere."""
+
+    model = _MaskedFillBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 2, False)
+
+
+def test_masked_fill_all_false_mask_fill_value_branch_is_exempt() -> None:
+    """An all-false saved mask never selects the tensor fill-value branch."""
+
+    model = _MaskedFillBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 2, True)
+
+
+def test_masked_fill_all_false_mask_input_branch_is_not_exempt() -> None:
+    """An all-false saved mask selects the input branch everywhere."""
+
+    model = _MaskedFillBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 0, False)
+
+
 def test_validation_with_setitem_slice_full_overwrite() -> None:
     """Perturbing a fully overwritten ``__setitem__`` destination slice is exempt."""
 
@@ -2292,6 +2522,146 @@ def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
         trace.cleanup()
 
 
+def test_index_put_accumulate_positional_destination_is_not_exempt() -> None:
+    """``index_put_`` with positional ``accumulate=True`` keeps destination values live."""
+
+    class IndexPutAccumulatePositionalModel(nn.Module):
+        """Model that accumulates into every destination row."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Accumulate replacement rows into the destination.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after accumulating values.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x + 1.0
+            destination.index_put_((idx,), replacement, True)
+            return destination
+
+    model = IndexPutAccumulatePositionalModel()
+    x = torch.randn(4, 5)
+
+    _assert_custom_exemption_for_arg(model, x, "index_put_", 0, False)
+
+
+def test_index_put_accumulate_kwarg_destination_is_not_exempt() -> None:
+    """``index_put_`` with kwarg ``accumulate=True`` keeps destination values live."""
+
+    class IndexPutAccumulateKwargModel(nn.Module):
+        """Model that accumulates into every destination row via kwarg."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Accumulate replacement rows into the destination.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after accumulating values.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x + 1.0
+            destination.index_put_((idx,), replacement, accumulate=True)
+            return destination
+
+    model = IndexPutAccumulateKwargModel()
+    x = torch.randn(4, 5)
+
+    _assert_custom_exemption_for_arg(model, x, "index_put_", 0, False)
+
+
+def test_index_put_duplicate_integer_indices_destination_is_not_exempt() -> None:
+    """Duplicate integer indices do not prove full destination coverage."""
+
+    class IndexPutDuplicateIndexModel(nn.Module):
+        """Model whose duplicate row indices leave one destination row live."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite with duplicate integer row indices.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(4, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after an ``index_put_`` with duplicate rows.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.tensor([0, 0, 1, 2], device=x.device)
+            replacement = x[idx] + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutDuplicateIndexModel()
+    x = torch.randn(4, 5)
+
+    _assert_custom_exemption_for_arg(model, x, "index_put_", 0, False)
+
+
+def test_index_put_index_parent_is_not_exempt() -> None:
+    """The ``index_put_`` exemption must never apply to the index parent."""
+
+    class IndexPutOverwriteModel(nn.Module):
+        """Model that fully overwrites a destination tensor via ``index_put_``."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite every destination row with a replacement tensor.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after a full ``index_put_`` overwrite.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutOverwriteModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        index_parent = index_put_layer.parent_arg_positions["args"][(1, 0)]
+
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [index_parent]) is False
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [index_parent]) is False
+    finally:
+        trace.cleanup()
+
+
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
     """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
 
@@ -2348,6 +2718,115 @@ def test_where_different_branches_are_not_condition_exempt() -> None:
 
         assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [condition_parent]) is False
         assert _check_perturbation_exemptions(trace, where_layer, [condition_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_where_mixed_condition_true_branch_is_not_exempt() -> None:
+    """A mixed saved condition leaves the true branch value-sensitive."""
+
+    model = _WhereBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, False)
+
+
+def test_where_mixed_condition_false_branch_is_not_exempt() -> None:
+    """A mixed saved condition leaves the false branch value-sensitive."""
+
+    model = _WhereBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 2, False)
+
+
+def test_where_shared_branch_mixed_condition_is_not_branch_exempt() -> None:
+    """Equal-content ``where`` branches do not create branch-parent exemptions."""
+
+    model = _WhereSharedBranchModel()
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, False)
+    _assert_custom_exemption_for_arg(model, x, "where", 2, False)
+
+
+def test_where_all_false_condition_true_branch_is_exempt() -> None:
+    """An all-false saved condition never selects the true branch."""
+
+    model = _WhereBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, True)
+
+
+def test_where_all_false_condition_false_branch_is_not_exempt() -> None:
+    """An all-false saved condition selects the false branch everywhere."""
+
+    model = _WhereBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 2, False)
+
+
+def test_where_all_true_condition_false_branch_is_exempt() -> None:
+    """An all-true saved condition never selects the false branch."""
+
+    model = _WhereBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 2, True)
+
+
+def test_where_all_true_condition_true_branch_is_not_exempt() -> None:
+    """An all-true saved condition selects the true branch everywhere."""
+
+    model = _WhereBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, False)
+
+
+def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None:
+    """Branch selectedness must use saved args, not mutable parent outputs."""
+
+    model = _WhereBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        where_layer = _only_layer_with_func_name(trace, "where")
+        condition_parent = where_layer.parent_arg_positions["args"][0]
+        true_parent = where_layer.parent_arg_positions["args"][1]
+        trace[condition_parent].out = torch.ones_like(trace[condition_parent].out)
+
+        assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [true_parent]) is True
+        assert _check_perturbation_exemptions(trace, where_layer, [true_parent]) is True
+    finally:
+        trace.cleanup()
+
+
+def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> None:
+    """TRIPWIRE: branch exemptions must not bless functionless placeholders."""
+
+    model = _UnselectedWherePlaceholderModel()
+    x = torch.randn(2, 3)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        where_layer = _only_layer_with_func_name(trace, "where")
+        unselected_parent = where_layer.parent_arg_positions["args"][2]
+
+        assert _check_perturbation_exemptions(trace, where_layer, [unselected_parent]) is True
+
+        placeholder = trace[unselected_parent]
+        placeholder.func = None
+        placeholder.func_name = "plain_placeholder"
+        placeholder.intervention_replaced = False
+        placeholder.is_internal_source = False
+
+        ground_truth = [model(x).detach().clone()]
+        with pytest.raises(MetadataInvariantError, match="func is not callable"):
+            trace.validate_forward_pass(ground_truth, validate_metadata=True)
     finally:
         trace.cleanup()
 

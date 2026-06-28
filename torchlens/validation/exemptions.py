@@ -365,6 +365,33 @@ def _perturbed_parent_is_arg_position(
     return arg_positions.get(position) == layers_to_perturb[0]
 
 
+def _perturbed_parent_arg_positions(layer: Op, layers_to_perturb: List[str]) -> set[int]:
+    """Return positional arg slots occupied by the perturbed parent.
+
+    Parameters
+    ----------
+    layer:
+        Captured op whose parent-argument map is being inspected.
+    layers_to_perturb:
+        Single perturbed parent label supplied by validation.
+
+    Returns
+    -------
+    set[int]
+        Positional arg indices whose parent label is the perturbed layer. Missing
+        or ambiguous metadata returns an empty set so callers fail closed.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return set()
+    arg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    return {
+        position
+        for position, parent_label in arg_positions.items()
+        if parent_label == layers_to_perturb[0]
+    }
+
+
 def _index_put_destination_is_fully_overwritten(
     perturbed_tensor: torch.Tensor | None,
     layer: Op,
@@ -590,9 +617,23 @@ def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
 
 
 def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
-    """Exempt where when the perturbed condition selects between equal branches."""
-    perturbed_tensor = self[layers_to_perturb[0]].out
+    """Exempt ``where`` parents only when saved value semantics prove irrelevance.
+
+    The condition parent is irrelevant when the saved true/false branches are
+    equal after broadcasting. A branch parent is irrelevant only when the SAVED
+    condition selects the opposite branch at every element in the full broadcast
+    output shape. Branch identity is taken from ``parent_arg_positions`` and the
+    saved condition is the only selectedness source; any missing metadata,
+    non-tensor saved arg, duplicate branch parent, or broadcast failure returns
+    False.
+    """
+
+    perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
+    if not perturbed_positions:
+        return False
     args = layer.saved_args
+    if args is None:
+        return False
     if len(args) < 3:
         return False
     condition, true_branch, false_branch = args[:3]
@@ -602,10 +643,147 @@ def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) 
         and isinstance(false_branch, torch.Tensor)
     ):
         return False
-    if not torch.equal(perturbed_tensor, condition):
+    if 0 in perturbed_positions:
+        if perturbed_positions != {0}:
+            return False
+        try:
+            true_values, false_values = torch.broadcast_tensors(true_branch, false_branch)
+        except RuntimeError:
+            return False
+        return bool(torch.equal(true_values, false_values))
+    if not perturbed_positions.issubset({1, 2}):
         return False
-    true_values, false_values = torch.broadcast_tensors(true_branch, false_branch)
-    return bool(torch.equal(true_values, false_values))
+    if len(perturbed_positions) != 1:
+        return False
+    selectedness = _where_saved_condition_selectedness(condition, true_branch, false_branch)
+    if selectedness is None:
+        return False
+    selected_true, total_elements = selectedness
+    if 1 in perturbed_positions:
+        return selected_true == 0
+    if 2 in perturbed_positions:
+        return selected_true == total_elements
+    return False
+
+
+def _where_saved_condition_selectedness(
+    condition: torch.Tensor,
+    true_branch: torch.Tensor,
+    false_branch: torch.Tensor,
+) -> tuple[int, int] | None:
+    """Return selected true-branch count over the full saved ``where`` shape.
+
+    Parameters
+    ----------
+    condition:
+        Saved ``where`` condition tensor.
+    true_branch:
+        Saved true-branch tensor.
+    false_branch:
+        Saved false-branch tensor.
+
+    Returns
+    -------
+    tuple[int, int] | None
+        ``(true_selected_count, total_elements)`` after broadcasting the saved
+        condition to ``broadcast_shapes(condition, true_branch, false_branch)``.
+        Returns ``None`` on empty output or any broadcast/count failure.
+    """
+
+    try:
+        condition_bool = condition.to(dtype=torch.bool)
+        output_shape = torch.broadcast_shapes(
+            tuple(condition_bool.shape),
+            tuple(true_branch.shape),
+            tuple(false_branch.shape),
+        )
+        broadcast_condition = torch.broadcast_to(condition_bool, output_shape)
+        total_elements = int(broadcast_condition.numel())
+        if total_elements == 0:
+            return None
+        true_selected = int(torch.count_nonzero(broadcast_condition).item())
+    except (TypeError, RuntimeError):
+        return None
+    return true_selected, total_elements
+
+
+def _masked_fill_saved_mask_selectedness(
+    mask: torch.Tensor,
+    input_tensor: torch.Tensor,
+    value: torch.Tensor,
+) -> tuple[int, int] | None:
+    """Return selected fill-value count over the full saved ``masked_fill`` shape.
+
+    Parameters
+    ----------
+    mask:
+        Saved boolean mask argument.
+    input_tensor:
+        Saved input/destination tensor.
+    value:
+        Saved scalar tensor fill value.
+
+    Returns
+    -------
+    tuple[int, int] | None
+        ``(fill_selected_count, total_elements)`` after broadcasting the saved
+        mask over the full input/value output shape. Returns ``None`` if the
+        saved data cannot prove exact selectedness.
+    """
+
+    try:
+        mask_bool = mask.to(dtype=torch.bool)
+        output_shape = torch.broadcast_shapes(
+            tuple(mask_bool.shape),
+            tuple(input_tensor.shape),
+            tuple(value.shape),
+        )
+        broadcast_mask = torch.broadcast_to(mask_bool, output_shape)
+        total_elements = int(broadcast_mask.numel())
+        if total_elements == 0:
+            return None
+        fill_selected = int(torch.count_nonzero(broadcast_mask).item())
+    except (TypeError, RuntimeError):
+        return None
+    return fill_selected, total_elements
+
+
+def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
+    """Exempt ``masked_fill`` value parents only when entirely unselected.
+
+    ``masked_fill(input, mask, value)`` is equivalent to
+    ``where(mask, value, input)``. The input parent is irrelevant only when the
+    saved mask is true at every output element; a tensor fill-value parent is
+    irrelevant only when the saved mask is false at every output element. The
+    mask itself remains handled by the structural-position registry.
+    """
+
+    perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
+    if not perturbed_positions:
+        return False
+    args = layer.saved_args
+    if args is None or len(args) < 3:
+        return False
+    input_tensor, mask, value = args[:3]
+    if not (
+        isinstance(input_tensor, torch.Tensor)
+        and isinstance(mask, torch.Tensor)
+        and isinstance(value, torch.Tensor)
+    ):
+        return False
+    if not perturbed_positions.issubset({0, 2}):
+        return False
+    if len(perturbed_positions) != 1:
+        return False
+    selectedness = _masked_fill_saved_mask_selectedness(mask, input_tensor, value)
+    if selectedness is None:
+        return False
+    fill_selected, total_elements = selectedness
+    if 0 in perturbed_positions:
+        return fill_selected == total_elements
+    if 2 in perturbed_positions:
+        return fill_selected == 0
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -621,6 +799,9 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", Op, List[str]], bool]] = {
     "scatter": _check_scatter_exempt,
     "scatter_": _check_scatter_exempt,
     "where": _check_where_exempt,
+    "maskedfill": _check_masked_fill_exempt,
+    "masked_fill": _check_masked_fill_exempt,
+    "masked_fill_": _check_masked_fill_exempt,
 }
 
 
