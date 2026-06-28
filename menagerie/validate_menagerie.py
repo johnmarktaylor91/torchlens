@@ -2439,6 +2439,46 @@ def latest_peak_rss_estimates(ledger_db: Path | None = None) -> dict[str, int]:
     return {str(row["stable_id"]): int(row["peak_rss_mb"]) for row in rows}
 
 
+def latest_scheduler_memory_estimates(ledger_db: Path | None = None) -> dict[str, int]:
+    """Return scheduler memory estimates keyed by stable model ID.
+
+    Parameters
+    ----------
+    ledger_db:
+        Optional verification ledger path.
+
+    Returns
+    -------
+    dict[str, int]
+        Latest measured peak RSS values plus high-floor estimates for models
+        that RAM-failed locally without recording a positive peak.
+    """
+
+    estimates = latest_peak_rss_estimates(ledger_db)
+    resolved_ledger_db = _resolve_verification_db(ledger_db)
+    with connect_ledger(_resolve_verification_db(ledger_db)) as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT stable_id
+            FROM verification_runs
+            WHERE scope = 'forward'
+              AND runner_host = ?
+            """,
+            (cluster_runner.socket.gethostname(),),
+        ).fetchall()
+    high_floor_mb = cluster_runner._largest_tier(
+        cluster_runner.ClusterConfig()
+    ).worker_memory_cap_gb
+    high_floor_mb *= MB_PER_GB
+    for row in rows:
+        stable_id = str(row["stable_id"])
+        if estimates.get(stable_id, 0) <= 0 and cluster_runner._had_local_ram_failure(
+            stable_id, resolved_ledger_db
+        ):
+            estimates[stable_id] = high_floor_mb
+    return estimates
+
+
 def latest_duration_estimates(ledger_db: Path | None = None) -> dict[str, float]:
     """Return latest recorded durations keyed by stable model ID.
 
@@ -4916,6 +4956,7 @@ def run(args: argparse.Namespace) -> int:
     # selected. The main thread does ALL manifest appends and disk bookkeeping
     # single-threaded as futures complete.
     jobs = max(1, args.jobs)
+    worker_torch_threads = resolve_worker_torch_threads(args.worker_torch_threads, jobs)
     route_ledger = _resolve_verification_db(args.verification_db)
     local_routes = {
         row.stable_id: cluster_runner.route_resources(
@@ -4949,7 +4990,7 @@ def run(args: argparse.Namespace) -> int:
     memory_floor_gb = _resolve_memory_floor_gb(args.memory_floor_gb)
     memory_floor_mb = max(1, int(memory_floor_gb * MB_PER_GB))
     max_concurrent_big_models = max(1, args.max_concurrent_big_models)
-    ledger_memory_estimates = latest_peak_rss_estimates(args.verification_db)
+    ledger_memory_estimates = latest_scheduler_memory_estimates(args.verification_db)
     pending = _build_validation_work_items(runnable, ledger_memory_estimates)
     pending.sort(key=lambda item: _lpt_sort_key(item, duration_estimates), reverse=True)
 
@@ -4996,7 +5037,7 @@ def run(args: argparse.Namespace) -> int:
                 row_timeout,
                 tmp_dir=tmp_dir,
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
-                worker_torch_threads=args.worker_torch_threads,
+                worker_torch_threads=worker_torch_threads,
                 input_scale=row_input_scale,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
@@ -5016,8 +5057,8 @@ def run(args: argparse.Namespace) -> int:
         worker_cap_safe_budget_gb=worker_cap_safe_budget_gb,
         memory_floor_gb=round(memory_floor_gb, 3),
         max_concurrent_big_models=max_concurrent_big_models,
-        worker_torch_threads=args.worker_torch_threads,
-        jobs_times_worker_torch_threads=jobs * args.worker_torch_threads,
+        worker_torch_threads=worker_torch_threads,
+        jobs_times_worker_torch_threads=jobs * worker_torch_threads,
         default_unknown_memory_gb=round(DEFAULT_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         heavy_unknown_memory_gb=round(HEAVY_UNKNOWN_MEMORY_MB / MB_PER_GB, 3),
         device=args.device,

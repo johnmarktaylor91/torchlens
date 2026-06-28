@@ -1172,6 +1172,12 @@ def node_tier_for_row(
     stable_id = _row_value(row, "stable_id")
     entry = GIANT_REGISTRY.get(stable_id)
     status, measured_peak_mb = _latest_status_and_peak(stable_id, ledger)
+    max_measured_peak_mb = _max_measured_peak_mb(stable_id, ledger, latest_peak_mb=measured_peak_mb)
+    if _had_local_ram_failure(stable_id, ledger):
+        if max_measured_peak_mb is not None and max_measured_peak_mb > 0:
+            measured_peak_mb = max_measured_peak_mb
+        else:
+            return _largest_tier(active_config)
     if (
         status == "oom"
         and entry is None

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from menagerie.catalog import CatalogRow
+from menagerie.ledger import VerificationRun, append_verification_run, connect
 from menagerie.cluster_runner import ResourceRoute
 from menagerie.runtime import DependencyPlan
 from menagerie.validate_menagerie import (
@@ -36,6 +37,7 @@ from menagerie.validate_menagerie import (
     _resolve_row_device,
     default_worker_torch_threads,
     default_validation_jobs,
+    latest_scheduler_memory_estimates,
     resolve_worker_torch_threads,
     resolve_timeout_ceiling_sec,
     validate_one,
@@ -95,6 +97,57 @@ def _plan() -> DependencyPlan:
         top_modules=(),
         environment="unit",
     )
+
+
+def _run(**overrides: object) -> VerificationRun:
+    """Build a compact verification run fixture.
+
+    Parameters
+    ----------
+    overrides:
+        Field overrides for the default run.
+
+    Returns
+    -------
+    VerificationRun
+        Verification run.
+    """
+
+    data = {
+        "stable_id": "m1",
+        "recipe_revision_sha256": "recipe-a",
+        "name": "UnitNet",
+        "zoo": "unit-zoo",
+        "variant": "",
+        "scope": "forward",
+        "status": "passed",
+        "forward_pass": 1,
+        "backward_pass": None,
+        "backward_na_reason": None,
+        "metadata_ok": 1,
+        "n_ops": 3,
+        "graph_shape_hash": "shape-a",
+        "svg_sha256": None,
+        "torchlens_version": "tl-test",
+        "torch_version": "torch-test",
+        "python_version": "py-test",
+        "device_requested": "cpu",
+        "device_actual": "cpu",
+        "env_hash": "env-a",
+        "lock_hash": "lock-a",
+        "torchlens_source_hash": "source-a",
+        "input_scale": 1.0,
+        "runner_host": "workstation",
+        "started_at": "2026-06-25T00:00:00+00:00",
+        "finished_at": "2026-06-25T00:00:01+00:00",
+        "duration_sec": 1.0,
+        "peak_rss_mb": 64,
+        "error_class": None,
+        "error_message": None,
+        "run_id": "run-a",
+    }
+    data.update(overrides)
+    return VerificationRun(**data)  # type: ignore[arg-type]
 
 
 def _item(estimated_gb: int, stable_id: str = "m1", name: str = "UnitNet") -> ValidationWorkItem:
@@ -853,6 +906,41 @@ def test_unmeasured_model_keeps_low_default_estimate() -> None:
 
     assert estimate.source == "default"
     assert estimate.estimated_mb == 4 * MB_PER_GB
+
+
+def test_local_oom_scheduler_estimate_uses_high_floor_not_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cluster-escalated local OOM receives high scheduler memory, not 4GB."""
+
+    local_host = "workstation"
+    monkeypatch.setattr("menagerie.cluster_runner.socket.gethostname", lambda: local_host)
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                run_id="local-oom",
+                stable_id="m9025",
+                name="samvit_large",
+                runner_host=local_host,
+                status="oom",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                graph_shape_hash=None,
+                peak_rss_mb=None,
+                error_class="oom",
+            ),
+        )
+
+    estimates = latest_scheduler_memory_estimates(ledger_db)
+    estimate = _memory_estimate_for_row(_row(stable_id="m9025", name="samvit_large"), estimates)
+
+    assert estimates["m9025"] == 960 * MB_PER_GB
+    assert estimate.source == "ledger"
+    assert estimate.estimated_mb > 4 * MB_PER_GB
 
 
 def test_big_model_concurrency_cap_blocks_models_beyond_cap() -> None:

@@ -331,6 +331,38 @@ def test_node_tier_right_sizes_incrementally_with_terabyte_escape() -> None:
     assert node_tier_for_row(_row(stable_id="huge"), ledger={"huge": 700 * 1024}).mem_gb == 1000
 
 
+def test_local_oom_escalation_without_peak_gets_largest_node_tier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A local OOM escalation with no peak must never receive a small default tier."""
+
+    local_host = "workstation"
+    monkeypatch.setattr("menagerie.cluster_runner.socket.gethostname", lambda: local_host)
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                run_id="local-oom",
+                stable_id="m9025",
+                name="samvit_large",
+                runner_host=local_host,
+                status="oom",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                peak_rss_mb=None,
+                error_class="oom",
+            ),
+        )
+
+    tier = node_tier_for_row(_row(stable_id="m9025", name="samvit_large"), ledger=ledger_db)
+
+    assert tier.mem_gb == 1000
+    assert tier.worker_memory_cap_gb == 960
+
+
 def test_repeated_unregistered_moe_oom_escalates_to_terabyte(tmp_path: Path) -> None:
     """Repeated OOMs for unregistered MoE monsters escalate to the largest tier."""
 

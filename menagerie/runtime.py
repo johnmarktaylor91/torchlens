@@ -80,6 +80,7 @@ CANONICAL_FEATURE_PATTERNS = (
 MODULE_PACKAGE_MAP = {
     "clip": "clip",
     "diffusers": "diffusers",
+    "effdet": "effdet",
     "mmcv": "mmcv",
     "mmdet": "mmdet",
     "mmengine": "mmengine",
