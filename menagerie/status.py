@@ -442,9 +442,13 @@ def build_run_health(
     for row in rows:
         stable_id = str(row.get("stable_id", ""))
         status = str(row.get("status", ""))
-        if status in {"failed:killed", "failed:oom", "failed:native_crash"}:
+        expected_status = expected.get(stable_id)
+        if (
+            status in {"failed:killed", "failed:oom", "failed:native_crash"}
+            and expected_status != status
+        ):
             worker_deaths += 1
-        if status.startswith("failed:") and expected.get(stable_id) != status:
+        if status.startswith("failed:") and expected_status != status:
             unexpected_failures += 1
         if status.startswith("skipped:") and status not in KNOWN_JUSTIFIED_SKIP_STATUSES:
             unexpected_skips += 1
