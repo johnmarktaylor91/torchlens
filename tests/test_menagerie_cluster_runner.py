@@ -1018,6 +1018,62 @@ def test_worker_forwards_no_build_catalog_to_validator(tmp_path: Path) -> None:
     assert "--base-env-only" in worker_cmd
 
 
+def test_worker_child_failure_persists_captured_output_in_ledger(tmp_path: Path) -> None:
+    """A failed child validator exports a failed row with stdout/stderr in the ledger."""
+
+    _write_catalog(tmp_path, [_row(stable_id="m1", name="UnitNet")])
+    assignment = ClusterAssignment(
+        "campaign-a",
+        "attempt-a",
+        "assign-a",
+        "m1",
+        0,
+        180,
+        170,
+        "nklab",
+        "unit",
+    )
+    manifest_path = tmp_path / "assignments.json"
+    write_assignment_manifest((assignment,), manifest_path)
+    ledger_db = tmp_path / "verification.db"
+    connect(ledger_db).close()
+
+    def fake_runner(command: Any) -> subprocess.CompletedProcess[str]:
+        """Raise a child validator failure with captured output."""
+
+        raise subprocess.CalledProcessError(
+            2,
+            tuple(str(item) for item in command),
+            output="stdout says dependency blew up",
+            stderr="stderr says CUDA unavailable",
+        )
+
+    result = run_worker_assignment(
+        manifest_path,
+        0,
+        repo_root=tmp_path,
+        result_dir=tmp_path / "results",
+        verification_db=ledger_db,
+        command_runner=fake_runner,
+    )
+
+    with connect(ledger_db) as conn:
+        row = conn.execute(
+            """
+            SELECT status, error_class, error_message
+            FROM current_verification
+            WHERE stable_id = 'm1'
+            """
+        ).fetchone()
+
+    assert result.run.status == "failed"
+    assert row["status"] == "failed"
+    assert row["error_class"] == "failed:cluster_job_failed"
+    assert "stdout says dependency blew up" in row["error_message"]
+    assert "stderr says CUDA unavailable" in row["error_message"]
+    assert (tmp_path / "results" / "assign-a.jsonl").exists()
+
+
 def _giant_assignment() -> ClusterAssignment:
     """Return a base-env giant assignment fixture."""
 

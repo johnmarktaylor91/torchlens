@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from typing import Any
 import pytest
 
 from menagerie import validate_menagerie
-from menagerie.catalog import CatalogRow, write_catalog
+from menagerie.catalog import SOURCE_JSONL, CatalogRow, write_catalog
 from menagerie.cluster_runner import (
     ClusterAssignment,
     ClusterConfig,
@@ -19,6 +20,7 @@ from menagerie.cluster_runner import (
     NodeTier,
     probe_local_gpu_vram_bytes,
     render_sbatch_script,
+    requires_cuda,
     route_resources,
 )
 from menagerie.ledger import VerificationRun, append_verification_run, connect
@@ -120,6 +122,55 @@ def test_resource_route_cuda_required_fits_local_gpu(monkeypatch: pytest.MonkeyP
     assert route.lane == "local-gpu"
     assert route.device == "cuda"
     assert route.cluster is False
+
+
+def test_catalog_cuda_required_ids_route_to_local_rtx_2080_ti() -> None:
+    """Catalog-confirmed CUDA-only recipes route to the local 11 GiB GPU."""
+
+    cuda_ids = {
+        "m4921",
+        "m4922",
+        "m4928",
+        "m4932",
+        "m5624",
+        "m5625",
+        "m5626",
+        "m11955",
+        "m11956",
+    }
+
+    for stable_id in cuda_ids:
+        row = _row(stable_id=stable_id, name="CudaOnly 100M")
+        route = route_resources(row, ledger={}, local_gpu_vram_bytes=11 * 1024**3)
+
+        assert requires_cuda(row)
+        assert route.lane == "local-gpu"
+        assert route.device == "cuda"
+        assert route.cluster is False
+
+
+def test_cuda_required_catalog_recipes_request_cuda() -> None:
+    """The hard-CUDA recipe records carry explicit CUDA device metadata."""
+
+    expected = {
+        ("fla_gated_deltanet", ""),
+        ("fla_gated_deltanet2", ""),
+        ("fla_gated_deltaproduct", ""),
+        ("fla_gla", ""),
+        ("lightweight_gan_discriminator", ""),
+        ("lightweight_gan_generator", ""),
+        ("lightweight_gan_simple_decoder", ""),
+        ("lightweight_gan_discriminator", "variant-2"),
+        ("lightweight_gan_generator", "variant-2"),
+    }
+    records = {
+        (record["name"], record.get("variant", "")): record
+        for record in (json.loads(line) for line in SOURCE_JSONL.read_text().splitlines())
+        if (record["name"], record.get("variant", "")) in expected
+    }
+
+    assert set(records) == expected
+    assert all(record["recipe"].get("device_requested") == "cuda" for record in records.values())
 
 
 def test_resource_route_cuda_required_no_fit_uses_cluster_gpu(
@@ -238,10 +289,11 @@ def test_resource_routing_does_not_initialize_torch_cuda() -> None:
     """Route calculation must not initialize CUDA in the orchestrator process."""
 
     torch = pytest.importorskip("torch")
+    cuda_initialized = torch.cuda.is_initialized()
 
     route_resources(_row(stable_id="m-small"), ledger={}, local_gpu_vram_bytes=None)
 
-    assert torch.cuda.is_initialized() is False
+    assert torch.cuda.is_initialized() is cuda_initialized
 
 
 def _run(**overrides: object) -> VerificationRun:

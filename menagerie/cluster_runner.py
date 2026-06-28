@@ -405,11 +405,20 @@ class ResourceRoute:
     reason: str
 
 
-# Populate only with catalog-confirmed hard-CUDA stable IDs, such as rows whose
-# honest validation failure says "Nvidia GPU with CUDA" or install failures for
-# CUDA-only tinycudann stacks. Empty is the safe local-first default: every
-# CPU-traceable row stays local CPU unless measured RAM evidence routes it.
-REQUIRES_CUDA: dict[str, str] = {}
+# Catalog-confirmed hard-CUDA stable IDs. These rows have no honest CPU validation
+# path (Triton/CUDA kernels or package-level CUDA assertions), so local-first means
+# local GPU first when the row fits the workstation GPU, not CPU.
+REQUIRES_CUDA: dict[str, str] = {
+    "m4921": "FLA gated_deltanet requires CUDA/Triton kernels",
+    "m4922": "FLA gated_deltanet2 requires CUDA/Triton kernels",
+    "m4928": "FLA gated_deltaproduct requires CUDA/Triton kernels",
+    "m4932": "FLA GLA requires CUDA/Triton kernels",
+    "m5624": "lightweight-GAN discriminator hard-requires CUDA",
+    "m5625": "lightweight-GAN generator hard-requires CUDA",
+    "m5626": "lightweight-GAN simple decoder hard-requires CUDA",
+    "m11955": "lightweight-GAN discriminator hard-requires CUDA",
+    "m11956": "lightweight-GAN generator hard-requires CUDA",
+}
 
 
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
@@ -1706,7 +1715,40 @@ def run_worker_assignment(
     previous_verification_db = os.environ.get(ENV_VERIFICATION_DB)
     os.environ[ENV_VERIFICATION_DB] = str(resolved_verification_db)
     try:
-        command_runner(command)
+        try:
+            command_runner(command)
+        except subprocess.CalledProcessError as exc:
+            # C1: surface the child validator's captured stdout/stderr instead of
+            # swallowing it. Without this, a giant/cluster failure shows only a bare
+            # "returned non-zero exit status N" in the slurm .err -- the real reason
+            # (OOM, dependency skip, etc.) is captured by capture_output=True and lost.
+            if exc.stdout:
+                sys.stderr.write(
+                    "=== child validator stdout (surfaced by C1) ===\n" + exc.stdout + "\n"
+                )
+            if exc.stderr:
+                sys.stderr.write(
+                    "=== child validator stderr (surfaced by C1) ===\n" + exc.stderr + "\n"
+                )
+            sys.stderr.flush()
+            row = _append_child_failure_run(
+                assignment,
+                catalog_db=assignment_manifest.parent / "catalog.db",
+                ledger_db=resolved_verification_db,
+                exc=exc,
+            )
+            result = ClusterResultRow(
+                campaign_id=assignment.campaign_id,
+                attempt_id=assignment.attempt_id,
+                assignment_id=assignment.assignment_id,
+                run=row,
+            )
+            result_path = result_dir / f"{assignment.assignment_id}.jsonl"
+            write_result_rows_jsonl((result,), result_path)
+            write_result_manifest(
+                (result,), result_dir / f"{assignment.assignment_id}.manifest.json"
+            )
+            return result
     finally:
         if previous_verification_db is None:
             os.environ.pop(ENV_VERIFICATION_DB, None)
@@ -1726,6 +1768,148 @@ def run_worker_assignment(
     write_result_rows_jsonl((result,), result_path)
     write_result_manifest((result,), result_dir / f"{assignment.assignment_id}.manifest.json")
     return result
+
+
+def _catalog_row_for_assignment(stable_id: str, catalog_db: Path) -> CatalogRow:
+    """Return the catalog row for a cluster worker assignment.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity from the assignment manifest.
+    catalog_db:
+        Snapshot catalog database staged beside the assignment manifest.
+
+    Returns
+    -------
+    CatalogRow
+        Matching catalog row.
+    """
+
+    with sqlite3.connect(catalog_db) as conn:
+        row = conn.execute(
+            """
+            SELECT model_id, display_index, stable_id, name, variant, family,
+                   family_normalized, domain, zoo, constructor_call, input_shape,
+                   input_dtype, era, verified, notes, source, recipe_revision_sha256,
+                   input_is_real, verification_expectation, quarantine
+            FROM models
+            WHERE stable_id = ?
+            """,
+            (stable_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError(f"no catalog row for stable_id {stable_id}")
+    return CatalogRow(
+        model_id=int(row[0]),
+        display_index=int(row[1]),
+        stable_id=str(row[2]),
+        name=str(row[3]),
+        variant=str(row[4]),
+        family=str(row[5]),
+        family_normalized=str(row[6]),
+        domain=str(row[7]),
+        zoo=str(row[8]),
+        constructor_call=str(row[9]),
+        input_shape=str(row[10]),
+        input_dtype=str(row[11]),
+        era=str(row[12]),
+        verified=bool(row[13]),
+        notes=str(row[14]),
+        source=str(row[15]),
+        recipe_revision_sha256=str(row[16]),
+        input_is_real=bool(row[17]),
+        verification_expectation=str(row[18]),
+        quarantine=bool(row[19]),
+    )
+
+
+def _child_failure_message(exc: subprocess.CalledProcessError) -> str:
+    """Return an honest ledger message for a failed child validator process.
+
+    Parameters
+    ----------
+    exc:
+        Child validator process failure with captured output.
+
+    Returns
+    -------
+    str
+        Compact message containing the return code plus captured stdout/stderr.
+    """
+
+    parts = [f"child validator failed with exit code {exc.returncode}"]
+    if exc.stdout:
+        parts.append("stdout:\n" + exc.stdout.strip())
+    if exc.stderr:
+        parts.append("stderr:\n" + exc.stderr.strip())
+    return "\n\n".join(parts)
+
+
+def _append_child_failure_run(
+    assignment: ClusterAssignment,
+    *,
+    catalog_db: Path,
+    ledger_db: Path,
+    exc: subprocess.CalledProcessError,
+) -> VerificationRun:
+    """Append and return a failed ledger row for a crashed worker child.
+
+    Parameters
+    ----------
+    assignment:
+        Cluster assignment being executed.
+    catalog_db:
+        Snapshot catalog database staged beside the assignment manifest.
+    ledger_db:
+        Verification ledger path used by the child validator.
+    exc:
+        Child validator process failure.
+
+    Returns
+    -------
+    VerificationRun
+        Appended failed row.
+    """
+
+    row = _catalog_row_for_assignment(assignment.stable_id, catalog_db)
+    started_at = utc_now()
+    finished_at = utc_now()
+    run = VerificationRun(
+        stable_id=row.stable_id,
+        recipe_revision_sha256=row.recipe_revision_sha256,
+        name=row.name,
+        zoo=row.zoo,
+        variant=row.variant,
+        scope="forward",
+        status="failed",
+        forward_pass=None,
+        backward_pass=None,
+        backward_na_reason=None,
+        metadata_ok=None,
+        n_ops=None,
+        graph_shape_hash=None,
+        svg_sha256=None,
+        torchlens_version=LEGACY_UNKNOWN,
+        torch_version=LEGACY_UNKNOWN,
+        python_version=sys.version.split()[0],
+        device_requested="cuda" if assignment.gpu else "cpu",
+        device_actual=None,
+        env_hash=os.environ.get("TORCHLENS_MENAGERIE_ENV_HASH", LEGACY_UNKNOWN),
+        lock_hash=os.environ.get("TORCHLENS_MENAGERIE_LOCK_HASH", LEGACY_UNKNOWN),
+        torchlens_source_hash=os.environ.get("TORCHLENS_SOURCE_HASH", LEGACY_UNKNOWN),
+        input_scale=assignment.input_scale,
+        runner_host=socket.gethostname(),
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_sec=0.0,
+        peak_rss_mb=None,
+        error_class="failed:cluster_job_failed",
+        error_message=_child_failure_message(exc),
+    )
+    with connect_ledger(ledger_db) as conn:
+        append_verification_run(conn, run)
+    return latest_verification_run_for_stable_id(row.stable_id, ledger_db=ledger_db)
 
 
 def latest_verification_run_for_stable_id(

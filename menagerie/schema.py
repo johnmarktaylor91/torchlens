@@ -103,6 +103,7 @@ class ImportCallableRecipe(BaseModel):
     expr: str
     imports: list[str] = Field(default_factory=list)
     input: InputBuilder
+    device_requested: Literal["cpu", "cuda"] | None = None
 
 
 class ExecStringRecipe(BaseModel):
@@ -116,6 +117,7 @@ class ExecStringRecipe(BaseModel):
     input: InputBuilder
     output_name: str = "model"
     quarantine: Literal[True] = True
+    device_requested: Literal["cpu", "cuda"] | None = None
 
 
 class ExpressionRecipe(BaseModel):
@@ -128,6 +130,7 @@ class ExpressionRecipe(BaseModel):
     imports: list[str] = Field(default_factory=list)
     input: InputBuilder
     quarantine: bool = False
+    device_requested: Literal["cpu", "cuda"] | None = None
 
     @model_validator(mode="after")
     def normalize_quarantine(self) -> ExpressionRecipe:
@@ -148,6 +151,7 @@ class StatementRecipe(BaseModel):
     input: InputBuilder
     output_name: str = "model"
     quarantine: bool = False
+    device_requested: Literal["cpu", "cuda"] | None = None
 
     @model_validator(mode="after")
     def normalize_quarantine(self) -> StatementRecipe:

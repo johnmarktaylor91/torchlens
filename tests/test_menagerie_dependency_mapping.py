@@ -90,3 +90,31 @@ def test_effdet_dependency_has_pip_mapping_and_does_not_no_mapping_skip(
     assert error is None
     assert commands
     assert commands[0][-1] == "effdet"
+
+
+def test_pip_installable_dep_without_mapping_is_not_a_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unmapped external import is a router gap, not a justified dependency skip."""
+
+    plan = dependency_plan(
+        _row(
+            stable_id="m-unmapped",
+            name="UnmappedDepNet",
+            zoo="pip:definitely-pip-installable-unit-dep",
+            constructor_call=(
+                "from definitely_pip_installable_unit_dep import Model; model=Model()"
+            ),
+        )
+    )
+    args = argparse.Namespace(install_deps=True, pip_args=[], install_timeout=30.0)
+
+    monkeypatch.setattr("menagerie.runtime.module_importable", lambda module: False)
+
+    error = install_dependency_plan(plan, args)
+
+    assert plan.top_modules == ("definitely_pip_installable_unit_dep",)
+    assert plan.packages == ()
+    assert error == (
+        "dependency missing with no package mapping: definitely_pip_installable_unit_dep"
+    )
