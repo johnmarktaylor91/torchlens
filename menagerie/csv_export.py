@@ -563,6 +563,25 @@ def _svg_url(svg_path: str, svg_sha256: str) -> str:
     return f"{svg_path}?sha256={svg_sha256}"
 
 
+def _tlspec_path(ledger_row: Mapping[str, Any] | None) -> str:
+    """Return the relative portable trace artifact path from a ledger row.
+
+    Parameters
+    ----------
+    ledger_row:
+        Current verification ledger row.
+
+    Returns
+    -------
+    str
+        Relative portable trace artifact path, or an empty string when absent.
+    """
+
+    if ledger_row is None:
+        return ""
+    return str(ledger_row.get("tlspec_path") or "")
+
+
 def _compatible_version(ledger_version: Any, current_version: str) -> bool:
     """Return whether a ledger TorchLens version is compatibility-trusted.
 
@@ -1085,7 +1104,7 @@ def build_artifact_rows(
                 "svg_url": _svg_url(svg_path, svg_sha256),
                 "svg_sha256": svg_sha256,
                 "has_svg": has_svg,
-                "tlspec_path": "",
+                "tlspec_path": _tlspec_path(ledger_row),
                 "model_card_url": "",
                 "added_wave": _added_wave(row, wave_lookup),
                 "row_quality_flags_json": _json_dumps(_row_quality_flags(ledger_row, has_svg)),

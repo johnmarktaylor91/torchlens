@@ -26,6 +26,8 @@ VALIDATION_DIR = "validation"
 VISUALS_DIR = "visuals"
 METADATA_DIR = "metadata"
 CSV_DIR = "csv"
+TLSPEC_DIR = "tlspecs"
+DIST_DIR = "dist"
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class CombinedReport:
         Total run-all elapsed wall-clock seconds.
     csv_export:
         CSV export status note.
+    bundle_manifest:
+        Distribution manifest path when bundling ran.
     cluster_tasks_pending:
         Cluster tasks left pending because their SLURM array was still running at
         the collect deadline (REVIEW_scheduling_fix.md N1); ``None`` when none.
@@ -86,6 +90,7 @@ class CombinedReport:
     timings: list[StepTiming]
     total_elapsed_sec: float
     csv_export: str
+    bundle_manifest: str = ""
     cluster_tasks_pending: dict[str, object] | None = None
 
 
@@ -349,6 +354,11 @@ def _validation_args(args: argparse.Namespace, validation_dir: Path) -> list[str
     _append_option(forwarded, "--env-registry", args.env_registry)
     _append_option(forwarded, "--verification-db", args.verification_db)
     _append_option(forwarded, "--smoke-manifest", args.smoke_manifest)
+    tlspec_out_dir = getattr(args, "tlspec_out_dir", validation_dir.parent / TLSPEC_DIR)
+    _append_option(forwarded, "--tlspec-out-dir", tlspec_out_dir)
+    _append_option(forwarded, "--tlspec-min-free-gb", args.min_free_gb)
+    if args.tlspec_include_activations:
+        forwarded.append("--tlspec-include-activations")
     if args.revalidate_failed:
         forwarded.append("--revalidate-failed")
     if getattr(args, "force_full", False):
@@ -456,6 +466,23 @@ def _metadata_outputs_exist(metadata_dir: Path) -> bool:
     """
 
     return (metadata_dir / "trace_summary.db").exists()
+
+
+def _bundle_outputs_exist(dist_dir: Path) -> bool:
+    """Return whether distribution bundle output exists.
+
+    Parameters
+    ----------
+    dist_dir:
+        Distribution output directory.
+
+    Returns
+    -------
+    bool
+        Whether the top-level distribution manifest exists.
+    """
+
+    return (dist_dir / "MANIFEST.json").exists()
 
 
 def _read_validation_manifest(manifest_path: Path) -> list[dict[str, str]]:
@@ -779,6 +806,56 @@ def _run_metadata(args: argparse.Namespace, validation_dir: Path, metadata_dir: 
     return _csv_export_note(metadata_dir, args)
 
 
+def _run_bundle(
+    args: argparse.Namespace,
+    tlspec_dir: Path,
+    visuals_dir: Path,
+    metadata_dir: Path,
+    dist_dir: Path,
+) -> Path:
+    """Run distribution bundling.
+
+    Parameters
+    ----------
+    args:
+        Parsed run-all arguments.
+    tlspec_dir:
+        Portable trace artifact directory.
+    visuals_dir:
+        Visual artifact directory.
+    metadata_dir:
+        Metadata output directory.
+    dist_dir:
+        Distribution output directory.
+
+    Returns
+    -------
+    Path
+        Written manifest path.
+    """
+
+    from menagerie import bundle
+
+    bundle_args = [
+        "--dist-dir",
+        str(dist_dir),
+        "--tlspec-dir",
+        str(tlspec_dir),
+        "--visuals-dir",
+        str(visuals_dir),
+        "--csv-dir",
+        str(metadata_dir / CSV_DIR),
+        "--max-combined-gb",
+        str(args.max_combined_gb),
+    ]
+    if args.as_of is not None:
+        bundle_args.extend(("--as-of", args.as_of))
+    exit_code = bundle.main(bundle_args)
+    if exit_code != 0:
+        raise RuntimeError(f"bundle failed with exit code {exit_code}")
+    return dist_dir / "MANIFEST.json"
+
+
 def _validation_numbers(validation_dir: Path) -> dict[str, int]:
     """Return validation completeness numbers.
 
@@ -919,6 +996,7 @@ def _write_report(report: CombinedReport, out_dir: Path) -> None:
         f"- Rendered visuals: {report.render_count}",
         f"- Metadata rows: {report.metadata_row_count}",
         f"- CSV export: {report.csv_export}",
+        f"- Bundle manifest: {report.bundle_manifest}",
         f"- Total elapsed seconds: {report.total_elapsed_sec:.3f}",
         "",
         "## Timings",
@@ -977,6 +1055,8 @@ def _print_report(report: CombinedReport) -> None:
     print(f"render_count: {report.render_count}")
     print(f"metadata_row_count: {report.metadata_row_count}")
     print(f"csv_export: {report.csv_export}")
+    if report.bundle_manifest:
+        print(f"bundle_manifest: {report.bundle_manifest}")
     pending = report.cluster_tasks_pending
     if pending:
         print(
@@ -1063,6 +1143,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--input-scale", type=float)
     parser.add_argument("--env-registry", type=Path)
+    parser.add_argument(
+        "--tlspec-include-activations",
+        action="store_true",
+        help="include saved activation payloads in validation .tlspec artifacts",
+    )
     parser.add_argument("--file-format", default="svg")
     parser.add_argument(
         "--vis-option",
@@ -1075,6 +1160,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--smoke", action="store_true", help="run with smoke isolation env vars")
     parser.add_argument("--smoke-manifest", type=Path)
     parser.add_argument("--csv-limit", type=int)
+    parser.add_argument("--bundle", dest="bundle", action="store_true", default=True)
+    parser.add_argument("--no-bundle", dest="bundle", action="store_false")
+    parser.add_argument("--dist-dir", type=Path)
+    parser.add_argument("--max-combined-gb", type=float, default=5.0)
+    parser.add_argument("--as-of", help="ISO date forwarded to menagerie.bundle")
     return parser
 
 
@@ -1109,6 +1199,9 @@ def run(args: argparse.Namespace) -> CombinedReport:
         validation_dir = out_dir / VALIDATION_DIR
         visuals_dir = out_dir / VISUALS_DIR
         metadata_dir = out_dir / METADATA_DIR
+        tlspec_dir = out_dir / TLSPEC_DIR
+        dist_dir = (args.dist_dir or out_dir / DIST_DIR).resolve()
+        args.tlspec_out_dir = tlspec_dir
         out_dir.mkdir(parents=True, exist_ok=True)
         # ``--force-full`` reruns every phase regardless of existing output (its
         # whole purpose is the acceptance + timing re-run); ``--force`` keeps the
@@ -1146,6 +1239,26 @@ def run(args: argparse.Namespace) -> CombinedReport:
         )
         if timings[-1].skipped:
             csv_note = "skipped: metadata output already exists"
+        bundle_manifest = ""
+        if args.bundle:
+            manifest_holder = {"path": ""}
+
+            def run_bundle_step() -> None:
+                """Run bundling and record the manifest path."""
+
+                manifest_holder["path"] = str(
+                    _run_bundle(args, tlspec_dir, visuals_dir, metadata_dir, dist_dir)
+                )
+
+            timings.append(
+                _timed_step(
+                    "bundle",
+                    lambda: _bundle_outputs_exist(dist_dir),
+                    run_bundle_step,
+                    force=force_phases,
+                )
+            )
+            bundle_manifest = manifest_holder["path"] or str(dist_dir / "MANIFEST.json")
         report = CombinedReport(
             out_dir=str(out_dir),
             validation=_validation_numbers(validation_dir),
@@ -1154,6 +1267,7 @@ def run(args: argparse.Namespace) -> CombinedReport:
             timings=timings,
             total_elapsed_sec=round(time.perf_counter() - total_start, 6),
             csv_export=csv_note,
+            bundle_manifest=bundle_manifest,
             cluster_tasks_pending=_cluster_tasks_pending(validation_dir),
         )
         _write_report(report, out_dir)

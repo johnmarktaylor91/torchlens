@@ -196,5 +196,8 @@ def test_run_all_orders_steps_and_skips_missing_csv_export(
         "validation",
         "render",
         "metadata",
+        "bundle",
     ]
     assert all(timing["elapsed_sec"] >= 0 for timing in report["timings"])
+    assert (out_dir / "dist" / "MANIFEST.json").exists()
+    assert report["bundle_manifest"] == str(out_dir / "dist" / "MANIFEST.json")

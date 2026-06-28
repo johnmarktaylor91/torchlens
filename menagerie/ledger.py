@@ -153,6 +153,10 @@ class VerificationRun:
         Trace graph shape hash.
     svg_sha256:
         SHA-256 of a rendered SVG artifact.
+    tlspec_path:
+        Relative portable trace artifact path.
+    tlspec_sha256:
+        SHA-256 digest of the portable trace artifact.
     torchlens_version:
         TorchLens version used for the run.
     torch_version:
@@ -253,6 +257,8 @@ class VerificationRun:
     machine_gpu_count: int | None = None
     machine_platform: str | None = None
     machine_torch_num_threads: int | None = None
+    tlspec_path: str | None = None
+    tlspec_sha256: str | None = None
 
 
 def with_machine_metadata(run: VerificationRun) -> VerificationRun:
@@ -723,6 +729,8 @@ def initialize(conn: sqlite3.Connection) -> None:
             n_ops INTEGER,
             graph_shape_hash TEXT,
             svg_sha256 TEXT,
+            tlspec_path TEXT,
+            tlspec_sha256 TEXT,
             torchlens_version TEXT NOT NULL,
             torch_version TEXT NOT NULL,
             python_version TEXT NOT NULL,
@@ -773,6 +781,7 @@ def initialize(conn: sqlite3.Connection) -> None:
     _migrate_peak_rss_column(conn)
     _migrate_identity_columns(conn)
     _migrate_machine_columns(conn)
+    _migrate_tlspec_columns(conn)
     _migrate_status_constraint(conn)
     _create_current_verification_view(conn)
     _create_current_verification_real_view(conn)
@@ -819,6 +828,8 @@ def _create_current_verification_view(conn: sqlite3.Connection) -> None:
             n_ops,
             graph_shape_hash,
             svg_sha256,
+            tlspec_path,
+            tlspec_sha256,
             torchlens_version,
             torch_version,
             python_version,
@@ -906,6 +917,8 @@ def _create_current_verification_real_view(conn: sqlite3.Connection) -> None:
             n_ops,
             graph_shape_hash,
             svg_sha256,
+            tlspec_path,
+            tlspec_sha256,
             torchlens_version,
             torch_version,
             python_version,
@@ -1039,6 +1052,25 @@ def _migrate_machine_columns(conn: sqlite3.Connection) -> None:
         initialize(conn)
 
 
+def _migrate_tlspec_columns(conn: sqlite3.Connection) -> None:
+    """Add nullable portable trace artifact columns to legacy ledgers.
+
+    Parameters
+    ----------
+    conn:
+        SQLite connection.
+    """
+
+    migrated = False
+    for column in ("tlspec_path", "tlspec_sha256"):
+        if _has_column(conn, "verification_runs", column):
+            continue
+        conn.execute(f"ALTER TABLE verification_runs ADD COLUMN {column} TEXT")
+        migrated = True
+    if migrated:
+        initialize(conn)
+
+
 def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     """Recreate legacy ledgers whose status or scope checks lack current values.
 
@@ -1078,6 +1110,10 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
     )
     input_scale_expr = "input_scale" if "input_scale" in existing_columns else "NULL AS input_scale"
     peak_rss_column = "peak_rss_mb" if "peak_rss_mb" in existing_columns else "NULL AS peak_rss_mb"
+    tlspec_path_expr = "tlspec_path" if "tlspec_path" in existing_columns else "NULL AS tlspec_path"
+    tlspec_sha256_expr = (
+        "tlspec_sha256" if "tlspec_sha256" in existing_columns else "NULL AS tlspec_sha256"
+    )
     # Machine/hardware columns (bucket C). Carry real values across the rebuild
     # when present, else synthesize NULL so a legacy ledger predating the machine
     # migration still rebuilds without dropping data.
@@ -1125,6 +1161,8 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             n_ops INTEGER,
             graph_shape_hash TEXT,
             svg_sha256 TEXT,
+            tlspec_path TEXT,
+            tlspec_sha256 TEXT,
             torchlens_version TEXT NOT NULL,
             torch_version TEXT NOT NULL,
             python_version TEXT NOT NULL,
@@ -1167,6 +1205,8 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             n_ops,
             graph_shape_hash,
             svg_sha256,
+            tlspec_path,
+            tlspec_sha256,
             torchlens_version,
             torch_version,
             python_version,
@@ -1201,6 +1241,8 @@ def _migrate_status_constraint(conn: sqlite3.Connection) -> None:
             n_ops,
             graph_shape_hash,
             svg_sha256,
+            {tlspec_path_expr},
+            {tlspec_sha256_expr},
             torchlens_version,
             torch_version,
             python_version,
@@ -1271,6 +1313,8 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             n_ops,
             graph_shape_hash,
             svg_sha256,
+            tlspec_path,
+            tlspec_sha256,
             torchlens_version,
             torch_version,
             python_version,
@@ -1311,6 +1355,8 @@ def append_verification_run(conn: sqlite3.Connection, run: VerificationRun) -> s
             :n_ops,
             :graph_shape_hash,
             :svg_sha256,
+            :tlspec_path,
+            :tlspec_sha256,
             :torchlens_version,
             :torch_version,
             :python_version,
@@ -1729,6 +1775,8 @@ def seed_from_legacy(conn: sqlite3.Connection, rows: list[CatalogRow]) -> int:
                 n_ops=None,
                 graph_shape_hash=None,
                 svg_sha256=None,
+                tlspec_path=None,
+                tlspec_sha256=None,
                 torchlens_version="legacy-unknown",
                 torch_version="legacy-unknown",
                 python_version=sys.version.split()[0],

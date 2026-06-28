@@ -10,6 +10,7 @@ import math
 import os
 import re
 import resource
+import shutil
 import signal
 import subprocess
 import sys
@@ -30,6 +31,7 @@ from menagerie import envs
 from menagerie.recipe import (
     build_input_for_row,
     instantiate_model,
+    is_classics_row,
 )
 from menagerie.runtime import (
     CACHE_ROOTS,
@@ -169,6 +171,7 @@ REPORT_MD = "VALIDATION_REPORT.md"
 # the operator knows to resume-collect rather than silently treat the run as final.
 CLUSTER_PENDING_JSON = "cluster_tasks_pending.json"
 RUNNER_CHOICES = ("auto", "local", "cluster")
+TLSPEC_TEMPORARY_TRACE_DEFAULTS: Mapping[str, Any] = {"activation_transform": None}
 
 
 @dataclass(frozen=True)
@@ -221,6 +224,10 @@ class ValidationResult:
         Peak resident set size observed by the isolated worker process, in MB.
     input_scale:
         Input scaling factor used for this validation.
+    tlspec_path:
+        Relative portable trace artifact path exported for this validation, if any.
+    tlspec_sha256:
+        SHA-256 of the exported portable trace artifact, if any.
     """
 
     name: str
@@ -237,6 +244,8 @@ class ValidationResult:
     recipe_revision_sha256: str = ""
     peak_rss_mb: int | None = None
     input_scale: float = 1.0
+    tlspec_path: str = ""
+    tlspec_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -823,6 +832,8 @@ def append_validation_ledger(
         n_ops=result.n_ops if passed else None,
         graph_shape_hash=result.graph_shape_hash or None,
         svg_sha256=None,
+        tlspec_path=result.tlspec_path or None,
+        tlspec_sha256=result.tlspec_sha256 or None,
         torchlens_version=_torchlens_version(),
         torch_version=_torch_version(),
         python_version=python_version(),
@@ -877,6 +888,8 @@ def result_from_payload(payload: Mapping[str, Any]) -> ValidationResult:
         recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
         peak_rss_mb=peak_rss_mb,
         input_scale=float(payload.get("input_scale", 1.0) or 1.0),
+        tlspec_path=str(payload.get("tlspec_path", "")),
+        tlspec_sha256=str(payload.get("tlspec_sha256", "")),
     )
 
 
@@ -1549,6 +1562,8 @@ def _append_cluster_unavailable_rows(
                 n_ops=None,
                 graph_shape_hash=None,
                 svg_sha256=None,
+                tlspec_path=None,
+                tlspec_sha256=None,
                 torchlens_version=_torchlens_version(),
                 torch_version=_torch_version(),
                 python_version=python_version(),
@@ -1656,6 +1671,8 @@ def _append_cluster_task_failed_rows(
                 n_ops=None,
                 graph_shape_hash=None,
                 svg_sha256=None,
+                tlspec_path=None,
+                tlspec_sha256=None,
                 torchlens_version=_torchlens_version(),
                 torch_version=_torch_version(),
                 python_version=python_version(),
@@ -3310,6 +3327,219 @@ def _trace_n_ops_and_hash_from_trace(trace: Any) -> tuple[int | None, str, str]:
     return n_ops, graph_shape_hash, ""
 
 
+def tlspec_artifact_stem(row: CatalogRow, out_dir: Path) -> Path:
+    """Return the organized portable trace artifact stem for one model.
+
+    Parameters
+    ----------
+    row:
+        Catalog row.
+    out_dir:
+        Portable trace output directory.
+
+    Returns
+    -------
+    Path
+        Artifact path without the ``.tlspec`` suffix.
+    """
+
+    if is_classics_row(row):
+        return (
+            out_dir
+            / "history"
+            / safe_path_part(row.era)
+            / safe_path_part(row.family_normalized)
+            / row.stable_id
+        )
+    return (
+        out_dir / safe_path_part(row.domain) / safe_path_part(row.family_normalized) / row.stable_id
+    )
+
+
+def _sha256_path(path: Path) -> str:
+    """Return a deterministic SHA-256 digest for a file or directory artifact.
+
+    Parameters
+    ----------
+    path:
+        File or directory artifact path.
+
+    Returns
+    -------
+    str
+        Hexadecimal SHA-256 digest.
+    """
+
+    digest = hashlib.sha256()
+    if path.is_file():
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    for file_path in sorted(item for item in path.rglob("*") if item.is_file()):
+        relative = file_path.relative_to(path).as_posix().encode("utf-8")
+        digest.update(relative)
+        digest.update(b"\0")
+        with file_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _tlspec_relative_path(tlspec_path: Path, artifact_root: Path) -> str:
+    """Return a stable relative portable trace path for ledger/CSV exports.
+
+    Parameters
+    ----------
+    tlspec_path:
+        Final ``.tlspec`` artifact path.
+    artifact_root:
+        Directory whose name should prefix exported relative paths.
+
+    Returns
+    -------
+    str
+        POSIX relative path.
+    """
+
+    try:
+        relative = tlspec_path.relative_to(artifact_root)
+    except ValueError:
+        return tlspec_path.name
+    return (Path(artifact_root.name) / relative).as_posix()
+
+
+def _cleanup_tlspec_tmp_paths(tmp_path: Path) -> None:
+    """Remove temporary paths from a failed portable trace save.
+
+    Parameters
+    ----------
+    tmp_path:
+        Outer temporary bundle path requested by the menagerie save helper.
+    """
+
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path, ignore_errors=True)
+    for partial_path in tmp_path.parent.glob(f"{tmp_path.name}.tmp.*"):
+        if partial_path.is_dir():
+            shutil.rmtree(partial_path, ignore_errors=True)
+        else:
+            partial_path.unlink(missing_ok=True)
+
+
+def _save_tlspec_artifact(
+    trace: Any,
+    row: CatalogRow,
+    tlspec_out_dir: Path,
+    *,
+    include_activations: bool,
+    min_free_gb: float,
+) -> tuple[str, str]:
+    """Persist one validation trace as a portable ``.tlspec`` artifact.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace already produced by validation.
+    row:
+        Catalog row being validated.
+    tlspec_out_dir:
+        Portable trace output root.
+    include_activations:
+        Whether to include materialized activation payloads.
+    min_free_gb:
+        Minimum free space required before writing.
+
+    Returns
+    -------
+    tuple[str, str]
+        Relative artifact path and SHA-256 digest.
+    """
+
+    import torchlens as tl
+
+    assert_min_free(tlspec_out_dir, min_free_gb)
+    final_path = tlspec_artifact_stem(row, tlspec_out_dir).with_suffix(".tlspec")
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = final_path.with_name(f"{final_path.name}.tmp.{os.getpid()}.{time.time_ns()}")
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path)
+    validation_failure_sentinel = object()
+    validation_failure = getattr(trace, "_last_validation_failure", validation_failure_sentinel)
+    if validation_failure is not validation_failure_sentinel:
+        delattr(trace, "_last_validation_failure")
+    missing_defaults: list[str] = []
+    for attr_name, default_value in TLSPEC_TEMPORARY_TRACE_DEFAULTS.items():
+        if hasattr(trace, attr_name):
+            continue
+        setattr(trace, attr_name, default_value)
+        missing_defaults.append(attr_name)
+    if not hasattr(trace, "layer_list"):
+        setattr(trace, "layer_list", list(getattr(trace, "layer_logs", {}).values()))
+        missing_defaults.append("layer_list")
+    try:
+        tl.save(
+            trace,
+            tmp_path,
+            level="portable" if include_activations else "audit",
+            include_outs=include_activations,
+            include_grads=False,
+            include_saved_args=False,
+            include_rng_states=False,
+            overwrite=True,
+        )
+        if final_path.exists():
+            shutil.rmtree(final_path)
+        tmp_path.rename(final_path)
+    except Exception:
+        _cleanup_tlspec_tmp_paths(tmp_path)
+        raise
+    finally:
+        if validation_failure is not validation_failure_sentinel:
+            setattr(trace, "_last_validation_failure", validation_failure)
+        for attr_name in missing_defaults:
+            delattr(trace, attr_name)
+    assert_min_free(tlspec_out_dir, min_free_gb)
+    return _tlspec_relative_path(final_path, tlspec_out_dir), _sha256_path(final_path)
+
+
+def _tlspec_smoke_excluded_stable_ids(smoke_manifest: Path | None) -> set[str]:
+    """Return smoke stable IDs excluded from portable trace export.
+
+    Parameters
+    ----------
+    smoke_manifest:
+        Optional smoke-manifest JSONL path.
+
+    Returns
+    -------
+    set[str]
+        Stable IDs excluded from portable trace export.
+    """
+
+    if smoke_manifest is None or not smoke_manifest.exists():
+        return set()
+    excluded: set[str] = set()
+    with smoke_manifest.open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            payload = json.loads(stripped)
+            stable_id = payload.get("stable_id")
+            if not stable_id:
+                continue
+            non_base_env = str(payload.get("expected_env", "base")) != "base"
+            if (
+                bool(payload.get("synthetic", False))
+                or not bool(payload.get("metadata", True))
+                or non_base_env
+            ):
+                excluded.add(str(stable_id))
+    return excluded
+
+
 def _stable_validation_seed(row: CatalogRow) -> int:
     """Return a deterministic validation seed for a catalog row.
 
@@ -3517,6 +3747,8 @@ def _add_result_note(result: ValidationResult, note: str) -> ValidationResult:
         recipe_revision_sha256=result.recipe_revision_sha256,
         peak_rss_mb=result.peak_rss_mb,
         input_scale=result.input_scale,
+        tlspec_path=result.tlspec_path,
+        tlspec_sha256=result.tlspec_sha256,
     )
 
 
@@ -3675,6 +3907,8 @@ def _annotate_input_scale(result: ValidationResult, input_scale: float) -> Valid
         recipe_revision_sha256=result.recipe_revision_sha256,
         peak_rss_mb=result.peak_rss_mb,
         input_scale=input_scale,
+        tlspec_path=result.tlspec_path,
+        tlspec_sha256=result.tlspec_sha256,
     )
 
 
@@ -3684,6 +3918,10 @@ def validate_one(
     scope: str,
     device: str,
     input_scale: float = 1.0,
+    tlspec_out_dir: Path | None = None,
+    tlspec_include_activations: bool = False,
+    tlspec_min_free_gb: float = 15.0,
+    tlspec_skip_stable_ids: set[str] | None = None,
 ) -> ValidationResult:
     """Instantiate and validate one menagerie model.
 
@@ -3703,6 +3941,14 @@ def validate_one(
         size; the scaling is recorded in the result note for auditability and does
         not alter the recipe identity (input is excluded from
         ``recipe_revision_sha256``).
+    tlspec_out_dir:
+        Optional portable trace output root.
+    tlspec_include_activations:
+        Whether portable trace artifacts include activation payloads.
+    tlspec_min_free_gb:
+        Minimum free disk space required around artifact writes.
+    tlspec_skip_stable_ids:
+        Stable IDs excluded from portable trace export.
 
     Returns
     -------
@@ -3711,7 +3957,17 @@ def validate_one(
     """
 
     return _annotate_input_scale(
-        _validate_one_unscaled_note(row, dry_run, scope, device, input_scale),
+        _validate_one_unscaled_note(
+            row,
+            dry_run,
+            scope,
+            device,
+            input_scale,
+            tlspec_out_dir=tlspec_out_dir,
+            tlspec_include_activations=tlspec_include_activations,
+            tlspec_min_free_gb=tlspec_min_free_gb,
+            tlspec_skip_stable_ids=tlspec_skip_stable_ids,
+        ),
         input_scale,
     )
 
@@ -3722,6 +3978,10 @@ def _validate_one_unscaled_note(
     scope: str,
     device: str,
     input_scale: float,
+    tlspec_out_dir: Path | None = None,
+    tlspec_include_activations: bool = False,
+    tlspec_min_free_gb: float = 15.0,
+    tlspec_skip_stable_ids: set[str] | None = None,
 ) -> ValidationResult:
     """Instantiate and validate one model; the input-scale note is added by the caller.
 
@@ -3737,6 +3997,14 @@ def _validate_one_unscaled_note(
         Device mode.
     input_scale:
         Spatial down-scaling factor for the built example input.
+    tlspec_out_dir:
+        Optional portable trace output root.
+    tlspec_include_activations:
+        Whether portable trace artifacts include activation payloads.
+    tlspec_min_free_gb:
+        Minimum free disk space required around artifact writes.
+    tlspec_skip_stable_ids:
+        Stable IDs excluded from portable trace export.
 
     Returns
     -------
@@ -3852,6 +4120,9 @@ def _validate_one_unscaled_note(
         trace_error = ""
         replay_failure_summary = ""
         validation_seed = _stable_validation_seed(row)
+        validation_trace: Any | None = None
+        tlspec_path = ""
+        tlspec_sha256 = ""
 
         def observe_validation_trace(trace: Any) -> None:
             """Record summary fields from the trace already built for validation.
@@ -3869,6 +4140,8 @@ def _validate_one_unscaled_note(
             """
 
             nonlocal graph_shape_hash, n_ops, trace_error, replay_failure_summary
+            nonlocal validation_trace
+            validation_trace = trace
             n_ops, graph_shape_hash, trace_error = _trace_n_ops_and_hash_from_trace(trace)
             try:
                 from torchlens.validation.diagnostics import get_validation_failure
@@ -4039,6 +4312,29 @@ def _validate_one_unscaled_note(
                 stable_id=row.stable_id,
                 recipe_revision_sha256=row.recipe_revision_sha256,
             )
+        skip_ids = tlspec_skip_stable_ids or set()
+        if (
+            tlspec_out_dir is not None
+            and row.stable_id not in skip_ids
+            and validation_trace is not None
+        ):
+            try:
+                tlspec_path, tlspec_sha256 = _save_tlspec_artifact(
+                    validation_trace,
+                    row,
+                    tlspec_out_dir,
+                    include_activations=tlspec_include_activations,
+                    min_free_gb=tlspec_min_free_gb,
+                )
+            except Exception as error:
+                tlspec_path = ""
+                tlspec_sha256 = ""
+                log_event(
+                    "tlspec_save_failed",
+                    name=row.name,
+                    stable_id=row.stable_id,
+                    error=f"{error!r}",
+                )
         return ValidationResult(
             row.name,
             row.model_id,
@@ -4055,6 +4351,8 @@ def _validate_one_unscaled_note(
             graph_shape_hash,
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
+            tlspec_path=tlspec_path,
+            tlspec_sha256=tlspec_sha256,
         )
 
     if device == "cuda":
@@ -4202,6 +4500,10 @@ def validate_with_timeout(
     worker_memory_cap_gb: float | None = None,
     worker_torch_threads: int | None = None,
     input_scale: float = 1.0,
+    tlspec_out_dir: Path | None = None,
+    tlspec_include_activations: bool = False,
+    tlspec_min_free_gb: float = 15.0,
+    tlspec_skip_stable_ids: set[str] | None = None,
     retry_worker_exception: bool = True,
     retry_replay_single_thread_process: bool = True,
 ) -> ValidationResult:
@@ -4232,6 +4534,14 @@ def validate_with_timeout(
     input_scale:
         Spatial down-scaling factor for the example input, forwarded to the worker
         via ``--input-scale`` (``1.0`` = full resolution).
+    tlspec_out_dir:
+        Optional portable trace output root forwarded to the worker.
+    tlspec_include_activations:
+        Whether portable trace artifacts include activation payloads.
+    tlspec_min_free_gb:
+        Minimum free disk space required around artifact writes.
+    tlspec_skip_stable_ids:
+        Stable IDs excluded from portable trace export.
     retry_worker_exception:
         Retry once when a capped worker reports a generic exception. The retry
         keeps memory-cap tests robust to transient broad-suite worker setup
@@ -4267,6 +4577,15 @@ def validate_with_timeout(
         command.extend(("--worker-memory-cap-gb", f"{worker_memory_cap_gb:.6f}"))
     if input_scale != 1.0:
         command.extend(("--input-scale", f"{input_scale:.6f}"))
+    if tlspec_out_dir is not None:
+        command.extend(("--tlspec-out-dir", str(tlspec_out_dir)))
+    if tlspec_include_activations:
+        command.append("--tlspec-include-activations")
+    if tlspec_min_free_gb != 15.0:
+        command.extend(("--tlspec-min-free-gb", f"{tlspec_min_free_gb:.6f}"))
+    if tlspec_skip_stable_ids:
+        command.append("--tlspec-skip-stable-ids")
+        command.extend(sorted(tlspec_skip_stable_ids))
     child_env = dict(os.environ)
     if device == "cpu":
         child_env["CUDA_VISIBLE_DEVICES"] = ""
@@ -4405,6 +4724,10 @@ def validate_with_timeout(
                     worker_memory_cap_gb=worker_memory_cap_gb,
                     worker_torch_threads=resolved_worker_torch_threads,
                     input_scale=input_scale,
+                    tlspec_out_dir=tlspec_out_dir,
+                    tlspec_include_activations=tlspec_include_activations,
+                    tlspec_min_free_gb=tlspec_min_free_gb,
+                    tlspec_skip_stable_ids=tlspec_skip_stable_ids,
                     retry_worker_exception=False,
                     retry_replay_single_thread_process=retry_replay_single_thread_process,
                 )
@@ -4423,6 +4746,10 @@ def validate_with_timeout(
                     worker_memory_cap_gb=worker_memory_cap_gb,
                     worker_torch_threads=1,
                     input_scale=input_scale,
+                    tlspec_out_dir=tlspec_out_dir,
+                    tlspec_include_activations=tlspec_include_activations,
+                    tlspec_min_free_gb=tlspec_min_free_gb,
+                    tlspec_skip_stable_ids=tlspec_skip_stable_ids,
                     retry_worker_exception=retry_worker_exception,
                     retry_replay_single_thread_process=False,
                 )
@@ -5039,6 +5366,10 @@ def run(args: argparse.Namespace) -> int:
                 worker_memory_cap_gb=args.worker_memory_cap_gb,
                 worker_torch_threads=worker_torch_threads,
                 input_scale=row_input_scale,
+                tlspec_out_dir=args.tlspec_out_dir,
+                tlspec_include_activations=args.tlspec_include_activations,
+                tlspec_min_free_gb=args.tlspec_min_free_gb,
+                tlspec_skip_stable_ids=args.tlspec_skip_stable_ids,
             )
             removed = 0 if args.keep_cache else cleanup_runtime(cache_snapshots, tmp_dir)
         return result, removed
@@ -5599,6 +5930,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--base-env-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--min-free-gb", type=float, default=15.0)
+    parser.add_argument(
+        "--tlspec-out-dir",
+        type=Path,
+        help="optional output root for portable validation .tlspec artifacts",
+    )
+    parser.add_argument(
+        "--tlspec-include-activations",
+        action="store_true",
+        help="include saved activation payloads in validation .tlspec artifacts",
+    )
+    parser.add_argument(
+        "--tlspec-min-free-gb",
+        type=float,
+        default=15.0,
+        help="minimum free disk space required around validation .tlspec artifact writes",
+    )
+    parser.add_argument(
+        "--tlspec-skip-stable-ids",
+        nargs="*",
+        default=[],
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--keep-cache", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-models", type=int, help=argparse.SUPPRESS)
@@ -5672,6 +6025,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    explicit_tlspec_skips = {str(stable_id) for stable_id in args.tlspec_skip_stable_ids}
+    args.tlspec_skip_stable_ids = explicit_tlspec_skips | _tlspec_smoke_excluded_stable_ids(
+        args.smoke_manifest
+    )
     args.worker_torch_threads = resolve_worker_torch_threads(
         args.worker_torch_threads, max(1, args.jobs)
     )
@@ -5701,7 +6058,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         worker_test_allocations = _run_worker_test_allocation_from_env()
         try:
-            result = validate_one(row, args.dry_run, args.scope, args.device, args.input_scale)
+            result = validate_one(
+                row,
+                args.dry_run,
+                args.scope,
+                args.device,
+                args.input_scale,
+                tlspec_out_dir=args.tlspec_out_dir,
+                tlspec_include_activations=args.tlspec_include_activations,
+                tlspec_min_free_gb=args.tlspec_min_free_gb,
+                tlspec_skip_stable_ids=args.tlspec_skip_stable_ids,
+            )
         except Exception as error:
             plan = dependency_plan(row)
             result = ValidationResult(
@@ -5733,6 +6100,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             result.recipe_revision_sha256,
             _peak_rss_mb(),
             result.input_scale,
+            result.tlspec_path,
+            result.tlspec_sha256,
         )
         if worker_test_allocations:
             worker_test_allocations.clear()
