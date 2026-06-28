@@ -13,10 +13,12 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
+import threading
 import time
 from typing import Any
 
 from menagerie.ledger import ENV_VERIFICATION_DB
+from menagerie.status import RunHealth, build_run_health
 
 
 DEFAULT_OUT_ROOT = Path("/tmp/torchlens_menagerie_run_all")
@@ -92,6 +94,122 @@ class CombinedReport:
     csv_export: str
     bundle_manifest: str = ""
     cluster_tasks_pending: dict[str, object] | None = None
+    health: RunHealth | None = None
+
+
+class ProgressWatchdog:
+    """Poll validation progress and emit live progress/stall alarms.
+
+    Parameters
+    ----------
+    manifest_path:
+        Validation manifest path to poll.
+    total:
+        Expected validation total, when known.
+    interval_sec:
+        Progress log interval.
+    stall_after_sec:
+        Emit a stall alarm after this many seconds with no new completed rows.
+    failure_rate_threshold:
+        Rolling failure-rate alarm threshold.
+    rolling_window:
+        Number of most recent completed rows used for rolling failure rate.
+    """
+
+    def __init__(
+        self,
+        manifest_path: Path,
+        *,
+        total: int | None,
+        interval_sec: float,
+        stall_after_sec: float,
+        failure_rate_threshold: float,
+        rolling_window: int,
+    ) -> None:
+        self.manifest_path = manifest_path
+        self.total = total
+        self.interval_sec = interval_sec
+        self.stall_after_sec = stall_after_sec
+        self.failure_rate_threshold = failure_rate_threshold
+        self.rolling_window = rolling_window
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._started_at = time.perf_counter()
+        self._last_completed_at = self._started_at
+        self._last_count = 0
+        self._last_stall_count = 0
+        self._failure_alarm_emitted = False
+
+    def start(self) -> None:
+        """Start the background polling thread."""
+
+        self._thread = threading.Thread(target=self._run, name="menagerie-progress", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Stop the background polling thread and wait briefly for it."""
+
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=max(1.0, self.interval_sec))
+
+    def _run(self) -> None:
+        """Poll until stopped."""
+
+        while not self._stop.wait(self.interval_sec):
+            try:
+                rows = _read_validation_manifest(self.manifest_path)
+            except (OSError, RuntimeError):
+                rows = []
+            self._emit(rows)
+
+    def _emit(self, rows: Sequence[dict[str, str]]) -> None:
+        """Emit progress and alarm lines for current manifest rows.
+
+        Parameters
+        ----------
+        rows:
+            Current validation manifest rows.
+        """
+
+        now = time.perf_counter()
+        completed = len(rows)
+        if completed > self._last_count:
+            self._last_completed_at = now
+            self._last_count = completed
+        validated = sum(1 for row in rows if row.get("status") == "validated")
+        elapsed_min = max((now - self._started_at) / 60.0, 1e-9)
+        rate = completed / elapsed_min
+        total_text = str(self.total) if self.total is not None else "?"
+        percent_text = f"{(completed / self.total) * 100.0:.1f}%" if self.total else "n/a"
+        remaining = max(self.total - completed, 0) if self.total is not None else None
+        eta_text = f"{remaining / rate:.1f} min" if remaining is not None and rate > 0.0 else "n/a"
+        window = rows[-self.rolling_window :] if self.rolling_window > 0 else rows
+        failures = sum(1 for row in window if str(row.get("status", "")).startswith("failed:"))
+        rolling_rate = failures / len(window) if window else 0.0
+        _log(
+            "validation progress: "
+            f"validated={validated}/{total_text} completed={completed}/{total_text} "
+            f"percent={percent_text} rate={rate:.2f} models/min ETA={eta_text} "
+            f"rolling_failure_rate={rolling_rate:.1%}"
+        )
+        if rolling_rate > self.failure_rate_threshold and not self._failure_alarm_emitted:
+            _log(
+                "ALARM failure-rate: "
+                f"rolling_failure_rate={rolling_rate:.1%} "
+                f"threshold={self.failure_rate_threshold:.1%}"
+            )
+            self._failure_alarm_emitted = True
+        if (
+            completed == self._last_stall_count
+            and now - self._last_completed_at >= self.stall_after_sec
+        ):
+            _log(
+                "ALARM STALL: "
+                f"no model completed for {(now - self._last_completed_at) / 60.0:.1f} min"
+            )
+            self._last_completed_at = now
+        self._last_stall_count = completed
 
 
 def _utc_now() -> datetime:
@@ -645,6 +763,33 @@ def _smoke_excluded_stable_ids(smoke_manifest: Path | None, field: str) -> set[s
     return excluded
 
 
+def _expected_validation_total(args: argparse.Namespace) -> int | None:
+    """Return the expected validation total when it can be known cheaply.
+
+    Parameters
+    ----------
+    args:
+        Parsed run-all arguments.
+
+    Returns
+    -------
+    int | None
+        Expected model count, or ``None`` when resolving it would require a
+        full catalog selection pass.
+    """
+
+    if args.stable_ids:
+        return len(args.stable_ids)
+    if args.smoke_manifest is not None:
+        rows = _read_smoke_manifest(args.smoke_manifest)
+        return len(rows) if rows else None
+    if args.max_models is not None:
+        return int(args.max_models)
+    if args.subset is not None:
+        return int(args.subset)
+    return None
+
+
 def _validated_model_ids(validation_dir: Path) -> list[int]:
     """Return validated model IDs from the validation manifest.
 
@@ -680,7 +825,19 @@ def _run_validation(args: argparse.Namespace, validation_dir: Path) -> None:
 
     from menagerie import validate_menagerie
 
-    exit_code = validate_menagerie.main(_validation_args(args, validation_dir))
+    watchdog = ProgressWatchdog(
+        validation_dir / "validation_manifest.tsv",
+        total=_expected_validation_total(args),
+        interval_sec=args.progress_interval_sec,
+        stall_after_sec=args.stall_watchdog_minutes * 60.0,
+        failure_rate_threshold=args.failure_rate_alarm_threshold,
+        rolling_window=args.rolling_failure_window,
+    )
+    watchdog.start()
+    try:
+        exit_code = validate_menagerie.main(_validation_args(args, validation_dir))
+    finally:
+        watchdog.stop()
     if exit_code != 0:
         raise RuntimeError(f"validation failed with exit code {exit_code}")
 
@@ -998,6 +1155,7 @@ def _write_report(report: CombinedReport, out_dir: Path) -> None:
         f"- CSV export: {report.csv_export}",
         f"- Bundle manifest: {report.bundle_manifest}",
         f"- Total elapsed seconds: {report.total_elapsed_sec:.3f}",
+        f"- Run health: {'ok' if report.health is None or report.health.ok else 'degraded'}",
         "",
         "## Timings",
         "",
@@ -1010,6 +1168,29 @@ def _write_report(report: CombinedReport, out_dir: Path) -> None:
             f"{timing.name} | {timing.skipped} | {timing.elapsed_sec:.3f} | "
             f"{timing.started_at} | {timing.finished_at} |"
         )
+    if report.health is not None:
+        lines.extend(
+            [
+                "",
+                "## Run Health",
+                "",
+                f"- OK: {report.health.ok}",
+                f"- Unexpected failures: {report.health.unexpected_failures}",
+                f"- Unexpected skips: {report.health.unexpected_skips}",
+                f"- Worker deaths: {report.health.worker_deaths}",
+                f"- Failure rate: {report.health.failure_rate:.1%}",
+                f"- Unknown statuses: {', '.join(report.health.unknown_statuses)}",
+            ]
+        )
+        for alarm in report.health.alarms:
+            lines.append(f"- ALARM: {alarm}")
+        if report.health.failure_classes:
+            lines.extend(["", "### Failure Classes", ""])
+            for record in report.health.failure_classes:
+                lines.append(
+                    f"- {record.failure_class}: count={record.count} "
+                    f"ids={', '.join(record.stable_ids)} kb_key={record.kb_key}"
+                )
     pending = report.cluster_tasks_pending
     if pending:
         raw_ids = pending.get("stable_ids", [])
@@ -1057,6 +1238,16 @@ def _print_report(report: CombinedReport) -> None:
     print(f"csv_export: {report.csv_export}")
     if report.bundle_manifest:
         print(f"bundle_manifest: {report.bundle_manifest}")
+    if report.health is not None:
+        print(f"run_health: {'ok' if report.health.ok else 'degraded'}")
+        for alarm in report.health.alarms:
+            print(f"run_health.ALARM: {alarm}")
+        for record in report.health.failure_classes:
+            print(
+                "failure_class: "
+                f"class={record.failure_class} count={record.count} "
+                f"ids={','.join(record.stable_ids)}"
+            )
     pending = report.cluster_tasks_pending
     if pending:
         print(
@@ -1165,6 +1356,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dist-dir", type=Path)
     parser.add_argument("--max-combined-gb", type=float, default=5.0)
     parser.add_argument("--as-of", help="ISO date forwarded to menagerie.bundle")
+    parser.add_argument("--progress-interval-sec", type=float, default=60.0)
+    parser.add_argument("--stall-watchdog-minutes", type=float, default=15.0)
+    parser.add_argument("--failure-rate-alarm-threshold", type=float, default=0.10)
+    parser.add_argument("--rolling-failure-window", type=int, default=50)
     return parser
 
 
@@ -1259,6 +1454,19 @@ def run(args: argparse.Namespace) -> CombinedReport:
                 )
             )
             bundle_manifest = manifest_holder["path"] or str(dist_dir / "MANIFEST.json")
+        validation_rows = _read_validation_manifest(validation_dir / "validation_manifest.tsv")
+        pending = _cluster_tasks_pending(validation_dir)
+        smoke_expectations = {
+            str(row["stable_id"]): str(row["expected_status"])
+            for row in _read_smoke_manifest(args.smoke_manifest)
+            if row.get("stable_id") and row.get("expected_status")
+        }
+        health = build_run_health(
+            validation_rows,
+            expected_status_by_id=smoke_expectations,
+            failure_rate_alarm_threshold=args.failure_rate_alarm_threshold,
+            pending_cluster_tasks=pending,
+        )
         report = CombinedReport(
             out_dir=str(out_dir),
             validation=_validation_numbers(validation_dir),
@@ -1268,7 +1476,8 @@ def run(args: argparse.Namespace) -> CombinedReport:
             total_elapsed_sec=round(time.perf_counter() - total_start, 6),
             csv_export=csv_note,
             bundle_manifest=bundle_manifest,
-            cluster_tasks_pending=_cluster_tasks_pending(validation_dir),
+            cluster_tasks_pending=pending,
+            health=health,
         )
         _write_report(report, out_dir)
         _print_report(report)
@@ -1298,10 +1507,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        run(args)
+        report = run(args)
     except RuntimeError as error:
         print(f"run-all failed: {error}", file=sys.stderr)
         return 1
+    if report.health is not None and not report.health.ok:
+        print("run-all degraded: run health is not clean", file=sys.stderr)
+        return 2
     return 0
 
 

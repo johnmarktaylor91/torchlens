@@ -201,3 +201,95 @@ def test_run_all_orders_steps_and_skips_missing_csv_export(
     assert all(timing["elapsed_sec"] >= 0 for timing in report["timings"])
     assert (out_dir / "dist" / "MANIFEST.json").exists()
     assert report["bundle_manifest"] == str(out_dir / "dist" / "MANIFEST.json")
+    assert report["health"]["ok"] is True
+
+
+def test_run_all_returns_nonzero_on_degraded_health(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run-all exits non-zero when validation artifacts contain an unexpected failure."""
+
+    out_dir = tmp_path / "run"
+
+    def option_value(argv: list[str], flag: str) -> str:
+        """Return the value after a CLI option.
+
+        Parameters
+        ----------
+        argv:
+            CLI argument list.
+        flag:
+            Option flag.
+
+        Returns
+        -------
+        str
+            Option value.
+        """
+
+        return argv[argv.index(flag) + 1]
+
+    def fake_validate_main(argv: list[str]) -> int:
+        """Write a failed validation manifest with a zero validator exit.
+
+        Parameters
+        ----------
+        argv:
+            Validator arguments.
+
+        Returns
+        -------
+        int
+            Success exit code from the validator process.
+        """
+
+        validation_dir = Path(option_value(argv, "--out-dir"))
+        manifest_path = Path(option_value(argv, "--manifest"))
+        validation_dir.mkdir(parents=True)
+        manifest_path.write_text(
+            "name\tmodel_id\tstable_id\trecipe_revision_sha256\tstatus\tn_ops\t"
+            "validate_metadata_ok\tscope\telapsed\tdependency_cluster\terror\t"
+            "graph_shape_hash\tpeak_rss_mb\tinput_scale\n"
+            "fixture\t7\tm_fixture\trecipe\tfailed:replay\t0\tFalse\tforward\t0.1\t"
+            "base\treplay diverged\t\t10\t1.0\n",
+            encoding="utf-8",
+        )
+        (validation_dir / "validation_summary.json").write_text(
+            json.dumps({"totals": {"validated": 0, "failed": 1, "skipped": 0, "total": 1}}) + "\n",
+            encoding="utf-8",
+        )
+        return 0
+
+    real_import_module = run_all.importlib.import_module
+
+    def fake_import_module(name: str, package: str | None = None) -> Any:
+        """Pretend optional csv_export is not installed.
+
+        Parameters
+        ----------
+        name:
+            Module name.
+        package:
+            Optional package context.
+
+        Returns
+        -------
+        Any
+            Imported module.
+        """
+
+        if name == "menagerie.csv_export":
+            raise ModuleNotFoundError(
+                "No module named 'menagerie.csv_export'", name="menagerie.csv_export"
+            )
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(validate_menagerie, "main", fake_validate_main)
+    monkeypatch.setattr(run_all.importlib, "import_module", fake_import_module)
+
+    exit_code = run_all.main(["--out-dir", str(out_dir), "--no-bundle", "--jobs", "1"])
+
+    assert exit_code == 2
+    report = json.loads((out_dir / run_all.REPORT_JSON).read_text(encoding="utf-8"))
+    assert report["health"]["ok"] is False
+    assert report["health"]["unexpected_failures"] == 1

@@ -70,6 +70,24 @@ TERMINAL_STATUSES = (
     "native_crash",
     "killed",
 )
+KNOWN_JUSTIFIED_MANIFEST_STATUSES = (
+    "validated",
+    "failed:exception",
+    "failed:killed",
+    "failed:memory_cap",
+    "failed:native_crash",
+    "failed:oom",
+    "failed:replay",
+    "failed:timeout",
+    "failed:trace_summary",
+    "skipped:cluster_unavailable",
+    "skipped:dependency_unavailable",
+    "skipped:dry_run",
+    "skipped:unsupported_input_recipe",
+)
+KNOWN_JUSTIFIED_SKIP_STATUSES = tuple(
+    status for status in KNOWN_JUSTIFIED_MANIFEST_STATUSES if status.startswith("skipped:")
+)
 
 
 @dataclass(frozen=True)
@@ -279,6 +297,184 @@ class CompletenessStatus:
     issues: list[CompletenessIssue]
     terminal_by_status: dict[str, int]
     funnel: FunnelStatus
+
+
+@dataclass(frozen=True)
+class FailureClassRecord:
+    """Summary for one recurring validation failure class.
+
+    Parameters
+    ----------
+    failure_class:
+        Stable class label, usually the manifest status.
+    count:
+        Number of rows in the class.
+    stable_ids:
+        Stable IDs represented by the class, capped for report readability.
+    sample_error:
+        First non-empty error message seen for the class.
+    kb_key:
+        Machine-readable knowledge-base key for matching recurring failures.
+    """
+
+    failure_class: str
+    count: int
+    stable_ids: list[str]
+    sample_error: str = ""
+    kb_key: str = ""
+
+
+@dataclass(frozen=True)
+class RunHealth:
+    """Run-all health signal derived from validation artifacts.
+
+    Parameters
+    ----------
+    ok:
+        Whether the run is clean enough for a zero exit.
+    unexpected_failures:
+        Count of unmasked failed rows.
+    unexpected_skips:
+        Count of skip rows outside the closed taxonomy.
+    unknown_statuses:
+        Manifest statuses not present in the closed taxonomy.
+    worker_deaths:
+        Count of killed/OOM/native-crash rows.
+    failure_rate:
+        Failed-row fraction across the manifest.
+    alarms:
+        Loud operator-facing health alarms.
+    failure_classes:
+        Structured recurring failure-class summary.
+    """
+
+    ok: bool
+    unexpected_failures: int
+    unexpected_skips: int
+    unknown_statuses: list[str]
+    worker_deaths: int
+    failure_rate: float
+    alarms: list[str]
+    failure_classes: list[FailureClassRecord]
+
+
+def classify_failure_records(
+    rows: Sequence[Mapping[str, str]], *, sample_limit: int = 8
+) -> list[FailureClassRecord]:
+    """Classify failed validation rows into recurring failure records.
+
+    Parameters
+    ----------
+    rows:
+        Validation manifest rows.
+    sample_limit:
+        Maximum number of stable IDs retained per class.
+
+    Returns
+    -------
+    list[FailureClassRecord]
+        Failure classes sorted by frequency and class name.
+    """
+
+    grouped: dict[str, list[Mapping[str, str]]] = {}
+    for row in rows:
+        status = str(row.get("status", ""))
+        if not status.startswith("failed:"):
+            continue
+        grouped.setdefault(status, []).append(row)
+    records: list[FailureClassRecord] = []
+    for failure_class, class_rows in grouped.items():
+        sample_error = next(
+            (str(row.get("error", "")) for row in class_rows if row.get("error")), ""
+        )
+        stable_ids = [str(row.get("stable_id", "")) for row in class_rows[:sample_limit]]
+        records.append(
+            FailureClassRecord(
+                failure_class=failure_class,
+                count=len(class_rows),
+                stable_ids=stable_ids,
+                sample_error=sample_error,
+                kb_key=f"{failure_class}:{sample_error[:96]}",
+            )
+        )
+    return sorted(records, key=lambda record: (-record.count, record.failure_class))
+
+
+def build_run_health(
+    rows: Sequence[Mapping[str, str]],
+    *,
+    expected_status_by_id: Mapping[str, str] | None = None,
+    failure_rate_alarm_threshold: float = 0.0,
+    pending_cluster_tasks: Mapping[str, object] | None = None,
+) -> RunHealth:
+    """Build the fail-loud health block for a run-all report.
+
+    Parameters
+    ----------
+    rows:
+        Validation manifest rows.
+    expected_status_by_id:
+        Optional smoke manifest expectations. Rows matching an expected failed
+        status are not counted as unexpected failures.
+    failure_rate_alarm_threshold:
+        Failure-rate threshold for a loud alarm. ``0`` means any unexpected
+        failure trips the alarm.
+    pending_cluster_tasks:
+        Pending cluster task block from the validation summary.
+
+    Returns
+    -------
+    RunHealth
+        Structured run-health result.
+    """
+
+    expected = expected_status_by_id or {}
+    unknown = sorted(
+        {
+            str(row.get("status", ""))
+            for row in rows
+            if str(row.get("status", "")) not in KNOWN_JUSTIFIED_MANIFEST_STATUSES
+        }
+    )
+    unexpected_failures = 0
+    unexpected_skips = 0
+    worker_deaths = 0
+    for row in rows:
+        stable_id = str(row.get("stable_id", ""))
+        status = str(row.get("status", ""))
+        if status in {"failed:killed", "failed:oom", "failed:native_crash"}:
+            worker_deaths += 1
+        if status.startswith("failed:") and expected.get(stable_id) != status:
+            unexpected_failures += 1
+        if status.startswith("skipped:") and status not in KNOWN_JUSTIFIED_SKIP_STATUSES:
+            unexpected_skips += 1
+    total = len(rows)
+    failure_rate = unexpected_failures / total if total else 0.0
+    alarms: list[str] = []
+    if unknown:
+        alarms.append(f"UNKNOWN_STATUS: {', '.join(unknown)}")
+    if unexpected_skips:
+        alarms.append(f"UNMAPPED_SKIP: count={unexpected_skips}")
+    if worker_deaths:
+        alarms.append(f"WORKER_DEATH: count={worker_deaths}")
+    if pending_cluster_tasks:
+        alarms.append(f"CLUSTER_TASKS_PENDING: count={pending_cluster_tasks.get('count', 0)}")
+    if unexpected_failures and failure_rate >= failure_rate_alarm_threshold:
+        alarms.append(
+            f"FAILURE_RATE: {failure_rate:.1%} exceeds threshold {failure_rate_alarm_threshold:.1%}"
+        )
+    failure_classes = classify_failure_records(rows)
+    ok = not alarms and unexpected_failures == 0
+    return RunHealth(
+        ok=ok,
+        unexpected_failures=unexpected_failures,
+        unexpected_skips=unexpected_skips,
+        unknown_statuses=unknown,
+        worker_deaths=worker_deaths,
+        failure_rate=failure_rate,
+        alarms=alarms,
+        failure_classes=failure_classes,
+    )
 
 
 def _catalog_rows(catalog_db: Path) -> list[sqlite3.Row]:
