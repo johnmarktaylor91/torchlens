@@ -204,6 +204,44 @@ def test_append_round_trip_and_verified_count(tmp_path: Path) -> None:
     assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
 
 
+def test_env_smoke_null_forward_row_cannot_mask_validated_current_count(tmp_path: Path) -> None:
+    """A later env-smoke row with NULL forward status cannot hide a real pass."""
+
+    conn = connect(tmp_path / "verification.db")
+    append_verification_run(conn, _run(run_id="validated-run"))
+    append_verification_run(
+        conn,
+        _run(
+            run_id="env-smoke-run",
+            status="env_unavailable",
+            forward_pass=None,
+            metadata_ok=None,
+            n_ops=None,
+            graph_shape_hash=None,
+            started_at="2026-06-22T00:00:02+00:00",
+            finished_at="2026-06-22T00:00:03+00:00",
+            duration_sec=1.0,
+            error_class="env_unavailable",
+            error_message="env smoke failed before forward validation",
+        ),
+    )
+
+    current = conn.execute(
+        """
+        SELECT run_id, status, forward_pass
+        FROM current_verification
+        WHERE stable_id = 'm1'
+        """
+    ).fetchone()
+
+    assert dict(current) == {
+        "run_id": "validated-run",
+        "status": "passed",
+        "forward_pass": 1,
+    }
+    assert verified_count(conn, "tl-current", {"m1": "recipe-a"}) == 1
+
+
 def test_identity_columns_migrate_existing_ledger(tmp_path: Path) -> None:
     """Legacy ledgers gain identity columns with non-current sentinels."""
 
@@ -977,10 +1015,10 @@ def test_concurrent_appends_from_two_threads_both_land(tmp_path: Path) -> None:
 def test_cascade_artifact_does_not_mask_real_prior_outcome(tmp_path: Path) -> None:
     """A synthesized cascade row never depresses a model's honest current status.
 
-    The standard ``current_verification`` view shows the (later) cascade artifact
-    as the model's current row, but ``current_verification_real`` skips it and
-    surfaces the real earlier failure. Suppression is an HONESTY fix: it shows the
-    model's true outcome, it does not flip anything to passed.
+    A later NULL-forward cascade artifact must not mask a real row in either
+    current view. The cascade-suppressed view also keeps excluding the frozen
+    artifact signature before ranking, so suppression remains an HONESTY fix:
+    it shows the model's true outcome, it does not flip anything to passed.
     """
 
     conn = connect(tmp_path / "verification.db")
@@ -1008,7 +1046,8 @@ def test_cascade_artifact_does_not_mask_real_prior_outcome(tmp_path: Path) -> No
     standard = conn.execute(
         "SELECT status, error_class FROM current_verification WHERE stable_id = 'm1'"
     ).fetchone()
-    assert standard["error_class"] == CASCADE_ARTIFACT_ERROR_CLASS
+    assert standard["status"] == "failed"
+    assert standard["error_class"] == "failed:replay"
 
     real = conn.execute(
         "SELECT status, error_class FROM current_verification_real WHERE stable_id = 'm1'"

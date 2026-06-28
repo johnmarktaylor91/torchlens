@@ -92,8 +92,17 @@ def test_effdet_dependency_has_pip_mapping_and_does_not_no_mapping_skip(
     assert commands[0][-1] == "effdet"
 
 
+@pytest.mark.parametrize(
+    ("module_name", "package_name"),
+    (
+        ("definitely_pip_installable_unit_dep", "definitely-pip-installable-unit-dep"),
+        ("another_pip_installable_unit_dep", "another-pip-installable-unit-dep"),
+    ),
+)
 def test_pip_installable_dep_without_mapping_is_not_a_skip(
     monkeypatch: pytest.MonkeyPatch,
+    module_name: str,
+    package_name: str,
 ) -> None:
     """An unmapped external import is a router gap, not a justified dependency skip."""
 
@@ -101,20 +110,42 @@ def test_pip_installable_dep_without_mapping_is_not_a_skip(
         _row(
             stable_id="m-unmapped",
             name="UnmappedDepNet",
-            zoo="pip:definitely-pip-installable-unit-dep",
-            constructor_call=(
-                "from definitely_pip_installable_unit_dep import Model; model=Model()"
-            ),
+            zoo=f"pip:{package_name}",
+            constructor_call=f"from {module_name} import Model; model=Model()",
         )
     )
+    commands: list[tuple[str, ...]] = []
+    installed = False
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        """Record the pip install command and return success."""
+
+        nonlocal installed
+        del check, capture_output, text, timeout
+        commands.append(tuple(command))
+        installed = True
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
     args = argparse.Namespace(install_deps=True, pip_args=[], install_timeout=30.0)
 
-    monkeypatch.setattr("menagerie.runtime.module_importable", lambda module: False)
+    monkeypatch.setattr(
+        "menagerie.runtime.module_importable",
+        lambda module: installed if module == module_name else True,
+    )
+    monkeypatch.setattr("menagerie.runtime.subprocess.run", fake_run)
 
     error = install_dependency_plan(plan, args)
 
-    assert plan.top_modules == ("definitely_pip_installable_unit_dep",)
-    assert plan.packages == ()
-    assert error == (
-        "dependency missing with no package mapping: definitely_pip_installable_unit_dep"
-    )
+    assert plan.top_modules == (module_name,)
+    assert plan.packages == (package_name,)
+    assert error != f"dependency missing with no package mapping: {module_name}"
+    assert error is None
+    assert commands
+    assert commands[0][-1] == package_name

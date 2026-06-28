@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from menagerie.catalog import CatalogRow
+from menagerie.classics import CLASSICS
 from menagerie.generate_menagerie import (
     RenderResult,
     append_manifest as append_render_manifest,
@@ -61,16 +66,16 @@ def test_catalog_recipe_golden_vector() -> None:
     row = _row()
     assert (
         canonical_recipe_v1(row)
-        == '{"recipe":{"constructor_call":"torch.nn.Linear(4, 2)"},"recipe_scheme_version":1,"source":"catalog"}'
+        == '{"recipe":{"constructor_call":"torch.nn.Linear(4, 2)"},"recipe_scheme_version":2,"source":"catalog"}'
     )
     assert (
         recipe_revision_sha256(row)
-        == "db63b4317b50f95020df4ac9325ecb7a9735b4c3563288f746f505b24bb90130"  # pragma: allowlist secret
+        == "b92ed1b65876008d7bc4a712bc4fdc1a18e436989e9653fbc8626420114370fa"  # pragma: allowlist secret
     )
 
 
 def test_classics_recipe_golden_vector() -> None:
-    """Classics recipe serialization uses module path and build function only."""
+    """Classics recipe serialization includes body-sensitive source digests."""
 
     row = _row(
         name="3D Gaussian Splatting (learnable per-Gaussian scene params)",
@@ -79,14 +84,39 @@ def test_classics_recipe_golden_vector() -> None:
         input_shape="(1, 16)",
         source="classics",
     )
-    assert (
-        canonical_recipe_v1(row)
-        == '{"recipe":{"build_fn":"build_gaussian_splatting","module_path":"menagerie.classics.gaussian_splatting"},"recipe_scheme_version":1,"source":"classics"}'
-    )
-    assert (
-        recipe_revision_sha256(row)
-        == "bb531318c963124274d404c246fd777b8dd07921e018198f236b965a770f3e54"  # pragma: allowlist secret
-    )
+    payload = json.loads(canonical_recipe_v1(row))
+
+    assert payload["recipe_scheme_version"] == 2
+    assert payload["source"] == "classics"
+    assert payload["recipe"]["build_fn"] == "build_gaussian_splatting"
+    assert payload["recipe"]["module_path"] == "menagerie.classics.gaussian_splatting"
+    assert len(payload["recipe"]["build_source_sha256"]) == 64
+    assert len(payload["recipe"]["module_file_sha256"]) == 64
+
+
+def test_classics_recipe_hash_changes_when_build_body_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutating a classics build function body changes its recipe revision."""
+
+    def build() -> int:
+        """Build a unit model variant."""
+
+        return 1
+
+    source_text = "def build() -> int:\n    return 1\n"
+    row = _row(name="Unit Classic", zoo="classics-pytorch", source="classics")
+    entry: dict[str, Any] = {
+        "module_path": "menagerie.classics.unit_test",
+        "build": build,
+    }
+    monkeypatch.setitem(CLASSICS, row.name, entry)
+    monkeypatch.setattr("menagerie.identity.inspect.getsource", lambda _function: source_text)
+    original_hash = recipe_revision_sha256(row)
+
+    source_text = "def build() -> int:\n    return 2\n"
+
+    assert recipe_revision_sha256(row) != original_hash
 
 
 def test_input_only_change_does_not_change_recipe_hash() -> None:

@@ -943,6 +943,41 @@ def test_local_oom_scheduler_estimate_uses_high_floor_not_default(
     assert estimate.estimated_mb > 4 * MB_PER_GB
 
 
+def test_sigkill_scheduler_estimate_uses_high_floor_not_4gb(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A local SIGKILL with no peak gets the high floor, not the 4GB default."""
+
+    local_host = "workstation"
+    monkeypatch.setattr("menagerie.cluster_runner.socket.gethostname", lambda: local_host)
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        append_verification_run(
+            conn,
+            _run(
+                run_id="local-killed",
+                stable_id="m-sigkill",
+                name="SigkillGiant",
+                runner_host=local_host,
+                status="killed",
+                forward_pass=0,
+                metadata_ok=0,
+                n_ops=None,
+                graph_shape_hash=None,
+                peak_rss_mb=None,
+                error_class="failed:killed",
+            ),
+        )
+
+    estimates = latest_scheduler_memory_estimates(ledger_db)
+    estimate = _memory_estimate_for_row(_row(stable_id="m-sigkill", name="SigkillGiant"), estimates)
+
+    assert estimates["m-sigkill"] == 960 * MB_PER_GB
+    assert estimate.source == "ledger"
+    assert estimate.estimated_mb > 4 * MB_PER_GB
+
+
 def test_big_model_concurrency_cap_blocks_models_beyond_cap() -> None:
     """Gate (c): the >40GB big-model cap admits two big models, then throttles."""
 

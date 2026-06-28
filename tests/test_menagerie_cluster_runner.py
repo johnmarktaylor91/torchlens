@@ -1018,8 +1018,11 @@ def test_worker_forwards_no_build_catalog_to_validator(tmp_path: Path) -> None:
     assert "--base-env-only" in worker_cmd
 
 
-def test_worker_child_failure_persists_captured_output_in_ledger(tmp_path: Path) -> None:
-    """A failed child validator exports a failed row with stdout/stderr in the ledger."""
+def test_worker_assignment_failure_surfaces_child_stderr(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed child validator re-emits stdout/stderr and persists it in the ledger."""
 
     _write_catalog(tmp_path, [_row(stable_id="m1", name="UnitNet")])
     assignment = ClusterAssignment(
@@ -1056,6 +1059,7 @@ def test_worker_child_failure_persists_captured_output_in_ledger(tmp_path: Path)
         verification_db=ledger_db,
         command_runner=fake_runner,
     )
+    captured = capsys.readouterr()
 
     with connect(ledger_db) as conn:
         row = conn.execute(
@@ -1069,9 +1073,55 @@ def test_worker_child_failure_persists_captured_output_in_ledger(tmp_path: Path)
     assert result.run.status == "failed"
     assert row["status"] == "failed"
     assert row["error_class"] == "failed:cluster_job_failed"
+    assert "stdout says dependency blew up" in captured.err
+    assert "stderr says CUDA unavailable" in captured.err
     assert "stdout says dependency blew up" in row["error_message"]
     assert "stderr says CUDA unavailable" in row["error_message"]
     assert (tmp_path / "results" / "assign-a.jsonl").exists()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "C5 remains open: repeated sub-floor failed:memory_cap rows are not yet "
+        "escalation evidence without a hard local RAM-failure row."
+    ),
+)
+def test_repeated_subcap_kill_escalates_without_hard_oom(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated sub-floor memory-cap kills should eventually escalate to cluster."""
+
+    local_host = "test-workstation"
+    monkeypatch.setattr("menagerie.cluster_runner.socket.gethostname", lambda: local_host)
+    ledger_db = tmp_path / "verification.db"
+    with connect(ledger_db) as conn:
+        for index in range(3):
+            append_verification_run(
+                conn,
+                _run(
+                    run_id=f"subcap-run-{index}",
+                    stable_id="future-subcap-giant",
+                    name="FutureSubcapGiant",
+                    runner_host=local_host,
+                    status="failed",
+                    forward_pass=0,
+                    metadata_ok=0,
+                    n_ops=None,
+                    graph_shape_hash=None,
+                    peak_rss_mb=50 * 1024,
+                    error_class="failed:memory_cap",
+                    error_message="worker RSS exceeded --worker-memory-cap-gb=50.000; killed",
+                    started_at=f"2026-06-22T00:00:0{index}+00:00",
+                    finished_at=f"2026-06-22T00:00:0{index + 1}+00:00",
+                ),
+            )
+
+    assert is_giant(
+        _row(stable_id="future-subcap-giant", name="FutureSubcapGiant"),
+        ledger=ledger_db,
+    )
 
 
 def _giant_assignment() -> ClusterAssignment:

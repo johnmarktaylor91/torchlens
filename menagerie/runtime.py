@@ -742,8 +742,15 @@ def dependency_plan(row: CatalogRow) -> DependencyPlan:
 
     top_modules, parse_error = _required_modules_with_error(row.constructor_call, row.zoo)
     packages: set[str] = set()
+    pip_cluster_package = _pip_cluster_package(row.zoo)
     for module in top_modules:
         package = MODULE_PACKAGE_MAP.get(module)
+        if (
+            package is None
+            and pip_cluster_package is not None
+            and module == pip_cluster_package.replace("-", "_")
+        ):
+            package = pip_cluster_package
         if package:
             packages.add(package)
     for pattern, hints in ZOO_PACKAGE_HINTS:
@@ -763,6 +770,28 @@ def dependency_plan(row: CatalogRow) -> DependencyPlan:
         environment=environment,
         recipe_parse_error=parse_error,
     )
+
+
+def _pip_cluster_package(zoo: str) -> str | None:
+    """Return the package implied by an explicit ``pip:`` dependency cluster.
+
+    Parameters
+    ----------
+    zoo:
+        Catalog zoo/dependency label.
+
+    Returns
+    -------
+    str | None
+        Package name, or ``None`` when the row does not explicitly
+        declare a pip-installable dependency cluster.
+    """
+
+    prefix = "pip:"
+    if not zoo.startswith(prefix):
+        return None
+    package = zoo[len(prefix) :].strip()
+    return package if package else None
 
 
 def module_importable(module_name: str) -> bool:

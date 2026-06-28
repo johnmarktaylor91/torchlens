@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
+import inspect
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -11,10 +13,72 @@ if TYPE_CHECKING:
     from menagerie.catalog import CatalogRow
 
 
-RECIPE_SCHEME_VERSION = 1
+RECIPE_SCHEME_VERSION = 2
 StableKey = tuple[str, str, str]
 NAME_CHUNK_SIZE = 24
 NAME_CHUNK_THRESHOLD = 60
+
+
+def _sha256_text(text: str) -> str:
+    """Return a SHA-256 digest for UTF-8 text.
+
+    Parameters
+    ----------
+    text:
+        Text payload to hash.
+
+    Returns
+    -------
+    str
+        Hex-encoded SHA-256 digest.
+    """
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _canonical_callable_source(function: Any) -> str:
+    """Return normalized source for a callable.
+
+    Parameters
+    ----------
+    function:
+        Callable whose source defines a classics architecture builder.
+
+    Returns
+    -------
+    str
+        AST-normalized source when available, otherwise raw source.
+    """
+
+    source = inspect.getsource(function)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source
+    return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+
+def _module_file_sha256(function: Any) -> str | None:
+    """Return a digest of the module file containing a callable, when available.
+
+    Parameters
+    ----------
+    function:
+        Callable whose module file should be fingerprinted.
+
+    Returns
+    -------
+    str | None
+        Hex-encoded SHA-256 digest, or ``None`` when no source file exists.
+    """
+
+    source_file = inspect.getsourcefile(function)
+    if source_file is None:
+        return None
+    path = Path(source_file)
+    if not path.exists():
+        return None
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def canonical_recipe_v1(row: CatalogRow) -> str:
@@ -28,7 +92,7 @@ def canonical_recipe_v1(row: CatalogRow) -> str:
     Returns
     -------
     str
-        Frozen JSON serializer output for recipe scheme version 1.
+        Frozen JSON serializer output for the current recipe scheme version.
     """
 
     if row.source == "classics":
@@ -38,6 +102,8 @@ def canonical_recipe_v1(row: CatalogRow) -> str:
         recipe: dict[str, Any] = {
             "module_path": str(entry["module_path"]),
             "build_fn": getattr(entry["build"], "__name__", "build"),
+            "build_source_sha256": _sha256_text(_canonical_callable_source(entry["build"])),
+            "module_file_sha256": _module_file_sha256(entry["build"]),
         }
     else:
         recipe = {"constructor_call": row.constructor_call}

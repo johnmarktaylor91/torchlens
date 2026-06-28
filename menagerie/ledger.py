@@ -796,7 +796,10 @@ def _create_current_verification_view(conn: sqlite3.Connection) -> None:
                 verification_runs.*,
                 ROW_NUMBER() OVER (
                     PARTITION BY stable_id
-                    ORDER BY finished_at DESC, run_id DESC
+                    ORDER BY
+                        CASE WHEN forward_pass IS NOT NULL THEN 0 ELSE 1 END,
+                        finished_at DESC,
+                        run_id DESC
                 ) AS rn
             FROM verification_runs
         )
@@ -849,8 +852,9 @@ def _create_current_verification_view(conn: sqlite3.Connection) -> None:
 def _create_current_verification_real_view(conn: sqlite3.Connection) -> None:
     """Create the cascade-suppressed current verification view.
 
-    This is the HONEST-DENOMINATOR sibling of ``current_verification``. It ranks
-    rows identically (latest ``finished_at``, then ``run_id``, per ``stable_id``)
+    This is the HONEST-DENOMINATOR sibling of ``current_verification``. It uses
+    the same current-row ordering (real forward-status rows before NULL-forward
+    env-smoke rows, then latest ``finished_at`` / ``run_id`` per ``stable_id``)
     but EXCLUDES frozen pre-fix batch-cascade artifact rows
     (``CASCADE_ARTIFACT_ERROR_CLASS`` with the full synthesized signature) before
     selecting the current row. A synthesized cascade row therefore never masks a
@@ -876,7 +880,10 @@ def _create_current_verification_real_view(conn: sqlite3.Connection) -> None:
                 verification_runs.*,
                 ROW_NUMBER() OVER (
                     PARTITION BY stable_id
-                    ORDER BY finished_at DESC, run_id DESC
+                    ORDER BY
+                        CASE WHEN forward_pass IS NOT NULL THEN 0 ELSE 1 END,
+                        finished_at DESC,
+                        run_id DESC
                 ) AS rn
             FROM verification_runs
             WHERE NOT (
@@ -1476,25 +1483,25 @@ def verified_count(
     _load_verification_targets(conn, targets)
     row = conn.execute(
         """
-        SELECT COUNT(DISTINCT current_verification.stable_id)
-        FROM current_verification
+        SELECT COUNT(DISTINCT current_verification_real.stable_id)
+        FROM current_verification_real
         JOIN temp_current_verification_targets AS target
-          ON target.stable_id = current_verification.stable_id
-         AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
-         AND target.torchlens_source_hash = current_verification.torchlens_source_hash
-         AND target.env_hash = current_verification.env_hash
-         AND target.lock_hash = current_verification.lock_hash
-         AND target.device_requested = current_verification.device_requested
-         AND target.scope = current_verification.scope
-        WHERE current_verification.status = 'passed'
-          AND current_verification.forward_pass = 1
-          AND current_verification.metadata_ok = 1
-          AND current_verification.n_ops IS NOT NULL
-          AND current_verification.graph_shape_hash IS NOT NULL
-          AND current_verification.torchlens_version = ?
+          ON target.stable_id = current_verification_real.stable_id
+         AND target.recipe_revision_sha256 = current_verification_real.recipe_revision_sha256
+         AND target.torchlens_source_hash = current_verification_real.torchlens_source_hash
+         AND target.env_hash = current_verification_real.env_hash
+         AND target.lock_hash = current_verification_real.lock_hash
+         AND target.device_requested = current_verification_real.device_requested
+         AND target.scope = current_verification_real.scope
+        WHERE current_verification_real.status = 'passed'
+          AND current_verification_real.forward_pass = 1
+          AND current_verification_real.metadata_ok = 1
+          AND current_verification_real.n_ops IS NOT NULL
+          AND current_verification_real.graph_shape_hash IS NOT NULL
+          AND current_verification_real.torchlens_version = ?
           AND NOT (
-              current_verification.torchlens_source_hash = ?
-              OR current_verification.lock_hash = ?
+              current_verification_real.torchlens_source_hash = ?
+              OR current_verification_real.lock_hash = ?
           )
         """,
         (torchlens_version, LEGACY_UNKNOWN, LEGACY_UNKNOWN),
@@ -1639,11 +1646,11 @@ def incremental_skip_stable_ids(
 def cascade_suppressed_stable_ids(conn: sqlite3.Connection) -> list[str]:
     """Return stable IDs whose current row is a suppressed cascade artifact.
 
-    A stable ID is suppressed when its latest row in ``current_verification`` is a
-    frozen pre-fix batch-cascade artifact, so ``current_verification_real`` shows a
-    different (or no) row for it. These are exactly the models whose REAL outcome
-    is pending re-derivation (re-attribution or re-run); the honest view hides the
-    synthesized failure rather than depressing the headline with it.
+    A stable ID is suppressed when its selected row in ``current_verification`` is
+    a frozen pre-fix batch-cascade artifact, so ``current_verification_real`` shows
+    a different (or no) row for it. These are exactly the models whose REAL
+    outcome is pending re-derivation (re-attribution or re-run); the honest view
+    hides the synthesized failure rather than depressing the headline with it.
 
     Parameters
     ----------
