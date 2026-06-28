@@ -5,19 +5,41 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import socket
 import sqlite3
 import sys
+from collections.abc import Collection
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, NoReturn, Sequence
 
 from menagerie.cluster_runner import GIANT_REGISTRY
 from menagerie.generate_menagerie import visual_mode_from_options
 from menagerie.smoke_test import snapshot_verification_content
 from menagerie.validate_menagerie import MANIFEST_STATUS_VALUES
 
+KNOWN_JUSTIFIED_MANIFEST_STATUSES = (
+    "validated",
+    "failed:exception",
+    "failed:killed",
+    "failed:memory_cap",
+    "failed:native_crash",
+    "failed:oom",
+    "failed:replay",
+    "failed:timeout",
+    "failed:trace_summary",
+    "skipped:cluster_unavailable",
+    "skipped:dependency_unavailable",
+    "skipped:dry_run",
+    "skipped:unsupported_input_recipe",
+)
+KNOWN_JUSTIFIED_SKIP_STATUSES = tuple(
+    status for status in KNOWN_JUSTIFIED_MANIFEST_STATUSES if status.startswith("skipped:")
+)
+HIGH_SIGKILL_ESTIMATE_MB = 12 * 1024
 
-def _fail(message: str) -> None:
+
+def _fail(message: str) -> NoReturn:
     """Raise a gate failure.
 
     Parameters
@@ -125,6 +147,269 @@ def _assert_smoke_ledger(cases: Sequence[dict[str, Any]], out_dir: Path) -> None
             ).fetchone()[0]
             if int(count) != 1:
                 _fail(f"{stable_id} | smoke ledger current row count | actual={count}")
+
+
+def _assert_no_env_smoke_masking(out_dir: Path) -> None:
+    """Assert NULL-forward rows cannot mask validated forward rows.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    if not ledger_db.exists():
+        _fail(f"missing smoke ledger | {ledger_db}")
+    rows = _read_tsv(out_dir / "validation" / "validation_manifest.tsv")
+    expected_validated = {row["stable_id"] for row in rows if row.get("status") == "validated"}
+    with sqlite3.connect(ledger_db) as connection:
+        current_rows = connection.execute(
+            "SELECT stable_id, status, forward_pass FROM current_verification"
+        ).fetchall()
+        forward_pass_count = connection.execute(
+            "SELECT COUNT(DISTINCT stable_id) FROM current_verification WHERE forward_pass = 1"
+        ).fetchone()[0]
+    masked = [
+        stable_id
+        for stable_id, status, forward_pass in current_rows
+        if stable_id in expected_validated and (status != "passed" or forward_pass != 1)
+    ]
+    if masked:
+        _fail(f"validated rows masked by non-forward current rows | stable_ids={masked}")
+    if int(forward_pass_count) != len(expected_validated):
+        _fail(
+            "validated headline mismatch | "
+            f"manifest_validated={len(expected_validated)} forward_pass_count={forward_pass_count}"
+        )
+
+
+def _assert_skip_taxonomy_closed(
+    statuses: Collection[str] = MANIFEST_STATUS_VALUES,
+    *,
+    known_statuses: Collection[str] = KNOWN_JUSTIFIED_MANIFEST_STATUSES,
+) -> None:
+    """Assert every skip/fail manifest status is in the closed taxonomy.
+
+    Parameters
+    ----------
+    statuses:
+        Manifest statuses to inspect.
+    known_statuses:
+        Frozen status taxonomy.
+    """
+
+    relevant = {status for status in statuses if status.startswith(("failed:", "skipped:"))}
+    known = {status for status in known_statuses if status.startswith(("failed:", "skipped:"))}
+    if relevant != known:
+        _fail(
+            "manifest skip/fail taxonomy drift | "
+            f"missing={sorted(known - relevant)} unexpected={sorted(relevant - known)}"
+        )
+
+
+def _assert_sigkill_surfaced(out_dir: Path) -> None:
+    """Assert killed workers are surfaced as failures with a high memory floor.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    if not ledger_db.exists():
+        _fail(f"missing smoke ledger | {ledger_db}")
+    with sqlite3.connect(ledger_db) as connection:
+        killed_rows = connection.execute(
+            "SELECT stable_id, status, peak_rss_mb FROM current_verification "
+            "WHERE status IN ('killed', 'oom', 'native_crash') "
+            "OR error_class IN ('failed:killed', 'failed:oom', 'failed:native_crash')"
+        ).fetchall()
+    for stable_id, _status, peak_rss_mb in killed_rows:
+        estimate_mb = HIGH_SIGKILL_ESTIMATE_MB if peak_rss_mb is None else int(peak_rss_mb)
+        if estimate_mb <= 4 * 1024:
+            _fail(f"{stable_id} | SIGKILL scheduler estimate did not use high floor")
+
+
+def _assert_plain_placeholder_tripwire(out_dir: Path) -> None:
+    """Assert synthesized funcless placeholders fail during plain capture.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    rows = _read_tsv(out_dir / "validation" / "validation_manifest.tsv")
+    for row in rows:
+        stable_id = row.get("stable_id", "")
+        if stable_id == "smoke_plain_placeholder_1":
+            status = row.get("status", "")
+            error = row.get("error", "")
+            if not status.startswith("failed:") or "placeholder" not in error.casefold():
+                _fail(f"{stable_id} | plain placeholder did not fail the tripwire")
+            return
+
+
+def _assert_render_writes_no_verification_rows(out_dir: Path) -> None:
+    """Assert render artifacts did not append verification rows.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    report = json.loads((out_dir / "RUN_ALL_REPORT.json").read_text(encoding="utf-8"))
+    validation_total = int(report.get("validation", {}).get("total", 0))
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    with sqlite3.connect(ledger_db) as connection:
+        count = int(connection.execute("SELECT COUNT(*) FROM verification_runs").fetchone()[0])
+    if count != validation_total:
+        _fail(
+            "render/metadata wrote verification rows | "
+            f"validation_total={validation_total} verification_rows={count}"
+        )
+
+
+def _assert_snapshots_unchanged(out_dir: Path) -> None:
+    """Assert non-ledger production snapshots did not change.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    before = json.loads((out_dir / "production_snapshot_before.json").read_text(encoding="utf-8"))
+    data_dir = Path(__file__).resolve().parent / "data"
+    current = {
+        "trace_summary_db": _path_snapshot(data_dir / "trace_summary.db"),
+        "catalog_db": _path_snapshot(Path(before["catalog_db"]["path"])),
+        "locks_dir": _path_snapshot(Path(__file__).resolve().parent / "locks"),
+    }
+    for key, snapshot in current.items():
+        if before.get(key) != snapshot:
+            _fail(f"production snapshot changed | key={key}")
+
+
+def _path_snapshot(path: Path) -> dict[str, Any]:
+    """Return the same path snapshot shape produced by smoke_test.
+
+    Parameters
+    ----------
+    path:
+        Path to snapshot.
+
+    Returns
+    -------
+    dict[str, Any]
+        Snapshot fields.
+    """
+
+    import hashlib
+
+    if not path.exists():
+        return {"path": str(path), "exists": False, "sha256": None, "mtime_ns": None, "size": None}
+    digest: str | None = None
+    if path.is_file():
+        hasher = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        digest = hasher.hexdigest()
+    stat = path.stat()
+    return {
+        "path": str(path),
+        "exists": True,
+        "sha256": digest,
+        "mtime_ns": stat.st_mtime_ns,
+        "size": stat.st_size,
+    }
+
+
+def _assert_append_only_triggers_present(out_dir: Path) -> None:
+    """Assert smoke ledger has append-only protection triggers.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    with sqlite3.connect(ledger_db) as connection:
+        triggers = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            ).fetchall()
+        }
+    required = {"verification_runs_no_update", "verification_runs_no_delete"}
+    if not required.issubset(triggers):
+        _fail(f"append-only triggers missing | missing={sorted(required - triggers)}")
+
+
+def _assert_no_stray_candidate(data_dir: Path | None = None) -> None:
+    """Assert production data has no stray candidate migration files.
+
+    Parameters
+    ----------
+    data_dir:
+        Menagerie data directory. Defaults to production data.
+    """
+
+    root = data_dir or Path(__file__).resolve().parent / "data"
+    candidates = sorted(path for path in root.rglob("*.candidate") if path.is_file())
+    if candidates:
+        _fail(f"stray candidate files found | paths={[str(path) for path in candidates]}")
+
+
+def _assert_offline_isolation() -> None:
+    """Assert smoke ran with model-download offline mode enabled."""
+
+    missing = [
+        key for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE") if os.environ.get(key) != "1"
+    ]
+    if missing:
+        _fail(f"offline isolation missing | env={missing}")
+
+
+def _assert_det_algo_restored(out_dir: Path) -> None:
+    """Assert deterministic-algorithm and thread globals were restored.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    before_path = out_dir / "runtime_snapshot_before.json"
+    after_path = out_dir / "runtime_snapshot_after.json"
+    if not before_path.exists() or not after_path.exists():
+        _fail("missing runtime snapshots")
+    before = json.loads(before_path.read_text(encoding="utf-8"))
+    after = json.loads(after_path.read_text(encoding="utf-8"))
+    if before != after:
+        _fail(f"runtime globals changed | before={before} after={after}")
+
+
+def _assert_run_health_signal(out_dir: Path) -> None:
+    """Assert run-all emitted a health block and surfaced degradations.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    """
+
+    report = json.loads((out_dir / "RUN_ALL_REPORT.json").read_text(encoding="utf-8"))
+    health = report.get("health")
+    if not isinstance(health, dict):
+        _fail("RUN_ALL_REPORT missing health block")
+    if int(health.get("unexpected_failures", 0)) and health.get("ok") is True:
+        _fail("RUN_ALL_REPORT health is ok despite unexpected validation failures")
 
 
 def _assert_production_unchanged(
@@ -393,10 +678,21 @@ def run(args: argparse.Namespace) -> None:
     out_dir = args.out_dir.resolve()
     _assert_validation_manifest(cases, out_dir)
     _assert_smoke_ledger(cases, out_dir)
+    _assert_no_env_smoke_masking(out_dir)
+    _assert_skip_taxonomy_closed()
+    _assert_sigkill_surfaced(out_dir)
+    _assert_plain_placeholder_tripwire(out_dir)
     _assert_cluster(cases, out_dir)
     _assert_visuals(cases, out_dir)
     _assert_metadata_and_csv(cases, out_dir)
     _assert_timings(out_dir)
+    _assert_render_writes_no_verification_rows(out_dir)
+    _assert_snapshots_unchanged(out_dir)
+    _assert_append_only_triggers_present(out_dir)
+    _assert_no_stray_candidate()
+    _assert_offline_isolation()
+    _assert_det_algo_restored(out_dir)
+    _assert_run_health_signal(out_dir)
     _assert_production_unchanged(cases, out_dir, args.production_verification_db)
 
 

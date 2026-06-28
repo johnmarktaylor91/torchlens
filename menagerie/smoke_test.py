@@ -368,6 +368,43 @@ def _snapshot_production(out_dir: Path, smoke_start: str, stable_ids: Sequence[s
     )
 
 
+def _torch_runtime_snapshot() -> dict[str, Any]:
+    """Return deterministic-algorithm and thread runtime state.
+
+    Returns
+    -------
+    dict[str, Any]
+        Runtime state used by the smoke gate to detect global leakage.
+    """
+
+    try:
+        import torch
+    except ModuleNotFoundError:
+        return {"torch_available": False}
+    return {
+        "torch_available": True,
+        "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()),
+        "num_threads": int(torch.get_num_threads()),
+    }
+
+
+def _write_runtime_snapshot(out_dir: Path, name: str) -> None:
+    """Write one smoke runtime snapshot.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    name:
+        Snapshot name suffix.
+    """
+
+    (out_dir / f"runtime_snapshot_{name}.json").write_text(
+        json.dumps(_torch_runtime_snapshot(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _preflight_assignments(cases: Sequence[SmokeCase], catalog_db: Path) -> None:
     """Assert live env assignment matches the smoke manifest.
 
@@ -453,11 +490,16 @@ def run(args: argparse.Namespace) -> Path:
         ENV_VERIFICATION_DB,
         "TORCHLENS_MENAGERIE_SMOKE_LOCKS_READONLY",
         "TORCHLENS_MENAGERIE_ENV_CACHE_ROOT",
+        "HF_HUB_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
     )
     previous_env = {key: os.environ.get(key) for key in env_keys}
+    _write_runtime_snapshot(out_dir, "before")
     try:
         os.environ[ENV_VERIFICATION_DB] = str(smoke_ledger)
         os.environ["TORCHLENS_MENAGERIE_SMOKE_LOCKS_READONLY"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
         # Honor a caller-provided warm pixi-env cache (faster reruns); default to a
         # per-run cache under the smoke out-dir for full isolation.
         os.environ.setdefault("TORCHLENS_MENAGERIE_ENV_CACHE_ROOT", str(out_dir / "envs_cache"))
@@ -500,6 +542,7 @@ def run(args: argparse.Namespace) -> Path:
             if gate_code != 0:
                 raise RuntimeError(f"smoke gate failed with exit code {gate_code}")
     finally:
+        _write_runtime_snapshot(out_dir, "after")
         for key, value in previous_env.items():
             if value is None:
                 os.environ.pop(key, None)

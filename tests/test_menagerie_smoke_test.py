@@ -78,6 +78,24 @@ def _seed_production_ledger(db_path: Path, stable_ids: list[str]) -> None:
         conn.close()
 
 
+def _append_run(db_path: Path, run: ledger.VerificationRun) -> None:
+    """Append one verification row to an isolated ledger.
+
+    Parameters
+    ----------
+    db_path:
+        Destination ledger path.
+    run:
+        Verification run to append.
+    """
+
+    conn = ledger.connect(db_path)
+    try:
+        ledger.append_verification_run(conn, run)
+    finally:
+        conn.close()
+
+
 def _write_production_snapshot(out_dir: Path, production_db: Path, smoke_start: str) -> None:
     """Write a ``production_snapshot_before.json`` like the smoke producer.
 
@@ -99,6 +117,63 @@ def _write_production_snapshot(out_dir: Path, production_db: Path, smoke_start: 
     (out_dir / "production_snapshot_before.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+
+def _write_manifest(out_dir: Path, rows: list[dict[str, str]]) -> None:
+    """Write a minimal validation manifest.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    rows:
+        Manifest rows.
+    """
+
+    validation_dir = out_dir / "validation"
+    validation_dir.mkdir(parents=True, exist_ok=True)
+    columns = [
+        "name",
+        "model_id",
+        "stable_id",
+        "recipe_revision_sha256",
+        "status",
+        "n_ops",
+        "validate_metadata_ok",
+        "scope",
+        "elapsed",
+        "dependency_cluster",
+        "error",
+        "graph_shape_hash",
+        "peak_rss_mb",
+        "input_scale",
+    ]
+    lines = ["\t".join(columns)]
+    for row in rows:
+        full = {column: "" for column in columns}
+        full.update(row)
+        lines.append("\t".join(full[column] for column in columns))
+    (validation_dir / "validation_manifest.tsv").write_text("\n".join(lines) + "\n")
+
+
+def _write_report(out_dir: Path, health: dict[str, object] | None = None) -> None:
+    """Write a minimal run-all report.
+
+    Parameters
+    ----------
+    out_dir:
+        Smoke output directory.
+    health:
+        Optional health block.
+    """
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "validation": {"validated": 1, "failed": 0, "skipped": 0, "total": 1},
+        "timings": [{"name": "validation", "skipped": False, "elapsed_sec": 0.1}],
+        "health": health or {"ok": True, "unexpected_failures": 0},
+    }
+    (out_dir / "RUN_ALL_REPORT.json").write_text(json.dumps(payload) + "\n")
 
 
 def _case(
@@ -355,3 +430,232 @@ def test_production_unchanged_fails_on_fresh_smoke_stable_id(tmp_path: Path) -> 
     cases = [{"stable_id": "smoke_case_1", "expected_status": "validated"}]
     with pytest.raises(RuntimeError, match="fresh smoke rows"):
         smoke_gate._assert_production_unchanged(cases, out_dir, production_db)  # noqa: SLF001
+
+
+def test_gate_f1_no_env_smoke_masking_positive_and_negative(tmp_path: Path) -> None:
+    """F1 rejects NULL-forward rows masking validated rows and accepts good rows."""
+
+    out_dir = tmp_path / "smoke"
+    _write_manifest(
+        out_dir,
+        [{"stable_id": "m_ok", "status": "validated", "name": "n", "model_id": "1"}],
+    )
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    _append_run(ledger_db, _verification_run("m_ok"))
+
+    smoke_gate._assert_no_env_smoke_masking(out_dir)  # noqa: SLF001
+
+    bad_dir = tmp_path / "bad"
+    _write_manifest(
+        bad_dir,
+        [{"stable_id": "m_ok", "status": "validated", "name": "n", "model_id": "1"}],
+    )
+    bad_db = bad_dir / "ledger" / "verification_smoke.db"
+    masked = _verification_run("m_ok")
+    _append_run(
+        bad_db,
+        ledger.VerificationRun(
+            **{
+                **masked.__dict__,
+                "run_id": "",
+                "status": "env_unavailable",
+                "forward_pass": None,
+                "metadata_ok": None,
+                "n_ops": None,
+                "graph_shape_hash": None,
+                "finished_at": "2026-01-01T00:00:02+00:00",
+            }
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="validated headline mismatch|masked"):
+        smoke_gate._assert_no_env_smoke_masking(bad_dir)  # noqa: SLF001
+
+
+def test_gate_c3_skip_taxonomy_closed_positive_and_negative() -> None:
+    """C3 rejects any skip/fail status outside the frozen taxonomy."""
+
+    smoke_gate._assert_skip_taxonomy_closed()  # noqa: SLF001
+
+    with pytest.raises(RuntimeError, match="taxonomy drift"):
+        smoke_gate._assert_skip_taxonomy_closed([*smoke_gate.MANIFEST_STATUS_VALUES, "skipped:new"])
+
+
+def test_gate_b1_sigkill_positive_and_negative(tmp_path: Path) -> None:
+    """B1 surfaces killed workers and fails if the high floor is lost."""
+
+    out_dir = tmp_path / "smoke"
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    killed = _verification_run("smoke_sigkill_1")
+    _append_run(
+        ledger_db,
+        ledger.VerificationRun(
+            **{
+                **killed.__dict__,
+                "run_id": "",
+                "status": "killed",
+                "forward_pass": 0,
+                "metadata_ok": None,
+                "n_ops": None,
+                "graph_shape_hash": None,
+                "error_class": "failed:killed",
+                "peak_rss_mb": None,
+            }
+        ),
+    )
+    smoke_gate._assert_sigkill_surfaced(out_dir)  # noqa: SLF001
+
+    bad_dir = tmp_path / "bad"
+    bad_db = bad_dir / "ledger" / "verification_smoke.db"
+    _append_run(
+        bad_db,
+        ledger.VerificationRun(
+            **{
+                **killed.__dict__,
+                "run_id": "",
+                "status": "killed",
+                "forward_pass": 0,
+                "metadata_ok": None,
+                "n_ops": None,
+                "graph_shape_hash": None,
+                "error_class": "failed:killed",
+                "peak_rss_mb": 1024,
+            }
+        ),
+    )
+    with pytest.raises(RuntimeError, match="SIGKILL"):
+        smoke_gate._assert_sigkill_surfaced(bad_dir)  # noqa: SLF001
+
+
+def test_gate_a2_plain_placeholder_positive_and_negative(tmp_path: Path) -> None:
+    """A2 requires the funcless plain-placeholder tripwire to fail."""
+
+    out_dir = tmp_path / "smoke"
+    _write_manifest(
+        out_dir,
+        [
+            {
+                "stable_id": "smoke_plain_placeholder_1",
+                "status": "failed:trace_summary",
+                "error": "funcless placeholder rejected",
+            }
+        ],
+    )
+    smoke_gate._assert_plain_placeholder_tripwire(out_dir)  # noqa: SLF001
+
+    bad_dir = tmp_path / "bad"
+    _write_manifest(
+        bad_dir,
+        [{"stable_id": "smoke_plain_placeholder_1", "status": "validated"}],
+    )
+    with pytest.raises(RuntimeError, match="plain placeholder"):
+        smoke_gate._assert_plain_placeholder_tripwire(bad_dir)  # noqa: SLF001
+
+
+def test_gate_f2_render_writes_no_verification_rows_positive_and_negative(tmp_path: Path) -> None:
+    """F2 rejects extra verification rows beyond validation totals."""
+
+    out_dir = tmp_path / "smoke"
+    _write_report(out_dir)
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    _append_run(ledger_db, _verification_run("m_ok"))
+    smoke_gate._assert_render_writes_no_verification_rows(out_dir)  # noqa: SLF001
+
+    _append_run(ledger_db, _verification_run("m_extra"))
+    with pytest.raises(RuntimeError, match="wrote verification rows"):
+        smoke_gate._assert_render_writes_no_verification_rows(out_dir)  # noqa: SLF001
+
+
+def test_gate_f4_append_only_triggers_positive_and_negative(tmp_path: Path) -> None:
+    """F4 requires both append-only ledger triggers."""
+
+    out_dir = tmp_path / "smoke"
+    ledger_db = out_dir / "ledger" / "verification_smoke.db"
+    _append_run(ledger_db, _verification_run("m_ok"))
+    smoke_gate._assert_append_only_triggers_present(out_dir)  # noqa: SLF001
+
+    with sqlite3.connect(ledger_db) as connection:
+        connection.execute("DROP TRIGGER verification_runs_no_update")
+    with pytest.raises(RuntimeError, match="append-only triggers"):
+        smoke_gate._assert_append_only_triggers_present(out_dir)  # noqa: SLF001
+
+
+def test_gate_f3_snapshots_unchanged_positive_and_negative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F3 rejects production snapshot drift."""
+
+    out_dir = tmp_path / "smoke"
+    data_dir = tmp_path / "data"
+    locks_dir = tmp_path / "locks"
+    out_dir.mkdir()
+    data_dir.mkdir()
+    locks_dir.mkdir()
+    catalog = data_dir / "catalog.db"
+    trace_summary = data_dir / "trace_summary.db"
+    catalog.write_text("catalog", encoding="utf-8")
+    trace_summary.write_text("trace", encoding="utf-8")
+    monkeypatch.setattr(smoke_gate, "__file__", str(tmp_path / "smoke_gate.py"))
+    payload = {
+        "catalog_db": smoke_gate._path_snapshot(catalog),  # noqa: SLF001
+        "trace_summary_db": smoke_gate._path_snapshot(trace_summary),  # noqa: SLF001
+        "locks_dir": smoke_gate._path_snapshot(locks_dir),  # noqa: SLF001
+    }
+    (out_dir / "production_snapshot_before.json").write_text(json.dumps(payload))
+    smoke_gate._assert_snapshots_unchanged(out_dir)  # noqa: SLF001
+
+    trace_summary.write_text("changed", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="production snapshot changed"):
+        smoke_gate._assert_snapshots_unchanged(out_dir)  # noqa: SLF001
+
+
+def test_gate_e2_no_stray_candidate_positive_and_negative(tmp_path: Path) -> None:
+    """E2 rejects stray .candidate files in the checked data root."""
+
+    smoke_gate._assert_no_stray_candidate(tmp_path)  # noqa: SLF001
+
+    (tmp_path / "bad.jsonl.candidate").write_text("", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="stray candidate"):
+        smoke_gate._assert_no_stray_candidate(tmp_path)  # noqa: SLF001
+
+
+def test_gate_i1_offline_isolation_positive_and_negative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """I1 requires both offline environment flags."""
+
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+    smoke_gate._assert_offline_isolation()  # noqa: SLF001
+
+    monkeypatch.delenv("HF_HUB_OFFLINE")
+    with pytest.raises(RuntimeError, match="offline isolation"):
+        smoke_gate._assert_offline_isolation()  # noqa: SLF001
+
+
+def test_gate_d2_det_algo_restored_positive_and_negative(tmp_path: Path) -> None:
+    """D2 rejects deterministic/thread global leaks."""
+
+    out_dir = tmp_path / "smoke"
+    out_dir.mkdir()
+    before = {"torch_available": True, "deterministic_algorithms": False, "num_threads": 4}
+    (out_dir / "runtime_snapshot_before.json").write_text(json.dumps(before))
+    (out_dir / "runtime_snapshot_after.json").write_text(json.dumps(before))
+    smoke_gate._assert_det_algo_restored(out_dir)  # noqa: SLF001
+
+    (out_dir / "runtime_snapshot_after.json").write_text(json.dumps({**before, "num_threads": 8}))
+    with pytest.raises(RuntimeError, match="runtime globals changed"):
+        smoke_gate._assert_det_algo_restored(out_dir)  # noqa: SLF001
+
+
+def test_gate_h1_run_health_signal_positive_and_negative(tmp_path: Path) -> None:
+    """H1 requires a health block and rejects hidden unexpected failures."""
+
+    out_dir = tmp_path / "smoke"
+    out_dir.mkdir()
+    _write_report(out_dir, {"ok": False, "unexpected_failures": 1})
+    smoke_gate._assert_run_health_signal(out_dir)  # noqa: SLF001
+
+    _write_report(out_dir, {"ok": True, "unexpected_failures": 1})
+    with pytest.raises(RuntimeError, match="unexpected validation failures"):
+        smoke_gate._assert_run_health_signal(out_dir)  # noqa: SLF001
