@@ -183,10 +183,16 @@ def _load_classics() -> dict[str, dict[str, Any]]:
         for entry in entries:
             try:
                 canonical_name, build_attr, example_attr, year, code = entry
+                # Tolerate MENAGERIE_ENTRIES that pass callables directly instead of string
+                # attribute names (some generators emit the function objects).
+                build = build_attr if callable(build_attr) else getattr(module, build_attr)
+                example_input = (
+                    example_attr if callable(example_attr) else getattr(module, example_attr)
+                )
                 registry[canonical_name] = {
                     "module_path": module_path,
-                    "build": getattr(module, build_attr),
-                    "example_input": getattr(module, example_attr),
+                    "build": build,
+                    "example_input": example_input,
                     "year": str(year) or _year_from_docstring(docstring),
                     "family": canonical_name,
                     "era": code,
