@@ -482,7 +482,7 @@ def example_input_ketod() -> tuple[Tensor, Tensor, Tensor]:
 
 
 MENAGERIE_ENTRIES = [
-    ("IEMOCAP", "build_dialoguernn", "example_input_dialoguernn", "2019", "NLP"),
+    ("DialogueRNN", "build_dialoguernn", "example_input_dialoguernn", "2019", "NLP"),
     (
         "InstructDial (Instruction-Tuned Dialogue)",
         "build_instructdial",
