@@ -580,9 +580,14 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             param_address = f"{address}.{param_name}" if address else param_name
             param_id_to_address[pid] = param_address
 
-            # Save original requires_grad before forcing True.
+            # Save original requires_grad before forcing True. Integer/bool-dtype
+            # Parameters (e.g. a fixed nn.Parameter(torch.arange(...), requires_grad=False)
+            # lookup buffer) are legal PyTorch and never gradient-capable; forcing
+            # requires_grad on them raises, so only force floating/complex dtypes.
             requires_grad_before = param.requires_grad
-            if not getattr(trace, "backward_ready", False):
+            if not getattr(trace, "backward_ready", False) and (
+                torch.is_floating_point(param) or torch.is_complex(param)
+            ):
                 param.requires_grad = True
 
             barcode = make_random_barcode()
@@ -655,7 +660,9 @@ def _retag_existing_session_param_logs(trace: "Trace", model: nn.Module) -> None
                 seen_param_ids.add(pid)
                 param_id_to_address[pid] = primary_address
                 requires_grad_before = param.requires_grad
-                if not getattr(trace, "backward_ready", False):
+                if not getattr(trace, "backward_ready", False) and (
+                    torch.is_floating_point(param) or torch.is_complex(param)
+                ):
                     param.requires_grad = True
                 set_param_meta(
                     param,
