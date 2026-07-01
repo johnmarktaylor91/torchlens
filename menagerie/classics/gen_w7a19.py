@@ -991,7 +991,7 @@ def example_input_heptrkx() -> tuple[Tensor, Tensor, Tensor]:
 
 
 MENAGERIE_ENTRIES = [
-    ("GPUMD", "build_gpumd_nep", "example_input_gpumd_nep", "2022", "BIO"),
+    ("Neuroevolution Potential (NEP)", "build_gpumd_nep", "example_input_gpumd_nep", "2022", "BIO"),
     ("GrAFF-MS", "build_graff_ms", "example_input_graff_ms", "2023", "BIO"),
     ("Graph2SMILES", "build_graph2smiles", "example_input_graph2smiles", "2022", "BIO"),
     ("GT-NMR", "build_gt_nmr", "example_input_gt_nmr", "2024", "BIO"),

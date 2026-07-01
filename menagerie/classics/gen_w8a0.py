@@ -343,34 +343,6 @@ class Space2Model(nn.Module):
         return self.subspace(pooled)
 
 
-def build_space2() -> nn.Module:
-    """Build a compact random-init SPACE-2 model.
-
-    Returns
-    -------
-    nn.Module
-        Random-initialized ``Space2Model`` in eval mode.
-    """
-
-    return Space2Model().eval()
-
-
-def example_input_space2() -> tuple[Tensor, Tensor, Tensor]:
-    """Create a small tokenized dialog batch.
-
-    Returns
-    -------
-    tuple[Tensor, Tensor, Tensor]
-        ``(token_ids, turn_ids, type_ids)``, each shape ``(2, 16)``.
-    """
-
-    torch.manual_seed(0)
-    token_ids = torch.randint(0, 256, (2, 16))
-    turn_ids = torch.randint(0, 8, (2, 16))
-    type_ids = torch.randint(0, 2, (2, 16))
-    return token_ids, turn_ids, type_ids
-
-
 # ---------------------------------------------------------------------------
 # 3. PDDFormer: pairwise-distance-distribution graph transformer for crystals
 # ---------------------------------------------------------------------------
@@ -570,7 +542,6 @@ def example_input_pddformer() -> tuple[Tensor, Tensor, Tensor]:
 
 MENAGERIE_ENTRIES = [
     ("MultiPath", "build_multipath", "example_input_multipath", "2019", "SEQ"),
-    ("SPACE (deep learning Hi-C)", "build_space2", "example_input_space2", "2022", "NLP"),
     ("PDDFormer", "build_pddformer", "example_input_pddformer", "2024", "GRAPH"),
 ]
 

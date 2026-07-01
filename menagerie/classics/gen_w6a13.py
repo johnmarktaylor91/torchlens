@@ -695,29 +695,6 @@ class DanQ(nn.Module):
         return self.classifier(flat)
 
 
-def build_danq() -> nn.Module:
-    """Build a small DanQ conv+BiLSTM genomic-feature predictor.
-
-    Returns
-    -------
-    nn.Module
-        Random-initialized :class:`DanQ` in eval mode.
-    """
-    return DanQ(sequence_length=200, n_features=20).eval()
-
-
-def example_input_danq() -> Tensor:
-    """Return an example one-hot DNA sequence.
-
-    Returns
-    -------
-    Tensor
-        Float tensor ``(1, 4, 200)``.
-    """
-    ids = torch.randint(0, 4, (1, 200), dtype=torch.long)
-    return F.one_hot(ids, num_classes=4).float().transpose(1, 2)
-
-
 # ---------------------------------------------------------------------------
 # SpaIM
 # ---------------------------------------------------------------------------
@@ -876,6 +853,5 @@ MENAGERIE_ENTRIES = [
     ("scScope", "build_scscope", "example_input_scscope", "2019", "BIO"),
     ("scVAE", "build_scvae", "example_input_scvae", "2020", "BIO"),
     ("Sei", "build_sei", "example_input_sei", "2022", "BIO"),
-    ("Selene/Selene model zoo CNNs", "build_danq", "example_input_danq", "2019", "BIO"),
     ("SpaIM", "build_spaim", "example_input_spaim", "2025", "BIO"),
 ]

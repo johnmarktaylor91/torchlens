@@ -853,7 +853,7 @@ MENAGERIE_ENTRIES = [
     ("Neural Quantum States RBM", "build_rbm_nqs", "example_input_rbm_nqs", "2017", "BIO"),
     ("Neural P3M", "build_neural_p3m", "example_input_neural_p3m", "2024", "BIO"),
     ("NMRNet", "build_nmrnet", "example_input_nmrnet", "2025", "BIO"),
-    ("OmniFold", "build_omnifold_pfn", "example_input_omnifold_pfn", "2020", "BIO"),
+    ("Particle Flow Network", "build_omnifold_pfn", "example_input_omnifold_pfn", "2020", "BIO"),
 ]
 
 if __name__ == "__main__":

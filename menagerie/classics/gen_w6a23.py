@@ -767,7 +767,7 @@ def example_input_dynamicbind() -> tuple[Tensor, Tensor, Tensor, Tensor]:
 
 MENAGERIE_ENTRIES = [
     ("DMfold", "build_dmfold", "example_input_dmfold", "2019", "BIO"),
-    ("DMPfold", "build_dmpfold2", "example_input_dmpfold2", "2022", "BIO"),
+    ("DMPfold2", "build_dmpfold2", "example_input_dmpfold2", "2022", "BIO"),
     ("DOVE", "build_dove", "example_input_dove", "2020", "BIO"),
     ("DRfold", "build_drfold", "example_input_drfold", "2023", "BIO"),
     ("dyMEAN", "build_dymean", "example_input_dymean", "2023", "BIO"),

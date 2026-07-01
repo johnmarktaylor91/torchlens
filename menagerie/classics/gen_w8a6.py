@@ -890,7 +890,7 @@ def example_input_deeptda() -> torch.Tensor:
 MENAGERIE_ENTRIES = [
     ("CGnet (Coarse-Grained Network)", "build_cgnet", "example_input_cgnet", "2019", "BIO"),
     ("CGSchNet", "build_cgschnet", "example_input_cgschnet", "2020", "BIO"),
-    ("CGVAE coarse-grained force field", "build_cgvae", "example_input_cgvae", "2022", "BIO"),
+    ("CGVAE backmapping decoder", "build_cgvae", "example_input_cgvae", "2022", "BIO"),
     ("Charge3Net", "build_charge3net", "example_input_charge3net", "2024", "BIO"),
     ("ComENet", "build_comenet", "example_input_comenet", "2022", "BIO"),
     ("Deep-TDA", "build_deeptda", "example_input_deeptda", "2021", "BIO"),

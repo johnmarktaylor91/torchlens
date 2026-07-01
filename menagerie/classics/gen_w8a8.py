@@ -967,7 +967,7 @@ def example_input_esen() -> tuple[Tensor, Tensor]:
 
 
 MENAGERIE_ENTRIES = [
-    ("DP-RDKit", "build_dp_rdkit", "example_input_dp_rdkit", "2022", "SCI"),
+    ("DPLR (Deep Potential Long Range)", "build_dp_rdkit", "example_input_dp_rdkit", "2022", "SCI"),
     ("DPA-1", "build_dpa1", "example_input_dpa1", "2022", "SCI"),
     ("DPA-2", "build_dpa2", "example_input_dpa2", "2023", "SCI"),
     ("EANN", "build_eann", "example_input_eann", "2019", "SCI"),

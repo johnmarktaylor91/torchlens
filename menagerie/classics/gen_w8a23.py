@@ -797,7 +797,7 @@ MENAGERIE_ENTRIES = [
     ),
     ("HierVAE", "build_hiervae", "example_input_hiervae", "2020", "BIO"),
     ("IPDiff", "build_ipdiff", "example_input_ipdiff", "2024", "BIO"),
-    ("JANUS", "build_janus", "example_input_janus", "2022", "BIO"),
+    ("JANUS fitness MLP", "build_janus", "example_input_janus", "2022", "BIO"),
     ("KANO", "build_kano", "example_input_kano", "2023", "BIO"),
     ("KV-PLM", "build_kvplm", "example_input_kvplm", "2022", "BIO"),
 ]
