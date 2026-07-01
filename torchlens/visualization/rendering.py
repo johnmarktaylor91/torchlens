@@ -4466,6 +4466,7 @@ def _add_node_to_graphviz(
             self,
             node,
             graphviz_graph,
+            module_edge_dict,
             collapsed_modules,
             vis_mode,
             vis_call_depth,
@@ -5751,6 +5752,7 @@ def _build_collapsed_module_node(
     self: "Trace",
     node: GraphNode,
     graphviz_graph: graphviz.Digraph,
+    module_edge_dict: Dict[str, Any],
     collapsed_modules: set[str],
     vis_mode: str,
     vis_call_depth: int,
@@ -5766,6 +5768,7 @@ def _build_collapsed_module_node(
     Args:
         node: The Op or Layer node triggering the collapse.
         graphviz_graph: The graphviz Digraph object to add the node to.
+        module_edge_dict: Dict mapping each cluster to its queued nodes and edges.
         collapsed_modules: Set of collapsed module names already added; updated in place.
         vis_mode: 'unrolled' or 'rolled'.
         vis_call_depth: Maximum nesting depth; nodes at this depth are collapsed.
@@ -5896,8 +5899,48 @@ def _build_collapsed_module_node(
     if spec.fillcolor is not None and ":" in spec.fillcolor:
         node_args["gradangle"] = "0"
 
-    graphviz_graph.node(**node_args)
+    owner_key = _collapsed_module_owner_key(self, address, call_index, vis_mode)
+    if owner_key is None:
+        graphviz_graph.node(**node_args)
+    else:
+        module_edge_dict[owner_key].setdefault("nodes", []).append(node_args)
     collapsed_modules.add(graph_node_label)
+
+
+def _collapsed_module_owner_key(
+    trace: "Trace",
+    address: str,
+    call_index: str,
+    vis_mode: str,
+) -> str | None:
+    """Return the parent module cluster key that should own a collapsed node.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    address:
+        Pass-free collapsed module address.
+    call_index:
+        Unrolled call index for ``address``.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str | None
+        Parent module cluster key, or ``None`` for top-level children.
+    """
+
+    if "." not in address:
+        return None
+    parent_address = address.rsplit(".", 1)[0]
+    if parent_address == "self" or parent_address not in trace.modules:
+        return None
+    if vis_mode == "rolled":
+        return parent_address
+    parent_key = f"{parent_address}:{call_index}"
+    return parent_key if parent_key in trace.modules else None
 
 
 def _compact_int_ranges(values: Sequence[int]) -> str:

@@ -388,6 +388,41 @@ class NestedStageBackbone(torch.nn.Module):
         return self.head(self.backbone(self.stem(x)))
 
 
+class BackboneContainer(torch.nn.Module):
+    """Backbone container with direct stem and repeated stage children."""
+
+    def __init__(self) -> None:
+        """Initialize the nested backbone container."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(4, 4, 1)
+        self.stages = torch.nn.ModuleList([NestedStage(4) for _ in range(4)])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem and repeated stages."""
+
+        x = self.stem(x)
+        for stage in self.stages:
+            x = stage(x)
+        return x
+
+
+class BackboneContainerModel(torch.nn.Module):
+    """Model whose collapsed children should remain inside ``backbone``."""
+
+    def __init__(self) -> None:
+        """Initialize the container model."""
+
+        super().__init__()
+        self.backbone = BackboneContainer()
+        self.head = torch.nn.Conv2d(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the container model."""
+
+        return self.head(self.backbone(x))
+
+
 class StemStageBackbone(torch.nn.Module):
     """Backbone with a standalone leaf-block stem and repeated stage blocks."""
 
@@ -634,6 +669,12 @@ def _select_branches_child(module: object) -> bool:
     return re.match(r"^branches\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
+def _select_backbone_stage(module: object) -> bool:
+    """Return whether ``module`` is a direct stage child of ``backbone``."""
+
+    return re.match(r"^backbone\.stages\.\d+$", str(getattr(module, "address", ""))) is not None
+
+
 def _edge_count(source: str, tail: str, head: str) -> int:
     """Return Graphviz edge count between two rendered node names."""
 
@@ -668,6 +709,29 @@ def _outgoing_edge_count(source: str, tail: str) -> int:
             flags=re.MULTILINE,
         )
     )
+
+
+def _cluster_body(source: str, cluster_name: str) -> str:
+    """Return the DOT body for one named subgraph cluster."""
+
+    markers = (f'subgraph "{cluster_name}" {{', f"subgraph {cluster_name} {{")
+    marker = next((candidate for candidate in markers if candidate in source), None)
+    if marker is None:
+        raise ValueError(f"Cluster {cluster_name!r} is not present")
+    start = source.index(marker)
+    body_start = start + len(marker)
+    depth = 1
+    index = body_start
+    while index < len(source):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[body_start:index]
+        index += 1
+    raise ValueError(f"Cluster {cluster_name!r} is not closed")
 
 
 def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> None:
@@ -716,6 +780,28 @@ def test_auto_collapse_enables_global_ranking_for_collapsed_layout(tmp_path: Pat
 
         assert "newrank=true" not in none_source
         assert "newrank=true" in auto_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_places_collapsed_children_inside_parent_cluster(tmp_path: Path) -> None:
+    """Collapsed child module nodes are emitted inside their parent cluster."""
+
+    trace = _trace(BackboneContainerModel(), torch.randn(1, 4, 16, 16))
+    try:
+        auto_source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / "nested_stage_cluster_auto"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="auto",
+                collapse_fn=_select_backbone_stage,
+            )
+        )
+        backbone_body = _cluster_body(auto_source, "cluster_backbone_pass1")
+
+        assert '"backbone.stages.0pass1" [' in backbone_body
     finally:
         trace.cleanup()
 
