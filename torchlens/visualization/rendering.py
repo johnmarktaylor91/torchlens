@@ -5156,6 +5156,30 @@ def _run_fold_representative_names(
     }
 
 
+def _rendered_edge_signature(edge_dict: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Return the visual identity used to deduplicate rendered edges.
+
+    Parameters
+    ----------
+    edge_dict:
+        Graphviz edge attributes.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Signature preserving genuinely distinct labels/styles.
+    """
+
+    return (
+        "rendered_edge",
+        edge_dict.get("style"),
+        edge_dict.get("label"),
+        edge_dict.get("headlabel"),
+        edge_dict.get("taillabel"),
+        edge_dict.get("xlabel"),
+    )
+
+
 def _render_raw_input(
     trace: "Trace",
     value: Any,
@@ -7085,6 +7109,11 @@ def _add_edges_for_node(
                 edge_dict[arg_name] = str(arg_val(self, parent_node, metadata_child or child_node))
             else:
                 edge_dict[arg_name] = str(arg_val)
+
+        visual_dedupe_key = (tail_name, head_name, _rendered_edge_signature(edge_dict))
+        if visual_dedupe_key in edges_used:
+            continue
+        edges_used.add(visual_dedupe_key)
 
         if module != -1:
             module_key = cast(str, module)

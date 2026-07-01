@@ -747,6 +747,8 @@ def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) 
         assert _run_fold_ellipsis_count(auto_source, 40) == 1
         assert _incoming_edge_count(auto_source, ellipsis_name) >= 1
         assert _outgoing_edge_count(auto_source, ellipsis_name) >= 1
+        assert _edge_count(auto_source, "input_1pass1", ellipsis_name) == 1
+        assert _edge_count(auto_source, ellipsis_name, "cat_1_161pass1") == 1
     finally:
         trace.cleanup()
 
