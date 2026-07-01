@@ -206,7 +206,7 @@ ignore = ["E721", "F401"]
 # common in vendored source, e.g. lucidrains repos (E731). Enforcing these would mean editing
 # generated/vendored forwards and perturbing already-rendered architecture graphs or diverging
 # from the real source. Real-bug lints (F821/F811/etc.) stay enforced.
-"menagerie/classics/*.py" = ["E702", "E741", "F841", "E731", "E712"]
+"menagerie/classics/*.py" = ["E702", "E741", "F841", "E731", "E712", "E402"]
 
 # =============================================================================
 # RELEASE POLICY (locked): TorchLens stays on the 2.x family on PyPI.
