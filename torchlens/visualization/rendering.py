@@ -5183,6 +5183,48 @@ def _rendered_edge_signature(edge_dict: Mapping[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _intentional_parallel_edge_key(
+    parent_node: GraphNode,
+    child_node: GraphNode,
+    render_edge: RenderEdge,
+    tail_name: str,
+    head_name: str,
+    vis_mode: str,
+) -> tuple[Any, ...] | None:
+    """Return an occurrence key for intentional same-op parallel edges.
+
+    Parameters
+    ----------
+    parent_node:
+        Original rendered source node.
+    child_node:
+        Original rendered target node.
+    render_edge:
+        Edge occurrence metadata.
+    tail_name:
+        Final Graphviz tail name after collapse/fold remapping.
+    head_name:
+        Final Graphviz head name after collapse/fold remapping.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        Occurrence key when duplicate rendered edges represent distinct argument
+        slots on the same visible op pair.
+    """
+
+    occurrence_kind = render_edge.occurrence_key[0] if render_edge.occurrence_key else None
+    if occurrence_kind not in {"edge_use", "parent_arg_position"}:
+        return None
+    original_tail = _render_node_label(parent_node, vis_mode).replace(":", "pass")
+    original_head = _render_node_label(child_node, vis_mode).replace(":", "pass")
+    if tail_name != original_tail or head_name != original_head:
+        return None
+    return render_edge.occurrence_key
+
+
 def _render_raw_input(
     trace: "Trace",
     value: Any,
@@ -7155,7 +7197,17 @@ def _add_edges_for_node(
             else:
                 edge_dict[arg_name] = str(arg_val)
 
-        visual_dedupe_key = (tail_name, head_name, _rendered_edge_signature(edge_dict))
+        visual_signature = _rendered_edge_signature(edge_dict) + (
+            _intentional_parallel_edge_key(
+                parent_node,
+                child_node,
+                render_edge,
+                tail_name,
+                head_name,
+                vis_mode,
+            ),
+        )
+        visual_dedupe_key = (tail_name, head_name, visual_signature)
         if visual_dedupe_key in edges_used:
             continue
         edges_used.add(visual_dedupe_key)
