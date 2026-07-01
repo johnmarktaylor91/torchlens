@@ -199,3 +199,5 @@ def example_input_bimodel_slu() -> tuple[torch.Tensor, torch.Tensor]:
 MENAGERIE_ENTRIES = [
     ("Bi-model RNN SLU", "build_bimodel_slu", "example_input_bimodel_slu", "2018", "nlp_slu"),
 ]
+
+MENAGERIE_ZOO = "vendored-pytorch"

@@ -685,3 +685,5 @@ MENAGERIE_ENTRIES = [
         "NL",
     )
 ]
+
+MENAGERIE_ZOO = "vendored-pytorch"

@@ -257,3 +257,5 @@ def example_input_capsule_nlu() -> tuple[torch.Tensor, torch.Tensor]:
 MENAGERIE_ENTRIES = [
     ("Capsule-NLU", "build_capsule_nlu", "example_input_capsule_nlu", "2019", "nlp_slu"),
 ]
+
+MENAGERIE_ZOO = "ported-pytorch"

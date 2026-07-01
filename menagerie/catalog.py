@@ -819,13 +819,20 @@ def _classics_source_rows() -> list[dict[str, str]]:
         example = entry["example_input"]()
         input_shape, input_dtype = _shape_dtype_for_input(example)
         paper = str(entry["paper"])
-        notes = "verified; traced; source=historical-reimplementation"
+        zoo = str(entry.get("zoo") or CLASSIC_ZOO)
+        origin = {
+            CLASSIC_ZOO: "historical-reimplementation",
+            "vendored-pytorch": "vendored-real-repo-code",
+            "ported-pytorch": "faithful-port-of-real-code",
+            "reimpl-pytorch": "faithful-reimplementation-from-description",
+        }.get(zoo, zoo)
+        notes = f"verified; traced; source={origin}"
         if paper:
             notes = f"{notes}; paper={paper}"
         rows.append(
             {
                 "name": name,
-                "zoo": CLASSIC_ZOO,
+                "zoo": zoo,
                 "constructor_call": f"menagerie.classics.{module_name}.{build_name}()",
                 "input_shape": input_shape,
                 "input_dtype": input_dtype,
