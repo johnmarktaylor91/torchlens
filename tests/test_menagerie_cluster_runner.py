@@ -251,6 +251,9 @@ def test_static_registry_contains_all_axon_giant_seeds() -> None:
         "m5187",
         "m5651",
         "m11112",
+        "m9025",
+        "m4598",
+        "m9024",
     }
 
     assert set(GIANT_REGISTRY) == expected
@@ -258,9 +261,10 @@ def test_static_registry_contains_all_axon_giant_seeds() -> None:
     # m5651 (longcat) fits locally (~82 GiB on axon); it is local-first now.
     assert GIANT_REGISTRY["m5651"].node_mem_gb == 180
     assert GIANT_REGISTRY["m5651"].force_cluster is False
-    # Only the four genuine giants force-route before any measurement.
+    # Four unmeasured genuine giants + three axon-MEASURED escalated giants (>115 GiB)
+    # all force-route to the cluster.
     forced = {sid for sid, entry in GIANT_REGISTRY.items() if entry.force_cluster}
-    assert forced == {"m4246", "m4525", "m4526", "m4527"}
+    assert forced == {"m4246", "m4525", "m4526", "m4527", "m9025", "m4598", "m9024"}
 
 
 def test_is_giant_local_first_routes_measured_and_forced_not_estimates(
@@ -331,11 +335,13 @@ def test_node_tier_right_sizes_incrementally_with_terabyte_escape() -> None:
     assert node_tier_for_row(_row(stable_id="huge"), ledger={"huge": 700 * 1024}).mem_gb == 1000
 
 
-def test_local_oom_escalation_without_peak_gets_largest_node_tier(
+def test_local_oom_escalation_without_peak_ladders_up_not_jumps_to_max(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A local OOM escalation with no peak must never receive a small default tier."""
+    """A local OOM with no measured peak scales by the trait heuristic and ladders up
+    one tier per repeat OOM -- it must NOT jump straight to the 1TB tier on the first
+    escalation, only reaching it after the smaller tiers are exhausted."""
 
     local_host = "workstation"
     monkeypatch.setattr("menagerie.cluster_runner.socket.gethostname", lambda: local_host)
@@ -354,13 +360,40 @@ def test_local_oom_escalation_without_peak_gets_largest_node_tier(
                 n_ops=None,
                 peak_rss_mb=None,
                 error_class="oom",
+                finished_at="2026-06-25T00:00:01+00:00",
             ),
         )
 
-    tier = node_tier_for_row(_row(stable_id="m9025", name="samvit_large"), ledger=ledger_db)
+    first = node_tier_for_row(_row(stable_id="m9025", name="samvit_large"), ledger=ledger_db)
 
-    assert tier.mem_gb == 1000
-    assert tier.worker_memory_cap_gb == 960
+    # First escalation: a right-sized tier from the heuristic, NEVER the 1TB max.
+    assert first.mem_gb < 1000
+    assert first.mem_gb >= 250
+
+    # It keeps OOM-ing on the cluster -> ladder UP per repeat OOM, reaching the
+    # largest tier only after the smaller ones are exhausted.
+    with connect(ledger_db) as conn:
+        for index in (2, 3):
+            append_verification_run(
+                conn,
+                _run(
+                    run_id=f"cluster-oom-{index}",
+                    stable_id="m9025",
+                    name="samvit_large",
+                    status="oom",
+                    forward_pass=0,
+                    metadata_ok=0,
+                    n_ops=None,
+                    peak_rss_mb=None,
+                    error_class="oom",
+                    finished_at=f"2026-06-25T00:00:0{index}+00:00",
+                ),
+            )
+
+    laddered = node_tier_for_row(_row(stable_id="m9025", name="samvit_large"), ledger=ledger_db)
+
+    assert laddered.mem_gb >= first.mem_gb
+    assert laddered.mem_gb == 1000
 
 
 def test_repeated_unregistered_moe_oom_escalates_to_terabyte(tmp_path: Path) -> None:

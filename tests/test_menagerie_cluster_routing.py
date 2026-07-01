@@ -892,7 +892,7 @@ def test_local_first_remote_ram_failure_does_not_escalate(
 
 
 def test_giant_registry_force_cluster_only_for_genuine_giants() -> None:
-    """Only the four measured-nonfit giants keep ``force_cluster=True``.
+    """Only measured-nonfit giants keep ``force_cluster=True``.
 
     Every registry entry whose measured peak fits locally (<115 GiB) must be
     local-first (``force_cluster=False``); preserving a force flag for a fittable
@@ -906,7 +906,7 @@ def test_giant_registry_force_cluster_only_for_genuine_giants() -> None:
     )
 
     forced = {sid for sid, entry in GIANT_REGISTRY.items() if entry.force_cluster}
-    assert forced == {"m4246", "m4525", "m4526", "m4527"}
+    assert forced == {"m4246", "m4525", "m4526", "m4527", "m4598", "m9024", "m9025"}
 
     threshold_mb = int(LOCAL_FIRST_CLUSTER_THRESHOLD_GB * MB_PER_GB)
     for sid, entry in GIANT_REGISTRY.items():

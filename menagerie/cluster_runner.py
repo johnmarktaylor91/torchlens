@@ -601,6 +601,30 @@ GIANT_REGISTRY: dict[str, GiantRegistryEntry] = {
         "axon peak about 98 GiB",
         force_cluster=False,
     ),
+    # Escalated-on-local-OOM giants, axon-MEASURED 2026-06-28 (completed runs ->
+    # true peaks, not cap-at-kill artifacts). Seeded so they right-size on first
+    # contact (tier 250/250/500) instead of re-deriving + re-OOMing every run.
+    "m9025": GiantRegistryEntry(
+        "m9025",
+        "samvit_large_patch16",
+        134 * MB_PER_GB,
+        180,
+        "axon-measured ~134 GiB; exceeds local RAM",
+    ),
+    "m4598": GiantRegistryEntry(
+        "m4598",
+        "efficientnet_l2",
+        145 * MB_PER_GB,
+        180,
+        "axon-measured ~145 GiB; exceeds local RAM",
+    ),
+    "m9024": GiantRegistryEntry(
+        "m9024",
+        "samvit_huge_patch16",
+        213 * MB_PER_GB,
+        250,
+        "axon-measured ~213 GiB; exceeds local RAM",
+    ),
 }
 
 
@@ -1186,7 +1210,10 @@ def node_tier_for_row(
         if max_measured_peak_mb is not None and max_measured_peak_mb > 0:
             measured_peak_mb = max_measured_peak_mb
         else:
-            return _largest_tier(active_config)
+            # No measured peak: scale by the trait heuristic and ladder up one tier
+            # per repeat OOM. NEVER jump straight to the largest tier -- a model that
+            # OOM'd on a ~125GB box needs the next tier up, not a 1TB node.
+            return _laddered_escalation_tier(row, stable_id, ledger, active_config)
     if (
         status == "oom"
         and entry is None
@@ -2908,6 +2935,47 @@ def _largest_tier(config: ClusterConfig) -> NodeTier:
     """
 
     return max(config.node_tiers, key=lambda tier: tier.mem_gb)
+
+
+def _laddered_escalation_tier(
+    row: CatalogRow | Mapping[str, object],
+    stable_id: str,
+    ledger: sqlite3.Connection | Path | Mapping[str, int] | None,
+    config: ClusterConfig,
+) -> NodeTier:
+    """Right-size a cluster node for a model that RAM-failed locally with no peak.
+
+    Scales by the conservative trait heuristic (:func:`_heuristic_peak_mb`, 160-360
+    GiB) to the SMALLEST fitting tier, then steps up one tier per *additional* prior
+    OOM so a genuinely-larger model ratchets up the ladder instead of re-OOM-ing on
+    the same tier. Reaches the largest tier only after exhausting the smaller ones --
+    it never jumps straight to max.
+
+    Parameters
+    ----------
+    row:
+        Catalog row or row-like mapping (for the trait heuristic).
+    stable_id:
+        Durable model identity (for the OOM-count ladder step).
+    ledger:
+        Ledger connection/path, peak-RSS mapping, or ``None``.
+    config:
+        Cluster defaults (supplies the node-tier ladder).
+
+    Returns
+    -------
+    NodeTier
+        The laddered, right-sized tier (never larger than necessary).
+    """
+
+    tiers = config.node_tiers
+    heuristic_gb = max(1, (_heuristic_peak_mb(row) + MB_PER_GB - 1) // MB_PER_GB)
+    base_index = next(
+        (index for index, tier in enumerate(tiers) if heuristic_gb <= tier.max_peak_rss_gb),
+        len(tiers) - 1,
+    )
+    extra_steps = max(0, _oom_run_count(stable_id, ledger) - 1)
+    return tiers[min(base_index + extra_steps, len(tiers) - 1)]
 
 
 def _assignment_for_row(
