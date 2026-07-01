@@ -38,6 +38,17 @@ assignment:
     super_gradients: yolox_sg
     tinycudann: gpu_tail
     yolox: yolox_sg
+  direct_envs:
+    m4034: gpu_tail
+    m4921: gpu_tail
+    m4922: gpu_tail
+    m4928: gpu_tail
+    m4932: gpu_tail
+    m5624: gpu_tail
+    m5625: gpu_tail
+    m5626: gpu_tail
+    m11955: gpu_tail
+    m11956: gpu_tail
   fallback_dependency_env: gpu_tail
 islands:
   base:
@@ -567,8 +578,10 @@ islands:
         - "^super_image$"
         - "^open_clip$"
       zoo_patterns:
+        - "detectron2"
         - "flash-linear-attention"
         - "fla"
+        - "lightweight-gan"
         - "diffusers"
         - "pytorchvideo"
         - "normflows"

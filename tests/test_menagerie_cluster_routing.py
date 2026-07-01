@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from menagerie import validate_menagerie
-from menagerie.catalog import SOURCE_JSONL, CatalogRow, write_catalog
+from menagerie import envs, validate_menagerie
+from menagerie.catalog import SOURCE_JSONL, CatalogRow, build_canonical_rows, write_catalog
 from menagerie.cluster_runner import (
     ClusterAssignment,
     ClusterConfig,
@@ -171,6 +171,35 @@ def test_cuda_required_catalog_recipes_request_cuda() -> None:
 
     assert set(records) == expected
     assert all(record["recipe"].get("device_requested") == "cuda" for record in records.values())
+
+
+def test_cuda_required_catalog_rows_resolve_to_cuda_env() -> None:
+    """The CUDA-only catalog rows resolve to a CUDA validation island."""
+
+    expected_env_by_id = {
+        "m4034": "gpu_tail",
+        "m4921": "gpu_tail",
+        "m4922": "gpu_tail",
+        "m4928": "gpu_tail",
+        "m4932": "gpu_tail",
+        "m5624": "gpu_tail",
+        "m5625": "gpu_tail",
+        "m5626": "gpu_tail",
+        "m11955": "gpu_tail",
+        "m11956": "gpu_tail",
+    }
+    registry = envs.load_registry()
+    rows_by_id = {row.stable_id: row for row in build_canonical_rows()}
+    assignments = envs.assign(
+        [rows_by_id[stable_id] for stable_id in expected_env_by_id],
+        registry,
+    )
+
+    for stable_id, expected_env in expected_env_by_id.items():
+        resolved_env = assignments[stable_id]
+
+        assert resolved_env == expected_env
+        assert registry.islands[resolved_env].expected_device == "cuda"
 
 
 def test_resource_route_cuda_required_no_fit_uses_cluster_gpu(

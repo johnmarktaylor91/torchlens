@@ -152,6 +152,9 @@ class EnvRegistry:
         Status in the base-sweep manifest used to identify island rows.
     cluster_envs:
         Exact dependency-cluster to island mapping for empirical island rows.
+    direct_envs:
+        Exact stable-ID to island mapping for rows that need a specialized island
+        independent of the empirical dependency-skip manifest.
     fallback_dependency_env:
         Island used for unmatched external dependency rows.
     islands:
@@ -166,6 +169,7 @@ class EnvRegistry:
     empirical_manifest_sha256: str | None
     dependency_unavailable_status: str
     cluster_envs: dict[str, str]
+    direct_envs: dict[str, str]
     fallback_dependency_env: str
     islands: dict[str, EnvSpec]
 
@@ -381,6 +385,10 @@ def load_registry(path: Path = REGISTRY_PATH) -> EnvRegistry:
             str(cluster): str(env_key)
             for cluster, env_key in assignment.get("cluster_envs", {}).items()
         },
+        direct_envs={
+            str(stable_id): str(env_key)
+            for stable_id, env_key in assignment.get("direct_envs", {}).items()
+        },
         fallback_dependency_env=str(assignment.get("fallback_dependency_env", "gpu_tail")),
         islands=islands,
     )
@@ -589,7 +597,15 @@ def _empirical_dependency_assignments(registry: EnvRegistry) -> dict[str, str]:
         items,
         island_keys,
     )
-    return dict(assignments)
+    resolved = dict(assignments)
+    known_islands = set(registry.islands)
+    for stable_id, env_key in registry.direct_envs.items():
+        if env_key not in known_islands:
+            raise ValueError(f"stable_id {stable_id} maps to unknown island {env_key!r}")
+        previous = resolved.setdefault(stable_id, env_key)
+        if previous != env_key:
+            raise ValueError(f"stable_id {stable_id} mapped to both {previous!r} and {env_key!r}")
+    return resolved
 
 
 def _row_needs_dependency_env(row: CatalogRow, registry: EnvRegistry) -> bool:
@@ -2061,37 +2077,43 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(_assignment_summary(build_canonical_rows(), registry), sort_keys=True))
         return 0
     if args.command == "lock":
-        result = lock(args.env_key, registry)
+        lock_result = lock(args.env_key, registry)
         print(
             json.dumps(
-                result.__dict__
-                | {"manifest_path": str(result.manifest_path), "lock_path": str(result.lock_path)},
+                lock_result.__dict__
+                | {
+                    "manifest_path": str(lock_result.manifest_path),
+                    "lock_path": str(lock_result.lock_path),
+                },
                 sort_keys=True,
             )
         )
-        return 0 if result.returncode == 0 else 1
+        return 0 if lock_result.returncode == 0 else 1
     if args.command == "build":
-        result = build(args.env_key, registry)
+        build_result = build(args.env_key, registry)
         print(
-            json.dumps(result.__dict__ | {"project_dir": str(result.project_dir)}, sort_keys=True)
+            json.dumps(
+                build_result.__dict__ | {"project_dir": str(build_result.project_dir)},
+                sort_keys=True,
+            )
         )
-        return 0 if result.status in {"built", "cached"} else 1
+        return 0 if build_result.status in {"built", "cached"} else 1
     if args.command == "smoke":
-        result = smoke(args.env_key, registry)
-        print(result.stdout, end="")
-        print(result.stderr, end="", file=sys.stderr)
-        return result.returncode
+        smoke_result = smoke(args.env_key, registry)
+        print(smoke_result.stdout, end="")
+        print(smoke_result.stderr, end="", file=sys.stderr)
+        return smoke_result.returncode
     if args.command == "validate":
-        result = run_validate(
+        validate_result = run_validate(
             args.env_key,
             args.stable_ids,
             registry,
             worker_memory_cap_gb=args.worker_memory_cap_gb,
             jobs=args.jobs,
         )
-        print(result.stdout, end="")
-        print(result.stderr, end="", file=sys.stderr)
-        return result.returncode
+        print(validate_result.stdout, end="")
+        print(validate_result.stderr, end="", file=sys.stderr)
+        return validate_result.returncode
     parser.error(f"unknown command: {args.command}")
     return 2
 
