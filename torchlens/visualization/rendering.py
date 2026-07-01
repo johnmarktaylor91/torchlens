@@ -5069,6 +5069,33 @@ def _run_fold_ellipsis_label(fold: "ModuleRunFold") -> str:
     return f"... +{fold.multiplicity - 1} more {fold.class_name}"
 
 
+def _run_fold_hidden_endpoint(
+    address_w_pass: str | None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+) -> "ModuleRunFold | None":
+    """Return the run fold when ``address_w_pass`` is a hidden run member.
+
+    Parameters
+    ----------
+    address_w_pass:
+        Pass-qualified or pass-free module address for one rendered endpoint.
+    run_folds:
+        Fold descriptors keyed by pass-free module address.
+
+    Returns
+    -------
+    ModuleRunFold | None
+        Fold descriptor when the address belongs to ``members[1:]``.
+    """
+
+    if address_w_pass is None:
+        return None
+    fold = _run_fold_for_address(address_w_pass, run_folds)
+    if run_folds is None or fold is None or _is_run_fold_representative(address_w_pass, run_folds):
+        return None
+    return fold
+
+
 def _edge_touches_run_fold(
     tail_name: str,
     head_name: str,
@@ -6807,8 +6834,9 @@ def _add_edges_for_node(
         else:
             edge_style = "dashed"
 
+        parent_module_name_w_pass: str | None = None
         if parent_is_collapsed_module:
-            module_name_w_pass = _collapse_address_for_node(
+            parent_module_name_w_pass = _collapse_address_for_node(
                 self,
                 parent_node,
                 vis_mode=vis_mode,
@@ -6817,14 +6845,14 @@ def _add_edges_for_node(
             )
             parent_fold_ancestor = _run_fold_ancestor_for_node(parent_node, run_folds)
             if parent_fold_ancestor is not None:
-                module_name_w_pass = parent_fold_ancestor
-            if module_name_w_pass is None:
+                parent_module_name_w_pass = parent_fold_ancestor
+            if parent_module_name_w_pass is None:
                 continue
-            tail_name = _run_fold_graph_node_name(module_name_w_pass, vis_mode, run_folds)
+            tail_name = _run_fold_graph_node_name(parent_module_name_w_pass, vis_mode, run_folds)
         else:
             tail_name = _render_node_label(parent_node, vis_mode).replace(":", "pass")
 
-        child_collapse_address = _collapse_address_for_node(
+        child_module_name_w_pass = _collapse_address_for_node(
             self,
             child_node,
             vis_mode=vis_mode,
@@ -6833,14 +6861,13 @@ def _add_edges_for_node(
         )
         child_fold_ancestor = _run_fold_ancestor_for_node(child_node, run_folds)
         if child_fold_ancestor is not None:
-            child_collapse_address = child_fold_ancestor
-        child_is_collapsed_module = child_collapse_address is not None
+            child_module_name_w_pass = child_fold_ancestor
+        child_is_collapsed_module = child_module_name_w_pass is not None
 
         if child_is_collapsed_module:
-            module_name_w_pass = child_collapse_address
-            if module_name_w_pass is None:
+            if child_module_name_w_pass is None:
                 continue
-            head_name = _run_fold_graph_node_name(module_name_w_pass, vis_mode, run_folds)
+            head_name = _run_fold_graph_node_name(child_module_name_w_pass, vis_mode, run_folds)
         else:
             head_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
         if collapsed_head_name is not None:
@@ -6915,48 +6942,43 @@ def _add_edges_for_node(
         # to a common cluster (always falling back to top-level emission).
         edge_module_key: str | int = module
 
+        parent_hidden_fold = _run_fold_hidden_endpoint(parent_module_name_w_pass, run_folds)
+        child_hidden_fold = _run_fold_hidden_endpoint(child_module_name_w_pass, run_folds)
+        if parent_hidden_fold is not None and child_hidden_fold is parent_hidden_fold:
+            continue
+
         run_fold_ellipsis_edge_key: tuple[Any, ...] | None = None
-        representative_fold = _run_fold_for_graph_node_name(tail_name, run_folds, vis_mode)
-        if representative_fold is not None:
+        ellipsis_fold = parent_hidden_fold or child_hidden_fold
+        if ellipsis_fold is not None:
             if run_fold_ellipsis_nodes is None:
                 run_fold_ellipsis_nodes = set()
+            representative_name = _run_fold_graph_node_name(
+                f"{ellipsis_fold.representative}:1",
+                vis_mode,
+                {ellipsis_fold.representative: ellipsis_fold},
+            )
             ellipsis_name = _queue_run_fold_ellipsis_node(
                 graphviz_graph,
                 module_edge_dict,
                 run_fold_ellipsis_nodes,
-                representative_name=tail_name,
-                fold=representative_fold,
+                representative_name=representative_name,
+                fold=ellipsis_fold,
                 module_key=edge_module_key,
             )
             run_fold_ellipsis_edge_key = (
                 "run_fold_ellipsis_edge",
-                tail_name,
+                representative_name,
                 ellipsis_name,
             )
-            if tail_name == head_name:
-                head_name = ellipsis_name
-            else:
-                if (tail_name, ellipsis_name, run_fold_ellipsis_edge_key) not in edges_used:
-                    edges_used.add((tail_name, ellipsis_name, run_fold_ellipsis_edge_key))
-                    ellipsis_edge_dict = {
-                        "tail_name": tail_name,
-                        "head_name": ellipsis_name,
-                        "color": node_color,
-                        "fontcolor": node_color,
-                        "style": edge_style,
-                        "arrowsize": ".7",
-                        "labelfontsize": "8",
-                    }
-                    if edge_module_key == -1:
-                        graphviz_graph.edge(**ellipsis_edge_dict)
-                    else:
-                        module_edge_dict[cast(str, edge_module_key)]["edges"].append(
-                            ellipsis_edge_dict
-                        )
+            if parent_hidden_fold is not None:
                 tail_name = ellipsis_name
+            if child_hidden_fold is not None:
+                head_name = ellipsis_name
 
         edge_is_self_loop = tail_name == head_name
         edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, run_folds, vis_mode)
+        if edge_is_self_loop and edge_touches_run_fold and ellipsis_fold is None:
+            continue
         if (
             edge_is_self_loop
             and not edge_touches_run_fold

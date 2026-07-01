@@ -335,6 +335,22 @@ class BranchConcat(torch.nn.Module):
         return torch.cat([self.a(x), self.b(x), self.c(x)], dim=1)
 
 
+class ParallelRepeatedBranches(torch.nn.Module):
+    """Many identical parallel branches feeding one concat junction."""
+
+    def __init__(self, depth: int = 24) -> None:
+        """Initialize repeated branch modules."""
+
+        super().__init__()
+        self.branches = torch.nn.ModuleList([ConvReluBlock(4, 4) for _ in range(depth)])
+        self.out = torch.nn.Conv2d(depth * 4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run branches in parallel and concatenate their outputs."""
+
+        return self.out(torch.cat([branch(x) for branch in self.branches], dim=1))
+
+
 class NestedStage(torch.nn.Module):
     """Stage block used inside a generic nested backbone container."""
 
@@ -612,12 +628,42 @@ def _select_blocks_child(module: object) -> bool:
     return re.match(r"^blocks\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
+def _select_branches_child(module: object) -> bool:
+    """Return whether ``module`` is a direct child of a ``branches`` container."""
+
+    return re.match(r"^branches\.\d+$", str(getattr(module, "address", ""))) is not None
+
+
 def _edge_count(source: str, tail: str, head: str) -> int:
     """Return Graphviz edge count between two rendered node names."""
 
     return len(
         re.findall(
             rf'^\s*"?{re.escape(tail)}"? -> "?{re.escape(head)}"?\s+\[',
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+
+
+def _incoming_edge_count(source: str, head: str) -> int:
+    """Return Graphviz edge count into one rendered node."""
+
+    return len(
+        re.findall(
+            rf'^\s*"?[^"]+"? -> "?{re.escape(head)}"?\s+\[',
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+
+
+def _outgoing_edge_count(source: str, tail: str) -> int:
+    """Return Graphviz edge count out of one rendered node."""
+
+    return len(
+        re.findall(
+            rf'^\s*"?{re.escape(tail)}"? -> "?[^"]+"?\s+\[',
             source,
             flags=re.MULTILINE,
         )
@@ -674,7 +720,33 @@ def test_auto_collapse_run_fold_collapses_nodes_and_edges(tmp_path: Path) -> Non
         assert _collapsed_exact_label_count(auto_source, "blocks.1") == 0
         assert _collapsed_exact_label_count(auto_source, "blocks.23") == 0
         assert _edge_count(auto_source, "blocks.0pass1", ellipsis_name) == 1
+        assert _incoming_edge_count(auto_source, ellipsis_name) >= 1
+        assert _outgoing_edge_count(auto_source, ellipsis_name) >= 1
         assert _edge_count(auto_source, "blocks.0pass1", "blocks.0pass1") == 0
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) -> None:
+    """Parallel run folds keep ellipsis edges from source to sink."""
+
+    trace = _trace(ParallelRepeatedBranches(depth=40), torch.randn(1, 4, 16, 16))
+    try:
+        auto_source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / "parallel_run_fold_auto"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="auto",
+                collapse_fn=_select_branches_child,
+            )
+        )
+        ellipsis_name = _run_fold_ellipsis_name("branches.0")
+
+        assert _run_fold_ellipsis_count(auto_source, 40) == 1
+        assert _incoming_edge_count(auto_source, ellipsis_name) >= 1
+        assert _outgoing_edge_count(auto_source, ellipsis_name) >= 1
     finally:
         trace.cleanup()
 
