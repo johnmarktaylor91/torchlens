@@ -1221,5 +1221,5 @@ MENAGERIE_ENTRIES = [
     ("MID", "build_mid", "example_input_mid", "2022", "SEQ"),
     ("mmTransformer", "build_mmtransformer", "example_input_mmtransformer", "2021", "SEQ"),
     ("MTR-A (Marginal + Joint)", "build_mtra", "example_input_mtra", "2022", "SEQ"),
-    ("MultiPath", "build_multipathplusplus", "example_input_multipathplusplus", "2021", "SEQ"),
+    ("MultiPath++", "build_multipathplusplus", "example_input_multipathplusplus", "2021", "SEQ"),
 ]

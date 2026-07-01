@@ -997,7 +997,7 @@ MENAGERIE_ENTRIES = [
     ("TransPHLA", "build_transphla", "example_input_transphla", "2022", "BIO"),
     ("UNI", "build_uni", "example_input_uni", "2024", "BIO"),
     ("VAMB", "build_vamb", "example_input_vamb", "2021", "BIO"),
-    ("ViennaRNA DL (SPOT-RNA)", "build_spot_rna", "example_input_spot_rna", "2019", "BIO"),
+    ("SPOT-RNA", "build_spot_rna", "example_input_spot_rna", "2019", "BIO"),
     (
         "ViT-based GigaPath (LongNet slide encoder)",
         "build_gigapath",

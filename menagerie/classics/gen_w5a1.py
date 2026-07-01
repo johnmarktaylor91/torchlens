@@ -490,7 +490,7 @@ MENAGERIE_ENTRIES = [
     ("DeepSTARR", "build_deepstarr", "example_input_deepstarr", "2022", "BIO"),
     ("DeepTCR", "build_deeptcr", "example_input_deeptcr", "2021", "BIO"),
     (
-        "DeepVariant-style DeepTrio collision note",
+        "DeepTrio",
         "build_deeptrio",
         "example_input_deeptrio",
         "2020",

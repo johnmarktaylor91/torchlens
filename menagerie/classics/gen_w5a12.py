@@ -761,7 +761,7 @@ def example_input_spider3() -> Tensor:
 
 
 MENAGERIE_ENTRIES = [
-    ("SPACE (deep learning Hi-C)", "build_space", "example_input_space", "2022", "NLP"),
+    ("SPACE-2", "build_space", "example_input_space", "2022", "NLP"),
     ("SPACEL", "build_spacel", "example_input_spacel", "2023", "BIO"),
     ("SpatialScope", "build_spatialscope", "example_input_spatialscope", "2023", "BIO"),
     ("SPIDER3", "build_spider3", "example_input_spider3", "2017", "BIO"),
