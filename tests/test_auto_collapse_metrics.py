@@ -706,6 +706,20 @@ def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> Non
         trace.cleanup()
 
 
+def test_auto_collapse_enables_global_ranking_for_collapsed_layout(tmp_path: Path) -> None:
+    """Collapsed DOT renders enable global ranking to keep sequential boxes ordered."""
+
+    trace = _trace(RepeatedResidual(depth=8), torch.randn(2, 8))
+    try:
+        none_source = _draw_source(trace, tmp_path, "rank_none", "none")
+        auto_source = _draw_source(trace, tmp_path, "rank_auto", "auto")
+
+        assert "newrank=true" not in none_source
+        assert "newrank=true" in auto_source
+    finally:
+        trace.cleanup()
+
+
 def test_auto_collapse_run_fold_collapses_nodes_and_edges(tmp_path: Path) -> None:
     """Auto folds an unreadable consecutive identical run through an ellipsis node."""
 

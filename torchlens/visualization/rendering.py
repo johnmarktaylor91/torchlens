@@ -1103,6 +1103,8 @@ def draw(
         "labeljust": "left",
         "ordering": "out",
     }
+    if collapse_fn is not None:
+        graph_args["newrank"] = "true"
     graph_args.update(theme_graph_attrs(theme, font_size=font_size, dpi=dpi))
 
     # Override system: callers can pass dicts of Graphviz attributes to
