@@ -616,6 +616,51 @@ def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
     return _scatter_index_fully_overwrites_dim(dest, dim, index)
 
 
+def _check_one_arg_where_index_exempt(layer: Op) -> bool:
+    """Return whether ``layer`` is the one-arg ``torch.where(condition)`` index form.
+
+    One-arg ``torch.where(condition)`` is torch's alias for
+    ``nonzero(condition, as_tuple=True)``: its output is a DISCRETE integer INDEX set, not a
+    value select, so small value-perturbation legitimately cannot change it -- the same
+    category as the topk/sort/max/min index exemption.
+
+    NARROW + tripwire-safe: the 3-arg VALUE-select ``where`` must NOT match. In particular the
+    mixed form ``torch.where(cond, input=a, other=b)`` is a genuine value select that TorchLens
+    records as ``len(saved_args) == 1`` with ``input``/``other`` in ``saved_kwargs`` (and an
+    integer output dtype when the branches are integer), so arg-count and dtype alone are NOT
+    sufficient. This asserts NO branch appears in args OR kwargs, matching only the true one-arg
+    forms: positional ``where(cond)`` -> ``saved_args == (cond,)``, ``saved_kwargs == {}``; and
+    keyword ``where(condition=cond)`` -> ``saved_args == ()``, ``saved_kwargs == {'condition'}``.
+
+    DUAL-LAB reviewed 2026-06-30 (Claude + Codex independently converged on this exact
+    predicate; the kwarg guard is load-bearing, the int-dtype gate mirrors the topk/sort
+    precedent). The 3-arg ``_check_where_exempt`` (``len(saved_args) >= 3``) path is untouched
+    and stays fully armed.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose perturbation-insensitivity is being excused.
+
+    Returns
+    -------
+    bool
+        Whether the op is a genuine one-arg ``where`` index form.
+    """
+
+    if getattr(layer, "func_name", None) != "where":
+        return False
+    if layer.dtype not in (torch.int, torch.long, torch.int32, torch.int64):
+        return False
+    saved_args = layer.saved_args or ()
+    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    if len(saved_args) == 1 and saved_kwargs == {}:
+        return True
+    if len(saved_args) == 0 and set(saved_kwargs) == {"condition"}:
+        return True
+    return False
+
+
 def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
     """Exempt ``where`` parents only when saved value semantics prove irrelevance.
 
@@ -895,6 +940,11 @@ def posthoc_perturb_check(
         torch.int32,
         torch.int64,
     ):
+        return True
+
+    # One-arg ``torch.where(condition)`` == ``nonzero(condition, as_tuple=True)``: a discrete
+    # INDEX output, same category as the topk/sort/max/min index exemption above.
+    if _check_one_arg_where_index_exempt(layer_to_validate_parents_for):
         return True
 
     # to() with tensor arg — type casting

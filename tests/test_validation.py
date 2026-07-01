@@ -4577,3 +4577,101 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
     assert _functionless_replacement_ops(log) == []
     assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
     check_metadata_invariants(log)
+
+
+# ---------------------------------------------------------------------------
+# one-arg torch.where(condition) == nonzero index exemption (DUAL-LAB 2026-06-30)
+# ---------------------------------------------------------------------------
+
+
+def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
+    """Build a minimal ``where`` op layer mock for the one-arg index discriminator."""
+
+    return SimpleNamespace(
+        func_name="where",
+        saved_args=saved_args,
+        saved_kwargs=saved_kwargs,
+        dtype=dtype,
+        out=torch.zeros(4, dtype=dtype),
+        layer_label="where_1_1",
+    )
+
+
+def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
+    """One-arg positional ``torch.where(cond)`` (nonzero index form) is recognized."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer((torch.tensor([1, 0, 1, 0], dtype=torch.int64),), {})
+    assert _check_one_arg_where_index_exempt(layer) is True
+
+
+def test_one_arg_where_keyword_nonzero_is_index_exempt() -> None:
+    """Keyword ``torch.where(condition=cond)`` nonzero index form is recognized."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer((), {"condition": torch.tensor([1, 0, 1, 0], dtype=torch.int64)})
+    assert _check_one_arg_where_index_exempt(layer) is True
+
+
+def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
+    """LOAD-BEARING: ``torch.where(cond, input=a, other=b)`` (value select, branches in
+    kwargs, captured as len(saved_args)==1 with int output) must NOT be treated as the
+    one-arg index form -- the tripwire must stay armed for a genuine value-dependent branch."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer(
+        (torch.tensor([True, False, True, False]),),
+        {
+            "input": torch.tensor([1, 2, 3, 4], dtype=torch.int64),
+            "other": torch.tensor([5, 6, 7, 8], dtype=torch.int64),
+        },
+    )
+    assert _check_one_arg_where_index_exempt(layer) is False
+
+
+def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None:
+    """A 3-arg positional value-select ``where`` is never the one-arg index form."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer(
+        (
+            torch.tensor([True, False, True, False]),
+            torch.tensor([1, 2, 3, 4], dtype=torch.int64),
+            torch.tensor([5, 6, 7, 8], dtype=torch.int64),
+        ),
+        {},
+    )
+    assert _check_one_arg_where_index_exempt(layer) is False
+
+
+def test_float_output_where_is_not_one_arg_index_exempt() -> None:
+    """A non-integer output ``where`` is never treated as the one-arg index form."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer((torch.tensor([1.0, 0.0, 1.0, 0.0]),), {}, dtype=torch.float32)
+    assert _check_one_arg_where_index_exempt(layer) is False
+
+
+class _OneArgWhereModel(nn.Module):
+    """Model exercising the one-arg ``torch.where(cond)`` nonzero index form."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sum over the nonzero indices of a boolean condition."""
+
+        condition = x > 0
+        indices = torch.where(condition)
+        return indices[0].sum() + x.sum()
+
+
+def test_one_arg_where_model_validates_forward() -> None:
+    """End-to-end: a model using one-arg ``torch.where`` passes forward replay validation."""
+
+    torch.manual_seed(0)
+    model = _OneArgWhereModel().eval()
+    example = torch.randint(-3, 3, (8,))
+    assert tl.validate(model, example, scope="forward") is True
