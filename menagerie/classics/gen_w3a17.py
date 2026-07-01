@@ -577,7 +577,7 @@ def example_input_panoocc() -> tuple[torch.Tensor, torch.Tensor]:
 
 
 MENAGERIE_ENTRIES = [
-    ("OCC-VO", "build_occ_vo", "example_input_occ_vo", "2024", "VIS"),
+    ("TPVFormer", "build_occ_vo", "example_input_occ_vo", "2024", "VIS"),
     ("OccFormer", "build_occformer", "example_input_occformer", "2023", "VIS"),
     ("OccNeRF", "build_occnerf", "example_input_occnerf", "2023", "VIS"),
     ("OccupancyFlow", "build_occupancy_flow", "example_input_occupancy_flow", "2019", "VIS"),

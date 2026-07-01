@@ -543,5 +543,4 @@ MENAGERIE_ENTRIES = [
     ("RADDet", "build_raddet", "example_input_raddet", "2021", "VIS"),
     ("RangeDet", "build_rangedet", "example_input_rangedet", "2021", "VIS"),
     ("RangeNet++", "build_rangenetpp", "example_input_rangenetpp", "2019", "VIS"),
-    ("RCBEV", "build_rcbevdet", "example_input_rcbevdet", "2024", "VIS"),
 ]

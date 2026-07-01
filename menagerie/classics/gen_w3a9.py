@@ -598,5 +598,5 @@ MENAGERIE_ENTRIES = [
     ("BEVHeight", "build_bevheight", "example_input_bevheight", "2023", "VIS"),
     ("BEVStereo", "build_bevstereo", "example_input_bevstereo", "2022", "VIS"),
     ("BtcDet", "build_btcdet", "example_input_btcdet", "2022", "VIS"),
-    ("Cam4DOcc", "build_cam4docc", "example_input_cam4docc", "2024", "VIS"),
+    ("OCFNet", "build_cam4docc", "example_input_cam4docc", "2024", "VIS"),
 ]

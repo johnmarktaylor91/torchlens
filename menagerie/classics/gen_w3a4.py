@@ -414,6 +414,106 @@ def example_input_sanet() -> tuple[Tensor, Tensor]:
 
 
 # ---------------------------------------------------------------------------
+# SA-Net (Shuffle Attention): grouped channel/spatial attention branches,
+# concatenated and channel-shuffled across groups.
+# ---------------------------------------------------------------------------
+class ShuffleAttention(nn.Module):
+    """Compact ICASSP-2021 Shuffle Attention block."""
+
+    def __init__(self, channels: int = 32, groups: int = 4) -> None:
+        """Build grouped channel and spatial attention branch parameters.
+
+        Parameters
+        ----------
+        channels : int
+            Number of input/output feature channels.
+        groups : int
+            Number of Shuffle Attention groups.
+        """
+
+        super().__init__()
+        if channels % (2 * groups) != 0:
+            msg = "channels must be divisible by 2 * groups"
+            raise ValueError(msg)
+
+        self.channels = channels
+        self.groups = groups
+        self.branch_channels = channels // (2 * groups)
+        param_shape = (1, groups, self.branch_channels, 1, 1)
+        self.channel_scale = nn.Parameter(torch.zeros(param_shape))
+        self.channel_bias = nn.Parameter(torch.ones(param_shape))
+        self.spatial_scale = nn.Parameter(torch.zeros(param_shape))
+        self.spatial_bias = nn.Parameter(torch.ones(param_shape))
+        self.spatial_norm = nn.GroupNorm(1, self.branch_channels)
+
+    @staticmethod
+    def _channel_shuffle(x: Tensor, groups: int) -> Tensor:
+        """Shuffle channels by transposing group and per-group channel axes."""
+
+        batch, channels, height, width = x.shape
+        channels_per_group = channels // groups
+        x = x.reshape(batch, groups, channels_per_group, height, width)
+        x = x.transpose(1, 2).contiguous()
+        return x.reshape(batch, channels, height, width)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Apply Shuffle Attention and return a feature map with the same shape."""
+
+        batch, _, height, width = x.shape
+        grouped = x.reshape(batch, self.groups, 2 * self.branch_channels, height, width)
+        channel_x, spatial_x = grouped.chunk(2, dim=2)
+
+        pooled = channel_x.mean(dim=(3, 4), keepdim=True)
+        channel_gate = torch.sigmoid(pooled * self.channel_scale + self.channel_bias)
+        channel_out = channel_x * channel_gate
+
+        spatial_flat = spatial_x.reshape(batch * self.groups, self.branch_channels, height, width)
+        normalized = self.spatial_norm(spatial_flat).reshape(
+            batch, self.groups, self.branch_channels, height, width
+        )
+        spatial_gate = torch.sigmoid(normalized * self.spatial_scale + self.spatial_bias)
+        spatial_out = spatial_x * spatial_gate
+
+        merged = torch.cat([channel_out, spatial_out], dim=2)
+        merged = merged.reshape(batch, self.channels, height, width)
+        return self._channel_shuffle(merged, self.groups)
+
+
+class ShuffleAttentionNet(nn.Module):
+    """Small convolutional wrapper around a Shuffle Attention block."""
+
+    def __init__(self, channels: int = 32, groups: int = 4) -> None:
+        """Build the stem, Shuffle Attention block, and output projection."""
+
+        super().__init__()
+        self.stem = nn.Sequential(
+            nn.Conv2d(3, channels, 3, padding=1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True),
+        )
+        self.attn = ShuffleAttention(channels=channels, groups=groups)
+        self.out = nn.Conv2d(channels, 3, 1)
+
+    def forward(self, image: Tensor) -> Tensor:
+        """Return a compact Shuffle Attention feature-map output."""
+
+        feat = self.stem(image)
+        return self.out(self.attn(feat))
+
+
+def build_shuffle_attention() -> nn.Module:
+    """Build the compact SA-Net Shuffle Attention module."""
+
+    return ShuffleAttentionNet(channels=32, groups=4).eval()
+
+
+def example_input_shuffle_attention() -> Tensor:
+    """Return a single RGB feature-map input for Shuffle Attention."""
+
+    return torch.randn(1, 3, 32, 32)
+
+
+# ---------------------------------------------------------------------------
 # SCGAN: colorization encoder fusing local conv features with globally-pooled
 # VGG-16-gray semantic features, feeding a decoder with TWO parallel heads
 # (RGB colorization + saliency map) trained as a joint proxy target.
@@ -678,7 +778,14 @@ def example_input_sketchbert() -> tuple[Tensor, Tensor, Tensor]:
 MENAGERIE_ENTRIES = [
     ("PEN-Net", "build_pennet", "example_input_pennet", "2019", "VIS"),
     ("RePaint (DDPM-based inpainting)", "build_repaint", "example_input_repaint", "2022", "VIS"),
-    ("SA-Net (Shuffle Attention)", "build_sanet", "example_input_sanet", "2019", "VIS"),
+    ("SANet (style-attentional network)", "build_sanet", "example_input_sanet", "2019", "VIS"),
+    (
+        "SA-Net (Shuffle Attention)",
+        "build_shuffle_attention",
+        "example_input_shuffle_attention",
+        "2021",
+        "VIS",
+    ),
     ("SCGAN Colorization", "build_scgan", "example_input_scgan", "2020", "VIS"),
     ("Shift-Net", "build_shiftnet", "example_input_shiftnet", "2018", "VIS"),
     ("Sketch-BERT", "build_sketchbert", "example_input_sketchbert", "2020", "VIS"),
