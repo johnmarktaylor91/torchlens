@@ -35,13 +35,34 @@ a queryable catalog (`python -m menagerie.catalog stats|query|recipe`), ~300+ ha
 "classics" with no prior PyTorch implementation (`menagerie/classics/`, each trace-verified), and a
 disk-safe graph renderer (`python -m menagerie.generate_menagerie`).
 
-**To expand or update the roster** — periodically, after each conference cycle, or **whenever a more
+**To DISCOVER new families** — periodically, after each conference cycle, or **whenever a more
 capable model becomes available** (a smarter auditor finds more) — use the canonical durable prompt at
 **`menagerie/DISCOVER_MODELS.md`**. It is the reusable, adversarial "hunt exhaustively for architecture
 families we missed" sweep: hostile framing, every-axis + non-English + newly-published coverage,
 strict family-not-variant discipline, and exact instructions for folding finds into the catalog or
 `classics/`. Dispatch cross-lab adversarial sub-hunters with it; seed candidates with the starter
 `python -m menagerie.discover_crawler` (recent-arXiv harvester, meant to be extended).
+
+### To ADD / BUILD found models into the roster (LOCKED — READ THE METHODOLOGY, DO NOT REINVENT)
+
+**BEFORE adding ANY model, READ and FOLLOW `menagerie/METHODOLOGY.md` + `menagerie/UPDATE_RECIPE.md` +
+`menagerie/HARVEST_SOURCES.md`.** The catalog's 8,400+ rows were built by ONE established process; do not
+re-derive it. The build-bridge is: harvest the model's **REAL constructor** into a 9-column source row
+(`name, zoo, constructor_call, input_shape, input_dtype, family, domain, era, notes`), run it through
+`python -m menagerie.tools.tsv_to_jsonl` → typed JSONL record in `menagerie/data/master_catalog.jsonl`
+(or `deferred.jsonl`), then `python -m menagerie.catalog build` and `python -m menagerie.validate_menagerie`
+(renders/validates random-init in **grouped/fat envs** — the renderer amortizes dependency installs; use a
+few fat pixi env-islands via `menagerie/envs.py`, NOT one env per model).
+
+**IF SOURCE CODE EXISTS FOR A MODEL, USE THE REAL SOURCE — never write a from-scratch "approximation".**
+That is SLOP and is forbidden (2026-07-01 incident: ~1029 such reimpls deleted, huge token/$ waste). The ladder
+per candidate: (1) real class from an installed base lib IF the arch is unmodified; (2) the real repo code, run
+it in a (fat) env / vendor its actual model file; (3) **faithful PORT** transcribed from the real repo code, only
+if it genuinely can't be made to run; (4) **faithful REIMPLEMENT from a DETAILED description** (paper/thesis/etc.)
+only when NO usable code exists at all — the triage's REIMPLEMENT class, still faithful, not a gist; (5) skip +
+document ONLY if not even a detailed description exists (triage UNAVAILABLE) or it is not a real trainable NN.
+`classics/` is ONLY for no-prior-code models (faithful ports + rung-4 reimpls). The triage's
+SOURCE_AVAILABLE / ENV_SETUP / REIMPLEMENT / UNAVAILABLE / NOT_TRACEABLE class IS the signal for which rung — honor it.
 
 ## Common Patterns
 
