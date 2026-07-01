@@ -8,11 +8,12 @@ import re
 import time
 import weakref
 from collections import defaultdict
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._literals import CollapseLiteral, VisModeLiteral
+from .collapse_plan import RenderContext
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
@@ -195,6 +196,53 @@ class ModuleCollapseSignals:
 
 
 @dataclass(frozen=True)
+class FlowIntervalFlags:
+    """Blocker flags for an interval between flow-adjacent children.
+
+    Parameters
+    ----------
+    landmark:
+        Whether landmark edges cross the interval.
+    passthrough:
+        Whether passthrough-style parent-owned flow crosses the interval.
+    """
+
+    landmark: bool
+    passthrough: bool
+
+
+@dataclass(frozen=True)
+class ChildCondensedFlowGraph:
+    """Child-condensed flow graph for one parent module call.
+
+    Parameters
+    ----------
+    parent:
+        Parent module address.
+    flow_children:
+        Direct child module addresses ordered by first executed op.
+    parent_owned_ops:
+        Parent-owned operation labels in execution order.
+    nodes:
+        Condensed graph nodes: child subtrees plus parent-owned ops.
+    edges:
+        Condensed op-flow edges between nodes.
+    child_external_endpoint_counts:
+        Per-child ``(entries, exits)`` counts against the condensed graph.
+    interval_flags:
+        Flags keyed by flow-child address pairs.
+    """
+
+    parent: str
+    flow_children: tuple[str, ...]
+    parent_owned_ops: tuple[str, ...]
+    nodes: tuple[str, ...]
+    edges: tuple[tuple[str, str], ...]
+    child_external_endpoint_counts: Mapping[str, tuple[int, int]]
+    interval_flags: Mapping[tuple[str, str], FlowIntervalFlags]
+
+
+@dataclass(frozen=True)
 class CollapseAnalysis:
     """Trace-local module-collapse analysis.
 
@@ -207,6 +255,8 @@ class CollapseAnalysis:
     peer_groups:
         Structural or relaxed peer groups keyed by signature and sibling parent
         address.
+    child_flow_graphs:
+        Child-condensed flow graph artifacts keyed by parent module address.
     elapsed_ms:
         Signal and score computation time in milliseconds.
     """
@@ -214,6 +264,7 @@ class CollapseAnalysis:
     signals: Mapping[str, ModuleCollapseSignals]
     scores: Mapping[str, float]
     peer_groups: Mapping[tuple[str, str | None], tuple[str, ...]]
+    child_flow_graphs: Mapping[str, ChildCondensedFlowGraph]
     elapsed_ms: float
 
 
@@ -241,6 +292,7 @@ def analyze_collapse(trace: "Trace") -> CollapseAnalysis:
     signals_without_peers = _compute_signal_skeleton(trace)
     digests = _compute_structural_digests(trace, signals_without_peers)
     peer_groups = _group_structural_peers(trace, digests)
+    child_flow_graphs = _compute_child_condensed_flow_graphs(trace, signals_without_peers)
     peer_count_by_address: dict[str, int] = {}
     for group in peer_groups.values():
         for address in group:
@@ -274,10 +326,28 @@ def analyze_collapse(trace: "Trace") -> CollapseAnalysis:
         signals=signals,
         scores=scores,
         peer_groups=peer_groups,
+        child_flow_graphs=child_flow_graphs,
         elapsed_ms=(time.perf_counter() - start) * 1000.0,
     )
     _ANALYSIS_CACHE[trace] = analysis
     return analysis
+
+
+def _child_condensed_flow_graphs(trace: "Trace") -> Mapping[str, ChildCondensedFlowGraph]:
+    """Return cached child-condensed flow graphs for tests and v2 downstream work.
+
+    Parameters
+    ----------
+    trace:
+        Trace to analyze.
+
+    Returns
+    -------
+    Mapping[str, ChildCondensedFlowGraph]
+        Flow graph artifacts keyed by parent module address.
+    """
+
+    return analyze_collapse(trace).child_flow_graphs
 
 
 def collapse_order(
@@ -316,6 +386,7 @@ def resolve_collapse_fn(
     trace: "Trace",
     collapse: CollapseLiteral,
     vis_mode: VisModeLiteral,
+    context: RenderContext | None = None,
 ) -> Callable[["Module"], bool] | None:
     """Resolve a public collapse option to a renderer predicate.
 
@@ -327,6 +398,8 @@ def resolve_collapse_fn(
         Public collapse mode.
     vis_mode:
         Current visualization mode.
+    context:
+        Render context for v2 instrumentation. Defaults preserve v1 behavior.
 
     Returns
     -------
@@ -334,11 +407,12 @@ def resolve_collapse_fn(
         Collapse predicate, or ``None`` for ``"none"``.
     """
 
+    resolved_context = RenderContext(vis_mode=vis_mode) if context is None else context
     if collapse == "none":
         return None
     if collapse not in {"auto", "max"}:
         raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
-    selected = _select_modules(trace, collapse=collapse, vis_mode=vis_mode)
+    selected = _select_modules(trace, collapse=collapse, vis_mode=resolved_context.vis_mode)
 
     def collapse_fn(module: "Module") -> bool:
         """Return whether ``module`` is selected for smart collapse."""
@@ -351,6 +425,7 @@ def resolve_collapse_fn(
 def resolve_run_folds(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,
+    context: RenderContext | None = None,
 ) -> dict[str, ModuleRunFold]:
     """Return render-time folds for consecutive collapsed sibling runs.
 
@@ -360,6 +435,8 @@ def resolve_run_folds(
         Trace being rendered.
     collapse_fn:
         Active collapse predicate. ``None`` disables run folding.
+    context:
+        Render context for v2 instrumentation. Defaults preserve v1 behavior.
 
     Returns
     -------
@@ -367,6 +444,7 @@ def resolve_run_folds(
         Mapping from each folded module address to its run descriptor.
     """
 
+    _ = RenderContext() if context is None else context
     if collapse_fn is None:
         return {}
     analysis = analyze_collapse(trace)
@@ -1060,6 +1138,335 @@ def _module_address_stack(op: "Op") -> tuple[str, ...]:
     """Return pass-free module addresses enclosing an op."""
 
     return tuple(str(module).rsplit(":", 1)[0] for module in getattr(op, "modules", ()) or ())
+
+
+def _compute_child_condensed_flow_graphs(
+    trace: "Trace",
+    signals: Mapping[str, ModuleCollapseSignals],
+) -> dict[str, ChildCondensedFlowGraph]:
+    """Compute child-condensed flow graphs for every parent module.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    signals:
+        Precomputed module signal skeletons.
+
+    Returns
+    -------
+    dict[str, ChildCondensedFlowGraph]
+        Flow graph artifacts keyed by parent module address.
+    """
+
+    graphs: dict[str, ChildCondensedFlowGraph] = {}
+    op_order = {op.label: index for index, op in enumerate(trace.ops)}
+    for module in trace.modules:
+        parent = module.address
+        child_addresses = tuple(
+            str(child)
+            for child in getattr(module, "address_children", ()) or ()
+            if child in trace.modules
+        )
+        if not child_addresses:
+            graphs[parent] = ChildCondensedFlowGraph(
+                parent=parent,
+                flow_children=(),
+                parent_owned_ops=(),
+                nodes=(),
+                edges=(),
+                child_external_endpoint_counts={},
+                interval_flags={},
+            )
+            continue
+        child_sets = {
+            child: set(signals[child].subtree_ops) for child in child_addresses if child in signals
+        }
+        flow_children = tuple(
+            sorted(
+                child_sets,
+                key=lambda child: (
+                    min((op_order[label] for label in child_sets[child]), default=10**12),
+                    child,
+                ),
+            )
+        )
+        parent_ops = tuple(
+            label
+            for label in signals.get(parent, _empty_signal(parent)).subtree_ops
+            if _condensed_owner_for_op(label, parent, flow_children, child_sets) == label
+        )
+        nodes = (*flow_children, *parent_ops)
+        edges = _condensed_edges(trace, parent, flow_children, child_sets, set(parent_ops))
+        endpoint_counts = _child_external_endpoint_counts(edges, flow_children)
+        interval_flags = _flow_interval_flags(trace, flow_children, child_sets, edges)
+        graphs[parent] = ChildCondensedFlowGraph(
+            parent=parent,
+            flow_children=flow_children,
+            parent_owned_ops=parent_ops,
+            nodes=nodes,
+            edges=edges,
+            child_external_endpoint_counts=endpoint_counts,
+            interval_flags=interval_flags,
+        )
+    return graphs
+
+
+def _empty_signal(address: str) -> ModuleCollapseSignals:
+    """Return an empty signal used for missing parent bookkeeping.
+
+    Parameters
+    ----------
+    address:
+        Module address.
+
+    Returns
+    -------
+    ModuleCollapseSignals
+        Empty signal with no subtree operations.
+    """
+
+    return ModuleCollapseSignals(
+        address=address,
+        subtree_ops=(),
+        own_func_names=(),
+        internal_edges=0,
+        input_edges=0,
+        output_edges=0,
+        landmark_edges=0,
+        passthrough_edges=0,
+        output_junctions=(),
+        params=0,
+        depth=0,
+        num_calls=1,
+        structural_digest="",
+        peer_count=1,
+        hidden_ops=0,
+        eligible=False,
+    )
+
+
+def _condensed_owner_for_op(
+    op_label: str,
+    parent: str,
+    flow_children: Sequence[str],
+    child_sets: Mapping[str, set[str]],
+) -> str:
+    """Return the condensed node that owns an op within ``parent``.
+
+    Parameters
+    ----------
+    op_label:
+        Operation label.
+    parent:
+        Parent module address.
+    flow_children:
+        Direct children in flow order.
+    child_sets:
+        Child subtree operation labels.
+
+    Returns
+    -------
+    str
+        Child address when the op belongs to a child subtree; otherwise the op label.
+    """
+
+    _ = parent
+    for child in flow_children:
+        if op_label in child_sets.get(child, set()):
+            return child
+    return op_label
+
+
+def _condensed_edges(
+    trace: "Trace",
+    parent: str,
+    flow_children: Sequence[str],
+    child_sets: Mapping[str, set[str]],
+    parent_ops: set[str],
+) -> tuple[tuple[str, str], ...]:
+    """Return condensed edges within one parent module subtree.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    parent:
+        Parent module address.
+    flow_children:
+        Direct children in flow order.
+    child_sets:
+        Child subtree operation labels.
+    parent_ops:
+        Parent-owned operation labels.
+
+    Returns
+    -------
+    tuple[tuple[str, str], ...]
+        Deterministically sorted condensed edges.
+    """
+
+    parent_subtree = set().union(*child_sets.values()) if child_sets else set()
+    parent_subtree.update(parent_ops)
+    order = {node: index for index, node in enumerate((*flow_children, *sorted(parent_ops)))}
+    edges: set[tuple[str, str]] = set()
+    for label in sorted(
+        parent_subtree, key=lambda item: int(getattr(trace.ops[item], "step_index", 0))
+    ):
+        op = cast("Op", trace.ops[label])
+        source = _condensed_owner_for_op(label, parent, flow_children, child_sets)
+        for child_label in getattr(op, "children", ()) or ():
+            child = cast("Op", trace.ops[child_label])
+            normalized_child_label = child.label
+            if normalized_child_label not in parent_subtree:
+                continue
+            target = _condensed_owner_for_op(
+                normalized_child_label,
+                parent,
+                flow_children,
+                child_sets,
+            )
+            if source != target:
+                edges.add((source, target))
+    return tuple(
+        sorted(edges, key=lambda edge: (order.get(edge[0], 10**9), order.get(edge[1], 10**9), edge))
+    )
+
+
+def _child_external_endpoint_counts(
+    edges: Sequence[tuple[str, str]],
+    flow_children: Sequence[str],
+) -> dict[str, tuple[int, int]]:
+    """Return per-child external entry and exit endpoint counts.
+
+    Parameters
+    ----------
+    edges:
+        Condensed graph edges.
+    flow_children:
+        Direct children in flow order.
+
+    Returns
+    -------
+    dict[str, tuple[int, int]]
+        Mapping from child address to ``(entries, exits)``.
+    """
+
+    child_set = set(flow_children)
+    entries: dict[str, set[str]] = {child: set() for child in flow_children}
+    exits: dict[str, set[str]] = {child: set() for child in flow_children}
+    for source, target in edges:
+        if target in child_set and source != target:
+            entries[target].add(source)
+        if source in child_set and source != target:
+            exits[source].add(target)
+    return {child: (len(entries[child]), len(exits[child])) for child in flow_children}
+
+
+def _flow_interval_flags(
+    trace: "Trace",
+    flow_children: Sequence[str],
+    child_sets: Mapping[str, set[str]],
+    edges: Sequence[tuple[str, str]],
+) -> dict[tuple[str, str], FlowIntervalFlags]:
+    """Return landmark and passthrough flags for child-flow intervals.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    flow_children:
+        Direct children in flow order.
+    child_sets:
+        Child subtree operation labels.
+    edges:
+        Condensed graph edges.
+
+    Returns
+    -------
+    dict[tuple[str, str], FlowIntervalFlags]
+        Flags keyed by adjacent child pairs in flow order.
+    """
+
+    if len(flow_children) < 2:
+        return {}
+    child_index = {child: index for index, child in enumerate(flow_children)}
+    edge_set = set(edges)
+    flags: dict[tuple[str, str], FlowIntervalFlags] = {}
+    for left, right in zip(flow_children[:-1], flow_children[1:], strict=True):
+        left_index = child_index[left]
+        right_index = child_index[right]
+        crossing_edges = [
+            edge
+            for edge in edge_set
+            if edge[0] in child_index
+            and edge[1] in child_index
+            and child_index[edge[0]] <= left_index
+            and child_index[edge[1]] >= right_index
+        ]
+        passthrough = any(
+            edge[0] not in child_index or edge[1] not in child_index
+            for edge in edge_set
+            if _edge_touches_interval(edge, child_index, left_index, right_index)
+        )
+        landmark = any(
+            _child_has_junction_op(trace, child_sets.get(child, set()))
+            for child in flow_children[left_index : right_index + 1]
+        ) or bool(crossing_edges)
+        flags[(left, right)] = FlowIntervalFlags(landmark=landmark, passthrough=passthrough)
+    return flags
+
+
+def _edge_touches_interval(
+    edge: tuple[str, str],
+    child_index: Mapping[str, int],
+    left_index: int,
+    right_index: int,
+) -> bool:
+    """Return whether a condensed edge touches an interval boundary.
+
+    Parameters
+    ----------
+    edge:
+        Condensed edge.
+    child_index:
+        Child address to flow index.
+    left_index:
+        Left child index of the interval.
+    right_index:
+        Right child index of the interval.
+
+    Returns
+    -------
+    bool
+        True when the edge is adjacent to the interval.
+    """
+
+    source, target = edge
+    source_index = child_index.get(source)
+    target_index = child_index.get(target)
+    return source_index in {left_index, right_index} or target_index in {left_index, right_index}
+
+
+def _child_has_junction_op(trace: "Trace", op_labels: set[str]) -> bool:
+    """Return whether a child subtree contains a junction operation.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    op_labels:
+        Operation labels in the child subtree.
+
+    Returns
+    -------
+    bool
+        True when a known fan-in/fan-out junction op is present.
+    """
+
+    return any(
+        _op_func_name(cast("Op", trace.ops[label])) in JUNCTION_FUNC_NAMES for label in op_labels
+    )
 
 
 def _op_func_name(op: "Op") -> str:

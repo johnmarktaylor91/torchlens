@@ -123,6 +123,7 @@ from .code_panel import (
     render_code_panel_subgraph,
     resolve_code_panel_source,
 )
+from .collapse_plan import RenderContext
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -752,6 +753,40 @@ class SiblingOrderDecision:
     surviving_keys: tuple[tuple[str, tuple[str, ...]], ...]
 
 
+@dataclass(frozen=True)
+class RenderedNodeEmission:
+    """Renderer-faithful visible node emitted by the forward DOT path.
+
+    Parameters
+    ----------
+    name:
+        Graphviz node name after collapse and run-fold remapping.
+    kind:
+        Diagnostic node kind.
+    node:
+        Source render node when one exists.
+    op_label:
+        Source op or layer label for raw nodes.
+    module_address:
+        Pass-free module address for collapsed module boxes.
+    call:
+        Pass-qualified module call for collapsed module boxes.
+    boundary_kind:
+        Boundary kind for synthetic focus boundary nodes.
+    fold:
+        Run-fold represented or touched by this node.
+    """
+
+    name: str
+    kind: Literal["raw_op", "module_box", "boundary", "run_fold_ellipsis", "hidden_run_member"]
+    node: GraphNode | None = None
+    op_label: str | None = None
+    module_address: str | None = None
+    call: str | None = None
+    boundary_kind: str | None = None
+    fold: "ModuleRunFold | None" = None
+
+
 def draw(
     self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
@@ -930,15 +965,21 @@ def draw(
         )
     if vis_renderer not in {"graphviz", "dagua"}:
         raise ValueError("vis_renderer must be 'graphviz' or 'dagua'")
+    render_context = RenderContext(
+        vis_mode=vis_mode,
+        show_buffer_layers=show_buffer_layers,
+        show_containers=show_containers,
+        engine=vis_node_placement,
+    )
     if collapse != "none" and collapse_fn is None:
         from .auto_collapse import resolve_collapse_fn
 
-        collapse_fn = resolve_collapse_fn(self, collapse, vis_mode)
+        collapse_fn = resolve_collapse_fn(self, collapse, vis_mode, context=render_context)
     run_folds: dict[str, ModuleRunFold] = {}
     if collapse in {"auto", "max"}:
         from .auto_collapse import resolve_run_folds
 
-        run_folds = resolve_run_folds(self, collapse_fn)
+        run_folds = resolve_run_folds(self, collapse_fn, context=render_context)
     theme = resolve_theme(vis_theme, for_paper=for_paper)
     if node_overlay is None:
         node_overlay = getattr(self, "_node_overlay_scores", None)
@@ -1151,7 +1192,7 @@ def draw(
         container_max_inline=container_max_inline,
     )
 
-    for node_barcode, node in entries_to_plot.items():
+    for node in entries_to_plot.values():
         if node.layer_label in skipped_labels:
             continue
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
@@ -2964,6 +3005,421 @@ def _build_skip_filtered_edge_map(
             vis_mode,
         )
     return edge_map, skipped_labels
+
+
+def rendered_node_universe_from_v1(
+    trace: "Trace",
+    *,
+    collapse_fn: CollapseFn | None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    context: RenderContext | None = None,
+    vis_call_depth: int = 1000,
+) -> tuple[RenderedNodeEmission, ...]:
+    """Return the forward renderer's visible node universe for v1 collapse.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose forward graph is being inspected.
+    collapse_fn:
+        Active collapse predicate.
+    run_folds:
+        Active run-fold descriptors keyed by module address.
+    context:
+        Render context. Defaults to the S7 parity matrix.
+    vis_call_depth:
+        Legacy call-depth threshold used when ``collapse_fn`` is ``None``.
+
+    Returns
+    -------
+    tuple[RenderedNodeEmission, ...]
+        Visible rendered nodes in deterministic emission order.
+    """
+
+    resolved_context = RenderContext() if context is None else context
+    show_buffer_layers = _normalize_buffer_visibility(resolved_context.show_buffer_layers)
+    entries_to_plot = _entries_to_plot_for_context(trace, resolved_context.vis_mode)
+    edge_map, skipped_labels = _build_skip_filtered_edge_map(
+        trace,
+        entries_to_plot,
+        vis_mode=resolved_context.vis_mode,
+        show_buffer_layers=show_buffer_layers,
+        skip_fn=None,
+    )
+    collapsed_container_nodes = _collapsed_container_leaf_nodes(
+        trace,
+        entries_to_plot,
+        vis_mode=resolved_context.vis_mode,
+        show_containers=resolved_context.show_containers,
+        container_max_inline=12,
+    )
+    emissions = _enumerate_base_rendered_node_emissions(
+        trace,
+        entries_to_plot,
+        skipped_labels=skipped_labels,
+        vis_mode=resolved_context.vis_mode,
+        vis_call_depth=vis_call_depth,
+        show_buffer_layers=show_buffer_layers,
+        collapse_fn=collapse_fn,
+        run_folds=run_folds,
+        show_containers=resolved_context.show_containers,
+        collapsed_container_nodes=collapsed_container_nodes,
+    )
+    ellipsis_emissions = _enumerate_run_fold_ellipsis_emissions(
+        trace,
+        entries_to_plot,
+        edge_map=edge_map,
+        skipped_labels=skipped_labels,
+        vis_mode=resolved_context.vis_mode,
+        vis_call_depth=vis_call_depth,
+        show_buffer_layers=show_buffer_layers,
+        collapse_fn=collapse_fn,
+        run_folds=run_folds,
+        collapsed_container_nodes=collapsed_container_nodes,
+    )
+    return (*emissions, *ellipsis_emissions)
+
+
+def _entries_to_plot_for_context(
+    trace: "Trace",
+    vis_mode: VisModeLiteral,
+) -> dict[str, GraphNode]:
+    """Return renderer entries for ``vis_mode`` without focus rewriting.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    dict[str, GraphNode]
+        Render entries matching the forward renderer's default path.
+    """
+
+    if vis_mode == "unrolled":
+        return dict(trace.layer_dict_main_keys)
+    if vis_mode == "rolled":
+        return dict(trace.layer_logs)
+    raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
+
+
+def _enumerate_base_rendered_node_emissions(
+    trace: "Trace",
+    entries_to_plot: Mapping[str, GraphNode],
+    *,
+    skipped_labels: set[str],
+    vis_mode: str,
+    vis_call_depth: int,
+    show_buffer_layers: BufferVisibilityLiteral,
+    collapse_fn: CollapseFn | None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    show_containers: ShowContainersLiteral,
+    collapsed_container_nodes: Mapping[str, str],
+) -> tuple[RenderedNodeEmission, ...]:
+    """Enumerate non-ellipsis nodes emitted by the forward renderer.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    entries_to_plot:
+        Candidate render entries.
+    skipped_labels:
+        Labels hidden by skip handling.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Module depth threshold.
+    show_buffer_layers:
+        Normalized buffer visibility.
+    collapse_fn:
+        Active collapse predicate.
+    run_folds:
+        Active run folds.
+    show_containers:
+        Container overlay mode.
+    collapsed_container_nodes:
+        Container leaf to summary-node mapping.
+
+    Returns
+    -------
+    tuple[RenderedNodeEmission, ...]
+        Base rendered node emissions.
+    """
+
+    emitted_names: set[str] = set()
+    emissions: list[RenderedNodeEmission] = []
+    for node in entries_to_plot.values():
+        if node.layer_label in skipped_labels:
+            continue
+        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+            continue
+        emission = _base_rendered_node_emission(
+            trace,
+            node,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+            run_folds=run_folds,
+            show_containers=show_containers,
+            collapsed_container_nodes=collapsed_container_nodes,
+        )
+        if emission is None:
+            continue
+        if emission.kind != "hidden_run_member":
+            if emission.name in emitted_names:
+                continue
+            emitted_names.add(emission.name)
+        emissions.append(emission)
+    return tuple(emissions)
+
+
+def _base_rendered_node_emission(
+    trace: "Trace",
+    node: GraphNode,
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    show_containers: ShowContainersLiteral,
+    collapsed_container_nodes: Mapping[str, str],
+) -> RenderedNodeEmission | None:
+    """Return the base node emission for one render node.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    node:
+        Candidate render node.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Module depth threshold.
+    collapse_fn:
+        Active collapse predicate.
+    run_folds:
+        Active run folds.
+    show_containers:
+        Container overlay mode.
+    collapsed_container_nodes:
+        Container leaf to summary-node mapping.
+
+    Returns
+    -------
+    RenderedNodeEmission | None
+        Emitted node, or ``None`` when hidden by run/container folding.
+    """
+
+    collapse_address = _collapse_address_for_node(
+        trace,
+        node,
+        vis_mode=vis_mode,
+        collapse_fn=collapse_fn,
+        max_module_depth=vis_call_depth,
+    )
+    fold_ancestor_address = _run_fold_ancestor_for_node(node, run_folds)
+    if fold_ancestor_address is not None:
+        collapse_address = fold_ancestor_address
+    if collapse_address is not None:
+        if run_folds is not None and not _is_run_fold_representative(collapse_address, run_folds):
+            return RenderedNodeEmission(
+                name=_render_node_label(node, vis_mode).replace(":", "pass"),
+                kind="hidden_run_member",
+                node=node,
+                module_address=collapse_address.rsplit(":", 1)[0],
+                call=collapse_address,
+                fold=_run_fold_for_address(collapse_address, run_folds),
+            )
+        name = _run_fold_graph_node_name(collapse_address, vis_mode, run_folds)
+        address = collapse_address.rsplit(":", 1)[0]
+        return RenderedNodeEmission(
+            name=name,
+            kind="module_box",
+            node=node,
+            module_address=address,
+            call=collapse_address,
+            fold=_run_fold_for_address(address, run_folds),
+        )
+    name = _render_node_label(node, vis_mode).replace(":", "pass")
+    if show_containers in {"collapsed", "auto"} and name in collapsed_container_nodes:
+        return None
+    if isinstance(node, BoundaryNode):
+        return RenderedNodeEmission(
+            name=name,
+            kind="boundary",
+            node=node,
+            op_label=node.layer_label,
+            boundary_kind=node.boundary_kind,
+        )
+    return RenderedNodeEmission(name=name, kind="raw_op", node=node, op_label=node.layer_label)
+
+
+def _enumerate_run_fold_ellipsis_emissions(
+    trace: "Trace",
+    entries_to_plot: Mapping[str, GraphNode],
+    *,
+    edge_map: Mapping[str, Sequence[RenderEdge]],
+    skipped_labels: set[str],
+    vis_mode: str,
+    vis_call_depth: int,
+    show_buffer_layers: BufferVisibilityLiteral,
+    collapse_fn: CollapseFn | None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    collapsed_container_nodes: Mapping[str, str],
+) -> tuple[RenderedNodeEmission, ...]:
+    """Enumerate run-fold ellipsis nodes triggered by rendered edges.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    entries_to_plot:
+        Candidate render entries.
+    edge_map:
+        Skip-filtered edge map.
+    skipped_labels:
+        Labels hidden by skip handling.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Module depth threshold.
+    show_buffer_layers:
+        Normalized buffer visibility.
+    collapse_fn:
+        Active collapse predicate.
+    run_folds:
+        Active run folds.
+    collapsed_container_nodes:
+        Container leaf to summary-node mapping.
+
+    Returns
+    -------
+    tuple[RenderedNodeEmission, ...]
+        Ellipsis nodes in first-trigger order.
+    """
+
+    if not run_folds:
+        return ()
+    emitted: set[str] = set()
+    emissions: list[RenderedNodeEmission] = []
+    for parent_node in entries_to_plot.values():
+        if parent_node.layer_label in skipped_labels:
+            continue
+        if parent_node.is_buffer and not _is_buffer_visible(parent_node, show_buffer_layers):
+            continue
+        parent_endpoint = _collapsed_endpoint_for_emission(
+            trace,
+            parent_node,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+            run_folds=run_folds,
+        )
+        parent_name = parent_endpoint or _render_node_label(parent_node, vis_mode).replace(
+            ":", "pass"
+        )
+        for render_edge in edge_map.get(_render_node_label(parent_node, vis_mode), ()):
+            child_node = render_edge.target
+            if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
+                continue
+            child_render_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
+            child_endpoint = _collapsed_endpoint_for_emission(
+                trace,
+                child_node,
+                vis_mode=vis_mode,
+                vis_call_depth=vis_call_depth,
+                collapse_fn=collapse_fn,
+                run_folds=run_folds,
+            )
+            child_name = (
+                collapsed_container_nodes.get(child_render_name)
+                or child_endpoint
+                or child_render_name
+            )
+            parent_fold = _run_fold_hidden_endpoint(parent_endpoint, run_folds)
+            child_fold = _run_fold_hidden_endpoint(child_endpoint, run_folds)
+            if parent_fold is not None and child_fold is parent_fold:
+                continue
+            fold = parent_fold or child_fold
+            if fold is None:
+                continue
+            tail_name = (
+                _run_fold_graph_node_name(parent_endpoint, vis_mode, run_folds)
+                if parent_endpoint
+                else parent_name
+            )
+            head_name = (
+                _run_fold_graph_node_name(child_endpoint, vis_mode, run_folds)
+                if child_endpoint
+                else child_name
+            )
+            if tail_name == head_name:
+                continue
+            representative_name = _run_fold_graph_node_name(
+                f"{fold.representative}:1",
+                vis_mode,
+                {fold.representative: fold},
+            )
+            ellipsis_name = _run_fold_ellipsis_node_name(representative_name)
+            if ellipsis_name in emitted:
+                continue
+            emitted.add(ellipsis_name)
+            emissions.append(
+                RenderedNodeEmission(
+                    name=ellipsis_name,
+                    kind="run_fold_ellipsis",
+                    fold=fold,
+                )
+            )
+    return tuple(emissions)
+
+
+def _collapsed_endpoint_for_emission(
+    trace: "Trace",
+    node: GraphNode,
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+    run_folds: Mapping[str, "ModuleRunFold"] | None,
+) -> str | None:
+    """Return pass-qualified collapsed endpoint for node-universe enumeration.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    node:
+        Candidate render node.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Module depth threshold.
+    collapse_fn:
+        Active collapse predicate.
+    run_folds:
+        Active run folds.
+
+    Returns
+    -------
+    str | None
+        Collapsed endpoint address, including hidden run-fold members.
+    """
+
+    endpoint = _collapse_address_for_node(
+        trace,
+        node,
+        vis_mode=vis_mode,
+        collapse_fn=collapse_fn,
+        max_module_depth=vis_call_depth,
+    )
+    fold_ancestor = _run_fold_ancestor_for_node(node, run_folds)
+    return fold_ancestor if fold_ancestor is not None else endpoint
 
 
 def _rank_layout_cost_inputs(

@@ -6,14 +6,22 @@ import re
 import time
 from pathlib import Path
 
+import pytest
 import torch
+import torchvision.models as tvm
+import torchvision.models.segmentation as tvs
 
 import torchlens as tl
 from torchlens.visualization.auto_collapse import (
+    _child_condensed_flow_graphs,
     analyze_collapse,
     resolve_collapse_fn,
     resolve_run_folds,
 )
+from torchlens.visualization.collapse_plan import RenderContext, count, plan_from_v1
+
+
+SVG_NODE_RE = re.compile(r'class="node"')
 
 
 class ResidualBlock(torch.nn.Module):
@@ -540,6 +548,43 @@ class TrivialSingle(torch.nn.Module):
         return self.relu(x)
 
 
+class FlowUnit(torch.nn.Module):
+    """Single child unit for flow-order graph tests."""
+
+    def __init__(self) -> None:
+        """Initialize a pointwise convolution."""
+
+        super().__init__()
+        self.conv = torch.nn.Conv2d(4, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the unit."""
+
+        return torch.relu(self.conv(x))
+
+
+class RegistrationInterleavedAuxParent(torch.nn.Module):
+    """GoogLeNet-style parent whose registration order differs from flow order."""
+
+    def __init__(self) -> None:
+        """Register an aux branch in the middle of trunk children."""
+
+        super().__init__()
+        self.trunk0 = FlowUnit()
+        self.aux = FlowUnit()
+        self.trunk1 = FlowUnit()
+        self.trunk2 = FlowUnit()
+        self.project = torch.nn.Conv2d(8, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run trunk first, then an aux branch from the early activation."""
+
+        stem = self.trunk0(x)
+        trunk = self.trunk2(self.trunk1(stem))
+        aux = self.aux(stem)
+        return self.project(torch.cat([trunk, aux], dim=1))
+
+
 class LongFunctional(torch.nn.Module):
     """Large op-count model for signal-tally latency coverage."""
 
@@ -576,6 +621,58 @@ def _draw_source(trace: tl.Trace, tmp_path: Path, name: str, collapse: str) -> s
             collapse=collapse,
         )
     )
+
+
+def _svg_node_count(path: Path) -> int:
+    """Return the Graphviz SVG node count.
+
+    Parameters
+    ----------
+    path:
+        SVG file path.
+
+    Returns
+    -------
+    int
+        Number of rendered node groups.
+    """
+
+    return len(SVG_NODE_RE.findall(path.read_text(encoding="utf-8")))
+
+
+def _assert_plan_svg_parity(
+    trace: tl.Trace,
+    tmp_path: Path,
+    name: str,
+    mode: str,
+) -> None:
+    """Assert v1 plan count equals rendered SVG node count.
+
+    Parameters
+    ----------
+    trace:
+        Trace to render.
+    tmp_path:
+        Pytest temporary directory.
+    name:
+        Output filename stem.
+    mode:
+        Collapse mode.
+    """
+
+    collapse_fn = resolve_collapse_fn(trace, mode, "unrolled", context=RenderContext())
+    folds = resolve_run_folds(trace, collapse_fn, context=RenderContext())
+    plan_count = count(plan_from_v1(trace, collapse_fn, folds, RenderContext()))
+    out = tmp_path / name
+    trace.draw(
+        vis_outpath=str(out),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_node_placement="dot",
+        collapse=mode,  # type: ignore[arg-type]
+        show_containers=False,
+    )
+    assert plan_count == _svg_node_count(out.with_suffix(".svg"))
 
 
 def _box_count(source: str) -> int:
@@ -732,6 +829,78 @@ def _cluster_body(source: str, cluster_name: str) -> str:
                 return source[body_start:index]
         index += 1
     raise ValueError(f"Cluster {cluster_name!r} is not closed")
+
+
+def test_collapse_plan_parity_fast_synthetic_models(tmp_path: Path) -> None:
+    """CollapsePlan count matches SVG nodes on fast synthetic collapse fixtures."""
+
+    cases = [
+        ("residual", RepeatedResidual(depth=8), torch.randn(2, 8)),
+        ("branches", ParallelRepeatedBranches(depth=8), torch.randn(1, 4, 8, 8)),
+    ]
+    for case_name, model, x in cases:
+        trace = _trace(model, x)
+        try:
+            for mode in ("auto", "max"):
+                _assert_plan_svg_parity(trace, tmp_path, f"{case_name}_{mode}", mode)
+        finally:
+            trace.cleanup()
+
+
+def test_child_condensed_flow_graph_uses_execution_order_for_aux_branch() -> None:
+    """Flow graph orders children by execution and keeps aux outside trunk chain."""
+
+    model = RegistrationInterleavedAuxParent()
+    assert tuple(model._modules) == ("trunk0", "aux", "trunk1", "trunk2", "project")
+    trace = _trace(model, torch.randn(1, 4, 8, 8))
+    try:
+        graph = _child_condensed_flow_graphs(trace)["self"]
+        assert graph.flow_children == ("trunk0", "trunk1", "trunk2", "aux", "project")
+        assert ("trunk0", "trunk1") in graph.edges
+        assert ("trunk1", "trunk2") in graph.edges
+        assert ("trunk0", "aux") in graph.edges
+        assert ("trunk2", "aux") not in graph.edges
+        assert ("aux", "trunk1") not in graph.edges
+        assert graph.flow_children.index("aux") != graph.flow_children.index("trunk1") - 1
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize(
+    ("name", "builder", "x"),
+    [
+        ("resnet50", lambda: tvm.resnet50(weights=None), torch.randn(1, 3, 224, 224)),
+        ("vit_b_16", lambda: tvm.vit_b_16(weights=None), torch.randn(1, 3, 224, 224)),
+        ("swin_s", lambda: tvm.swin_s(weights=None), torch.randn(1, 3, 224, 224)),
+        ("mobilenet_v2", lambda: tvm.mobilenet_v2(weights=None), torch.randn(1, 3, 224, 224)),
+        (
+            "deeplabv3_resnet50",
+            lambda: tvs.deeplabv3_resnet50(weights=None, weights_backbone=None),
+            torch.randn(1, 3, 224, 224),
+        ),
+        (
+            "googlenet",
+            lambda: tvm.googlenet(weights=None, aux_logits=False, init_weights=False),
+            torch.randn(1, 3, 224, 224),
+        ),
+    ],
+)
+def test_collapse_plan_parity_heavy_torchvision(
+    tmp_path: Path,
+    name: str,
+    builder: object,
+    x: torch.Tensor,
+) -> None:
+    """CollapsePlan count matches SVG nodes on representative torchvision models."""
+
+    model = builder()
+    trace = _trace(model, x)  # type: ignore[arg-type]
+    try:
+        for mode in ("auto", "max"):
+            _assert_plan_svg_parity(trace, tmp_path, f"{name}_{mode}", mode)
+    finally:
+        trace.cleanup()
 
 
 def test_auto_collapse_budget_boxes_grain_and_determinism(tmp_path: Path) -> None:
