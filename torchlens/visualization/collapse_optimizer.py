@@ -401,7 +401,12 @@ def _select_max_plan(
             k_hi=k_hi,
         )
         plan_count = count(plan)
-        if segments and 3 <= plan_count <= k_hi and plan_count < auto_count:
+        if (
+            segments
+            and 3 <= plan_count <= k_hi
+            and plan_count < auto_count
+            and _plan_respects_max_dominance(trace, analysis, plan, segments, dominance_limit)
+        ):
             return replace(
                 auto,
                 plan=plan,
@@ -500,6 +505,39 @@ def _condense_plan_with_child_segments(
         nodes.append(node)
         index += 1
     return CollapsePlan(nodes=tuple(nodes), context=context), segments
+
+
+def _plan_respects_max_dominance(
+    trace: "Trace",
+    analysis: CollapseAnalysis,
+    plan: CollapsePlan,
+    segments: Mapping[str, SegmentDescriptor],
+    dominance_limit: float,
+) -> bool:
+    """Return whether visible max boxes and segments obey the dominance cap."""
+
+    total_ops = _optimizer_total_units(trace, plan.context)
+    if total_ops <= 0:
+        return True
+    segment_by_member = {
+        tuple(segment.members if segment.kind == "child" else segment.ops): segment
+        for segment in segments.values()
+    }
+    for node in plan.nodes:
+        if isinstance(node, ModuleBox):
+            address = node.call.rsplit(":", 1)[0]
+            signal = analysis.signals.get(address)
+            if signal is not None and signal.hidden_ops / total_ops > dominance_limit:
+                return False
+        elif isinstance(node, ChildSegment):
+            segment = segment_by_member.get(tuple(node.members))
+            if segment is not None and segment.num_ops / total_ops > dominance_limit:
+                return False
+        elif isinstance(node, OpSegment):
+            segment = segment_by_member.get(tuple(node.ops))
+            if segment is not None and segment.num_ops / total_ops > dominance_limit:
+                return False
+    return True
 
 
 def _legal_plan_op_segment_run(
@@ -616,14 +654,26 @@ def _legal_plan_child_segment_run(
         candidate = tuple(addresses[:end])
         if not _segment_is_legal(candidate, graph):
             continue
-        hidden = sum(
-            hidden_counts.get(address, analysis.signals[address].hidden_ops)
-            for address in candidate
-        )
+        hidden = _child_segment_hidden_units(analysis, candidate, hidden_counts)
         if total_ops > 0 and hidden / total_ops > dominance_limit:
             continue
         best = candidate
     return best
+
+
+def _child_segment_hidden_units(
+    analysis: CollapseAnalysis,
+    addresses: tuple[str, ...],
+    hidden_counts: Mapping[str, int],
+) -> int:
+    """Return rendered hidden-unit count for a candidate child segment."""
+
+    covered_ops = _child_segment_covered_ops(analysis, addresses)
+    if covered_ops:
+        return len(covered_ops)
+    return sum(
+        hidden_counts.get(address, analysis.signals[address].hidden_ops) for address in addresses
+    )
 
 
 def _plan_module_address(node: PlanNode) -> str | None:
@@ -656,7 +706,7 @@ def _make_child_segment_descriptor(
     """Build a renderer descriptor for one child segment."""
 
     _ = context
-    num_ops = sum(
+    num_ops = len(covered_ops) or sum(
         int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
     )
     num_params = sum(
