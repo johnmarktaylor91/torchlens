@@ -8,6 +8,7 @@ import os
 import re
 import time
 import weakref
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ STRUCTURED_CONTAINER_NAMES = frozenset(
         "trunk",
     }
 )
+_COUNT_MISMATCH_WARNING_EMITTED = False
 JUNCTION_FUNC_NAMES = frozenset({"__add__", "add", "cat", "concat", "concatenate"})
 # v1-only crutch, dies with R4/R3c.
 LEAF_BLOCK_MAX_OPS = 12
@@ -2802,9 +2804,46 @@ def _assert_plan_count(
     """
 
     planned_count = count(plan_from_v1(trace, collapse_fn, run_folds, context))
-    assert running_count == planned_count, (
+    if running_count == planned_count:
+        return
+    message = (
         "incremental collapse count mismatch: "
         f"running_count={running_count}, planned_count={planned_count}"
+    )
+    if _strict_count_checks_enabled():
+        raise AssertionError(message)
+    _warn_count_mismatch_once(message)
+
+
+def _strict_count_checks_enabled() -> bool:
+    """Return whether collapse count mismatches should fail loudly.
+
+    Returns
+    -------
+    bool
+        True under pytest or when ``TORCHLENS_COLLAPSE_STRICT=1`` is set.
+    """
+
+    return os.environ.get("TORCHLENS_COLLAPSE_STRICT") == "1" or "PYTEST_CURRENT_TEST" in os.environ
+
+
+def _warn_count_mismatch_once(message: str) -> None:
+    """Emit a single production warning for incremental count mismatches.
+
+    Parameters
+    ----------
+    message:
+        Diagnostic mismatch message.
+    """
+
+    global _COUNT_MISMATCH_WARNING_EMITTED
+    if _COUNT_MISMATCH_WARNING_EMITTED:
+        return
+    _COUNT_MISMATCH_WARNING_EMITTED = True
+    warnings.warn(
+        f"{message}; using authoritative CollapsePlan count for rendering.",
+        RuntimeWarning,
+        stacklevel=3,
     )
 
 

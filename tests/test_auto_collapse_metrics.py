@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+import warnings
 from pathlib import Path
 
 import pytest
@@ -12,8 +13,10 @@ import torchvision.models as tvm
 import torchvision.models.segmentation as tvs
 
 import torchlens as tl
+import torchlens.visualization.auto_collapse as auto_collapse
 import torchlens.visualization.collapse_optimizer as collapse_optimizer
 from torchlens.visualization.auto_collapse import (
+    _assert_plan_count,
     _child_condensed_flow_graphs,
     _flow_graph_for_sibling_group,
     _iter_collapsible_runs,
@@ -1898,6 +1901,40 @@ def test_v2_zero_frontier_falls_back_to_visible_full_plan(
         assert count(result.plan) >= 1
         assert result.visible_count == count(result.plan)
         assert result.reason == "floor_fallback: no optimizer frontier was produced"
+    finally:
+        trace.cleanup()
+
+
+def test_incremental_count_mismatch_warns_once_outside_strict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production count-model gaps warn and continue instead of raising."""
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("TORCHLENS_COLLAPSE_STRICT", raising=False)
+    monkeypatch.setattr(auto_collapse, "_COUNT_MISMATCH_WARNING_EMITTED", False)
+    trace = _trace(SegmentToyNet(), torch.randn(1, 3, 8, 8))
+    try:
+        with pytest.warns(RuntimeWarning, match="incremental collapse count mismatch"):
+            _assert_plan_count(trace, None, None, RenderContext(), -1)
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            _assert_plan_count(trace, None, None, RenderContext(), -1)
+        assert not records
+    finally:
+        trace.cleanup()
+
+
+def test_incremental_count_mismatch_stays_hard_in_strict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Strict collapse count-model gaps remain hard tripwires."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_STRICT", "1")
+    trace = _trace(SegmentToyNet(), torch.randn(1, 3, 8, 8))
+    try:
+        with pytest.raises(AssertionError, match="incremental collapse count mismatch"):
+            _assert_plan_count(trace, None, None, RenderContext(), -1)
     finally:
         trace.cleanup()
 
