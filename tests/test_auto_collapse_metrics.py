@@ -28,6 +28,18 @@ from torchlens.visualization.collapse_plan import RenderContext, count, plan_fro
 SVG_NODE_RE = re.compile(r'class="node"')
 
 
+def _force_v1_collapse_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route legacy collapse-policy assertions through the v1 engine.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest monkeypatch fixture used to set the process environment.
+    """
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v1")
+
+
 class ResidualBlock(torch.nn.Module):
     """Small residual block with enough internal structure to collapse."""
 
@@ -1118,9 +1130,13 @@ def test_auto_collapse_places_collapsed_children_inside_parent_cluster(tmp_path:
         trace.cleanup()
 
 
-def test_auto_collapse_run_fold_collapses_nodes_and_edges(tmp_path: Path) -> None:
+def test_auto_collapse_run_fold_collapses_nodes_and_edges(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto folds an unreadable consecutive identical run through an ellipsis node."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
     try:
         auto_source = _draw_source(trace, tmp_path, "run_fold_auto", "auto")
@@ -1224,9 +1240,12 @@ def test_auto_collapse_run_fold_folds_residual_mix_without_digest_key() -> None:
 
 
 @pytest.mark.heavy
-def test_auto_collapse_run_fold_preserves_swin_stage_fold() -> None:
+def test_auto_collapse_run_fold_preserves_swin_stage_fold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Swin stage blocks fold when alternating members render selected descendants."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(tvm.swin_s(weights=None), torch.randn(1, 3, 224, 224))
     try:
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
@@ -1314,9 +1333,13 @@ def test_auto_collapse_run_fold_rejects_flow_parallel_aux_chain() -> None:
         trace.cleanup()
 
 
-def test_auto_collapse_run_fold_skips_readable_stack(tmp_path: Path) -> None:
+def test_auto_collapse_run_fold_skips_readable_stack(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Run-fold does not elide a stack whose collapsed render is readable."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(DimStepRun(depth=12, start_width=16), torch.randn(1, 16, 8, 8))
     try:
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
@@ -1332,9 +1355,13 @@ def test_auto_collapse_run_fold_skips_readable_stack(tmp_path: Path) -> None:
         trace.cleanup()
 
 
-def test_auto_collapse_run_fold_fires_when_stack_exceeds_band(tmp_path: Path) -> None:
+def test_auto_collapse_run_fold_fires_when_stack_exceeds_band(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Run-fold elides the longest stack when collapsed render exceeds the band."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
     try:
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
@@ -1348,9 +1375,13 @@ def test_auto_collapse_run_fold_fires_when_stack_exceeds_band(tmp_path: Path) ->
         trace.cleanup()
 
 
-def test_auto_collapse_flat_vgg_bn_features_container_folds(tmp_path: Path) -> None:
+def test_auto_collapse_flat_vgg_bn_features_container_folds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto folds a flat VGG-BN-style features Sequential as one container."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(VggBnFeatures(), torch.randn(1, 3, 16, 16))
     try:
         auto_source = _draw_source(trace, tmp_path, "vgg_bn_auto", "auto")
@@ -1398,9 +1429,13 @@ def test_max_collapse_is_never_less_collapsed_than_auto(tmp_path: Path) -> None:
             trace.cleanup()
 
 
-def test_auto_collapse_residual_peer_bodies_keep_parent_joins(tmp_path: Path) -> None:
+def test_auto_collapse_residual_peer_bodies_keep_parent_joins(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto elides repeated residual bodies while keeping add junction nodes visible."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(ParentJoinResidual(depth=24), torch.randn(2, 8))
     try:
         none_source = _draw_source(trace, tmp_path, "parent_residual_none", "none")
@@ -1417,9 +1452,13 @@ def test_auto_collapse_residual_peer_bodies_keep_parent_joins(tmp_path: Path) ->
         trace.cleanup()
 
 
-def test_auto_collapse_skip_concat_keeps_cat_junction(tmp_path: Path) -> None:
+def test_auto_collapse_skip_concat_keeps_cat_junction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto folds U-Net-style blocks while keeping the skip concat visible."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(SkipConcatUNet(), torch.randn(1, 4, 16, 16))
     try:
         none_source = _draw_source(trace, tmp_path, "skip_concat_none", "none")
@@ -1436,9 +1475,13 @@ def test_auto_collapse_skip_concat_keeps_cat_junction(tmp_path: Path) -> None:
         trace.cleanup()
 
 
-def test_auto_collapse_branch_concat_keeps_cat_junction(tmp_path: Path) -> None:
+def test_auto_collapse_branch_concat_keeps_cat_junction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto folds parallel branches while keeping the branch concat visible."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(BranchConcat(), torch.randn(1, 4, 16, 16))
     try:
         none_source = _draw_source(trace, tmp_path, "branch_concat_none", "none")
@@ -1453,9 +1496,13 @@ def test_auto_collapse_branch_concat_keeps_cat_junction(tmp_path: Path) -> None:
         trace.cleanup()
 
 
-def test_auto_collapse_leaf_blocks_match_stage_grain(tmp_path: Path) -> None:
+def test_auto_collapse_leaf_blocks_match_stage_grain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto folds standalone leaf blocks at the same grain as stage siblings."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(StemStageBackbone(), torch.randn(1, 4, 16, 16))
     try:
         none_source = _draw_source(trace, tmp_path, "stem_stage_none", "none")
@@ -1505,9 +1552,13 @@ def test_auto_collapse_groups_structurally_similar_unique_parallel_modules(
         trace.cleanup()
 
 
-def test_auto_collapse_recurrent_module_is_not_noop(tmp_path: Path) -> None:
+def test_auto_collapse_recurrent_module_is_not_noop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Auto folds recurrent modules instead of treating recurrence as a veto."""
 
+    _force_v1_collapse_engine(monkeypatch)
     trace = _trace(RecurrentWrapper(), torch.randn(1, 6, 8))
     try:
         none_source = _draw_source(trace, tmp_path, "recurrent_none", "none")
