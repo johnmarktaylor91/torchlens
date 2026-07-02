@@ -209,6 +209,7 @@ class _OptimizerState:
     g_star: float
     total_ops: int
     allow_folds: bool
+    rendered_own_units: Mapping[str, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,8 @@ class _MemoKey:
     digest: str
     landmark_bucket: int
     trunk: bool
+    num_calls: int | None = None
+    rolled_mass: int | None = None
 
 
 _RESULT_CACHE: weakref.WeakKeyDictionary[object, dict[RenderContext, OptimizerResult]] = (
@@ -237,7 +240,7 @@ def select_collapse_plan(
     trace:
         Trace being rendered.
     context:
-        Rendering context. R3a only supports unrolled mode.
+        Rendering context.
     weights:
         Optional optimizer weights.
 
@@ -247,8 +250,6 @@ def select_collapse_plan(
         Selected collapse result, or a declined result when unsupported.
     """
 
-    if context.vis_mode != "unrolled":
-        return _declined_result(context, "rolled mode is deferred to R3c")
     cached_by_context = _RESULT_CACHE.setdefault(trace, {})
     cached = cached_by_context.get(context)
     if cached is not None:
@@ -399,8 +400,9 @@ def _instantiate_best_point(
         branch_salience_cache={},
         weights=winning_weights,
         g_star=winning_g,
-        total_ops=max(len(trace.ops), 1),
+        total_ops=_optimizer_total_units(trace, context),
         allow_folds=allow_folds,
+        rendered_own_units=_rendered_own_unit_map(trace, context),
     )
     instantiated_point = _instantiate_module("self", decision_point.k, winning_state, winning_memo)
     run_folds = _fold_mapping(instantiated_point.folds)
@@ -486,7 +488,9 @@ def _select_best_decision(
         ]
         | None
     ) = None
-    for g_star in _g_star_candidates(trace, analysis):
+    total_units = _optimizer_total_units(trace, context)
+    rendered_own_units = _rendered_own_unit_map(trace, context)
+    for g_star in _g_star_candidates(trace, analysis, context, hidden_counts):
         state = _OptimizerState(
             trace=trace,
             context=context,
@@ -501,13 +505,16 @@ def _select_best_decision(
             branch_salience_cache={},
             weights=weights,
             g_star=g_star,
-            total_ops=max(len(trace.ops), 1),
+            total_ops=total_units,
             allow_folds=allow_folds,
+            rendered_own_units=rendered_own_units,
         )
         memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
         frontier = _frontier_for_module("self", state, memo)
         for point in frontier:
             score = _global_q(point, trace, weights)
+            if context.vis_mode == "rolled" and not point.box_costs and hidden_counts:
+                score = round(score + 10.0, 6)
             candidate = (score, g_star, point.k, point, memo, weights, allow_folds)
             if best is None or candidate[:3] < best[:3]:
                 best = candidate
@@ -519,6 +526,7 @@ def build_role_components(
     parent_address: str,
     child_addresses: Sequence[str],
     analysis: CollapseAnalysis | None = None,
+    hidden_counts: Mapping[str, int] | None = None,
 ) -> tuple[RoleComponent, ...]:
     """Return role components for a parent's flow-ordered children.
 
@@ -532,6 +540,8 @@ def build_role_components(
         Child addresses, preferably in flow order.
     analysis:
         Optional shared collapse analysis.
+    hidden_counts:
+        Optional renderer-faithful hidden masses for role grouping.
 
     Returns
     -------
@@ -567,7 +577,7 @@ def build_role_components(
 
     for left_index, left in enumerate(children):
         for right in children[left_index + 1 :]:
-            if _same_role(trace, left, right, resolved_analysis):
+            if _same_role(trace, left, right, resolved_analysis, hidden_counts or {}):
                 union(left, right)
     grouped: dict[str, list[str]] = {}
     for child in children:
@@ -593,7 +603,13 @@ def _role_components_for_children(
     cached = state.role_components_cache.get(key)
     if cached is not None:
         return cached
-    components = build_role_components(state.trace, parent_address, child_key, state.analysis)
+    components = build_role_components(
+        state.trace,
+        parent_address,
+        child_key,
+        state.analysis,
+        state.hidden_counts,
+    )
     state.role_components_cache[key] = components
     return components
 
@@ -688,23 +704,31 @@ def _expanded_structure(
     child_addresses = tuple(_flow_ordered_child_addresses(list(raw_child_addresses), graph))
     signal = state.analysis.signals[address]
     own_ops = tuple(graph.parent_owned_ops if graph is not None else ())
+    if state.context.vis_mode == "rolled":
+        own_ops = state.rendered_own_units.get(address, ())
     if not child_addresses:
-        own_ops = tuple(
-            label
-            for label in signal.subtree_ops
-            if not getattr(state.trace.ops[label], "is_buffer", False)
-        )
+        if state.context.vis_mode == "rolled":
+            own_ops = state.rendered_own_units.get(address, ())
+        else:
+            own_ops = tuple(
+                label
+                for label in signal.subtree_ops
+                if not getattr(state.trace.ops[label], "is_buffer", False)
+            )
     elif address == "self":
-        child_ops = {
-            label
-            for child in child_addresses
-            for label in state.analysis.signals.get(child, signal).subtree_ops
-        }
-        own_ops = tuple(
-            op.label
-            for op in state.trace.ops
-            if op.label not in child_ops and not getattr(op, "is_buffer", False)
-        )
+        if state.context.vis_mode == "rolled":
+            own_ops = state.rendered_own_units.get(address, ())
+        else:
+            child_ops = {
+                label
+                for child in child_addresses
+                for label in state.analysis.signals.get(child, signal).subtree_ops
+            }
+            own_ops = tuple(
+                op.label
+                for op in state.trace.ops
+                if op.label not in child_ops and not getattr(op, "is_buffer", False)
+            )
     result = (graph, child_addresses, tuple(own_ops))
     state.expanded_cache[address] = result
     return result
@@ -1551,12 +1575,17 @@ def _band_cost(k: int, trace: "Trace") -> float:
     return slope * ((k - target) / width) ** 2
 
 
-def _g_star_candidates(trace: "Trace", analysis: CollapseAnalysis) -> tuple[float, ...]:
+def _g_star_candidates(
+    trace: "Trace",
+    analysis: CollapseAnalysis,
+    context: RenderContext,
+    hidden_counts: Mapping[str, int],
+) -> tuple[float, ...]:
     """Return deterministic grain target candidates."""
 
     hi = _readable_band_high(trace)
     target = min(28, hi - 2)
-    total_ops = max(len(trace.ops), 1)
+    total_ops = _optimizer_total_units(trace, context)
     raw = [
         math.log2(1 + total_ops / max(target, 1)),
         math.log2(1 + total_ops / max(target / 2.0, 1.0)),
@@ -1564,9 +1593,22 @@ def _g_star_candidates(trace: "Trace", analysis: CollapseAnalysis) -> tuple[floa
         math.log2(1 + total_ops / 20.0),
     ]
     masses = sorted(
-        math.log2(1 + max(signal.hidden_ops, 0))
+        math.log2(
+            1
+            + max(
+                hidden_counts.get(signal.address, signal.hidden_ops)
+                if context.vis_mode == "rolled"
+                else signal.hidden_ops,
+                0,
+            )
+        )
         for signal in analysis.signals.values()
-        if signal.hidden_ops > 0
+        if (
+            hidden_counts.get(signal.address, signal.hidden_ops)
+            if context.vis_mode == "rolled"
+            else signal.hidden_ops
+        )
+        > 0
     )
     if masses:
         raw.append(masses[len(masses) // 2])
@@ -1583,6 +1625,7 @@ def _same_role(
     left: str,
     right: str,
     analysis: CollapseAnalysis,
+    hidden_counts: Mapping[str, int],
 ) -> bool:
     """Return whether two siblings belong to the same role component."""
 
@@ -1590,9 +1633,17 @@ def _same_role(
     right_module = cast("Module", trace.modules[right])
     if str(getattr(left_module, "class_name", "")) != str(getattr(right_module, "class_name", "")):
         return False
-    left_n = _faithful_hidden_count(analysis.signals[left], {})
-    right_n = _faithful_hidden_count(analysis.signals[right], {})
+    left_n = _faithful_hidden_count(analysis.signals[left], hidden_counts)
+    right_n = _faithful_hidden_count(analysis.signals[right], hidden_counts)
     return abs(math.log2(1 + left_n) - math.log2(1 + right_n)) <= 1.5
+
+
+def _optimizer_total_units(trace: "Trace", context: RenderContext) -> int:
+    """Return the raw rendered universe size used for optimizer normalization."""
+
+    if context.vis_mode != "rolled":
+        return max(len(trace.ops), 1)
+    return max(count(plan_from_v1(trace, None, None, context)), 1)
 
 
 def _child_address_map(trace: "Trace") -> dict[str, tuple[str, ...]]:
@@ -1617,6 +1668,46 @@ def _child_address_map(trace: "Trace") -> dict[str, tuple[str, ...]]:
     return {
         parent: tuple(dict.fromkeys(children)) for parent, children in children_by_parent.items()
     }
+
+
+def _rendered_own_unit_map(trace: "Trace", context: RenderContext) -> dict[str, tuple[str, ...]]:
+    """Return rendered raw units owned directly by each optimizer module.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Render context defining the raw rendered node universe.
+
+    Returns
+    -------
+    dict[str, tuple[str, ...]]
+        Rendered raw node labels keyed by their pass-free innermost module
+        owner, with module-less boundary/raw nodes assigned to ``"self"``.
+    """
+
+    if context.vis_mode != "rolled":
+        return {}
+    from .rendering import rendered_node_universe_from_v1
+
+    units: dict[str, list[str]] = {"self": []}
+    emissions = rendered_node_universe_from_v1(
+        trace,
+        collapse_fn=None,
+        run_folds=None,
+        context=context,
+    )
+    for emission in emissions:
+        if emission.kind in {"hidden_run_member", "run_fold_ellipsis", "module_box"}:
+            continue
+        node = emission.node
+        modules = list(getattr(node, "modules", ()) or ()) if node is not None else []
+        if getattr(node, "is_atomic_module", False) and modules:
+            modules = modules[:-1]
+        owner = str(modules[-1]).rsplit(":", 1)[0] if modules else "self"
+        units.setdefault(owner, []).append(emission.op_label or emission.name)
+    return {address: tuple(dict.fromkeys(labels)) for address, labels in units.items()}
 
 
 def _structural_digest_map(
@@ -1736,6 +1827,14 @@ def _memo_key(state: _OptimizerState, signal: ModuleCollapseSignals) -> _MemoKey
     """Return the R3a structural memo key for a signal."""
 
     landmark_bucket = min(signal.landmark_edges, 3)
+    if state.context.vis_mode == "rolled":
+        return _MemoKey(
+            digest=state.structural_digests.get(signal.address, signal.structural_digest),
+            landmark_bucket=landmark_bucket,
+            trunk=_is_trunk_collapse(state.trace, signal),
+            num_calls=int(signal.num_calls),
+            rolled_mass=_faithful_hidden_count(signal, state.hidden_counts),
+        )
     return _MemoKey(
         digest=state.structural_digests.get(signal.address, signal.structural_digest),
         landmark_bucket=landmark_bucket,
