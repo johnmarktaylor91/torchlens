@@ -55,6 +55,7 @@ from ._literals import (
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
+    FoldRunsLiteral,
 )
 from .backends import (
     BackendName,
@@ -3526,6 +3527,7 @@ def show_model_graph(
     vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     collapse: CollapseLiteral | MissingType = MISSING,
+    fold_runs: FoldRunsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
@@ -3580,6 +3582,11 @@ def show_model_graph(
             while that object is still alive.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         collapse: Smart module-collapse mode: ``"none"``, ``"auto"``, or ``"max"``.
+        fold_runs: Run-fold policy. ``None`` preserves the default policy:
+            off for ``collapse="none"`` and band-pressure two-pass folding for
+            ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
+            including standalone folding with ``collapse="none"``. ``False``
+            disables run folding.
         random_seed: Fixed RNG seed for stochastic models.
         recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
@@ -3620,6 +3627,7 @@ def show_model_graph(
         vis_graph_overrides=vis_graph_overrides,
         vis_node_mode=vis_node_mode,
         collapse=collapse,
+        fold_runs=fold_runs,
         vis_edge_overrides=vis_edge_overrides,
         vis_grad_edge_overrides=vis_grad_edge_overrides,
         vis_module_overrides=vis_module_overrides,

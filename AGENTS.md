@@ -43,11 +43,12 @@ Key entry points:
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases
 - Visualization: `Trace.draw(order_siblings=True)` applies a Graphviz-only verified
   sibling-ordering post-pass for forward unrolled graphs under the node cap.
-  `Trace.draw(collapse="none"|"auto"|"max")` controls smart module collapse;
-  `"none"` is the default and preserves existing rendering, `"auto"` targets a readable
-  overview, and `"max"` aggressively collapses eligible modules. `collapse=` supersedes
-  `vis_call_depth` for smart collapse and is orthogonal to `show_containers` (usually best
-  reviewed with containers off).
+  `Trace.draw(collapse="none"|"auto"|"max", fold_runs=None|True|False)` controls v2 smart
+  collapse for rolled and unrolled graphs. `None` preserves defaults (`"none"` has no run
+  folding; `"auto"`/`"max"` use band-pressure folding), `True` folds eligible repeated runs
+  even with `collapse="none"`, and `False` disables run folding. `collapse="max"` may emit
+  segment boxes; `(xN)`, ellipsis, and segment labels must stay honest about hidden calls or
+  ranges. `Trace.collapse_plan(mode=...)` returns the diagnostic plan.
 
 Common unified capture patterns:
 

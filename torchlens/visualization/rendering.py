@@ -65,6 +65,7 @@ from PIL import Image
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    FoldRunsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -799,6 +800,7 @@ def draw(
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
     collapse: CollapseLiteral = "none",
+    fold_runs: FoldRunsLiteral = None,
     skip_fn: SkipFn | None = None,
     vis_edge_overrides: Optional[Dict[str, Any]] = None,
     vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -854,7 +856,15 @@ def draw(
             it replaces ``vis_call_depth`` collapse decisions.
         collapse: Smart module-collapse mode. ``"none"`` preserves existing
             rendering, ``"auto"`` targets a readable overview, and ``"max"``
-            aggressively collapses eligible modules.
+            aggressively collapses eligible modules. The v2 engine supports
+            rolled and unrolled rendering, may emit segment boxes in ``"max"``,
+            and uses honest labels for ``(xN)`` collapsed calls, ellipsis
+            run-folds, and segment summaries.
+        fold_runs: Run-fold policy. ``None`` preserves the collapse mode
+            default: off for ``collapse="none"`` and band-pressure two-pass
+            folding for ``"auto"``/``"max"``. ``True`` folds every eligible
+            repeated run, including standalone run folding when
+            ``collapse="none"``. ``False`` disables run folding.
         skip_fn: Optional predicate receiving a Layer. Skipped nodes are
             elided and edges are chained through them.
         vis_edge_overrides: Overrides for forward edges.
@@ -934,6 +944,8 @@ def draw(
         raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
     if collapse not in {"none", "auto", "max"}:
         raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
+    if fold_runs not in {None, True, False}:
+        raise ValueError("fold_runs must be None, True, or False.")
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
     site_labels, _ = intervention_site_and_cone_labels(self, show_cone=vis_show_cone)
     intervention_node_spec_fn = make_intervention_node_spec_fn(
@@ -976,10 +988,15 @@ def draw(
 
         collapse_fn = resolve_collapse_fn(self, collapse, vis_mode, context=render_context)
     run_folds: dict[str, ModuleRunFold] = {}
-    if collapse in {"auto", "max"}:
+    if fold_runs is not False and (fold_runs is True or collapse in {"auto", "max"}):
         from .auto_collapse import resolve_run_folds
 
-        run_folds = resolve_run_folds(self, collapse_fn, context=render_context)
+        run_folds = resolve_run_folds(
+            self,
+            collapse_fn,
+            context=render_context,
+            fold_runs=fold_runs,
+        )
     segments: dict[str, SegmentDescriptor] = {}
     if collapse_fn is not None:
         segments = dict(getattr(collapse_fn, "_torchlens_v2_segments", {}) or {})

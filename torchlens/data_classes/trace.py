@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from ..intervention.types import FireRecord
     from ..validation.status import ValidationReplayStatus
     from ..visualization.code_panel import CodePanelOption
+    from ..visualization.collapse_plan import CollapsePlan, RenderContext
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .layer import LayerAccessor
@@ -85,6 +86,7 @@ from .._training_validation import reject_compiled_model
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    FoldRunsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -4908,6 +4910,51 @@ class Trace(CapturedRun):
 
         return collapse_order(self, weights=weights, mode=mode)
 
+    def collapse_plan(
+        self,
+        mode: Literal["auto", "max"] = "auto",
+        context: "RenderContext | None" = None,
+    ) -> "CollapsePlan":
+        """Return the v2 diagnostic collapse plan for this trace.
+
+        Parameters
+        ----------
+        mode:
+            Collapse policy to plan, either ``"auto"`` for a readable overview
+            or ``"max"`` for aggressive condensation.
+        context:
+            Optional :class:`torchlens.visualization.collapse_plan.RenderContext`.
+            When omitted, the default unrolled Graphviz context is used.
+
+        Returns
+        -------
+        CollapsePlan
+            Renderer-faithful diagnostic plan. Node kinds are ``ModuleBox`` for
+            collapsed module calls, ``RawOp`` for exposed operations,
+            ``RunFold`` for representative-plus-ellipsis repeated runs,
+            ``OpSegment`` and ``ChildSegment`` for condensed segment boxes, and
+            ``Boundary`` for input/output or renderer boundary nodes.
+
+        Raises
+        ------
+        ValueError
+            If ``mode`` is not ``"auto"`` or ``"max"``, or the v2 optimizer
+            declines to produce a plan for the provided context.
+        """
+
+        if mode not in {"auto", "max"}:
+            raise ValueError("mode must be one of 'auto' or 'max'.")
+
+        from ..visualization.collapse_optimizer import select_collapse_plan
+        from ..visualization.collapse_plan import RenderContext
+
+        resolved_context = RenderContext() if context is None else context
+        result = select_collapse_plan(self, resolved_context, mode=mode)
+        if result.declined:
+            reason = result.reason or "unsupported render context"
+            raise ValueError(f"collapse plan unavailable: {reason}")
+        return result.plan
+
     def modules_with_facet(self, name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now.
 
@@ -5673,6 +5720,7 @@ class Trace(CapturedRun):
         collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
         collapse_fn: Optional[Callable[..., Any]] = None,
         collapse: CollapseLiteral = "none",
+        fold_runs: FoldRunsLiteral = None,
         skip_fn: Optional[Callable[..., Any]] = None,
         vis_edge_overrides: Optional[Dict[str, Any]] = None,
         vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -5715,6 +5763,16 @@ class Trace(CapturedRun):
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
             Graphviz renderer.
+        collapse:
+            Smart module-collapse mode. ``"none"`` preserves the full graph,
+            ``"auto"`` uses the v2 readability-targeted engine, and ``"max"``
+            aggressively condenses eligible modules and segment boxes.
+        fold_runs:
+            Run-fold policy. ``None`` preserves the default policy: off for
+            ``collapse="none"`` and band-pressure two-pass folding for
+            ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
+            including standalone folding with ``collapse="none"``. ``False``
+            disables run folding.
 
         Returns
         -------
@@ -5755,6 +5813,7 @@ class Trace(CapturedRun):
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             collapse_fn=collapse_fn,
             collapse=collapse,
+            fold_runs=fold_runs,
             skip_fn=skip_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_grad_edge_overrides=vis_grad_edge_overrides,

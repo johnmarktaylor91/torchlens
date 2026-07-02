@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -185,6 +186,58 @@ class CollapsePlan:
 
     nodes: tuple[PlanNode, ...]
     context: RenderContext
+
+    def __repr__(self) -> str:
+        """Return a compact diagnostic summary by rendered node kind.
+
+        Returns
+        -------
+        str
+            Summary containing the total node count and per-kind counts.
+        """
+
+        counts = Counter(_plan_node_kind(node) for node in self.nodes)
+        kind_summary = ", ".join(
+            f"{kind}={counts[kind]}"
+            for kind in (
+                "module_box",
+                "raw_op",
+                "run_fold",
+                "op_segment",
+                "child_segment",
+                "boundary",
+            )
+            if counts[kind]
+        )
+        return f"CollapsePlan(total={count(self)}, {kind_summary})"
+
+
+def _plan_node_kind(node: PlanNode) -> str:
+    """Return the public diagnostic kind for a collapse-plan node.
+
+    Parameters
+    ----------
+    node:
+        Plan node to classify.
+
+    Returns
+    -------
+    str
+        One of ``"module_box"``, ``"raw_op"``, ``"run_fold"``,
+        ``"op_segment"``, ``"child_segment"``, or ``"boundary"``.
+    """
+
+    if isinstance(node, ModuleBox):
+        return "module_box"
+    if isinstance(node, RawOp):
+        return "raw_op"
+    if isinstance(node, RunFold):
+        return "run_fold"
+    if isinstance(node, OpSegment):
+        return "op_segment"
+    if isinstance(node, ChildSegment):
+        return "child_segment"
+    return "boundary"
 
 
 def count(plan: CollapsePlan) -> int:

@@ -13,7 +13,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from .._literals import CollapseLiteral, VisModeLiteral
+from .._literals import CollapseLiteral, FoldRunsLiteral, VisModeLiteral
 from .collapse_plan import RenderContext, count, plan_from_v1
 
 if TYPE_CHECKING:
@@ -456,6 +456,7 @@ def resolve_run_folds(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,
     context: RenderContext | None = None,
+    fold_runs: FoldRunsLiteral = None,
 ) -> dict[str, ModuleRunFold]:
     """Return render-time folds for consecutive collapsed sibling runs.
 
@@ -467,6 +468,10 @@ def resolve_run_folds(
         Active collapse predicate. ``None`` disables run folding.
     context:
         Render context for v2 instrumentation. Defaults preserve v1 behavior.
+    fold_runs:
+        Run-fold policy override. ``None`` preserves the current band-gated
+        policy, ``True`` folds every eligible repeated run, and ``False``
+        disables run folding.
 
     Returns
     -------
@@ -475,16 +480,22 @@ def resolve_run_folds(
     """
 
     resolved_context = RenderContext() if context is None else context
-    if collapse_fn is None:
+    if fold_runs not in {None, True, False}:
+        raise ValueError("fold_runs must be None, True, or False.")
+    if fold_runs is False:
         return {}
+    if collapse_fn is None and fold_runs is not True:
+        return {}
+    eligibility_collapse_fn = collapse_fn if collapse_fn is not None else _always_collapse_module
+    render_collapse_fn = collapse_fn
     v2_run_folds = getattr(collapse_fn, "_torchlens_v2_run_folds", None)
-    if v2_run_folds is not None:
+    if fold_runs is None and v2_run_folds is not None:
         return dict(v2_run_folds)
-    projected_count = count(plan_from_v1(trace, collapse_fn, None, resolved_context))
-    if projected_count <= _readable_band_high(trace):
+    projected_count = count(plan_from_v1(trace, render_collapse_fn, None, resolved_context))
+    if fold_runs is None and projected_count <= _readable_band_high(trace):
         _assert_plan_count(
             trace,
-            collapse_fn,
+            render_collapse_fn,
             None,
             resolved_context,
             projected_count,
@@ -492,7 +503,7 @@ def resolve_run_folds(
         return {}
     hidden_member_contributions = _run_fold_hidden_member_contributions(
         trace,
-        collapse_fn,
+        render_collapse_fn,
         resolved_context,
     )
     analysis = analyze_collapse(trace)
@@ -506,7 +517,7 @@ def resolve_run_folds(
             analysis,
         )
         flow_addresses = _flow_ordered_child_addresses(child_addresses, graph)
-        for run in _iter_collapsible_runs(trace, flow_addresses, collapse_fn):
+        for run in _iter_collapsible_runs(trace, flow_addresses, eligibility_collapse_fn):
             if not _run_fold_is_legal(run, graph):
                 continue
             fold = _make_run_fold(trace, run)
@@ -515,7 +526,7 @@ def resolve_run_folds(
         for run in _iter_collapsible_child_path_runs(
             trace,
             flow_addresses,
-            collapse_fn,
+            eligibility_collapse_fn,
         ):
             if any(address in candidate_addresses for address in run):
                 continue
@@ -534,7 +545,7 @@ def resolve_run_folds(
         for run in _iter_collapsible_runs(
             trace,
             flow_addresses,
-            collapse_fn,
+            eligibility_collapse_fn,
             allow_selected_descendant=True,
         ):
             if any(address in candidate_addresses for address in run):
@@ -551,16 +562,38 @@ def resolve_run_folds(
         for address in fold.addresses:
             folds_by_address[address] = fold
         projected_count += _run_fold_delta(fold, hidden_member_contributions)
-        if projected_count <= _readable_band_high(trace):
+        if fold_runs is None and projected_count <= _readable_band_high(trace):
             break
+    if fold_runs is True:
+        projected_count = count(
+            plan_from_v1(trace, render_collapse_fn, folds_by_address, resolved_context)
+        )
     _assert_plan_count(
         trace,
-        collapse_fn,
+        render_collapse_fn,
         folds_by_address,
         resolved_context,
         projected_count,
     )
     return folds_by_address
+
+
+def _always_collapse_module(module: "Module") -> bool:
+    """Return ``True`` for standalone run-fold eligibility checks.
+
+    Parameters
+    ----------
+    module:
+        Module being considered.
+
+    Returns
+    -------
+    bool
+        Always ``True``.
+    """
+
+    _ = module
+    return True
 
 
 def _collapse_engine() -> Literal["v1", "v2"]:
@@ -2777,7 +2810,7 @@ def _assert_plan_count(
 
 def _run_fold_hidden_member_contributions(
     trace: "Trace",
-    collapse_fn: Callable[["Module"], bool],
+    collapse_fn: Callable[["Module"], bool] | None,
     context: RenderContext,
 ) -> dict[str, int]:
     """Return pre-fold rendered contribution under each module address.
@@ -2787,7 +2820,8 @@ def _run_fold_hidden_member_contributions(
     trace:
         Trace being rendered.
     collapse_fn:
-        Active collapse predicate before run folding.
+        Active collapse predicate before run folding, or ``None`` for an
+        uncollapsed render.
     context:
         Render context used for the caller's render.
 

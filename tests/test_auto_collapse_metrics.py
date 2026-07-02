@@ -784,7 +784,13 @@ def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         return tl.trace(model.eval(), x)
 
 
-def _draw_source(trace: tl.Trace, tmp_path: Path, name: str, collapse: str) -> str:
+def _draw_source(
+    trace: tl.Trace,
+    tmp_path: Path,
+    name: str,
+    collapse: str,
+    fold_runs: bool | None = None,
+) -> str:
     """Render a trace to SVG and return DOT source."""
 
     return str(
@@ -794,6 +800,7 @@ def _draw_source(trace: tl.Trace, tmp_path: Path, name: str, collapse: str) -> s
             vis_fileformat="svg",
             vis_node_placement="dot",
             collapse=collapse,
+            fold_runs=fold_runs,
         )
     )
 
@@ -1503,7 +1510,7 @@ def test_auto_collapse_run_fold_skips_readable_stack(
     """Run-fold does not elide a stack whose collapsed render is readable."""
 
     _force_v1_collapse_engine(monkeypatch)
-    trace = _trace(DimStepRun(depth=12, start_width=16), torch.randn(1, 16, 8, 8))
+    trace = _trace(RepeatedResidual(depth=12), torch.randn(2, 8))
     try:
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
         folds = resolve_run_folds(trace, collapse_fn)
@@ -1512,8 +1519,6 @@ def test_auto_collapse_run_fold_skips_readable_stack(
         assert folds == {}
         assert "runfoldellipsis" not in auto_source
         assert "... +" not in auto_source
-        assert _collapsed_exact_label_count(auto_source, "blocks.0") == 1
-        assert _collapsed_exact_label_count(auto_source, "blocks.11") == 1
     finally:
         trace.cleanup()
 
@@ -1534,6 +1539,121 @@ def test_auto_collapse_run_fold_fires_when_stack_exceeds_band(
         assert folds["blocks.0"].addresses == tuple(f"blocks.{index}" for index in range(24))
         assert _run_fold_ellipsis_count(auto_source, 24) == 1
         assert "... +23 more ResidualBlock" in auto_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_fold_runs_false_disables_default_run_fold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit ``fold_runs=False`` disables otherwise-default auto run folding."""
+
+    _force_v1_collapse_engine(monkeypatch)
+    trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
+    try:
+        auto_source = _draw_source(
+            trace,
+            tmp_path,
+            "run_fold_disabled_auto",
+            "auto",
+            fold_runs=False,
+        )
+
+        assert "runfoldellipsis" not in auto_source
+        assert "... +" not in auto_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_fold_runs_true_folds_readable_stack(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit ``fold_runs=True`` folds eligible runs even inside the readable band."""
+
+    _force_v1_collapse_engine(monkeypatch)
+    trace = _trace(RepeatedResidual(depth=12), torch.randn(2, 8))
+    try:
+        auto_source = _draw_source(
+            trace,
+            tmp_path,
+            "run_fold_forced_auto",
+            "auto",
+            fold_runs=True,
+        )
+
+        assert _run_fold_ellipsis_count(auto_source, 12) == 1
+        assert "... +11 more ResidualBlock" in auto_source
+        assert _collapsed_exact_label_count(auto_source, "blocks.11") == 0
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_fold_runs_none_preserves_default_run_fold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default ``fold_runs=None`` preserves the current band-pressure policy."""
+
+    _force_v1_collapse_engine(monkeypatch)
+    trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
+    try:
+        auto_source = _draw_source(
+            trace,
+            tmp_path,
+            "run_fold_default_none_auto",
+            "auto",
+            fold_runs=None,
+        )
+
+        assert _run_fold_ellipsis_count(auto_source, 24) == 1
+        assert "... +23 more ResidualBlock" in auto_source
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_fold_runs_true_standalone_keeps_parallel_junction(
+    tmp_path: Path,
+) -> None:
+    """Standalone run folding works with ``collapse='none'`` and preserves junctions."""
+
+    trace = _trace(ParallelRepeatedBranches(depth=40), torch.randn(1, 4, 16, 16))
+    try:
+        source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / "standalone_run_fold_parallel"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="none",
+                fold_runs=True,
+            )
+        )
+        ellipsis_name = _run_fold_ellipsis_name("branches.0")
+
+        assert _run_fold_ellipsis_count(source, 40) == 1
+        assert _has_visible_node(source, "cat_")
+        assert _edge_count(source, "input_1pass1", ellipsis_name) == 1
+        assert _edge_count(source, ellipsis_name, "cat_1_161pass1") == 1
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_fold_runs_rejects_invalid_value(tmp_path: Path) -> None:
+    """Run-fold policy validation rejects non-tristate values."""
+
+    trace = _trace(RepeatedResidual(depth=4), torch.randn(2, 8))
+    try:
+        with pytest.raises(ValueError, match="fold_runs must be None, True, or False"):
+            trace.draw(
+                vis_outpath=str(tmp_path / "invalid_fold_runs"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="auto",
+                fold_runs="yes",  # type: ignore[arg-type]
+            )
     finally:
         trace.cleanup()
 

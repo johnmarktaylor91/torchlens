@@ -271,6 +271,26 @@ def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None
         trace.cleanup()
 
 
+def test_trace_collapse_plan_public_diagnostic(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Trace.collapse_plan returns the v2 plan without adding top-level API names."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(UniformStack(depth=12), torch.randn(2, 8))
+    try:
+        plan = trace.collapse_plan(mode="auto")
+        summary = repr(plan)
+
+        assert isinstance(plan, CollapsePlan)
+        assert count(plan) > 0
+        assert summary.startswith("CollapsePlan(total=")
+        assert "module_box=" in summary or "raw_op=" in summary
+
+        with pytest.raises(ValueError, match="mode must be one of"):
+            trace.collapse_plan(mode="none")  # type: ignore[arg-type]
+    finally:
+        trace.cleanup()
+
+
 def test_frontier_pruning_respects_caps() -> None:
     """Frontier pruning keeps at most the cap and drops over-cap counts."""
 
