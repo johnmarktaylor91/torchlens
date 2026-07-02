@@ -81,6 +81,8 @@ class ModuleRunFold:
         Aggregate frozen parameter count across the run.
     shape_summary:
         Short first-to-last output-shape summary when shapes vary, else ``None``.
+    hidden_member_composition:
+        Metadata describing hidden members represented by the ellipsis.
     """
 
     representative: str
@@ -91,6 +93,7 @@ class ModuleRunFold:
     num_params_trainable: int
     num_params_frozen: int
     shape_summary: str | None
+    hidden_member_composition: Mapping[str, int]
 
     @property
     def multiplicity(self) -> int:
@@ -467,39 +470,51 @@ def resolve_run_folds(
         collapse_fn,
         resolved_context,
     )
-    dimless_digests = _compute_dimless_structural_digests(trace)
+    analysis = analyze_collapse(trace)
     candidate_folds: list[ModuleRunFold] = []
     candidate_addresses: set[str] = set()
-    for child_addresses in _sibling_address_groups(trace).values():
-        for run in _iter_collapsible_runs(trace, child_addresses, dimless_digests, collapse_fn):
-            if not _run_span_allows_fold(trace, run):
+    for parent_address, child_addresses in _sibling_address_groups(trace).items():
+        graph = _flow_graph_for_sibling_group(
+            trace,
+            str(parent_address),
+            child_addresses,
+            analysis,
+        )
+        flow_addresses = _flow_ordered_child_addresses(child_addresses, graph)
+        for run in _iter_collapsible_runs(trace, flow_addresses, collapse_fn):
+            if not _run_fold_is_legal(run, graph):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
             candidate_addresses.update(run)
         for run in _iter_collapsible_child_path_runs(
             trace,
-            child_addresses,
-            dimless_digests,
+            flow_addresses,
             collapse_fn,
         ):
             if any(address in candidate_addresses for address in run):
                 continue
-            if not _run_span_allows_fold(trace, run):
+            run_parent = _common_parent_address(run)
+            run_graph = _flow_graph_for_sibling_group(
+                trace,
+                str(run_parent),
+                list(run),
+                analysis,
+            )
+            if not _run_fold_is_legal(run, run_graph):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
             candidate_addresses.update(run)
         for run in _iter_collapsible_runs(
             trace,
-            child_addresses,
-            dimless_digests,
+            flow_addresses,
             collapse_fn,
             allow_selected_descendant=True,
         ):
             if any(address in candidate_addresses for address in run):
                 continue
-            if not _run_span_allows_fold(trace, run):
+            if not _run_fold_is_legal(run, graph):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
@@ -543,6 +558,154 @@ def _sibling_address_groups(trace: "Trace") -> dict[str | None, list[str]]:
             continue
         groups[getattr(module, "address_parent", None)].append(module.address)
     return groups
+
+
+def _flow_ordered_child_addresses(
+    child_addresses: list[str],
+    graph: ChildCondensedFlowGraph | None,
+) -> list[str]:
+    """Return child addresses in flow order with deterministic fallback.
+
+    Parameters
+    ----------
+    child_addresses:
+        Recorded sibling addresses.
+    graph:
+        Optional child-condensed flow graph for the sibling parent.
+
+    Returns
+    -------
+    list[str]
+        Sibling addresses ordered by first-op flow position when available.
+    """
+
+    if graph is None:
+        return list(child_addresses)
+    seen = set(graph.flow_children)
+    ordered = [address for address in graph.flow_children if address in child_addresses]
+    ordered.extend(address for address in child_addresses if address not in seen)
+    return ordered
+
+
+def _flow_graph_for_sibling_group(
+    trace: "Trace",
+    parent_address: str,
+    child_addresses: list[str],
+    analysis: CollapseAnalysis,
+) -> ChildCondensedFlowGraph | None:
+    """Return the child-flow graph for a concrete or synthetic sibling scope.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    parent_address:
+        Recorded parent address for the sibling group.
+    child_addresses:
+        Sibling child addresses.
+    analysis:
+        Cached collapse analysis for the trace.
+
+    Returns
+    -------
+    ChildCondensedFlowGraph | None
+        Precomputed graph when available, otherwise a graph synthesized for
+        recorded non-module scopes such as ``ModuleList`` containers.
+    """
+
+    graph = analysis.child_flow_graphs.get(parent_address)
+    if graph is not None:
+        return graph
+    if not child_addresses:
+        return None
+    return _synthetic_child_condensed_flow_graph(
+        trace,
+        parent_address,
+        child_addresses,
+        analysis.signals,
+    )
+
+
+def _synthetic_child_condensed_flow_graph(
+    trace: "Trace",
+    parent_address: str,
+    child_addresses: list[str],
+    signals: Mapping[str, ModuleCollapseSignals],
+) -> ChildCondensedFlowGraph:
+    """Build a child-condensed graph for recorded non-module sibling scopes.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    parent_address:
+        Synthetic parent address.
+    child_addresses:
+        Direct child addresses in the synthetic scope.
+    signals:
+        Precomputed module signals.
+
+    Returns
+    -------
+    ChildCondensedFlowGraph
+        Flow graph with external source/sink sentinels for boundary edges.
+    """
+
+    op_order = {op.label: index for index, op in enumerate(trace.ops)}
+    child_sets = {
+        child: set(signals[child].subtree_ops) for child in child_addresses if child in signals
+    }
+    flow_children = tuple(
+        sorted(
+            child_sets,
+            key=lambda child: (
+                _first_flow_op_order(trace, child_sets[child], op_order),
+                child,
+            ),
+        )
+    )
+    owner_by_label: dict[str, str] = {}
+    for child_address, labels in child_sets.items():
+        for label in labels:
+            owner_by_label[label] = child_address
+    edges: set[tuple[str, str]] = set()
+    for op in trace.ops:
+        source = owner_by_label.get(op.label)
+        for child_label in getattr(op, "children", ()) or ():
+            child_op = cast("Op", trace.ops[child_label])
+            target_label = child_op.label
+            if not _is_forward_dataflow_edge(trace, op.label, target_label):
+                continue
+            target = owner_by_label.get(target_label)
+            if source is None and target is None:
+                continue
+            if source is None:
+                if target is None:
+                    continue
+                edges.add((f"external_source:{op.label}", target))
+            elif target is None:
+                edges.add((source, f"external_sink:{target_label}"))
+            elif target != source:
+                edges.add((source, target))
+    ordered_nodes = (
+        *flow_children,
+        *sorted({node for edge in edges for node in edge if ":" in node}),
+    )
+    ordered = {node: index for index, node in enumerate(ordered_nodes)}
+    sorted_edges = tuple(
+        sorted(
+            edges, key=lambda edge: (ordered.get(edge[0], 10**9), ordered.get(edge[1], 10**9), edge)
+        )
+    )
+    return ChildCondensedFlowGraph(
+        parent=parent_address,
+        flow_children=flow_children,
+        parent_owned_ops=(),
+        nodes=ordered_nodes,
+        edges=sorted_edges,
+        child_external_endpoint_counts=_child_external_endpoint_counts(sorted_edges, flow_children),
+        interval_flags=_flow_interval_flags(trace, flow_children, child_sets, sorted_edges),
+    )
 
 
 def module_collapse_score(module: "Module") -> float:
@@ -596,7 +759,6 @@ def _compute_dimless_structural_digests(trace: "Trace") -> dict[str, str]:
         payload = repr(
             (
                 getattr(module, "class_name", ""),
-                signal.own_func_names,
                 child_sigs,
                 len(signal.subtree_ops),
                 int(getattr(module, "num_layers", 0) or 0),
@@ -642,29 +804,25 @@ def _normalized_internal_topology(
 def _iter_collapsible_runs(
     trace: "Trace",
     child_addresses: list[str],
-    dimless_digests: Mapping[str, str],
     collapse_fn: Callable[["Module"], bool],
     run_stem: str | None = None,
     allow_selected_descendant: bool = False,
 ) -> Iterator[tuple[str, ...]]:
-    """Yield consecutive sibling runs that should fold to one render node.
+    """Yield flow-consecutive same-class runs with equal adjacent output shapes.
 
     Parameters
     ----------
     trace:
         Trace owning the modules.
     child_addresses:
-        Ordered direct children for one parent module.
-    dimless_digests:
-        Dim-insensitive structural digest keyed by address.
+        Direct children for one parent module in flow order.
     collapse_fn:
         Active collapse predicate.
     run_stem:
         Optional precomputed sibling-run stem for descendant-path folds.
     allow_selected_descendant:
-        Whether a module with selected descendants can stand in for a selected
-        module. This supports folding repeated ancestors whose internal
-        submodules would otherwise render as a node wall.
+        Whether selected descendants allow a sibling ancestor to stand in as
+        the folded member.
 
     Yields
     ------
@@ -672,85 +830,62 @@ def _iter_collapsible_runs(
         One run of at least :data:`RUN_FOLD_MIN_LENGTH` addresses.
     """
 
-    current_key: tuple[str, str, str] | None = None
+    current_key: tuple[str, str] | None = None
+    current_descendant_only_num_layers: int | None = None
+    current_has_direct_selection = False
     current_run: list[str] = []
     for address in child_addresses:
         module = cast("Module", trace.modules[address])
-        selected = collapse_fn(module) or (
-            allow_selected_descendant and bool(_selected_descendants(trace, address, collapse_fn))
+        directly_selected = collapse_fn(module)
+        descendant_selected = allow_selected_descendant and bool(
+            _selected_descendants(trace, address, collapse_fn)
         )
+        selected = directly_selected or descendant_selected
         if not selected:
             if allow_selected_descendant:
                 continue
             if len(current_run) >= RUN_FOLD_MIN_LENGTH:
                 yield tuple(current_run)
             current_key = None
+            current_descendant_only_num_layers = None
+            current_has_direct_selection = False
             current_run = []
             continue
         key = (
             str(getattr(module, "class_name", "")),
-            (
-                _selected_descendant_run_digest(trace, module, dimless_digests)
-                if allow_selected_descendant
-                else dimless_digests.get(address, "")
-            ),
             run_stem or _indexed_parent_stem(address),
         )
-        if key == current_key:
+        num_layers = int(getattr(module, "num_layers", 0) or 0)
+        descendant_only_depth_matches = (
+            directly_selected
+            or current_has_direct_selection
+            or current_descendant_only_num_layers in {None, num_layers}
+        )
+        extends_current = (
+            key == current_key
+            and bool(current_run)
+            and _module_output_shapes_equal(trace, current_run[-1], address)
+            and descendant_only_depth_matches
+        )
+        if extends_current:
             current_run.append(address)
+            current_has_direct_selection = current_has_direct_selection or directly_selected
+            if not current_has_direct_selection:
+                current_descendant_only_num_layers = num_layers
             continue
         if len(current_run) >= RUN_FOLD_MIN_LENGTH:
             yield tuple(current_run)
         current_key = key
+        current_descendant_only_num_layers = None if directly_selected else num_layers
+        current_has_direct_selection = directly_selected
         current_run = [address]
     if len(current_run) >= RUN_FOLD_MIN_LENGTH:
         yield tuple(current_run)
 
 
-def _selected_descendant_run_digest(
-    trace: "Trace",
-    module: "Module",
-    dimless_digests: Mapping[str, str],
-) -> str:
-    """Return the structural digest for selected-descendant run folding.
-
-    Parameters
-    ----------
-    trace:
-        Trace owning the module hierarchy.
-    module:
-        Candidate module whose descendants may be selected for collapse.
-    dimless_digests:
-        Full dimensionless structural digests keyed by module address.
-
-    Returns
-    -------
-    str
-        Digest that preserves immediate child topology and depth while ignoring
-        implementation-level op differences inside those repeated children.
-    """
-
-    child_addresses = tuple(
-        str(child_address)
-        for child_address in getattr(module, "address_children", ()) or ()
-        if child_address in trace.modules
-    )
-    if not child_addresses:
-        return dimless_digests.get(module.address, "")
-    child_classes = tuple(
-        str(getattr(cast("Module", trace.modules[child_address]), "class_name", ""))
-        for child_address in child_addresses
-    )
-    payload = repr((getattr(module, "class_name", ""), child_classes, len(child_addresses))).encode(
-        "utf-8"
-    )
-    return hashlib.sha1(payload).hexdigest()
-
-
 def _iter_collapsible_child_path_runs(
     trace: "Trace",
     sibling_addresses: list[str],
-    dimless_digests: Mapping[str, str],
     collapse_fn: Callable[["Module"], bool],
 ) -> Iterator[tuple[str, ...]]:
     """Yield repeated selected child paths under consecutive sibling parents.
@@ -761,8 +896,6 @@ def _iter_collapsible_child_path_runs(
         Trace owning the modules.
     sibling_addresses:
         Ordered direct children for one parent module.
-    dimless_digests:
-        Dim-insensitive structural digest keyed by address.
     collapse_fn:
         Active collapse predicate.
 
@@ -801,7 +934,6 @@ def _iter_collapsible_child_path_runs(
                 yield from _iter_collapsible_runs(
                     trace,
                     current_candidates,
-                    dimless_digests,
                     collapse_fn,
                     current_stem,
                 )
@@ -811,7 +943,6 @@ def _iter_collapsible_child_path_runs(
             yield from _iter_collapsible_runs(
                 trace,
                 current_candidates,
-                dimless_digests,
                 collapse_fn,
                 current_stem,
             )
@@ -841,6 +972,275 @@ def _indexed_parent_stem(address: str) -> str:
     else:
         stem = match.group("stem").rstrip("._") or ""
     return f"{parent}.{stem}" if parent and stem else parent or stem or name
+
+
+def _common_parent_address(addresses: tuple[str, ...]) -> str | None:
+    """Return the shared parent address for a run.
+
+    Parameters
+    ----------
+    addresses:
+        Candidate module addresses.
+
+    Returns
+    -------
+    str | None
+        Shared parent address, or ``None`` when the run is empty or mixed.
+    """
+
+    parents = {address.rsplit(".", 1)[0] if "." in address else "self" for address in addresses}
+    if len(parents) != 1:
+        return None
+    return next(iter(parents))
+
+
+def _module_output_shapes_equal(trace: "Trace", left: str, right: str) -> bool:
+    """Return whether two modules have exactly equal known output shapes.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    left:
+        First module address.
+    right:
+        Second module address.
+
+    Returns
+    -------
+    bool
+        True only when both primary output shapes are known and all dimensions
+        match exactly.
+    """
+
+    left_shape = _module_output_shape_tuple(trace, left)
+    right_shape = _module_output_shape_tuple(trace, right)
+    return left_shape is not None and left_shape == right_shape
+
+
+def _run_fold_is_legal(
+    addresses: tuple[str, ...],
+    graph: ChildCondensedFlowGraph | None,
+) -> bool:
+    """Return whether a candidate run satisfies the v2 legality grammar.
+
+    Parameters
+    ----------
+    addresses:
+        Candidate run addresses in flow order.
+    graph:
+        Child-condensed flow graph for the run's parent.
+
+    Returns
+    -------
+    bool
+        True for legal chain intervals or legal parallel-fan bundles.
+    """
+
+    if len(addresses) < RUN_FOLD_MIN_LENGTH or graph is None:
+        return False
+    if not _run_is_flow_consecutive(addresses, graph):
+        return False
+    return _run_fold_is_chain_interval(addresses, graph) or _run_fold_is_parallel_fan(
+        addresses,
+        graph,
+    )
+
+
+def _run_is_flow_consecutive(
+    addresses: tuple[str, ...],
+    graph: ChildCondensedFlowGraph,
+) -> bool:
+    """Return whether ``addresses`` are adjacent in graph flow-child order.
+
+    Parameters
+    ----------
+    addresses:
+        Candidate run addresses.
+    graph:
+        Child-condensed flow graph for the parent.
+
+    Returns
+    -------
+    bool
+        True when the candidate is a contiguous interval in flow order.
+    """
+
+    flow_index = {address: index for index, address in enumerate(graph.flow_children)}
+    indexes = [flow_index.get(address) for address in addresses]
+    if any(index is None for index in indexes):
+        return False
+    first = cast(int, indexes[0])
+    return indexes == list(range(first, first + len(addresses)))
+
+
+def _run_fold_is_chain_interval(
+    addresses: tuple[str, ...],
+    graph: ChildCondensedFlowGraph,
+) -> bool:
+    """Return whether a run satisfies the chain-interval legality contract.
+
+    Parameters
+    ----------
+    addresses:
+        Candidate run addresses in flow order.
+    graph:
+        Child-condensed flow graph for the parent.
+
+    Returns
+    -------
+    bool
+        True when members form one path with one external entry, one external
+        exit, and no flagged interior boundary crossing.
+    """
+
+    member_set = set(addresses)
+    edges = set(graph.edges)
+    internal_edges = {
+        (source, target)
+        for source, target in edges
+        if source in member_set and target in member_set and source != target
+    }
+    expected_edges = set(zip(addresses[:-1], addresses[1:], strict=True))
+    connector_nodes = _chain_connector_nodes(addresses, edges)
+    if connector_nodes is None:
+        return False
+    direct_expected_edges = expected_edges & internal_edges
+    if internal_edges - direct_expected_edges:
+        return False
+    entries = [
+        (source, target)
+        for source, target in edges
+        if target in member_set and source not in member_set and source not in connector_nodes
+    ]
+    exits = [
+        (source, target)
+        for source, target in edges
+        if source in member_set and target not in member_set and target not in connector_nodes
+    ]
+    if len(entries) != 1 or entries[0][1] != addresses[0]:
+        return False
+    if len(exits) != 1 or exits[0][0] != addresses[-1]:
+        return False
+    return True
+
+
+def _chain_connector_nodes(
+    addresses: tuple[str, ...],
+    edges: set[tuple[str, str]],
+) -> set[str] | None:
+    """Return external one-hop connectors for a chain run if it forms a path.
+
+    Parameters
+    ----------
+    addresses:
+        Candidate run addresses in flow order.
+    edges:
+        Condensed graph edges.
+
+    Returns
+    -------
+    set[str] | None
+        External connector nodes used between members, or ``None`` if any
+        consecutive pair is not connected by exactly one path step.
+    """
+
+    member_set = set(addresses)
+    connectors: set[str] = set()
+    for left, right in zip(addresses[:-1], addresses[1:], strict=True):
+        if (left, right) in edges:
+            continue
+        pair_connectors = {
+            target
+            for source, target in edges
+            if source == left and target not in member_set and (target, right) in edges
+        }
+        paired_connectors = {
+            (target, paired)
+            for source, target in edges
+            for paired in (_paired_external_connector(target),)
+            if source == left
+            and target not in member_set
+            and paired is not None
+            and (paired, right) in edges
+        }
+        if paired_connectors:
+            pair_connectors.update(connector for pair in paired_connectors for connector in pair)
+        if len(pair_connectors) != 1:
+            if len(pair_connectors) != 2 or not any(
+                _paired_external_connector(connector) in pair_connectors
+                for connector in pair_connectors
+            ):
+                return None
+        connectors.update(pair_connectors)
+    return connectors
+
+
+def _paired_external_connector(node: str) -> str | None:
+    """Return the source/sink counterpart for an external connector node.
+
+    Parameters
+    ----------
+    node:
+        Condensed external connector node name.
+
+    Returns
+    -------
+    str | None
+        Paired connector name, or ``None`` when ``node`` is not an external
+        source/sink sentinel.
+    """
+
+    if node.startswith("external_sink:"):
+        return f"external_source:{node.removeprefix('external_sink:')}"
+    if node.startswith("external_source:"):
+        return f"external_sink:{node.removeprefix('external_source:')}"
+    return None
+
+
+def _run_fold_is_parallel_fan(
+    addresses: tuple[str, ...],
+    graph: ChildCondensedFlowGraph,
+) -> bool:
+    """Return whether a run satisfies the parallel-fan legality contract.
+
+    Parameters
+    ----------
+    addresses:
+        Candidate run addresses in flow order.
+    graph:
+        Child-condensed flow graph for the parent.
+
+    Returns
+    -------
+    bool
+        True when members have no mutual edges and identical external source
+        and sink sets.
+    """
+
+    member_set = set(addresses)
+    source_sets: list[frozenset[str]] = []
+    sink_sets: list[frozenset[str]] = []
+    for address in addresses:
+        sources: set[str] = set()
+        sinks: set[str] = set()
+        for source, target in graph.edges:
+            if source == address and target in member_set:
+                return False
+            if target == address and source in member_set:
+                return False
+            if target == address and source not in member_set:
+                sources.add(source)
+            if source == address and target not in member_set:
+                sinks.add(target)
+        source_sets.append(frozenset(sources))
+        sink_sets.append(frozenset(sinks))
+    return (
+        bool(source_sets[0])
+        and bool(sink_sets[0])
+        and all(sources == source_sets[0] for sources in source_sets[1:])
+        and all(sinks == sink_sets[0] for sinks in sink_sets[1:])
+    )
 
 
 def _selected_descendants(
@@ -903,7 +1303,44 @@ def _make_run_fold(trace: "Trace", addresses: tuple[str, ...]) -> ModuleRunFold:
             int(getattr(module, "num_params_frozen", 0) or 0) for module in modules
         ),
         shape_summary=_run_shape_summary(trace, addresses),
+        hidden_member_composition=_hidden_member_composition(trace, addresses),
     )
+
+
+def _hidden_member_composition(trace: "Trace", addresses: tuple[str, ...]) -> Mapping[str, int]:
+    """Return residual/passthrough composition for hidden run members.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    addresses:
+        Folded run addresses, including the representative.
+
+    Returns
+    -------
+    Mapping[str, int]
+        Counts for hidden members with and without residual or join-style
+        passthrough operations.
+    """
+
+    analysis = analyze_collapse(trace)
+    composition = {
+        "hidden_with_residual_join": 0,
+        "hidden_without_residual_join": 0,
+    }
+    for address in addresses[1:]:
+        signal = analysis.signals.get(address)
+        has_join = signal is not None and (
+            signal.passthrough_edges > 0
+            or any(
+                _op_func_name(cast("Op", trace.ops[label])) in JUNCTION_FUNC_NAMES
+                for label in signal.subtree_ops
+            )
+        )
+        key = "hidden_with_residual_join" if has_join else "hidden_without_residual_join"
+        composition[key] += 1
+    return composition
 
 
 def _run_shape_summary(trace: "Trace", addresses: tuple[str, ...]) -> str | None:
@@ -1217,6 +1654,7 @@ def _compute_child_condensed_flow_graphs(
             label
             for label in signals.get(parent, _empty_signal(parent)).subtree_ops
             if _condensed_owner_for_op(label, parent, flow_children, child_sets) == label
+            and not _is_buffer_op_label(trace, label)
         )
         nodes = (*flow_children, *parent_ops)
         edges = _condensed_edges(trace, parent, flow_children, child_sets, set(parent_ops))
@@ -1265,6 +1703,84 @@ def _empty_signal(address: str) -> ModuleCollapseSignals:
         peer_count=1,
         hidden_ops=0,
         eligible=False,
+    )
+
+
+def _first_flow_op_order(
+    trace: "Trace",
+    op_labels: set[str],
+    op_order: Mapping[str, int],
+) -> int:
+    """Return first non-buffer op order for a child subtree.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    op_labels:
+        Operation labels in the child subtree.
+    op_order:
+        Deterministic operation-order index keyed by op label.
+
+    Returns
+    -------
+    int
+        First non-buffer operation index, falling back to any operation index
+        when the subtree has no non-buffer ops.
+    """
+
+    non_buffer_orders = [
+        op_order[label] for label in op_labels if not _is_buffer_op_label(trace, label)
+    ]
+    if non_buffer_orders:
+        return min(non_buffer_orders)
+    return min((op_order[label] for label in op_labels), default=10**12)
+
+
+def _is_buffer_op_label(trace: "Trace", op_label: str) -> bool:
+    """Return whether ``op_label`` identifies a buffer/source op.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    op_label:
+        Operation label to inspect.
+
+    Returns
+    -------
+    bool
+        True when the label exists and represents a buffer op.
+    """
+
+    if op_label not in trace.ops:
+        return False
+    return bool(getattr(cast("Op", trace.ops[op_label]), "is_buffer", False))
+
+
+def _is_forward_dataflow_edge(trace: "Trace", source_label: str, target_label: str) -> bool:
+    """Return whether an op edge is real forward tensor dataflow.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the operation graph.
+    source_label:
+        Source operation label.
+    target_label:
+        Target operation label.
+
+    Returns
+    -------
+    bool
+        True for non-buffer endpoint edges. Registered-buffer provenance and
+        write-version edges are excluded from the child-condensed dataflow
+        artifact.
+    """
+
+    return not _is_buffer_op_label(trace, source_label) and not _is_buffer_op_label(
+        trace,
+        target_label,
     )
 
 
@@ -1337,10 +1853,21 @@ def _condensed_edges(
     ):
         op = cast("Op", trace.ops[label])
         source = _condensed_owner_for_op(label, parent, flow_children, child_sets)
+        for parent_label in getattr(op, "parents", ()) or ():
+            parent_op = cast("Op", trace.ops[parent_label])
+            normalized_parent_label = parent_op.label
+            if normalized_parent_label in parent_subtree:
+                continue
+            if not _is_forward_dataflow_edge(trace, normalized_parent_label, label):
+                continue
+            edges.add((f"external_source:{normalized_parent_label}", source))
         for child_label in getattr(op, "children", ()) or ():
             child = cast("Op", trace.ops[child_label])
             normalized_child_label = child.label
+            if not _is_forward_dataflow_edge(trace, label, normalized_child_label):
+                continue
             if normalized_child_label not in parent_subtree:
+                edges.add((source, f"external_sink:{normalized_child_label}"))
                 continue
             target = _condensed_owner_for_op(
                 normalized_child_label,
