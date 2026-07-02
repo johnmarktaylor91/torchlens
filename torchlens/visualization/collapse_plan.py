@@ -122,6 +122,40 @@ class ChildSegment:
 
 
 @dataclass(frozen=True)
+class SegmentDescriptor:
+    """Render-time metadata for a condensed segment node.
+
+    Parameters
+    ----------
+    name:
+        Deterministic Graphviz node name.
+    kind:
+        Segment kind, either ``"child"`` or ``"op"``.
+    label:
+        Human-readable range label.
+    members:
+        Child module addresses represented by a child segment.
+    ops:
+        Operation labels represented by an op segment.
+    owner:
+        Module-cluster owner key, or ``None`` for top-level emission.
+    num_ops:
+        Number of operations represented by the segment.
+    num_params:
+        Number of parameters represented by the segment.
+    """
+
+    name: str
+    kind: Literal["child", "op"]
+    label: str
+    members: tuple[str, ...] = ()
+    ops: tuple[str, ...] = ()
+    owner: str | None = None
+    num_ops: int = 0
+    num_params: int = 0
+
+
+@dataclass(frozen=True)
 class Boundary:
     """Renderer boundary node.
 

@@ -24,6 +24,7 @@ from .auto_collapse import (
     _module_output_shapes_equal,
     _readable_band_high,
     _rendered_module_hidden_counts,
+    _run_fold_is_chain_interval,
     _run_fold_is_legal,
     _run_span_allows_fold,
     _shape_channel_dim,
@@ -31,12 +32,15 @@ from .auto_collapse import (
     analyze_collapse,
 )
 from .collapse_plan import (
+    ChildSegment,
     CollapsePlan,
     ModuleBox,
+    OpSegment,
     PlanNode,
     RawOp,
     RenderContext,
     RunFold,
+    SegmentDescriptor,
     count,
     plan_from_v1,
 )
@@ -44,6 +48,7 @@ from .collapse_plan import EllipsisNode
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
+    from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from .auto_collapse import ChildCondensedFlowGraph
 
@@ -127,6 +132,10 @@ class OptimizerResult:
         Whether the optimizer declined and callers should use v1.
     reason:
         Human-readable decline reason.
+    segments:
+        Segment descriptors keyed by segment node name.
+    level:
+        Max-mode ladder level that produced the plan.
     """
 
     selected: frozenset[str]
@@ -138,6 +147,8 @@ class OptimizerResult:
     g_star: float | None
     declined: bool = False
     reason: str | None = None
+    segments: Mapping[str, SegmentDescriptor] | None = None
+    level: str | None = None
 
 
 @dataclass(frozen=True)
@@ -223,15 +234,16 @@ class _MemoKey:
     rolled_mass: int | None = None
 
 
-_RESULT_CACHE: weakref.WeakKeyDictionary[object, dict[RenderContext, OptimizerResult]] = (
-    weakref.WeakKeyDictionary()
-)
+_RESULT_CACHE: weakref.WeakKeyDictionary[
+    object, dict[tuple[RenderContext, str], OptimizerResult]
+] = weakref.WeakKeyDictionary()
 
 
 def select_collapse_plan(
     trace: "Trace",
     context: RenderContext,
     weights: OptimizerWeights | None = None,
+    mode: Literal["auto", "max"] = "auto",
 ) -> OptimizerResult:
     """Return the v2 auto-collapse plan for ``trace``.
 
@@ -243,6 +255,8 @@ def select_collapse_plan(
         Rendering context.
     weights:
         Optional optimizer weights.
+    mode:
+        Collapse policy to select.
 
     Returns
     -------
@@ -250,10 +264,15 @@ def select_collapse_plan(
         Selected collapse result, or a declined result when unsupported.
     """
 
+    cache_key = (context, mode)
     cached_by_context = _RESULT_CACHE.setdefault(trace, {})
-    cached = cached_by_context.get(context)
+    cached = cached_by_context.get(cache_key)
     if cached is not None:
         return cached
+    if mode == "max":
+        result = _select_max_plan(trace, context, weights)
+        cached_by_context[cache_key] = result
+        return result
     resolved_weights = OptimizerWeights() if weights is None else weights
     analysis = analyze_collapse(trace)
     start = time.perf_counter()
@@ -304,7 +323,7 @@ def select_collapse_plan(
         first_pass_plan = None
     if best is None:
         result = _declined_result(context, "no optimizer frontier was produced")
-        cached_by_context[context] = result
+        cached_by_context[cache_key] = result
         return result
     if first_pass_point is None or first_pass_plan is None:
         instantiated_point, plan = _instantiate_best_point(
@@ -332,8 +351,435 @@ def select_collapse_plan(
         select_ms=(time.perf_counter() - start) * 1000.0,
         g_star=winning_g,
     )
-    cached_by_context[context] = result
+    cached_by_context[cache_key] = result
     return result
+
+
+def _select_max_plan(
+    trace: "Trace",
+    context: RenderContext,
+    weights: OptimizerWeights | None,
+) -> OptimizerResult:
+    """Return the max-mode v2 plan by condensing legal auto-plan intervals.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    weights:
+        Optional optimizer weights forwarded to the auto selector.
+
+    Returns
+    -------
+    OptimizerResult
+        Max-mode result with segment descriptors, or an L3 auto fallback.
+    """
+
+    auto = select_collapse_plan(trace, context, weights, mode="auto")
+    if auto.declined:
+        return auto
+    analysis = analyze_collapse(trace)
+    hidden_counts = _rendered_module_hidden_counts(trace, context)
+    total_ops = _optimizer_total_units(trace, context)
+    auto_count = count(auto.plan)
+    levels = (
+        ("L0", 12, 0.60),
+        ("L1", 12, 0.75),
+        ("L2", min(20, auto_count), 0.75),
+    )
+    for level, k_hi, dominance_limit in levels:
+        plan, segments = _condense_plan_with_child_segments(
+            trace,
+            context,
+            analysis,
+            auto.plan,
+            hidden_counts,
+            total_ops,
+            dominance_limit=dominance_limit,
+            k_hi=k_hi,
+        )
+        plan_count = count(plan)
+        if segments and 3 <= plan_count <= k_hi and plan_count < auto_count:
+            return replace(
+                auto,
+                plan=plan,
+                visible_count=plan_count,
+                segments=segments,
+                level=level,
+                reason=None,
+            )
+    return replace(
+        auto,
+        segments={},
+        level="L3",
+        reason=f"fallback_to_auto: no legal max plan in [3,{min(20, auto_count)}]",
+    )
+
+
+def _condense_plan_with_child_segments(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    plan: CollapsePlan,
+    hidden_counts: Mapping[str, int],
+    total_ops: int,
+    *,
+    dominance_limit: float,
+    k_hi: int,
+) -> tuple[CollapsePlan, dict[str, SegmentDescriptor]]:
+    """Replace legal consecutive child boxes with max-mode segment nodes.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    analysis:
+        Shared collapse analysis.
+    plan:
+        Auto-mode plan to condense.
+    hidden_counts:
+        Renderer-faithful hidden counts by module.
+    total_ops:
+        Total rendered operation units.
+    dominance_limit:
+        Maximum fraction of ops one segment may hide.
+    k_hi:
+        Current ladder node ceiling.
+
+    Returns
+    -------
+    tuple[CollapsePlan, dict[str, SegmentDescriptor]]
+        Condensed plan and renderer descriptors.
+    """
+
+    _ = k_hi
+    nodes: list[PlanNode] = []
+    segments: dict[str, SegmentDescriptor] = {}
+    hidden_raw_ops: set[str] = set()
+    index = 0
+    while index < len(plan.nodes):
+        node = plan.nodes[index]
+        if isinstance(node, RawOp) and isinstance(node.op, str) and node.op in hidden_raw_ops:
+            index += 1
+            continue
+        op_run = _legal_plan_op_segment_run(
+            trace,
+            plan.nodes,
+            index,
+            total_ops,
+            dominance_limit=dominance_limit,
+        )
+        if op_run:
+            descriptor = _make_op_segment_descriptor(trace, context, op_run)
+            segments[descriptor.name] = descriptor
+            nodes.append(OpSegment(op_run))
+            index += len(op_run)
+            continue
+        run = _legal_plan_child_segment_run(
+            trace,
+            context,
+            analysis,
+            plan.nodes,
+            index,
+            hidden_counts,
+            total_ops,
+            dominance_limit=dominance_limit,
+        )
+        if run:
+            covered_ops = _child_segment_covered_ops(analysis, run)
+            descriptor = _make_child_segment_descriptor(trace, context, run, covered_ops)
+            segments[descriptor.name] = descriptor
+            hidden_raw_ops.update(covered_ops)
+            nodes.append(ChildSegment(run))
+            index += len(run)
+            continue
+        nodes.append(node)
+        index += 1
+    return CollapsePlan(nodes=tuple(nodes), context=context), segments
+
+
+def _legal_plan_op_segment_run(
+    trace: "Trace",
+    nodes: Sequence[PlanNode],
+    start: int,
+    total_ops: int,
+    *,
+    dominance_limit: float,
+) -> tuple[str, ...] | None:
+    """Return a legal consecutive raw-op segment run at ``start``.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    nodes:
+        Plan-node sequence.
+    start:
+        Candidate start index.
+    total_ops:
+        Total rendered operation units.
+    dominance_limit:
+        Maximum segment dominance.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Operation labels for a legal segment, or ``None``.
+    """
+
+    labels: list[str] = []
+    op_by_label = {str(op.label).rsplit(":", 1)[0]: op for op in trace.ops}
+    op_order = {str(op.label).rsplit(":", 1)[0]: index for index, op in enumerate(trace.ops)}
+    previous_index: int | None = None
+    for node in nodes[start:]:
+        if not isinstance(node, RawOp) or not isinstance(node.op, str):
+            break
+        label = node.op
+        current_index = op_order.get(label)
+        if current_index is None:
+            break
+        op = op_by_label[label]
+        if getattr(op, "is_input", False) or getattr(op, "is_output", False):
+            break
+        if previous_index is not None and current_index != previous_index + 1:
+            break
+        labels.append(label)
+        previous_index = current_index
+    if len(labels) < 3:
+        return None
+    if total_ops > 0:
+        max_len = max(3, int(total_ops * dominance_limit))
+        labels = labels[:max_len]
+    return tuple(labels) if len(labels) >= 3 else None
+
+
+def _legal_plan_child_segment_run(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    nodes: Sequence[PlanNode],
+    start: int,
+    hidden_counts: Mapping[str, int],
+    total_ops: int,
+    *,
+    dominance_limit: float,
+) -> tuple[str, ...] | None:
+    """Return the longest legal child-segment run starting at ``start``.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    analysis:
+        Shared collapse analysis.
+    nodes:
+        Plan-node sequence.
+    start:
+        Candidate start index.
+    hidden_counts:
+        Renderer-faithful hidden counts.
+    total_ops:
+        Total rendered operation units.
+    dominance_limit:
+        Maximum segment dominance.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Legal run, or ``None``.
+    """
+
+    _ = context
+    addresses: list[str] = []
+    parent: str | None = None
+    for node in nodes[start:]:
+        address = _plan_module_address(node)
+        if address is None:
+            break
+        node_parent = address.rsplit(".", 1)[0] if "." in address else "self"
+        if parent is None:
+            parent = node_parent
+        if node_parent != parent:
+            break
+        addresses.append(address)
+    if len(addresses) < 2 or parent is None:
+        return None
+    graph = analysis.child_flow_graphs.get(parent)
+    best: tuple[str, ...] | None = None
+    for end in range(2, len(addresses) + 1):
+        candidate = tuple(addresses[:end])
+        if not _segment_is_legal(candidate, graph):
+            continue
+        hidden = sum(
+            hidden_counts.get(address, analysis.signals[address].hidden_ops)
+            for address in candidate
+        )
+        if total_ops > 0 and hidden / total_ops > dominance_limit:
+            continue
+        best = candidate
+    return best
+
+
+def _plan_module_address(node: PlanNode) -> str | None:
+    """Return the pass-free module address represented by ``node`` if any."""
+
+    if isinstance(node, ModuleBox):
+        return node.call.rsplit(":", 1)[0]
+    if isinstance(node, RunFold):
+        return node.rep.call.rsplit(":", 1)[0]
+    return None
+
+
+def _segment_is_legal(
+    addresses: tuple[str, ...],
+    graph: "ChildCondensedFlowGraph | None",
+) -> bool:
+    """Return whether ``addresses`` satisfy chain-interval segment legality."""
+
+    if len(addresses) < 2 or graph is None:
+        return False
+    return _run_fold_is_chain_interval(addresses, graph)
+
+
+def _make_child_segment_descriptor(
+    trace: "Trace",
+    context: RenderContext,
+    addresses: tuple[str, ...],
+    covered_ops: tuple[str, ...],
+) -> SegmentDescriptor:
+    """Build a renderer descriptor for one child segment."""
+
+    _ = context
+    num_ops = sum(
+        int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
+    )
+    num_params = sum(
+        int(getattr(trace.modules[address], "num_params", 0) or 0) for address in addresses
+    )
+    owner = _segment_owner_key(trace, addresses)
+    label = _child_segment_label(addresses, num_ops, num_params)
+    name = f"{addresses[0].replace('.', '_')}__segment__{addresses[-1].replace('.', '_')}pass1"
+    return SegmentDescriptor(
+        name=name,
+        kind="child",
+        label=label,
+        members=addresses,
+        ops=covered_ops,
+        owner=owner,
+        num_ops=num_ops,
+        num_params=num_params,
+    )
+
+
+def _child_segment_covered_ops(
+    analysis: CollapseAnalysis,
+    addresses: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return pass-free raw op labels covered by a child segment."""
+
+    labels: list[str] = []
+    for address in addresses:
+        signal = analysis.signals.get(address)
+        if signal is None:
+            continue
+        labels.extend(str(label).rsplit(":", 1)[0] for label in signal.subtree_ops)
+    return tuple(dict.fromkeys(labels))
+
+
+def _make_op_segment_descriptor(
+    trace: "Trace",
+    context: RenderContext,
+    labels: tuple[str, ...],
+) -> SegmentDescriptor:
+    """Build a renderer descriptor for one operation segment."""
+
+    _ = context
+    owner = _op_segment_owner_key(trace, labels)
+    label = _op_segment_label(labels)
+    name = f"{labels[0].replace(':', 'pass')}__segment__{labels[-1].replace(':', 'pass')}pass1"
+    return SegmentDescriptor(
+        name=name,
+        kind="op",
+        label=label,
+        ops=labels,
+        owner=owner,
+        num_ops=len(labels),
+        num_params=0,
+    )
+
+
+def _op_segment_owner_key(trace: "Trace", labels: tuple[str, ...]) -> str | None:
+    """Return the lowest common rendered module cluster for operation labels."""
+
+    module_stacks: list[list[str]] = []
+    for label in labels:
+        op = _trace_op_for_render_label(trace, label)
+        modules = [str(module) for module in getattr(op, "modules", ()) or ()]
+        if getattr(op, "is_atomic_module", False) and modules:
+            modules = modules[:-1]
+        module_stacks.append(modules)
+    if not module_stacks or any(not stack for stack in module_stacks):
+        return None
+    common: str | None = None
+    for values in zip(*module_stacks, strict=False):
+        pass_free = {value.rsplit(":", 1)[0] for value in values}
+        if len(pass_free) != 1:
+            break
+        common = values[0]
+    return common
+
+
+def _trace_op_for_render_label(trace: "Trace", label: str) -> "Op":
+    """Return the trace op for a pass-free rendered label."""
+
+    try:
+        return trace.ops[f"{label}:1"]
+    except (KeyError, IndexError):
+        return trace.ops[label]
+
+
+def _op_segment_label(labels: tuple[str, ...]) -> str:
+    """Return a class-free range label for an operation segment."""
+
+    return f"{labels[0]} ... {labels[-1]} -- {len(labels)} ops"
+
+
+def _segment_owner_key(trace: "Trace", addresses: tuple[str, ...]) -> str | None:
+    """Return the lowest rendered module cluster that owns ``addresses``."""
+
+    parent = addresses[0].rsplit(".", 1)[0] if "." in addresses[0] else "self"
+    if parent == "self" or parent not in trace.modules:
+        return None
+    parent_key = f"{parent}:1"
+    return parent_key if parent_key in trace.modules else parent
+
+
+def _child_segment_label(addresses: tuple[str, ...], num_ops: int, num_params: int) -> str:
+    """Return a class-free range label for a child segment."""
+
+    first = addresses[0]
+    last = addresses[-1]
+    prefix = first.rsplit(".", 1)[0] if "." in first else ""
+    first_leaf = first.rsplit(".", 1)[-1]
+    last_leaf = last.rsplit(".", 1)[-1]
+    range_text = f"{prefix}.{first_leaf}-{last_leaf}" if prefix else f"{first_leaf}-{last_leaf}"
+    return f"{range_text} -- {len(addresses)} blocks, {num_ops} ops, {_format_param_count(num_params)} params"
+
+
+def _format_param_count(value: int) -> str:
+    """Return a compact parameter count for segment labels."""
+
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}K"
+    return str(value)
 
 
 def _instantiate_best_point(

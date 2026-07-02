@@ -22,7 +22,7 @@ from torchlens.visualization.auto_collapse import (
     resolve_collapse_fn,
     resolve_run_folds,
 )
-from torchlens.visualization.collapse_plan import RenderContext, count, plan_from_v1
+from torchlens.visualization.collapse_plan import OpSegment, RenderContext, count, plan_from_v1
 
 
 SVG_NODE_RE = re.compile(r'class="node"')
@@ -744,6 +744,39 @@ class LongFunctional(torch.nn.Module):
         return x
 
 
+class SegmentToyBlock(torch.nn.Module):
+    """Small block used by max-mode segment rendering tests."""
+
+    def __init__(self) -> None:
+        """Initialize the block layers."""
+
+        super().__init__()
+        self.conv = torch.nn.Conv2d(4, 4, 1)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block forward pass."""
+
+        return self.relu(self.conv(x))
+
+
+class SegmentToyNet(torch.nn.Module):
+    """Sequential toy net with a long raw-op run for max condensation."""
+
+    def __init__(self) -> None:
+        """Initialize the segment toy network."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(3, 4, 1)
+        self.blocks = torch.nn.Sequential(*(SegmentToyBlock() for _ in range(5)))
+        self.head = torch.nn.Conv2d(4, 2, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the toy network forward pass."""
+
+        return self.head(self.blocks(self.stem(x)))
+
+
 def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture ``model`` under ``torch.no_grad``."""
 
@@ -848,7 +881,12 @@ def _assert_plan_svg_parity(
     context = RenderContext(vis_mode=vis_mode)  # type: ignore[arg-type]
     collapse_fn = resolve_collapse_fn(trace, mode, vis_mode, context=context)  # type: ignore[arg-type]
     folds = resolve_run_folds(trace, collapse_fn, context=context)
-    plan_count = count(plan_from_v1(trace, collapse_fn, folds, context))
+    v2_plan = getattr(collapse_fn, "_torchlens_v2_plan", None)
+    plan_count = (
+        count(v2_plan)
+        if v2_plan is not None
+        else count(plan_from_v1(trace, collapse_fn, folds, context))
+    )
     out = tmp_path / name
     trace.draw(
         vis_mode=vis_mode,  # type: ignore[arg-type]
@@ -1693,6 +1731,48 @@ def test_auto_collapse_recurrent_module_is_not_noop(
         assert _box_count(auto_source) >= 1
         assert "@rnn" in auto_source
         assert auto_source != none_source
+    finally:
+        trace.cleanup()
+
+
+def test_v2_max_mode_uses_op_segments_without_changing_auto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Max mode condenses raw op runs while auto remains segment-free."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(SegmentToyNet(), torch.randn(1, 3, 8, 8))
+    try:
+        context = RenderContext()
+        auto_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=context)
+        max_fn = resolve_collapse_fn(trace, "max", "unrolled", context=context)
+        auto_plan = getattr(auto_fn, "_torchlens_v2_plan")
+        max_plan = getattr(max_fn, "_torchlens_v2_plan")
+
+        assert not any(isinstance(node, OpSegment) for node in auto_plan.nodes)
+        assert any(isinstance(node, OpSegment) for node in max_plan.nodes)
+        assert count(max_plan) < count(auto_plan)
+    finally:
+        trace.cleanup()
+
+
+def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rendered max op segments suppress members and keep contracted flow edges."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(SegmentToyNet(), torch.randn(1, 3, 8, 8))
+    try:
+        source = _draw_source(trace, tmp_path, "max_op_segment", "max")
+
+        assert "__segment__" in source
+        assert 'style="rounded,dashed,filled"' in source
+        assert "conv2d_1_1 ... conv2d_5_8 -- 8 ops" in source
+        assert "conv2d_2_2pass1 [" not in source
+        assert "input_1pass1 -> conv2d_1_1__segment__conv2d_5_8pass1" in source
+        assert "relu_4_9__segment__conv2d_7_12pass1 -> output_1pass1" in source
     finally:
         trace.cleanup()
 

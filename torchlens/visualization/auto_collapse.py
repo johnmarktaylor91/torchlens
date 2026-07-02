@@ -421,10 +421,10 @@ def resolve_collapse_fn(
         return None
     if collapse not in {"auto", "max"}:
         raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
-    if collapse == "auto" and _collapse_engine() == "v2":
+    if collapse in {"auto", "max"} and _collapse_engine() == "v2":
         from .collapse_optimizer import select_collapse_plan
 
-        result = select_collapse_plan(trace, resolved_context)
+        result = select_collapse_plan(trace, resolved_context, mode=collapse)
         if not result.declined:
 
             def v2_collapse_fn(module: "Module") -> bool:
@@ -433,6 +433,7 @@ def resolve_collapse_fn(
                 return module.address in result.selected
 
             setattr(v2_collapse_fn, "_torchlens_v2_run_folds", result.run_folds)
+            setattr(v2_collapse_fn, "_torchlens_v2_segments", result.segments or {})
             setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
             setattr(v2_collapse_fn, "_torchlens_v2_result", result)
             return v2_collapse_fn

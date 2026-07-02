@@ -123,7 +123,7 @@ from .code_panel import (
     render_code_panel_subgraph,
     resolve_code_panel_source,
 )
-from .collapse_plan import RenderContext
+from .collapse_plan import RenderContext, SegmentDescriptor
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -980,6 +980,9 @@ def draw(
         from .auto_collapse import resolve_run_folds
 
         run_folds = resolve_run_folds(self, collapse_fn, context=render_context)
+    segments: dict[str, SegmentDescriptor] = {}
+    if collapse_fn is not None:
+        segments = dict(getattr(collapse_fn, "_torchlens_v2_segments", {}) or {})
     theme = resolve_theme(vis_theme, for_paper=for_paper)
     if node_overlay is None:
         node_overlay = getattr(self, "_node_overlay_scores", None)
@@ -1181,6 +1184,7 @@ def draw(
     # node name -- without this, we'd get duplicate edges.
     edges_used: Set[tuple[str, str, tuple[Any, ...]]] = set()
     run_fold_ellipsis_nodes: set[str] = set()
+    emitted_segment_nodes: set[str] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
     self._pending_container_collapse_nodes = []
     container_clusters: list[ContainerClusterSpec] = []
@@ -1225,6 +1229,8 @@ def draw(
             show_input_transform_summary,
             run_folds,
             run_fold_ellipsis_nodes,
+            segments,
+            emitted_segment_nodes,
         )
 
     for node_args in getattr(self, "_pending_container_collapse_nodes", []):
@@ -4890,6 +4896,8 @@ def _add_node_to_graphviz(
     show_input_transform_summary: bool = False,
     run_folds: Mapping[str, "ModuleRunFold"] | None = None,
     run_fold_ellipsis_nodes: set[str] | None = None,
+    segments: Mapping[str, SegmentDescriptor] | None = None,
+    emitted_segment_nodes: set[str] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -4913,6 +4921,14 @@ def _add_node_to_graphviz(
     fold_ancestor_address = _run_fold_ancestor_for_node(node, run_folds)
     if fold_ancestor_address is not None:
         collapse_address = fold_ancestor_address
+    segment = _segment_for_node(node, segments)
+    if segment is not None:
+        _queue_segment_node(
+            graphviz_graph,
+            module_edge_dict,
+            emitted_segment_nodes,
+            segment,
+        )
     is_collapsed_module = collapse_address is not None
     is_hidden_run_member = (
         collapse_address is not None
@@ -4920,7 +4936,9 @@ def _add_node_to_graphviz(
         and not _is_run_fold_representative(collapse_address, run_folds)
     )
 
-    if is_collapsed_module and not is_hidden_run_member:
+    if segment is not None:
+        node_color = "black"
+    elif is_collapsed_module and not is_hidden_run_member:
         _build_collapsed_module_node(
             self,
             node,
@@ -4979,6 +4997,8 @@ def _add_node_to_graphviz(
         collapsed_container_nodes,
         run_folds,
         run_fold_ellipsis_nodes,
+        segments,
+        segment,
     )
 
 
@@ -5351,6 +5371,79 @@ def _run_fold_for_address(
     if run_folds is None:
         return None
     return run_folds.get(address_w_pass.rsplit(":", 1)[0])
+
+
+def _segment_for_node(
+    node: GraphNode,
+    segments: Mapping[str, SegmentDescriptor] | None,
+) -> SegmentDescriptor | None:
+    """Return the segment descriptor that absorbs ``node`` if any.
+
+    Parameters
+    ----------
+    node:
+        Render node being emitted.
+    segments:
+        Segment descriptors keyed by node name.
+
+    Returns
+    -------
+    SegmentDescriptor | None
+        Matching descriptor, or ``None``.
+    """
+
+    if not segments or isinstance(node, BoundaryNode):
+        return None
+    label = str(getattr(node, "layer_label", ""))
+    for segment in segments.values():
+        if label in segment.ops:
+            return segment
+        member_set = set(segment.members)
+        for address_w_pass in getattr(node, "modules", ()) or ():
+            if str(address_w_pass).rsplit(":", 1)[0] in member_set:
+                return segment
+    return None
+
+
+def _queue_segment_node(
+    graphviz_graph: graphviz.Digraph,
+    module_edge_dict: Dict[str, Any],
+    emitted_segment_nodes: set[str] | None,
+    segment: SegmentDescriptor,
+) -> None:
+    """Queue one dashed segment node if it has not already been emitted.
+
+    Parameters
+    ----------
+    graphviz_graph:
+        Top-level Graphviz graph.
+    module_edge_dict:
+        Module-cluster accumulator.
+    emitted_segment_nodes:
+        Mutable set of emitted segment node names.
+    segment:
+        Segment descriptor to render.
+    """
+
+    if emitted_segment_nodes is None:
+        emitted_segment_nodes = set()
+    if segment.name in emitted_segment_nodes:
+        return
+    emitted_segment_nodes.add(segment.name)
+    node_args = {
+        "name": segment.name,
+        "label": render_lines_to_html([segment.label]),
+        "shape": "box",
+        "style": "rounded,dashed,filled",
+        "fillcolor": "#f7f7f7",
+        "color": "#666666",
+        "fontcolor": "#222222",
+        "ordering": "out",
+    }
+    if segment.owner is None:
+        graphviz_graph.node(**node_args)
+    else:
+        module_edge_dict[segment.owner].setdefault("nodes", []).append(node_args)
 
 
 def _is_run_fold_representative(
@@ -7341,6 +7434,8 @@ def _add_edges_for_node(
     collapsed_container_nodes: Mapping[str, str] | None = None,
     run_folds: Mapping[str, "ModuleRunFold"] | None = None,
     run_fold_ellipsis_nodes: set[str] | None = None,
+    segments: Mapping[str, SegmentDescriptor] | None = None,
+    parent_segment: SegmentDescriptor | None = None,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -7405,7 +7500,9 @@ def _add_edges_for_node(
             edge_style = "dashed"
 
         parent_module_name_w_pass: str | None = None
-        if parent_is_collapsed_module:
+        if parent_segment is not None:
+            tail_name = parent_segment.name
+        elif parent_is_collapsed_module:
             parent_module_name_w_pass = _collapse_address_for_node(
                 self,
                 parent_node,
@@ -7432,9 +7529,13 @@ def _add_edges_for_node(
         child_fold_ancestor = _run_fold_ancestor_for_node(child_node, run_folds)
         if child_fold_ancestor is not None:
             child_module_name_w_pass = child_fold_ancestor
+        child_segment = _segment_for_node(child_node, segments)
         child_is_collapsed_module = child_module_name_w_pass is not None
 
-        if child_is_collapsed_module:
+        if child_segment is not None:
+            head_name = child_segment.name
+            child_is_collapsed_module = False
+        elif child_is_collapsed_module:
             if child_module_name_w_pass is None:
                 continue
             head_name = _run_fold_graph_node_name(child_module_name_w_pass, vis_mode, run_folds)
@@ -7444,7 +7545,12 @@ def _add_edges_for_node(
             head_name = collapsed_head_name
             child_is_collapsed_module = False
 
-        both_nodes_collapsed_modules = parent_is_collapsed_module and child_is_collapsed_module
+        both_nodes_collapsed_modules = (
+            parent_segment is None
+            and child_segment is None
+            and parent_is_collapsed_module
+            and child_is_collapsed_module
+        )
 
         # Collapsed module intra-edge skip: if both nodes are collapsed AND
         # they share the same module path up to vis_call_depth, the edge
@@ -7546,6 +7652,8 @@ def _add_edges_for_node(
                 head_name = ellipsis_name
 
         edge_is_self_loop = tail_name == head_name
+        if edge_is_self_loop and (parent_segment is not None or child_segment is not None):
+            continue
         edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, run_folds, vis_mode)
         if edge_is_self_loop and edge_touches_run_fold and ellipsis_fold is None:
             continue
@@ -7561,6 +7669,8 @@ def _add_edges_for_node(
             continue
 
         occurrence_key = render_edge.occurrence_key
+        if parent_segment is not None or child_segment is not None:
+            occurrence_key = ("segment_edge", tail_name, head_name)
         if run_fold_ellipsis_edge_key is not None and edge_touches_run_fold:
             occurrence_key = run_fold_ellipsis_edge_key
         elif edge_touches_run_fold:
