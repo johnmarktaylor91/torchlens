@@ -2671,38 +2671,27 @@ def _rendered_module_hidden_counts(trace: "Trace", context: RenderContext) -> di
         rendered nodes with one box contributes ``n - 1``.
     """
 
-    from .rendering import _collapse_address_for_node, rendered_node_universe_from_v1
+    from .rendering import (
+        BoundaryNode,
+        _entries_to_plot_for_context,
+        _is_buffer_visible,
+        _normalize_buffer_visibility,
+    )
 
     absorbed_counts: dict[str, int] = defaultdict(int)
-    emissions = rendered_node_universe_from_v1(
-        trace,
-        collapse_fn=None,
-        run_folds=None,
-        context=context,
-    )
-    for emission in emissions:
-        node = emission.node
-        if node is None:
+    show_buffer_layers = _normalize_buffer_visibility(context.show_buffer_layers)
+    entries_to_plot = _entries_to_plot_for_context(trace, context.vis_mode)
+    for node in entries_to_plot.values():
+        if isinstance(node, BoundaryNode):
             continue
-        addresses = tuple(
-            dict.fromkeys(str(module).rsplit(":", 1)[0] for module in getattr(node, "modules", ()))
-        )
+        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+            continue
+        modules = list(getattr(node, "modules", ()) or ())
+        if getattr(node, "is_atomic_module", False) and modules:
+            modules = modules[:-1]
+        addresses = tuple(dict.fromkeys(str(module).rsplit(":", 1)[0] for module in modules))
         for address in addresses:
-
-            def collapse_fn(module: "Module", *, selected_address: str = address) -> bool:
-                """Return whether ``module`` is the candidate address."""
-
-                return module.address == selected_address
-
-            collapsed_address = _collapse_address_for_node(
-                trace,
-                node,
-                vis_mode=context.vis_mode,
-                collapse_fn=collapse_fn,
-                max_module_depth=1000,
-            )
-            if collapsed_address is not None and collapsed_address.rsplit(":", 1)[0] == address:
-                absorbed_counts[address] += 1
+            absorbed_counts[address] += 1
     return {
         address: max(absorbed_count - 1, 0)
         for address, absorbed_count in absorbed_counts.items()

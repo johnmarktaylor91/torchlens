@@ -188,6 +188,9 @@ class _OptimizerState:
         str,
         tuple["ChildCondensedFlowGraph | None", tuple[str, ...], tuple[str, ...]],
     ]
+    role_components_cache: dict[tuple[str, tuple[str, ...]], tuple[RoleComponent, ...]]
+    child_segments_cache: dict[tuple[str, ...], tuple[tuple[str, ...], ...]]
+    box_cost_cache: dict[str, float]
     weights: OptimizerWeights
     g_star: float
     total_ops: int
@@ -258,6 +261,9 @@ def select_collapse_plan(
             hidden_counts=hidden_counts,
             structural_digests=structural_digests,
             expanded_cache=expanded_cache,
+            role_components_cache={},
+            child_segments_cache={},
+            box_cost_cache={},
             weights=resolved_weights,
             g_star=g_star,
             total_ops=max(len(trace.ops), 1),
@@ -282,6 +288,9 @@ def select_collapse_plan(
         hidden_counts=hidden_counts,
         structural_digests=structural_digests,
         expanded_cache=expanded_cache,
+        role_components_cache={},
+        child_segments_cache={},
+        box_cost_cache={},
         weights=resolved_weights,
         g_star=winning_g,
         total_ops=max(len(trace.ops), 1),
@@ -373,6 +382,23 @@ def build_role_components(
     )
 
 
+def _role_components_for_children(
+    state: _OptimizerState,
+    parent_address: str,
+    child_addresses: Sequence[str],
+) -> tuple[RoleComponent, ...]:
+    """Return cached role components for a concrete parent child sequence."""
+
+    child_key = tuple(child_addresses)
+    key = (parent_address, child_key)
+    cached = state.role_components_cache.get(key)
+    if cached is not None:
+        return cached
+    components = build_role_components(state.trace, parent_address, child_key, state.analysis)
+    state.role_components_cache[key] = components
+    return components
+
+
 def _declined_result(context: RenderContext, reason: str) -> OptimizerResult:
     """Return a declined optimizer result."""
 
@@ -404,7 +430,7 @@ def _frontier_for_module(
         return memo[key]
     points: list[_DecisionPoint] = []
     if address != "self" and _eligible_box(state.trace, address, signal):
-        box_cost = _box_cost(state.trace, signal, state)
+        box_cost = _cached_box_cost(state.trace, signal, state)
         points.append(
             _DecisionPoint(
                 k=1,
@@ -437,7 +463,7 @@ def _expanded_points(
     )
     if not child_addresses:
         return (base,) if base.k <= K_CAP else ()
-    segments = _child_segments_for_parent(state.trace, child_addresses)
+    segments = _child_segments_for_parent(state, child_addresses)
     accumulated: tuple[_DecisionPoint, ...] = (base,)
     for segment in segments:
         segment_points = _sequence_points(address, segment, graph, state, memo)
@@ -580,12 +606,7 @@ def _sequence_points(
 ) -> tuple[_DecisionPoint, ...]:
     """Return child-sequence DP points constrained by role components."""
 
-    components = build_role_components(
-        state.trace,
-        parent_address,
-        child_addresses,
-        state.analysis,
-    )
+    components = _role_components_for_children(state, parent_address, child_addresses)
     component_choices = [
         _component_treatment_points(component, graph, state, memo) for component in components
     ]
@@ -632,7 +653,7 @@ def _component_boxes(component: RoleComponent, state: _OptimizerState) -> _Decis
         signal = state.analysis.signals[address]
         if not _eligible_box(state.trace, address, signal):
             return None
-        cost = _box_cost(state.trace, signal, state)
+        cost = _cached_box_cost(state.trace, signal, state)
         costs.append(cost)
     return _DecisionPoint(
         k=len(component.members),
@@ -704,12 +725,12 @@ def _component_folded(
             signal = state.analysis.signals[address]
             if not _eligible_box(state.trace, address, signal):
                 return None
-            cost = _box_cost(state.trace, signal, state)
+            cost = _cached_box_cost(state.trace, signal, state)
             costs.append(cost)
             node_count += 1
             continue
         member_costs = [
-            _box_cost(state.trace, state.analysis.signals[member], state) for member in run
+            _cached_box_cost(state.trace, state.analysis.signals[member], state) for member in run
         ]
         fold_cost = round(sum(member_costs) / len(member_costs) + state.weights.fold_intrinsic, 6)
         costs.append(fold_cost)
@@ -768,7 +789,7 @@ def _instantiate_module(
     decision = cast(_ModuleDecision, decision_point.decision)
     if decision.kind == "box":
         signal = state.analysis.signals[address]
-        box_cost = _box_cost(state.trace, signal, state)
+        box_cost = _cached_box_cost(state.trace, signal, state)
         return _FrontierPoint(
             k=1,
             cost=box_cost,
@@ -782,7 +803,7 @@ def _instantiate_module(
     selected: set[str] = set()
     folds: list[ModuleRunFold] = []
     box_costs: list[float] = []
-    segments = _child_segments_for_parent(state.trace, child_addresses)
+    segments = _child_segments_for_parent(state, child_addresses)
     for segment, segment_decision in zip(segments, decision.segments, strict=True):
         segment_point = _instantiate_segment(address, segment, graph, segment_decision, state, memo)
         nodes.extend(segment_point.nodes)
@@ -824,12 +845,7 @@ def _instantiate_segment(
 ) -> _FrontierPoint:
     """Instantiate one segmented child sequence."""
 
-    components = build_role_components(
-        state.trace,
-        parent_address,
-        child_addresses,
-        state.analysis,
-    )
+    components = _role_components_for_children(state, parent_address, child_addresses)
     nodes: list[PlanNode] = []
     selected: set[str] = set()
     folds: list[ModuleRunFold] = []
@@ -881,7 +897,7 @@ def _instantiate_component_boxes(
     box_costs: list[float] = []
     for address in component.members:
         signal = state.analysis.signals[address]
-        cost = _box_cost(state.trace, signal, state)
+        cost = _cached_box_cost(state.trace, signal, state)
         nodes.append(ModuleBox(f"{address}:1"))
         selected.add(address)
         box_costs.append(cost)
@@ -960,7 +976,7 @@ def _instantiate_component_folded(
         run = tuple(component.members[index] for index in indices)
         fold = _make_run_fold(state.trace, run)
         member_costs = [
-            _box_cost(state.trace, state.analysis.signals[member], state) for member in run
+            _cached_box_cost(state.trace, state.analysis.signals[member], state) for member in run
         ]
         fold_cost = round(sum(member_costs) / len(member_costs) + state.weights.fold_intrinsic, 6)
         nodes.append(
@@ -1108,9 +1124,9 @@ def _point_sort_key(point: Any) -> tuple[float, int, tuple[Any, ...], tuple[Any,
     """Return deterministic ordering key for frontier points."""
 
     if isinstance(point, _DecisionPoint):
-        return (round(point.cost, 6), point.k, point.priority, ())
+        return (point.cost, point.k, point.priority, ())
     fold_addresses = tuple(fold.representative for fold in point.folds)
-    return (round(point.cost, 6), point.k, tuple(sorted(point.selected)), fold_addresses)
+    return (point.cost, point.k, tuple(sorted(point.selected)), fold_addresses)
 
 
 def _eligible_box(trace: "Trace", address: str, signal: ModuleCollapseSignals) -> bool:
@@ -1147,6 +1163,21 @@ def _box_cost(trace: "Trace", signal: ModuleCollapseSignals, state: _OptimizerSt
         - state.weights.w_tangle * tangle
     )
     return round(cost, 6)
+
+
+def _cached_box_cost(
+    trace: "Trace",
+    signal: ModuleCollapseSignals,
+    state: _OptimizerState,
+) -> float:
+    """Return a cached normalized v2 box cost for one module."""
+
+    cached = state.box_cost_cache.get(signal.address)
+    if cached is not None:
+        return cached
+    cost = _box_cost(trace, signal, state)
+    state.box_cost_cache[signal.address] = cost
+    return cost
 
 
 def _dominance(hidden_count: int, total_ops: int) -> float:
@@ -1297,20 +1328,29 @@ def _nearest_recorded_parent(trace: "Trace", address: str) -> str | None:
 
 
 def _child_segments_for_parent(
-    trace: "Trace", children: Sequence[str]
+    state: _OptimizerState,
+    children: Sequence[str],
 ) -> tuple[tuple[str, ...], ...]:
     """Pre-segment long child lists at boundary-classifier cliffs."""
 
-    if not children:
+    child_key = tuple(children)
+    cached = state.child_segments_cache.get(child_key)
+    if cached is not None:
+        return cached
+    if not child_key:
         return ()
-    if len(children) <= K_CAP:
-        return (tuple(children),)
-    segments: list[list[str]] = [[]]
-    for child in children:
-        if segments[-1] and _boundary_cliff(trace, segments[-1][-1], child):
-            segments.append([])
-        segments[-1].append(child)
-    return tuple(tuple(segment) for segment in segments if segment)
+    if len(child_key) <= K_CAP:
+        cached_segments = (child_key,)
+        state.child_segments_cache[child_key] = cached_segments
+        return cached_segments
+    segment_lists: list[list[str]] = [[]]
+    for child in child_key:
+        if segment_lists[-1] and _boundary_cliff(state.trace, segment_lists[-1][-1], child):
+            segment_lists.append([])
+        segment_lists[-1].append(child)
+    result = tuple(tuple(segment) for segment in segment_lists if segment)
+    state.child_segments_cache[child_key] = result
+    return result
 
 
 def _boundary_cliff(trace: "Trace", left: str, right: str) -> bool:
