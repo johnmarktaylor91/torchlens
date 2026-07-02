@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 
 GENERIC_CONTAINER_CLASSES = frozenset({"Sequential", "ModuleList", "ModuleDict", "ParameterList"})
+# v1-only crutch, dies with R4/R3c.
 STRUCTURED_CONTAINER_NAMES = frozenset(
     {
         "backbone",
@@ -36,7 +37,9 @@ STRUCTURED_CONTAINER_NAMES = frozenset(
     }
 )
 JUNCTION_FUNC_NAMES = frozenset({"__add__", "add", "cat", "concat", "concatenate"})
+# v1-only crutch, dies with R4/R3c.
 LEAF_BLOCK_MAX_OPS = 12
+# v1-only crutch, dies with R4/R3c.
 LEAF_BLOCK_WRAPPER_CLASSES = frozenset(
     {"BasicConv2d", "Conv2dNormActivation", "ConvNormActivation"}
 )
@@ -53,6 +56,7 @@ LEAF_BLOCK_CHILD_CLASS_PARTS = (
     "SiLU",
 )
 _INDEXED_CHILD_RE = re.compile(r"^(?P<stem>.*?)(?:\.?\d+|_?\d+[a-z]?)$")
+# v1-only crutch, dies with R4/R3c.
 _STAGE_NAME_RE = re.compile(
     r"^(?:denseblock\d*|transition\d*|layer\d+|stage\d*|mixed_[0-9a-z]+|mixed_\d+)$",
     re.IGNORECASE,
