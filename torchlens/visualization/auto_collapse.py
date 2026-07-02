@@ -58,7 +58,7 @@ _STAGE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 RUN_FOLD_MIN_LENGTH = 3
-COLLAPSE_ENGINE = "v1"
+COLLAPSE_ENGINE = "v2"
 
 
 @dataclass(frozen=True)
@@ -564,7 +564,7 @@ def _collapse_engine() -> Literal["v1", "v2"]:
     Returns
     -------
     Literal["v1", "v2"]
-        ``"v1"`` unless the module variable or environment selects ``"v2"``.
+        Active collapse engine, defaulting to ``"v2"`` unless overridden.
     """
 
     engine = os.environ.get("TORCHLENS_COLLAPSE_ENGINE", COLLAPSE_ENGINE).lower()

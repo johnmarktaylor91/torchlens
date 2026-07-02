@@ -123,23 +123,28 @@ def test_role_components_split_heterogeneous_same_class_sequentials() -> None:
         trace.cleanup()
 
 
-def test_engine_flag_routes_v2_and_declines_rolled(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The v2 engine is opt-in and rolled mode falls back to v1."""
+def test_engine_default_routes_v2_env_override_and_rolled_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default auto engine is v2, env override works, and rolled falls back."""
 
     trace = _trace(UniformStack(depth=4), torch.randn(2, 8))
     try:
         monkeypatch.delenv("TORCHLENS_COLLAPSE_ENGINE", raising=False)
-        monkeypatch.setattr(auto_collapse, "COLLAPSE_ENGINE", "v1")
+        v2_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
+        assert hasattr(v2_fn, "_torchlens_v2_result")
+
+        monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v1")
         v1_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
         assert not hasattr(v1_fn, "_torchlens_v2_result")
 
         monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
-        v2_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
-        assert hasattr(v2_fn, "_torchlens_v2_result")
-
         rolled_context = RenderContext(vis_mode="rolled")
         rolled_fn = resolve_collapse_fn(trace, "auto", "rolled", context=rolled_context)
         assert not hasattr(rolled_fn, "_torchlens_v2_result")
+
+        max_fn = resolve_collapse_fn(trace, "max", "unrolled", context=RenderContext())
+        assert not hasattr(max_fn, "_torchlens_v2_result")
     finally:
         trace.cleanup()
 
