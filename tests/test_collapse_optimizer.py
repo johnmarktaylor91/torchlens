@@ -17,11 +17,20 @@ from torchlens.visualization.auto_collapse import (
 from torchlens.visualization.collapse_optimizer import (
     K_CAP,
     _FrontierPoint,
+    _plan_respects_max_dominance,
     _prune_frontier,
     build_role_components,
     select_collapse_plan,
 )
-from torchlens.visualization.collapse_plan import RenderContext, count, plan_from_v1
+from torchlens.visualization.collapse_plan import (
+    ChildSegment,
+    CollapsePlan,
+    ModuleBox,
+    RenderContext,
+    SegmentDescriptor,
+    count,
+    plan_from_v1,
+)
 
 
 class TinyBlock(torch.nn.Module):
@@ -197,7 +206,7 @@ def test_engine_default_routes_v2_env_override_and_rolled_auto(
         assert hasattr(rolled_fn, "_torchlens_v2_result")
 
         max_fn = resolve_collapse_fn(trace, "max", "unrolled", context=RenderContext())
-        assert not hasattr(max_fn, "_torchlens_v2_result")
+        assert hasattr(max_fn, "_torchlens_v2_result")
     finally:
         trace.cleanup()
 
@@ -279,6 +288,41 @@ def test_frontier_pruning_respects_caps() -> None:
     pruned = _prune_frontier(points)
     assert len(pruned) <= 32
     assert all(point.k <= K_CAP for point in pruned)
+
+
+def test_max_dominance_guard_rejects_oversized_visible_units() -> None:
+    """Max-mode dominance validation rejects oversized boxes and segments."""
+
+    trace = _trace(SequentialEncoderHead(), torch.randn(1, 4))
+    try:
+        analysis = analyze_collapse(trace)
+        context = RenderContext()
+        box_plan = CollapsePlan(nodes=(ModuleBox("encoder:1"),), context=context)
+        assert not _plan_respects_max_dominance(trace, analysis, box_plan, {}, 0.1)
+
+        segment = SegmentDescriptor(
+            name="encoder_0__segment__encoder_10pass1",
+            kind="child",
+            label="encoder.0-10",
+            members=("encoder.0", "encoder.2", "encoder.4"),
+            ops=(),
+            owner=None,
+            num_ops=len(trace.ops),
+            num_params=0,
+        )
+        segment_plan = CollapsePlan(
+            nodes=(ChildSegment(segment.members),),
+            context=context,
+        )
+        assert not _plan_respects_max_dominance(
+            trace,
+            analysis,
+            segment_plan,
+            {segment.name: segment},
+            0.75,
+        )
+    finally:
+        trace.cleanup()
 
 
 @pytest.mark.heavy
