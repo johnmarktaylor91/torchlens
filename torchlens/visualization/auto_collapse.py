@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._literals import CollapseLiteral, VisModeLiteral
-from .collapse_plan import RenderContext
+from .collapse_plan import RenderContext, count, plan_from_v1
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
@@ -412,7 +412,12 @@ def resolve_collapse_fn(
         return None
     if collapse not in {"auto", "max"}:
         raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
-    selected = _select_modules(trace, collapse=collapse, vis_mode=resolved_context.vis_mode)
+    selected = _select_modules(
+        trace,
+        collapse=collapse,
+        vis_mode=resolved_context.vis_mode,
+        context=resolved_context,
+    )
 
     def collapse_fn(module: "Module") -> bool:
         """Return whether ``module`` is selected for smart collapse."""
@@ -444,14 +449,24 @@ def resolve_run_folds(
         Mapping from each folded module address to its run descriptor.
     """
 
-    _ = RenderContext() if context is None else context
+    resolved_context = RenderContext() if context is None else context
     if collapse_fn is None:
         return {}
-    analysis = analyze_collapse(trace)
-    selected = [module.address for module in trace.modules if collapse_fn(module)]
-    projected_count = _visible_count_after_selection(trace, analysis, selected)
+    projected_count = count(plan_from_v1(trace, collapse_fn, None, resolved_context))
     if projected_count <= _readable_band_high(trace):
+        _assert_plan_count(
+            trace,
+            collapse_fn,
+            None,
+            resolved_context,
+            projected_count,
+        )
         return {}
+    hidden_member_contributions = _run_fold_hidden_member_contributions(
+        trace,
+        collapse_fn,
+        resolved_context,
+    )
     dimless_digests = _compute_dimless_structural_digests(trace)
     candidate_folds: list[ModuleRunFold] = []
     candidate_addresses: set[str] = set()
@@ -495,9 +510,16 @@ def resolve_run_folds(
             continue
         for address in fold.addresses:
             folds_by_address[address] = fold
-        projected_count -= sum(analysis.signals[address].hidden_ops for address in fold.addresses)
+        projected_count += _run_fold_delta(fold, hidden_member_contributions)
         if projected_count <= _readable_band_high(trace):
             break
+    _assert_plan_count(
+        trace,
+        collapse_fn,
+        folds_by_address,
+        resolved_context,
+        projected_count,
+    )
     return folds_by_address
 
 
@@ -1966,10 +1988,11 @@ def _select_modules(
     *,
     collapse: Literal["auto", "max"],
     vis_mode: VisModeLiteral,
+    context: RenderContext | None = None,
 ) -> frozenset[str]:
     """Select an antichain of module addresses by greedy score."""
 
-    _ = vis_mode
+    resolved_context = RenderContext(vis_mode=vis_mode) if context is None else context
     analysis = analyze_collapse(trace)
     band = (8, _readable_band_high(trace), 28) if collapse == "auto" else (4, 12, 7)
     if collapse == "auto" and len(trace.ops) > 100:
@@ -1979,10 +2002,21 @@ def _select_modules(
     if collapse == "auto" and len(trace.ops) > 15:
         target = min(target, math.ceil(len(trace.ops) * 0.7))
     selected: list[str] = []
-    visible_count = len(trace.ops)
+    base_count = count(plan_from_v1(trace, None, None, resolved_context))
+    hidden_counts = _rendered_module_hidden_counts(trace, resolved_context)
+    selected_hidden_ops = 0
+    visible_count = base_count
     if collapse == "max":
-        selected = list(_select_modules(trace, collapse="auto", vis_mode=vis_mode))
-        visible_count = _visible_count_after_selection(trace, analysis, selected)
+        selected = list(
+            _select_modules(
+                trace,
+                collapse="auto",
+                vis_mode=resolved_context.vis_mode,
+                context=resolved_context,
+            )
+        )
+        selected_hidden_ops = _selected_hidden_ops(hidden_counts, selected)
+        visible_count = base_count - selected_hidden_ops
     ordered = collapse_order(trace, mode=collapse)
     for address, score in ordered:
         if score <= 0.0:
@@ -1993,37 +2027,25 @@ def _select_modules(
         if _selection_conflicts(address, selected, collapse=collapse):
             continue
         addresses = _selection_batch(address, analysis, selected, collapse=collapse)
-        hidden_ops = sum(analysis.signals[batch_address].hidden_ops for batch_address in addresses)
-        if (
-            collapse == "auto"
-            and len(trace.ops) > 100
-            and len(addresses) > 1
-            and all(_is_mixed_stage(batch_address) for batch_address in addresses)
-        ):
-            hidden_ops = min(hidden_ops, max(1, visible_count - 20))
-        next_visible = visible_count - hidden_ops
         tentative_selected = _selection_with_addresses(selected, addresses, collapse=collapse)
-        if collapse == "max":
-            next_visible = _visible_count_after_selection(trace, analysis, tentative_selected)
+        next_hidden_ops = _selected_hidden_ops(hidden_counts, tentative_selected)
+        next_visible = base_count - next_hidden_ops
         if next_visible < floor and len(addresses) > 1:
             addresses = (address,)
             tentative_selected = _selection_with_addresses(selected, addresses, collapse=collapse)
-            next_visible = _visible_count_after_selection(trace, analysis, tentative_selected)
-        if (
-            next_visible < floor
-            and collapse == "auto"
-            and visible_count > band[0]
-            and _is_stem_basic_conv(address)
-        ):
-            hidden_ops = max(1, visible_count - band[0])
-            next_visible = visible_count - hidden_ops
+            next_hidden_ops = _selected_hidden_ops(hidden_counts, tentative_selected)
+            next_visible = base_count - next_hidden_ops
         if next_visible < floor:
             continue
         selected = tentative_selected
+        selected_hidden_ops = next_hidden_ops
         visible_count = next_visible
         if band[0] <= visible_count <= target:
             break
     selected = _complete_leaf_block_selection(trace, analysis, selected, collapse=collapse)
+    selected_hidden_ops = _selected_hidden_ops(hidden_counts, selected)
+    visible_count = base_count - selected_hidden_ops
+    _assert_plan_count_for_selection(trace, selected, resolved_context, visible_count)
     # Irregular stage containers remain a known general-algorithm gap; keep
     # selection model-agnostic rather than adding per-class patches.
     if collapse == "max":
@@ -2050,6 +2072,251 @@ def _readable_band_high(trace: "Trace") -> int:
     return 25 if len(trace.ops) > 100 else 40
 
 
+def _selected_hidden_ops(hidden_counts: Mapping[str, int], selected: Sequence[str]) -> int:
+    """Return operation-node contribution hidden by ``selected``.
+
+    Parameters
+    ----------
+    hidden_counts:
+        Renderer-derived hidden contribution keyed by module address.
+    selected:
+        Module addresses selected for smart collapse. The caller is
+        responsible for preserving antichain semantics.
+
+    Returns
+    -------
+    int
+        Sum of v1 hidden-op deltas for selected modules.
+    """
+
+    return sum(hidden_counts.get(address, 0) for address in selected)
+
+
+def _rendered_module_hidden_counts(trace: "Trace", context: RenderContext) -> dict[str, int]:
+    """Return rendered-node counts hidden by selecting each module alone.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    context:
+        Render context used by the caller's render.
+
+    Returns
+    -------
+    dict[str, int]
+        Per-module rendered hidden contribution. A module replacing ``n``
+        rendered nodes with one box contributes ``n - 1``.
+    """
+
+    from .rendering import _collapse_address_for_node, rendered_node_universe_from_v1
+
+    absorbed_counts: dict[str, int] = defaultdict(int)
+    emissions = rendered_node_universe_from_v1(
+        trace,
+        collapse_fn=None,
+        run_folds=None,
+        context=context,
+    )
+    for emission in emissions:
+        node = emission.node
+        if node is None:
+            continue
+        addresses = tuple(
+            dict.fromkeys(str(module).rsplit(":", 1)[0] for module in getattr(node, "modules", ()))
+        )
+        for address in addresses:
+
+            def collapse_fn(module: "Module", *, selected_address: str = address) -> bool:
+                """Return whether ``module`` is the candidate address."""
+
+                return module.address == selected_address
+
+            collapsed_address = _collapse_address_for_node(
+                trace,
+                node,
+                vis_mode=context.vis_mode,
+                collapse_fn=collapse_fn,
+                max_module_depth=1000,
+            )
+            if collapsed_address is not None and collapsed_address.rsplit(":", 1)[0] == address:
+                absorbed_counts[address] += 1
+    return {
+        address: max(absorbed_count - 1, 0)
+        for address, absorbed_count in absorbed_counts.items()
+        if absorbed_count > 1
+    }
+
+
+def _selection_collapse_fn(selected: Sequence[str]) -> Callable[["Module"], bool]:
+    """Return a collapse predicate for a fixed selected-address sequence.
+
+    Parameters
+    ----------
+    selected:
+        Module addresses selected for smart collapse.
+
+    Returns
+    -------
+    Callable[[Module], bool]
+        Predicate matching modules by exact address.
+    """
+
+    selected_addresses = frozenset(selected)
+
+    def collapse_fn(module: "Module") -> bool:
+        """Return whether ``module`` is selected."""
+
+        return module.address in selected_addresses
+
+    return collapse_fn
+
+
+def _assert_plan_count_for_selection(
+    trace: "Trace",
+    selected: Sequence[str],
+    context: RenderContext,
+    running_count: int,
+) -> None:
+    """Assert that selection delta accounting matches the collapse plan.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    selected:
+        Final selected module addresses.
+    context:
+        Render context used for planning.
+    running_count:
+        Incrementally maintained rendered node count.
+    """
+
+    _assert_plan_count(
+        trace,
+        _selection_collapse_fn(selected),
+        None,
+        context,
+        running_count,
+    )
+
+
+def _assert_plan_count(
+    trace: "Trace",
+    collapse_fn: Callable[["Module"], bool] | None,
+    run_folds: Mapping[str, ModuleRunFold] | None,
+    context: RenderContext,
+    running_count: int,
+) -> None:
+    """Assert that incremental count maintenance matches full planning.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    collapse_fn:
+        Active collapse predicate.
+    run_folds:
+        Active run-fold mapping.
+    context:
+        Render context used for planning.
+    running_count:
+        Incrementally maintained rendered node count.
+    """
+
+    planned_count = count(plan_from_v1(trace, collapse_fn, run_folds, context))
+    assert running_count == planned_count, (
+        "incremental collapse count mismatch: "
+        f"running_count={running_count}, planned_count={planned_count}"
+    )
+
+
+def _run_fold_hidden_member_contributions(
+    trace: "Trace",
+    collapse_fn: Callable[["Module"], bool],
+    context: RenderContext,
+) -> dict[str, int]:
+    """Return pre-fold rendered contribution under each module address.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    collapse_fn:
+        Active collapse predicate before run folding.
+    context:
+        Render context used for the caller's render.
+
+    Returns
+    -------
+    dict[str, int]
+        Count of currently rendered node contributions contained by each
+        module address. Boundary nodes with no module ancestry are excluded.
+    """
+
+    from .rendering import rendered_node_universe_from_v1
+
+    contributions: dict[str, int] = defaultdict(int)
+    emissions = rendered_node_universe_from_v1(
+        trace,
+        collapse_fn=collapse_fn,
+        run_folds=None,
+        context=context,
+    )
+    for emission in emissions:
+        if emission.kind in {"hidden_run_member", "run_fold_ellipsis"}:
+            continue
+        addresses = _emission_module_ancestors(emission)
+        for address in addresses:
+            contributions[address] += 1
+    return contributions
+
+
+def _emission_module_ancestors(emission: Any) -> tuple[str, ...]:
+    """Return pass-free module ancestors for a rendered emission.
+
+    Parameters
+    ----------
+    emission:
+        Diagnostic rendered-node emission from the renderer.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Pass-free module addresses enclosing the emitted node.
+    """
+
+    addresses: list[str] = []
+    if emission.module_address is not None:
+        addresses.append(emission.module_address)
+    node = emission.node
+    if node is None:
+        return tuple(dict.fromkeys(addresses))
+    addresses.extend(str(module).rsplit(":", 1)[0] for module in getattr(node, "modules", ()) or ())
+    return tuple(dict.fromkeys(addresses))
+
+
+def _run_fold_delta(fold: ModuleRunFold, hidden_member_contributions: Mapping[str, int]) -> int:
+    """Return rendered-node delta for accepting ``fold``.
+
+    Parameters
+    ----------
+    fold:
+        Candidate run fold.
+    hidden_member_contributions:
+        Pre-fold contribution count keyed by module address.
+
+    Returns
+    -------
+    int
+        Incremental count change after replacing all member contributions with
+        the representative box plus one ellipsis node.
+    """
+
+    removed = sum(hidden_member_contributions.get(address, 0) for address in fold.addresses)
+    return 2 - removed
+
+
 def _visible_count_after_selection(
     trace: "Trace",
     analysis: CollapseAnalysis,
@@ -2074,7 +2341,8 @@ def _selection_with_addresses(
     selected_without_descendants = [
         selected_address
         for selected_address in selected
-        if not any(selected_address.startswith(f"{address}.") for address in addresses)
+        if selected_address not in addresses
+        and not any(selected_address.startswith(f"{address}.") for address in addresses)
     ]
     return [*selected_without_descendants, *addresses]
 
@@ -2128,8 +2396,10 @@ def _inside_selected(address: str, selected: list[str]) -> bool:
 def _conflicts_selected(address: str, selected: list[str]) -> bool:
     """Return whether ``address`` overlaps an already selected collapse target."""
 
-    return _inside_selected(address, selected) or any(
-        selected_address.startswith(f"{address}.") for selected_address in selected
+    return (
+        address in selected
+        or _inside_selected(address, selected)
+        or any(selected_address.startswith(f"{address}.") for selected_address in selected)
     )
 
 
@@ -2142,7 +2412,7 @@ def _selection_conflicts(
     """Return whether a candidate conflicts under the active collapse mode."""
 
     if collapse == "max":
-        return _inside_selected(address, selected)
+        return address in selected or _inside_selected(address, selected)
     return _conflicts_selected(address, selected)
 
 
