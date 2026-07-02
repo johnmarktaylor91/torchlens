@@ -351,6 +351,45 @@ def select_collapse_plan(
         plan = first_pass_plan
     _, winning_g, _, _, _, _, _ = best
     run_folds = _fold_mapping(instantiated_point.folds)
+    band_high = _readable_band_high(trace)
+    if (
+        count(plan) > band_high
+        and not instantiated_point.selected
+        and not instantiated_point.folds
+        and not _frontier_can_reach_band(
+            trace=trace,
+            context=context,
+            analysis=analysis,
+            child_addresses=child_addresses,
+            hidden_counts=hidden_counts,
+            structural_digests=structural_digests,
+            expanded_cache=expanded_cache,
+            weights=replace(resolved_weights, fold_intrinsic=0.05),
+            band_high=band_high,
+        )
+    ):
+        segmented_plan, segments = _condense_plan_with_child_segments(
+            trace,
+            context,
+            analysis,
+            plan,
+            hidden_counts,
+            _optimizer_total_units(trace, context),
+            dominance_limit=0.75,
+            k_hi=band_high,
+        )
+        segmented_count = count(segmented_plan)
+        if (
+            segments
+            and 1 <= segmented_count <= band_high
+            and segmented_count < count(plan)
+            and _plan_respects_max_dominance(trace, analysis, segmented_plan, segments, 0.75)
+        ):
+            plan = segmented_plan
+        else:
+            segments = {}
+    else:
+        segments = {}
     assert count(plan) > 0, "v2 collapse plan produced no visible nodes"
     result = OptimizerResult(
         selected=instantiated_point.selected,
@@ -360,6 +399,7 @@ def select_collapse_plan(
         analyze_ms=analysis.elapsed_ms,
         select_ms=(time.perf_counter() - start) * 1000.0,
         g_star=winning_g,
+        segments=segments,
     )
     cached_by_context[cache_key] = result
     return result
@@ -1027,6 +1067,87 @@ def _select_best_decision(
             if best is None or candidate[:3] < best[:3]:
                 best = candidate
     return best
+
+
+def _frontier_can_reach_band(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    child_addresses: Mapping[str, tuple[str, ...]],
+    hidden_counts: Mapping[str, int],
+    structural_digests: Mapping[str, str],
+    expanded_cache: dict[
+        str,
+        tuple["ChildCondensedFlowGraph | None", tuple[str, ...], tuple[str, ...]],
+    ],
+    weights: OptimizerWeights,
+    band_high: int,
+) -> bool:
+    """Return whether module boxes or run folds can reach the readable band.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    analysis:
+        Shared collapse analysis.
+    child_addresses:
+        Renderer-tree child addresses.
+    hidden_counts:
+        Renderer-faithful hidden counts.
+    structural_digests:
+        Structural memo digests.
+    expanded_cache:
+        Shared expanded-structure cache.
+    weights:
+        Optimizer weights for the fold-enabled pass.
+    band_high:
+        Maximum readable auto node count.
+
+    Returns
+    -------
+    bool
+        True when a non-segment frontier point can already render within the
+        auto band.
+    """
+
+    total_units = _optimizer_total_units(trace, context)
+    rendered_own_units = _rendered_own_unit_map(trace, context)
+    for g_star in _g_star_candidates(trace, analysis, context, hidden_counts):
+        state = _OptimizerState(
+            trace=trace,
+            context=context,
+            analysis=analysis,
+            child_addresses=child_addresses,
+            hidden_counts=hidden_counts,
+            structural_digests=structural_digests,
+            expanded_cache=expanded_cache,
+            role_components_cache={},
+            child_segments_cache={},
+            box_cost_cache={},
+            branch_salience_cache={},
+            weights=weights,
+            g_star=g_star,
+            total_ops=total_units,
+            allow_folds=True,
+            rendered_own_units=rendered_own_units,
+        )
+        memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
+        for point in _frontier_for_module("self", state, memo):
+            if point.k < 1 or point.k > band_high:
+                continue
+            instantiated = _instantiate_module("self", point.k, state, memo)
+            plan = plan_from_v1(
+                trace,
+                _collapse_fn_from_selected(instantiated.selected),
+                _fold_mapping(instantiated.folds),
+                context,
+            )
+            if 1 <= count(plan) <= band_high:
+                return True
+    return False
 
 
 def build_role_components(

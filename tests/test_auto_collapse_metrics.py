@@ -750,6 +750,56 @@ class LongFunctional(torch.nn.Module):
         return x
 
 
+class DistinctFunctionalChain(torch.nn.Module):
+    """Flat straight-line chain of distinct functional operations."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a long non-recurrent functional chain."""
+
+        x = x + 1.0
+        x = torch.relu(x)
+        x = x * 1.1
+        x = torch.sigmoid(x)
+        x = x - 0.2
+        x = torch.tanh(x)
+        x = x / 1.1
+        x = torch.exp(x)
+        x = torch.log(torch.abs(x) + 1.0)
+        x = torch.sqrt(torch.abs(x) + 1.0)
+        x = torch.square(x)
+        x = -x
+        x = torch.sin(x)
+        x = torch.cos(x)
+        x = x + 2.0
+        x = torch.relu(x)
+        x = x * 0.9
+        x = torch.sigmoid(x)
+        x = x - 0.1
+        x = torch.tanh(x)
+        x = x / 0.9
+        x = torch.exp(x)
+        x = torch.log(torch.abs(x) + 1.0)
+        x = torch.sqrt(torch.abs(x) + 1.0)
+        x = torch.square(x)
+        x = -x
+        x = torch.sin(x)
+        x = torch.cos(x)
+        x = x + 3.0
+        x = torch.relu(x)
+        x = x * 0.7
+        x = torch.sigmoid(x)
+        x = x - 0.3
+        x = torch.tanh(x)
+        x = x / 0.7
+        x = torch.exp(x)
+        x = torch.log(torch.abs(x) + 1.0)
+        x = torch.sqrt(torch.abs(x) + 1.0)
+        x = torch.square(x)
+        x = -x
+        x = torch.sin(x)
+        return torch.cos(x)
+
+
 class SegmentToyBlock(torch.nn.Module):
     """Small block used by max-mode segment rendering tests."""
 
@@ -1911,6 +1961,26 @@ def test_v2_max_mode_uses_op_segments_without_changing_auto(
         assert not any(isinstance(node, OpSegment) for node in auto_plan.nodes)
         assert any(isinstance(node, OpSegment) for node in max_plan.nodes)
         assert count(max_plan) < count(auto_plan)
+    finally:
+        trace.cleanup()
+
+
+def test_v2_auto_uses_op_segments_as_over_band_last_resort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auto condenses over-band flat op chains when module cuts cannot help."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(DistinctFunctionalChain(), torch.randn(1, 8))
+    try:
+        context = RenderContext()
+        full_count = count(plan_from_v1(trace, None, None, context))
+        result = select_collapse_plan(trace, context, mode="auto")
+
+        assert full_count > 40
+        assert any(isinstance(node, OpSegment) for node in result.plan.nodes)
+        assert 1 <= count(result.plan) <= 40
+        assert count(result.plan) < full_count
     finally:
         trace.cleanup()
 
