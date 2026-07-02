@@ -6,8 +6,8 @@ import hashlib
 import math
 import time
 import weakref
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from itertools import product
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -30,7 +30,16 @@ from .auto_collapse import (
     _shape_spatial_dims,
     analyze_collapse,
 )
-from .collapse_plan import CollapsePlan, ModuleBox, PlanNode, RawOp, RenderContext, RunFold, count
+from .collapse_plan import (
+    CollapsePlan,
+    ModuleBox,
+    PlanNode,
+    RawOp,
+    RenderContext,
+    RunFold,
+    count,
+    plan_from_v1,
+)
 from .collapse_plan import EllipsisNode
 
 if TYPE_CHECKING:
@@ -59,12 +68,15 @@ class OptimizerWeights:
         Penalty for generic container labels.
     w_dom:
         Penalty for one module dominating the full trace.
-    w_tangle:
-        Credit for hiding internally tangled structure.
+    w_sal:
+        Penalty for hiding salient child-level branching, divided by same-role
+        sibling multiplicity.
     fold_intrinsic:
         Small intrinsic fold cost, so folds win only under band pressure.
     w_max:
         Weight for the maximum selected box cost in global selection.
+    w_k:
+        Linear in-band preference for smaller rendered cuts.
     """
 
     w_grain: float = 1.0
@@ -72,9 +84,10 @@ class OptimizerWeights:
     w_trunk: float = 1.0
     w_generic: float = 0.15
     w_dom: float = 1.5
-    w_tangle: float = 0.4
+    w_sal: float = 0.8
     fold_intrinsic: float = 0.15
     w_max: float = 0.3
+    w_k: float = 2.5
 
 
 @dataclass(frozen=True)
@@ -194,6 +207,7 @@ class _OptimizerState:
     weights: OptimizerWeights
     g_star: float
     total_ops: int
+    allow_folds: bool
 
 
 @dataclass(frozen=True)
@@ -248,12 +262,21 @@ def select_collapse_plan(
         str,
         tuple["ChildCondensedFlowGraph | None", tuple[str, ...], tuple[str, ...]],
     ] = {}
-    candidates = _g_star_candidates(trace, analysis)
-    best: (
-        tuple[float, float, int, _DecisionPoint, dict[_MemoKey, tuple[_DecisionPoint, ...]]] | None
-    ) = None
-    for g_star in candidates:
-        state = _OptimizerState(
+    best = _select_best_decision(
+        trace=trace,
+        context=context,
+        analysis=analysis,
+        child_addresses=child_addresses,
+        hidden_counts=hidden_counts,
+        structural_digests=structural_digests,
+        expanded_cache=expanded_cache,
+        weights=resolved_weights,
+        allow_folds=False,
+    )
+    first_pass_point: _FrontierPoint | None = None
+    first_pass_plan: CollapsePlan | None = None
+    if best is not None:
+        first_pass_point, first_pass_plan = _instantiate_best_point(
             trace=trace,
             context=context,
             analysis=analysis,
@@ -261,25 +284,106 @@ def select_collapse_plan(
             hidden_counts=hidden_counts,
             structural_digests=structural_digests,
             expanded_cache=expanded_cache,
-            role_components_cache={},
-            child_segments_cache={},
-            box_cost_cache={},
-            weights=resolved_weights,
-            g_star=g_star,
-            total_ops=max(len(trace.ops), 1),
+            best=best,
         )
-        memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
-        frontier = _frontier_for_module("self", state, memo)
-        for point in frontier:
-            score = _global_q(point, trace, resolved_weights)
-            candidate = (score, g_star, point.k, point, memo)
-            if best is None or candidate[:3] < best[:3]:
-                best = candidate
+    if first_pass_plan is None or count(first_pass_plan) > _readable_band_high(trace):
+        best = _select_best_decision(
+            trace=trace,
+            context=context,
+            analysis=analysis,
+            child_addresses=child_addresses,
+            hidden_counts=hidden_counts,
+            structural_digests=structural_digests,
+            expanded_cache=expanded_cache,
+            weights=replace(resolved_weights, fold_intrinsic=0.05),
+            allow_folds=True,
+        )
+        first_pass_point = None
+        first_pass_plan = None
     if best is None:
         result = _declined_result(context, "no optimizer frontier was produced")
         cached_by_context[context] = result
         return result
-    _, winning_g, _, decision_point, winning_memo = best
+    if first_pass_point is None or first_pass_plan is None:
+        instantiated_point, plan = _instantiate_best_point(
+            trace=trace,
+            context=context,
+            analysis=analysis,
+            child_addresses=child_addresses,
+            hidden_counts=hidden_counts,
+            structural_digests=structural_digests,
+            expanded_cache=expanded_cache,
+            best=best,
+        )
+    else:
+        instantiated_point = first_pass_point
+        plan = first_pass_plan
+    _, winning_g, _, _, _, _, _ = best
+    run_folds = _fold_mapping(instantiated_point.folds)
+    assert count(plan) > 0, "v2 collapse plan produced no visible nodes"
+    result = OptimizerResult(
+        selected=instantiated_point.selected,
+        run_folds=run_folds,
+        plan=plan,
+        visible_count=count(plan),
+        analyze_ms=analysis.elapsed_ms,
+        select_ms=(time.perf_counter() - start) * 1000.0,
+        g_star=winning_g,
+    )
+    cached_by_context[context] = result
+    return result
+
+
+def _instantiate_best_point(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    child_addresses: Mapping[str, tuple[str, ...]],
+    hidden_counts: Mapping[str, int],
+    structural_digests: Mapping[str, str],
+    expanded_cache: dict[
+        str,
+        tuple["ChildCondensedFlowGraph | None", tuple[str, ...], tuple[str, ...]],
+    ],
+    best: tuple[
+        float,
+        float,
+        int,
+        _DecisionPoint,
+        dict[_MemoKey, tuple[_DecisionPoint, ...]],
+        OptimizerWeights,
+        bool,
+    ],
+) -> tuple[_FrontierPoint, CollapsePlan]:
+    """Instantiate a winning DP point and its renderer-faithful plan.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    analysis:
+        Shared collapse analysis.
+    child_addresses:
+        Renderer-tree child addresses.
+    hidden_counts:
+        Renderer-faithful hidden counts.
+    structural_digests:
+        Structural memo digests.
+    expanded_cache:
+        Shared expanded-structure cache.
+    best:
+        Winner tuple from :func:`_select_best_decision`.
+
+    Returns
+    -------
+    tuple[_FrontierPoint, CollapsePlan]
+        Concrete DP point and renderer-faithful plan for its selected modules
+        and run folds.
+    """
+
+    _, winning_g, _, decision_point, winning_memo, winning_weights, allow_folds = best
     winning_state = _OptimizerState(
         trace=trace,
         context=context,
@@ -291,28 +395,120 @@ def select_collapse_plan(
         role_components_cache={},
         child_segments_cache={},
         box_cost_cache={},
-        weights=resolved_weights,
+        weights=winning_weights,
         g_star=winning_g,
         total_ops=max(len(trace.ops), 1),
+        allow_folds=allow_folds,
     )
     instantiated_point = _instantiate_module("self", decision_point.k, winning_state, winning_memo)
     run_folds = _fold_mapping(instantiated_point.folds)
-    plan = CollapsePlan(nodes=instantiated_point.nodes, context=context)
-    assert count(plan) == instantiated_point.k, (
-        "v2 collapse plan count mismatch: "
-        f"plan_count={count(plan)}, frontier_count={instantiated_point.k}"
-    )
-    result = OptimizerResult(
-        selected=instantiated_point.selected,
-        run_folds=run_folds,
-        plan=plan,
-        visible_count=instantiated_point.k,
-        analyze_ms=analysis.elapsed_ms,
-        select_ms=(time.perf_counter() - start) * 1000.0,
-        g_star=winning_g,
-    )
-    cached_by_context[context] = result
-    return result
+    collapse_fn = _collapse_fn_from_selected(instantiated_point.selected)
+    plan = plan_from_v1(trace, collapse_fn, run_folds, context)
+    return instantiated_point, plan
+
+
+def _collapse_fn_from_selected(selected: frozenset[str]) -> Callable[["Module"], bool]:
+    """Return a module-collapse predicate for selected addresses."""
+
+    def collapse_fn(module: "Module") -> bool:
+        """Return whether ``module`` is selected."""
+
+        return module.address in selected
+
+    return collapse_fn
+
+
+def _select_best_decision(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    child_addresses: Mapping[str, tuple[str, ...]],
+    hidden_counts: Mapping[str, int],
+    structural_digests: Mapping[str, str],
+    expanded_cache: dict[
+        str,
+        tuple["ChildCondensedFlowGraph | None", tuple[str, ...], tuple[str, ...]],
+    ],
+    weights: OptimizerWeights,
+    allow_folds: bool,
+) -> (
+    tuple[
+        float,
+        float,
+        int,
+        _DecisionPoint,
+        dict[_MemoKey, tuple[_DecisionPoint, ...]],
+        OptimizerWeights,
+        bool,
+    ]
+    | None
+):
+    """Return the best global decision for one fold-gating pass.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    analysis:
+        Shared collapse analysis.
+    child_addresses:
+        Renderer-tree child addresses.
+    hidden_counts:
+        Renderer-faithful hidden counts.
+    structural_digests:
+        Structural memo digests.
+    expanded_cache:
+        Shared expanded-structure cache.
+    weights:
+        Optimizer weights for this pass.
+    allow_folds:
+        Whether folded role-component treatments may enter the DP frontier.
+
+    Returns
+    -------
+    tuple[...] | None
+        Best decision tuple, or ``None`` when no frontier was produced.
+    """
+
+    best: (
+        tuple[
+            float,
+            float,
+            int,
+            _DecisionPoint,
+            dict[_MemoKey, tuple[_DecisionPoint, ...]],
+            OptimizerWeights,
+            bool,
+        ]
+        | None
+    ) = None
+    for g_star in _g_star_candidates(trace, analysis):
+        state = _OptimizerState(
+            trace=trace,
+            context=context,
+            analysis=analysis,
+            child_addresses=child_addresses,
+            hidden_counts=hidden_counts,
+            structural_digests=structural_digests,
+            expanded_cache=expanded_cache,
+            role_components_cache={},
+            child_segments_cache={},
+            box_cost_cache={},
+            weights=weights,
+            g_star=g_star,
+            total_ops=max(len(trace.ops), 1),
+            allow_folds=allow_folds,
+        )
+        memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
+        frontier = _frontier_for_module("self", state, memo)
+        for point in frontier:
+            score = _global_q(point, trace, weights)
+            candidate = (score, g_star, point.k, point, memo, weights, allow_folds)
+            if best is None or candidate[:3] < best[:3]:
+                best = candidate
+    return best
 
 
 def build_role_components(
@@ -639,9 +835,10 @@ def _component_treatment_points(
     expanded = _component_expanded(component, state, memo)
     if expanded:
         choices.extend(expanded)
-    folded = _component_folded(component, graph, state)
-    if folded is not None:
-        choices.append(folded)
+    if state.allow_folds:
+        folded = _component_folded(component, graph, state)
+        if folded is not None:
+            choices.append(folded)
     return _prune_frontier(choices)
 
 
@@ -1148,19 +1345,14 @@ def _box_cost(trace: "Trace", signal: ModuleCollapseSignals, state: _OptimizerSt
     module = cast("Module", trace.modules[signal.address])
     generic = 1.0 if str(getattr(module, "class_name", "")) in GENERIC_CONTAINER_CLASSES else 0.0
     dominance = _dominance(n, state.total_ops)
-    edge_total = signal.internal_edges + signal.input_edges + signal.output_edges
-    tangle = (
-        min(signal.internal_edges / edge_total, 1.0)
-        if signal.internal_edges >= 1 and edge_total > 0
-        else 0.0
-    )
+    salience = _branch_salience(signal.address, state) / max(float(signal.peer_count), 1.0)
     cost = (
         state.weights.w_grain * grain
         + state.weights.w_landmark * landmark
         + state.weights.w_trunk * trunk
         + state.weights.w_generic * generic
         + state.weights.w_dom * dominance
-        - state.weights.w_tangle * tangle
+        + state.weights.w_sal * salience
     )
     return round(cost, 6)
 
@@ -1191,6 +1383,93 @@ def _dominance(hidden_count: int, total_ops: int) -> float:
     return min((fraction - 0.6) / 0.4, 1.0)
 
 
+def _branch_salience(
+    address: str,
+    state: _OptimizerState,
+    seen: frozenset[str] = frozenset(),
+) -> float:
+    """Return normalized child-level branch salience for a module.
+
+    This uses the R1a child-condensed flow artifact with the prescribed simpler
+    proxy: ``W`` is the largest set of direct child modules that share the same
+    non-child upstream and downstream neighbors and have no flow edges among
+    themselves. That catches ASPP/Inception-style parallel fans without paying
+    to preserve ordinary sequential stacks. The score propagates through
+    immediate children so a thin wrapper around a salient fan is also expensive
+    to hide.
+    """
+
+    if address in seen:
+        return 0.0
+    graph = state.analysis.child_flow_graphs.get(address)
+    own_salience = 0.0
+    if graph is not None:
+        width = _parallel_flow_width(graph)
+        own_salience = min(max((width - 1) / 4.0, 0.0), 1.0)
+    child_salience = max(
+        (
+            _branch_salience(child, state, seen | {address})
+            for child in state.child_addresses.get(address, ())
+            if child in state.analysis.signals
+        ),
+        default=0.0,
+    )
+    return max(own_salience, child_salience)
+
+
+def _parallel_flow_width(graph: ChildCondensedFlowGraph) -> int:
+    """Return max parallel width visible in a child-condensed flow graph.
+
+    The primary width is the task-prescribed child signature proxy. Some
+    containers, notably ModuleList-backed branch fans, appear in the R1a graph
+    as parent-owned op chains rather than direct child module nodes; for those,
+    the fallback width is the largest non-external merge fan-in.
+    """
+
+    child_set = set(graph.flow_children)
+    child_edges = {
+        (source, target)
+        for source, target in graph.edges
+        if source in child_set and target in child_set
+    }
+    upstreams: dict[str, set[str]] = {child: set() for child in graph.flow_children}
+    downstreams: dict[str, set[str]] = {child: set() for child in graph.flow_children}
+    for source, target in graph.edges:
+        if target in child_set and source not in child_set:
+            upstreams[target].add(source)
+        if source in child_set and target not in child_set:
+            downstreams[source].add(target)
+    groups: dict[tuple[tuple[str, ...], tuple[str, ...]], list[str]] = {}
+    for child in graph.flow_children:
+        signature = (tuple(sorted(upstreams[child])), tuple(sorted(downstreams[child])))
+        groups.setdefault(signature, []).append(child)
+    max_width = 1 if graph.flow_children else 0
+    for members in groups.values():
+        independent: list[str] = []
+        for child in members:
+            if all(
+                (child, other) not in child_edges and (other, child) not in child_edges
+                for other in independent
+            ):
+                independent.append(child)
+        max_width = max(max_width, len(independent))
+    return max(max_width, _parent_owned_merge_width(graph))
+
+
+def _parent_owned_merge_width(graph: ChildCondensedFlowGraph) -> int:
+    """Return the largest non-external merge fan-in in a condensed graph."""
+
+    node_set = set(graph.nodes)
+    incoming: dict[str, set[str]] = {node: set() for node in graph.nodes}
+    for source, target in graph.edges:
+        if target not in node_set or target.startswith("external_sink:"):
+            continue
+        if source.startswith("external_source:"):
+            continue
+        incoming[target].add(source)
+    return max((len(sources) for sources in incoming.values()), default=0)
+
+
 def _faithful_hidden_count(
     signal: ModuleCollapseSignals,
     hidden_counts: Mapping[str, int],
@@ -1207,7 +1486,21 @@ def _global_q(
 
     mean_cost = sum(point.box_costs) / len(point.box_costs) if point.box_costs else 0.0
     max_cost = max(point.box_costs) if point.box_costs else 0.0
-    return round(mean_cost + weights.w_max * max_cost + _band_cost(point.k, trace), 6)
+    return round(
+        mean_cost
+        + weights.w_max * max_cost
+        + weights.w_k * _k_preference(point.k, trace)
+        + _band_cost(point.k, trace),
+        6,
+    )
+
+
+def _k_preference(k: int, trace: "Trace") -> float:
+    """Return linear node-count preference normalized to the readable band."""
+
+    lo = 8
+    hi = _readable_band_high(trace)
+    return (k - lo) / max(hi - lo, 1)
 
 
 def _band_cost(k: int, trace: "Trace") -> float:
