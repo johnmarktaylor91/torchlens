@@ -89,8 +89,12 @@ def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Trace a model in eval mode."""
 
     model.eval()
+    grad_enabled = torch.is_grad_enabled()
     torch.set_grad_enabled(False)
-    return tl.trace(model, x)
+    try:
+        return tl.trace(model, x)
+    finally:
+        torch.set_grad_enabled(grad_enabled)
 
 
 def test_role_components_connect_uniform_siblings() -> None:
