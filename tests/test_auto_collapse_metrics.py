@@ -6,6 +6,7 @@ import re
 import time
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -848,6 +849,39 @@ def _draw_source_mode(
             collapse=collapse,  # type: ignore[arg-type]
         )
     )
+
+
+def _landmark_swallow_count(trace: tl.Trace, result: Any) -> int:
+    """Return the number of selected boxes or child segments hiding landmarks.
+
+    Parameters
+    ----------
+    trace:
+        Trace being inspected.
+    result:
+        Optimizer result to inspect.
+
+    Returns
+    -------
+    int
+        Number of selected landmark-hiding module boxes or child segments.
+    """
+
+    analysis = analyze_collapse(trace)
+    total = sum(
+        1
+        for address in getattr(result, "selected", ())
+        if analysis.signals.get(address) is not None
+        and analysis.signals[address].landmark_edges >= 2
+    )
+    for segment in (getattr(result, "segments", {}) or {}).values():
+        if getattr(segment, "kind", "") != "child":
+            continue
+        for address in getattr(segment, "members", ()):
+            signal = analysis.signals.get(address)
+            if signal is not None and signal.landmark_edges >= 2:
+                total += 1
+    return total
 
 
 def _svg_node_count(path: Path) -> int:
@@ -1937,6 +1971,86 @@ def test_incremental_count_mismatch_stays_hard_in_strict(
             _assert_plan_count(trace, None, None, RenderContext(), -1)
     finally:
         trace.cleanup()
+
+
+def test_transformer_attention_landmarks_remain_visible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GPT-2 attention residual landmarks are not hidden by auto or max."""
+
+    transformers = pytest.importorskip("transformers")
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+
+    class DictInputWrapper(torch.nn.Module):
+        """Wrap keyword-input transformer modules for TorchLens tracing."""
+
+        def __init__(self, model: torch.nn.Module) -> None:
+            """Initialize the wrapped module."""
+
+            super().__init__()
+            self.model = model
+
+        def forward(self, batch: dict[str, torch.Tensor]) -> Any:
+            """Forward a tensor dictionary as keyword arguments."""
+
+            return self.model(**batch)
+
+    cases = (
+        (
+            "gpt2",
+            transformers.GPT2Model(
+                transformers.GPT2Config(
+                    vocab_size=50257,
+                    n_embd=128,
+                    n_layer=2,
+                    n_head=4,
+                    n_positions=32,
+                    n_ctx=32,
+                )
+            ),
+            {"input_ids": torch.randint(0, 50257, (1, 16))},
+        ),
+        (
+            "bert",
+            transformers.BertModel(
+                transformers.BertConfig(
+                    vocab_size=30522,
+                    hidden_size=128,
+                    num_hidden_layers=2,
+                    num_attention_heads=4,
+                    intermediate_size=256,
+                )
+            ),
+            {
+                "input_ids": torch.randint(0, 30522, (1, 16)),
+                "attention_mask": torch.ones(1, 16, dtype=torch.long),
+            },
+        ),
+        (
+            "distilbert",
+            transformers.DistilBertModel(
+                transformers.DistilBertConfig(
+                    vocab_size=30522,
+                    dim=128,
+                    n_layers=2,
+                    n_heads=4,
+                    hidden_dim=256,
+                )
+            ),
+            {
+                "input_ids": torch.randint(0, 30522, (1, 16)),
+                "attention_mask": torch.ones(1, 16, dtype=torch.long),
+            },
+        ),
+    )
+    for _name, model, batch in cases:
+        trace = _trace(DictInputWrapper(model), batch)  # type: ignore[arg-type]
+        try:
+            for mode in ("auto", "max"):
+                result = select_collapse_plan(trace, RenderContext(), mode=mode)
+                assert _landmark_swallow_count(trace, result) == 0
+        finally:
+            trace.cleanup()
 
 
 def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(

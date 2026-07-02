@@ -662,6 +662,8 @@ def _legal_plan_child_segment_run(
     best: tuple[str, ...] | None = None
     for end in range(2, len(addresses) + 1):
         candidate = tuple(addresses[:end])
+        if any(analysis.signals[address].landmark_edges >= 2 for address in candidate):
+            continue
         if not _segment_is_legal(candidate, graph):
             continue
         hidden = _child_segment_hidden_units(analysis, candidate, hidden_counts)
@@ -1915,7 +1917,7 @@ def _eligible_box(trace: "Trace", address: str, signal: ModuleCollapseSignals) -
     """Return whether a module may render as a collapsed box."""
 
     _ = trace, address
-    return signal.eligible
+    return signal.eligible and signal.landmark_edges < 2
 
 
 def _box_cost(trace: "Trace", signal: ModuleCollapseSignals, state: _OptimizerState) -> float:
