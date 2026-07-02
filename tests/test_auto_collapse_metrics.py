@@ -14,6 +14,10 @@ import torchvision.models.segmentation as tvs
 import torchlens as tl
 from torchlens.visualization.auto_collapse import (
     _child_condensed_flow_graphs,
+    _flow_graph_for_sibling_group,
+    _iter_collapsible_runs,
+    _run_fold_is_legal,
+    _sibling_address_groups,
     analyze_collapse,
     resolve_collapse_fn,
     resolve_run_folds,
@@ -101,6 +105,96 @@ class DimStepRun(torch.nn.Module):
         for block in self.blocks:
             x = block(x)
         return self.head(x)
+
+
+class MobileNetPlateauBlock(torch.nn.Module):
+    """MobileNetV2-style block with optional residual join."""
+
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        """Initialize a pointwise-depthwise-pointwise block."""
+
+        super().__init__()
+        self.use_residual = in_channels == out_channels
+        hidden_channels = max(in_channels, out_channels)
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, hidden_channels, 1),
+            torch.nn.BatchNorm2d(hidden_channels),
+            torch.nn.ReLU6(),
+            torch.nn.Conv2d(hidden_channels, hidden_channels, 3, padding=1, groups=hidden_channels),
+            torch.nn.BatchNorm2d(hidden_channels),
+            torch.nn.ReLU6(),
+            torch.nn.Conv2d(hidden_channels, out_channels, 1),
+            torch.nn.BatchNorm2d(out_channels),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        y = self.net(x)
+        if self.use_residual:
+            return x + y
+        return y
+
+
+class MobileNetPlateauStack(torch.nn.Module):
+    """Synthetic MobileNetV2 stage stack with channel plateaus."""
+
+    def __init__(self) -> None:
+        """Initialize two foldable channel plateaus."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(3, 32, 1)
+        channels = [32, 32, 32, 64, 64, 64, 64]
+        in_channels = [32, *channels[:-1]]
+        self.features = torch.nn.ModuleList(
+            MobileNetPlateauBlock(in_ch, out_ch)
+            for in_ch, out_ch in zip(in_channels, channels, strict=True)
+        )
+        self.head = torch.nn.Conv2d(64, 64, 1)
+        self.tail = torch.nn.ModuleList(torch.nn.ReLU() for _ in range(48))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run all synthetic inverted residual blocks."""
+
+        x = self.stem(x)
+        for block in self.features:
+            x = block(x)
+        x = self.head(x)
+        for relu in self.tail:
+            x = relu(x)
+        return x
+
+
+class BatchNormFlowBlock(torch.nn.Module):
+    """Convolutional child block with registered BatchNorm buffers."""
+
+    def __init__(self) -> None:
+        """Initialize the block."""
+
+        super().__init__()
+        self.conv = torch.nn.Conv2d(4, 4, 1)
+        self.bn = torch.nn.BatchNorm2d(4)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.relu(self.bn(self.conv(x)))
+
+
+class BatchNormFlowStack(torch.nn.Module):
+    """Repeated BatchNorm blocks for condensed-flow buffer-edge regression."""
+
+    def __init__(self, depth: int = 4) -> None:
+        """Initialize repeated BatchNorm blocks."""
+
+        super().__init__()
+        self.blocks = torch.nn.Sequential(*(BatchNormFlowBlock() for _ in range(depth)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the sequential BatchNorm stack."""
+
+        return self.blocks(x)
 
 
 class StageUnit(torch.nn.Module):
@@ -760,6 +854,12 @@ def _select_blocks_child(module: object) -> bool:
     return re.match(r"^blocks\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
+def _select_features_child(module: object) -> bool:
+    """Return whether ``module`` is a direct child of a ``features`` container."""
+
+    return re.match(r"^features\.\d+$", str(getattr(module, "address", ""))) is not None
+
+
 def _select_branches_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``branches`` container."""
 
@@ -862,6 +962,49 @@ def test_child_condensed_flow_graph_uses_execution_order_for_aux_branch() -> Non
         assert ("trunk2", "aux") not in graph.edges
         assert ("aux", "trunk1") not in graph.edges
         assert graph.flow_children.index("aux") != graph.flow_children.index("trunk1") - 1
+    finally:
+        trace.cleanup()
+
+
+def test_child_condensed_flow_graph_ignores_batchnorm_buffer_edges() -> None:
+    """BatchNorm buffer provenance does not create inter-child flow edges."""
+
+    trace = _trace(BatchNormFlowStack(depth=4), torch.randn(1, 4, 8, 8))
+    try:
+        graph = _child_condensed_flow_graphs(trace)["blocks"]
+        child_set = set(graph.flow_children)
+        inter_child_edges = tuple(
+            edge for edge in graph.edges if edge[0] in child_set and edge[1] in child_set
+        )
+
+        assert graph.flow_children == tuple(f"blocks.{index}" for index in range(4))
+        assert inter_child_edges == tuple(
+            (f"blocks.{index}", f"blocks.{index + 1}") for index in range(3)
+        )
+        assert graph.child_external_endpoint_counts["blocks.0"][0] == 1
+        assert graph.child_external_endpoint_counts["blocks.3"][1] == 1
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+def test_child_condensed_flow_graph_mobilenet_v2_features_exact_chain() -> None:
+    """MobileNetV2 features children form one exact forward dataflow chain."""
+
+    trace = _trace(tvm.mobilenet_v2(weights=None), torch.randn(1, 3, 224, 224))
+    try:
+        graph = _child_condensed_flow_graphs(trace)["features"]
+        child_set = set(graph.flow_children)
+        inter_child_edges = tuple(
+            edge for edge in graph.edges if edge[0] in child_set and edge[1] in child_set
+        )
+
+        assert graph.flow_children == tuple(f"features.{index}" for index in range(19))
+        assert inter_child_edges == tuple(
+            (f"features.{index}", f"features.{index + 1}") for index in range(18)
+        )
+        assert graph.child_external_endpoint_counts["features.0"][0] == 1
+        assert graph.child_external_endpoint_counts["features.18"][1] == 1
     finally:
         trace.cleanup()
 
@@ -1022,22 +1165,76 @@ def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) 
         trace.cleanup()
 
 
-def test_auto_collapse_run_fold_ignores_dimension_steps(tmp_path: Path) -> None:
-    """Auto folds structurally identical runs even when channel dimensions vary."""
+def test_auto_collapse_run_fold_splits_same_spatial_channel_steps(tmp_path: Path) -> None:
+    """Run-fold splits same-spatial channel changes into stage boundaries."""
 
     trace = _trace(DimStepRun(depth=24, start_width=32), torch.randn(1, 32, 8, 8))
     try:
-        auto_source = _draw_source(trace, tmp_path, "dim_step_auto", "auto")
+        auto_source = _draw_source(trace, tmp_path, "dim_step_stage_boundary_auto", "auto")
         folds = resolve_run_folds(trace, _select_blocks_child)
-        ellipsis_name = _run_fold_ellipsis_name("blocks.1")
 
         assert _collapsed_exact_label_count(auto_source, "blocks.1") == 1
-        assert _run_fold_ellipsis_count(auto_source, 23) == 1
-        assert "... +22 more DimStepBlock" in auto_source
-        assert _collapsed_exact_label_count(auto_source, "blocks.23") == 0
-        assert "shapes " in auto_source
-        assert _edge_count(auto_source, "blocks.1pass1", ellipsis_name) == 1
-        assert folds["blocks.1"].addresses == tuple(f"blocks.{index}" for index in range(1, 24))
+        assert "runfoldellipsis" not in auto_source
+        assert "... +" not in auto_source
+        assert "shapes " not in auto_source
+        assert folds == {}
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_folds_mobilenet_channel_plateaus() -> None:
+    """MobileNetV2-style same-class plateaus fold and channel transitions split."""
+
+    trace = _trace(MobileNetPlateauStack(), torch.randn(1, 3, 16, 16))
+    try:
+        folds = resolve_run_folds(trace, _select_features_child)
+
+        assert folds["features.0"].addresses == ("features.0", "features.1", "features.2")
+        assert folds["features.3"].addresses == (
+            "features.3",
+            "features.4",
+            "features.5",
+            "features.6",
+        )
+        assert folds["features.0"].addresses[-1] != folds["features.3"].addresses[0]
+        assert folds["features.3"].hidden_member_composition == {
+            "hidden_with_residual_join": 3,
+            "hidden_without_residual_join": 0,
+        }
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_folds_residual_mix_without_digest_key() -> None:
+    """Same-class equal-shape blocks fold even when residual topology differs."""
+
+    trace = _trace(MobileNetPlateauStack(), torch.randn(1, 3, 16, 16))
+    try:
+        folds = resolve_run_folds(trace, _select_features_child)
+
+        assert folds["features.3"].addresses == (
+            "features.3",
+            "features.4",
+            "features.5",
+            "features.6",
+        )
+        assert folds["features.3"].hidden_member_composition["hidden_with_residual_join"] == 3
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+def test_auto_collapse_run_fold_preserves_swin_stage_fold() -> None:
+    """Swin stage blocks fold when alternating members render selected descendants."""
+
+    trace = _trace(tvm.swin_s(weights=None), torch.randn(1, 3, 224, 224))
+    try:
+        collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
+        folds = resolve_run_folds(trace, collapse_fn)
+
+        assert folds["features.5.0"].addresses == tuple(
+            f"features.5.{index}" for index in range(18)
+        )
     finally:
         trace.cleanup()
 
@@ -1068,6 +1265,51 @@ def test_auto_collapse_run_fold_rejects_spatial_span() -> None:
         assert "blocks.0" not in folds
         assert "blocks.1" not in folds
         assert "blocks.2" not in folds
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_parallel_fan_keeps_junction_visible(tmp_path: Path) -> None:
+    """Parallel fan folds branches while keeping the shared concat outside."""
+
+    trace = _trace(ParallelRepeatedBranches(depth=40), torch.randn(1, 4, 16, 16))
+    try:
+        auto_source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / "parallel_fan_contract_auto"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="auto",
+                collapse_fn=_select_branches_child,
+            )
+        )
+        ellipsis_name = _run_fold_ellipsis_name("branches.0")
+
+        assert _run_fold_ellipsis_count(auto_source, 40) == 1
+        assert _has_visible_node(auto_source, "cat_")
+        assert _edge_count(auto_source, ellipsis_name, "cat_1_161pass1") == 1
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_run_fold_rejects_flow_parallel_aux_chain() -> None:
+    """Flow-parallel aux children do not join a trunk chain run."""
+
+    trace = _trace(RegistrationInterleavedAuxParent(), torch.randn(1, 4, 8, 8))
+    try:
+        analysis = analyze_collapse(trace)
+        graph = _flow_graph_for_sibling_group(
+            trace,
+            "self",
+            _sibling_address_groups(trace)["self"],
+            analysis,
+        )
+        assert graph is not None
+        runs = list(_iter_collapsible_runs(trace, list(graph.flow_children), lambda module: True))
+
+        assert runs == [("trunk0", "trunk1", "trunk2")]
+        assert not _run_fold_is_legal(("trunk0", "trunk1", "trunk2"), graph)
     finally:
         trace.cleanup()
 
