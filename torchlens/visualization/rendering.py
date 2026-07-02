@@ -3039,13 +3039,16 @@ def rendered_node_universe_from_v1(
     resolved_context = RenderContext() if context is None else context
     show_buffer_layers = _normalize_buffer_visibility(resolved_context.show_buffer_layers)
     entries_to_plot = _entries_to_plot_for_context(trace, resolved_context.vis_mode)
-    edge_map, skipped_labels = _build_skip_filtered_edge_map(
-        trace,
-        entries_to_plot,
-        vis_mode=resolved_context.vis_mode,
-        show_buffer_layers=show_buffer_layers,
-        skip_fn=None,
-    )
+    skipped_labels: set[str] = set()
+    edge_map: dict[str, list[RenderEdge]] = {}
+    if run_folds:
+        edge_map, skipped_labels = _build_skip_filtered_edge_map(
+            trace,
+            entries_to_plot,
+            vis_mode=resolved_context.vis_mode,
+            show_buffer_layers=show_buffer_layers,
+            skip_fn=None,
+        )
     collapsed_container_nodes = _collapsed_container_leaf_nodes(
         trace,
         entries_to_plot,

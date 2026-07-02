@@ -204,6 +204,7 @@ class _OptimizerState:
     role_components_cache: dict[tuple[str, tuple[str, ...]], tuple[RoleComponent, ...]]
     child_segments_cache: dict[tuple[str, ...], tuple[tuple[str, ...], ...]]
     box_cost_cache: dict[str, float]
+    branch_salience_cache: dict[str, float]
     weights: OptimizerWeights
     g_star: float
     total_ops: int
@@ -395,6 +396,7 @@ def _instantiate_best_point(
         role_components_cache={},
         child_segments_cache={},
         box_cost_cache={},
+        branch_salience_cache={},
         weights=winning_weights,
         g_star=winning_g,
         total_ops=max(len(trace.ops), 1),
@@ -496,6 +498,7 @@ def _select_best_decision(
             role_components_cache={},
             child_segments_cache={},
             box_cost_cache={},
+            branch_salience_cache={},
             weights=weights,
             g_star=g_star,
             total_ops=max(len(trace.ops), 1),
@@ -868,6 +871,8 @@ def _component_expanded(
 ) -> tuple[_DecisionPoint, ...]:
     """Return independently expanded member combinations for one component."""
 
+    if len(component.members) == 1:
+        return _single_member_expanded(component.members[0], state, memo)
     member_frontiers = [
         tuple(
             point
@@ -894,6 +899,33 @@ def _component_expanded(
     for frontier in member_frontiers:
         points = _merge_component_member_frontiers(points, frontier)
     return points
+
+
+def _single_member_expanded(
+    address: str,
+    state: _OptimizerState,
+    memo: dict[_MemoKey, tuple[_DecisionPoint, ...]],
+) -> tuple[_DecisionPoint, ...]:
+    """Return expanded treatment points for a one-member role component."""
+
+    points: list[_DecisionPoint] = []
+    for point in _frontier_for_module(address, state, memo):
+        if (
+            point.k == 1
+            and isinstance(point.decision, _ModuleDecision)
+            and point.decision.kind == "box"
+        ):
+            continue
+        points.append(
+            _DecisionPoint(
+                k=point.k,
+                cost=point.cost,
+                decision=_ComponentDecision("expanded", (point.k,)),
+                box_costs=point.box_costs,
+                priority=point.priority,
+            )
+        )
+    return tuple(points)
 
 
 def _component_folded(
@@ -1401,6 +1433,9 @@ def _branch_salience(
 
     if address in seen:
         return 0.0
+    cached = state.branch_salience_cache.get(address)
+    if cached is not None:
+        return cached
     graph = state.analysis.child_flow_graphs.get(address)
     own_salience = 0.0
     if graph is not None:
@@ -1414,7 +1449,9 @@ def _branch_salience(
         ),
         default=0.0,
     )
-    return max(own_salience, child_salience)
+    salience = max(own_salience, child_salience)
+    state.branch_salience_cache[address] = salience
+    return salience
 
 
 def _parallel_flow_width(graph: ChildCondensedFlowGraph) -> int:
