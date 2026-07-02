@@ -639,6 +639,42 @@ class RecurrentWrapper(torch.nn.Module):
         return self.head(y[:, -1])
 
 
+class UnevenReusedBlock(torch.nn.Module):
+    """Small reused block for rolled recurrence-label tests."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the block."""
+
+        super().__init__()
+        self.fc = torch.nn.Linear(width, width)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.relu(self.fc(x))
+
+
+class UnevenReusedSiblings(torch.nn.Module):
+    """Digest-identical sibling modules called different numbers of times."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the siblings."""
+
+        super().__init__()
+        self.short = UnevenReusedBlock(width)
+        self.long = UnevenReusedBlock(width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run sibling modules with different recurrence counts."""
+
+        for _ in range(3):
+            x = self.short(x)
+        for _ in range(5):
+            x = self.long(x)
+        return x
+
+
 class TrivialSingle(torch.nn.Module):
     """Single-op model whose only submodule should not be collapse-eligible."""
 
@@ -729,6 +765,46 @@ def _draw_source(trace: tl.Trace, tmp_path: Path, name: str, collapse: str) -> s
     )
 
 
+def _draw_source_mode(
+    trace: tl.Trace,
+    tmp_path: Path,
+    name: str,
+    collapse: str,
+    vis_mode: str,
+) -> str:
+    """Render a trace in a specific visualization mode and return DOT source.
+
+    Parameters
+    ----------
+    trace:
+        Trace to render.
+    tmp_path:
+        Temporary output directory.
+    name:
+        Output file stem.
+    collapse:
+        Collapse mode.
+    vis_mode:
+        Visualization mode.
+
+    Returns
+    -------
+    str
+        DOT source returned by ``Trace.draw``.
+    """
+
+    return str(
+        trace.draw(
+            vis_mode=vis_mode,  # type: ignore[arg-type]
+            vis_outpath=str(tmp_path / name),
+            vis_save_only=True,
+            vis_fileformat="svg",
+            vis_node_placement="dot",
+            collapse=collapse,  # type: ignore[arg-type]
+        )
+    )
+
+
 def _svg_node_count(path: Path) -> int:
     """Return the Graphviz SVG node count.
 
@@ -751,6 +827,7 @@ def _assert_plan_svg_parity(
     tmp_path: Path,
     name: str,
     mode: str,
+    vis_mode: str = "unrolled",
 ) -> None:
     """Assert v1 plan count equals rendered SVG node count.
 
@@ -764,13 +841,17 @@ def _assert_plan_svg_parity(
         Output filename stem.
     mode:
         Collapse mode.
+    vis_mode:
+        Visualization mode.
     """
 
-    collapse_fn = resolve_collapse_fn(trace, mode, "unrolled", context=RenderContext())
-    folds = resolve_run_folds(trace, collapse_fn, context=RenderContext())
-    plan_count = count(plan_from_v1(trace, collapse_fn, folds, RenderContext()))
+    context = RenderContext(vis_mode=vis_mode)  # type: ignore[arg-type]
+    collapse_fn = resolve_collapse_fn(trace, mode, vis_mode, context=context)  # type: ignore[arg-type]
+    folds = resolve_run_folds(trace, collapse_fn, context=context)
+    plan_count = count(plan_from_v1(trace, collapse_fn, folds, context))
     out = tmp_path / name
     trace.draw(
+        vis_mode=vis_mode,  # type: ignore[arg-type]
         vis_outpath=str(out),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -1054,6 +1135,50 @@ def test_collapse_plan_parity_heavy_torchvision(
     try:
         for mode in ("auto", "max"):
             _assert_plan_svg_parity(trace, tmp_path, f"{name}_{mode}", mode)
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize(
+    ("name", "builder", "x"),
+    [
+        ("resnet50", lambda: tvm.resnet50(weights=None), torch.randn(1, 3, 224, 224)),
+        ("vit_b_16", lambda: tvm.vit_b_16(weights=None), torch.randn(1, 3, 224, 224)),
+        ("gru_toy", RecurrentWrapper, torch.randn(1, 6, 8)),
+    ],
+)
+def test_rolled_collapse_plan_parity_requested_models(
+    tmp_path: Path,
+    name: str,
+    builder: object,
+    x: torch.Tensor,
+) -> None:
+    """Rolled auto plan count matches SVG nodes on requested R3c models."""
+
+    model = builder()
+    trace = _trace(model, x)  # type: ignore[arg-type]
+    try:
+        _assert_plan_svg_parity(trace, tmp_path, f"{name}_rolled_auto", "auto", "rolled")
+    finally:
+        trace.cleanup()
+
+
+def test_rolled_auto_distinct_recurrence_labels_for_uneven_siblings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rolled labels keep ``(xN)`` strictly tied to recurrence counts."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
+    try:
+        source = _draw_source_mode(trace, tmp_path, "uneven_rolled_auto", "auto", "rolled")
+
+        assert "@short (x3)" in source
+        assert "@long (x5)" in source
+        assert "... +3 more" not in source
+        assert "... +5 more" not in source
     finally:
         trace.cleanup()
 

@@ -85,6 +85,59 @@ class SequentialEncoderHead(torch.nn.Module):
         return self.head(self.encoder(x))
 
 
+class ReusedCallBlock(torch.nn.Module):
+    """Small multi-op block reused across recurrent call counts."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the reused block."""
+
+        super().__init__()
+        self.fc = torch.nn.Linear(width, width)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.relu(self.fc(x))
+
+
+class UnevenReusedSiblings(torch.nn.Module):
+    """Digest-identical sibling modules called different numbers of times."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize uneven reused siblings."""
+
+        super().__init__()
+        self.short = ReusedCallBlock(width)
+        self.long = ReusedCallBlock(width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run sibling modules with different recurrence counts."""
+
+        for _ in range(3):
+            x = self.short(x)
+        for _ in range(5):
+            x = self.long(x)
+        return x
+
+
+class GRUWrapper(torch.nn.Module):
+    """GRU fixture for rolled optimizer coverage."""
+
+    def __init__(self) -> None:
+        """Initialize the GRU wrapper."""
+
+        super().__init__()
+        self.rnn = torch.nn.GRU(8, 8, batch_first=True)
+        self.head = torch.nn.Linear(8, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the GRU wrapper."""
+
+        y, _ = self.rnn(x)
+        return self.head(y[:, -1])
+
+
 def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Trace a model in eval mode."""
 
@@ -123,10 +176,10 @@ def test_role_components_split_heterogeneous_same_class_sequentials() -> None:
         trace.cleanup()
 
 
-def test_engine_default_routes_v2_env_override_and_rolled_fallback(
+def test_engine_default_routes_v2_env_override_and_rolled_auto(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The default auto engine is v2, env override works, and rolled falls back."""
+    """The default auto engine is v2, env override works, and rolled uses v2."""
 
     trace = _trace(UniformStack(depth=4), torch.randn(2, 8))
     try:
@@ -141,10 +194,50 @@ def test_engine_default_routes_v2_env_override_and_rolled_fallback(
         monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
         rolled_context = RenderContext(vis_mode="rolled")
         rolled_fn = resolve_collapse_fn(trace, "auto", "rolled", context=rolled_context)
-        assert not hasattr(rolled_fn, "_torchlens_v2_result")
+        assert hasattr(rolled_fn, "_torchlens_v2_result")
 
         max_fn = resolve_collapse_fn(trace, "max", "unrolled", context=RenderContext())
         assert not hasattr(max_fn, "_torchlens_v2_result")
+    finally:
+        trace.cleanup()
+
+
+def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rolled v2 keeps recurrence counts in labels for digest-identical siblings."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
+    try:
+        context = RenderContext(vis_mode="rolled")
+        collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
+        result = getattr(collapse_fn, "_torchlens_v2_result")
+        rendered_plan = plan_from_v1(trace, collapse_fn, result.run_folds, context)
+
+        assert not result.declined
+        assert trace.modules["short"].num_calls == 3
+        assert trace.modules["long"].num_calls == 5
+        assert count(rendered_plan) == result.visible_count
+    finally:
+        trace.cleanup()
+
+
+def test_rolled_v2_gru_auto_is_non_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rolled v2 auto produces a non-empty recurrent cut."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    trace = _trace(GRUWrapper(), torch.randn(1, 6, 8))
+    try:
+        context = RenderContext(vis_mode="rolled")
+        none_count = count(plan_from_v1(trace, None, None, context))
+        collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
+        result = getattr(collapse_fn, "_torchlens_v2_result")
+
+        assert not result.declined
+        assert result.selected
+        assert 0 < result.visible_count < none_count
+        assert "rnn" in result.selected
     finally:
         trace.cleanup()
 
