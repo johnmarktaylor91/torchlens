@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import re
 import time
 import weakref
@@ -57,6 +58,7 @@ _STAGE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 RUN_FOLD_MIN_LENGTH = 3
+COLLAPSE_ENGINE = "v1"
 
 
 @dataclass(frozen=True)
@@ -415,6 +417,21 @@ def resolve_collapse_fn(
         return None
     if collapse not in {"auto", "max"}:
         raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
+    if collapse == "auto" and _collapse_engine() == "v2":
+        from .collapse_optimizer import select_collapse_plan
+
+        result = select_collapse_plan(trace, resolved_context)
+        if not result.declined:
+
+            def v2_collapse_fn(module: "Module") -> bool:
+                """Return whether ``module`` is selected by the v2 optimizer."""
+
+                return module.address in result.selected
+
+            setattr(v2_collapse_fn, "_torchlens_v2_run_folds", result.run_folds)
+            setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
+            setattr(v2_collapse_fn, "_torchlens_v2_result", result)
+            return v2_collapse_fn
     selected = _select_modules(
         trace,
         collapse=collapse,
@@ -455,6 +472,9 @@ def resolve_run_folds(
     resolved_context = RenderContext() if context is None else context
     if collapse_fn is None:
         return {}
+    v2_run_folds = getattr(collapse_fn, "_torchlens_v2_run_folds", None)
+    if v2_run_folds is not None:
+        return dict(v2_run_folds)
     projected_count = count(plan_from_v1(trace, collapse_fn, None, resolved_context))
     if projected_count <= _readable_band_high(trace):
         _assert_plan_count(
@@ -536,6 +556,21 @@ def resolve_run_folds(
         projected_count,
     )
     return folds_by_address
+
+
+def _collapse_engine() -> Literal["v1", "v2"]:
+    """Return the active auto-collapse engine switch.
+
+    Returns
+    -------
+    Literal["v1", "v2"]
+        ``"v1"`` unless the module variable or environment selects ``"v2"``.
+    """
+
+    engine = os.environ.get("TORCHLENS_COLLAPSE_ENGINE", COLLAPSE_ENGINE).lower()
+    if engine not in {"v1", "v2"}:
+        raise ValueError("TORCHLENS_COLLAPSE_ENGINE must be 'v1' or 'v2'.")
+    return cast(Literal["v1", "v2"], engine)
 
 
 def _sibling_address_groups(trace: "Trace") -> dict[str | None, list[str]]:
