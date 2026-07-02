@@ -254,10 +254,19 @@ class TorchBackend:
             get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
             for kwarg in input_kwargs.values()
         ]
-        # Move each tensor to model device.  Tuples must be temporarily converted
-        # to lists for item assignment, then converted back to preserve type.
+        # Move each tensor to model device.  Plain tuples must be temporarily
+        # converted to lists for item assignment, then converted back to
+        # preserve type.  This roundtrip only applies to *exact* ``tuple``
+        # instances: they are the only ones addressed positionally
+        # (``("ind", i)``) by ``get_vars_of_type_from_obj``, which treats
+        # tuple *subclasses* (e.g. a NamedTuple-based GNN batch container) as
+        # plain attribute-bearing objects instead, addressed via
+        # ``("attr", name)``.  Applying the list roundtrip to a subclass would
+        # silently discard its identity and break downstream named-field
+        # access (``batch.edge_features``); ``_assign_nested_input_value``
+        # already knows how to mutate those in place via ``attr`` addressing.
         for arg_idx, arg in enumerate(input_args):
-            was_tuple = isinstance(arg, tuple)
+            was_tuple = type(arg) is tuple
             if was_tuple:
                 input_args[arg_idx] = list(arg)
             for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
@@ -798,7 +807,10 @@ def _assign_nested_input_value(
         if isinstance(obj, tuple):
             items = list(obj)
             items[entry_val] = _assign_nested_input_value(items[entry_val], rest, value)
-            return tuple(items)
+            obj_type = type(obj)
+            if hasattr(obj_type, "_fields"):
+                return obj_type(*items)
+            return obj_type(items)
         if isinstance(obj, list):
             obj[entry_val] = _assign_nested_input_value(obj[entry_val], rest, value)
             return obj
@@ -807,7 +819,21 @@ def _assign_nested_input_value(
             return obj
     if entry_type == "attr":
         child = getattr(obj, entry_val)
-        setattr(obj, entry_val, _assign_nested_input_value(child, rest, value))
+        new_child = _assign_nested_input_value(child, rest, value)
+        try:
+            setattr(obj, entry_val, new_child)
+        except AttributeError:
+            # Immutable attribute — e.g. a real (non-property) NamedTuple
+            # field on a NamedTuple subclass such as a GNN batch container.
+            # ``_replace`` returns a new instance with that field swapped in.
+            obj_fields = getattr(type(obj), "_fields", None)
+            if hasattr(obj, "_replace") and obj_fields is not None and entry_val in obj_fields:
+                return obj._replace(**{entry_val: new_child})
+            # Otherwise this is a read-only *derived* property (e.g. a
+            # convenience accessor that returns a value already stored in a
+            # mutable nested container). The tensor's real backing storage is
+            # reached and moved to device through its own container address;
+            # there is nothing else to update at this alias.
         return obj
     nested_assign(obj, addr, value)
     return obj

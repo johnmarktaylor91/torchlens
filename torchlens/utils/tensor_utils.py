@@ -389,8 +389,24 @@ def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
     ``is_contiguous(memory_format=...)`` is the recommended query; it is
     undefined for some exotic layouts (sparse, meta), so we wrap in a
     try/except and fall back to ``preserve_format`` (clone's default).
+
+    Standard (torch.contiguous_format) is checked FIRST and wins on ties.
+    For tensors with a size-1 dimension (most commonly ``C=1``, e.g. a mono
+    spectrogram or single-channel image), ``is_contiguous(memory_format=
+    torch.channels_last)`` is degenerately also ``True`` even though the
+    tensor is genuinely NCHW-contiguous — the collapsed size-1 axis makes
+    both stride orderings equally valid descriptions of the same bytes.
+    Checking ``channels_last`` first (the prior behavior) would then force
+    ``.clone(memory_format=torch.channels_last)`` on an already-standard
+    tensor, physically rewriting its strides to the channels-last layout.
+    That silently corrupts any downstream ``.view()`` call the traced model
+    makes under the (correct, for its real input) assumption of standard
+    contiguity — a real capture bug, not a model bug. See
+    ``torchlens/utils/tensor_utils.py`` history / BC-ResNet capture repro.
     """
     try:
+        if t.is_contiguous(memory_format=torch.contiguous_format):
+            return torch.contiguous_format
         if t.is_contiguous(memory_format=torch.channels_last):
             return torch.channels_last
         if t.is_contiguous(memory_format=torch.channels_last_3d):

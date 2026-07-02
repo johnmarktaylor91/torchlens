@@ -1352,7 +1352,15 @@ def _capture_output_metadata_from_model_config(trace: Trace, model: nn.Module) -
         Model being captured.
     """
 
-    config = getattr(model, "config", None)
+    try:
+        config = getattr(model, "config", None)
+    except Exception:
+        # ``config`` may be a property whose getter raises for reasons unrelated to
+        # attribute existence (e.g. delegating to a submodule that only partially
+        # implements it). This is best-effort output metadata capture, not a
+        # validation check, so a raising getter degrades to "no config metadata"
+        # rather than aborting the whole capture.
+        return
     if config is None:
         return
 
@@ -1580,12 +1588,21 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
 
     Handles common dict-like types (OrderedDict, HuggingFace BatchEncoding, etc.)
     by attempting to reconstruct the original container type after moving values.
+    NamedTuple subclasses (e.g. a GNN model's batch container, which is also an
+    ``isinstance(obj, tuple)`` match) are reconstructed through their own type so
+    downstream named-field access keeps working instead of silently degrading to
+    a plain ``tuple``.
     """
     if isinstance(obj, torch.Tensor):
         return obj.to(device)
     elif isinstance(obj, (list, tuple)):
         moved_sequence = [_move_tensors_to_device(item, device) for item in obj]
-        return type(obj)(moved_sequence) if not isinstance(obj, tuple) else tuple(moved_sequence)
+        if not isinstance(obj, tuple):
+            return type(obj)(moved_sequence)
+        obj_type = type(obj)
+        if hasattr(obj_type, "_fields"):
+            return obj_type(*moved_sequence)
+        return tuple(moved_sequence)
     elif isinstance(obj, collections.abc.MutableMapping):
         # Handles dict, UserDict, BatchEncoding, OrderedDict, etc.
         moved_mapping = {k: _move_tensors_to_device(v, device) for k, v in obj.items()}

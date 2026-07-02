@@ -1484,7 +1484,13 @@ def _module_role_hints_by_address(
     for event in prep_events:
         module_class = _resolve_module_class(event.cls_qualname)
         if module_class is None:
-            module_class = getattr(nn, event.class_name, None)
+            # `torch.nn` also exposes non-class submodules (e.g. `nn.init`,
+            # `nn.functional`, `nn.utils`). A user module class can legitimately
+            # share one of those names (e.g. a class literally named `init`),
+            # so this fallback must reject non-class matches instead of handing
+            # them to `issubclass()` below.
+            candidate = getattr(nn, event.class_name, None)
+            module_class = candidate if isinstance(candidate, type) else None
         hints = role_hints_for_module_class(module_class)
         if hints is not None:
             hints_by_address[event.address] = hints
