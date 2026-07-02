@@ -322,7 +322,17 @@ def select_collapse_plan(
         first_pass_point = None
         first_pass_plan = None
     if best is None:
-        result = _declined_result(context, "no optimizer frontier was produced")
+        plan = _floor_fallback_plan(trace, context)
+        result = OptimizerResult(
+            selected=frozenset(),
+            run_folds={},
+            plan=plan,
+            visible_count=count(plan),
+            analyze_ms=analysis.elapsed_ms,
+            select_ms=(time.perf_counter() - start) * 1000.0,
+            g_star=None,
+            reason="floor_fallback: no optimizer frontier was produced",
+        )
         cached_by_context[cache_key] = result
         return result
     if first_pass_point is None or first_pass_plan is None:
@@ -1124,6 +1134,29 @@ def _declined_result(context: RenderContext, reason: str) -> OptimizerResult:
         declined=True,
         reason=reason,
     )
+
+
+def _floor_fallback_plan(trace: "Trace", context: RenderContext) -> CollapsePlan:
+    """Return the conservative full-op plan used when the DP frontier is empty.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+
+    Returns
+    -------
+    CollapsePlan
+        Renderer-faithful uncollapsed plan. This is intentionally the safest
+        legal fallback: it preserves all visible structure instead of returning
+        a zero-node cut.
+    """
+
+    plan = plan_from_v1(trace, None, None, context)
+    assert count(plan) > 0, "collapse floor fallback produced no visible nodes"
+    return plan
 
 
 def _frontier_for_module(

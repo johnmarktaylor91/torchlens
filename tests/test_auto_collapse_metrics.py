@@ -12,6 +12,7 @@ import torchvision.models as tvm
 import torchvision.models.segmentation as tvs
 
 import torchlens as tl
+import torchlens.visualization.collapse_optimizer as collapse_optimizer
 from torchlens.visualization.auto_collapse import (
     _child_condensed_flow_graphs,
     _flow_graph_for_sibling_group,
@@ -22,6 +23,7 @@ from torchlens.visualization.auto_collapse import (
     resolve_collapse_fn,
     resolve_run_folds,
 )
+from torchlens.visualization.collapse_optimizer import select_collapse_plan
 from torchlens.visualization.collapse_plan import OpSegment, RenderContext, count, plan_from_v1
 
 
@@ -1872,6 +1874,30 @@ def test_v2_max_mode_uses_op_segments_without_changing_auto(
         assert not any(isinstance(node, OpSegment) for node in auto_plan.nodes)
         assert any(isinstance(node, OpSegment) for node in max_plan.nodes)
         assert count(max_plan) < count(auto_plan)
+    finally:
+        trace.cleanup()
+
+
+def test_v2_zero_frontier_falls_back_to_visible_full_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """V2 never returns an empty plan when every DP point is over the cap."""
+
+    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
+    monkeypatch.setattr(
+        collapse_optimizer,
+        "_RESULT_CACHE",
+        collapse_optimizer.weakref.WeakKeyDictionary(),
+    )
+    monkeypatch.setattr(collapse_optimizer, "_select_best_decision", lambda **_: None)
+    trace = _trace(LongFunctional(depth=80), torch.randn(1, 8))
+    try:
+        result = select_collapse_plan(trace, RenderContext(), mode="auto")
+
+        assert not result.declined
+        assert count(result.plan) >= 1
+        assert result.visible_count == count(result.plan)
+        assert result.reason == "floor_fallback: no optimizer frontier was produced"
     finally:
         trace.cleanup()
 
