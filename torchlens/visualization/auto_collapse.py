@@ -2383,12 +2383,6 @@ def _is_named_stage(address: str) -> bool:
     return _STAGE_NAME_RE.match(name) is not None
 
 
-def _is_stem_basic_conv(address: str) -> bool:
-    """Return whether ``address`` is a torchvision Inception stem BasicConv2d."""
-
-    return address.rsplit(".", 1)[-1].startswith("Conv2d_")
-
-
 def _is_structured_container(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
     """Return whether ``signal`` should be transparent in ``collapse='auto'``."""
 
