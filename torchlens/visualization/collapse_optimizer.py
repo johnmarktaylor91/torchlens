@@ -8,7 +8,6 @@ import time
 import weakref
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from itertools import product
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .auto_collapse import (
@@ -215,6 +214,7 @@ class _OptimizerState:
     ]
     role_components_cache: dict[tuple[str, tuple[str, ...]], tuple[RoleComponent, ...]]
     child_segments_cache: dict[tuple[str, ...], tuple[tuple[str, ...], ...]]
+    single_member_expanded_cache: dict[_MemoKey, tuple[_DecisionPoint, ...]]
     box_cost_cache: dict[str, float]
     branch_salience_cache: dict[str, float]
     weights: OptimizerWeights
@@ -1040,6 +1040,7 @@ def _instantiate_best_point(
         expanded_cache=expanded_cache,
         role_components_cache={},
         child_segments_cache={},
+        single_member_expanded_cache={},
         box_cost_cache={},
         branch_salience_cache={},
         weights=winning_weights,
@@ -1154,6 +1155,7 @@ def _select_best_decision(
             expanded_cache=expanded_cache,
             role_components_cache={},
             child_segments_cache={},
+            single_member_expanded_cache={},
             box_cost_cache={},
             branch_salience_cache={},
             weights=weights,
@@ -1242,6 +1244,7 @@ def _frontier_can_reach_band(
             expanded_cache=expanded_cache,
             role_components_cache={},
             child_segments_cache={},
+            single_member_expanded_cache={},
             box_cost_cache={},
             branch_salience_cache={},
             weights=weights,
@@ -1833,6 +1836,13 @@ def _single_member_expanded(
 ) -> tuple[_DecisionPoint, ...]:
     """Return expanded treatment points for a one-member role component."""
 
+    signal = state.analysis.signals.get(address)
+    if signal is None:
+        return ()
+    key = _memo_key(state, signal)
+    cached = state.single_member_expanded_cache.get(key)
+    if cached is not None:
+        return cached
     points: list[_DecisionPoint] = []
     for point in _frontier_for_module(address, state, memo):
         if (
@@ -1850,7 +1860,9 @@ def _single_member_expanded(
                 priority=point.priority,
             )
         )
-    return tuple(points)
+    result = tuple(points)
+    state.single_member_expanded_cache[key] = result
+    return result
 
 
 def _component_folded(
@@ -2207,13 +2219,15 @@ def _merge_frontiers(
 ) -> tuple[_FrontierPoint, ...]:
     """Merge two frontier sequences by standard node-count knapsack."""
 
-    merged: list[_FrontierPoint] = []
-    for left, right in product(left_points, right_points):
-        k = left.k + right.k
-        if k > K_CAP:
-            continue
-        merged.append(
-            _FrontierPoint(
+    best_by_count: dict[
+        int, tuple[_FrontierPoint, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]
+    ] = {}
+    for left in left_points:
+        for right in right_points:
+            k = left.k + right.k
+            if k > K_CAP:
+                continue
+            point = _FrontierPoint(
                 k=k,
                 cost=round(left.cost + right.cost, 6),
                 nodes=(*left.nodes, *right.nodes),
@@ -2221,8 +2235,53 @@ def _merge_frontiers(
                 folds=(*left.folds, *right.folds),
                 box_costs=(*left.box_costs, *right.box_costs),
             )
-        )
-    return _prune_frontier(merged)
+            _retain_best_frontier_point(best_by_count, point)
+    return _frontier_from_best_by_count(best_by_count)
+
+
+def _retain_best_frontier_point(
+    best_by_count: dict[int, tuple[Any, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]],
+    point: Any,
+) -> None:
+    """Retain ``point`` if it is the best candidate seen for its node count."""
+
+    sort_key = _point_sort_key(point)
+    incumbent = best_by_count.get(point.k)
+    if incumbent is None or sort_key < incumbent[1]:
+        best_by_count[point.k] = (point, sort_key)
+
+
+def _frontier_from_best_by_count(
+    best_by_count: Mapping[int, tuple[Any, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]],
+) -> tuple[Any, ...]:
+    """Return the capped deterministic frontier from per-count best points."""
+
+    ordered = sorted(best_by_count.values(), key=lambda item: item[1])
+    return tuple(sorted((item[0] for item in ordered[:FRONTIER_CAP]), key=lambda point: point.k))
+
+
+def _decision_sort_key(
+    cost: float,
+    k: int,
+    priority: tuple[int, ...],
+) -> tuple[float, int, tuple[int, ...], tuple[Any, ...]]:
+    """Return the deterministic ordering key for a decision candidate."""
+
+    return (cost, k, priority, ())
+
+
+def _retain_best_decision_candidate(
+    best_by_count: dict[
+        int, tuple[_DecisionPoint, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]
+    ],
+    point: _DecisionPoint,
+    sort_key: tuple[float, int, tuple[int, ...], tuple[Any, ...]],
+) -> None:
+    """Retain ``point`` when its precomputed key wins its node-count bucket."""
+
+    incumbent = best_by_count.get(point.k)
+    if incumbent is None or sort_key < incumbent[1]:
+        best_by_count[point.k] = (point, sort_key)
 
 
 def _merge_module_segment_frontiers(
@@ -2231,26 +2290,34 @@ def _merge_module_segment_frontiers(
 ) -> tuple[_DecisionPoint, ...]:
     """Merge module expand points with child-segment decisions."""
 
-    merged: list[_DecisionPoint] = []
-    for left, right in product(left_points, right_points):
-        k = left.k + right.k
-        if k > K_CAP:
-            continue
+    best_by_count: dict[
+        int, tuple[_DecisionPoint, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]
+    ] = {}
+    for left in left_points:
         left_decision = cast(_ModuleDecision, left.decision)
-        right_decision = cast(_SegmentDecision, right.decision)
-        merged.append(
-            _DecisionPoint(
+        for right in right_points:
+            k = left.k + right.k
+            if k > K_CAP:
+                continue
+            cost = round(left.cost + right.cost, 6)
+            priority = (*left.priority, *right.priority)
+            sort_key = _decision_sort_key(cost, k, priority)
+            incumbent = best_by_count.get(k)
+            if incumbent is not None and incumbent[1] <= sort_key:
+                continue
+            right_decision = cast(_SegmentDecision, right.decision)
+            point = _DecisionPoint(
                 k=k,
-                cost=round(left.cost + right.cost, 6),
+                cost=cost,
                 decision=_ModuleDecision(
                     "expand",
                     (*left_decision.segments, right_decision),
                 ),
                 box_costs=(*left.box_costs, *right.box_costs),
-                priority=(*left.priority, *right.priority),
+                priority=priority,
             )
-        )
-    return _prune_frontier(merged)
+            _retain_best_decision_candidate(best_by_count, point, sort_key)
+    return cast(tuple[_DecisionPoint, ...], _frontier_from_best_by_count(best_by_count))
 
 
 def _merge_segment_component_frontiers(
@@ -2259,23 +2326,31 @@ def _merge_segment_component_frontiers(
 ) -> tuple[_DecisionPoint, ...]:
     """Merge segment points with one role-component treatment frontier."""
 
-    merged: list[_DecisionPoint] = []
-    for left, right in product(left_points, right_points):
-        k = left.k + right.k
-        if k > K_CAP:
-            continue
+    best_by_count: dict[
+        int, tuple[_DecisionPoint, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]
+    ] = {}
+    for left in left_points:
         left_decision = cast(_SegmentDecision, left.decision)
-        right_decision = cast(_ComponentDecision, right.decision)
-        merged.append(
-            _DecisionPoint(
+        for right in right_points:
+            k = left.k + right.k
+            if k > K_CAP:
+                continue
+            cost = round(left.cost + right.cost, 6)
+            priority = (*left.priority, *right.priority)
+            sort_key = _decision_sort_key(cost, k, priority)
+            incumbent = best_by_count.get(k)
+            if incumbent is not None and incumbent[1] <= sort_key:
+                continue
+            right_decision = cast(_ComponentDecision, right.decision)
+            point = _DecisionPoint(
                 k=k,
-                cost=round(left.cost + right.cost, 6),
+                cost=cost,
                 decision=_SegmentDecision((*left_decision.components, right_decision)),
                 box_costs=(*left.box_costs, *right.box_costs),
-                priority=(*left.priority, *right.priority),
+                priority=priority,
             )
-        )
-    return _prune_frontier(merged)
+            _retain_best_decision_candidate(best_by_count, point, sort_key)
+    return cast(tuple[_DecisionPoint, ...], _frontier_from_best_by_count(best_by_count))
 
 
 def _merge_component_member_frontiers(
@@ -2284,39 +2359,44 @@ def _merge_component_member_frontiers(
 ) -> tuple[_DecisionPoint, ...]:
     """Merge expanded role-component points with one member frontier."""
 
-    merged: list[_DecisionPoint] = []
-    for left, right in product(left_points, right_points):
-        k = left.k + right.k
-        if k > K_CAP:
-            continue
+    best_by_count: dict[
+        int, tuple[_DecisionPoint, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]
+    ] = {}
+    for left in left_points:
         left_decision = cast(_ComponentDecision, left.decision)
-        merged.append(
-            _DecisionPoint(
+        for right in right_points:
+            k = left.k + right.k
+            if k > K_CAP:
+                continue
+            cost = round(left.cost + right.cost, 6)
+            priority = (*left.priority, *right.priority)
+            sort_key = _decision_sort_key(cost, k, priority)
+            incumbent = best_by_count.get(k)
+            if incumbent is not None and incumbent[1] <= sort_key:
+                continue
+            point = _DecisionPoint(
                 k=k,
-                cost=round(left.cost + right.cost, 6),
+                cost=cost,
                 decision=_ComponentDecision(
                     "expanded",
                     (*left_decision.member_ks, right.k),
                 ),
                 box_costs=(*left.box_costs, *right.box_costs),
-                priority=(*left.priority, *right.priority),
+                priority=priority,
             )
-        )
-    return _prune_frontier(merged)
+            _retain_best_decision_candidate(best_by_count, point, sort_key)
+    return cast(tuple[_DecisionPoint, ...], _frontier_from_best_by_count(best_by_count))
 
 
 def _prune_frontier(points: Sequence[Any]) -> tuple[Any, ...]:
     """Keep deterministic Pareto frontier points, capped for R3a."""
 
-    best_by_count: dict[int, Any] = {}
+    best_by_count: dict[int, tuple[Any, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]] = {}
     for point in points:
         if point.k > K_CAP:
             continue
-        incumbent = best_by_count.get(point.k)
-        if incumbent is None or _point_sort_key(point) < _point_sort_key(incumbent):
-            best_by_count[point.k] = point
-    ordered = sorted(best_by_count.values(), key=_point_sort_key)
-    return tuple(sorted(ordered[:FRONTIER_CAP], key=lambda point: point.k))
+        _retain_best_frontier_point(best_by_count, point)
+    return _frontier_from_best_by_count(best_by_count)
 
 
 def _point_sort_key(point: Any) -> tuple[float, int, tuple[Any, ...], tuple[Any, ...]]:
