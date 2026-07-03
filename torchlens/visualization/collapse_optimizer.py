@@ -93,6 +93,7 @@ class OptimizerWeights:
     fold_intrinsic: float = 0.15
     w_max: float = 0.3
     w_k: float = 2.5
+    segment_intrinsic: float = 0.03
 
 
 @dataclass(frozen=True)
@@ -193,7 +194,7 @@ class _SegmentDecision:
 class _ComponentDecision:
     """Memoized role-component treatment."""
 
-    kind: Literal["boxes", "folded", "expanded"]
+    kind: Literal["boxes", "folded", "expanded", "segmented"]
     member_ks: tuple[int, ...] = ()
     run_indices: tuple[tuple[int, ...], ...] = ()
 
@@ -220,6 +221,7 @@ class _OptimizerState:
     g_star: float
     total_ops: int
     allow_folds: bool
+    allow_segments: bool
     rendered_own_units: Mapping[str, tuple[str, ...]]
 
 
@@ -432,6 +434,12 @@ def _select_max_plan(
         return auto
     analysis = analyze_collapse(trace)
     hidden_counts = _rendered_module_hidden_counts(trace, context)
+    child_addresses = _child_address_map(trace)
+    structural_digests = _structural_digest_map(trace, child_addresses, analysis)
+    expanded_cache: dict[
+        str,
+        tuple["ChildCondensedFlowGraph | None", tuple[str, ...], tuple[str, ...]],
+    ] = {}
     total_ops = _optimizer_total_units(trace, context)
     auto_count = count(auto.plan)
     levels = (
@@ -439,7 +447,57 @@ def _select_max_plan(
         ("L1", 12, 0.75),
         ("L2", min(20, auto_count), 0.75),
     )
+    resolved_weights = OptimizerWeights() if weights is None else weights
+    start = time.perf_counter()
     for level, k_hi, dominance_limit in levels:
+        best = _select_best_decision(
+            trace=trace,
+            context=context,
+            analysis=analysis,
+            child_addresses=child_addresses,
+            hidden_counts=hidden_counts,
+            structural_digests=structural_digests,
+            expanded_cache=expanded_cache,
+            weights=replace(resolved_weights, fold_intrinsic=0.05),
+            allow_folds=True,
+            allow_segments=True,
+            k_min=3,
+            k_max=k_hi,
+            objective="max",
+            require_segments=True,
+        )
+        if best is not None:
+            point, plan = _instantiate_best_point(
+                trace=trace,
+                context=context,
+                analysis=analysis,
+                child_addresses=child_addresses,
+                hidden_counts=hidden_counts,
+                structural_digests=structural_digests,
+                expanded_cache=expanded_cache,
+                best=best,
+                prefer_instantiated_nodes=True,
+            )
+            segments = _segments_from_plan_nodes(trace, context, analysis, plan)
+            plan_count = count(plan)
+            if (
+                segments
+                and 3 <= plan_count <= k_hi
+                and plan_count < auto_count
+                and _plan_respects_max_dominance(trace, analysis, plan, segments, dominance_limit)
+            ):
+                return OptimizerResult(
+                    selected=point.selected,
+                    run_folds=_fold_mapping(point.folds),
+                    plan=plan,
+                    visible_count=plan_count,
+                    analyze_ms=analysis.elapsed_ms,
+                    select_ms=(time.perf_counter() - start) * 1000.0,
+                    g_star=best[1],
+                    segments=segments,
+                    level=level,
+                    reason=None,
+                )
         plan, segments = _condense_plan_with_child_segments(
             trace,
             context,
@@ -555,6 +613,43 @@ def _condense_plan_with_child_segments(
         nodes.append(node)
         index += 1
     return CollapsePlan(nodes=tuple(nodes), context=context), segments
+
+
+def _segments_from_plan_nodes(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    plan: CollapsePlan,
+) -> dict[str, SegmentDescriptor]:
+    """Build renderer segment descriptors from first-class plan nodes.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Rendering context.
+    analysis:
+        Shared collapse analysis.
+    plan:
+        Plan containing first-class segment nodes.
+
+    Returns
+    -------
+    dict[str, SegmentDescriptor]
+        Descriptor mapping keyed by Graphviz segment node name.
+    """
+
+    segments: dict[str, SegmentDescriptor] = {}
+    for node in plan.nodes:
+        if isinstance(node, ChildSegment):
+            covered_ops = _child_segment_covered_ops(analysis, node.members)
+            descriptor = _make_child_segment_descriptor(trace, context, node.members, covered_ops)
+            segments[descriptor.name] = descriptor
+        elif isinstance(node, OpSegment):
+            descriptor = _make_op_segment_descriptor(trace, context, node.ops)
+            segments[descriptor.name] = descriptor
+    return segments
 
 
 def _plan_respects_max_dominance(
@@ -904,6 +999,7 @@ def _instantiate_best_point(
         OptimizerWeights,
         bool,
     ],
+    prefer_instantiated_nodes: bool = False,
 ) -> tuple[_FrontierPoint, CollapsePlan]:
     """Instantiate a winning DP point and its renderer-faithful plan.
 
@@ -950,12 +1046,16 @@ def _instantiate_best_point(
         g_star=winning_g,
         total_ops=_optimizer_total_units(trace, context),
         allow_folds=allow_folds,
+        allow_segments=prefer_instantiated_nodes,
         rendered_own_units=_rendered_own_unit_map(trace, context),
     )
     instantiated_point = _instantiate_module("self", decision_point.k, winning_state, winning_memo)
     run_folds = _fold_mapping(instantiated_point.folds)
     collapse_fn = _collapse_fn_from_selected(instantiated_point.selected)
-    plan = plan_from_v1(trace, collapse_fn, run_folds, context)
+    if prefer_instantiated_nodes:
+        plan = CollapsePlan(nodes=instantiated_point.nodes, context=context)
+    else:
+        plan = plan_from_v1(trace, collapse_fn, run_folds, context)
     return instantiated_point, plan
 
 
@@ -983,6 +1083,11 @@ def _select_best_decision(
     ],
     weights: OptimizerWeights,
     allow_folds: bool,
+    allow_segments: bool = False,
+    k_min: int | None = None,
+    k_max: int | None = None,
+    objective: Literal["auto", "max"] = "auto",
+    require_segments: bool = False,
 ) -> (
     tuple[
         float,
@@ -1055,12 +1160,23 @@ def _select_best_decision(
             g_star=g_star,
             total_ops=total_units,
             allow_folds=allow_folds,
+            allow_segments=allow_segments,
             rendered_own_units=rendered_own_units,
         )
         memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
         frontier = _frontier_for_module("self", state, memo)
         for point in frontier:
-            score = _global_q(point, trace, weights)
+            if k_min is not None and point.k < k_min:
+                continue
+            if k_max is not None and point.k > k_max:
+                continue
+            if require_segments and -1 not in point.priority:
+                continue
+            score = (
+                _global_max_q(point, weights)
+                if objective == "max"
+                else _global_q(point, trace, weights)
+            )
             if context.vis_mode == "rolled" and not point.box_costs and hidden_counts:
                 score = round(score + 10.0, 6)
             candidate = (score, g_star, point.k, point, memo, weights, allow_folds)
@@ -1132,6 +1248,7 @@ def _frontier_can_reach_band(
             g_star=g_star,
             total_ops=total_units,
             allow_folds=True,
+            allow_segments=False,
             rendered_own_units=rendered_own_units,
         )
         memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
@@ -1358,13 +1475,22 @@ def _expanded_points(
     """Return expanded-frontier points for one module."""
 
     graph, child_addresses, own_ops = _expanded_structure(address, state)
-    base = _DecisionPoint(
-        k=len(own_ops),
-        cost=0.0,
-        decision=_ModuleDecision("expand", ()),
-        box_costs=(),
-        priority=(2,),
-    )
+    if state.allow_segments and _own_ops_segment_is_legal(state, own_ops):
+        base = _DecisionPoint(
+            k=1,
+            cost=state.weights.segment_intrinsic,
+            decision=_ModuleDecision("expand", ()),
+            box_costs=(state.weights.segment_intrinsic,),
+            priority=(-1,),
+        )
+    else:
+        base = _DecisionPoint(
+            k=len(own_ops),
+            cost=0.0,
+            decision=_ModuleDecision("expand", ()),
+            box_costs=(),
+            priority=(2,),
+        )
     if not child_addresses:
         return (base,) if base.k <= K_CAP else ()
     segments = _child_segments_for_parent(state, child_addresses)
@@ -1545,6 +1671,10 @@ def _component_treatment_points(
     """Enumerate BOXES, EXPANDED, and FOLDED treatments for one role component."""
 
     choices: list[_DecisionPoint] = []
+    if state.allow_segments:
+        segmented = _component_segmented(component, graph, state)
+        if segmented is not None:
+            choices.append(segmented)
     boxes = _component_boxes(component, state)
     if boxes is not None:
         choices.append(boxes)
@@ -1556,6 +1686,88 @@ def _component_treatment_points(
         if folded is not None:
             choices.append(folded)
     return _prune_frontier(choices)
+
+
+def _own_ops_segment_is_legal(state: _OptimizerState, own_ops: tuple[str, ...]) -> bool:
+    """Return whether parent-owned ops may be replaced by one op segment."""
+
+    if len(own_ops) < 3:
+        return False
+    if state.total_ops > 0 and len(own_ops) / state.total_ops > 0.75:
+        return False
+    op_by_label = {str(op.label): op for op in state.trace.ops}
+    for label in own_ops:
+        op = op_by_label.get(label)
+        if op is None:
+            return False
+        if getattr(op, "is_input", False) or getattr(op, "is_output", False):
+            return False
+    return True
+
+
+def _component_segmented(
+    component: RoleComponent,
+    graph: "ChildCondensedFlowGraph | None",
+    state: _OptimizerState,
+) -> _DecisionPoint | None:
+    """Return a first-class child segment treatment for one role component."""
+
+    run = _legal_component_segment_run(component.members, graph, state)
+    if run is None:
+        return None
+    run_set = set(run)
+    costs = [_segment_run_cost(run, state)]
+    node_count = 1
+    for address in component.members:
+        if address in run_set:
+            continue
+        signal = state.analysis.signals[address]
+        if not _eligible_box(state.trace, address, signal):
+            return None
+        costs.append(_cached_box_cost(state.trace, signal, state))
+        node_count += 1
+    return _DecisionPoint(
+        k=node_count,
+        cost=round(sum(costs), 6),
+        decision=_ComponentDecision(
+            "segmented",
+            run_indices=(tuple(range(len(run))),),
+        ),
+        box_costs=tuple(costs),
+        priority=(-1,),
+    )
+
+
+def _segment_run_cost(run: tuple[str, ...], state: _OptimizerState) -> float:
+    """Return the normalized cost for one child segment run."""
+
+    member_costs = [
+        _cached_box_cost(state.trace, state.analysis.signals[member], state) for member in run
+    ]
+    return round(sum(member_costs) / len(member_costs) + state.weights.segment_intrinsic, 6)
+
+
+def _legal_component_segment_run(
+    members: Sequence[str],
+    graph: "ChildCondensedFlowGraph | None",
+    state: _OptimizerState,
+) -> tuple[str, ...] | None:
+    """Return the longest legal component segment run."""
+
+    if len(members) < 2 or graph is None:
+        return None
+    best: tuple[str, ...] | None = None
+    for end in range(2, len(members) + 1):
+        candidate = tuple(members[:end])
+        if any(state.analysis.signals[address].landmark_edges >= 2 for address in candidate):
+            continue
+        if not _segment_is_legal(candidate, graph):
+            continue
+        hidden = _child_segment_hidden_units(state.analysis, candidate, state.hidden_counts)
+        if state.total_ops > 0 and hidden / state.total_ops > 0.75:
+            continue
+        best = candidate
+    return best
 
 
 def _component_boxes(component: RoleComponent, state: _OptimizerState) -> _DecisionPoint | None:
@@ -1741,7 +1953,14 @@ def _instantiate_module(
             box_costs=(box_cost,),
         )
     graph, child_addresses, own_ops = _expanded_structure(address, state)
-    nodes: list[PlanNode] = [RawOp(op) for op in own_ops]
+    if (
+        state.allow_segments
+        and decision_point.k == 1
+        and _own_ops_segment_is_legal(state, tuple(own_ops))
+    ):
+        nodes: list[PlanNode] = [OpSegment(tuple(str(op).rsplit(":", 1)[0] for op in own_ops))]
+    else:
+        nodes = [RawOp(op) for op in own_ops]
     selected: set[str] = set()
     folds: list[ModuleRunFold] = []
     box_costs: list[float] = []
@@ -1825,7 +2044,45 @@ def _instantiate_component(
         return _instantiate_component_boxes(component, state)
     if decision.kind == "expanded":
         return _instantiate_component_expanded(component, decision, state, memo)
+    if decision.kind == "segmented":
+        return _instantiate_component_segmented(component, decision, state)
     return _instantiate_component_folded(component, graph, decision, state)
+
+
+def _instantiate_component_segmented(
+    component: RoleComponent,
+    decision: _ComponentDecision,
+    state: _OptimizerState,
+) -> _FrontierPoint:
+    """Instantiate a first-class child segment component treatment."""
+
+    if not decision.run_indices:
+        raise ValueError("segmented component requires member indices")
+    indices = decision.run_indices[0]
+    run = tuple(component.members[index] for index in indices)
+    run_set = set(run)
+    segment_cost = _segment_run_cost(run, state)
+    nodes: list[PlanNode] = [ChildSegment(run)]
+    selected: set[str] = set(run)
+    box_costs: list[float] = [segment_cost]
+    total_cost = segment_cost
+    for address in component.members:
+        if address in run_set:
+            continue
+        signal = state.analysis.signals[address]
+        cost = _cached_box_cost(state.trace, signal, state)
+        nodes.append(ModuleBox(f"{address}:1"))
+        selected.add(address)
+        box_costs.append(cost)
+        total_cost += cost
+    return _FrontierPoint(
+        k=len(nodes),
+        cost=round(total_cost, 6),
+        nodes=tuple(nodes),
+        selected=frozenset(selected),
+        folds=(),
+        box_costs=tuple(box_costs),
+    )
 
 
 def _instantiate_component_boxes(
@@ -2243,6 +2500,28 @@ def _global_q(
         + _band_cost(point.k, trace),
         6,
     )
+
+
+def _global_max_q(point: _DecisionPoint | _FrontierPoint, weights: OptimizerWeights) -> float:
+    """Return max-mode objective for a realized cut.
+
+    Parameters
+    ----------
+    point:
+        Candidate DP point.
+    weights:
+        Optimizer weights.
+
+    Returns
+    -------
+    float
+        Rounded objective value, favoring lower-cost condensed cuts inside the
+        active max ladder bound.
+    """
+
+    mean_cost = sum(point.box_costs) / len(point.box_costs) if point.box_costs else 0.0
+    max_cost = max(point.box_costs) if point.box_costs else 0.0
+    return round(mean_cost + weights.w_max * max_cost + 0.01 * point.k, 6)
 
 
 def _k_preference(k: int, trace: "Trace") -> float:

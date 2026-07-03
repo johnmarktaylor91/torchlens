@@ -95,6 +95,30 @@ class SequentialEncoderHead(torch.nn.Module):
         return self.head(self.encoder(x))
 
 
+class SegmentPrefixTail(torch.nn.Module):
+    """Same-role stack where only a prefix is legal to segment."""
+
+    def __init__(self, width: int = 8) -> None:
+        """Initialize the prefix/tail segment fixture."""
+
+        super().__init__()
+        self.b0 = TinyBlock(width)
+        self.b1 = TinyBlock(width)
+        self.b2 = TinyBlock(width)
+        self.b3 = TinyBlock(width)
+        self.head = torch.nn.Linear(width, width)
+        self.aux = torch.nn.Linear(width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a sequential prefix with a fan-out tail."""
+
+        x = self.b0(x)
+        x = self.b1(x)
+        x = self.b2(x)
+        x = self.b3(x)
+        return self.head(x) + self.aux(x)
+
+
 class ReusedCallBlock(torch.nn.Module):
     """Small multi-op block reused across recurrent call counts."""
 
@@ -528,6 +552,27 @@ def test_max_dominance_guard_rejects_oversized_visible_units() -> None:
             {segment.name: segment},
             0.75,
         )
+    finally:
+        trace.cleanup()
+
+
+def test_max_dp_segments_legal_prefix_and_keeps_fanout_tail_visible() -> None:
+    """Max-mode DP can segment a legal prefix before a required visible tail."""
+
+    trace = _trace(SegmentPrefixTail(), torch.randn(2, 8))
+    try:
+        context = RenderContext()
+        auto = select_collapse_plan(trace, context, mode="auto")
+        result = select_collapse_plan(trace, context, mode="max")
+
+        child_segments = [node for node in result.plan.nodes if isinstance(node, ChildSegment)]
+
+        assert count(result.plan) < count(auto.plan)
+        assert child_segments
+        assert any(segment.members == ("b0", "b1", "b2") for segment in child_segments)
+        assert "b3" in result.selected
+        assert result.level != "L3"
+        assert _landmark_swallow_count(trace, result) == 0
     finally:
         trace.cleanup()
 
