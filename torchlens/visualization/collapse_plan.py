@@ -212,6 +212,70 @@ class CollapsePlan:
         return f"CollapsePlan(total={count(self)}, {kind_summary})"
 
 
+@dataclass(frozen=True)
+class CollapseScheduleStep:
+    """One point on the public float collapse schedule.
+
+    Parameters
+    ----------
+    t:
+        Collapse level represented by this step.
+    target_count:
+        Linear target visible-node count for ``t``.
+    visible_count:
+        Renderer-faithful visible-node count for ``plan``.
+    collapsed_addresses:
+        Module addresses that remain collapsed at this and all later steps.
+    plan:
+        Renderer-faithful collapse plan for this step.
+    """
+
+    t: float
+    target_count: int
+    visible_count: int
+    collapsed_addresses: frozenset[str]
+    plan: CollapsePlan
+
+
+@dataclass(frozen=True)
+class CollapseSchedule:
+    """Inspectable public float collapse schedule.
+
+    Parameters
+    ----------
+    steps:
+        Ordered monotone schedule points from ``t=0.0`` to ``t=1.0``.
+    """
+
+    steps: tuple[CollapseScheduleStep, ...]
+
+    def at(self, t: float) -> CollapseScheduleStep:
+        """Return the selected schedule step for collapse level ``t``.
+
+        Parameters
+        ----------
+        t:
+            Collapse level in ``[0.0, 1.0]``.
+
+        Returns
+        -------
+        CollapseScheduleStep
+            The deterministic schedule step selected for ``t``.
+
+        Raises
+        ------
+        ValueError
+            If ``t`` is outside ``[0.0, 1.0]``.
+        """
+
+        if not 0.0 <= t <= 1.0:
+            raise ValueError("collapse float level must be in [0.0, 1.0].")
+        for step in reversed(self.steps):
+            if t >= step.t:
+                return step
+        return self.steps[0]
+
+
 def _plan_node_kind(node: PlanNode) -> str:
     """Return the public diagnostic kind for a collapse-plan node.
 

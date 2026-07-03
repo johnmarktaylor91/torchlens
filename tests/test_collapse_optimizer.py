@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import time
 from types import ModuleType
 
 import pytest
 import torch
+import torchvision.models as tvm
 
 import torchlens as tl
 from torchlens.visualization import auto_collapse
@@ -21,6 +23,7 @@ from torchlens.visualization.collapse_optimizer import (
     _plan_respects_max_dominance,
     _prune_frontier,
     build_role_components,
+    collapse_schedule,
     select_collapse_plan,
 )
 from torchlens.visualization.collapse_plan import (
@@ -239,6 +242,12 @@ def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         torch.set_grad_enabled(grad_enabled)
 
 
+def _plan_signature(plan: CollapsePlan) -> tuple[str, ...]:
+    """Return a deterministic structural signature for a collapse plan."""
+
+    return tuple(repr(node) for node in plan.nodes)
+
+
 def _landmark_swallow_count(trace: tl.Trace, result: object) -> int:
     """Return selected boxes or child segments with hard landmark blockers."""
 
@@ -313,6 +322,91 @@ def test_engine_default_routes_v2_env_override_and_rolled_auto(
 
         max_fn = resolve_collapse_fn(trace, "max", "unrolled", context=RenderContext())
         assert hasattr(max_fn, "_torchlens_v2_result")
+    finally:
+        trace.cleanup()
+
+
+def test_float_collapse_level_validation_and_endpoints() -> None:
+    """Float collapse levels validate and preserve none/max endpoint plans."""
+
+    trace = _trace(UniformStack(depth=6), torch.randn(2, 8))
+    context = RenderContext()
+    try:
+        none_plan = plan_from_v1(trace, None, None, context)
+        max_result = select_collapse_plan(trace, context, mode="max")
+
+        with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
+            trace.collapse_plan(mode=-0.1)
+        with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
+            trace.draw(collapse=1.1, vis_save_only=True)
+
+        assert trace.collapse_plan(mode=0.0) == none_plan
+        assert trace.collapse_plan(mode=1.0) == max_result.plan
+    finally:
+        trace.cleanup()
+
+
+def test_float_collapse_level_is_deterministic() -> None:
+    """Same trace and float level produce identical plans across calls."""
+
+    trace = _trace(UniformStack(depth=8), torch.randn(2, 8))
+    context = RenderContext()
+    try:
+        first = trace.collapse_plan(mode=0.5, context=context)
+        second = trace.collapse_plan(mode=0.5, context=context)
+        assert _plan_signature(first) == _plan_signature(second)
+
+        first_schedule = collapse_schedule(trace, context)
+        second_schedule = collapse_schedule(trace, context)
+        assert tuple(
+            (step.t, step.visible_count, tuple(sorted(step.collapsed_addresses)))
+            for step in first_schedule.steps
+        ) == tuple(
+            (step.t, step.visible_count, tuple(sorted(step.collapsed_addresses)))
+            for step in second_schedule.steps
+        )
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize(
+    ("name", "builder", "x"),
+    [
+        ("resnet50", lambda: tvm.resnet50(weights=None), torch.randn(1, 3, 224, 224)),
+        ("vit_b_16", lambda: tvm.vit_b_16(weights=None), torch.randn(1, 3, 224, 224)),
+        ("maxvit_t", lambda: tvm.maxvit_t(weights=None), torch.randn(1, 3, 224, 224)),
+        ("mobilenet_v2", lambda: tvm.mobilenet_v2(weights=None), torch.randn(1, 3, 224, 224)),
+        ("densenet201", lambda: tvm.densenet201(weights=None), torch.randn(1, 3, 224, 224)),
+    ],
+)
+def test_float_collapse_schedule_monotone_and_nested(
+    name: str,
+    builder: Callable[[], torch.nn.Module],
+    x: torch.Tensor,
+) -> None:
+    """Float collapse schedule is monotone and nesting-coherent on requested models."""
+
+    _ = name
+    torch.set_num_threads(4)
+    trace = _trace(builder(), x)
+    context = RenderContext()
+    try:
+        schedule = trace.collapse_schedule(context)
+        none_plan = plan_from_v1(trace, None, None, context)
+        max_plan = select_collapse_plan(trace, context, mode="max").plan
+
+        sampled = [schedule.at(index / 10.0) for index in range(11)]
+        assert sampled[0].plan == none_plan
+        assert sampled[-1].plan == max_plan
+
+        previous_count = sampled[0].visible_count
+        previous_addresses = sampled[0].collapsed_addresses
+        for step in sampled[1:]:
+            assert step.visible_count <= previous_count
+            assert previous_addresses <= step.collapsed_addresses
+            previous_count = step.visible_count
+            previous_addresses = step.collapsed_addresses
     finally:
         trace.cleanup()
 

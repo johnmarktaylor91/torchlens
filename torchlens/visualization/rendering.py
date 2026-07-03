@@ -860,7 +860,13 @@ def draw(
             aggressively collapses eligible modules. The v2 engine supports
             rolled and unrolled rendering, may emit segment boxes in ``"max"``,
             and uses honest labels for ``(xN)`` collapsed calls, ellipsis
-            run-folds, and segment summaries.
+            run-folds, and segment summaries. A float in ``[0.0, 1.0]`` selects
+            the public monotone collapse schedule: ``0.0`` is equivalent to
+            ``"none"``, ``1.0`` is equivalent to ``"max"``, and larger values
+            never increase the visible node count or uncollapse a collapsed
+            unit. ``"auto"`` is the schedule point where the visible count first
+            enters the readable band; the existing ``"auto"`` implementation is
+            unchanged for compatibility.
         fold_runs: Run-fold policy. ``None`` preserves the collapse mode
             default: off for ``collapse="none"`` and band-pressure two-pass
             folding for ``"auto"``/``"max"``. ``True`` folds every eligible
@@ -943,8 +949,11 @@ def draw(
         )
     if vis_intervention_mode not in {"node_mark", "as_node"}:
         raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
-    if collapse not in {"none", "auto", "max"}:
-        raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
+    if isinstance(collapse, float):
+        if not 0.0 <= collapse <= 1.0:
+            raise ValueError("collapse float level must be in [0.0, 1.0].")
+    elif collapse not in {"none", "auto", "max"}:
+        raise ValueError("collapse must be 'none', 'auto', 'max', or a float in [0.0, 1.0].")
     if fold_runs not in {None, True, False}:
         raise ValueError("fold_runs must be None, True, or False.")
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
@@ -989,7 +998,10 @@ def draw(
 
         collapse_fn = resolve_collapse_fn(self, collapse, vis_mode, context=render_context)
     run_folds: dict[str, ModuleRunFold] = {}
-    if fold_runs is not False and (fold_runs is True or collapse in {"auto", "max"}):
+    collapse_uses_default_folds = collapse in {"auto", "max"} or (
+        isinstance(collapse, float) and collapse > 0.0
+    )
+    if fold_runs is not False and (fold_runs is True or collapse_uses_default_folds):
         from .auto_collapse import resolve_run_folds
 
         run_folds = resolve_run_folds(

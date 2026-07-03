@@ -419,10 +419,30 @@ def resolve_collapse_fn(
     """
 
     resolved_context = RenderContext(vis_mode=vis_mode) if context is None else context
+    if isinstance(collapse, float):
+        if not 0.0 <= collapse <= 1.0:
+            raise ValueError("collapse float level must be in [0.0, 1.0].")
+        if collapse == 0.0:
+            return None
+        from .collapse_optimizer import select_collapse_level
+
+        result = select_collapse_level(trace, resolved_context, collapse)
+        if not result.declined:
+
+            def v2_collapse_fn(module: "Module") -> bool:
+                """Return whether ``module`` is selected by the v2 optimizer."""
+
+                return module.address in result.selected
+
+            setattr(v2_collapse_fn, "_torchlens_v2_run_folds", result.run_folds)
+            setattr(v2_collapse_fn, "_torchlens_v2_segments", result.segments or {})
+            setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
+            setattr(v2_collapse_fn, "_torchlens_v2_result", result)
+            return v2_collapse_fn
     if collapse == "none":
         return None
     if collapse not in {"auto", "max"}:
-        raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
+        raise ValueError("collapse must be 'none', 'auto', 'max', or a float in [0.0, 1.0].")
     if collapse in {"auto", "max"} and _collapse_engine() == "v2":
         from .collapse_optimizer import select_collapse_plan
 

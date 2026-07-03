@@ -463,8 +463,12 @@ def _validate_collapse(value: CollapseLiteral) -> None:
         If ``value`` is not a supported collapse mode.
     """
 
+    if isinstance(value, float):
+        if 0.0 <= value <= 1.0:
+            return
+        raise ValueError("collapse float level must be in [0.0, 1.0].")
     if value not in {"none", "auto", "max"}:
-        raise ValueError("collapse must be one of 'none', 'auto', or 'max'.")
+        raise ValueError("collapse must be 'none', 'auto', 'max', or a float in [0.0, 1.0].")
 
 
 def _validate_fold_runs(value: FoldRunsLiteral) -> None:
@@ -1137,7 +1141,8 @@ class VisualizationOptions:
     collapse_fn:
         Optional module collapse predicate.
     collapse:
-        Smart module-collapse mode: ``"none"``, ``"auto"``, or ``"max"``.
+        Smart module-collapse mode: ``"none"``, ``"auto"``, ``"max"``, or a
+        float in ``[0.0, 1.0]`` on the public monotone schedule.
     fold_runs:
         Run-fold policy. ``None`` preserves the collapse mode default,
         ``True`` folds every eligible run, and ``False`` disables run folding.
@@ -1948,7 +1953,6 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
         "collapse_fn": visualization.collapse_fn,
         "collapse": visualization.collapse,
-        "fold_runs": visualization.fold_runs,
         "skip_fn": visualization.skip_fn,
         "vis_edge_overrides": visualization.edge_overrides,
         "vis_grad_edge_overrides": visualization.grad_edge_overrides,
@@ -1963,6 +1967,8 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "vis_intervention_mode": visualization.intervention_mode,
         "vis_show_cone": visualization.show_cone,
     }
+    if visualization.fold_runs is not None or visualization.is_field_explicit("fold_runs"):
+        kwargs["fold_runs"] = visualization.fold_runs
     phase7_kwargs = {
         "node_overlay": visualization.node_overlay,
         "node_label_fields": visualization.node_label_fields,

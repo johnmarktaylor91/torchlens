@@ -3581,7 +3581,11 @@ def show_model_graph(
             callable modes receive the live model object and are only available
             while that object is still alive.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
-        collapse: Smart module-collapse mode: ``"none"``, ``"auto"``, or ``"max"``.
+        collapse: Smart module-collapse mode: ``"none"``, ``"auto"``,
+            ``"max"``, or a float in ``[0.0, 1.0]``. Float levels follow the
+            public monotone schedule: ``0.0`` is equivalent to ``"none"``,
+            ``1.0`` is equivalent to ``"max"``, and larger values never
+            increase the visible node count or uncollapse a collapsed unit.
         fold_runs: Run-fold policy. ``None`` preserves the default policy:
             off for ``collapse="none"`` and band-pressure two-pass folding for
             ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,

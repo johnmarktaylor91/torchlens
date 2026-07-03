@@ -114,12 +114,15 @@ print(tl.compat.report(model, x).to_markdown())
   deferred like sibling preview gaps.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
-- `Trace.draw(collapse="none"|"auto"|"max", fold_runs=None|True|False)` controls v2 smart
-  collapse for rolled and unrolled graphs. `None` preserves defaults (`"none"` has no run
-  folding; `"auto"`/`"max"` use band-pressure folding), `True` folds eligible repeated runs
-  even with `collapse="none"`, and `False` disables run folding. `collapse="max"` may emit
-  segment boxes; `(xN)`, ellipsis, and segment labels must stay honest about hidden calls or
-  ranges. `Trace.collapse_plan(mode=...)` returns the diagnostic plan.
+- `Trace.draw(collapse="none"|"auto"|"max"|t, fold_runs=None|True|False)` controls v2 smart
+  collapse for rolled and unrolled graphs, where float `t` in `[0.0, 1.0]` follows the public
+  monotone schedule (`0.0 == "none"`, `1.0 == "max"`). `auto` is the first schedule point whose
+  visible count enters the readable band, but its implementation remains frozen for compatibility.
+  `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
+  folding), `True` folds eligible repeated runs even with `collapse="none"`, and `False` disables
+  run folding. `collapse="max"` may emit segment boxes; `(xN)`, ellipsis, and segment labels must
+  stay honest about hidden calls or ranges. `Trace.collapse_plan(mode=...)` returns the diagnostic
+  plan, and `Trace.collapse_schedule()` returns the float schedule metadata.
 - Smart-collapse metadata is computed at access time: `Module.collapse_score`,
   `Trace.module_collapse_order`, and `Trace.collapse_order(weights=..., mode=...)`. These are
   not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.

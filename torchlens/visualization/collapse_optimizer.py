@@ -32,6 +32,8 @@ from .auto_collapse import (
 )
 from .collapse_plan import (
     ChildSegment,
+    CollapseSchedule,
+    CollapseScheduleStep,
     CollapsePlan,
     ModuleBox,
     OpSegment,
@@ -239,6 +241,9 @@ class _MemoKey:
 _RESULT_CACHE: weakref.WeakKeyDictionary[
     object, dict[tuple[RenderContext, str], OptimizerResult]
 ] = weakref.WeakKeyDictionary()
+_SCHEDULE_CACHE: weakref.WeakKeyDictionary[object, dict[RenderContext, CollapseSchedule]] = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def select_collapse_plan(
@@ -405,6 +410,264 @@ def select_collapse_plan(
     )
     cached_by_context[cache_key] = result
     return result
+
+
+def select_collapse_level(
+    trace: "Trace",
+    context: RenderContext,
+    t: float,
+    weights: OptimizerWeights | None = None,
+) -> OptimizerResult:
+    """Return the v2 collapse plan for a public float collapse level.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    context:
+        Rendering context.
+    t:
+        Collapse level in ``[0.0, 1.0]``. ``0.0`` preserves the full graph and
+        ``1.0`` is byte-identical to ``collapse="max"``.
+    weights:
+        Optional optimizer weights.
+
+    Returns
+    -------
+    OptimizerResult
+        Selected collapse result for ``t``.
+
+    Raises
+    ------
+    ValueError
+        If ``t`` is outside ``[0.0, 1.0]``.
+    """
+
+    if not 0.0 <= t <= 1.0:
+        raise ValueError("collapse float level must be in [0.0, 1.0].")
+    if t == 1.0:
+        return select_collapse_plan(trace, context, weights, mode="max")
+    schedule = collapse_schedule(trace, context, weights)
+    step = schedule.at(t)
+    selected = step.collapsed_addresses
+    run_folds: dict[str, ModuleRunFold] = {}
+    segments: dict[str, SegmentDescriptor] = {}
+    if t == 0.0:
+        selected = frozenset()
+    result = OptimizerResult(
+        selected=selected,
+        run_folds=run_folds,
+        plan=step.plan,
+        visible_count=step.visible_count,
+        analyze_ms=0.0,
+        select_ms=0.0,
+        g_star=None,
+        segments=segments,
+        reason=None,
+    )
+    return result
+
+
+def collapse_schedule(
+    trace: "Trace",
+    context: RenderContext,
+    weights: OptimizerWeights | None = None,
+) -> CollapseSchedule:
+    """Return the monotone public float collapse schedule.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    context:
+        Rendering context.
+    weights:
+        Optional optimizer weights.
+
+    Returns
+    -------
+    CollapseSchedule
+        Ordered nested schedule from the full graph to the current max plan.
+    """
+
+    _ = weights
+    cached_by_context = _SCHEDULE_CACHE.setdefault(trace, {})
+    cached = cached_by_context.get(context)
+    if cached is not None:
+        return cached
+    full_plan = plan_from_v1(trace, None, None, context)
+    full_count = count(full_plan)
+    max_result = select_collapse_plan(trace, context, mode="max")
+    if max_result.declined:
+        step = CollapseScheduleStep(
+            t=0.0,
+            target_count=full_count,
+            visible_count=full_count,
+            collapsed_addresses=frozenset(),
+            plan=full_plan,
+        )
+        schedule = CollapseSchedule((step,))
+        cached_by_context[context] = schedule
+        return schedule
+    max_count = max_result.visible_count
+    if full_count <= max_count:
+        schedule = CollapseSchedule(
+            (
+                CollapseScheduleStep(0.0, full_count, full_count, frozenset(), full_plan),
+                CollapseScheduleStep(
+                    1.0,
+                    max_count,
+                    max_count,
+                    _collapsed_addresses_for_result(max_result),
+                    max_result.plan,
+                ),
+            )
+        )
+        cached_by_context[context] = schedule
+        return schedule
+    ordered_addresses = _schedule_ordered_addresses(trace, context, max_result)
+    raw_steps: list[tuple[frozenset[str], CollapsePlan, int]] = [
+        (frozenset(), full_plan, full_count)
+    ]
+    selected: set[str] = set()
+    previous_count = full_count
+    for address in ordered_addresses:
+        selected.add(address)
+        collapse_fn = _collapse_fn_from_selected(frozenset(selected))
+        plan = plan_from_v1(trace, collapse_fn, {}, context)
+        visible_count = count(plan)
+        if visible_count <= previous_count:
+            raw_steps.append((frozenset(selected), plan, visible_count))
+            previous_count = visible_count
+    max_addresses = _collapsed_addresses_for_result(max_result)
+    if raw_steps[-1][2] != max_count or raw_steps[-1][0] != max_addresses:
+        raw_steps.append((max_addresses, max_result.plan, max_count))
+    denominator = max(full_count - max_count, 1)
+    steps = tuple(
+        CollapseScheduleStep(
+            t=0.0
+            if index == 0
+            else (
+                1.0
+                if index == len(raw_steps) - 1
+                else _schedule_t(
+                    full_count,
+                    visible_count,
+                    denominator,
+                )
+            ),
+            target_count=visible_count,
+            visible_count=visible_count,
+            collapsed_addresses=addresses,
+            plan=plan,
+        )
+        for index, (addresses, plan, visible_count) in enumerate(raw_steps)
+    )
+    schedule = CollapseSchedule(steps)
+    cached_by_context[context] = schedule
+    return schedule
+
+
+def _schedule_t(full_count: int, visible_count: int, denominator: int) -> float:
+    """Return the collapse level implied by a visible-node count.
+
+    Parameters
+    ----------
+    full_count:
+        Full graph visible-node count.
+    visible_count:
+        Step visible-node count.
+    denominator:
+        Positive count span from full to max.
+
+    Returns
+    -------
+    float
+        Rounded deterministic collapse level.
+    """
+
+    return round((full_count - visible_count) / denominator, 6)
+
+
+def _collapsed_addresses_for_result(result: OptimizerResult) -> frozenset[str]:
+    """Return module addresses hidden by an optimizer result.
+
+    Parameters
+    ----------
+    result:
+        Optimizer result to inspect.
+
+    Returns
+    -------
+    frozenset[str]
+        Collapsed module addresses represented by selected boxes, run folds,
+        and child segments.
+    """
+
+    addresses = set(result.selected)
+    addresses.update(result.run_folds)
+    for segment in (result.segments or {}).values():
+        addresses.update(segment.members)
+    return frozenset(addresses)
+
+
+def _schedule_ordered_addresses(
+    trace: "Trace",
+    context: RenderContext,
+    max_result: OptimizerResult,
+) -> tuple[str, ...]:
+    """Return max-result addresses ordered by DP box cost for the slider path.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+    context:
+        Rendering context.
+    max_result:
+        Existing max-mode result that defines the endpoint.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Deterministically ordered candidate addresses.
+    """
+
+    addresses = _collapsed_addresses_for_result(max_result)
+    if not addresses:
+        return ()
+    analysis = analyze_collapse(trace)
+    hidden_counts = _rendered_module_hidden_counts(trace, context)
+    child_addresses = _child_address_map(trace)
+    structural_digests = _structural_digest_map(trace, child_addresses, analysis)
+    state = _OptimizerState(
+        trace=trace,
+        context=context,
+        analysis=analysis,
+        child_addresses=child_addresses,
+        hidden_counts=hidden_counts,
+        structural_digests=structural_digests,
+        expanded_cache={},
+        role_components_cache={},
+        child_segments_cache={},
+        single_member_expanded_cache={},
+        box_cost_cache={},
+        branch_salience_cache={},
+        weights=OptimizerWeights(),
+        g_star=max_result.g_star or 1.0,
+        total_ops=_optimizer_total_units(trace, context),
+        allow_folds=True,
+        allow_segments=True,
+        rendered_own_units=_rendered_own_unit_map(trace, context),
+    )
+    costs: dict[str, float] = {}
+    for address in addresses:
+        signal = analysis.signals.get(address)
+        if signal is None:
+            costs[address] = math.inf
+        else:
+            costs[address] = _cached_box_cost(trace, signal, state)
+    return tuple(sorted(addresses, key=lambda address: (costs[address], address)))
 
 
 def _select_max_plan(

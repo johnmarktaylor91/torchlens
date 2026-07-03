@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     from ..intervention.types import FireRecord
     from ..validation.status import ValidationReplayStatus
     from ..visualization.code_panel import CodePanelOption
-    from ..visualization.collapse_plan import CollapsePlan, RenderContext
+    from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .layer import LayerAccessor
@@ -4912,7 +4912,7 @@ class Trace(CapturedRun):
 
     def collapse_plan(
         self,
-        mode: Literal["auto", "max"] = "auto",
+        mode: Literal["auto", "max"] | float = "auto",
         context: "RenderContext | None" = None,
     ) -> "CollapsePlan":
         """Return the v2 diagnostic collapse plan for this trace.
@@ -4921,7 +4921,9 @@ class Trace(CapturedRun):
         ----------
         mode:
             Collapse policy to plan, either ``"auto"`` for a readable overview
-            or ``"max"`` for aggressive condensation.
+            or ``"max"`` for aggressive condensation. A float in ``[0.0, 1.0]``
+            selects the public monotone collapse schedule, where ``0.0`` is
+            the full graph and ``1.0`` is byte-identical to ``"max"``.
         context:
             Optional :class:`torchlens.visualization.collapse_plan.RenderContext`.
             When omitted, the default unrolled Graphviz context is used.
@@ -4938,22 +4940,56 @@ class Trace(CapturedRun):
         Raises
         ------
         ValueError
-            If ``mode`` is not ``"auto"`` or ``"max"``, or the v2 optimizer
-            declines to produce a plan for the provided context.
+            If ``mode`` is not ``"auto"``, ``"max"``, or a float in
+            ``[0.0, 1.0]``, or the v2 optimizer declines to produce a plan for
+            the provided context.
         """
 
-        if mode not in {"auto", "max"}:
-            raise ValueError("mode must be one of 'auto' or 'max'.")
+        if isinstance(mode, float):
+            if not 0.0 <= mode <= 1.0:
+                raise ValueError("collapse float level must be in [0.0, 1.0].")
+        elif mode not in {"auto", "max"}:
+            raise ValueError("mode must be one of 'auto', 'max', or a float in [0.0, 1.0].")
 
-        from ..visualization.collapse_optimizer import select_collapse_plan
+        from ..visualization.collapse_optimizer import select_collapse_level, select_collapse_plan
         from ..visualization.collapse_plan import RenderContext
 
         resolved_context = RenderContext() if context is None else context
-        result = select_collapse_plan(self, resolved_context, mode=mode)
+        result = (
+            select_collapse_level(self, resolved_context, mode)
+            if isinstance(mode, float)
+            else select_collapse_plan(self, resolved_context, mode=mode)
+        )
         if result.declined:
             reason = result.reason or "unsupported render context"
             raise ValueError(f"collapse plan unavailable: {reason}")
         return result.plan
+
+    def collapse_schedule(
+        self,
+        context: "RenderContext | None" = None,
+    ) -> "CollapseSchedule":
+        """Return the public monotone float collapse schedule.
+
+        Parameters
+        ----------
+        context:
+            Optional :class:`torchlens.visualization.collapse_plan.RenderContext`.
+            When omitted, the default unrolled Graphviz context is used.
+
+        Returns
+        -------
+        CollapseSchedule
+            Ordered schedule from ``t=0.0`` full graph to ``t=1.0`` max
+            collapse. Each step includes the selected plan, visible count, and
+            collapsed module-address set.
+        """
+
+        from ..visualization.collapse_optimizer import collapse_schedule
+        from ..visualization.collapse_plan import RenderContext
+
+        resolved_context = RenderContext() if context is None else context
+        return collapse_schedule(self, resolved_context)
 
     def modules_with_facet(self, name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now.
@@ -5766,7 +5802,13 @@ class Trace(CapturedRun):
         collapse:
             Smart module-collapse mode. ``"none"`` preserves the full graph,
             ``"auto"`` uses the v2 readability-targeted engine, and ``"max"``
-            aggressively condenses eligible modules and segment boxes.
+            aggressively condenses eligible modules and segment boxes. A float
+            in ``[0.0, 1.0]`` selects a deterministic monotone schedule:
+            ``0.0`` is equivalent to ``"none"``, ``1.0`` is equivalent to
+            ``"max"``, and larger values never increase the visible node count
+            or uncollapse a collapsed unit. ``"auto"`` is the first schedule
+            point whose visible count enters the readable band, while its
+            current implementation remains unchanged for compatibility.
         fold_runs:
             Run-fold policy. ``None`` preserves the default policy: off for
             ``collapse="none"`` and band-pressure two-pass folding for

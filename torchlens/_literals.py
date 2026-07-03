@@ -4,7 +4,7 @@ from typing import Literal
 
 OutputDeviceLiteral = Literal["same", "cpu", "cuda"]
 BufferVisibilityLiteral = Literal["never", "meaningful", "always"]
-CollapseLiteral = Literal["none", "auto", "max"]
+CollapseLiteral = Literal["none", "auto", "max"] | float
 FoldRunsLiteral = Literal[None, True, False]
 VisModeLiteral = Literal["none", "rolled", "unrolled"]
 VisNodeModeLiteral = Literal["default", "profiling", "vision", "attention"]
