@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from types import ModuleType
 
 import pytest
 import torch
@@ -130,6 +131,61 @@ class UnevenReusedSiblings(torch.nn.Module):
         return x
 
 
+class InteriorJunctionBlock(torch.nn.Module):
+    """Block with a residual junction fully inside the module subtree."""
+
+    def __init__(self, width: int = 8) -> None:
+        """Initialize the interior-junction block."""
+
+        super().__init__()
+        self.pre = torch.nn.Linear(width, width)
+        self.left = torch.nn.Linear(width, width)
+        self.right = torch.nn.Linear(width, width)
+        self.post = torch.nn.Linear(width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        hidden = self.pre(x)
+        return self.post(self.left(hidden) + self.right(hidden))
+
+
+class BoundaryJunctionBlock(torch.nn.Module):
+    """Block with a module-output residual join fed by the module input."""
+
+    def __init__(self, width: int = 8) -> None:
+        """Initialize the boundary-junction block."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(width, width),
+            torch.nn.ReLU(),
+            torch.nn.Linear(width, width),
+            torch.nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.net(x) + x
+
+
+class SingleBlockWrapper(torch.nn.Module):
+    """Wrapper exposing one named block for signal assertions."""
+
+    def __init__(self, block: torch.nn.Module, width: int = 8) -> None:
+        """Initialize the wrapper."""
+
+        super().__init__()
+        self.block = block
+        self.out = torch.nn.Linear(width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the wrapped block and output layer."""
+
+        return self.out(self.block(x))
+
+
 class GRUWrapper(torch.nn.Module):
     """GRU fixture for rolled optimizer coverage."""
 
@@ -157,6 +213,32 @@ def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         return tl.trace(model, x)
     finally:
         torch.set_grad_enabled(grad_enabled)
+
+
+def _landmark_swallow_count(trace: tl.Trace, result: object) -> int:
+    """Return selected boxes or child segments with hard landmark blockers."""
+
+    analysis = analyze_collapse(trace)
+    total = sum(
+        1
+        for address in getattr(result, "selected", ())
+        if analysis.signals.get(address) is not None
+        and analysis.signals[address].landmark_edges >= 2
+    )
+    for segment in (getattr(result, "segments", {}) or {}).values():
+        if getattr(segment, "kind", "") != "child":
+            continue
+        for address in getattr(segment, "members", ()):
+            signal = analysis.signals.get(address)
+            if signal is not None and signal.landmark_edges >= 2:
+                total += 1
+    return total
+
+
+def _require_transformers() -> ModuleType:
+    """Import transformers or skip the calling test."""
+
+    return pytest.importorskip("transformers")
 
 
 def test_role_components_connect_uniform_siblings() -> None:
@@ -249,6 +331,111 @@ def test_rolled_v2_gru_auto_is_non_noop(monkeypatch: pytest.MonkeyPatch) -> None
         assert "rnn" in result.selected
     finally:
         trace.cleanup()
+
+
+def test_gpt2_small_config_auto_collapses_blocks_without_landmark_swallows() -> None:
+    """GPT-2 small-config auto renders transformer blocks as honest boxes."""
+
+    transformers = _require_transformers()
+    config = transformers.GPT2Config(
+        n_layer=2,
+        n_head=2,
+        n_embd=16,
+        n_positions=16,
+        n_ctx=16,
+        vocab_size=100,
+    )
+    trace = _trace(transformers.GPT2Model(config), torch.randint(0, 100, (1, 8)))
+    try:
+        result = select_collapse_plan(trace, RenderContext(), mode="auto")
+        analysis = analyze_collapse(trace)
+
+        assert result.visible_count in range(18, 29)
+        assert {"h.0", "h.1"}.issubset(result.selected)
+        assert _landmark_swallow_count(trace, result) == 0
+        assert analysis.signals["h.0"].landmark_edges == 0
+        assert analysis.signals["h.1"].landmark_edges == 0
+    finally:
+        trace.cleanup()
+
+
+def test_bert_and_distilbert_small_config_auto_cuts_stay_pinned() -> None:
+    """BERT-family small-config cuts do not move while freeing GPT-2 blocks."""
+
+    transformers = _require_transformers()
+    bert_config = transformers.BertConfig(
+        num_hidden_layers=2,
+        hidden_size=16,
+        intermediate_size=32,
+        num_attention_heads=2,
+        vocab_size=100,
+        max_position_embeddings=16,
+    )
+    bert_trace = _trace(transformers.BertModel(bert_config), torch.randint(0, 100, (1, 8)))
+    try:
+        bert_result = select_collapse_plan(bert_trace, RenderContext(), mode="auto")
+        assert bert_result.visible_count == 29
+        assert bert_result.selected == {
+            "encoder.layer.0.attention",
+            "encoder.layer.0.output",
+            "encoder.layer.1.attention",
+            "encoder.layer.1.output",
+        }
+    finally:
+        bert_trace.cleanup()
+
+    distil_config = transformers.DistilBertConfig(
+        n_layers=2,
+        dim=16,
+        hidden_dim=32,
+        n_heads=2,
+        vocab_size=100,
+        max_position_embeddings=16,
+    )
+    distil_trace = _trace(
+        transformers.DistilBertModel(distil_config),
+        torch.randint(0, 100, (1, 8)),
+    )
+    try:
+        distil_result = select_collapse_plan(distil_trace, RenderContext(), mode="auto")
+        assert distil_result.visible_count == 19
+        assert distil_result.selected == {
+            "embeddings",
+            "transformer.layer.0.attention",
+            "transformer.layer.0.ffn",
+            "transformer.layer.1.attention",
+            "transformer.layer.1.ffn",
+        }
+    finally:
+        distil_trace.cleanup()
+
+
+def test_landmark_signals_ignore_interior_junctions_but_keep_boundary_merges() -> None:
+    """Interior joins are free, while output merges with external input stay protected."""
+
+    interior_trace = _trace(
+        SingleBlockWrapper(InteriorJunctionBlock()),
+        torch.randn(2, 8),
+    )
+    try:
+        interior_signal = analyze_collapse(interior_trace).signals["block"]
+        assert interior_signal.eligible
+        assert interior_signal.landmark_edges == 0
+        assert interior_signal.passthrough_edges == 0
+    finally:
+        interior_trace.cleanup()
+
+    boundary_trace = _trace(
+        SingleBlockWrapper(BoundaryJunctionBlock()),
+        torch.randn(2, 8),
+    )
+    try:
+        boundary_signal = analyze_collapse(boundary_trace).signals["block"]
+        assert boundary_signal.eligible
+        assert boundary_signal.landmark_edges == 0
+        assert boundary_signal.passthrough_edges == 1
+    finally:
+        boundary_trace.cleanup()
 
 
 def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None:

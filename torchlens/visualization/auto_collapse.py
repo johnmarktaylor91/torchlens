@@ -2105,7 +2105,7 @@ def _count_landmark_edges(
     subtree_ops: tuple[str, ...],
     boundary_edges: set[tuple[str, str]],
 ) -> int:
-    """Return boundary-crossing non-boundary edges for a module.
+    """Return boundary-crossing junction edges for a module.
 
     Parameters
     ----------
@@ -2121,9 +2121,10 @@ def _count_landmark_edges(
     Returns
     -------
     int
-        Count of boundary edges whose internal endpoint is not a normal module
-        input or output boundary. Fully internal junctions are intentionally not
-        counted because they are safely hidden with the collapsed module box.
+        Count of boundary edges that would hide or visually skip a junction
+        across the collapsed module boundary. Fully internal junctions and
+        ordinary module I/O edges are intentionally not counted because they are
+        safely represented by the collapsed module box.
     """
 
     subtree = set(subtree_ops)
@@ -2147,8 +2148,81 @@ def _count_landmark_edges(
             continue
         if child_inside and child_base in output_layers:
             continue
+        if getattr(parent, "is_output", False) or getattr(child, "is_output", False):
+            continue
+        if not _boundary_edge_preserves_junction(trace, parent, child, subtree):
+            continue
         landmarks.add((parent.label, child.label))
     return len(landmarks)
+
+
+def _boundary_edge_preserves_junction(
+    trace: "Trace",
+    parent: "Op",
+    child: "Op",
+    subtree: set[str],
+) -> bool:
+    """Return whether a boundary edge is part of a cross-boundary junction.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the operation graph.
+    parent:
+        Parent endpoint of the boundary edge.
+    child:
+        Child endpoint of the boundary edge.
+    subtree:
+        Pass-qualified operation labels in the candidate module subtree.
+
+    Returns
+    -------
+    bool
+        True when collapsing the subtree would obscure a junction whose visible
+        endpoints span the module boundary.
+    """
+
+    parent_inside = parent.label in subtree
+    child_inside = child.label in subtree
+    if parent_inside == child_inside:
+        return False
+    internal = parent if parent_inside else child
+    external = child if parent_inside else parent
+    if _is_junction_op(external):
+        return True
+    if not _is_junction_op(internal):
+        return False
+    return _has_external_parent(trace, internal, subtree) and _has_external_child(
+        trace,
+        internal,
+        subtree,
+    )
+
+
+def _is_junction_op(op: "Op") -> bool:
+    """Return whether an operation is a fan-in or fan-out junction."""
+
+    return _op_func_name(op) in JUNCTION_FUNC_NAMES
+
+
+def _has_external_parent(trace: "Trace", op: "Op", subtree: set[str]) -> bool:
+    """Return whether an operation has a non-buffer parent outside ``subtree``."""
+
+    for parent_label in getattr(op, "parents", ()) or ():
+        parent = cast("Op", trace.ops[parent_label])
+        if parent.label not in subtree and not getattr(parent, "is_buffer", False):
+            return True
+    return False
+
+
+def _has_external_child(trace: "Trace", op: "Op", subtree: set[str]) -> bool:
+    """Return whether an operation has a non-buffer child outside ``subtree``."""
+
+    for child_label in getattr(op, "children", ()) or ():
+        child = cast("Op", trace.ops[child_label])
+        if child.label not in subtree and not getattr(child, "is_buffer", False):
+            return True
+    return False
 
 
 def _base_label(label: str) -> str:
