@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 import time
 from types import ModuleType
 
@@ -831,6 +832,44 @@ def test_max_salience_floor_fires_on_synthetic_unique_wide_fan() -> None:
         assert "head" not in result.selected
         assert any(isinstance(node, RunFold) for node in result.plan.nodes)
         assert any("head.branches" in repr(node) for node in result.plan.nodes)
+    finally:
+        trace.cleanup()
+
+
+def test_max_salience_floor_fold_representative_uses_single_instance_stats(
+    tmp_path: Path,
+) -> None:
+    """Max-mode parallel fold representatives display single-instance stats."""
+
+    trace = _trace(UniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    try:
+        result = select_collapse_plan(trace, RenderContext(), mode="max")
+        source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / "max_floor_rep_stats"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="max",
+            )
+        )
+        run_fold = next(node for node in result.plan.nodes if isinstance(node, RunFold))
+        fold = result.run_folds[run_fold.rep.call.rsplit(":", 1)[0]]
+        representative = trace.modules[fold.representative]
+        aggregate_layers = sum(
+            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in fold.addresses
+        )
+        aggregate_params = sum(
+            int(getattr(trace.modules[address], "num_params", 0) or 0) for address in fold.addresses
+        )
+
+        assert aggregate_layers != representative.num_layers
+        assert aggregate_params != representative.num_params
+        assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
+        assert f"{representative.num_layers} layers total" in source
+        assert f"{representative.num_params} params (all trainable)" in source
+        assert f"{aggregate_layers} layers total" not in source
+        assert f"{aggregate_params} params (all trainable)" not in source
     finally:
         trace.cleanup()
 
