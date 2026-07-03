@@ -322,9 +322,9 @@ def select_collapse_plan(
         first_pass_point = None
         first_pass_plan = None
     if best is None:
-        plan = _floor_fallback_plan(trace, context)
+        selected, plan = _floor_fallback_selection(trace, context)
         result = OptimizerResult(
-            selected=frozenset(),
+            selected=selected,
             run_folds={},
             plan=plan,
             visible_count=count(plan),
@@ -1259,8 +1259,11 @@ def _declined_result(context: RenderContext, reason: str) -> OptimizerResult:
     )
 
 
-def _floor_fallback_plan(trace: "Trace", context: RenderContext) -> CollapsePlan:
-    """Return the conservative full-op plan used when the DP frontier is empty.
+def _floor_fallback_selection(
+    trace: "Trace",
+    context: RenderContext,
+) -> tuple[frozenset[str], CollapsePlan]:
+    """Return the conservative visible plan used when the DP frontier is empty.
 
     Parameters
     ----------
@@ -1271,15 +1274,49 @@ def _floor_fallback_plan(trace: "Trace", context: RenderContext) -> CollapsePlan
 
     Returns
     -------
-    CollapsePlan
-        Renderer-faithful uncollapsed plan. This is intentionally the safest
-        legal fallback: it preserves all visible structure instead of returning
-        a zero-node cut.
+    tuple[frozenset[str], CollapsePlan]
+        Selected top-level module boxes and their renderer-faithful plan. When
+        no useful top-level cut exists, the selected set is empty and the plan
+        is the full-op renderer plan.
     """
 
-    plan = plan_from_v1(trace, None, None, context)
-    assert count(plan) > 0, "collapse floor fallback produced no visible nodes"
-    return plan
+    full_plan = plan_from_v1(trace, None, None, context)
+    full_count = count(full_plan)
+    selected = frozenset(_top_level_fallback_addresses(trace))
+    if selected:
+        candidate_plan = plan_from_v1(trace, _collapse_fn_from_selected(selected), None, context)
+        if 0 < count(candidate_plan) < full_count:
+            return selected, candidate_plan
+    assert full_count > 0, "collapse floor fallback produced no visible nodes"
+    return frozenset(), full_plan
+
+
+def _top_level_fallback_addresses(trace: "Trace") -> tuple[str, ...]:
+    """Return direct child module addresses suitable for floor fallback boxes.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Direct children of ``self`` that hide at least one rendered operation.
+    """
+
+    addresses: list[str] = []
+    for module in trace.modules:
+        address = str(getattr(module, "address", ""))
+        if address in {"", "self"}:
+            continue
+        parent = getattr(module, "address_parent", None)
+        if parent not in {"", "self", None}:
+            continue
+        if int(getattr(module, "num_layers", 0) or 0) <= 1:
+            continue
+        addresses.append(address)
+    return tuple(sorted(dict.fromkeys(addresses)))
 
 
 def _frontier_for_module(

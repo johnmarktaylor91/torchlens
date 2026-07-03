@@ -274,6 +274,7 @@ COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 SIBLING_ORDER_NODE_CAP = 2000
 SIBLING_ORDER_STRETCH_CAP = 4.5
 SIBLING_ORDER_EPSILON = 1e-9
+_SIBLING_ORDER_WARNING_EMITTED = False
 
 
 class GraphvizRenderError(RuntimeError):
@@ -1354,13 +1355,18 @@ def draw(
     source_override = None
     self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
     if sibling_order_chains:
-        source_override, decision = _verify_and_apply_sibling_ordering(
-            dot.source,
-            sibling_order_chains,
-            captured_forward_edges,
-            rankdir,
-        )
-        self._last_sibling_ordering_decision = decision
+        try:
+            source_override, decision = _verify_and_apply_sibling_ordering(
+                dot.source,
+                sibling_order_chains,
+                captured_forward_edges,
+                rankdir,
+            )
+            self._last_sibling_ordering_decision = decision
+        except (subprocess.SubprocessError, OSError) as exc:
+            if _strict_sibling_order_checks_enabled():
+                raise
+            _warn_sibling_order_fallback_once(exc)
 
     final_source = source_override if source_override is not None else dot.source
     source_path = dot.save(vis_outpath)
@@ -9338,6 +9344,39 @@ def _verify_and_apply_sibling_ordering(
         current_source = _inject_sibling_rank_groups(baseline_source, survivors)
         current_layout = _layout_dot_plain(current_source, rankdir, captured_edges)
     return current_source, _sibling_order_decision(chains, survivors, ratios)
+
+
+def _strict_sibling_order_checks_enabled() -> bool:
+    """Return whether sibling-order verification failures should raise.
+
+    Returns
+    -------
+    bool
+        True under pytest or when ``TORCHLENS_COLLAPSE_STRICT=1`` is set.
+    """
+
+    return os.environ.get("TORCHLENS_COLLAPSE_STRICT") == "1" or "PYTEST_CURRENT_TEST" in os.environ
+
+
+def _warn_sibling_order_fallback_once(exc: BaseException) -> None:
+    """Warn once when sibling-order verification is skipped in production.
+
+    Parameters
+    ----------
+    exc:
+        Verification failure that triggered the fallback.
+    """
+
+    global _SIBLING_ORDER_WARNING_EMITTED
+    if _SIBLING_ORDER_WARNING_EMITTED:
+        return
+    _SIBLING_ORDER_WARNING_EMITTED = True
+    warnings.warn(
+        "Sibling-order verification failed; rendering without the optional sibling-order "
+        f"post-pass. ({type(exc).__name__}: {exc})",
+        RuntimeWarning,
+        stacklevel=3,
+    )
 
 
 def _filter_sibling_chains_to_rendered_nodes(
