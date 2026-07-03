@@ -19,9 +19,21 @@ from torchlens.visualization.auto_collapse import (
 )
 from torchlens.visualization.collapse_optimizer import (
     K_CAP,
+    MAX_SALIENCE_FLOOR,
+    OptimizerWeights,
     _FrontierPoint,
+    _OptimizerState,
+    _RESULT_CACHE,
+    _branch_salience,
+    _child_address_map,
+    _eligible_module_box,
+    _max_box_salience_score,
+    _optimizer_total_units,
     _plan_respects_max_dominance,
     _prune_frontier,
+    _rendered_own_unit_map,
+    _rendered_module_hidden_counts,
+    _structural_digest_map,
     build_role_components,
     collapse_schedule,
     select_collapse_plan,
@@ -31,6 +43,7 @@ from torchlens.visualization.collapse_plan import (
     CollapsePlan,
     ModuleBox,
     RenderContext,
+    RunFold,
     SegmentDescriptor,
     count,
     plan_from_v1,
@@ -230,6 +243,109 @@ class GRUWrapper(torch.nn.Module):
         return self.head(y[:, -1])
 
 
+class ParallelBranch(torch.nn.Module):
+    """Small convolution branch used by salience-floor fixtures."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the branch."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(width, width, 1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(width, width, 1),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the branch."""
+
+        return self.net(x)
+
+
+class UniqueWideFanHead(torch.nn.Module):
+    """One-off four-way fan head with a visible concat junction."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the fan head."""
+
+        super().__init__()
+        self.branches = torch.nn.ModuleList([ParallelBranch(width) for _ in range(4)])
+        self.project = torch.nn.Conv2d(width * 4, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run four parallel branches and project their concatenation."""
+
+        return self.project(torch.cat([branch(x) for branch in self.branches], dim=1))
+
+
+class UniqueWideFanModel(torch.nn.Module):
+    """Model with a single salient head/neck fan."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the unique fan model."""
+
+        super().__init__()
+        self.stem = torch.nn.Conv2d(width, width, 1)
+        self.head = UniqueWideFanHead(width)
+        self.out = torch.nn.Conv2d(width, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        return self.out(self.head(self.stem(x)))
+
+
+class RepeatedWideFanModel(torch.nn.Module):
+    """Model with repeated wide fans that should have low uniqueness."""
+
+    def __init__(self, depth: int = 4, width: int = 4) -> None:
+        """Initialize the repeated fan model."""
+
+        super().__init__()
+        self.blocks = torch.nn.ModuleList([UniqueWideFanHead(width) for _ in range(depth)])
+        self.out = torch.nn.Conv2d(width, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the repeated fan model."""
+
+        for block in self.blocks:
+            x = block(x)
+        return self.out(x)
+
+
+class WidthTwoResidualBlock(torch.nn.Module):
+    """Residual block whose internal branch width is only two."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the residual block."""
+
+        super().__init__()
+        self.left = ParallelBranch(width)
+        self.right = ParallelBranch(width)
+        self.project = torch.nn.Conv2d(width, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a width-two residual-style junction."""
+
+        return self.project(self.left(x) + self.right(x))
+
+
+class WidthTwoResidualModel(torch.nn.Module):
+    """Model containing one width-two residual junction."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the width-two residual fixture."""
+
+        super().__init__()
+        self.block = WidthTwoResidualBlock(width)
+        self.out = torch.nn.Conv2d(width, width, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        return self.out(self.block(x))
+
+
 def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Trace a model in eval mode."""
 
@@ -266,6 +382,34 @@ def _landmark_swallow_count(trace: tl.Trace, result: object) -> int:
             if signal is not None and signal.landmark_edges >= 2:
                 total += 1
     return total
+
+
+def _optimizer_state_for_floor(trace: tl.Trace, context: RenderContext) -> _OptimizerState:
+    """Return an optimizer state configured with the max-mode salience floor."""
+
+    analysis = analyze_collapse(trace)
+    child_addresses = _child_address_map(trace)
+    return _OptimizerState(
+        trace=trace,
+        context=context,
+        analysis=analysis,
+        child_addresses=child_addresses,
+        hidden_counts=_rendered_module_hidden_counts(trace, context),
+        structural_digests=_structural_digest_map(trace, child_addresses, analysis),
+        expanded_cache={},
+        role_components_cache={},
+        child_segments_cache={},
+        single_member_expanded_cache={},
+        box_cost_cache={},
+        branch_salience_cache={},
+        weights=OptimizerWeights(),
+        g_star=1.0,
+        total_ops=_optimizer_total_units(trace, context),
+        allow_folds=True,
+        allow_segments=True,
+        max_salience_floor=MAX_SALIENCE_FLOOR,
+        rendered_own_units=_rendered_own_unit_map(trace, context),
+    )
 
 
 def _require_transformers() -> ModuleType:
@@ -667,6 +811,80 @@ def test_max_dp_segments_legal_prefix_and_keeps_fanout_tail_visible() -> None:
         assert "b3" in result.selected
         assert result.level != "L3"
         assert _landmark_swallow_count(trace, result) == 0
+    finally:
+        trace.cleanup()
+
+
+def test_max_salience_floor_fires_on_synthetic_unique_wide_fan() -> None:
+    """Max mode keeps a parallel-fan hint for a unique wide head."""
+
+    trace = _trace(UniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    try:
+        context = RenderContext()
+        state = _optimizer_state_for_floor(trace, context)
+        signal = state.analysis.signals["head"]
+        result = select_collapse_plan(trace, context, mode="max")
+
+        assert _branch_salience("head", state) == 0.75
+        assert _max_box_salience_score("head", signal, state) == MAX_SALIENCE_FLOOR
+        assert not _eligible_module_box(state, "head", signal)
+        assert "head" not in result.selected
+        assert any(isinstance(node, RunFold) for node in result.plan.nodes)
+        assert any("head.branches" in repr(node) for node in result.plan.nodes)
+    finally:
+        trace.cleanup()
+
+
+def test_max_salience_floor_does_not_fire_on_repeated_fans() -> None:
+    """Repeated wide fans have low uniqueness and remain box-eligible."""
+
+    trace = _trace(RepeatedWideFanModel(), torch.randn(1, 4, 8, 8))
+    try:
+        context = RenderContext()
+        state = _optimizer_state_for_floor(trace, context)
+        signal = state.analysis.signals["blocks.0"]
+
+        assert signal.peer_count >= 4
+        assert _branch_salience("blocks.0", state) == 0.75
+        assert _max_box_salience_score("blocks.0", signal, state) < MAX_SALIENCE_FLOOR
+        assert _eligible_module_box(state, "blocks.0", signal)
+    finally:
+        trace.cleanup()
+
+
+def test_max_salience_floor_does_not_fire_on_width_two_residual_junction() -> None:
+    """Width-two residual-style junctions stay below the max salience floor."""
+
+    trace = _trace(WidthTwoResidualModel(), torch.randn(1, 4, 8, 8))
+    try:
+        context = RenderContext()
+        state = _optimizer_state_for_floor(trace, context)
+        signal = state.analysis.signals["block"]
+
+        assert _branch_salience("block", state) == 0.25
+        assert _max_box_salience_score("block", signal, state) < MAX_SALIENCE_FLOOR
+        assert _eligible_module_box(state, "block", signal)
+    finally:
+        trace.cleanup()
+
+
+def test_auto_plan_unaffected_by_max_salience_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auto plans do not consult the max-only salience floor constant."""
+
+    trace = _trace(UniqueWideFanModel(), torch.randn(1, 4, 8, 8))
+    context = RenderContext()
+    try:
+        baseline = select_collapse_plan(trace, context, mode="auto").plan
+        monkeypatch.setattr(
+            "torchlens.visualization.collapse_optimizer.MAX_SALIENCE_FLOOR",
+            0.0,
+        )
+        _RESULT_CACHE[trace].pop((context, "auto"), None)
+        auto_collapse_result = select_collapse_plan(trace, context, mode="auto")
+
+        assert _plan_signature(auto_collapse_result.plan) == _plan_signature(baseline)
     finally:
         trace.cleanup()
 

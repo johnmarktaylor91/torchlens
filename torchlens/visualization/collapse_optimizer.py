@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 
 K_CAP = 64
 FRONTIER_CAP = 32
+MAX_SALIENCE_FLOOR = 0.75
 
 
 @dataclass(frozen=True)
@@ -224,6 +225,7 @@ class _OptimizerState:
     total_ops: int
     allow_folds: bool
     allow_segments: bool
+    max_salience_floor: float | None
     rendered_own_units: Mapping[str, tuple[str, ...]]
 
 
@@ -658,6 +660,7 @@ def _schedule_ordered_addresses(
         total_ops=_optimizer_total_units(trace, context),
         allow_folds=True,
         allow_segments=True,
+        max_salience_floor=None,
         rendered_own_units=_rendered_own_unit_map(trace, context),
     )
     costs: dict[str, float] = {}
@@ -712,6 +715,9 @@ def _select_max_plan(
     )
     resolved_weights = OptimizerWeights() if weights is None else weights
     start = time.perf_counter()
+    deferred_repair: (
+        tuple[_FrontierPoint, CollapsePlan, dict[str, SegmentDescriptor], float] | None
+    ) = None
     for level, k_hi, dominance_limit in levels:
         best = _select_best_decision(
             trace=trace,
@@ -741,8 +747,26 @@ def _select_max_plan(
                 best=best,
                 prefer_instantiated_nodes=True,
             )
+            point, plan = _repair_max_salience_floor(
+                trace=trace,
+                context=context,
+                analysis=analysis,
+                child_addresses=child_addresses,
+                hidden_counts=hidden_counts,
+                structural_digests=structural_digests,
+                weights=replace(resolved_weights, fold_intrinsic=0.05),
+                g_star=best[1],
+                point=point,
+            )
             segments = _segments_from_plan_nodes(trace, context, analysis, plan)
             plan_count = count(plan)
+            if (
+                plan_count > k_hi
+                and plan_count <= min(20, auto_count)
+                and plan_count < auto_count
+                and _plan_respects_max_dominance(trace, analysis, plan, segments, 0.75)
+            ):
+                deferred_repair = (point, plan, segments, best[1])
             if (
                 segments
                 and 3 <= plan_count <= k_hi
@@ -761,6 +785,22 @@ def _select_max_plan(
                     level=level,
                     reason=None,
                 )
+            if level == "L2" and deferred_repair is not None:
+                repair_point, repair_plan, repair_segments, repair_g = deferred_repair
+                repair_count = count(repair_plan)
+                if 3 <= repair_count <= k_hi:
+                    return OptimizerResult(
+                        selected=repair_point.selected,
+                        run_folds=_fold_mapping(repair_point.folds),
+                        plan=repair_plan,
+                        visible_count=repair_count,
+                        analyze_ms=analysis.elapsed_ms,
+                        select_ms=(time.perf_counter() - start) * 1000.0,
+                        g_star=repair_g,
+                        segments=repair_segments,
+                        level=level,
+                        reason=None,
+                    )
         plan, segments = _condense_plan_with_child_segments(
             trace,
             context,
@@ -792,6 +832,123 @@ def _select_max_plan(
         level="L3",
         reason=f"fallback_to_auto: no legal max plan in [3,{min(20, auto_count)}]",
     )
+
+
+def _repair_max_salience_floor(
+    trace: "Trace",
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    child_addresses: Mapping[str, tuple[str, ...]],
+    hidden_counts: Mapping[str, int],
+    structural_digests: Mapping[str, str],
+    weights: OptimizerWeights,
+    g_star: float,
+    point: _FrontierPoint,
+) -> tuple[_FrontierPoint, CollapsePlan]:
+    """Expand selected max boxes that hide unique wide parallel fans."""
+
+    state = _OptimizerState(
+        trace=trace,
+        context=context,
+        analysis=analysis,
+        child_addresses=child_addresses,
+        hidden_counts=hidden_counts,
+        structural_digests=structural_digests,
+        expanded_cache={},
+        role_components_cache={},
+        child_segments_cache={},
+        single_member_expanded_cache={},
+        box_cost_cache={},
+        branch_salience_cache={},
+        weights=weights,
+        g_star=g_star,
+        total_ops=_optimizer_total_units(trace, context),
+        allow_folds=True,
+        allow_segments=False,
+        max_salience_floor=MAX_SALIENCE_FLOOR,
+        rendered_own_units=_rendered_own_unit_map(trace, context),
+    )
+    memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
+    nodes: list[PlanNode] = []
+    selected = set(point.selected)
+    folds = list(point.folds)
+    box_costs = list(point.box_costs)
+    changed = False
+    for node in point.nodes:
+        replacement = _max_salience_floor_replacement(node, state, memo)
+        if replacement is None:
+            nodes.append(node)
+            continue
+        address = _plan_module_address(node)
+        if address is None:
+            nodes.append(node)
+            continue
+        changed = True
+        nodes.extend(replacement.nodes)
+        selected = {
+            candidate
+            for candidate in selected
+            if candidate != address and not candidate.startswith(f"{address}.")
+        }
+        selected.update(replacement.selected)
+        folds.extend(replacement.folds)
+        box_costs.extend(replacement.box_costs)
+    if not changed:
+        return point, CollapsePlan(nodes=point.nodes, context=context)
+    rendered_plan = plan_from_v1(
+        trace,
+        _collapse_fn_from_selected(frozenset(selected)),
+        _fold_mapping(folds),
+        context,
+    )
+    rendered_plan, _ = _condense_plan_with_child_segments(
+        trace,
+        context,
+        analysis,
+        rendered_plan,
+        hidden_counts,
+        _optimizer_total_units(trace, context),
+        dominance_limit=0.75,
+        k_hi=20,
+    )
+    repaired = _FrontierPoint(
+        k=count(rendered_plan),
+        cost=point.cost,
+        nodes=rendered_plan.nodes,
+        selected=frozenset(selected),
+        folds=tuple(folds),
+        box_costs=tuple(box_costs),
+    )
+    return repaired, rendered_plan
+
+
+def _max_salience_floor_replacement(
+    node: PlanNode,
+    state: _OptimizerState,
+    memo: dict[_MemoKey, tuple[_DecisionPoint, ...]],
+) -> _FrontierPoint | None:
+    """Return an expanded replacement for a salient max-mode module box."""
+
+    if not isinstance(node, ModuleBox):
+        return None
+    address = node.call.rsplit(":", 1)[0]
+    signal = state.analysis.signals.get(address)
+    if signal is None or _max_box_salience_score(address, signal, state) < MAX_SALIENCE_FLOOR:
+        return None
+    candidates: list[_FrontierPoint] = []
+    for decision in _frontier_for_module(address, state, memo):
+        if (
+            decision.k == 1
+            and isinstance(decision.decision, _ModuleDecision)
+            and decision.decision.kind == "box"
+        ):
+            continue
+        candidates.append(_instantiate_module(address, decision.k, state, memo))
+    if not candidates:
+        return None
+    folded = [candidate for candidate in candidates if candidate.folds]
+    pool = folded or candidates
+    return min(pool, key=lambda candidate: (candidate.k, candidate.cost, repr(candidate.nodes)))
 
 
 def _condense_plan_with_child_segments(
@@ -1311,6 +1468,7 @@ def _instantiate_best_point(
         total_ops=_optimizer_total_units(trace, context),
         allow_folds=allow_folds,
         allow_segments=prefer_instantiated_nodes,
+        max_salience_floor=None,
         rendered_own_units=_rendered_own_unit_map(trace, context),
     )
     instantiated_point = _instantiate_module("self", decision_point.k, winning_state, winning_memo)
@@ -1426,6 +1584,7 @@ def _select_best_decision(
             total_ops=total_units,
             allow_folds=allow_folds,
             allow_segments=allow_segments,
+            max_salience_floor=None,
             rendered_own_units=rendered_own_units,
         )
         memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
@@ -1515,6 +1674,7 @@ def _frontier_can_reach_band(
             total_ops=total_units,
             allow_folds=True,
             allow_segments=False,
+            max_salience_floor=None,
             rendered_own_units=rendered_own_units,
         )
         memo: dict[_MemoKey, tuple[_DecisionPoint, ...]] = {}
@@ -1716,7 +1876,7 @@ def _frontier_for_module(
     if key in memo:
         return memo[key]
     points: list[_DecisionPoint] = []
-    if address != "self" and _eligible_box(state.trace, address, signal):
+    if address != "self" and _eligible_module_box(state, address, signal):
         box_cost = _cached_box_cost(state.trace, signal, state)
         points.append(
             _DecisionPoint(
@@ -1988,7 +2148,7 @@ def _component_segmented(
         if address in run_set:
             continue
         signal = state.analysis.signals[address]
-        if not _eligible_box(state.trace, address, signal):
+        if not _eligible_module_box(state, address, signal):
             return None
         costs.append(_cached_box_cost(state.trace, signal, state))
         node_count += 1
@@ -2042,7 +2202,7 @@ def _component_boxes(component: RoleComponent, state: _OptimizerState) -> _Decis
     costs: list[float] = []
     for address in component.members:
         signal = state.analysis.signals[address]
-        if not _eligible_box(state.trace, address, signal):
+        if not _eligible_module_box(state, address, signal):
             return None
         cost = _cached_box_cost(state.trace, signal, state)
         costs.append(cost)
@@ -2152,7 +2312,7 @@ def _component_folded(
         run = run_by_first.get(address)
         if run is None:
             signal = state.analysis.signals[address]
-            if not _eligible_box(state.trace, address, signal):
+            if not _eligible_module_box(state, address, signal):
                 return None
             cost = _cached_box_cost(state.trace, signal, state)
             costs.append(cost)
@@ -2190,7 +2350,7 @@ def _maximal_legal_runs(
         for address in members[index:]:
             if candidate and not _flow_adjacent(candidate[-1], address, graph):
                 break
-            if not _eligible_box(state.trace, address, state.analysis.signals[address]):
+            if not _eligible_module_box(state, address, state.analysis.signals[address]):
                 break
             if candidate and not _module_output_shapes_equal(state.trace, candidate[-1], address):
                 break
@@ -2676,6 +2836,33 @@ def _eligible_box(trace: "Trace", address: str, signal: ModuleCollapseSignals) -
 
     _ = trace, address
     return signal.eligible and signal.landmark_edges < 2
+
+
+def _eligible_module_box(
+    state: _OptimizerState,
+    address: str,
+    signal: ModuleCollapseSignals,
+) -> bool:
+    """Return whether a module box is legal under the current optimizer state."""
+
+    if not _eligible_box(state.trace, address, signal):
+        return False
+    floor = state.max_salience_floor
+    if floor is None:
+        return True
+    return _max_box_salience_score(address, signal, state) < floor
+
+
+def _max_box_salience_score(
+    address: str,
+    signal: ModuleCollapseSignals,
+    state: _OptimizerState,
+) -> float:
+    """Return the max-mode salience floor score for hiding ``address``."""
+
+    salience = _branch_salience(address, state)
+    uniqueness = 1.0 / max(float(signal.peer_count), 1.0)
+    return round(salience * uniqueness, 6)
 
 
 def _box_cost(trace: "Trace", signal: ModuleCollapseSignals, state: _OptimizerState) -> float:
