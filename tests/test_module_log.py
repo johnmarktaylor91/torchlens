@@ -36,6 +36,73 @@ def _nested_input():
     return torch.randn(1, 10)
 
 
+class _RepeatedBatchNormLeaf(nn.Module):
+    """Leaf module with a BatchNorm site and registered running buffers."""
+
+    def __init__(self, channels: int) -> None:
+        """Initialize the convolution and BatchNorm layers.
+
+        Parameters
+        ----------
+        channels:
+            Number of feature channels preserved by the leaf block.
+        """
+
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, 1, bias=False)
+        self.bn = nn.BatchNorm2d(channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the leaf block.
+
+        Parameters
+        ----------
+        x:
+            Input feature map.
+
+        Returns
+        -------
+        torch.Tensor
+            Activated output feature map.
+        """
+
+        return torch.relu(self.bn(self.conv(x)))
+
+
+class _RepeatedBatchNormStack(nn.Module):
+    """Stack of identical BatchNorm-containing leaf modules."""
+
+    def __init__(self, depth: int = 4, channels: int = 3) -> None:
+        """Initialize the repeated BatchNorm stack.
+
+        Parameters
+        ----------
+        depth:
+            Number of repeated leaf modules.
+        channels:
+            Number of channels preserved by every leaf module.
+        """
+
+        super().__init__()
+        self.blocks = nn.Sequential(*(_RepeatedBatchNormLeaf(channels) for _ in range(depth)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the repeated BatchNorm stack.
+
+        Parameters
+        ----------
+        x:
+            Input feature map.
+
+        Returns
+        -------
+        torch.Tensor
+            Output feature map after every leaf module.
+        """
+
+        return self.blocks(x)
+
+
 # ---------------------------------------------------------------------------
 # TestModuleLogBasic
 # ---------------------------------------------------------------------------
@@ -386,6 +453,25 @@ class TestModuleLogIntegration:
         # Should have nested hierarchy
         max_depth = max(ml.call_depth for ml in log.modules)
         assert max_depth >= 2  # At least 3 levels of nesting
+
+    def test_first_repeated_batchnorm_module_owns_only_local_layers(self) -> None:
+        """Internal buffer-address probes must not inflate first BatchNorm module layers."""
+
+        model = _RepeatedBatchNormStack(depth=4).eval()
+        log = trace_fn(model, torch.randn(1, 3, 8, 8))
+
+        block_layers = [log.modules[f"blocks.{idx}"].layer_labels for idx in range(4)]
+        block_counts = [log.modules[f"blocks.{idx}"].num_layers for idx in range(4)]
+        batchnorm_counts = [log.modules[f"blocks.{idx}.bn"].num_layers for idx in range(4)]
+
+        assert block_counts == [7, 7, 7, 7]
+        assert [len(labels) for labels in block_layers] == block_counts
+        assert batchnorm_counts == [5, 5, 5, 5]
+        for labels in block_layers:
+            assert [label.split("_", 1)[0] for label in labels].count("buffer") == 4
+            assert [label.split("_", 1)[0] for label in labels].count("batchnorm") == 1
+            assert [label.split("_", 1)[0] for label in labels].count("conv2d") == 1
+            assert [label.split("_", 1)[0] for label in labels].count("relu") == 1
 
 
 # ---------------------------------------------------------------------------

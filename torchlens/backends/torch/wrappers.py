@@ -82,7 +82,11 @@ from .ops import (
     log_function_output_tensors,
     register_call_input_container_snapshots,
 )
-from .buffer_writes import record_op_buffer_writes, snapshot_buffer_args
+from .buffer_writes import (
+    record_op_buffer_writes,
+    resolve_registered_buffer_address,
+    snapshot_buffer_args,
+)
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
@@ -940,6 +944,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             if isinstance(t, torch.nn.Parameter):
                 continue
             address = get_buffer_address(t)
+            if address is None:
+                address = resolve_registered_buffer_address(trace, t)
             if address is not None and get_tensor_label(t) is None:
                 log_source_tensor(trace, t, "buffer", address)
 

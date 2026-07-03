@@ -677,6 +677,12 @@ def _fix_buffer_layers(self: "Trace") -> None:
                 )
 
         if layer.address is None:
+            equivalence_class = str(getattr(layer, "equivalence_class", ""))
+            if equivalence_class.startswith("buffer_"):
+                recovered_address = equivalence_class.removeprefix("buffer_")
+                if recovered_address and recovered_address != "None":
+                    layer.address = recovered_address
+        if layer.address is None:
             layer.address = f"anonymous_buffer_{layer._label_raw}"
         buffer_hash = str(layer.modules) + str(layer.buffer_source) + layer.address
         buffer_hash_groups[buffer_hash].append(layer_label)

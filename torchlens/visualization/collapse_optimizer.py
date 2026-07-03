@@ -2366,6 +2366,51 @@ def _maximal_legal_runs(
     return tuple(runs)
 
 
+def _module_box_plan_nodes(
+    trace: "Trace",
+    context: RenderContext,
+    address: str,
+) -> tuple[PlanNode, ...]:
+    """Return plan nodes rendered for one selected module box.
+
+    Parameters
+    ----------
+    trace:
+        Trace being optimized.
+    context:
+        Render context for the selected plan.
+    address:
+        Pass-free module address selected as a collapsed box.
+
+    Returns
+    -------
+    tuple[PlanNode, ...]
+        The module box plus raw atomic own-output ops that the renderer keeps
+        visible because atomic module collapse drops the innermost module.
+    """
+
+    nodes: list[PlanNode] = [ModuleBox(f"{address}:1")]
+    if context.vis_mode == "rolled":
+        return tuple(nodes)
+    module = trace.modules[address]
+    for label in getattr(module, "layer_labels", ()) or ():
+        op = trace.ops[label]
+        if getattr(op, "is_buffer", False):
+            continue
+        if not getattr(op, "is_atomic_module", False):
+            continue
+        modules = list(getattr(op, "modules", ()) or ())
+        if not modules:
+            continue
+        if modules[-1].rsplit(":", 1)[0] != address:
+            continue
+        remaining = [module_call.rsplit(":", 1)[0] for module_call in modules[:-1]]
+        if address in remaining:
+            continue
+        nodes.append(RawOp(str(label).rsplit(":", 1)[0]))
+    return tuple(nodes)
+
+
 def _instantiate_module(
     address: str,
     k: int,
@@ -2379,10 +2424,11 @@ def _instantiate_module(
     if decision.kind == "box":
         signal = state.analysis.signals[address]
         box_cost = _cached_box_cost(state.trace, signal, state)
+        box_nodes = _module_box_plan_nodes(state.trace, state.context, address)
         return _FrontierPoint(
-            k=1,
+            k=len(box_nodes),
             cost=box_cost,
-            nodes=(ModuleBox(f"{address}:1"),),
+            nodes=box_nodes,
             selected=frozenset({address}),
             folds=(),
             box_costs=(box_cost,),
@@ -2506,7 +2552,7 @@ def _instantiate_component_segmented(
             continue
         signal = state.analysis.signals[address]
         cost = _cached_box_cost(state.trace, signal, state)
-        nodes.append(ModuleBox(f"{address}:1"))
+        nodes.extend(_module_box_plan_nodes(state.trace, state.context, address))
         selected.add(address)
         box_costs.append(cost)
         total_cost += cost
@@ -2532,7 +2578,7 @@ def _instantiate_component_boxes(
     for address in component.members:
         signal = state.analysis.signals[address]
         cost = _cached_box_cost(state.trace, signal, state)
-        nodes.append(ModuleBox(f"{address}:1"))
+        nodes.extend(_module_box_plan_nodes(state.trace, state.context, address))
         selected.add(address)
         box_costs.append(cost)
     return _FrontierPoint(

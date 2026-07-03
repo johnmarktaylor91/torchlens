@@ -405,12 +405,36 @@ def record_op_buffer_writes(
         tracker.record_op_writes(func_name, snapshots, producer_label_raw)
 
 
+def resolve_registered_buffer_address(trace: "Trace", tensor: torch.Tensor) -> str | None:
+    """Resolve an actual tensor argument to a registered-buffer address.
+
+    Parameters
+    ----------
+    trace:
+        Active trace whose buffer-write tracker owns the registered-buffer index.
+    tensor:
+        Tensor argument observed by a wrapped torch call.
+
+    Returns
+    -------
+    str | None
+        Registered-buffer address when the tensor aliases a tracked buffer,
+        otherwise ``None``.
+    """
+
+    tracker = getattr(trace, "_buffer_write_tracker", None)
+    if not isinstance(tracker, BufferWriteTracker):
+        return get_buffer_address(tensor)
+    return _resolve_buffer_address(tracker, tensor)
+
+
 def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
     """Return a storage identity key guarded by object checks at use sites."""
 
     try:
-        storage = tensor.untyped_storage()
-        return (str(tensor.device), storage.data_ptr(), storage.nbytes())
+        with _state.pause_logging():
+            storage = tensor.untyped_storage()
+            return (str(tensor.device), storage.data_ptr(), storage.nbytes())
     except Exception:
         return None
 
@@ -519,9 +543,10 @@ def _resolve_buffer_address(
 def _storage_range(tensor: torch.Tensor) -> tuple[int, int]:
     """Return byte range occupied by a tensor inside its storage."""
 
-    element_size = tensor.element_size()
-    start = int(tensor.storage_offset()) * element_size
-    end = start + int(tensor.numel()) * element_size
+    with _state.pause_logging():
+        element_size = tensor.element_size()
+        start = int(tensor.storage_offset()) * element_size
+        end = start + int(tensor.numel()) * element_size
     return start, end
 
 

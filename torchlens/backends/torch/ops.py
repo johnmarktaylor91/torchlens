@@ -48,13 +48,21 @@ import torch
 
 from ... import _state as _st
 from ..._state import pause_logging
-from ._tl import get_label_list, get_param_meta, get_tensor_label, get_tensor_meta, set_tensor_label
+from ._tl import (
+    get_buffer_address,
+    get_label_list,
+    get_param_meta,
+    get_tensor_label,
+    get_tensor_meta,
+    set_tensor_label,
+)
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
 )
+from .buffer_writes import resolve_registered_buffer_address
 from . import module_stack as _mstack
 from ...errors import CaptureError
 from ...fastlog._halt import HaltSignal
@@ -88,6 +96,7 @@ from ...data_classes.op import (
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
+from .sources import log_source_tensor
 from ...ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
@@ -2083,6 +2092,20 @@ def _build_shared_fields_dict(
 
     # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
     arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    tensors_to_resolve = get_vars_of_type_from_obj(
+        [args, kwargs],
+        torch.Tensor,
+        [torch.nn.Parameter],
+        search_depth=5,
+    )
+    for tensor in tensors_to_resolve:
+        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
+            continue
+        buffer_address = get_buffer_address(tensor)
+        if buffer_address is None:
+            buffer_address = resolve_registered_buffer_address(self, tensor)
+        if buffer_address is not None:
+            log_source_tensor(self, tensor, "buffer", buffer_address)
 
     # Separate tensor args (which define graph edges) from non-tensor args
     # (which become metadata and feed into equivalence_class hashing).
