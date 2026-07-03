@@ -775,7 +775,7 @@ def _select_max_plan(
             ):
                 return OptimizerResult(
                     selected=point.selected,
-                    run_folds=_display_fold_mapping(trace, point.folds),
+                    run_folds=_fold_mapping(point.folds),
                     plan=plan,
                     visible_count=plan_count,
                     analyze_ms=analysis.elapsed_ms,
@@ -791,7 +791,7 @@ def _select_max_plan(
                 if 3 <= repair_count <= k_hi:
                     return OptimizerResult(
                         selected=repair_point.selected,
-                        run_folds=_display_fold_mapping(trace, repair_point.folds),
+                        run_folds=_fold_mapping(repair_point.folds),
                         plan=repair_plan,
                         visible_count=repair_count,
                         analyze_ms=analysis.elapsed_ms,
@@ -895,11 +895,10 @@ def _repair_max_salience_floor(
         box_costs.extend(replacement.box_costs)
     if not changed:
         return point, CollapsePlan(nodes=point.nodes, context=context)
-    display_folds = _representative_stat_folds(trace, folds)
     rendered_plan = plan_from_v1(
         trace,
         _collapse_fn_from_selected(frozenset(selected)),
-        _fold_mapping(display_folds),
+        _fold_mapping(folds),
         context,
     )
     rendered_plan, _ = _condense_plan_with_child_segments(
@@ -917,69 +916,10 @@ def _repair_max_salience_floor(
         cost=point.cost,
         nodes=rendered_plan.nodes,
         selected=frozenset(selected),
-        folds=tuple(display_folds),
+        folds=tuple(folds),
         box_costs=tuple(box_costs),
     )
     return repaired, rendered_plan
-
-
-def _representative_stat_folds(
-    trace: "Trace", folds: Sequence[ModuleRunFold]
-) -> tuple[ModuleRunFold, ...]:
-    """Return max-repair folds whose representative label stats are single-instance.
-
-    Parameters
-    ----------
-    trace:
-        Trace owning the folded modules.
-    folds:
-        Fold descriptors selected by max-mode salience repair.
-
-    Returns
-    -------
-    tuple[ModuleRunFold, ...]
-        Fold descriptors with unchanged membership and ellipsis metadata, but
-        representative module layer and parameter totals for display.
-    """
-
-    display_folds: list[ModuleRunFold] = []
-    for fold in folds:
-        module = trace.modules[fold.representative]
-        display_folds.append(
-            ModuleRunFold(
-                representative=fold.representative,
-                addresses=fold.addresses,
-                class_name=fold.class_name,
-                num_layers=int(getattr(module, "num_layers", 0) or 0),
-                num_params=int(getattr(module, "num_params", 0) or 0),
-                num_params_trainable=int(getattr(module, "num_params_trainable", 0) or 0),
-                num_params_frozen=int(getattr(module, "num_params_frozen", 0) or 0),
-                shape_summary=fold.shape_summary,
-                hidden_member_composition=fold.hidden_member_composition,
-            )
-        )
-    return tuple(display_folds)
-
-
-def _display_fold_mapping(
-    trace: "Trace", folds: Sequence[ModuleRunFold]
-) -> dict[str, ModuleRunFold]:
-    """Return max-mode renderer fold mapping with representative display stats.
-
-    Parameters
-    ----------
-    trace:
-        Trace owning the folded modules.
-    folds:
-        Fold descriptors selected by the max-mode optimizer.
-
-    Returns
-    -------
-    dict[str, ModuleRunFold]
-        Renderer mapping keyed by every folded address.
-    """
-
-    return _fold_mapping(_representative_stat_folds(trace, folds))
 
 
 def _max_salience_floor_replacement(

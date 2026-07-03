@@ -6461,11 +6461,6 @@ def _build_collapsed_module_node(
 
     module_nparams_trainable = ml.num_params_trainable  # type: ignore[union-attr]
     module_nparams_frozen = ml.num_params_frozen  # type: ignore[union-attr]
-    if fold is not None:
-        module_num_tensors = fold.num_layers
-        module_nparams = fold.num_params
-        module_nparams_trainable = fold.num_params_trainable
-        module_nparams_frozen = fold.num_params_frozen
 
     if module_nparams > 0:
         if module_nparams_frozen == 0:

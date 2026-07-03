@@ -1051,6 +1051,15 @@ def _collapsed_exact_label_count(source: str, address: str) -> int:
     )
 
 
+def _collapsed_node_line(source: str, address: str) -> str:
+    """Return the DOT node declaration for one collapsed module address."""
+
+    for line in source.splitlines():
+        if "shape=box3d" in line and f"<B>@{address}</B>" in line:
+            return line
+    raise AssertionError(f"missing collapsed module node for {address!r}")
+
+
 def _run_fold_ellipsis_name(address: str) -> str:
     """Return the deterministic run-fold ellipsis node name for ``address``."""
 
@@ -1414,6 +1423,39 @@ def test_auto_collapse_run_fold_collapses_nodes_and_edges(
         trace.cleanup()
 
 
+def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
+    tmp_path: Path,
+) -> None:
+    """Auto-mode chain fold representatives display single-instance stats."""
+
+    trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
+    try:
+        collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
+        folds = resolve_run_folds(trace, collapse_fn, fold_runs=True)
+        fold = folds["blocks.0"]
+        representative = trace.modules[fold.representative]
+        source = _draw_source(
+            trace,
+            tmp_path,
+            "run_fold_auto_rep_stats",
+            "auto",
+            fold_runs=True,
+        )
+        rep_line = _collapsed_node_line(source, "blocks.0")
+
+        assert fold.num_layers != representative.num_layers
+        assert fold.num_params != representative.num_params
+        assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
+        assert f"{representative.num_layers} layers total" in rep_line
+        assert f"{representative.num_params} params (all trainable)" in rep_line
+        assert f"{fold.num_layers} layers total" not in rep_line
+        assert f"{fold.num_params} params (all trainable)" not in rep_line
+        assert f"{trace.num_tensors} tensors total" in source
+        assert f"{trace.num_params} params" in source
+    finally:
+        trace.cleanup()
+
+
 def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) -> None:
     """Parallel run folds keep ellipsis edges from source to sink."""
 
@@ -1436,6 +1478,41 @@ def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) 
         assert _outgoing_edge_count(auto_source, ellipsis_name) >= 1
         assert _edge_count(auto_source, "input_1pass1", ellipsis_name) == 1
         assert _edge_count(auto_source, ellipsis_name, "cat_1_161pass1") == 1
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
+    tmp_path: Path,
+) -> None:
+    """Auto-mode parallel fold representatives display single-instance stats."""
+
+    trace = _trace(ParallelRepeatedBranches(depth=40), torch.randn(1, 4, 16, 16))
+    try:
+        folds = resolve_run_folds(trace, _select_branches_child)
+        fold = folds["branches.0"]
+        representative = trace.modules[fold.representative]
+        source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / "parallel_run_fold_auto_rep_stats"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="auto",
+                collapse_fn=_select_branches_child,
+            )
+        )
+        rep_line = _collapsed_node_line(source, "branches.0")
+
+        assert fold.num_layers != representative.num_layers
+        assert fold.num_params != representative.num_params
+        assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
+        assert f"{representative.num_layers} layers total" in rep_line
+        assert f"{representative.num_params} params (all trainable)" in rep_line
+        assert f"{fold.num_layers} layers total" not in rep_line
+        assert f"{fold.num_params} params (all trainable)" not in rep_line
+        assert f"{trace.num_tensors} tensors total" in source
+        assert f"{trace.num_params} params" in source
     finally:
         trace.cleanup()
 
