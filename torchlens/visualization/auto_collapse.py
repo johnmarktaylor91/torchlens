@@ -438,6 +438,7 @@ def resolve_collapse_fn(
             setattr(v2_collapse_fn, "_torchlens_v2_segments", result.segments or {})
             setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
             setattr(v2_collapse_fn, "_torchlens_v2_result", result)
+            setattr(v2_collapse_fn, "_torchlens_v2_mode", "level")
             return v2_collapse_fn
     if collapse == "none":
         return None
@@ -458,6 +459,7 @@ def resolve_collapse_fn(
             setattr(v2_collapse_fn, "_torchlens_v2_segments", result.segments or {})
             setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
             setattr(v2_collapse_fn, "_torchlens_v2_result", result)
+            setattr(v2_collapse_fn, "_torchlens_v2_mode", collapse)
             return v2_collapse_fn
     selected = _select_modules(
         trace,

@@ -4988,6 +4988,7 @@ def _add_node_to_graphviz(
             collapsed_node_spec_fn,
             theme,
             run_folds,
+            collapse_fn,
         )
         node_color = "black"
     elif is_hidden_run_member:
@@ -6391,6 +6392,7 @@ def _build_collapsed_module_node(
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     theme: VisualizationTheme | None = None,
     run_folds: Mapping[str, "ModuleRunFold"] | None = None,
+    collapse_fn: CollapseFn | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -6428,15 +6430,23 @@ def _build_collapsed_module_node(
     module_type = ml.class_name  # type: ignore[union-attr]
     module_num_calls = ml.num_calls  # type: ignore[union-attr]
     module_nparams = ml.num_params  # type: ignore[union-attr]
+    module_nparams_trainable = ml.num_params_trainable  # type: ignore[union-attr]
+    module_nparams_frozen = ml.num_params_frozen  # type: ignore[union-attr]
 
     # In unrolled mode, each pass of a module is a separate collapsed node
     # (e.g., "encoder.layer.0pass1").  In rolled mode, all ops share one
     # node (e.g., "encoder.layer.0").
     if vis_mode == "unrolled":
         graph_node_label = "pass".join(module_tuple)
-        mpl = self.modules[address_w_pass]
-        module_num_tensors = mpl.num_layers
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in mpl.ops)
+        module_call = ml.ops[int(call_index) - 1]  # type: ignore[index]
+        module_num_tensors = module_call.num_layers
+        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
+        if getattr(collapse_fn, "_torchlens_v2_mode", None) == "max" and fold is None:
+            remainder_stats = _collapsed_module_remainder_stats(self, address, module_call.ops)
+            module_num_tensors = remainder_stats["num_layers"]
+            module_nparams = remainder_stats["num_params"]
+            module_nparams_trainable = remainder_stats["num_params_trainable"]
+            module_nparams_frozen = remainder_stats["num_params_frozen"]
     else:
         graph_node_label = module_tuple[0]
         module_num_tensors = ml.num_layers
@@ -6458,9 +6468,6 @@ def _build_collapsed_module_node(
         node_title = f"<b>@{address} (x{module_num_calls})</b>"
 
     shape_str = format_shape(module_output_shape)
-
-    module_nparams_trainable = ml.num_params_trainable  # type: ignore[union-attr]
-    module_nparams_frozen = ml.num_params_frozen  # type: ignore[union-attr]
 
     if module_nparams > 0:
         if module_nparams_frozen == 0:
@@ -6529,6 +6536,89 @@ def _build_collapsed_module_node(
     else:
         module_edge_dict[owner_key].setdefault("nodes", []).append(node_args)
     collapsed_modules.add(graph_node_label)
+
+
+def _collapsed_module_remainder_stats(
+    trace: "Trace",
+    address: str,
+    op_labels: Sequence[str],
+) -> dict[str, int]:
+    """Return collapsed-box stats excluding separately rendered own-output ops.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the module and operation logs.
+    address:
+        Pass-free module address rendered as a collapsed box.
+    op_labels:
+        Pass-qualified operation labels in this module call.
+
+    Returns
+    -------
+    dict[str, int]
+        Remainder layer and parameter totals for the inner collapsed box.
+    """
+
+    module = trace.modules[address]
+    stats = {
+        "num_layers": int(getattr(module, "num_layers", 0) or 0),
+        "num_params": int(getattr(module, "num_params", 0) or 0),
+        "num_params_trainable": int(getattr(module, "num_params_trainable", 0) or 0),
+        "num_params_frozen": int(getattr(module, "num_params_frozen", 0) or 0),
+    }
+    surfaced = _surfaced_own_output_ops(trace, address, op_labels)
+    stats["num_layers"] = max(0, stats["num_layers"] - len(surfaced))
+    for op in surfaced:
+        stats["num_params"] = max(0, stats["num_params"] - int(getattr(op, "num_params", 0) or 0))
+        stats["num_params_trainable"] = max(
+            0,
+            stats["num_params_trainable"] - int(getattr(op, "num_params_trainable", 0) or 0),
+        )
+        stats["num_params_frozen"] = max(
+            0,
+            stats["num_params_frozen"] - int(getattr(op, "num_params_frozen", 0) or 0),
+        )
+    return stats
+
+
+def _surfaced_own_output_ops(
+    trace: "Trace",
+    address: str,
+    op_labels: Sequence[str],
+) -> tuple["Op", ...]:
+    """Return atomic own-output ops drawn outside a selected module box.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing operation metadata.
+    address:
+        Pass-free owner module address.
+    op_labels:
+        Pass-qualified operation labels in this module call.
+
+    Returns
+    -------
+    tuple[Op, ...]
+        Atomic non-buffer ops whose own module is ``address`` and which are
+        rendered separately because atomic collapse drops the innermost module.
+    """
+
+    surfaced: list[Op] = []
+    for label in op_labels:
+        op = trace.ops[label]
+        if getattr(op, "is_buffer", False):
+            continue
+        if not getattr(op, "is_atomic_module", False):
+            continue
+        modules = list(getattr(op, "modules", ()) or ())
+        if not modules:
+            continue
+        if modules[-1].rsplit(":", 1)[0] != address:
+            continue
+        surfaced.append(op)
+    return tuple(surfaced)
 
 
 def _collapsed_module_owner_key(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import time
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -453,6 +454,93 @@ class BranchConcat(torch.nn.Module):
         """Run all branches and concatenate their outputs."""
 
         return torch.cat([self.a(x), self.b(x), self.c(x)], dim=1)
+
+
+class OwnOutputResidualBlock(torch.nn.Module):
+    """Residual block whose add is the module's own output op."""
+
+    def __init__(self) -> None:
+        """Initialize the residual block."""
+
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(8, 8, 1),
+            torch.nn.BatchNorm2d(8),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(8, 8, 3, padding=1),
+            torch.nn.BatchNorm2d(8),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(8, 8, 1),
+            torch.nn.BatchNorm2d(8),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the residual block."""
+
+        return x + self.net(x)
+
+
+class OwnOutputResidualModel(torch.nn.Module):
+    """Wrapper model exposing one own-output residual block."""
+
+    def __init__(self) -> None:
+        """Initialize the residual wrapper."""
+
+        super().__init__()
+        self.pre = torch.nn.Conv2d(3, 8, 1)
+        self.block = OwnOutputResidualBlock()
+        self.out = torch.nn.Conv2d(8, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the residual wrapper."""
+
+        return self.out(self.block(self.pre(x)))
+
+
+class OwnOutputConcatBlock(torch.nn.Module):
+    """Concat block whose cat is the module's own output op."""
+
+    def __init__(self) -> None:
+        """Initialize the concat block."""
+
+        super().__init__()
+        self.a = torch.nn.Sequential(
+            torch.nn.Conv2d(4, 4, 1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(4, 4, 1),
+        )
+        self.b = torch.nn.Sequential(
+            torch.nn.Conv2d(4, 4, 3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(4, 4, 1),
+        )
+        self.c = torch.nn.Sequential(
+            torch.nn.AvgPool2d(3, stride=1, padding=1),
+            torch.nn.Conv2d(4, 4, 1),
+            torch.nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the concat block."""
+
+        return torch.cat([self.a(x), self.b(x), self.c(x)], dim=1)
+
+
+class OwnOutputConcatModel(torch.nn.Module):
+    """Wrapper model exposing one own-output concat block."""
+
+    def __init__(self) -> None:
+        """Initialize the concat wrapper."""
+
+        super().__init__()
+        self.pre = torch.nn.Conv2d(3, 4, 1)
+        self.block = OwnOutputConcatBlock()
+        self.out = torch.nn.Conv2d(12, 4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the concat wrapper."""
+
+        return self.out(self.block(self.pre(x)))
 
 
 class ParallelRepeatedBranches(torch.nn.Module):
@@ -1058,6 +1146,23 @@ def _collapsed_node_line(source: str, address: str) -> str:
         if "shape=box3d" in line and f"<B>@{address}</B>" in line:
             return line
     raise AssertionError(f"missing collapsed module node for {address!r}")
+
+
+def _atomic_own_output_ops(trace: tl.Trace, address: str) -> tuple[Any, ...]:
+    """Return atomic own-output ops for ``address`` in trace order."""
+
+    surfaced: list[Any] = []
+    for label in trace.modules[address].layer_labels:
+        op = trace.ops[label]
+        modules = list(getattr(op, "modules", ()) or ())
+        if (
+            modules
+            and modules[-1].rsplit(":", 1)[0] == address
+            and getattr(op, "is_atomic_module", False)
+            and not getattr(op, "is_buffer", False)
+        ):
+            surfaced.append(op)
+    return tuple(surfaced)
 
 
 def _run_fold_ellipsis_name(address: str) -> str:
@@ -1876,6 +1981,57 @@ def test_max_collapse_is_never_less_collapsed_than_auto(tmp_path: Path) -> None:
             assert _dot_node_count(max_source) <= _dot_node_count(auto_source)
         finally:
             trace.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("model_factory", "input_shape", "op_prefix"),
+    (
+        (OwnOutputResidualModel, (1, 3, 8, 8), "add_"),
+        (OwnOutputConcatModel, (1, 3, 8, 8), "cat_"),
+    ),
+)
+def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
+    tmp_path: Path,
+    model_factory: Callable[[], torch.nn.Module],
+    input_shape: tuple[int, ...],
+    op_prefix: str,
+) -> None:
+    """Max-mode collapsed boxes summarize the remainder beside surfaced output ops."""
+
+    trace = _trace(model_factory(), torch.randn(*input_shape))
+    try:
+
+        def collapse_block(module: Any) -> bool:
+            """Select the fixture block as a v2 max collapsed module."""
+
+            return getattr(module, "address", None) == "block"
+
+        setattr(collapse_block, "_torchlens_v2_mode", "max")
+        source = str(
+            trace.draw(
+                vis_outpath=str(tmp_path / f"{op_prefix}own_output_remainder"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse_fn=collapse_block,
+            )
+        )
+        module = trace.modules["block"]
+        surfaced_ops = _atomic_own_output_ops(trace, "block")
+        surfaced_params = sum(int(getattr(op, "num_params", 0) or 0) for op in surfaced_ops)
+        remainder_layers = module.num_layers - len(surfaced_ops)
+        remainder_params = module.num_params - surfaced_params
+        block_line = _collapsed_node_line(source, "block")
+
+        assert len(surfaced_ops) == 1
+        assert _has_visible_node(source, op_prefix)
+        assert f"{remainder_layers} layers total" in block_line
+        assert f"{module.num_layers} layers total" not in block_line
+        assert f"{remainder_params} params" in block_line
+        assert remainder_layers + len(surfaced_ops) == module.num_layers
+        assert remainder_params + surfaced_params == module.num_params
+    finally:
+        trace.cleanup()
 
 
 def test_auto_collapse_residual_peer_bodies_keep_parent_joins(
