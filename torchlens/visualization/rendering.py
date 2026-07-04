@@ -124,7 +124,7 @@ from .code_panel import (
     render_code_panel_subgraph,
     resolve_code_panel_source,
 )
-from .collapse_plan import RenderContext, SegmentDescriptor
+from .collapse_plan import CollapsePlan, RawOp, RenderContext, SegmentDescriptor
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -6441,7 +6441,10 @@ def _build_collapsed_module_node(
         module_call = ml.ops[int(call_index) - 1]  # type: ignore[index]
         module_num_tensors = module_call.num_layers
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
-        if getattr(collapse_fn, "_torchlens_v2_mode", None) == "max" and fold is None:
+        if (
+            _collapsed_module_should_show_remainder(self, address, module_call.ops, collapse_fn)
+            and fold is None
+        ):
             remainder_stats = _collapsed_module_remainder_stats(self, address, module_call.ops)
             module_num_tensors = remainder_stats["num_layers"]
             module_nparams = remainder_stats["num_params"]
@@ -6536,6 +6539,65 @@ def _build_collapsed_module_node(
     else:
         module_edge_dict[owner_key].setdefault("nodes", []).append(node_args)
     collapsed_modules.add(graph_node_label)
+
+
+def _collapsed_module_should_show_remainder(
+    trace: "Trace",
+    address: str,
+    op_labels: Sequence[str],
+    collapse_fn: CollapseFn | None,
+) -> bool:
+    """Return whether a collapsed box has own-output ops surfaced by the plan.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the collapse plan and operation logs.
+    address:
+        Pass-free module address rendered as a collapsed box.
+    op_labels:
+        Pass-qualified operation labels in this module call.
+    collapse_fn:
+        Active collapse predicate, optionally carrying v2 plan metadata.
+
+    Returns
+    -------
+    bool
+        ``True`` when this collapsed module's own-output op is drawn as a
+        separate visible sibling node in the resolved plan.
+    """
+
+    surfaced = _surfaced_own_output_ops(trace, address, op_labels)
+    if not surfaced:
+        return False
+    plan = getattr(collapse_fn, "_torchlens_v2_plan", None)
+    if isinstance(plan, CollapsePlan):
+        result = getattr(collapse_fn, "_torchlens_v2_result", None)
+        if getattr(result, "level", None) is None:
+            return False
+        visible_raw_ops = {_raw_op_label(node) for node in plan.nodes if isinstance(node, RawOp)}
+        return any(op.layer_label in visible_raw_ops for op in surfaced)
+    return getattr(collapse_fn, "_torchlens_v2_mode", None) == "max"
+
+
+def _raw_op_label(node: RawOp) -> str:
+    """Return the pass-qualified operation label represented by a raw plan node.
+
+    Parameters
+    ----------
+    node:
+        Raw operation node from a collapse plan.
+
+    Returns
+    -------
+    str
+        Operation label suitable for comparison with ``Op.layer_label``.
+    """
+
+    op = node.op
+    if isinstance(op, str):
+        return op
+    return str(getattr(op, "layer_label", op))
 
 
 def _collapsed_module_remainder_stats(

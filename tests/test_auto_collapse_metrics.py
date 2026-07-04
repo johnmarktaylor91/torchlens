@@ -1039,6 +1039,60 @@ def _svg_node_count(path: Path) -> int:
     return len(SVG_NODE_RE.findall(path.read_text(encoding="utf-8")))
 
 
+def _svg_collapsed_box_layer_labels(path: Path) -> list[str]:
+    """Return collapsed-box layer-count labels from a Graphviz SVG.
+
+    Parameters
+    ----------
+    path:
+        SVG file path.
+
+    Returns
+    -------
+    list[str]
+        Labels such as ``"20 layers total"`` in SVG order.
+    """
+
+    text = path.read_text(encoding="utf-8")
+    return re.findall(r">([0-9]+ layers total)<", text)
+
+
+def _draw_svg_layer_labels(
+    trace: tl.Trace,
+    tmp_path: Path,
+    name: str,
+    collapse: Any,
+) -> list[str]:
+    """Render ``trace`` and return collapsed-box layer labels from SVG output.
+
+    Parameters
+    ----------
+    trace:
+        Trace to render.
+    tmp_path:
+        Temporary output directory.
+    name:
+        Output filename stem.
+    collapse:
+        Public collapse mode or float level.
+
+    Returns
+    -------
+    list[str]
+        Collapsed-box layer-count labels in SVG order.
+    """
+
+    out = tmp_path / name
+    trace.draw(
+        vis_outpath=str(out),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_node_placement="dot",
+        collapse=collapse,
+    )
+    return _svg_collapsed_box_layer_labels(out.with_suffix(".svg"))
+
+
 def _assert_plan_svg_parity(
     trace: tl.Trace,
     tmp_path: Path,
@@ -2030,6 +2084,26 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         assert f"{remainder_params} params" in block_line
         assert remainder_layers + len(surfaced_ops) == module.num_layers
         assert remainder_params + surfaced_params == module.num_params
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+def test_equivalent_max_plans_render_same_collapsed_box_layer_labels(tmp_path: Path) -> None:
+    """Equivalent max endpoint plans render identical collapsed-box layer labels."""
+
+    torch.set_num_threads(4)
+    trace = _trace(tvm.mobilenet_v2(weights=None), torch.randn(1, 3, 224, 224))
+    try:
+        max_plan = trace.collapse_plan(mode="max")
+        level_plan = trace.collapse_plan(mode=1.0)
+        max_labels = _draw_svg_layer_labels(trace, tmp_path, "mobilenet_v2_max", "max")
+        level_labels = _draw_svg_layer_labels(trace, tmp_path, "mobilenet_v2_level_1", 1.0)
+
+        assert max_plan == level_plan
+        assert max_labels == level_labels
+        assert "20 layers total" in max_labels
+        assert "21 layers total" not in level_labels
     finally:
         trace.cleanup()
 
