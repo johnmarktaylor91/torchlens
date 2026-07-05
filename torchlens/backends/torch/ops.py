@@ -42,7 +42,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import prod
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Iterator, cast
+from typing import TYPE_CHECKING, Any, Iterator, Literal, cast
 
 import torch
 
@@ -108,6 +108,7 @@ from ...ir.events import (
     OutputVersionEvent,
     ParentEdge,
 )
+from ...ir.buffer import replace_op_event
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.container import (
     ContainerSpec,
@@ -178,6 +179,7 @@ from ...capture.predicates import (
     _is_halt_only_capture,
     build_op_record_context,
 )
+
 from ...capture.projections import (
     append_projected_event,
     get_active_recording_state,
@@ -194,6 +196,177 @@ from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
+
+
+CaptureProducerMode = Literal["exhaustive", "fast", "predicate"]
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureProducerPolicy:
+    """Precomputed producer routing for one capture mode.
+
+    Parameters
+    ----------
+    mode
+        Capture mode represented by this policy.
+    emit
+        Callable that emits operation events for the mode.
+    """
+
+    mode: CaptureProducerMode
+    emit: Callable[
+        [
+            "Trace",
+            Callable[..., Any],
+            str,
+            tuple[Any, ...],
+            dict[str, Any],
+            tuple[Any, ...],
+            dict[str, Any],
+            Any,
+            FuncExecutionContext,
+            bool,
+            int,
+        ],
+        None,
+    ]
+
+
+_CAPTURE_PRODUCER_POLICIES: dict[CaptureProducerMode, CaptureProducerPolicy] = {}
+
+
+def _emit_exhaustive_policy(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Emit operation events through the exhaustive producer body."""
+
+    log_function_output_tensors_exhaustive(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+    )
+
+
+def _emit_fast_policy(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Emit operation events through the fast replay producer body."""
+
+    log_function_output_tensors_fast(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+    )
+
+
+def _emit_predicate_policy(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Emit operation events through the predicate producer body."""
+
+    del exec_ctx
+    log_function_output_tensors_predicate(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        is_bottom_level_func,
+        func_call_id,
+    )
+
+
+def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:
+    """Return the precomputed producer policy for ``mode``.
+
+    Parameters
+    ----------
+    mode
+        Capture mode to route.
+
+    Returns
+    -------
+    CaptureProducerPolicy
+        Cached policy object used on the decorated-operation hot path.
+    """
+
+    if not _CAPTURE_PRODUCER_POLICIES:
+        _CAPTURE_PRODUCER_POLICIES.update(
+            {
+                "exhaustive": CaptureProducerPolicy("exhaustive", _emit_exhaustive_policy),
+                "fast": CaptureProducerPolicy("fast", _emit_fast_policy),
+                "predicate": CaptureProducerPolicy("predicate", _emit_predicate_policy),
+            }
+        )
+    return _CAPTURE_PRODUCER_POLICIES[mode]
+
+
+def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> None:
+    """Attach a precomputed producer policy to ``trace``.
+
+    Parameters
+    ----------
+    trace
+        Trace receiving the hot-path producer policy.
+    mode
+        Capture mode to compile into the policy.
+
+    Returns
+    -------
+    None
+        Mutates ``trace`` in place.
+    """
+
+    trace._capture_producer_policy = get_capture_producer_policy(mode)
 
 
 _SHARED_FIELDS_TO_SHALLOW_COPY_PER_OUTPUT = (
@@ -1354,47 +1527,23 @@ def log_function_output_tensors(
     original function.  The mode was set in ``save_new_outs`` (fast)
     or ``trace`` (exhaustive).
     """
-    if self.capture_mode == "exhaustive":
-        log_function_output_tensors_exhaustive(
-            self,
-            func,
-            func_name,
-            args,
-            kwargs,
-            arg_copies,
-            kwarg_copies,
-            out_orig,
-            exec_ctx,
-            is_bottom_level_func,
-            func_call_id,
-        )
-    elif self.capture_mode == "fast":
-        log_function_output_tensors_fast(
-            self,
-            func,
-            func_name,
-            args,
-            kwargs,
-            arg_copies,
-            kwarg_copies,
-            out_orig,
-            exec_ctx,
-            is_bottom_level_func,
-            func_call_id,
-        )
-    elif self.capture_mode == "predicate":
-        log_function_output_tensors_predicate(
-            self,
-            func,
-            func_name,
-            args,
-            kwargs,
-            arg_copies,
-            kwarg_copies,
-            out_orig,
-            is_bottom_level_func,
-            func_call_id,
-        )
+    policy = getattr(self, "_capture_producer_policy", None)
+    if policy is None:
+        policy = get_capture_producer_policy(cast(CaptureProducerMode, self.capture_mode))
+        self._capture_producer_policy = policy
+    policy.emit(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+    )
 
 
 def apply_live_hooks_to_outputs(
@@ -4041,12 +4190,7 @@ def _replace_event_with_retained_payload(
         transformed_tensor=transformed_ref,
         has_saved_activation=True,
     )
-    updated_event = dataclasses.replace(event, output=output_ref, predicate_matched=True)
-    trace.capture_events.op_event_by_label_raw[raw_label] = updated_event
-    for index, existing_event in enumerate(trace.capture_events.op_events):
-        if existing_event.label_raw == raw_label:
-            trace.capture_events.op_events[index] = updated_event
-            break
+    replace_op_event(trace, raw_label, output=output_ref, predicate_matched=True)
 
 
 def _build_trace_predicate_context(

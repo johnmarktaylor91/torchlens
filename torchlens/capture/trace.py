@@ -304,6 +304,9 @@ def save_new_outs(
 
     # Switch to fast mode: reuse graph structure, only capture new outs.
     self.capture_mode = "fast"
+    from ..backends.torch.ops import set_capture_producer_policy
+
+    set_capture_producer_policy(self, "fast")
     self._in_exhaustive_pass = False
 
     # Clear all existing outs from the previous pass.
@@ -681,6 +684,9 @@ def run_and_log_inputs_through_model(
         random_seed = random.randint(1, 4294967294)
     self.random_seed = random_seed  # type: ignore[assignment]
     set_random_seed(random_seed)
+    from ..backends.torch.ops import set_capture_producer_policy
+
+    set_capture_producer_policy(self, cast(Any, self.capture_mode))
 
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
