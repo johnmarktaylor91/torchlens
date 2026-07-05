@@ -277,6 +277,22 @@ def test_buffer_write_models_validate_and_expose_entities(
     assert not any(op.is_buffer for op in trace.compute_ops)
 
 
+def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
+    """Assert deferred BatchNorm buffer reads do not precede earlier raw ops."""
+
+    model = nn.BatchNorm1d(3).train()
+    trace = tl.trace(model, torch.randn(4, 3), save_arg_values=True)
+    raw_indices = [op.raw_index for op in trace.layer_list]
+
+    assert raw_indices == sorted(raw_indices)
+    assert trace["add_1_1"].raw_index < trace["buffer_2"].raw_index
+    assert trace.layer_list.index(trace["add_1_1"]) < trace.layer_list.index(trace["buffer_2"])
+    assert trace["batchnorm_1_2"].raw_index < trace["buffer_5"].raw_index
+    assert trace.layer_list.index(trace["batchnorm_1_2"]) < trace.layer_list.index(
+        trace["buffer_5"]
+    )
+
+
 def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
     """Assert derived buffer op accessors partition the flat buffer op population."""
 

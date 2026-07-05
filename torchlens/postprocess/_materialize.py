@@ -145,12 +145,13 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
         events.module_enter_events,
         events.module_exit_events,
     )
-    op_event_labels = {event.label_raw for event in events.op_events}
-    children_by_parent = _children_by_parent(trace, events.op_events, op_event_labels)
-    buffer_addresses_by_label = _buffer_addresses_by_label(trace, events.op_events)
+    op_events = _op_events_in_raw_order(events.op_events)
+    op_event_labels = {event.label_raw for event in op_events}
+    children_by_parent = _children_by_parent(trace, op_events, op_event_labels)
+    buffer_addresses_by_label = _buffer_addresses_by_label(trace, op_events)
     equivalent_ops_by_label = _equivalent_ops_by_label(
         trace,
-        events.op_events,
+        op_events,
         buffer_addresses_by_label,
     )
     buffer_alias_snapshots = _buffer_alias_snapshots_by_address(trace)
@@ -159,14 +160,14 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
         module_enter_addresses,
         live_module_forward_args,
     )
-    op_events_by_label = {event.label_raw: event for event in events.op_events}
-    input_io_roles = _input_io_roles(trace, events.op_events)
+    op_events_by_label = {event.label_raw: event for event in op_events}
+    input_io_roles = _input_io_roles(trace, op_events)
     # Count ops per innermost module call so a single-op (atomic) leaf module can
     # be told apart from a multi-op one. The innermost module of an op is the last
     # frame of its capture-time module stack.
     innermost_module_op_counts: Counter[tuple[str, int]] = Counter(
         (event.module_stack[-1].address, event.module_stack[-1].call_index)
-        for event in events.op_events
+        for event in op_events
         if event.module_stack
     )
     module_output_fields = _module_output_fields(
@@ -178,7 +179,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     buffer_write_fields = _buffer_write_fields(trace, op_event_labels)
     output_versions = _output_versions_by_parent(events)
 
-    for event in events.op_events:
+    for event in op_events:
         fields_dict = _fields_from_event(
             trace,
             event,
@@ -211,6 +212,23 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     events.op_event_by_label_raw.clear()
     events.live_index.clear()
     events.grad_fn_handles_by_label_raw.clear()
+
+
+def _op_events_in_raw_order(op_events: list[OpEvent]) -> list[OpEvent]:
+    """Return operation events sorted by their reserved raw index.
+
+    Parameters
+    ----------
+    op_events
+        Operation events in backend append order.
+
+    Returns
+    -------
+    list[OpEvent]
+        Events in graph raw-index order.
+    """
+
+    return sorted(op_events, key=lambda event: event.raw_index)
 
 
 def _drop_missing_buffer_sources(trace: "Trace") -> None:
