@@ -132,6 +132,12 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 - `debug/`, `report/`, `stats/`, `viz/`, `experimental/`: diagnostics, explanation,
   aggregation, convenience visuals, and unstable APIs.
 
+## Package Layout Policy
+- `io` is the public portable I/O facade; `_io` owns bundle, manifest, codec, and lazy-load internals.
+- `errors` is the public exception facade; `_errors.py` is legacy internal exception plumbing to fold in later.
+- `debug` is the public diagnostics toolbox; private debug helpers should stay local to their owning modules.
+- `visualization` owns graph rendering and layout; `viz` owns image and plot primitives used by renderers.
+
 ## Conditional Branch Attribution
 - Step 5 builds AST file indexes, classifies terminal bools, materializes dense
   `conditional_records`, runs backward flood, attributes forward arm edges, then derives
