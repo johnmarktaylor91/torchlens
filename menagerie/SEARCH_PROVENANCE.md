@@ -10,6 +10,36 @@ the *WHAT-has-been-searched and WHEN* ledger those two flank.
 
 ---
 
+## WHAT "DISTINCT" MEANS (the primary distinctness criterion)
+
+**The MAIN definition of a distinct model is a UNIQUE COMPUTATIONAL GRAPH.** Concretely, distinctness is
+measured by `graph_shape_hash` (`torchlens/utils/hashing.py::compute_graph_shape_hash`) -- a hash of the
+*traced computational-graph topology* (operation sequence + parent-edge structure + module organization),
+deliberately blind to input tensor SHAPE/dtype.
+
+Consequences (this is the intended, verified behavior):
+- **Depth/width/block variants ARE DISTINCT.** `resnet18`, `resnet34`, `resnet50`, `resnet101` are distinct
+  architectures -- distinct computational graphs (different op counts/sequences; basic vs bottleneck blocks) ->
+  distinct `graph_shape_hash`. Each is its own entry AND counts as its own distinct architecture. (Empirically
+  verified: resnet18 != resnet34 != resnet50.) The same holds for any hyperparameter change that alters the
+  GRAPH -- different #layers, #heads, #experts, kernel/stride, fusion/routing, etc.
+- **The SAME model at a different INPUT RESOLUTION is NOT a new architecture.** resnet50@224 and resnet50@256
+  produce the identical computational graph (same ops/edges, only tensor shapes on the edges differ) -> same
+  `graph_shape_hash` -> one architecture. (Verified: resnet50@224 == resnet50@256.) Ditto batch size / sequence
+  length -- input-induced shape changes are not new architectures.
+
+Two counts are reported (both wanted -- `python -m menagerie.status`):
+1. **# distinct NAMED entries** -- the findable surface (every name/alias resolves; the corpus's row count).
+2. **# distinct ARCHITECTURES = COUNT(DISTINCT graph_shape_hash)** -- the primary "how many truly distinct
+   designs" number (the moat). This is the number that treats resnet18/50 as distinct and resnet50-at-two-
+   resolutions as one.
+
+Aliases (alternate names for the *same* graph) collapse in count #2 while staying individually findable in
+count #1. Building is deduped by `graph_shape_hash` (build each distinct GRAPH once), never by coarse family
+label -- so depth/width siblings are always built + counted separately.
+
+---
+
 ## PART 1 -- DISCOVERY SWEEP RECORD
 
 ### Sweep 001 -- "Definitive Sweep" (2026-06 -> 2026-07-04)
@@ -131,5 +161,9 @@ lets the next maintainer see what's covered and pick up cleanly.
 - **Dedup-baseline-first:** always rebuild the 3-stage known-name baseline before a sweep, or you re-find the
   registry.
 - **Family-not-variant + real-source:** the two rules that keep the corpus honest and non-slop.
-- **All names findable:** aliases are first-class; true distinctness is `graph_shape_hash`, reported alongside
-  the named-entry count.
+- **Distinctness = unique computational graph** (`graph_shape_hash`) -- see "WHAT DISTINCT MEANS" above. The
+  catalog's `family` field is only a browse-GROUPING label (e.g. all ResNets share `family=resnet`), NOT the
+  distinctness unit: resnet18/34/50 share a family label but are DISTINCT architectures (distinct graphs,
+  distinct entries, distinct in the architecture count). Never collapse by family label.
+- **All names findable:** aliases are first-class; the named-entry count and the distinct-architecture
+  (`graph_shape_hash`) count are both reported.
