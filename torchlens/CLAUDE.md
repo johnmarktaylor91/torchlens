@@ -131,7 +131,7 @@ exclusive with backward-related capture because it discards the autograd graph.
 - `intervention/_super/` - internal Bundle-level Super* aligned views and accessors.
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.
 - `bridge/`, `compat/`, `callbacks/` - optional integrations and migration facades.
-- `viewer/`, `paper/`, `notebook/`, `llm/`, `neuro/` - appliance package boundaries gated by extras.
+- `notebook/`, `neuro/` - appliance package boundaries gated by extras.
 
 ## Key Concepts
 
@@ -168,6 +168,6 @@ arrays and preserve `tf.bfloat16` logical dtype metadata.
 Intervention specs can be saved at audit, executable-with-callables, or portable levels.
 
 ### Appliances
-The five appliance subfolders are part of the 2.x package layout. `viewer`, `paper`, and
-`llm` are empty stubs with docstring intent. `notebook` and `neuro` currently enforce their
-extras by importing required dependencies, but export no public objects yet.
+The appliance subfolders `notebook` and `neuro` are part of the 2.x package layout. They
+currently enforce their extras by importing required dependencies, but export no public
+objects yet.

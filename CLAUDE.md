@@ -132,8 +132,8 @@ print(tl.compat.report(model, x).to_markdown())
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools.
-- Appliance packages `viewer`, `paper`, `notebook`, `llm`, and `neuro` reserve extras
-  boundaries; most are stubs except import gating in `notebook` and `neuro`.
+- Appliance packages `notebook` and `neuro` reserve extras boundaries and enforce
+  import gating for their optional dependencies.
 
 ## Anti-Patterns
 

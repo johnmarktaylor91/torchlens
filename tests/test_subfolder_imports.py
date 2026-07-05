@@ -22,24 +22,6 @@ def _drop_module(module_name: str) -> None:
             del sys.modules[loaded_name]
 
 
-def test_viewer_imports() -> None:
-    """Verify the viewer namespace is reserved and importable."""
-    _drop_module("torchlens.viewer")
-
-    module = importlib.import_module("torchlens.viewer")
-
-    assert module.__all__ == []
-
-
-def test_paper_imports() -> None:
-    """Verify the paper namespace is reserved and importable."""
-    _drop_module("torchlens.paper")
-
-    module = importlib.import_module("torchlens.paper")
-
-    assert module.__all__ == []
-
-
 def test_notebook_imports() -> None:
     """Verify the notebook namespace imports when its extra deps are present."""
     _drop_module("torchlens.notebook")
@@ -58,15 +40,6 @@ def test_notebook_import_reports_missing_dependency() -> None:
     with patch.dict("sys.modules", {"IPython": None}):
         with pytest.raises(ImportError, match=r"torchlens\.notebook requires extra"):
             importlib.import_module("torchlens.notebook")
-
-
-def test_llm_imports() -> None:
-    """Verify the LLM namespace is reserved and importable."""
-    _drop_module("torchlens.llm")
-
-    module = importlib.import_module("torchlens.llm")
-
-    assert module.__all__ == []
 
 
 def test_neuro_imports() -> None:
