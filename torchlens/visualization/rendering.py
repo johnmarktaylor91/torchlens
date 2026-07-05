@@ -6718,6 +6718,32 @@ def _collapsed_module_owner_key(
     return parent_key if parent_key in trace.modules else None
 
 
+def _run_fold_ellipsis_owner_key(
+    trace: "Trace",
+    fold: "ModuleRunFold",
+    vis_mode: str,
+) -> str | None:
+    """Return the module cluster that owns a run-fold ellipsis node.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    fold:
+        Fold descriptor represented by the ellipsis.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str | None
+        Parent cluster key for the fold representative, or ``None`` for
+        top-level emission.
+    """
+
+    return _collapsed_module_owner_key(trace, fold.representative, "1", vis_mode)
+
+
 def _compact_int_ranges(values: Sequence[int]) -> str:
     """Return sorted integers in compact range notation.
 
@@ -7567,8 +7593,8 @@ def _queue_run_fold_ellipsis_node(
     fold:
         Fold descriptor represented by the ellipsis.
     module_key:
-        Module cluster key that owns the current folded-run edge, or ``-1`` for
-        top-level emission.
+        Module cluster key that owns the ellipsis node, or ``-1`` for top-level
+        emission.
 
     Returns
     -------
@@ -7820,7 +7846,7 @@ def _add_edges_for_node(
                 run_fold_ellipsis_nodes,
                 representative_name=representative_name,
                 fold=ellipsis_fold,
-                module_key=edge_module_key,
+                module_key=_run_fold_ellipsis_owner_key(self, ellipsis_fold, vis_mode) or -1,
             )
             run_fold_ellipsis_edge_key = (
                 "run_fold_ellipsis_edge",

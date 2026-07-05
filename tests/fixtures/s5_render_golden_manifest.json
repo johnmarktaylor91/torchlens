@@ -48,8 +48,8 @@
         "dot_sha256": "cebd5b7b4e9e0f609c7e0c31549edd8d0b927b7b7b640e81b57d939a0869ebd7"
       },
       "none_fold_True": {
-        "dot_len": 5639,
-        "dot_sha256": "a10b41714aadd97e837ef8e5e970c3916a3cb8c56ebdff5dbb2de12f989590a4"
+        "dot_len": 5640,
+        "dot_sha256": "3d3865944fdc2c9bdd985a5f93ddbace2f799df1c4604f87eab07369fc2339d1"
       }
     },
     "torchvision_resnet18": {
