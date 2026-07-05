@@ -515,7 +515,15 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "predicate":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
-    if kind in {"grad_fn", "grad_fn_handle", "intervening", "without_op", "label"}:
+    if kind in {
+        "grad_fn",
+        "grad_fn_handle",
+        "intervening",
+        "without_op",
+        "label",
+        "grad_kind",
+        "backward_pass",
+    }:
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
 
     raise SiteResolutionError(f"Unsupported selector kind {kind!r}.")
@@ -720,7 +728,75 @@ def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
         if is_custom is not None and bool(site.is_custom) is not bool(is_custom):
             return False
         return True
+    if kind == "grad_kind":
+        return _grad_fn_has_saved_grad_kind(site, str(value))
+    if kind == "backward_pass":
+        return _grad_fn_has_backward_pass(site, int(value))
     return False
+
+
+def _grad_fn_has_saved_grad_kind(site: "GradFn", grad_kind: str) -> bool:
+    """Return whether a grad_fn has calls with the requested saved grad tuple.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn_handle log.
+    grad_kind:
+        ``"grad_input"`` or ``"grad_output"``.
+
+    Returns
+    -------
+    bool
+        Whether at least one call has the requested tuple saved.
+    """
+
+    field_name = "grad_inputs" if grad_kind == "grad_input" else "grad_outputs"
+    return any(getattr(call, field_name, None) is not None for call in _grad_fn_call_values(site))
+
+
+def _grad_fn_has_backward_pass(site: "GradFn", pass_index: int) -> bool:
+    """Return whether a grad_fn participates in a backward pass.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn_handle log.
+    pass_index:
+        One-based global backward pass number.
+
+    Returns
+    -------
+    bool
+        Whether the grad_fn has a call or origin in the requested pass.
+    """
+
+    if any(
+        getattr(call, "backward_pass_index", None) == pass_index
+        for call in _grad_fn_call_values(site)
+    ):
+        return True
+    return getattr(site, "origin_backward_pass", None) == pass_index
+
+
+def _grad_fn_call_values(site: "GradFn") -> tuple[Any, ...]:
+    """Return GradFnCall values from dict or accessor-backed call storage.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn_handle log.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Recorded GradFnCall values.
+    """
+
+    calls = site.calls
+    if isinstance(calls, dict):
+        return tuple(calls.values())
+    return tuple(calls._list)
 
 
 def _output_matches(site: Site, value: Any) -> bool:

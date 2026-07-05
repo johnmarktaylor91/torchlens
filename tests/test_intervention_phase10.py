@@ -16,7 +16,7 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.save import _write_tlspec_tensor_blob
 from torchlens.intervention.save import resolve_function_registry_key, save_intervention
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention.types import FireRecord, FunctionRegistryKey
 
 
 class _ReluModel(nn.Module):
@@ -101,6 +101,45 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     compat = tl.check_spec_compat(spec, _log(_ReluModel(), x))
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
     assert compat.targets_resolve_identically is True
+
+
+@pytest.mark.smoke
+def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
+    """Live forward hook records survive intervention spec save/load."""
+
+    log = tl.trace(
+        _ReluModel(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+        hooks={tl.func("relu"): tl.zero_ablate()},
+    )
+    path = tmp_path / "forward_records.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec = tl.load_intervention_spec(path)
+
+    assert spec.records
+    assert all(isinstance(record, FireRecord) for record in spec.records)
+    assert any(record.direction == "forward" for record in spec.records)
+
+
+@pytest.mark.smoke
+def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
+    """Live backward hook records survive intervention spec save/load."""
+
+    x = torch.randn(2, 3, requires_grad=True)
+    log = tl.trace(_ReluModel(), x, save_grads="all", backward_ready=True)
+    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    path = tmp_path / "backward_records.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec = tl.load_intervention_spec(path)
+
+    backward_records = [record for record in spec.records if record.direction == "backward"]
+    assert backward_records
+    assert backward_records[0].backward_pass_index == 1
+    assert backward_records[0].call_index == 1
 
 
 @pytest.mark.smoke

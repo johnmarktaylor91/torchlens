@@ -49,6 +49,25 @@ class _HookedMlp(torch.nn.Module):
         return self.fc3(x)
 
 
+class _NestedFreshTensorModel(torch.nn.Module):
+    """Nested module fixture for raw-hook fresh tensor replacements."""
+
+    def __init__(self) -> None:
+        """Initialize nested modules."""
+
+        super().__init__()
+        self.block = torch.nn.Sequential(
+            torch.nn.Linear(4, 4),
+            torch.nn.ReLU(),
+        )
+        self.head = torch.nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run nested modules and return the model output."""
+
+        return self.head(self.block(x))
+
+
 def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     """Return a zero replacement for a TorchLens live hook."""
 
@@ -169,3 +188,42 @@ def test_quantization_sensitivity_pattern() -> None:
     assert sigmoid_layer.intervention_replaced is True
     assert sigmoid_layer.parents
     assert sigmoid_layer.out is not None
+
+
+def test_fresh_tensor_replacement_at_nested_boundary_and_model_output() -> None:
+    """Fresh tensors from nested and root raw hooks keep TorchLens metadata intact."""
+
+    model = _NestedFreshTensorModel()
+
+    def nested_hook(
+        module: torch.nn.Module,
+        args: tuple[torch.Tensor, ...],
+        output: torch.Tensor,
+    ) -> torch.Tensor:
+        """Return a fresh tensor at a nested module boundary."""
+
+        del module, args
+        return output.clone()
+
+    def root_hook(
+        module: torch.nn.Module,
+        args: tuple[torch.Tensor, ...],
+        output: torch.Tensor,
+    ) -> torch.Tensor:
+        """Return a fresh tensor as the model output."""
+
+        del module, args
+        return output + torch.zeros_like(output)
+
+    nested_handle = model.block.register_forward_hook(nested_hook)
+    root_handle = model.register_forward_hook(root_hook)
+    try:
+        log = tl.trace(model, torch.randn(3, 4), intervention_ready=True)
+    finally:
+        nested_handle.remove()
+        root_handle.remove()
+
+    assert log.output_layers
+    assert log[log.output_layers[0]].out is not None
+    assert any(getattr(layer, "intervention_replaced", False) for layer in log.layer_list)
+    assert all(getattr(layer, "layer_label", None) for layer in log.layer_list)

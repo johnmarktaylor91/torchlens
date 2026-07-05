@@ -25,7 +25,29 @@ from .._literals import (
     VisRendererLiteral,
 )
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
+from ..intervention.types import FireRecord
 from .module import Module
+
+
+def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
+    """Return fire records stored on a backward call reference.
+
+    Parameters
+    ----------
+    value:
+        FireRecord, tuple of records, or another value.
+
+    Returns
+    -------
+    tuple[FireRecord, ...]
+        Fire records contained in ``value``.
+    """
+
+    if isinstance(value, FireRecord):
+        return (value,)
+    if isinstance(value, tuple):
+        return tuple(item for item in value if isinstance(item, FireRecord))
+    return ()
 
 
 class TraceVisualizationMixin:
@@ -498,6 +520,15 @@ class TraceVisualizationMixin:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                     records.append(record)
+        for grad_fn in getattr(self, "grad_fn_logs", {}).values():
+            calls = getattr(getattr(grad_fn, "calls", None), "_list", [])
+            for call in calls:
+                for record in _flatten_backward_fire_ref(
+                    getattr(call, "intervention_fire_ref", None)
+                ):
+                    record_timestamp = getattr(record, "timestamp", None)
+                    if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
+                        records.append(record)
         return tuple(records)
 
     def summary(
