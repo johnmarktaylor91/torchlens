@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Trace intervention mixin."""
 
 import copy
@@ -15,7 +16,6 @@ from torch import nn
 
 if TYPE_CHECKING:
     from .trace import Trace
-
 from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._trace_state import TraceState

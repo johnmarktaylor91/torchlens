@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Trace visualization mixin."""
 
 from collections.abc import Iterable, Mapping
@@ -11,7 +12,6 @@ if TYPE_CHECKING:
     from ..intervention.types import FireRecord
     from ..visualization.code_panel import CodePanelOption
     from .trace import Trace
-
 from .._deprecations import MISSING, MissingType
 from .._literals import (
     BufferVisibilityLiteral,

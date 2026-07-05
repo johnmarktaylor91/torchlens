@@ -74,6 +74,7 @@ from .loop_grouping_adapter import (
     RecurrenceNode,
     group_recurrent_nodes,
 )
+from .saved_summary import refresh_saved_module_call_count
 from ._materialize import materialize_from_events
 from .ast_branches import resolve_var_names
 
@@ -212,12 +213,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         sum(int(getattr(layer_entry, "activation_memory", 0) or 0) for layer_entry in saved_layers)
     )
     self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
-    saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
-    self.num_saved_module_calls = sum(
-        1
-        for module_call in getattr(self, "module_calls", [])
-        if any(label in saved_labels for label in getattr(module_call, "layers", []))
-    )
+    refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
 
 
 def postprocess(
@@ -358,6 +354,7 @@ def postprocess(
     # Step 16: Build structured Module objects from raw module_* dicts.
     with _vtimed(self, "  Step 16: Build module logs"):
         _build_module_logs(self)
+        refresh_saved_module_call_count(self)
 
     # Step 16.5: Compute graph shape hash before _set_tracing_finished changes access behavior.
     with _vtimed(self, "  Step 16.5: Graph shape hash"):

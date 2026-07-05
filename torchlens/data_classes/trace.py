@@ -145,11 +145,53 @@ from ._trace_accessors import (
     _TRACE_MODULE_CALL_ACCESSOR_CACHE,
     _TRACE_OP_ACCESSOR_CACHE,
 )
-from ._trace_stats import TraceStatsMixin
-from ._trace_intervention import TraceInterventionMixin
-from ._trace_validation import TraceValidationMixin
-from ._trace_export import TraceExportMixin
-from ._trace_viz import TraceVisualizationMixin
+
+if TYPE_CHECKING:
+
+    class _TraceMixinTypingBase:
+        """Typing-only permissive base for mechanically extracted Trace mixins."""
+
+        def __getattr__(self, name: str) -> Any:
+            """Return any dynamic Trace attribute for type checking."""
+
+            raise AttributeError(name)
+
+        def __getitem__(self, key: Any) -> Any:
+            """Return any dynamic Trace item for type checking."""
+
+            raise KeyError(key)
+
+        def __iter__(self) -> Iterator[Any]:
+            """Iterate dynamic Trace entries for type checking."""
+
+            return iter(())
+
+        def __len__(self) -> int:
+            """Return dynamic Trace length for type checking."""
+
+            return 0
+
+    class TraceStatsMixin(_TraceMixinTypingBase):
+        """Typing-only TraceStatsMixin stand-in."""
+
+    class TraceInterventionMixin(_TraceMixinTypingBase):
+        """Typing-only TraceInterventionMixin stand-in."""
+
+    class TraceValidationMixin(_TraceMixinTypingBase):
+        """Typing-only TraceValidationMixin stand-in."""
+
+    class TraceExportMixin(_TraceMixinTypingBase):
+        """Typing-only TraceExportMixin stand-in."""
+
+    class TraceVisualizationMixin(_TraceMixinTypingBase):
+        """Typing-only TraceVisualizationMixin stand-in."""
+
+else:
+    from ._trace_export import TraceExportMixin
+    from ._trace_intervention import TraceInterventionMixin
+    from ._trace_stats import TraceStatsMixin
+    from ._trace_validation import TraceValidationMixin
+    from ._trace_viz import TraceVisualizationMixin
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 

@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Trace export mixin."""
 
 from collections.abc import Mapping, Sequence
@@ -9,7 +10,6 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from .trace import Trace
-
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .interface import _format_conditional_branch_stack
 

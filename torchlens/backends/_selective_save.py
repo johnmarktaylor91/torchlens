@@ -12,6 +12,7 @@ from ..intervention.selectors import (
     NotSelector,
     SelectorLike,
 )
+from ..postprocess.saved_summary import refresh_saved_module_call_count
 from ..quantities import Bytes
 
 _STATIC_SELECTOR_KINDS = frozenset(
@@ -250,12 +251,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
         sum(int(getattr(op, "activation_memory", 0) or 0) for op in saved_ops)
     )
     trace.num_saved_layers = len({op.layer_label for op in saved_ops})
-    saved_layer_labels = {op.layer_label for op in saved_ops}
-    trace.num_saved_module_calls = sum(
-        1
-        for module_call in getattr(trace, "module_calls", ())
-        if any(label in saved_layer_labels for label in getattr(module_call, "layers", ()))
-    )
+    refresh_saved_module_call_count(trace, {op.label for op in saved_ops})
     trace._layers_saved = trace.num_saved_ops == len(getattr(trace, "layer_list", ()))
 
 

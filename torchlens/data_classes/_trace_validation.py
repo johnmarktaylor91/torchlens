@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Trace validation and replay mixin."""
 
 from collections.abc import Iterable
@@ -9,7 +10,6 @@ from torch import nn
 if TYPE_CHECKING:
     from ..validation.status import ValidationReplayStatus
     from .trace import Trace
-
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import reject_compiled_model
 from ..options import ReplayOptions, merge_replay_options

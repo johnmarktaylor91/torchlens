@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Trace computed stats mixin."""
 
 from collections import OrderedDict

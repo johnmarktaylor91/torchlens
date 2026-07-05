@@ -829,12 +829,6 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         and not getattr(layer_entry, "is_orphan", False)
     ]
     self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
-    saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
-    self.num_saved_module_calls = sum(
-        1
-        for module_call in getattr(self, "module_calls", [])
-        if any(label in saved_labels for label in getattr(module_call, "layers", []))
-    )
 
     new_equiv_operations_tensors: dict[Any, set[str]] = {}
     for key, equiv_values in self.op_equivalence_classes.items():
