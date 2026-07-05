@@ -14,8 +14,21 @@ Exemption decisions (which ops to skip, which args are structural) are
 delegated to the registries in ``exemptions.py``.
 """
 
-from collections import defaultdict, deque
-from typing import Optional, Any, Dict, List, Sequence, Set, TYPE_CHECKING, Union, cast
+from collections import Counter, defaultdict, deque
+from dataclasses import dataclass, field
+from typing import (
+    Optional,
+    Any,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Sequence,
+    Set,
+    TYPE_CHECKING,
+    Union,
+    cast,
+)
 
 import torch
 
@@ -44,6 +57,259 @@ from .exemptions import (
     perturbed_layer_at_structural_position,
     posthoc_perturb_check,
 )
+from .status import ValidationReplayStatus
+
+ValidationDecisionKind = Literal["validated", "failed", "unverified", "exempted"]
+ValidationDecisionPhase = Literal["ground_truth", "replay", "perturbation", "metadata"]
+
+
+@dataclass(frozen=True)
+class ValidationDecision:
+    """A single replay-validation decision for audit and golden tests.
+
+    Parameters
+    ----------
+    op_label:
+        Operation label associated with the decision, or ``None`` for a
+        trace-level decision.
+    func_name:
+        Captured function name for the operation, when available.
+    phase:
+        Validation phase that produced the decision.
+    decision:
+        Stable decision kind.
+    reason:
+        Stable reason code explaining the decision.
+    """
+
+    op_label: str | None
+    func_name: str | None
+    phase: ValidationDecisionPhase
+    decision: ValidationDecisionKind
+    reason: str
+
+    def as_dict(self) -> dict[str, str | None]:
+        """Return a JSON-stable representation of this decision.
+
+        Returns
+        -------
+        dict of str to str or None
+            JSON-serializable decision payload.
+        """
+
+        return {
+            "op_label": self.op_label,
+            "func_name": self.func_name,
+            "phase": self.phase,
+            "decision": self.decision,
+            "reason": self.reason,
+        }
+
+
+@dataclass
+class ValidationDecisionRecorder:
+    """Collect replay-validation decisions and coverage counts.
+
+    Attributes
+    ----------
+    decisions:
+        Ordered per-op decisions.
+    """
+
+    decisions: list[ValidationDecision] = field(default_factory=list)
+
+    def record(
+        self,
+        *,
+        op_label: str | None,
+        func_name: str | None,
+        phase: ValidationDecisionPhase,
+        decision: ValidationDecisionKind,
+        reason: str,
+    ) -> None:
+        """Append a validation decision.
+
+        Parameters
+        ----------
+        op_label:
+            Operation label associated with the decision.
+        func_name:
+            Captured function name for the operation, when available.
+        phase:
+            Validation phase that produced the decision.
+        decision:
+            Stable decision kind.
+        reason:
+            Stable reason code explaining the decision.
+        """
+
+        self.decisions.append(
+            ValidationDecision(
+                op_label=op_label,
+                func_name=func_name,
+                phase=phase,
+                decision=decision,
+                reason=reason,
+            )
+        )
+
+    def count(self, decision: ValidationDecisionKind) -> int:
+        """Return the number of decisions of a given kind.
+
+        Parameters
+        ----------
+        decision:
+            Decision kind to count.
+
+        Returns
+        -------
+        int
+            Number of matching decisions.
+        """
+
+        return sum(item.decision == decision for item in self.decisions)
+
+    def reason_counts(self, decision: ValidationDecisionKind) -> dict[str, int]:
+        """Return reason-code counts for a given decision kind.
+
+        Parameters
+        ----------
+        decision:
+            Decision kind to summarize.
+
+        Returns
+        -------
+        dict of str to int
+            Counts keyed by stable reason code.
+        """
+
+        return dict(
+            sorted(
+                Counter(item.reason for item in self.decisions if item.decision == decision).items()
+            )
+        )
+
+    def as_status(self, *, backend: str = "torch") -> ValidationReplayStatus:
+        """Build a trace-level replay status from collected decisions.
+
+        Parameters
+        ----------
+        backend:
+            Backend name to attach to the status.
+
+        Returns
+        -------
+        ValidationReplayStatus
+            Aggregate replay-validation status.
+        """
+
+        return ValidationReplayStatus.from_replay_counts(
+            backend=backend,
+            source="live",
+            replayed_node_count=self.count("validated"),
+            unverified_node_count=self.count("unverified"),
+            failed_node_count=self.count("failed"),
+            unverified_reason_counts=self.reason_counts("unverified"),
+            exempted_reason_counts=self.reason_counts("exempted"),
+            decisions=tuple(item.as_dict() for item in self.decisions),
+        )
+
+
+@dataclass(frozen=True)
+class ValidationCheckResult:
+    """Internal replay result preserving pass/fail and coverage status.
+
+    Parameters
+    ----------
+    decision:
+        Stable decision kind.
+    reason:
+        Stable reason code explaining the decision.
+    """
+
+    decision: ValidationDecisionKind
+    reason: str
+
+    @property
+    def failed(self) -> bool:
+        """Return whether this result is a hard validation failure.
+
+        Returns
+        -------
+        bool
+            True for hard failures.
+        """
+
+        return self.decision == "failed"
+
+    @classmethod
+    def validated(cls, reason: str = "replay_matched") -> "ValidationCheckResult":
+        """Build a validated result.
+
+        Parameters
+        ----------
+        reason:
+            Stable reason code.
+
+        Returns
+        -------
+        ValidationCheckResult
+            Validated result.
+        """
+
+        return cls("validated", reason)
+
+    @classmethod
+    def failed_result(cls, reason: str) -> "ValidationCheckResult":
+        """Build a failed result.
+
+        Parameters
+        ----------
+        reason:
+            Stable reason code.
+
+        Returns
+        -------
+        ValidationCheckResult
+            Failed result.
+        """
+
+        return cls("failed", reason)
+
+    @classmethod
+    def unverified(cls, reason: str) -> "ValidationCheckResult":
+        """Build an unverified result.
+
+        Parameters
+        ----------
+        reason:
+            Stable reason code.
+
+        Returns
+        -------
+        ValidationCheckResult
+            Unverified result.
+        """
+
+        return cls("unverified", reason)
+
+    @classmethod
+    def exempted(cls, reason: str) -> "ValidationCheckResult":
+        """Build an exempted result.
+
+        Parameters
+        ----------
+        reason:
+            Stable reason code.
+
+        Returns
+        -------
+        ValidationCheckResult
+            Exempted result.
+        """
+
+        return cls("exempted", reason)
+
 
 # Maximum number of random perturbation attempts before giving up on finding
 # a value different from the original.  Relevant for integer/bool tensors
@@ -216,7 +482,7 @@ def validate_saved_outs(
     ground_truth_output_tensors: List[torch.Tensor],
     verbose: bool = False,
     validate_metadata: bool = True,
-) -> bool:
+) -> ValidationReplayStatus:
     """Run the full validation pipeline on a completed Trace.
 
     The BFS traversal starts from two kinds of seed layers:
@@ -239,7 +505,8 @@ def validate_saved_outs(
         validate_metadata: Whether to run metadata invariant checks (default True).
 
     Returns:
-        True if all checks pass, False otherwise.
+        Aggregate replay-validation status. Fully validated pass/fail results
+        remain bool-compatible through callers that unwrap completed statuses.
     """
     _raise_if_portable_bundle_log(self)
 
@@ -256,6 +523,7 @@ def validate_saved_outs(
     )
 
     reset_validation_failure(self)
+    decision_recorder = ValidationDecisionRecorder()
 
     # Phase 0: verify logged outputs match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
@@ -275,7 +543,16 @@ def validate_saved_outs(
                         message=f"output layer #{i} has no saved out",
                     ),
                 )
-                return False
+                decision_recorder.record(
+                    op_label=output_layer_label,
+                    func_name=getattr(output_layer, "func_name", None),
+                    phase="ground_truth",
+                    decision="failed",
+                    reason="output_missing",
+                )
+                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+                setattr(self, "_validation_replay_status", status)
+                return status
             if not _ground_truth_output_matches_saved(
                 output_layer.out, ground_truth_output_tensors[i]
             ):
@@ -293,16 +570,35 @@ def validate_saved_outs(
                         message=f"output #{i} does not match ground truth",
                     ),
                 )
-                return False
+                decision_recorder.record(
+                    op_label=output_layer_label,
+                    func_name=getattr(output_layer, "func_name", None),
+                    phase="ground_truth",
+                    decision="failed",
+                    reason="ground_truth_mismatch",
+                )
+                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+                setattr(self, "_validation_replay_status", status)
+                return status
+            decision_recorder.record(
+                op_label=output_layer_label,
+                func_name=getattr(output_layer, "func_name", None),
+                phase="ground_truth",
+                decision="validated",
+                reason="ground_truth_matched",
+            )
 
     # BFS backward from outputs + internally terminated layers.
     # Edge-counting approach: a parent is enqueued only after ALL its child
     # edges are validated (validated_child_edges == set(children)).
     validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
-    validated_layers = {
-        self[label].layer_label for label in self.output_layers + self.internal_sink_ops
-    }
-    layers_to_validate_parents_for = deque(validated_layers)
+    seed_layers = list(
+        dict.fromkeys(
+            self[label].layer_label for label in self.output_layers + self.internal_sink_ops
+        )
+    )
+    validated_layers = set(seed_layers)
+    layers_to_validate_parents_for = deque(seed_layers)
 
     while len(layers_to_validate_parents_for) > 0:
         layer_to_validate_parents_for = layers_to_validate_parents_for.popleft()
@@ -313,9 +609,12 @@ def validate_saved_outs(
             validated_child_edges_for_each_layer,
             layers_to_validate_parents_for,  # type: ignore[arg-type]
             verbose,
+            decision_recorder,
         )
-        if not parents_valid:
-            return False
+        if parents_valid.failed:
+            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+            setattr(self, "_validation_replay_status", status)
+            return status
 
     # Completeness check: BFS must visit every layer in the graph.
     expected_layers = {layer.layer_label for layer in self.layer_list}
@@ -336,7 +635,16 @@ def validate_saved_outs(
                 extra={"n_unreached": len(unreached)},
             ),
         )
-        return False
+        decision_recorder.record(
+            op_label=None,
+            func_name=None,
+            phase="metadata",
+            decision="failed",
+            reason="bfs_incomplete",
+        )
+        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+        setattr(self, "_validation_replay_status", status)
+        return status
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:
@@ -361,9 +669,18 @@ def validate_saved_outs(
                     message=f"{type(invariant_error).__name__}: {invariant_error}",
                 ),
             )
+            decision_recorder.record(
+                op_label=None,
+                func_name=None,
+                phase="metadata",
+                decision="failed",
+                reason="metadata_invariant_exception",
+            )
             raise
 
-    return True
+    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+    setattr(self, "_validation_replay_status", status)
+    return status
 
 
 def validate_parents_of_saved_layer(
@@ -373,7 +690,8 @@ def validate_parents_of_saved_layer(
     validated_child_edges_for_each_layer: Dict[str, Set[str]],
     layers_to_validate_parents_for: List[str],
     verbose: bool = False,
-) -> bool:
+    decision_recorder: ValidationDecisionRecorder | None = None,
+) -> ValidationCheckResult:
     """Validate a single layer's parent edges: argument logging, forward replay,
     and perturbation for each parent.
 
@@ -402,7 +720,7 @@ def validate_parents_of_saved_layer(
         verbose: Whether to print warning messages on validation failure.
 
     Returns:
-        True if all parent edges are valid, False on the first failure.
+        Structured result for the parent-edge validation step.
     """
     layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
     ops_to_validate = _validation_ops_for_entry(layer_to_validate_parents_for)
@@ -424,17 +742,42 @@ def validate_parents_of_saved_layer(
                 message="parent not logged as an argument, or logged an extra time",
             ),
         )
-        return False
+        if decision_recorder is not None:
+            decision_recorder.record(
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer_to_validate_parents_for, "func_name", None),
+                phase="replay",
+                decision="failed",
+                reason="arg_logging_mismatch",
+            )
+        return ValidationCheckResult.failed_result("arg_logging_mismatch")
 
     # Forward replay: re-execute with correct parent values, expect same output.
     ops_to_replay = _representative_ops_for_replay(self, ops_to_validate)
     for target_op in ops_to_replay:
         if _is_intentional_intervention_replacement(target_op):
+            if decision_recorder is not None:
+                decision_recorder.record(
+                    op_label=target_op.label,
+                    func_name=getattr(target_op, "func_name", None),
+                    phase="replay",
+                    decision="exempted",
+                    reason="intentional_intervention_replacement",
+                )
             continue
-        if not _check_whether_func_on_saved_parents_yields_saved_tensor(
+        replay_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
             self, target_op.label, perturb=False
-        ):
-            return False
+        )
+        if decision_recorder is not None:
+            decision_recorder.record(
+                op_label=target_op.label,
+                func_name=getattr(target_op, "func_name", None),
+                phase="replay",
+                decision=replay_result.decision,
+                reason=replay_result.reason,
+            )
+        if replay_result.failed:
+            return replay_result
 
     # Perturbation: for each parent, substitute random values and expect
     # the output to change, proving that parent genuinely influences this layer.
@@ -442,17 +785,42 @@ def validate_parents_of_saved_layer(
     representative_parent_edges = _representative_parent_edges(self, ops_to_replay)
     for target_op, perturb_layer in representative_parent_edges:
         if _is_intentional_intervention_replacement(target_op):
+            if decision_recorder is not None:
+                decision_recorder.record(
+                    op_label=target_op.label,
+                    func_name=getattr(target_op, "func_name", None),
+                    phase="perturbation",
+                    decision="exempted",
+                    reason="intentional_intervention_replacement",
+                )
             continue
         if target_op.func_name in SKIP_PERTURBATION_ENTIRELY:
+            if decision_recorder is not None:
+                decision_recorder.record(
+                    op_label=target_op.label,
+                    func_name=getattr(target_op, "func_name", None),
+                    phase="perturbation",
+                    decision="exempted",
+                    reason=f"skip_perturbation_entirely:{target_op.func_name}",
+                )
             continue
-        if not _check_whether_func_on_saved_parents_yields_saved_tensor(
+        perturb_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
             self,
             target_op.label,
             perturb=True,
             layers_to_perturb=[perturb_layer],
             verbose=verbose,
-        ):
-            return False
+        )
+        if decision_recorder is not None:
+            decision_recorder.record(
+                op_label=target_op.label,
+                func_name=getattr(target_op, "func_name", None),
+                phase="perturbation",
+                decision=perturb_result.decision,
+                reason=perturb_result.reason,
+            )
+        if perturb_result.failed:
+            return perturb_result
 
     # Record validated edges and enqueue parents whose ALL child edges are now validated.
     for parent_layer_label in layer_to_validate_parents_for.parents:
@@ -473,7 +841,7 @@ def validate_parents_of_saved_layer(
             ):
                 layers_to_validate_parents_for.append(parent_layer_label)
 
-    return True
+    return ValidationCheckResult.validated("parent_edges_validated")
 
 
 def _is_intentional_intervention_replacement(layer: "Op") -> bool:
@@ -548,7 +916,7 @@ def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> 
         data_parents = _data_parent_labels(target_op)
         if not data_parents:
             representative_ops.setdefault(target_op.label, target_op)
-        for parent_label in data_parents:
+        for parent_label in sorted(data_parents):
             parent_layer_label = self[parent_label].layer_label
             representative_ops.setdefault(parent_layer_label, target_op)
     if not representative_ops:
@@ -572,7 +940,7 @@ def _representative_parent_edges(self: "Trace", ops_to_validate: List[Op]) -> Li
 
     representative_edges: dict[str, tuple[Op, str]] = {}
     for target_op in ops_to_validate:
-        for parent_label in _data_parent_labels(target_op):
+        for parent_label in sorted(_data_parent_labels(target_op)):
             parent_layer_label = self[parent_label].layer_label
             representative_edges.setdefault(parent_layer_label, (target_op, parent_label))
     return list(representative_edges.values())
@@ -818,7 +1186,7 @@ def _check_arglocs_correct_for_arg(
       all-zero, or all-abs-one, or another parent has identical values).
     - If the parent is logged at that position BUT its out does not
       match the saved arg value, that is an error (with a special exemption
-      for in-place RNG ops like ``bernoulli_`` and ``full`` that mutate after
+      for in-place RNG ops like ``bernoulli_`` that mutate after
       logging).
 
     Args:
@@ -887,13 +1255,13 @@ def _check_arglocs_correct_for_arg(
         )
         return False
 
-    # Case 2 exemption: in-place RNG ops (bernoulli_, full) mutate the tensor
+    # Case 2 exemption: in-place RNG ops (bernoulli_) mutate the tensor
     # AFTER it was logged as an arg, so the saved out no longer matches
     # the saved_args snapshot.  This is expected and not a real mismatch.
     if (
         not parent_layer_matches_arg
         and parent_layerged_as_arg
-        and parent_layer.func_name in ["bernoulli_", "full"]
+        and parent_layer.func_name == "bernoulli_"
     ):
         return True
 
@@ -1444,7 +1812,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     perturb: bool = False,
     layers_to_perturb: Optional[List[str]] = None,
     verbose: bool = False,
-) -> bool:
+) -> ValidationCheckResult:
     """Checks whether executing the saved function for a layer on the saved value of its parent layers
     in fact yields the saved outs for that layer.
 
@@ -1454,7 +1822,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         layers_to_perturb: layers for which to perturb the saved outs
 
     Returns:
-        True if the outs match, False otherwise
+        Structured validation decision for this replay/perturbation attempt.
     """
     if layers_to_perturb is None:
         layers_to_perturb = []
@@ -1467,19 +1835,21 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Input layers and buffer layers without parents have no function to replay
     # (func is None for model inputs and parentless buffers).
     if layer.func is None:
-        return True
+        return ValidationCheckResult.exempted("functionless_source_or_boundary")
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
     if layer.func_name in SKIP_VALIDATION_ENTIRELY:
-        return True
+        return ValidationCheckResult.unverified(f"skip_validation_entirely:{layer.func_name}")
 
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
-        return True
+        return ValidationCheckResult.exempted("pre_perturbation_exemption")
 
-    input_args = _prepare_input_args_for_validating_layer(self, layer, layers_to_perturb)
+    input_args, unverified_reason = _prepare_input_args_for_validating_layer(
+        self, layer, layers_to_perturb
+    )
     if input_args is None:
-        return True  # Can't validate without saved function args (#131)
+        return ValidationCheckResult.unverified(unverified_reason or "missing_saved_args")
 
     recomputed_output = _execute_func_with_restored_state(
         layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
@@ -1510,10 +1880,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                     message="replay re-execution raised an exception (run verbose for traceback)",
                 ),
             )
-            return False
+            return ValidationCheckResult.failed_result("replay_execution_exception")
         # Perturbed execution raised -- the perturbed values caused an invalid
-        # input (e.g., wrong shape).  Treat as exempt.
-        return True
+        # input (e.g., wrong shape). It is unverified, not a pass.
+        return ValidationCheckResult.unverified("perturbation_execution_exception")
 
     matches_saved = tensor_nanequal(recomputed_output, layer.out, allow_tolerance=True)
     if not matches_saved and not perturb and isinstance(recomputed_output, torch.Tensor):
@@ -1523,11 +1893,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if not matches_saved and not perturb:
         # Exemption: parent is an in-place RNG op that may have mutated its
         # tensor after the child logged it as an arg.
-        parent_has_inplace_rng = any(
-            self[p].func_name in ["bernoulli_", "full"] for p in layer.parents
-        )
+        parent_has_inplace_rng = any(self[p].func_name == "bernoulli_" for p in layer.parents)
         if parent_has_inplace_rng:
-            return True
+            return ValidationCheckResult.exempted("parent_inplace_rng_bernoulli")
         # Surface the computed reduction depth so a band-C miss is diagnosable:
         # depth < 64 means the op was (correctly) ineligible for the deep-numeric
         # tolerance; a large depth that still failed points at a real replay bug.
@@ -1562,7 +1930,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                 message="isolated replay does not reproduce saved out",
             ),
         )
-        return False
+        return ValidationCheckResult.failed_result("replay_mismatch")
 
     # Perturbation produced identical output -- run posthoc checks to see if
     # there's a valid excuse (bool output, special-value args, type cast, etc.).
@@ -1593,16 +1961,17 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                     extra={"perturbed_parents": list(layers_to_perturb)},
                 ),
             )
-        return perturb_ok
+            return ValidationCheckResult.failed_result("perturbation_insensitive")
+        return ValidationCheckResult.exempted("posthoc_perturbation_exemption")
 
-    return True
+    return ValidationCheckResult.validated("perturbation_changed" if perturb else "replay_matched")
 
 
 def _prepare_input_args_for_validating_layer(
     self: "Trace",
     layer_to_validate_parents_for: Op,
     layers_to_perturb: List[str],
-) -> dict[str, Any] | None:
+) -> tuple[dict[str, Any] | None, str | None]:
     """Build the input argument dict for replaying a layer's function.
 
     Starts from the layer's saved ``saved_args`` / ``saved_kwargs``,
@@ -1619,11 +1988,10 @@ def _prepare_input_args_for_validating_layer(
         layers_to_perturb: Layers for which to perturb the saved outs.
 
     Returns:
-        Dict with ``"args"`` and ``"kwargs"`` keys, or None if saved_args
-        was not saved (can't validate without them).
+        Tuple of prepared replay args and an optional unverified reason code.
     """
     if layer_to_validate_parents_for.saved_args is None:
-        return None  # Can't validate without saved args (#131)
+        return None, "missing_saved_args"
     input_args = {
         "args": list(layer_to_validate_parents_for.saved_args[:]),
         "kwargs": layer_to_validate_parents_for.saved_kwargs.copy(),
@@ -1660,12 +2028,14 @@ def _prepare_input_args_for_validating_layer(
                     )
                 parent_values = parent_layer.out
             if parent_values is None:
-                continue  # Skip validation for unsaved parents (#150)
+                return None, "missing_saved_parent_payload"
             parent_values = parent_values.detach().clone()
 
             if parent_layer_arg in layers_to_perturb:
-                parent_layer_func_values = _perturb_layer_outs(
-                    parent_values, layer_to_validate_parents_for.out
+                parent_layer_func_values = _perturb_parent_values_for_layer(
+                    layer_to_validate_parents_for,
+                    parent_layer_arg,
+                    parent_values,
                 )
             else:
                 parent_layer_func_values = parent_values
@@ -1677,7 +2047,118 @@ def _prepare_input_args_for_validating_layer(
                     input_args[arg_type][key[0]], key[1], parent_layer_func_values
                 )
 
-    return input_args
+    return input_args, None
+
+
+def _perturb_parent_values_for_layer(
+    layer: Op,
+    parent_label: str,
+    parent_values: torch.Tensor,
+) -> torch.Tensor:
+    """Return perturbed parent values tailored to the child op when needed.
+
+    Parameters
+    ----------
+    layer:
+        Child op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved parent tensor values.
+
+    Returns
+    -------
+    torch.Tensor
+        Perturbed values intended to be valid inputs for ``layer`` while still
+        differing from the saved parent.
+    """
+
+    one_hot_values = _perturb_one_hot_indices(layer, parent_label, parent_values)
+    if one_hot_values is not None:
+        return one_hot_values
+    return _perturb_layer_outs(parent_values, layer.out)
+
+
+def _perturb_one_hot_indices(
+    layer: Op,
+    parent_label: str,
+    parent_values: torch.Tensor,
+) -> torch.Tensor | None:
+    """Return a valid alternate class-index tensor for ``one_hot`` replay.
+
+    Parameters
+    ----------
+    layer:
+        Candidate ``one_hot`` op.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved class-index tensor.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Valid class indices distinct from ``parent_values`` when this is the
+        value parent of a ``one_hot`` op; otherwise ``None``.
+    """
+
+    if layer.func_name != "one_hot":
+        return None
+    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return None
+    if parent_values.dtype not in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
+        return None
+    num_classes = _one_hot_num_classes(layer)
+    if num_classes is None or num_classes <= 1:
+        return None
+    return (parent_values + 1).remainder(num_classes)
+
+
+def _parent_label_occupies_arg_position(layer: Op, parent_label: str, position: int) -> bool:
+    """Return whether a parent label occupies a positional argument.
+
+    Parameters
+    ----------
+    layer:
+        Op whose parent-argument map should be inspected.
+    parent_label:
+        Parent label to find.
+    position:
+        Positional argument index.
+
+    Returns
+    -------
+    bool
+        True when ``parent_label`` is registered at ``args[position]``.
+    """
+
+    return (getattr(layer, "parent_arg_positions", None) or {}).get("args", {}).get(
+        position
+    ) == parent_label
+
+
+def _one_hot_num_classes(layer: Op) -> int | None:
+    """Return the captured ``num_classes`` for a ``one_hot`` op.
+
+    Parameters
+    ----------
+    layer:
+        Candidate ``one_hot`` op.
+
+    Returns
+    -------
+    int or None
+        Positive class count when captured, otherwise ``None``.
+    """
+
+    saved_kwargs = getattr(layer, "saved_kwargs", {}) or {}
+    num_classes = saved_kwargs.get("num_classes")
+    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    if num_classes is None and len(saved_args) > 1:
+        num_classes = saved_args[1]
+    if isinstance(num_classes, int):
+        return num_classes
+    return None
 
 
 def _restore_live_parameter_args_for_replay(input_args: dict[str, Any], layer: Op) -> None:

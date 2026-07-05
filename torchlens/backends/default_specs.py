@@ -698,7 +698,7 @@ def _tf_validate_entry(*args: Any, **kwargs: Any) -> bool:
     return TFBackend().validate_entry(*args, **kwargs)
 
 
-def _torch_validate_trace(*args: Any, **kwargs: Any) -> bool:
+def _torch_validate_trace(*args: Any, **kwargs: Any) -> Any:
     """Dispatch to the current torch trace validation implementation.
 
     Parameters
@@ -708,8 +708,8 @@ def _torch_validate_trace(*args: Any, **kwargs: Any) -> bool:
 
     Returns
     -------
-    bool
-        Validation result.
+    Any
+        Validation result or replay status.
     """
 
     from ..validation.core import validate_saved_outs

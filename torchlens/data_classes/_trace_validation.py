@@ -151,12 +151,20 @@ class TraceValidationMixin:
             setattr(self, "_validation_replay_status", status)
             return status
         spec = get_backend_spec(getattr(self, "backend", "torch"))
-        return spec.validate_trace(
+        validation_result = spec.validate_trace(
             self,
             ground_truth_output_tensors=ground_truth_output_tensors,
             verbose=verbose,
             validate_metadata=validate_metadata,
         )
+        if getattr(self, "backend", "torch") == "torch":
+            from ..validation.status import ValidationReplayStatus
+
+            if isinstance(validation_result, ValidationReplayStatus):
+                setattr(self, "_validation_replay_status", validation_result)
+                if validation_result.state in {"passed", "failed"}:
+                    return validation_result.passed
+        return validation_result
 
     @property
     def validation_replay_status(self) -> "ValidationReplayStatus":

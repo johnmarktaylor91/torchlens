@@ -1,0 +1,403 @@
+{
+  "tiny_batch_norm": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_4:1",
+        "phase": "replay",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_4:1",
+        "phase": "perturbation",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__add__",
+        "op_label": "add_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__add__",
+        "op_label": "add_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__add__",
+        "op_label": "add_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_3:1",
+        "phase": "replay",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_3:1",
+        "phase": "perturbation",
+        "reason": "functionless_source_or_boundary"
+      }
+    ],
+    "exempted_reason_counts": {
+      "functionless_source_or_boundary": 4
+    },
+    "failed_node_count": 0,
+    "replayed_node_count": 10,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
+  "tiny_feed_forward": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "sum",
+        "op_label": "sum_1_3:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "sum",
+        "op_label": "sum_1_3:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "relu",
+        "op_label": "relu_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "relu",
+        "op_label": "relu_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "linear",
+        "op_label": "linear_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "linear",
+        "op_label": "linear_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      }
+    ],
+    "exempted_reason_counts": {},
+    "failed_node_count": 0,
+    "replayed_node_count": 9,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
+  "tiny_intervention": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "sigmoid",
+        "op_label": "sigmoid_1_3:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "sigmoid",
+        "op_label": "sigmoid_1_3:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "relu",
+        "op_label": "relu_1_2:1",
+        "phase": "replay",
+        "reason": "intentional_intervention_replacement"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "relu",
+        "op_label": "relu_1_2:1",
+        "phase": "perturbation",
+        "reason": "intentional_intervention_replacement"
+      },
+      {
+        "decision": "validated",
+        "func_name": "linear",
+        "op_label": "linear_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "linear",
+        "op_label": "linear_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      }
+    ],
+    "exempted_reason_counts": {
+      "intentional_intervention_replacement": 2
+    },
+    "failed_node_count": 0,
+    "replayed_node_count": 7,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
+  "tiny_recurrent": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:3",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:3",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:3",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__getitem__",
+        "op_label": "getitem_3_5:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__getitem__",
+        "op_label": "getitem_3_5:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:2",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:2",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:2",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__getitem__",
+        "op_label": "getitem_2_4:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__getitem__",
+        "op_label": "getitem_2_4:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "gru_cell",
+        "op_label": "grucell_1_3:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__getitem__",
+        "op_label": "getitem_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__getitem__",
+        "op_label": "getitem_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "zeros",
+        "op_label": "zeros_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      }
+    ],
+    "exempted_reason_counts": {},
+    "failed_node_count": 0,
+    "replayed_node_count": 19,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  }
+}

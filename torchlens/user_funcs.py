@@ -4615,7 +4615,10 @@ def _validate_forward_pass_torch(
         validation_result = trace.validate_forward_pass(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
-        outs_are_valid = validation_result if isinstance(validation_result, bool) else False
+        if isinstance(validation_result, bool):
+            outs_are_valid = validation_result
+        else:
+            outs_are_valid = bool(getattr(validation_result, "passed", False))
         if _trace_observer is not None:
             _trace_observer(trace)
     finally:

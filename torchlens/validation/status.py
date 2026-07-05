@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -50,6 +50,13 @@ class ValidationReplayStatus:
         replay.
     failed_node_count:
         Number of replay-validation failures contributing to a failed result.
+    unverified_reason_counts:
+        Stable reason-code counts for nodes that replay could not verify.
+    exempted_reason_counts:
+        Stable reason-code counts for nodes whose replay/perturbation check had
+        a provable exemption.
+    decisions:
+        Optional per-op validation decisions, used by golden regression tests.
     """
 
     state: ValidationReplayState
@@ -64,6 +71,9 @@ class ValidationReplayStatus:
     pure_unverified_node_count: int = field(default=0, repr=False)
     effect_region_node_count: int = field(default=0, repr=False)
     failed_node_count: int = field(default=0, repr=False)
+    unverified_reason_counts: Mapping[str, int] = field(default_factory=dict, repr=False)
+    exempted_reason_counts: Mapping[str, int] = field(default_factory=dict, repr=False)
+    decisions: Sequence[Mapping[str, Any]] = field(default_factory=tuple, repr=False)
 
     @property
     def passed(self) -> bool:
@@ -114,6 +124,9 @@ class ValidationReplayStatus:
         pure_unverified_node_count: int = 0,
         effect_region_node_count: int = 0,
         failed_node_count: int = 0,
+        unverified_reason_counts: Mapping[str, int] | None = None,
+        exempted_reason_counts: Mapping[str, int] | None = None,
+        decisions: Sequence[Mapping[str, Any]] | None = None,
     ) -> "ValidationReplayStatus":
         """Build a completed replay-validation result.
 
@@ -140,6 +153,12 @@ class ValidationReplayStatus:
         failed_node_count:
             Number of replay failures. Defaults to ``0`` for legacy boolean
             callers that only report aggregate pass/fail.
+        unverified_reason_counts:
+            Stable reason-code counts for unverified replay decisions.
+        exempted_reason_counts:
+            Stable reason-code counts for provable replay exemptions.
+        decisions:
+            Optional per-op validation decisions.
 
         Returns
         -------
@@ -161,6 +180,9 @@ class ValidationReplayStatus:
             pure_unverified_node_count=pure_unverified_node_count,
             effect_region_node_count=effect_region_node_count,
             failed_node_count=failed_node_count,
+            unverified_reason_counts=dict(unverified_reason_counts or {}),
+            exempted_reason_counts=dict(exempted_reason_counts or {}),
+            decisions=tuple(decisions or ()),
         )
 
     @classmethod
@@ -177,6 +199,9 @@ class ValidationReplayStatus:
         pure_unverified_node_count: int = 0,
         effect_region_node_count: int = 0,
         failed_node_count: int = 0,
+        unverified_reason_counts: Mapping[str, int] | None = None,
+        exempted_reason_counts: Mapping[str, int] | None = None,
+        decisions: Sequence[Mapping[str, Any]] | None = None,
     ) -> "ValidationReplayStatus":
         """Build a partial replay-validation status for importer-owned regions.
 
@@ -204,6 +229,12 @@ class ValidationReplayStatus:
             Number of effectful or stateful nodes excluded from pure replay.
         failed_node_count:
             Number of replay failures. Must be zero for an unverified result.
+        unverified_reason_counts:
+            Stable reason-code counts for unverified replay decisions.
+        exempted_reason_counts:
+            Stable reason-code counts for provable replay exemptions.
+        decisions:
+            Optional per-op validation decisions.
 
         Returns
         -------
@@ -225,6 +256,9 @@ class ValidationReplayStatus:
             pure_unverified_node_count=pure_unverified_node_count,
             effect_region_node_count=effect_region_node_count,
             failed_node_count=failed_node_count,
+            unverified_reason_counts=dict(unverified_reason_counts or {}),
+            exempted_reason_counts=dict(exempted_reason_counts or {}),
+            decisions=tuple(decisions or ()),
         )
 
     @classmethod
@@ -239,6 +273,9 @@ class ValidationReplayStatus:
         effect_region_node_count: int = 0,
         failed_node_count: int = 0,
         payload_load_status: str | None = None,
+        unverified_reason_counts: Mapping[str, int] | None = None,
+        exempted_reason_counts: Mapping[str, int] | None = None,
+        decisions: Sequence[Mapping[str, Any]] | None = None,
     ) -> "ValidationReplayStatus":
         """Fold replay outcome counts into a trace-level status.
 
@@ -263,6 +300,12 @@ class ValidationReplayStatus:
             Number of replay failures.
         payload_load_status:
             Optional payload materialization status attached by ``tl.load``.
+        unverified_reason_counts:
+            Stable reason-code counts for unverified replay decisions.
+        exempted_reason_counts:
+            Stable reason-code counts for provable replay exemptions.
+        decisions:
+            Optional per-op validation decisions.
 
         Returns
         -------
@@ -286,6 +329,9 @@ class ValidationReplayStatus:
                 pure_unverified_node_count=pure_unverified_node_count,
                 effect_region_node_count=effect_region_node_count,
                 failed_node_count=failed_node_count,
+                unverified_reason_counts=unverified_reason_counts,
+                exempted_reason_counts=exempted_reason_counts,
+                decisions=decisions,
             )
         if total_unverified_count:
             return cls.unverified(
@@ -309,6 +355,10 @@ class ValidationReplayStatus:
                 pure_unverified_node_count=pure_unverified_node_count,
                 effect_region_node_count=effect_region_node_count,
                 payload_load_status=payload_load_status,
+                failed_node_count=failed_node_count,
+                unverified_reason_counts=unverified_reason_counts,
+                exempted_reason_counts=exempted_reason_counts,
+                decisions=decisions,
             )
         return cls.result(
             passed=True,
@@ -320,6 +370,9 @@ class ValidationReplayStatus:
             pure_unverified_node_count=pure_unverified_node_count,
             effect_region_node_count=effect_region_node_count,
             failed_node_count=0,
+            unverified_reason_counts=unverified_reason_counts,
+            exempted_reason_counts=exempted_reason_counts,
+            decisions=decisions,
         )
 
     @classmethod
