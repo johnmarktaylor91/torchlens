@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 from torch import nn
 
+import torchlens as tl
 from torchlens.utils import format_flops, format_size
 from torchlens.visualization._label_format import (
     format_module_kwargs,
@@ -37,14 +38,14 @@ def test_format_flops_si_units() -> None:
 
     assert format_flops(0) == "0 FLOPs"
     assert format_flops(999) == "999 FLOPs"
-    assert format_flops(1000) == "1.0 KFLOPs"
+    assert format_flops(1000) == "1 KFLOPs"
     assert format_flops(3_400_000_000) == "3.4 GFLOPs"
 
 
 def test_format_flops_accepts_convention_marker() -> None:
     """The FMA convention flag is accepted by the public formatter."""
 
-    assert format_flops(2000, count_fma_as_two=True) == "2.0 KFLOPs"
+    assert format_flops(2000, count_fma_as_two=True) == "2 KFLOPs"
 
 
 def test_format_flops_rejects_negative_values() -> None:
@@ -52,6 +53,15 @@ def test_format_flops_rejects_negative_values() -> None:
 
     with pytest.raises(ValueError):
         format_flops(-1)
+
+
+def test_display_formatters_delegate_to_quantity_canonical_outputs() -> None:
+    """Display helpers match ``Bytes`` and ``Flops`` across representative magnitudes."""
+
+    for value in (0, 999, 1024, 1_234_567, 1024**4):
+        assert format_size(value) == str(tl.Bytes(value))
+    for value in (0, 999, 1_000, 1_234_000_000, 1_000_000_000_000):
+        assert format_flops(value) == str(tl.Flops(value))
 
 
 def test_visualization_format_shape_uses_python_tuple_notation() -> None:

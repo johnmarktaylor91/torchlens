@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Iterator, List, TypeVar, cast
 
 import torch
 
+from ..quantities import Bytes, Flops
+
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
@@ -121,15 +123,11 @@ def human_readable_size(size: float, decimal_places: int = 1) -> str:
     Returns:
         String with human-readable size and unit suffix.
     """
-    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if size < 1024.0 or unit == "PB":
-            break
-        size /= 1024.0
-    if unit == "B":
-        size = int(size)  # No fractional bytes.
-    else:
-        size = round(size, decimal_places)
-    return f"{size} {unit}"
+    if size < 0:
+        raise ValueError("size must be non-negative.")
+    if decimal_places == 1:
+        return str(Bytes(size))
+    return format(Bytes(size), f".{decimal_places}f")
 
 
 def format_size(size: float, decimal_places: int = 1) -> str:
@@ -148,8 +146,6 @@ def format_size(size: float, decimal_places: int = 1) -> str:
         Human-readable byte string such as ``"1.2 MB"``.
     """
 
-    if size < 0:
-        raise ValueError("size must be non-negative.")
     return human_readable_size(size, decimal_places=decimal_places)
 
 
@@ -181,16 +177,9 @@ def format_flops(
     del count_fma_as_two
     if flops < 0:
         raise ValueError("flops must be non-negative.")
-    value = float(flops)
-    units = ["FLOPs", "KFLOPs", "MFLOPs", "GFLOPs", "TFLOPs", "PFLOPs"]
-    unit = units[-1]
-    for unit in units:
-        if value < 1000.0 or unit == units[-1]:
-            break
-        value /= 1000.0
-    if unit == "FLOPs":
-        return f"{int(value)} {unit}"
-    return f"{round(value, decimal_places)} {unit}"
+    if decimal_places == 1:
+        return str(Flops(flops))
+    return format(Flops(flops), f".{decimal_places}f")
 
 
 def _format_number(value: float | None) -> str:
