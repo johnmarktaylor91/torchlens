@@ -15,7 +15,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.visualization.collapse_plan import RenderContext
-from torchlens.visualization.render_ir import RenderIR, build_render_ir
+from torchlens.visualization.render_ir import (
+    RenderIR,
+    RenderIREdge,
+    RenderIRCluster,
+    build_render_ir,
+)
 
 _MANIFEST_PATH = Path(__file__).parent / "fixtures" / "s5_render_golden_manifest.json"
 
@@ -195,9 +200,14 @@ def _assert_ir_shape(trace: tl.Trace) -> None:
 
     assert isinstance(render_ir, RenderIR)
     assert render_ir.nodes
+    assert render_ir.edges
+    assert render_ir.clusters
     assert len(render_ir.nodes) == len(render_ir.node_emissions)
     assert all(node.name for node in render_ir.nodes)
+    assert all(isinstance(edge, RenderIREdge) for edge in render_ir.edges)
+    assert all(isinstance(cluster, RenderIRCluster) for cluster in render_ir.clusters)
     assert {node.kind for node in render_ir.nodes}.issuperset({"raw_op"})
+    assert {edge.projection_reason for edge in render_ir.edges}.issuperset({"direct"})
 
 
 @pytest.mark.slow
