@@ -1048,19 +1048,57 @@ TORCHVISION_FUNCS = [
     ("torch.ops.torchvision.roi_pool", "_op"),
 ]
 
+_TORCHVISION_FUNCS_CACHE: list[tuple[str, str]] | None = None
+
 # Build the master function list at module load time.  Warnings are suppressed
 # because some torch namespaces emit deprecation warnings during introspection.
 # ORIG_TORCH_FUNCS = overridable functions + "ignored" functions (which we still
-# decorate) + optional torchvision ops.  This is the complete list fed to
-# decorate_all_once() in decoration/torch_funcs.py.
+# decorate).  Optional torchvision ops are appended lazily by
+# get_orig_torch_funcs() at first wrap time, not during ``import torchlens``.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     OVERRIDABLE_FUNCS = _get_torch_overridable_functions()
 ORIG_TORCH_FUNCS = OVERRIDABLE_FUNCS + IGNORED_FUNCS
 
-try:
-    import torchvision
 
-    ORIG_TORCH_FUNCS += TORCHVISION_FUNCS
-except ModuleNotFoundError:
-    pass
+def _get_torchvision_funcs() -> list[tuple[str, str]]:
+    """Return torchvision torch.ops targets if torchvision is installed.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Torchvision operation targets for wrapper decoration, or an empty list
+        when torchvision is not installed.
+    """
+
+    global _TORCHVISION_FUNCS_CACHE
+    if _TORCHVISION_FUNCS_CACHE is not None:
+        return _TORCHVISION_FUNCS_CACHE
+    try:
+        import torchvision  # noqa: F401
+    except ModuleNotFoundError:
+        _TORCHVISION_FUNCS_CACHE = []
+    else:
+        _TORCHVISION_FUNCS_CACHE = list(TORCHVISION_FUNCS)
+    return _TORCHVISION_FUNCS_CACHE
+
+
+def get_orig_torch_funcs(*, include_torchvision: bool = True) -> list[tuple[str, str]]:
+    """Return torch function targets for wrapper decoration.
+
+    Parameters
+    ----------
+    include_torchvision:
+        Whether to append torchvision custom op targets when torchvision is
+        installed. The import probe is intentionally deferred to first wrapper
+        use so ``import torchlens`` does not import torchvision.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Torch function targets, including torchvision targets on demand.
+    """
+
+    if not include_torchvision:
+        return list(ORIG_TORCH_FUNCS)
+    return [*ORIG_TORCH_FUNCS, *_get_torchvision_funcs()]

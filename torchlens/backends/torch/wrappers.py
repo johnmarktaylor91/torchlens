@@ -60,7 +60,7 @@ import torch
 from torch.overrides import handle_torch_function, has_torch_function_unary  # noqa: F401
 
 from ... import _state
-from ...constants import ORIG_TORCH_FUNCS
+from ...constants import get_orig_torch_funcs
 from ...data_classes.func_call_location import FuncCallLocation
 from ._tl import (
     get_buffer_address,
@@ -1321,7 +1321,7 @@ def decorate_all_once() -> None:
     # Python 3.14+ (PEP 649) evaluates annotations lazily; if we decorate
     # Tensor.bool first, then inspect Tensor.dim_order, the annotation
     # bool | list[...] resolves bool to our wrapper -> TypeError (#138).
-    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+    for namespace_name, func_name in get_orig_torch_funcs():
         if func_name.strip("_") in _state._arg_names:
             continue
         namespace_key = namespace_name.replace("torch.", "")
@@ -1332,7 +1332,7 @@ def decorate_all_once() -> None:
         get_arg_names(orig_func, func_name)
 
     # --- Pass 2: Decorate all functions ---
-    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+    for namespace_name, func_name in get_orig_torch_funcs():
         namespace_key = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch, namespace_key)
         if not hasattr(local_func_namespace, func_name):
@@ -1518,7 +1518,7 @@ def unwrap_torch() -> None:
         _PATCHED_MODEL_INSTANCES.clear()
         return
 
-    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+    for namespace_name, func_name in get_orig_torch_funcs():
         namespace_key = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch, namespace_key)
         if not hasattr(local_func_namespace, func_name):
@@ -1600,7 +1600,7 @@ def wrap_torch() -> None:
         return
 
     # Re-install from existing maps (after a prior unwrap_torch)
-    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+    for namespace_name, func_name in get_orig_torch_funcs():
         namespace_key = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch, namespace_key)
         if not hasattr(local_func_namespace, func_name):

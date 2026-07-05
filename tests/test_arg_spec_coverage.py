@@ -11,7 +11,7 @@ from torchlens.capture.arg_positions import (
     _cache_dynamic_spec,
     _normalize_func_name,
 )
-from torchlens.constants import ORIG_TORCH_FUNCS
+from torchlens.constants import get_orig_torch_funcs
 
 
 _HIGH_CONFIDENCE_STATIC_NAMES = frozenset(
@@ -283,10 +283,10 @@ def _decorated_normalized_names() -> set[str]:
     Returns
     -------
     set[str]
-        Normalized names derived from ``ORIG_TORCH_FUNCS``.
+        Normalized names derived from the actual first-wrap function target set.
     """
 
-    return {_normalize_func_name(func_name.strip("_")) for _, func_name in ORIG_TORCH_FUNCS}
+    return {_normalize_func_name(func_name.strip("_")) for _, func_name in get_orig_torch_funcs()}
 
 
 def test_every_decorated_arg_spec_is_static_or_explicitly_unsupported() -> None:
