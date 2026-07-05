@@ -76,7 +76,6 @@ class BufferWriteTracker:
         self.storage_key_to_addresses: dict[tuple[Any, ...], dict[str, None]] = {}
         self._storage_key_cache: dict[tuple[int, int | None], tuple[Any, ...] | None] = {}
         self._storage_range_cache: dict[tuple[int, int | None], tuple[int, int]] = {}
-        self._legacy_source_scan_complete = False
         self._installed_classes: set[type[nn.Module]] = set()
 
     def install(self) -> None:
@@ -442,24 +441,6 @@ class BufferWriteTracker:
         self.address_to_version[address] = _tensor_version(tensor)
         if new_key is not None:
             self.storage_key_to_addresses.setdefault(new_key, {})[address] = None
-        if get_tensor_label(tensor) is None:
-            self._legacy_source_scan_complete = False
-
-    def log_unlabeled_registered_buffers_for_legacy_scan(self) -> None:
-        """Log unlabeled buffers once to preserve legacy full-scan side effects."""
-
-        if self._legacy_source_scan_complete or not _state._logging_enabled:
-            return
-        from .sources import log_source_tensor
-
-        all_labeled = True
-        for address, tensor in self.address_to_tensor.items():
-            if get_tensor_label(tensor) is not None:
-                continue
-            log_source_tensor(self.trace, tensor, "buffer", address)
-            if get_tensor_label(tensor) is None:
-                all_labeled = False
-        self._legacy_source_scan_complete = all_labeled
 
 
 def install_buffer_write_tracker(trace: "Trace", model: nn.Module) -> BufferWriteTracker:
@@ -646,7 +627,6 @@ def _resolve_buffer_address(
     if key is None:
         return None
     if key not in tracker.storage_key_to_addresses:
-        tracker.log_unlabeled_registered_buffers_for_legacy_scan()
         return None
     tensor_start, tensor_end = tracker.storage_range(tensor)
     for address in tracker.addresses_for_storage_key(key):
