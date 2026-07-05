@@ -53,6 +53,7 @@ class CaptureEvents:
     backend_session: object | None = None
     live_by_raw_label: dict[str, "LiveOpRecord"] = field(default_factory=dict)
     op_event_by_label_raw: dict[str, OpEvent] = field(default_factory=dict)
+    op_event_index_by_label_raw: dict[str, int] = field(default_factory=dict)
     live_index: LiveIndex = field(default_factory=LiveIndex)
     parent_op_label_raws: dict[str, list[str]] = field(default_factory=dict)
     child_op_label_raws: dict[str, list[str]] = field(default_factory=dict)
@@ -71,6 +72,7 @@ class CaptureEvents:
 
     def append(self, event: OpEvent) -> None:
         """Append a single operation event."""
+        self.op_event_index_by_label_raw[event.label_raw] = len(self.op_events)
         self.op_events.append(event)
         self.op_event_by_label_raw[event.label_raw] = event
         self.live_index.append(event)
@@ -208,10 +210,20 @@ def replace_op_event(trace: Any, label_raw: str, **updates: Any) -> OpEvent | No
         return None
     updated_event = replace(event, **updates)
     events.op_event_by_label_raw[label_raw] = updated_event
-    for index, candidate in enumerate(events.op_events):
-        if candidate.label_raw == label_raw:
-            events.op_events[index] = updated_event
-            break
+    index = events.op_event_index_by_label_raw.get(label_raw)
+    if index is None:
+        index = next(
+            (
+                candidate_index
+                for candidate_index, candidate in enumerate(events.op_events)
+                if candidate.label_raw == label_raw
+            ),
+            None,
+        )
+        if index is None:
+            return updated_event
+        events.op_event_index_by_label_raw[label_raw] = index
+    events.op_events[index] = updated_event
     events.live_index.replace(updated_event)
     return updated_event
 

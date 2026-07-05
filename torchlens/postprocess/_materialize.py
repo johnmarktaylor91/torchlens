@@ -210,6 +210,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     events.output_version_events.clear()
     events.live_by_raw_label.clear()
     events.op_event_by_label_raw.clear()
+    events.op_event_index_by_label_raw.clear()
     events.live_index.clear()
     events.grad_fn_handles_by_label_raw.clear()
 

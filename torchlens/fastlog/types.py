@@ -642,10 +642,11 @@ class Recording(CapturedRun):
                 "recordings do not contain enough topology metadata."
             )
         from ..data_classes.trace import Trace
+        from .options import RecordingOptions
 
         trace = Trace(model_class_name="RecordedModel")
         trace.capture_mode = "exhaustive"
-        trace._predicate_save_options = object()
+        trace._predicate_save_options = RecordingOptions()
         trace._replay_arg_version_data_complete = False
         trace.capture_events = self._capture_events
         trace.output_layers = [
