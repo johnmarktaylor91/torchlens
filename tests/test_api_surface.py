@@ -110,7 +110,6 @@ CANONICAL_SUBMODULES = [
     "torchlens.experimental.dagua",
     "torchlens.export",
     "torchlens.fastlog",
-    "torchlens.grad",
     "torchlens.intervene",
     "torchlens.io",
     "torchlens.options",
