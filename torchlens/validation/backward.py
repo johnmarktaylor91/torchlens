@@ -367,6 +367,14 @@ def validate_backward_pass(
                     break
         observed_param_grads = _param_grads(model)
 
+        if not expected_param_grads:
+            warnings.warn(
+                "validate_backward_pass could not verify parameter gradients because "
+                "stock autograd produced zero parameter gradients.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return False
         if expected_param_grads.keys() != observed_param_grads.keys():
             return False
         params_passed = (
