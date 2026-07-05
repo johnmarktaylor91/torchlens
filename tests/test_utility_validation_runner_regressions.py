@@ -32,10 +32,11 @@ from typing import Any, Literal
 import pytest
 import torch
 import torch.nn as nn
+import torchlens as tl
 
 import torchlens.utils.hashing as tl_hashing
 from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.utils.hashing import make_short_barcode_from_input
+from torchlens.utils.hashing import compute_graph_shape_hash, make_short_barcode_from_input
 from torchlens.validation import validate_forward_pass
 
 # ---------------------------------------------------------------------------
@@ -229,6 +230,18 @@ def test_short_barcode_deterministic_across_calls() -> None:
 
     payload = ["layer_type", 7, (1, 2, 3), "kw_stride_2"]
     assert make_short_barcode_from_input(payload) == make_short_barcode_from_input(payload)
+
+
+def test_graph_shape_hashes_deterministic_across_calls() -> None:
+    """Repeated graph-hash calls return identical address-sensitive and address-free hashes."""
+
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    trace = tl.trace(model, torch.randn(2, 3))
+
+    assert compute_graph_shape_hash(trace) == compute_graph_shape_hash(trace)
+    assert compute_graph_shape_hash(
+        trace, include_module_address=False
+    ) == compute_graph_shape_hash(trace, include_module_address=False)
 
 
 def test_short_barcode_deterministic_across_processes() -> None:

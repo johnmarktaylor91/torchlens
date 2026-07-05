@@ -38,7 +38,11 @@ import torch
 import warnings
 
 from ..utils.tensor_utils import _is_cuda_available, safe_copy
-from ..utils.hashing import compute_graph_shape_hash, compute_raw_event_shape_hash
+from ..utils.hashing import (
+    compute_graph_shape_hash,
+    compute_raw_event_shape_hash,
+    populate_normalized_layer_addresses,
+)
 
 from .control_flow import (
     _fix_buffer_layers,
@@ -358,6 +362,7 @@ def postprocess(
 
     # Step 16.5: Compute graph shape hash before _set_tracing_finished changes access behavior.
     with _vtimed(self, "  Step 16.5: Graph shape hash"):
+        populate_normalized_layer_addresses(self)
         self.graph_shape_hash = compute_graph_shape_hash(self)
 
     # Step 17: log the pass as finished, changing the Trace behavior to its user-facing version.
@@ -460,6 +465,7 @@ def postprocess_fast(self: "Trace") -> None:
     # in fast mode (Step 9 is skipped). Existing module logs remain valid. (#108)
     if self.intervention_ready and not getattr(self, "save_arg_templates", False):
         self.intervention_ready = False
+    populate_normalized_layer_addresses(self)
     self.graph_shape_hash = compute_graph_shape_hash(self)
     _set_tracing_finished(self)
 

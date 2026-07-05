@@ -1,4 +1,4 @@
-"""Barcode generation and argument hashing for tensor identity tracking.
+"""Barcode generation and graph hash helpers.
 
 Barcodes are short opaque identifiers attached to tensors during logging.
 They serve two purposes:
@@ -15,6 +15,22 @@ They serve two purposes:
    originated from the same parameter/buffer and are candidates for
    *same-layer grouping* in loop detection — the barcode is the key signal
    that separate forward-pass operations actually reference the same weight.
+
+The graph hash family answers compatibility questions about captured structure:
+
+* ``compute_graph_shape_hash`` hashes a postprocessed graph's operation order,
+  layer/function kind, parent topology, output container paths/cardinality, and
+  boundary flags. It is shape- and dtype-blind. By default it is sensitive to
+  normalized module addresses; pass ``include_module_address=False`` for an
+  address-free topology hash used to compare distinct designs independent of
+  where modules live in a model.
+* ``compute_raw_event_shape_hash`` hashes raw capture events before
+  postprocessing. It includes raw op order, function identity, parent topology,
+  normalized module addresses, output container metadata, and output shape/dtype.
+
+Both graph hashes are deterministic within a TorchLens version for equivalent
+capture structure. They are not security hashes and are not guaranteed stable
+across intentional schema/policy changes.
 """
 
 import hashlib
@@ -144,18 +160,39 @@ def _container_cardinality(container_spec: Any) -> Any:
     }
 
 
-def compute_graph_shape_hash(trace: Any) -> str:
-    """Compute a deterministic shape hash for a postprocessed graph.
-
-    The hash intentionally excludes run-specific out values and raw/final
-    labels. It includes operation order, normalized function names, parent-edge
-    positions, normalized module addresses, output paths, and output container
-    cardinality.
+def populate_normalized_layer_addresses(trace: Any) -> None:
+    """Populate normalized module addresses on postprocessed layers.
 
     Parameters
     ----------
     trace:
         Postprocessed ``Trace`` with populated ``layer_list``.
+
+    Returns
+    -------
+    None
+        Each layer's ``_address_normalized`` field is updated in place.
+    """
+
+    for layer in trace.layer_list:
+        layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
+
+
+def compute_graph_shape_hash(trace: Any, *, include_module_address: bool = True) -> str:
+    """Compute a deterministic shape hash for a postprocessed graph.
+
+    The hash intentionally excludes run-specific out values and raw/final
+    labels. It includes operation order, normalized function names, parent-edge
+    positions, output paths, output container cardinality, and, by default,
+    normalized module addresses.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed ``Trace`` with populated ``layer_list``.
+    include_module_address:
+        Whether normalized module addresses contribute to the digest. The
+        default preserves the historical address-sensitive hash.
 
     Returns
     -------
@@ -167,7 +204,7 @@ def compute_graph_shape_hash(trace: Any) -> str:
     records = []
     for index, layer in enumerate(trace.layer_list):
         address = normalize_address_for_hash(getattr(layer, "module", None))
-        layer._address_normalized = address
+        hash_address = address if include_module_address else None
         parent_indices = sorted(
             order_by_label[parent_label]
             for parent_label in getattr(layer, "parents", ())
@@ -179,7 +216,7 @@ def compute_graph_shape_hash(trace: Any) -> str:
                 "layer_type": getattr(layer, "layer_type", None),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
-                "_address_normalized": address,
+                "_address_normalized": hash_address,
                 "container_path": [
                     _hashable_path_component(component)
                     for component in (getattr(layer, "container_path", None) or ())

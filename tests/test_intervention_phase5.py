@@ -6,9 +6,10 @@ import torch
 
 import torchlens as tl
 from torchlens.errors import MetadataInvariantError
-from torchlens.validation import check_metadata_invariants
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import ParentRef, TupleIndex
+from torchlens.utils.hashing import compute_graph_shape_hash
+from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import check_func_call_id_invariant
 
 
@@ -86,6 +87,33 @@ class _DifferentGraphModel(torch.nn.Module):
         return torch.relu(x) * 2
 
 
+class _RenamedLinearSplitModel(torch.nn.Module):
+    """Same operations as ``_LinearSplitModel`` under a different module address."""
+
+    def __init__(self) -> None:
+        """Create a single linear layer under a different attribute name."""
+
+        super().__init__()
+        self.proj = torch.nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply a linear layer, split its output, and recombine.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Recombined split outputs.
+        """
+
+        left, right = torch.split(self.proj(x), 1, dim=0)
+        return left + right
+
+
 class _RecurrentReluModel(torch.nn.Module):
     """Small recurrent-style fixture with repeated operations."""
 
@@ -161,6 +189,38 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     assert len(log1.graph_shape_hash) == 64
     assert log1.graph_shape_hash == log2.graph_shape_hash
     assert log3.graph_shape_hash != log1.graph_shape_hash
+
+
+def test_graph_shape_hash_is_referentially_transparent() -> None:
+    """Computing graph hashes repeatedly does not mutate layer metadata."""
+
+    log = tl.trace(
+        _LinearSplitModel(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+    )
+    target = next(layer for layer in log.layer_list if layer.module is not None)
+    target._address_normalized = "sentinel"
+
+    first = compute_graph_shape_hash(log)
+    second = compute_graph_shape_hash(log)
+
+    assert first == second
+    assert target._address_normalized == "sentinel"
+
+
+def test_graph_shape_hash_address_free_variant_ignores_module_names() -> None:
+    """Address-free graph hash matches equivalent topology under renamed modules."""
+
+    torch.manual_seed(123)
+    left = tl.trace(_LinearSplitModel(), torch.randn(2, 3), intervention_ready=True)
+    torch.manual_seed(123)
+    right = tl.trace(_RenamedLinearSplitModel(), torch.randn(2, 3), intervention_ready=True)
+
+    assert compute_graph_shape_hash(left) != compute_graph_shape_hash(right)
+    assert compute_graph_shape_hash(left, include_module_address=False) == compute_graph_shape_hash(
+        right, include_module_address=False
+    )
 
 
 def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
