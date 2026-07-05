@@ -31,7 +31,11 @@ from ...utils.tensor_utils import safe_copy
 from . import _tl
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
-from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
+from .model_prep import (
+    _cleanup_model_session,
+    _ensure_model_prepared,
+    _prepare_model_session,
+)
 from .module_stack import pop_frame, push_existing_frame
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
@@ -122,12 +126,16 @@ class TorchBackend:
         """Clean up per-session torch metadata."""
         model: object
         input_tensors: object
-        if isinstance(prepared_model, tuple) and len(prepared_model) == 2:
+        input_objects: object
+        if isinstance(prepared_model, tuple) and len(prepared_model) == 3:
+            model, input_tensors, input_objects = prepared_model
+        elif isinstance(prepared_model, tuple) and len(prepared_model) == 2:
             model, input_tensors = prepared_model
+            input_objects = None
         else:
-            model, input_tensors = prepared_model, None
+            model, input_tensors, input_objects = prepared_model, None, None
         uninstall_buffer_write_tracker(cast("Trace", session))
-        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors)
+        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors, input_objects)
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch logging context manager."""
@@ -246,10 +254,19 @@ class TorchBackend:
             get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
             for kwarg in input_kwargs.values()
         ]
-        # Move each tensor to model device.  Tuples must be temporarily converted
-        # to lists for item assignment, then converted back to preserve type.
+        # Move each tensor to model device.  Plain tuples must be temporarily
+        # converted to lists for item assignment, then converted back to
+        # preserve type.  This roundtrip only applies to *exact* ``tuple``
+        # instances: they are the only ones addressed positionally
+        # (``("ind", i)``) by ``get_vars_of_type_from_obj``, which treats
+        # tuple *subclasses* (e.g. a NamedTuple-based GNN batch container) as
+        # plain attribute-bearing objects instead, addressed via
+        # ``("attr", name)``.  Applying the list roundtrip to a subclass would
+        # silently discard its identity and break downstream named-field
+        # access (``batch.edge_features``); ``_assign_nested_input_value``
+        # already knows how to mutate those in place via ``attr`` addressing.
         for arg_idx, arg in enumerate(input_args):
-            was_tuple = isinstance(arg, tuple)
+            was_tuple = type(arg) is tuple
             if was_tuple:
                 input_args[arg_idx] = list(arg)
             for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
@@ -389,13 +406,19 @@ class TorchBackend:
         """
 
         self_trace = cast("Trace", session)
-        if getattr(self_trace, "intervention_ready", False) or getattr(
+        output_entries = list(_walk_output_tensors_with_paths(outputs))
+        # The container_spec is only user-facing metadata when explicitly opted
+        # into via capture_container_structure (or implied by intervention_ready);
+        # with the default OFF it must stay None on output layers. The container
+        # *path*, however, is always preserved so forward-replay validation can
+        # slice multi-output containers back to the right leaf.
+        persist_container_spec = getattr(self_trace, "intervention_ready", False) or getattr(
             self_trace, "_capture_container_structure", False
-        ):
-            output_entries = list(_walk_output_tensors_with_paths(outputs))
+        )
+        if output_entries:
             output_tensors_w_addresses_all = [
                 (tensor, _container_path_to_address(path), None)
-                for tensor, path, container_spec in output_entries
+                for tensor, path, _container_spec in output_entries
             ]
             output_specs_by_raw_label = {}
             for tensor, path, container_spec in output_entries:
@@ -403,11 +426,15 @@ class TorchBackend:
                 if _label_raw is not None:
                     output_specs_by_raw_label[_label_raw] = (
                         path,
-                        container_spec,
+                        container_spec if persist_container_spec else None,
                     )
             setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
-            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
         else:
+            output_tensors_w_addresses_all = []
+        if output_entries and persist_container_spec:
+            _register_model_output_container_snapshot(self_trace, outputs, output_entries)
+        # (container_path is stored above for validation replay even when the spec is None)
+        if not output_entries:
             output_tensors_w_addresses_all = get_vars_of_type_from_obj(
                 outputs,
                 torch.Tensor,
@@ -788,7 +815,10 @@ def _assign_nested_input_value(
         if isinstance(obj, tuple):
             items = list(obj)
             items[entry_val] = _assign_nested_input_value(items[entry_val], rest, value)
-            return tuple(items)
+            obj_type = type(obj)
+            if hasattr(obj_type, "_fields"):
+                return obj_type(*items)
+            return obj_type(items)
         if isinstance(obj, list):
             obj[entry_val] = _assign_nested_input_value(obj[entry_val], rest, value)
             return obj
@@ -797,7 +827,21 @@ def _assign_nested_input_value(
             return obj
     if entry_type == "attr":
         child = getattr(obj, entry_val)
-        setattr(obj, entry_val, _assign_nested_input_value(child, rest, value))
+        new_child = _assign_nested_input_value(child, rest, value)
+        try:
+            setattr(obj, entry_val, new_child)
+        except AttributeError:
+            # Immutable attribute — e.g. a real (non-property) NamedTuple
+            # field on a NamedTuple subclass such as a GNN batch container.
+            # ``_replace`` returns a new instance with that field swapped in.
+            obj_fields = getattr(type(obj), "_fields", None)
+            if hasattr(obj, "_replace") and obj_fields is not None and entry_val in obj_fields:
+                return obj._replace(**{entry_val: new_child})
+            # Otherwise this is a read-only *derived* property (e.g. a
+            # convenience accessor that returns a value already stored in a
+            # mutable nested container). The tensor's real backing storage is
+            # reached and moved to device through its own container address;
+            # there is nothing else to update at this alias.
         return obj
     nested_assign(obj, addr, value)
     return obj

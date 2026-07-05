@@ -51,6 +51,8 @@ from ..._state import pause_logging
 from ._tl import (
     get_buffer_address,
     get_label_list,
+    get_live_label_list,
+    get_live_tensor_label,
     get_param_meta,
     get_tensor_label,
     get_tensor_meta,
@@ -676,6 +678,68 @@ def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
     return field_names
 
 
+def _non_iterable_type_error(exc: TypeError) -> bool:
+    """Return whether ``exc`` represents an opaque non-iterable object.
+
+    Parameters
+    ----------
+    exc
+        TypeError raised while attempting output-container iteration.
+
+    Returns
+    -------
+    bool
+        True when the exception text matches Python's non-iterable diagnostics.
+    """
+
+    return "not iterable" in str(exc)
+
+
+def _iter_sequence_items(value: Any) -> tuple[tuple[int, Any], ...] | None:
+    """Return indexed sequence items, or no items for opaque non-iterables.
+
+    Parameters
+    ----------
+    value
+        Candidate list/tuple output container.
+
+    Returns
+    -------
+    tuple[tuple[int, Any], ...] | None
+        Enumerated child values. ``None`` means the object raised a
+        non-iterable ``TypeError`` and should be treated as an opaque leaf.
+    """
+
+    try:
+        return tuple(enumerate(value))
+    except TypeError as exc:
+        if _non_iterable_type_error(exc):
+            return None
+        raise
+
+
+def _try_build_container_spec(value: Any) -> ContainerSpec | None:
+    """Build a child container spec, treating opaque non-iterables as leaves.
+
+    Parameters
+    ----------
+    value
+        Child output value to describe.
+
+    Returns
+    -------
+    ContainerSpec | None
+        Child container spec, or ``None`` when the child is an opaque leaf.
+    """
+
+    try:
+        return _build_container_spec(value)
+    except TypeError as exc:
+        if _non_iterable_type_error(exc):
+            return None
+        raise
+
+
 def _is_hf_model_output(value: Any) -> bool:
     """Return whether ``value`` looks like a HuggingFace ``ModelOutput``.
 
@@ -743,7 +807,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if registered is not None:
         children, aux_data = registered.flatten(value)
         for index, item in enumerate(children):
-            child_spec = _build_container_spec(item)
+            child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
         module, qualname = _container_type_ref(value)
@@ -758,7 +822,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         for key in keys:
-            child_spec = _build_container_spec(value[key])
+            child_spec = _try_build_container_spec(value[key])
             if child_spec is not None:
                 child_specs.append((HFKey(key), child_spec))
         module, qualname = _container_type_ref(value)
@@ -774,7 +838,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if _is_namedtuple_instance(value) or torch_fields:
         fields = torch_fields or tuple(value._fields)
         for field_name in fields:
-            child_spec = _build_container_spec(getattr(value, field_name))
+            child_spec = _try_build_container_spec(getattr(value, field_name))
             if child_spec is not None:
                 child_specs.append((NamedField(field_name), child_spec))
         module, qualname = _container_type_ref(value)
@@ -789,7 +853,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         fields = tuple(field.name for field in dataclasses.fields(value))
         for field_name in fields:
-            child_spec = _build_container_spec(getattr(value, field_name))
+            child_spec = _try_build_container_spec(getattr(value, field_name))
             if child_spec is not None:
                 child_specs.append((DataclassField(field_name), child_spec))
         module, qualname = _container_type_ref(value)
@@ -804,7 +868,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     if isinstance(value, dict):
         keys = tuple(value.keys())
         for key in keys:
-            child_spec = _build_container_spec(value[key])
+            child_spec = _try_build_container_spec(value[key])
             if child_spec is not None:
                 child_specs.append((DictKey(key), child_spec))
         return ContainerSpec(
@@ -814,14 +878,20 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             child_specs=tuple(child_specs),
         )
     if isinstance(value, tuple):
-        for index, item in enumerate(value):
-            child_spec = _build_container_spec(item)
+        items = _iter_sequence_items(value)
+        if items is None:
+            return None
+        for index, item in items:
+            child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
         return ContainerSpec(kind="tuple", length=len(value), child_specs=tuple(child_specs))
     if isinstance(value, list):
-        for index, item in enumerate(value):
-            child_spec = _build_container_spec(item)
+        items = _iter_sequence_items(value)
+        if items is None:
+            return None
+        for index, item in items:
+            child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
         return ContainerSpec(kind="list", length=len(value), child_specs=tuple(child_specs))
@@ -900,12 +970,37 @@ def _walk_supported_output_container(
             )
         return
     if isinstance(out, (list, tuple)):
-        for index, item in enumerate(out):
+        items = _iter_sequence_items(out)
+        if items is None:
+            return
+        for index, item in items:
             yield from _walk_supported_output_container(
                 item,
                 root_spec=root_spec,
                 path=(*path, TupleIndex(index)),
             )
+        return
+    # Unrecognized nested container (e.g. transformers DynamicCache nested inside
+    # an HF ModelOutput, or a detectron2 Instances inside a list). The structured
+    # walk cannot descend into this subtree to assign deeper stable paths, so every
+    # tensor it holds is attributed to the path of the opaque container boundary
+    # itself -- the same depth at which ``_build_container_spec`` records the opaque
+    # slot as a childless leaf. Yielding tensors here is mandatory: otherwise
+    # capture silently drops them (e.g. GPT-2's past_key_values), shrinking the
+    # output set from 3 tensors to 1. ``root_spec`` must be propagated (not None);
+    # it is the outer container spec used as ``output_structure``, and dropping it
+    # leaves ``output_structure`` unset so it is later back-filled from an
+    # unrelated output layer, producing a structure whose leaf paths disagree with
+    # these output paths (caught by the module_hierarchy invariant). search_depth=5
+    # matches the legacy whole-output BFS fallback; DynamicCache's tensors live at
+    # depth ~5 and are missed by the default depth of 3.
+    for tensor in get_vars_of_type_from_obj(
+        out,
+        which_type=torch.Tensor,
+        subclass_exceptions=[torch.nn.Parameter],
+        search_depth=5,
+    ):
+        yield tensor, path, root_spec
 
 
 def _walk_output_tensors_with_paths(
@@ -930,7 +1025,7 @@ def _walk_output_tensors_with_paths(
             yield out, (), None
         return
 
-    root_spec = _build_container_spec(out)
+    root_spec = _try_build_container_spec(out)
     if root_spec is None:
         if _literal_value_supported(out) or isinstance(out, torch.Size):
             return
@@ -991,7 +1086,9 @@ def _literal_value_supported(value: Any) -> bool:
     )
 
 
-def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
+def _classify_arg_component(
+    value: Any, notes: list[str], trace: "Trace | None" = None
+) -> ArgComponent:
     """Classify a function argument value for replay templating.
 
     Parameters
@@ -1007,7 +1104,12 @@ def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
         Tagged replay template component.
     """
 
-    label = None if isinstance(value, torch.nn.Parameter) else get_tensor_label(value)
+    label = None
+    if not isinstance(value, torch.nn.Parameter):
+        if trace is None:
+            label = get_tensor_label(value)
+        else:
+            label = get_live_tensor_label(value, trace.capture_events.live_index.by_raw_label)
     if isinstance(label, str):
         return ParentRef(label)
     if isinstance(value, torch.Tensor):
@@ -1016,9 +1118,11 @@ def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
     if _literal_value_supported(value):
         return LiteralValue(value)
     if isinstance(value, (list, tuple)):
-        return tuple(_classify_arg_component(item, notes) for item in value)
+        return tuple(_classify_arg_component(item, notes, trace) for item in value)
     if isinstance(value, dict):
-        return tuple((key, _classify_arg_component(item, notes)) for key, item in value.items())
+        return tuple(
+            (key, _classify_arg_component(item, notes, trace)) for key, item in value.items()
+        )
 
     reason = f"unsupported argument type {type(value).__module__}.{type(value).__qualname__}"
     notes.append(reason)
@@ -1029,6 +1133,7 @@ def _build_args_template(
     func: Callable[..., Any],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
+    trace: "Trace | None" = None,
 ) -> CapturedArgTemplate:
     """Build a replay template from original function args and kwargs.
 
@@ -1040,6 +1145,8 @@ def _build_args_template(
         Original positional args.
     kwargs
         Original keyword args.
+    trace
+        Active trace used to reject stale parent labels.
 
     Returns
     -------
@@ -1048,9 +1155,9 @@ def _build_args_template(
     """
 
     notes: list[str] = []
-    arg_components = tuple(_classify_arg_component(arg, notes) for arg in args)
+    arg_components = tuple(_classify_arg_component(arg, notes, trace) for arg in args)
     kwarg_components = tuple(
-        (str(key), _classify_arg_component(value, notes)) for key, value in kwargs.items()
+        (str(key), _classify_arg_component(value, notes, trace)) for key, value in kwargs.items()
     )
     return CapturedArgTemplate(
         args=arg_components,
@@ -1923,7 +2030,9 @@ def _build_graph_relationship_fields(
     out_kwarg_label = None
     out_kwarg = kwargs.get("out")
     if isinstance(out_kwarg, torch.Tensor):
-        out_kwarg_label = get_tensor_label(out_kwarg)
+        out_kwarg_label = get_live_tensor_label(
+            out_kwarg, self.capture_events.live_index.by_raw_label
+        )
     if out_kwarg_label is not None and out_kwarg_label not in parent_layer_labels:
         parent_layer_labels = [*parent_layer_labels, out_kwarg_label]
         parent_layer_entries = [
@@ -2017,21 +2126,23 @@ def _build_param_fields(
     arg_parameters: list[torch.nn.Parameter],
 ) -> dict[str, int]:
     """Populate parameter-involvement fields. Returns parent_param_ops dict."""
-    parent_param_ops = _process_parent_param_ops(arg_parameters)
-    indiv_param_barcodes = list(parent_param_ops.keys())
-
     _param_logs = []
+    resolved_parameters = []
     for param in arg_parameters:
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
         if addr is not None and addr in self.param_logs:
             _param_logs.append(self.param_logs[addr])
+            resolved_parameters.append(param)
 
-    fields_dict["parent_params"] = arg_parameters
+    parent_param_ops = _process_parent_param_ops(resolved_parameters)
+    indiv_param_barcodes = list(parent_param_ops.keys())
+
+    fields_dict["parent_params"] = resolved_parameters
     fields_dict["_param_barcodes"] = indiv_param_barcodes
     fields_dict["parent_param_ops"] = parent_param_ops
     fields_dict["_param_logs"] = _param_logs
-    fields_dict["param_shapes"] = [tuple(param.shape) for param in arg_parameters]
+    fields_dict["param_shapes"] = [tuple(param.shape) for param in resolved_parameters]
     fields_dict["num_params"] = sum(prod(shape) for shape in fields_dict["param_shapes"])
     fields_dict["num_params_trainable"] = sum(
         pl.num_params for pl in _param_logs if pl.is_trainable
@@ -2040,7 +2151,9 @@ def _build_param_fields(
         pl.num_params for pl in _param_logs if not pl.is_trainable
     )
     with pause_logging():
-        fields_dict["param_memory"] = sum(p.nelement() * p.element_size() for p in arg_parameters)
+        fields_dict["param_memory"] = sum(
+            p.nelement() * p.element_size() for p in resolved_parameters
+        )
     return parent_param_ops
 
 
@@ -2111,7 +2224,9 @@ def _build_shared_fields_dict(
     # (which become metadata and feed into equivalence_class hashing).
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
-    parent_layer_labels = get_label_list(arg_tensors)
+    parent_layer_labels = get_live_label_list(
+        arg_tensors, self.capture_events.live_index.by_raw_label
+    )
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
@@ -2129,7 +2244,7 @@ def _build_shared_fields_dict(
         getattr(self, "intervention_ready", False) or getattr(self, "save_arg_templates", False)
     )
     if should_capture_template:
-        captured_template = _build_args_template(func, args, kwargs)
+        captured_template = _build_args_template(func, args, kwargs, self)
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if kwargs else None
     else:

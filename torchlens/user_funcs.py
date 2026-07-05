@@ -535,6 +535,34 @@ class _PlainAttrIdentitySnapshot:
     value_type_name: str
 
 
+@dataclasses.dataclass(frozen=True)
+class _PlainAttrManagedTensorSnapshot:
+    """Snapshot marker for PyTorch-managed derived tensor attributes.
+
+    Parameters
+    ----------
+    module:
+        Owning module that exposes the derived tensor attribute.
+    name:
+        Attribute name on ``module``.
+    shape:
+        Tensor shape at snapshot time.
+    dtype:
+        Tensor dtype at snapshot time.
+    device:
+        Tensor device at snapshot time.
+    manager:
+        Human-readable manager kind for diagnostics.
+    """
+
+    module: nn.Module
+    name: str
+    shape: tuple[int, ...]
+    dtype: torch.dtype
+    device: torch.device
+    manager: str
+
+
 def _is_identity_stable_plain_attr(value: Any) -> bool:
     """Return whether a plain attr should be tracked by object identity.
 
@@ -563,6 +591,135 @@ def _is_identity_stable_plain_attr(value: Any) -> bool:
     ) or callable(value)
 
 
+def _legacy_parametrization_manager(module: nn.Module, name: str) -> str | None:
+    """Return the legacy PyTorch parametrization hook managing an attribute.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the candidate plain tensor attribute.
+    name:
+        Attribute name to classify.
+
+    Returns
+    -------
+    str | None
+        Manager kind when the attribute is a computed view backed by registered
+        module state, otherwise ``None``.
+    """
+
+    for hook in getattr(module, "_forward_pre_hooks", {}).values():
+        if getattr(hook, "name", None) != name:
+            continue
+        hook_type = type(hook)
+        hook_key = f"{hook_type.__module__}.{hook_type.__name__}"
+        if (
+            hook_key == "torch.nn.utils.weight_norm.WeightNorm"
+            and f"{name}_g" in module._parameters
+            and f"{name}_v" in module._parameters
+        ):
+            return "legacy_weight_norm"
+        if (
+            hook_key == "torch.nn.utils.spectral_norm.SpectralNorm"
+            and f"{name}_orig" in module._parameters
+            and f"{name}_u" in module._buffers
+            and f"{name}_v" in module._buffers
+        ):
+            return "legacy_spectral_norm"
+    return None
+
+
+def _parametrize_manager(module: nn.Module, name: str) -> str | None:
+    """Return whether PyTorch's parametrization API manages an attribute.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the candidate plain tensor attribute.
+    name:
+        Attribute name to classify.
+
+    Returns
+    -------
+    str | None
+        Manager kind when the attribute is parametrized, otherwise ``None``.
+    """
+
+    try:
+        from torch.nn.utils import parametrize
+    except ImportError:
+        return None
+    try:
+        if parametrize.is_parametrized(module, name):
+            return "parametrize"
+    except (AttributeError, ValueError, TypeError):
+        return None
+    return None
+
+
+def _managed_plain_tensor_attr_snapshot(
+    module: nn.Module,
+    name: str,
+    value: Any,
+) -> _PlainAttrManagedTensorSnapshot | None:
+    """Return a marker for a legitimate derived plain tensor attribute.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the candidate attribute.
+    name:
+        Attribute name to classify.
+    value:
+        Current attribute value.
+
+    Returns
+    -------
+    _PlainAttrManagedTensorSnapshot | None
+        Snapshot marker when PyTorch registered state manages this plain tensor
+        attribute, otherwise ``None``.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        return None
+    manager = _parametrize_manager(module, name) or _legacy_parametrization_manager(module, name)
+    if manager is None:
+        return None
+    return _PlainAttrManagedTensorSnapshot(
+        module=module,
+        name=name,
+        shape=tuple(value.shape),
+        dtype=value.dtype,
+        device=value.device,
+        manager=manager,
+    )
+
+
+def _snapshot_module_plain_attr_value(module: nn.Module, name: str, attr_path: str) -> Any:
+    """Return a snapshot for a named plain attribute on a module.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the plain attribute.
+    name:
+        Attribute name.
+    attr_path:
+        Human-readable module/attribute path for diagnostics.
+
+    Returns
+    -------
+    Any
+        Snapshot suitable for later comparison and restoration.
+    """
+
+    value = getattr(module, name)
+    managed_snapshot = _managed_plain_tensor_attr_snapshot(module, name, value)
+    if managed_snapshot is not None:
+        return managed_snapshot
+    return _snapshot_plain_attr_value(value, attr_path)
+
+
 def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
     """Return a value snapshot for a plain module-tree attribute.
 
@@ -585,7 +742,7 @@ def _snapshot_plain_attr_value(value: Any, attr_path: str) -> Any:
         validation restore. External objects remain unsupported in this path.
     """
 
-    if isinstance(value, _PlainAttrIdentitySnapshot):
+    if isinstance(value, (_PlainAttrIdentitySnapshot, _PlainAttrManagedTensorSnapshot)):
         return value
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
         return value
@@ -696,6 +853,21 @@ def _plain_attr_values_equal(left: Any, right: Any, attr_path: str) -> bool:
         ):
             return False
         return left.value is right.value
+    if isinstance(left, _PlainAttrManagedTensorSnapshot) or isinstance(
+        right, _PlainAttrManagedTensorSnapshot
+    ):
+        if not isinstance(left, _PlainAttrManagedTensorSnapshot) or not isinstance(
+            right, _PlainAttrManagedTensorSnapshot
+        ):
+            return False
+        return (
+            left.module is right.module
+            and left.name == right.name
+            and left.shape == right.shape
+            and left.dtype == right.dtype
+            and left.device == right.device
+            and left.manager == right.manager
+        )
     if isinstance(left, torch.Tensor) or isinstance(right, torch.Tensor):
         if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
             return False
@@ -759,6 +931,8 @@ def _plain_attr_restore_value(snapshot: Any) -> Any:
 
     if isinstance(snapshot, _PlainAttrIdentitySnapshot):
         return snapshot.value
+    if isinstance(snapshot, _PlainAttrManagedTensorSnapshot):
+        return getattr(snapshot.module, snapshot.name)
     return _snapshot_plain_attr_value(snapshot, "<snapshot>")
 
 
@@ -809,7 +983,7 @@ class _ModuleTreePlainAttrSnapshot:
                         module,
                         name,
                         attr_path,
-                        _snapshot_plain_attr_value(getattr(module, name), attr_path),
+                        _snapshot_module_plain_attr_value(module, name, attr_path),
                     )
                 )
 
@@ -835,7 +1009,7 @@ class _ModuleTreePlainAttrSnapshot:
                     ) from exc
         for module, name, attr_path, snapshot in self._entries:
             try:
-                current_snapshot = _snapshot_plain_attr_value(getattr(module, name), attr_path)
+                current_snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
             except AttributeError:
                 current_snapshot = None
                 changed = True
@@ -1180,7 +1354,15 @@ def _capture_output_metadata_from_model_config(trace: Trace, model: nn.Module) -
         Model being captured.
     """
 
-    config = getattr(model, "config", None)
+    try:
+        config = getattr(model, "config", None)
+    except Exception:
+        # ``config`` may be a property whose getter raises for reasons unrelated to
+        # attribute existence (e.g. delegating to a submodule that only partially
+        # implements it). This is best-effort output metadata capture, not a
+        # validation check, so a raising getter degrades to "no config metadata"
+        # rather than aborting the whole capture.
+        return
     if config is None:
         return
 
@@ -1408,12 +1590,21 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
 
     Handles common dict-like types (OrderedDict, HuggingFace BatchEncoding, etc.)
     by attempting to reconstruct the original container type after moving values.
+    NamedTuple subclasses (e.g. a GNN model's batch container, which is also an
+    ``isinstance(obj, tuple)`` match) are reconstructed through their own type so
+    downstream named-field access keeps working instead of silently degrading to
+    a plain ``tuple``.
     """
     if isinstance(obj, torch.Tensor):
         return obj.to(device)
     elif isinstance(obj, (list, tuple)):
         moved_sequence = [_move_tensors_to_device(item, device) for item in obj]
-        return type(obj)(moved_sequence) if not isinstance(obj, tuple) else tuple(moved_sequence)
+        if not isinstance(obj, tuple):
+            return type(obj)(moved_sequence)
+        obj_type = type(obj)
+        if hasattr(obj_type, "_fields"):
+            return obj_type(*moved_sequence)
+        return tuple(moved_sequence)
     elif isinstance(obj, collections.abc.MutableMapping):
         # Handles dict, UserDict, BatchEncoding, OrderedDict, etc.
         moved_mapping = {k: _move_tensors_to_device(v, device) for k, v in obj.items()}
@@ -4234,6 +4425,9 @@ def _validate_forward_pass_torch(
     random_seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
+    *,
+    num_threads: int | None = None,
+    _trace_observer: Callable[[Trace], None] | None = None,
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
@@ -4253,15 +4447,31 @@ def _validate_forward_pass_torch(
     each function using its saved non-tensor arguments (e.g., stride, padding for
     conv2d).  Without them, replay cannot reconstruct the correct computation.
 
-    Args:
-        model: PyTorch model.
-        input_args: Input for which to validate the saved outs.
-        input_kwargs: Keyword arguments for model forward pass.
-        random_seed: Fixed RNG seed for reproducibility (auto-generated if None).
-        verbose: If True, print detailed error messages on validation failure.
-        validate_metadata: If True (default), also run metadata invariant checks.
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Input for which to validate the saved outs.
+    input_kwargs:
+        Keyword arguments for model forward pass.
+    random_seed:
+        Fixed RNG seed for reproducibility (auto-generated if None).
+    verbose:
+        If True, print detailed error messages on validation failure.
+    validate_metadata:
+        If True (default), also run metadata invariant checks.
+    num_threads:
+        Optional intra-op thread count for the validation forwards. ``None``
+        preserves the process default; an integer pins for this harness call and
+        restores the previous thread count afterward.
+    _trace_observer:
+        Optional private callback invoked with the completed validation trace
+        after replay validation and before cleanup.
 
-    Returns:
+    Returns
+    -------
+    bool
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
@@ -4293,15 +4503,80 @@ def _validate_forward_pass_torch(
     state_dict = _clone_state_dict_with_metadata(model)
     trace: Trace | None = None
     outs_are_valid = False
+    # Determinism stabilizer for the capture + replay + perturbation region.
+    #
+    # The replay-validation drift between an op's value captured INLINE in the
+    # full forward and the value recomputed by ISOLATED per-op replay is, for
+    # most ops, float-reduction-ORDER non-determinism in parallel CPU kernels
+    # (multi-threaded conv/matmul, atomic-add scatter) -- NOT randomness (RNG is
+    # already seeded above). Forcing deterministic algorithms makes the
+    # ground-truth forward, the TorchLens capture, and the per-op replay use the
+    # same reduction order, which removes the nondeterministic in-place-scatter
+    # PERTURBATION flake (the GNN/molecular "regression" class: a wrong value
+    # injected into a scatter destination sometimes produced an output
+    # indistinguishable from the original under a thread race, spuriously failing
+    # the sensitivity check). warn_only=True so no op raises if it lacks a
+    # deterministic impl (CPU scatter_add IS deterministic in torch 2.8, so this
+    # is not even exercised there, but it keeps the stabilizer safe on any op).
+    #
+    # In addition to deterministic algorithms, callers may pass ``num_threads``
+    # to PIN an intra-op thread count (save/restore, scoped to this harness only)
+    # for the duration of the validation forwards. Multi-threaded float
+    # reduction-ORDER is non-deterministic ACROSS RUNS even with deterministic
+    # algorithms enabled: two CLEAN forwards of the SAME nn.Module can disagree
+    # by ~3e-7 at the output. That straddles the strict phase-0 ground-truth bar
+    # (GROUND_TRUTH_OUTPUT_RTOL=1e-6), making the spectral-GCN family (MSTGCN /
+    # TGT-MSTGCN Chebyshev sparse aggregation) FLAKY, and the same thread
+    # non-determinism in MoE masked-gate routing makes the perturbation
+    # sensitivity check FLAKY (minimax / nllb-moe). Pinning one thread makes both
+    # bit-exact (abs diff -> exactly 0.0), so the strict bar becomes DETERMINISTIC
+    # -- this does NOT loosen any tolerance, it removes the inter-run thread
+    # non-determinism the bar was never meant to police.
+    #
+    # The menagerie validator normally runs this harness at the worker process
+    # default thread count for throughput, then retries exactly the failed forward
+    # validation once with ``num_threads=1``. A genuine capture/replay bug still
+    # fails the single-thread retry; the known reduction-order flakes are rescued
+    # by a strict bit-exact rerun instead of by loosening any tolerance.
+    #
+    # LOAD-BEARING: when a deterministic retry is needed, pinning at PROCESS start
+    # does NOT reliably fix the validation path (the capture forward and/or model
+    # internals re-parallelize); the pin must wrap the forwards INSIDE the
+    # harness, which is what ``num_threads=1`` does.
+    #
+    # Deterministic algorithms remain on as well: the optional thread pin removes
+    # inter-run reduction-order drift, while deterministic algorithms remove
+    # intra-run scatter non-determinism. (The single-thread pin alone covers most
+    # of it, but keeping deterministic algorithms is strictly safer and free
+    # here.) The thread pin does NOT make deep CPU conv inline-vs-isolated replay
+    # bit-exact (that residual is oneDNN kernel selection, not threading) -- that
+    # is what the band-C reduction-depth tolerance in validation/core.py covers;
+    # the changes are complementary.
+    prior_deterministic = torch.are_deterministic_algorithms_enabled()
+    prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    prior_num_threads = torch.get_num_threads()
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    if num_threads is not None:
+        torch.set_num_threads(num_threads)
     try:
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
-        ground_truth_output_all = get_vars_of_type_from_obj(
-            ground_truth_model(*input_args_copy, **input_kwargs_copy),
-            torch.Tensor,
-            search_depth=5,
-            return_addresses=True,
-            allow_repeats=True,
-        )
+        from .backends.torch.ops import _walk_output_tensors_with_paths
+
+        ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
+        ground_truth_output_all = [
+            (tensor, tuple(path))
+            for tensor, path, _container_spec in _walk_output_tensors_with_paths(
+                ground_truth_output
+            )
+        ]
+        if not ground_truth_output_all:
+            ground_truth_output_all = get_vars_of_type_from_obj(
+                ground_truth_output,
+                torch.Tensor,
+                search_depth=5,
+                return_addresses=True,
+                allow_repeats=True,
+            )
         # Deduplicate by structural address to match how capture/trace.py extracts
         # outputs (same tensor returned in multiple positions is counted once).
         addresses_used = []
@@ -4344,7 +4619,12 @@ def _validate_forward_pass_torch(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
         outs_are_valid = validation_result if isinstance(validation_result, bool) else False
+        if _trace_observer is not None:
+            _trace_observer(trace)
     finally:
+        torch.use_deterministic_algorithms(prior_deterministic, warn_only=prior_warn_only)
+        if num_threads is not None:
+            torch.set_num_threads(prior_num_threads)
         model.load_state_dict(state_dict)
         if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()

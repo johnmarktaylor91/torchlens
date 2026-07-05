@@ -323,9 +323,16 @@ def _fields_from_event(
     templates = event.templates
     params = tuple(event.params)
     param_logs = _param_logs_for_event(trace, params)
-    parent_param_ops = {param.barcode: event.pass_index for param in params}
-    param_shapes = [param.shape for param in params]
-    parent_params = list(event.parent_params)
+    resolved_param_addresses = {log.address for log in param_logs}
+    resolved_params = tuple(param for param in params if param.address in resolved_param_addresses)
+    resolved_parent_params = [
+        parent_param
+        for param, parent_param in zip(params, event.parent_params, strict=False)
+        if param.address in resolved_param_addresses
+    ]
+    parent_param_ops = {param.barcode: event.pass_index for param in resolved_params}
+    param_shapes = [param.shape for param in resolved_params]
+    parent_params = resolved_parent_params
     grad_handle = grad_fn_handle if grad_fn_handle is not None else event.grad_fn_handle
     module = event.modules[-1] if event.modules else None
     resolved_address = buffer_address or _event_address(event)
@@ -440,7 +447,7 @@ def _fields_from_event(
             "transform_fn_source": event.transform_fn_source,
             "unattributed_tensor_args": tuple(event.unattributed_tensor_args),
             "parent_params": parent_params,
-            "_param_barcodes": [param.barcode for param in params],
+            "_param_barcodes": [param.barcode for param in resolved_params],
             "parent_param_ops": parent_param_ops,
             "_param_logs": param_logs,
             "param_shapes": param_shapes,
@@ -1198,6 +1205,8 @@ def _apply_module_exit_event(trace: "Trace", event: ModuleExitEvent) -> None:
     mbd["module_forward_durations"][event.call_label] = event.forward_duration
     if event.output_structure is not None:
         mbd["module_output_structures"][event.call_label] = event.output_structure
+    if event.output_paths:
+        mbd.setdefault("module_output_paths", {})[event.call_label] = tuple(event.output_paths)
 
 
 def _module_enter_addresses(
@@ -1475,7 +1484,13 @@ def _module_role_hints_by_address(
     for event in prep_events:
         module_class = _resolve_module_class(event.cls_qualname)
         if module_class is None:
-            module_class = getattr(nn, event.class_name, None)
+            # `torch.nn` also exposes non-class submodules (e.g. `nn.init`,
+            # `nn.functional`, `nn.utils`). A user module class can legitimately
+            # share one of those names (e.g. a class literally named `init`),
+            # so this fallback must reject non-class matches instead of handing
+            # them to `issubclass()` below.
+            candidate = getattr(nn, event.class_name, None)
+            module_class = candidate if isinstance(candidate, type) else None
         hints = role_hints_for_module_class(module_class)
         if hints is not None:
             hints_by_address[event.address] = hints

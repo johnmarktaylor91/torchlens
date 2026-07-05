@@ -159,6 +159,13 @@ def _build_root_module_log(
     root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.is_trainable)
     root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.is_trainable)
     root_fsize = Bytes(sum(int(pl.param_memory) for pl in self.param_logs))
+    root_meta_children = root_meta.get("address_children")
+    if root_meta_children is None:
+        address_children = [m for m in mbd["top_level_modules"] if m != "self" and "." not in m]
+    else:
+        address_children = [
+            child for child in root_meta_children if child != "self" and "." not in child
+        ]
 
     root_module = Module(
         address="self",
@@ -183,7 +190,7 @@ def _build_root_module_log(
         # top_level_modules may include grandchildren called directly
         # (e.g., self.level21.level12(x)), which belong in call_children
         # but not in the static address hierarchy.
-        address_children=[m for m in mbd["top_level_modules"] if m != "self" and "." not in m],
+        address_children=address_children,
         address_depth=0,
         call_parent=None,
         call_children=[m for m in mbd["top_level_modules"] if m != "self"],
@@ -220,7 +227,7 @@ def _build_root_module_log(
         output_ops=list(self.output_layers),
         output_structure=_first_output_structure(self, list(self.output_layers)),
         call_parent=None,
-        call_children=[m for m in mbd["top_level_module_ops"] if m != "self:1"],
+        call_children=_root_call_children(mbd),
         all_addresses=root_meta.get("all_addresses", ["self"]),
         cls=root_meta.get("cls"),
         class_name=root_meta.get("class_name", self.model_class_name),
@@ -236,6 +243,37 @@ def _build_root_module_log(
     pass_dict["self:1"] = root_pass
 
     return root_module
+
+
+def _root_call_children(mbd: dict[str, Any]) -> list[str]:
+    """Resolve the root ``self:1`` ModuleCall's direct call children.
+
+    Two capture shapes feed this:
+
+    * Function-root traces (``self`` is synthetic and never appears in an op's
+      module stack): the direct children are the outermost real module calls,
+      recorded in ``top_level_module_ops`` while ``module_pass_children['self:1']``
+      stays empty.
+    * Object-module / explicit-self traces (``self`` is itself a traced module,
+      so ops carry ``['self:1', child:1, ...]`` stacks): the outermost call IS
+      ``self:1`` itself, so ``top_level_module_ops`` collapses to ``['self:1']``
+      and the real direct children land in ``module_pass_children['self:1']``.
+
+    Unioning both sources (preserving order, dropping the self-reference) yields
+    the correct children in both shapes. Previously only ``top_level_module_ops``
+    was consulted, so the explicit-self shape silently dropped every child of
+    ``self:1`` -- an asymmetric call-tree the module-hierarchy invariant rightly
+    flags (parent lists no children while children point back to ``self:1``).
+    """
+
+    children: list[str] = []
+    for label in mbd.get("top_level_module_ops", []):
+        if label != "self:1" and label not in children:
+            children.append(label)
+    for label in mbd.get("module_pass_children", {}).get("self:1", []):
+        if label != "self:1" and label not in children:
+            children.append(label)
+    return children
 
 
 def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module") -> None:
@@ -566,6 +604,7 @@ def _build_submodule_call_logs(
             output_structure=mbd.get("module_output_structures", {}).get(
                 call_label, _first_output_structure(self, pass_output_layers)
             ),
+            output_paths=mbd.get("module_output_paths", {}).get(call_label, ()),
             forward_args=fwd_positional,
             forward_kwargs=fwd_kwargs,
             forward_args_template=fwd_args_template,
@@ -947,8 +986,15 @@ def _build_layer_logs(self: "Trace") -> None:
         for pass_log in layer_log.ops.values():
             linked_labels = []
             for param_log in getattr(pass_log, "_param_logs", []):
-                for linked_address in getattr(param_log, "co_parent_params", []):
-                    linked_labels.append(f"{param_log.address} → {linked_address}")
+                # Tied/shared parameters expose every aliasing address through
+                # ``all_addresses`` (the primary is ``param_log.address`` == all_addresses[0]).
+                # Emit ``primary -> alias`` for each additional address that shares the
+                # underlying tensor storage. (Co-occurrence of distinct tensors in one op
+                # is tracked separately by ``co_parent_params`` and is NOT tying.)
+                for alias_address in getattr(param_log, "all_addresses", []):
+                    if alias_address == param_log.address:
+                        continue
+                    linked_labels.append(f"{param_log.address} → {alias_address}")
             if linked_labels:
                 pass_log.annotations["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [

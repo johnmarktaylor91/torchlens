@@ -15,7 +15,7 @@ delegated to the registries in ``exemptions.py``.
 """
 
 from collections import defaultdict, deque
-from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union, cast
+from typing import Optional, Any, Dict, List, Sequence, Set, TYPE_CHECKING, Union, cast
 
 import torch
 
@@ -50,26 +50,72 @@ from .exemptions import (
 # where the value space may be small (e.g., a single-element int tensor).
 MAX_PERTURB_ATTEMPTS = 100
 
-# Deep convolutional models can replay the same FP32 op with tiny differences
-# after many accumulated reductions. Keep this local to validation replay so
-# global tensor equality stays strict for graph bookkeeping and lower-tier tests.
-DEEP_NUMERIC_REPLAY_FUNCS = frozenset(
+# Deep reduction ops can replay the same FP32 op with tiny differences after
+# many accumulated multiply-adds. Keep this local to validation replay so global
+# tensor equality stays strict for graph bookkeeping and lower-tier tests.
+#
+# Band-C (deep-numeric) eligibility is the FAITHFUL reduction depth, not a graph-
+# position or func-allowlist proxy: an op qualifies iff it is a REDUCTION whose
+# per-output accumulation depth (FP32 multiply-adds summed into each output
+# element) is at least DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH. FP32 reorder
+# drift is driven by the contraction length, not by where the op sits in the
+# graph (a wide channel-expansion conv accumulates hundreds of products per
+# output whether it is op #41 or op #870) nor by a hand-picked conv/matmul list
+# (a high-degree scatter/segment aggregation drifts by the same physics). This
+# replaces BOTH the earlier DEEP_NUMERIC_REPLAY_FUNCS allowlist and the
+# step_index >= 100 position proxy, which together mis-gated physically-deep
+# early ops AND lent band C to shallow late ops (a bug-masking hole). The
+# acceptance tolerances below are UNCHANGED, so a genuinely wrong replay still
+# fails; only the qualification predicate is now the faithful depth measure.
+#
+# Depth 0 means the depth could not be determined; such ops are INELIGIBLE
+# (fail-toward-strict) so band C is withheld and global tolerance stays strict.
+DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH = 64
+
+# Reduction-category func-name groups, used only to compute the per-output
+# accumulation depth (NOT to gate eligibility -- a shallow op in any category
+# below depth 64 stays strict). "Reduction" here means any op that sums many
+# inputs into a single output element; everything else (elementwise, view,
+# structural, copy) has depth 1 and never reaches the threshold.
+_CONV_FUNC_PREFIX = "conv"  # conv1d/2d/3d + conv_transpose1d/2d/3d
+_CONV_TRANSPOSE_FUNC_PREFIX = "conv_transpose"  # conv_transpose1d/2d/3d
+_MATMUL_LINEAR_FUNCS = frozenset({"addmm", "baddbmm", "bmm", "linear", "matmul", "mm"})
+# Scatter/segment/index aggregations that are band-C-eligible ONLY when they are
+# ADDITIVE/mean accumulators -- i.e. they sum many FP32 source elements into one
+# destination slot, so summation-order round-off genuinely accrues. Plain
+# overwrite ``scatter``/``scatter_`` (no FP accumulation -- the last write wins)
+# and ``max``/``min``/``amax``/``amin`` reductions (no summation-order drift)
+# are EXCLUDED here and stay on the strict global tolerance. ``scatter_reduce*``
+# is conditionally additive: only its ``reduce="sum"``/``"mean"`` modes accumulate
+# (its ``"prod"``/``"amax"``/``"amin"`` modes do not), so it is gated dynamically
+# inside the depth predicate rather than by membership here.
+_SCATTER_REDUCE_FUNCS = frozenset(
     {
-        "addmm",
-        "baddbmm",
-        "bmm",
-        "conv1d",
-        "conv2d",
-        "conv3d",
-        "conv_transpose1d",
-        "conv_transpose2d",
-        "conv_transpose3d",
-        "linear",
-        "matmul",
-        "mm",
+        "scatter_add",
+        "scatter_add_",
+        "scatter_reduce",
+        "scatter_reduce_",
+        "segment_reduce",
+        "index_add",
+        "index_add_",
     }
 )
-DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM = 100
+# scatter_reduce reduce-modes that ADD (FP reorder drift) vs that select/overwrite.
+_ADDITIVE_SCATTER_REDUCE_MODES = frozenset({"sum", "mean"})
+_DIM_REDUCE_FUNCS = frozenset(
+    {
+        "sum",
+        "mean",
+        "prod",
+        "norm",
+        "var",
+        "std",
+        "nansum",
+        "nanmean",
+        "logsumexp",
+    }
+)
+
 DEEP_NUMERIC_REPLAY_RTOL = 1e-3
 DEEP_NUMERIC_REPLAY_ATOL = 1e-4
 DEEP_NUMERIC_REPLAY_OUTLIER_RTOL = 5e-2
@@ -197,6 +243,20 @@ def validate_saved_outs(
     """
     _raise_if_portable_bundle_log(self)
 
+    # Diagnostics side-channel: clear any stale failure from a prior run so a
+    # report reflects THIS validation only. ADD-ONLY -- never affects the result.
+    from .diagnostics import (
+        CHECK_COMPLETENESS,
+        CHECK_GROUND_TRUTH,
+        CHECK_OUTPUT_MISSING,
+        ValidationFailure,
+        describe_tensor_mismatch,
+        record_validation_failure,
+        reset_validation_failure,
+    )
+
+    reset_validation_failure(self)
+
     # Phase 0: verify logged outputs match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
     if not getattr(self, "halted", False):
@@ -207,12 +267,31 @@ def validate_saved_outs(
             )
             if output_layer.out is None:
                 print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
+                record_validation_failure(
+                    self,
+                    ValidationFailure(
+                        check=CHECK_OUTPUT_MISSING,
+                        op_label=output_layer_label,
+                        message=f"output layer #{i} has no saved out",
+                    ),
+                )
                 return False
             if not _ground_truth_output_matches_saved(
                 output_layer.out, ground_truth_output_tensors[i]
             ):
                 print(
                     f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
+                )
+                record_validation_failure(
+                    self,
+                    describe_tensor_mismatch(
+                        output_layer.out,
+                        ground_truth_output_tensors[i],
+                        check=CHECK_GROUND_TRUTH,
+                        op_label=output_layer_label,
+                        func_name=getattr(output_layer, "func_name", None),
+                        message=f"output #{i} does not match ground truth",
+                    ),
                 )
                 return False
 
@@ -246,13 +325,43 @@ def validate_saved_outs(
             f"All saved outs were accurate, but some layers were not reached (check that "
             f"child args logged accurately): {unreached}"
         )
+        record_validation_failure(
+            self,
+            ValidationFailure(
+                check=CHECK_COMPLETENESS,
+                message=(
+                    f"BFS reached {len(validated_layers)}/{len(expected_layers)} layers; "
+                    f"{len(unreached)} unreached (e.g. {sorted(unreached)[:3]})"
+                ),
+                extra={"n_unreached": len(unreached)},
+            ),
+        )
         return False
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:
         from .invariants import check_metadata_invariants
 
-        check_metadata_invariants(self)
+        try:
+            check_metadata_invariants(self)
+        except Exception as invariant_error:
+            # ADD-ONLY: record the firing invariant on the side-channel, then
+            # RE-RAISE unchanged. The invariant remains a hard tripwire -- this
+            # only captures its identity for downstream reporting.
+            from .diagnostics import (
+                CHECK_METADATA_INVARIANT,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_METADATA_INVARIANT,
+                    message=f"{type(invariant_error).__name__}: {invariant_error}",
+                ),
+            )
+            raise
 
     return True
 
@@ -303,6 +412,17 @@ def validate_parents_of_saved_layer(
         print(
             f"Parent arguments for layer {layer_to_validate_parents_for_label} are not logged properly; "
             f"either a parent wasn't logged as an argument, or was logged an extra time"
+        )
+        from .diagnostics import CHECK_ARG_LOGGING, ValidationFailure, record_validation_failure
+
+        record_validation_failure(
+            self,
+            ValidationFailure(
+                check=CHECK_ARG_LOGGING,
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer_to_validate_parents_for, "func_name", None),
+                message="parent not logged as an argument, or logged an extra time",
+            ),
         )
         return False
 
@@ -880,7 +1000,7 @@ def _execute_func_with_restored_state(
     # Multi-output functions may return typed containers; select the specific
     # output this layer represents using the captured typed path when available.
     container_path = tuple(getattr(layer, "container_path", ()) or ())
-    if container_path:
+    if container_path and not isinstance(recomputed_output, torch.Tensor):
         recomputed_output = _slice_recomputed_output_by_path(recomputed_output, container_path)
     elif isinstance(recomputed_output, (list, tuple)):
         recomputed_output = recomputed_output[layer.multi_output_index]
@@ -946,6 +1066,298 @@ def _index_recomputed_output_component(output: Any, component: OutputPathCompone
     raise TypeError(f"Unsupported output path component {component!r}.")
 
 
+def _reduced_numel_over_dims(tensor: torch.Tensor, dim: Any, default_all: bool) -> int:
+    """Return how many input elements are summed into each output element.
+
+    For a dimension-reducing op (``sum``/``mean``/...), the per-output
+    accumulation depth is the product of the reduced dimension sizes. ``dim``
+    follows torch's reduce conventions: ``None`` reduces over every dimension
+    (when ``default_all``), an int or sequence of ints names the reduced dims.
+
+    Runtime-verified torch behavior for an EXPLICIT empty ``dim=()`` (torch 2.x):
+    for the reduce family this predicate gates (``sum``/``mean``/``nansum``/
+    ``nanmean``/``var``/``std``/``norm``/``amax``/``amin``), ``dim=()`` is NOT an
+    identity/no-op -- it reduces over EVERY dimension and returns a scalar (e.g.
+    ``torch.sum(x, dim=()).shape == ()``). So ``dim=()`` is treated as reduce-all
+    (depth = ``numel``), the same as ``dim=None`` with ``default_all`` -- not depth
+    1. (``prod``/``logsumexp`` reject a tuple ``dim`` outright at runtime, so a
+    captured op there will not present ``dim=()`` to this path.)
+    """
+
+    if dim is None:
+        return int(tensor.numel()) if default_all else 1
+    if isinstance(dim, int):
+        dims: tuple[int, ...] = (dim,)
+    else:
+        try:
+            dims = tuple(int(d) for d in dim)
+        except TypeError:
+            return 0
+    if not dims:
+        # Empty dim. For default_all reducers an explicit dim=() reduces over all
+        # dims (runtime-verified scalar output), matching dim=None's reduce-all.
+        return int(tensor.numel()) if default_all else 1
+    ndim = tensor.dim()
+    depth = 1
+    for d in dims:
+        depth *= int(tensor.shape[d % ndim]) if ndim else 1
+    return depth
+
+
+def _op_reduction_depth(layer: Op) -> int:
+    """Return the per-output FP32 accumulation depth for a replay op.
+
+    The reduction depth is the number of multiply-adds summed into each output
+    element, which is what drives accumulation-order round-off between an original
+    op and its faithful replay. It is read from the op's saved operand shapes /
+    indices, consulting BOTH ``saved_args`` and ``saved_kwargs`` so that operands
+    passed by keyword (``conv2d(x, weight=w)``, ``matmul(a, other=b)``,
+    ``scatter_add(out, dim=d, index=idx, src=s)``) are still measured correctly --
+    reading positionally only would drop the operand to depth 0 and wrongly
+    withhold band C, a fresh false-negative.
+
+    Depth by category:
+
+    - forward ``conv*``: ``in_channels/groups * prod(kernel_size)`` =
+      ``weight.numel() / weight.shape[0]`` products per output element (forward
+      conv weight is ``[out_channels, in_channels/groups, *kernel]``, so the
+      out-channel axis is ``shape[0]``).
+    - ``conv_transpose*``: transposed-conv weight is
+      ``[in_channels, out_channels/groups, *kernel]`` -- the IN-channel axis is
+      ``shape[0]``. The true per-output accumulation depth is
+      ``in_channels/groups * prod(kernel)`` = ``weight.shape[0] // groups *
+      prod(weight.shape[2:])``, with ``groups`` read from positional arg 6 / kwarg
+      ``groups`` (default 1; an unreadable or non-dividing ``groups`` returns 0,
+      fail-toward-strict). The forward formula ``weight.numel() // weight.shape[0]``
+      would read ``out_channels/groups * prod(kernel)``, and omitting the
+      ``// groups`` divisor over-reports a grouped transpose (e.g.
+      ``ConvTranspose2d(128, 128, 1, groups=128)`` is depth 1, not 128).
+    - ``linear`` / ``addmm`` / ``mm`` / ``matmul`` / ``bmm`` / ``baddbmm``:
+      the contracted dimension ``K`` of the first matrix operand.
+    - ``scatter_add*`` / additive ``scatter_reduce*`` (``reduce="sum"``/``"mean"``)
+      / ``segment_reduce`` / ``index_add``: the max number of source elements
+      summed into a single destination COORDINATE (the graph fan-in = max
+      duplicate destination-tuple count, counted per actual destination position,
+      NOT per raw index value). Plain overwrite ``scatter``/``scatter_`` and
+      ``max``/``min``/``amax``/``amin``/``prod`` reduce-modes do not accumulate and
+      are not in the eligible set, so they stay strict. A depth-2 scatter (two
+      sources per destination) stays well below threshold.
+    - ``sum`` / ``mean`` / ``prod`` / ``norm`` / ``var`` / ``std`` and other
+      dimension reductions: the numel of the reduced dimension(s).
+    - elementwise / copy / view / structural ops: 1.
+
+    Returns
+    -------
+    int
+        Per-output accumulation depth, or ``0`` when it cannot be determined.
+        A return of ``0`` conservatively withholds band C (fail-toward-strict).
+    """
+
+    saved_args: Sequence[Any] = getattr(layer, "saved_args", None) or ()
+    saved_kwargs: Dict[str, Any] = getattr(layer, "saved_kwargs", None) or {}
+    func_name = layer.func_name
+
+    def _operand(index: int, *kwarg_names: str) -> Any:
+        """Read an operand positionally, falling back to its keyword names."""
+        if index < len(saved_args):
+            return saved_args[index]
+        for name in kwarg_names:
+            if name in saved_kwargs:
+                return saved_kwargs[name]
+        return None
+
+    # conv_transpose* (checked FIRST -- "conv_transpose" also startswith "conv"):
+    # transposed weight is [in_channels, out_channels/groups, *kernel], so the true
+    # per-output accumulation depth is in_channels/groups * prod(kernel) =
+    # shape[0] // groups * prod(shape[2:]). groups is read from positional arg 6 /
+    # kwarg "groups" (default 1). Omitting the // groups divisor over-reports a
+    # grouped transpose (ConvTranspose2d(128,128,1,groups=128) is depth 1, not 128);
+    # an unreadable / non-dividing groups returns 0 (fail-toward-strict).
+    if func_name.startswith(_CONV_TRANSPOSE_FUNC_PREFIX):
+        weight = _operand(1, "weight")
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
+            kernel_numel = 1
+            for kdim in weight.shape[2:]:
+                kernel_numel *= int(kdim)
+            groups = _operand(6, "groups")
+            if groups is None:
+                groups = 1
+            if not isinstance(groups, int) or groups <= 0 or int(weight.shape[0]) % groups != 0:
+                return 0
+            return (int(weight.shape[0]) // groups) * kernel_numel
+        return 0
+
+    # forward conv*: weight is [out_channels, in_channels/groups, *kernel], so depth
+    # = in_channels/groups * prod(kernel) = weight.numel() // weight.shape[0].
+    if func_name.startswith(_CONV_FUNC_PREFIX):
+        weight = _operand(1, "weight")
+        if isinstance(weight, torch.Tensor) and weight.dim() >= 2 and weight.shape[0] > 0:
+            return int(weight.numel() // weight.shape[0])
+        return 0
+
+    # matmul / linear family: depth = contracted dimension K.
+    if func_name in _MATMUL_LINEAR_FUNCS:
+        if func_name == "linear":
+            weight = _operand(1, "weight")
+            if isinstance(weight, torch.Tensor) and weight.dim() >= 1:
+                return int(weight.shape[-1])
+            first = _operand(0, "input")
+            if isinstance(first, torch.Tensor) and first.dim() >= 1:
+                return int(first.shape[-1])
+            return 0
+        if func_name == "addmm":
+            mat1 = _operand(1, "mat1")
+            if isinstance(mat1, torch.Tensor) and mat1.dim() >= 1:
+                return int(mat1.shape[-1])
+            return 0
+        if func_name == "baddbmm":
+            first_matrix = _operand(1, "batch1")
+        elif func_name in {"mm", "bmm"}:
+            first_matrix = _operand(0, "input", "mat1")
+        else:  # matmul
+            first_matrix = _operand(0, "input")
+        if isinstance(first_matrix, torch.Tensor) and first_matrix.dim() >= 1:
+            return int(first_matrix.shape[-1])
+        return 0
+
+    # Additive scatter / segment / index_add: depth = max per-coordinate fan-in.
+    # scatter_reduce* is conditionally additive -- only its sum/mean modes accumulate;
+    # a prod/amax/amin reduce-mode does not drift and is withheld (depth 0).
+    if func_name in _SCATTER_REDUCE_FUNCS:
+        if func_name.startswith("scatter_reduce"):
+            # scatter_reduce(input, dim, index, src, reduce, *, include_self): the
+            # reduce mode arrives as kwarg "reduce" (TorchLens-captured form) or as
+            # positional arg 4 (free-function torch.scatter_reduce(..., reduce)).
+            reduce_mode = saved_kwargs.get("reduce", None)
+            if reduce_mode is None and len(saved_args) > 4:
+                reduce_mode = saved_args[4]
+            if reduce_mode not in _ADDITIVE_SCATTER_REDUCE_MODES:
+                return 0
+        return _scatter_fan_in_depth(func_name, saved_args, saved_kwargs)
+
+    # dimension reductions (sum/mean/...): depth = numel of reduced dims.
+    if func_name in _DIM_REDUCE_FUNCS:
+        tensor = _operand(0, "input")
+        if not isinstance(tensor, torch.Tensor):
+            return 0
+        dim = saved_kwargs.get("dim", None)
+        if dim is None:
+            dim = _operand(1, "dim")
+        # sum/mean/prod with no dim reduce over all elements; var/std/norm too.
+        return _reduced_numel_over_dims(tensor, dim, default_all=True)
+
+    # Everything else (elementwise, view, structural, copy) has depth 1: a single
+    # value flows through per output element, so no FP32 reorder drift accrues.
+    return 1
+
+
+def _scatter_fan_in_depth(
+    func_name: str,
+    saved_args: Any,
+    saved_kwargs: Dict[str, Any],
+) -> int:
+    """Return the max number of source elements aggregated per destination slot.
+
+    For ``scatter_add``-family ops the per-output accumulation depth is the graph
+    fan-in: the maximum number of source elements that sum into a single
+    destination COORDINATE. This MUST be counted per actual destination position,
+    not per raw index value: a row-/feature-wise scatter writes many independent
+    destinations at index ``0``, and counting the duplicate raw index value ``0``
+    globally would conflate those independent destinations into one huge fan-in and
+    wrongly grant band C to a genuinely shallow (e.g. depth-2) scatter.
+
+    For an n-D ``scatter_add``/``scatter_reduce`` (``self``, ``index`` and ``src``
+    all share rank), the destination coordinate of source element at position
+    ``(i_0, ..., i_{n-1})`` is ``index[...]`` along the scatter ``dim`` and the
+    SOURCE position ``i_d`` along every other dim. We rebuild the full destination
+    tuple per source element and count the max number of identical tuples. A
+    1-D ``index_add`` (index value IS the whole destination coordinate) and
+    ``segment_reduce`` (max segment length) are already per-coordinate.
+    """
+
+    def _arg(index: int, *kwarg_names: str) -> Any:
+        if index < len(saved_args):
+            return saved_args[index]
+        for name in kwarg_names:
+            if name in saved_kwargs:
+                return saved_kwargs[name]
+        return None
+
+    if func_name.startswith("index_add"):
+        # index_add(input, dim, index, source): 1-D index value IS the full
+        # destination coordinate along the indexed dim, so each raw index value
+        # already names a distinct destination -- count raw duplicates directly.
+        index = _arg(2, "index")
+        return _max_raw_index_multiplicity(index)
+    if func_name == "segment_reduce":
+        # segment_reduce(data, reduce, lengths=...): fan-in = max segment length.
+        lengths = saved_kwargs.get("lengths", None)
+        if isinstance(lengths, torch.Tensor) and lengths.numel() > 0:
+            return int(lengths.max().item())
+        return 0
+
+    # scatter_add*/scatter_reduce*: index is the 3rd operand, dim the 2nd.
+    index = _arg(2, "index")
+    if not isinstance(index, torch.Tensor) or index.numel() == 0:
+        return 0
+    dim = _arg(1, "dim")
+    if not isinstance(dim, int):
+        return 0
+    return _max_destination_coordinate_fan_in(index, dim)
+
+
+def _max_raw_index_multiplicity(index: Any) -> int:
+    """Return the max count of any repeated raw index value (1-D index_add fan-in)."""
+
+    if not isinstance(index, torch.Tensor) or index.numel() == 0:
+        return 0
+    try:
+        flat = index.reshape(-1).to(torch.int64)
+        counts = torch.bincount(flat - flat.min())
+        return int(counts.max().item())
+    except (RuntimeError, ValueError):
+        return 0
+
+
+def _max_destination_coordinate_fan_in(index: torch.Tensor, dim: int) -> int:
+    """Return the max number of n-D scatter source elements per destination tuple.
+
+    Builds, for each source element, the full destination coordinate -- ``index``
+    along the (normalized) scatter ``dim`` and the source position along every other
+    dim -- then counts the largest group of identical destination coordinates. Two
+    sources landing on the same destination report depth 2 no matter how many other
+    destinations also happen to be indexed at the same raw value.
+    """
+
+    try:
+        ndim = index.dim()
+        if ndim == 0:
+            return int(index.numel())
+        scatter_dim = dim % ndim
+        idx64 = index.to(torch.int64)
+        # Per-axis destination coordinate: the index value along the scatter dim,
+        # the source position (arange, broadcast) along every other dim.
+        coord_axes = []
+        for axis in range(ndim):
+            if axis == scatter_dim:
+                coord_axes.append(idx64.reshape(-1))
+            else:
+                shape = [1] * ndim
+                shape[axis] = index.shape[axis]
+                axis_positions = (
+                    torch.arange(index.shape[axis], dtype=torch.int64)
+                    .reshape(shape)
+                    .expand_as(index)
+                    .reshape(-1)
+                )
+                coord_axes.append(axis_positions)
+        dest_tuples = torch.stack(coord_axes, dim=1)
+        _, counts = torch.unique(dest_tuples, dim=0, return_counts=True)
+        return int(counts.max().item())
+    except (RuntimeError, ValueError):
+        return 0
+
+
 def _deep_numeric_replay_matches_saved(
     layer: Op,
     recomputed_output: torch.Tensor,
@@ -953,10 +1365,14 @@ def _deep_numeric_replay_matches_saved(
     """Return whether a deep numeric replay matches within local relaxed tolerance.
 
     The standard validation tolerance remains the default for every layer. This
-    fallback is intentionally narrow: it only applies to later convolution-like
-    numeric ops, first tries a modest ``allclose`` relaxation, then allows a
-    tiny fraction of stricter-check outliers only when the overall scaled error
-    is still very small.
+    fallback is intentionally narrow: it only applies to REDUCTION ops whose
+    per-output accumulation depth is at least
+    ``DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH`` (a deep conv/matmul/scatter/sum,
+    where FP32 reorder round-off genuinely accrues). It first tries a modest
+    ``allclose`` relaxation, then allows a tiny fraction of stricter-check
+    outliers only when the overall scaled error is still very small. A shallow
+    op (depth < 64) -- or any op whose depth cannot be determined (depth 0) --
+    is INELIGIBLE and stays on the strict global tolerance (fail-toward-strict).
 
     Parameters
     ----------
@@ -974,9 +1390,8 @@ def _deep_numeric_replay_matches_saved(
     saved_output = layer.out
     if saved_output is None:
         return False
-    if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
-        return False
-    if layer.step_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+    depth = _op_reduction_depth(layer)
+    if depth < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH:
         return False
     if recomputed_output.shape != saved_output.shape:
         return False
@@ -1080,6 +1495,21 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                 f"Validation replay raised an exception for layer "
                 f"{layer_to_validate_parents_for_label}; treating as failed validation."
             )
+            from .diagnostics import (
+                CHECK_REPLAY,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_REPLAY,
+                    op_label=layer_to_validate_parents_for_label,
+                    func_name=getattr(layer, "func_name", None),
+                    message="replay re-execution raised an exception (run verbose for traceback)",
+                ),
+            )
             return False
         # Perturbed execution raised -- the perturbed values caused an invalid
         # input (e.g., wrong shape).  Treat as exempt.
@@ -1098,9 +1528,39 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         )
         if parent_has_inplace_rng:
             return True
+        # Surface the computed reduction depth so a band-C miss is diagnosable:
+        # depth < 64 means the op was (correctly) ineligible for the deep-numeric
+        # tolerance; a large depth that still failed points at a real replay bug.
+        reduction_depth = (
+            _op_reduction_depth(layer) if isinstance(recomputed_output, torch.Tensor) else None
+        )
+        depth_note = (
+            f" (reduction_depth={reduction_depth}, band-C eligibility threshold="
+            f"{DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH})"
+            if reduction_depth is not None
+            else ""
+        )
         print(
             f"Saved outs for layer {layer_to_validate_parents_for_label} do not match the "
-            f"values computed based on the parent layers {layer.parents}."
+            f"values computed based on the parent layers {layer.parents}{depth_note}."
+        )
+        from .diagnostics import (
+            CHECK_REPLAY,
+            describe_tensor_mismatch,
+            record_validation_failure,
+        )
+
+        record_validation_failure(
+            self,
+            describe_tensor_mismatch(
+                layer.out,
+                recomputed_output,
+                check=CHECK_REPLAY,
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer, "func_name", None),
+                reduction_depth=reduction_depth,
+                message="isolated replay does not reproduce saved out",
+            ),
         )
         return False
 
@@ -1108,7 +1568,32 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # there's a valid excuse (bool output, special-value args, type cast, etc.).
     # Uses exact equality (no tolerance) since any change should be detectable.
     if perturb and tensor_nanequal(recomputed_output, layer.out, allow_tolerance=False):
-        return posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
+        perturb_ok = posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
+        if not perturb_ok:
+            # ADD-ONLY: a genuine perturbation-insensitivity failure (the output
+            # did not change when a parent's value was perturbed and no posthoc
+            # excuse applied). Record the structured reason -- this NEVER changes
+            # the decision posthoc_perturb_check already returned.
+            from .diagnostics import (
+                CHECK_PERTURBATION,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_PERTURBATION,
+                    op_label=layer_to_validate_parents_for_label,
+                    func_name=getattr(layer, "func_name", None),
+                    message=(
+                        "output insensitive to perturbing parent(s) "
+                        f"{layers_to_perturb}; the parent does not influence this op's value"
+                    ),
+                    extra={"perturbed_parents": list(layers_to_perturb)},
+                ),
+            )
+        return perturb_ok
 
     return True
 
@@ -1144,6 +1629,7 @@ def _prepare_input_args_for_validating_layer(
         "kwargs": layer_to_validate_parents_for.saved_kwargs.copy(),
     }
     input_args = _copy_validation_args(input_args)
+    _restore_live_parameter_args_for_replay(input_args, layer_to_validate_parents_for)
 
     # Swap in saved parent outs:
 
@@ -1192,6 +1678,181 @@ def _prepare_input_args_for_validating_layer(
                 )
 
     return input_args
+
+
+def _restore_live_parameter_args_for_replay(input_args: dict[str, Any], layer: Op) -> None:
+    """Restore live parameter objects into replay args when snapshots still match.
+
+    Some PyTorch kernels, notably oneDNN-backed convolutions, can replay with
+    slightly different accumulation when a model ``nn.Parameter`` is replaced
+    by a detached tensor clone. The original call consumed the live parameter
+    object, so validation should do the same when the source model is still
+    available and the live parameter remains exactly equal to the saved
+    argument snapshot. If the parameter has changed or cannot be resolved, the
+    saved tensor clone is left in place so stale/corrupt captures still fail.
+
+    Parameters
+    ----------
+    input_args:
+        Replay argument mapping created from saved args/kwargs.
+    layer:
+        Operation being replayed.
+
+    Returns
+    -------
+    None
+        ``input_args`` is updated in place.
+    """
+
+    if getattr(layer, "is_inplace", False):
+        return
+    param_logs = tuple(getattr(layer, "_param_logs", ()) or ())
+    if not param_logs:
+        return
+
+    skip_paths = _parent_arg_paths(layer)
+    live_params = tuple(_available_live_params(param_logs))
+    if not live_params:
+        return
+
+    input_args["args"] = [
+        _restore_live_parameter_leaf(arg, live_params, skip_paths["args"], (index,))
+        for index, arg in enumerate(input_args["args"])
+    ]
+    input_args["kwargs"] = {
+        key: _restore_live_parameter_leaf(value, live_params, skip_paths["kwargs"], (key,))
+        for key, value in input_args["kwargs"].items()
+    }
+
+
+def _parent_arg_paths(layer: Op) -> dict[str, set[tuple[Any, ...]]]:
+    """Return argument paths occupied by dataflow parent tensors.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose parent argument positions should be skipped.
+
+    Returns
+    -------
+    dict[str, set[tuple[Any, ...]]]
+        Path sets for positional and keyword arguments.
+    """
+
+    parent_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    paths: dict[str, set[tuple[Any, ...]]] = {"args": set(), "kwargs": set()}
+    for arg_type in ("args", "kwargs"):
+        for key in parent_positions.get(arg_type, {}):
+            paths[arg_type].add(key if isinstance(key, tuple) else (key,))
+    return paths
+
+
+def _available_live_params(param_logs: tuple[Any, ...]) -> list[torch.nn.Parameter]:
+    """Resolve live parameters still reachable from a trace's source model.
+
+    Parameters
+    ----------
+    param_logs:
+        Parameter metadata objects attached to an op.
+
+    Returns
+    -------
+    list[torch.nn.Parameter]
+        Live parameters that could be resolved.
+    """
+
+    live_params: list[torch.nn.Parameter] = []
+    for param_log in param_logs:
+        try:
+            live_param = getattr(param_log, "handle", None)
+        except Exception:
+            live_param = None
+        if isinstance(live_param, torch.nn.Parameter):
+            live_params.append(live_param)
+    return live_params
+
+
+def _restore_live_parameter_leaf(
+    value: Any,
+    live_params: tuple[torch.nn.Parameter, ...],
+    skip_paths: set[tuple[Any, ...]],
+    path: tuple[Any, ...],
+) -> Any:
+    """Replace a saved parameter clone with its matching live parameter.
+
+    Parameters
+    ----------
+    value:
+        Candidate replay argument value.
+    live_params:
+        Live parameters used by the operation.
+    skip_paths:
+        Argument paths occupied by graph parents.
+    path:
+        Current path within args or kwargs.
+
+    Returns
+    -------
+    Any
+        ``value`` with matching parameter leaves restored where unambiguous.
+    """
+
+    if path in skip_paths:
+        return value
+    if isinstance(value, torch.Tensor):
+        matches = [
+            live_param
+            for live_param in live_params
+            if _live_parameter_matches_snapshot(live_param, value)
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        return value
+    if isinstance(value, list):
+        return [
+            _restore_live_parameter_leaf(item, live_params, skip_paths, (*path, index))
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, tuple):
+        restored = [
+            _restore_live_parameter_leaf(item, live_params, skip_paths, (*path, index))
+            for index, item in enumerate(value)
+        ]
+        return type(value)(restored)
+    if isinstance(value, dict):
+        return {
+            key: _restore_live_parameter_leaf(item, live_params, skip_paths, (*path, key))
+            for key, item in value.items()
+        }
+    return value
+
+
+def _live_parameter_matches_snapshot(
+    live_param: torch.nn.Parameter,
+    snapshot: torch.Tensor,
+) -> bool:
+    """Return whether a live parameter exactly matches a saved tensor snapshot.
+
+    Parameters
+    ----------
+    live_param:
+        Live model parameter that was used by an operation.
+    snapshot:
+        Saved replay argument tensor.
+
+    Returns
+    -------
+    bool
+        Whether shape, dtype, device, and values match exactly.
+    """
+
+    if tuple(live_param.shape) != tuple(snapshot.shape):
+        return False
+    if live_param.dtype != snapshot.dtype:
+        return False
+    if live_param.device != snapshot.device:
+        return False
+    return tensor_nanequal(live_param, snapshot, allow_tolerance=False)
 
 
 def _is_buffer_version_parent(parent_layer: Op) -> bool:
@@ -1269,8 +1930,10 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
     "wrong" values while respecting type constraints:
 
     - **Integer types**: sample uniformly from [min, max+1) of the original
-      tensor.  If the tensor is all-one-value (single unique value), widen
-      the range to [-10, 11) or [0, 11).  Retries up to
+      tensor, with the exclusive high bound clamped by ``torch.iinfo`` so the
+      ``max + 1`` cannot overflow the dtype (a saturated range widens to the
+      full valid dtype range instead).  If the tensor is all-one-value (single
+      unique value), widen the range to [-10, 11) or [0, 11).  Retries up to
       ``MAX_PERTURB_ATTEMPTS`` to avoid accidentally reproducing the original.
     - **Bool**: random 0/1, retried to ensure difference.
     - **Float/complex**: scaled random normal, where the scale is derived from
@@ -1302,11 +1965,30 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
         tensor_unique_vals = torch.unique(parent_outs)
         if len(tensor_unique_vals) > 1:
             # Multiple unique values: sample within the original range.
+            #
+            # Compute the bounds as Python ints and clamp the exclusive high
+            # bound with ``torch.iinfo`` so ``max() + 1`` can never overflow the
+            # dtype. A legitimately captured tensor holding ``iinfo.max`` (e.g.
+            # PyG sentinel/cluster index tensors carry ``INT64_MAX``) would
+            # otherwise wrap ``max() + 1`` to ``INT64_MIN`` and make
+            # ``torch.randint`` raise "random_ expects 'from' to be less than
+            # 'to'". This mirrors the ``torch.finfo`` clamping the float branch
+            # already does; it only bounds the *sampling range*, never skips the
+            # perturbation, so the tripwire stays non-vacuous.
+            int_info = torch.iinfo(parent_outs.dtype)
+            int_lo = int(parent_outs.min().item())
+            int_hi = int(parent_outs.max().item())
+            int_hi_excl = int_hi + 1 if int_hi < int_info.max else int_info.max
+            if int_lo >= int_hi_excl:
+                # Saturated range (e.g. the whole tensor sits at ``iinfo.max``):
+                # widen to the full valid dtype range so we can still draw a
+                # genuinely different value rather than degenerating to a no-op.
+                int_lo, int_hi_excl = int_info.min, int_info.max
             perturbed_outs = parent_outs.detach().clone()
             for _ in range(MAX_PERTURB_ATTEMPTS):
                 perturbed_outs = torch.randint(
-                    parent_outs.min(),  # type: ignore[call-overload]
-                    parent_outs.max() + 1,
+                    int_lo,
+                    int_hi_excl,
                     size=parent_outs.shape,
                     device=device,
                 ).type(parent_outs.dtype)
@@ -1357,14 +2039,48 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
         else:
             lo = parent_outs.float().min().item()
             hi = parent_outs.float().max().item()
+            finite_output = output_outs.detach().float().abs()
+            finite_output = finite_output[torch.isfinite(finite_output)]
+            output_scale = finite_output.max().item() if finite_output.numel() else 0.0
+            dtype_info = torch.finfo(parent_outs.dtype)
+            parent_scale = max(abs(lo), abs(hi), hi - lo, 1.0)
+            scaled_expansion: float | None = None
             if hi - lo < max(1e-6, abs(lo) * 1e-6):
                 # Near-constant tensor — range is too narrow for meaningful
-                # perturbation at float32 precision.  Expand by ±10% of
-                # magnitude (or ±1 near zero).  Conservative to avoid feeding
-                # invalid values to C extensions (e.g. ROI align segfaults).
-                expansion = max(1.0, abs(lo) * 0.1)
-                lo, hi = lo - expansion, hi + expansion
-            perturbed_outs = torch.rand_like(parent_outs.float(), device=device) * (hi - lo) + lo
+                # perturbation at float32 precision. Expand by ±10% of the
+                # parent magnitude, or by the child output scale when the parent
+                # is near zero but the op output is huge. Without the output
+                # scale, zero-valued broadcast parents can be perturbed by only
+                # ~1 and then disappear under float32 rounding beside 1e38
+                # operands.
+                expansion = min(
+                    max(1.0, abs(lo) * 0.1, output_scale * 0.1),
+                    dtype_info.max * 0.25,
+                )
+                if output_scale > parent_scale * 1.0e6:
+                    scaled_expansion = expansion
+                else:
+                    lo, hi = lo - expansion, hi + expansion
+            elif output_scale > parent_scale * 1.0e6:
+                # A non-constant but tiny parent range can also be invisible
+                # when combined additively with enormous operands. Expand only
+                # for extreme scale separation so normal range-restricted
+                # tensors keep their original valid-domain perturbations.
+                scaled_expansion = min(output_scale * 0.1, dtype_info.max * 0.25)
+            if scaled_expansion is not None:
+                signs = torch.where(
+                    torch.rand_like(parent_outs.float(), device=device) < 0.5,
+                    -1.0,
+                    1.0,
+                )
+                magnitudes = (
+                    torch.rand_like(parent_outs.float(), device=device) * 0.5 + 0.5
+                ) * scaled_expansion
+                perturbed_outs = parent_outs.float() + signs * magnitudes
+            else:
+                perturbed_outs = (
+                    torch.rand_like(parent_outs.float(), device=device) * (hi - lo) + lo
+                )
             perturbed_outs = perturbed_outs.type(parent_outs.dtype)
 
     return perturbed_outs

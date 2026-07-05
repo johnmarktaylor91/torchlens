@@ -358,6 +358,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "num_saved_grad_fn_calls": 0,
     "total_param_gradient_memory": 0,
     "forward_peak_memory": 0,
+    "forward_memory_backend": "unknown",
 }
 _MODEL_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in MODEL_LOG_FIELD_ORDER},
@@ -1651,6 +1652,7 @@ class Trace(CapturedRun):
         "total_param_memory": FieldPolicy.KEEP,
         "total_param_gradient_memory": FieldPolicy.KEEP,
         "forward_peak_memory": FieldPolicy.KEEP,
+        "forward_memory_backend": FieldPolicy.KEEP,
         "_raw" + "_layer_dict": FieldPolicy.DROP,
         "_raw" + "_layer_labels_list": FieldPolicy.DROP,
         "_layer" + "_counter": FieldPolicy.DROP,
@@ -2010,6 +2012,7 @@ class Trace(CapturedRun):
         self.total_param_memory: Bytes = Bytes(0)
         self.total_param_gradient_memory: Bytes = Bytes(0)
         self.forward_peak_memory: Bytes = Bytes(0)
+        self.forward_memory_backend: str = "unknown"
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
@@ -3892,6 +3895,7 @@ class Trace(CapturedRun):
                 "saved_gradient_memory": 0,
                 "total_param_gradient_memory": 0,
                 "forward_peak_memory": 0,
+                "forward_memory_backend": "unknown",
                 "_postprocessing_active": False,
             },
         )

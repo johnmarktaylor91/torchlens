@@ -71,6 +71,16 @@ from ._tl import (
 )
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
+from ...utils._torch_compat import (
+    get_current_function_mode_stack,
+    get_device_constructors,
+    get_device_context_type,
+    get_functorch_maybe_current_level,
+    get_jit_builtin_table,
+    get_optional_torch_namespace,
+    get_torch_function_mode_stack_length,
+    mark_torch_capability_missing,
+)
 from ...utils.display import identity
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.hashing import make_random_barcode
@@ -255,12 +265,10 @@ def _fix_tensor_sequence_slot() -> None:
 
 def _is_inside_functorch_transform() -> bool:
     """Return True if inside a vmap/grad/etc. functorch transform."""
-    try:
-        from torch._C._functorch import maybe_current_level
-
-        return maybe_current_level() is not None
-    except (ImportError, AttributeError):
+    maybe_current_level = get_functorch_maybe_current_level()
+    if maybe_current_level is None:
         return False
+    return maybe_current_level() is not None
 
 
 def _warn_transform_boundary_collapse(transform_kind: str) -> None:
@@ -659,8 +667,9 @@ def _decorate_transform_builders() -> None:
     """
 
     for namespace_name, attr_name, transform_kind in TRANSFORM_BUILDER_SITES:
-        namespace_key = namespace_name.removeprefix("torch.")
-        namespace = torch if namespace_name == "torch" else nested_getattr(torch, namespace_key)
+        namespace = get_optional_torch_namespace(namespace_name)
+        if namespace is None:
+            continue
         if not hasattr(namespace, attr_name):
             continue
         current = getattr(namespace, attr_name)
@@ -747,17 +756,15 @@ def _get_active_device() -> str | None:
     """
     global _DeviceContext
     if _DeviceContext is None:
-        from torch.utils._device import DeviceContext
-
-        _DeviceContext = DeviceContext
-    try:
-        from torch.overrides import _get_current_function_mode_stack
-
-        for mode in reversed(_get_current_function_mode_stack()):  # type: ignore[no-untyped-call]
-            if isinstance(mode, _DeviceContext):
-                return str(mode.device)
-    except (ImportError, AttributeError):
-        pass
+        _DeviceContext = get_device_context_type()
+    if _DeviceContext is None:
+        return None
+    mode_stack = get_current_function_mode_stack()
+    if mode_stack is None:
+        return None
+    for mode in reversed(list(mode_stack)):
+        if isinstance(mode, _DeviceContext):
+            return str(mode.device)
     return None
 
 
@@ -776,15 +783,11 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[s
         return kwargs
     if "device" in kwargs:
         return kwargs
-    try:
-        from torch.overrides import _len_torch_function_stack  # type: ignore[attr-defined]
-
-        if _len_torch_function_stack() > 0:
-            device = _get_active_device()
-            if device is not None:
-                return {**kwargs, "device": device}
-    except (ImportError, AttributeError):
-        pass
+    stack_length = get_torch_function_mode_stack_length()
+    if stack_length is not None and stack_length > 0:
+        device = _get_active_device()
+        if device is not None:
+            return {**kwargs, "device": device}
     return kwargs
 
 
@@ -847,6 +850,25 @@ def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
     return get_vars_of_type_from_obj(
         out, which_type=torch.Tensor, subclass_exceptions=[torch.nn.Parameter]
     )
+
+
+def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) -> None:
+    """Hook the live in-place result so its gradient is captured under ``raw_label``.
+
+    In-place ops log their output against a ``safe_copy`` whose grad_fn is a
+    dead-end ``CloneBackward`` node. When same-object identity is preserved the
+    live tensor (the original, in-place-modified one) is what downstream ops
+    consume, so the real gradient flows through it -- not the logged copy. This
+    registers the standard backward grad hook on the live tensor so the grad is
+    captured. ``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and
+    only hooks autograd-participating tensors, so the call is safe and cheap.
+    """
+
+    if not isinstance(tensor, torch.Tensor):
+        return
+    from .tensor_tracking import _add_tensor_backward_hook
+
+    _add_tensor_backward_hook(trace, tensor, raw_label)
 
 
 def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[..., Any]:
@@ -991,6 +1013,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             out_orig = func(*args, **kwargs)
         finally:
             _nvtx_range_pop(nvtx_pushed)
+        return_value = out_orig
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - capture_start_time,
             rng_states=rng_states,
@@ -1011,13 +1034,23 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Both cases need safe_copy so logging doesn't overwrite the original's
         # label, but only true in-place ops should propagate the new label back.
         was_inplace = same_object_returned and (
-            func_name.endswith("_") or func_name.startswith("__i")
+            func_name.endswith("_")
+            or func_name.startswith("__i")
+            or func_name in {"__setitem__", "__delitem__"}
         )
+        # The internal identity-forcing decorator (_state._decorated_identity)
+        # exists precisely to MINT a distinct logged tensor at module boundaries
+        # (nn.Identity / pass-through outputs). Unlike user-visible no-ops such as
+        # x.contiguous(), it must NOT preserve the input's Python object identity,
+        # otherwise the module exit re-reads the input's label and the boundary
+        # node (e.g. identity_1_2) never attaches to the module's output_ops.
+        force_distinct_return = func_name == "identity"
         if same_object_returned:
             # Create a distinct tensor object for logging — otherwise attaching
             # _tl.label_raw on the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
 
+        out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
             func,
@@ -1052,12 +1085,35 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 func_call_id,
             )
 
-            # For true in-place ops, propagate the newly assigned label back
-            # to the original tensor so subsequent operations see it.
-            if was_inplace and not isinstance(args[0], torch.nn.Parameter):
+            # Same-object returns are logged against out_orig (a safe_copy with
+            # the op's new label). When Python object identity is preserved we
+            # actually return the LIVE tensor (return_value / args[0]), which
+            # still carries its OLD label and OLD autograd grad_fn -- so without
+            # repair the live graph bypasses this op entirely:
+            #  * label: downstream ops would see the input's label, so the op
+            #    (e.g. an eval-mode Dropout no-op, or in-place add_) drops out of
+            #    the graph and the model output traces straight back to the input
+            #    -- which then spuriously trips the module-boundary identity-node
+            #    synthesis, inflating the node count.
+            #  * grad: the op's grad hook sits on the dead safe_copy, so any
+            #    module whose output descends from it loses grad attribution.
+            # Propagate the op's label onto the live tensor(s) and hook them so
+            # both the forward graph and backward grads stay attached. Only do
+            # this when we will actually hand back the live tensor (the default
+            # for same-object returns that no hook replaced); when out_orig is
+            # returned instead the safe_copy already carries everything.
+            propagate_to_live = (
+                same_object_returned and out_orig is out_before_hooks and not force_distinct_return
+            )
+            if propagate_to_live and not isinstance(args[0], torch.nn.Parameter):
                 out_label = get_tensor_label(out_orig)
                 if out_label is not None:
-                    set_tensor_label(args[0], out_label)
+                    if was_inplace:
+                        set_tensor_label(args[0], out_label)
+                        _register_inplace_live_grad_hook(trace, args[0], out_label)
+                    if isinstance(return_value, torch.Tensor):
+                        set_tensor_label(return_value, out_label)
+                        _register_inplace_live_grad_hook(trace, return_value, out_label)
 
         producer_label = None
         if isinstance(out_orig, torch.Tensor):
@@ -1067,7 +1123,11 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         if is_bottom_level_func:
             record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
 
-        return out_orig
+        if out_orig is not out_before_hooks:
+            return out_orig
+        if force_distinct_return:
+            return out_orig
+        return return_value
 
     # ---- __wrapped__ removal for JIT compatibility ----
     # @wraps sets __wrapped__ on the wrapper. For C builtins (no __code__),
@@ -1196,25 +1256,22 @@ def _sanitize_jit_wrapper_annotations(func: Callable[..., Any]) -> None:
 def _register_jit_builtin_wrappers() -> None:
     """Register decorated torch wrappers in TorchScript's builtin table."""
 
-    try:
-        import torch.jit._builtins as _jit_builtins
-
-        builtin_table = cast(Any, _jit_builtins._builtin_table)
-        for orig_id, decorated_func in _state._orig_to_decorated.items():
-            builtin_name = builtin_table.get(orig_id)
-            if builtin_name is not None:
-                if callable(decorated_func):
-                    _sanitize_jit_wrapper_annotations(decorated_func)
-                builtin_table[id(decorated_func)] = builtin_name
-                # For properties, also register getter/setter/deleter individually
-                # since JIT may call them directly.
-                if isinstance(decorated_func, property):
-                    for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
-                        if accessor is not None:
-                            _sanitize_jit_wrapper_annotations(accessor)
-                            builtin_table[id(accessor)] = builtin_name
-    except (ImportError, AttributeError):
-        pass  # JIT internals may change across PyTorch versions
+    builtin_table = get_jit_builtin_table()
+    if builtin_table is None:
+        return
+    for orig_id, decorated_func in _state._orig_to_decorated.items():
+        builtin_name = builtin_table.get(orig_id)
+        if builtin_name is not None:
+            if callable(decorated_func):
+                _sanitize_jit_wrapper_annotations(decorated_func)
+            builtin_table[id(decorated_func)] = builtin_name
+            # For properties, also register getter/setter/deleter individually
+            # since JIT may call them directly.
+            if isinstance(decorated_func, property):
+                for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
+                    if accessor is not None:
+                        _sanitize_jit_wrapper_annotations(accessor)
+                        builtin_table[id(accessor)] = builtin_name
 
 
 # ---------------------------------------------------------------------------
@@ -1357,16 +1414,19 @@ def decorate_all_once() -> None:
     # Collect names of factory functions (zeros, ones, empty, etc.) that accept
     # a device kwarg. The lru_cache must be cleared first so _device_constructors()
     # re-evaluates with our wrapped functions (otherwise it returns stale refs).
-    try:
-        from torch.utils._device import _device_constructors
-
-        _device_constructors.cache_clear()
-        for ctor in _device_constructors():
-            name = getattr(ctor, "__name__", None)
-            if name:
-                _DEVICE_CONSTRUCTOR_NAMES.add(name)
-    except (ImportError, AttributeError):
-        pass
+    device_constructors = get_device_constructors()
+    if device_constructors is not None:
+        try:
+            device_constructors.cache_clear()
+            for ctor in device_constructors():
+                name = getattr(ctor, "__name__", None)
+                if name:
+                    _DEVICE_CONSTRUCTOR_NAMES.add(name)
+        except (AttributeError, TypeError):
+            mark_torch_capability_missing(
+                "HAS_DEVICE_CONSTRUCTORS",
+                "factory-function device injection inventory could not be evaluated",
+            )
 
     # Create the decorated identity — a no-op that forces a new log entry at
     # module boundaries (nn.Identity, pass-through outputs).  Stored on _state
@@ -1885,6 +1945,8 @@ def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:
     try:
         defaults = getattr(func, "__defaults__", None)
     except Exception:
+        return
+    if defaults is not None and not isinstance(defaults, tuple):
         return
     if defaults is not None:
         new_defaults = []

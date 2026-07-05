@@ -118,8 +118,18 @@ def semantic_output_cache_key(
         Stable-ish metadata that affects output auto-detection and labels.
     """
 
-    config = getattr(model, "config", None)
-    default_cfg = getattr(model, "default_cfg", None)
+    try:
+        config = getattr(model, "config", None)
+    except Exception:
+        # ``config`` may be a property whose getter raises for reasons unrelated to
+        # attribute existence (e.g. delegating to a submodule that only partially
+        # implements it). This cache-key fingerprint is best-effort, so a raising
+        # getter degrades to "no config metadata" rather than aborting capture.
+        config = None
+    try:
+        default_cfg = getattr(model, "default_cfg", None)
+    except Exception:
+        default_cfg = None
     weights = getattr(model, "_torchlens_weights", None)
     return {
         "version": DETECTOR_VERSION,

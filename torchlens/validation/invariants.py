@@ -30,19 +30,24 @@ and raises ``MetadataInvariantError`` on the first failure.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Callable, Literal, cast
 
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..errors._base import ValidationError
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
+    from ..backends import BackendSpec
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from ..data_classes.module import Module
+
+InvariantApplicability = Literal["torch", "non_torch", "all"]
+MetadataInvariantFunc = Callable[["Trace"], object]
 
 
 class MetadataInvariantError(ValidationError, ValueError):
@@ -86,6 +91,28 @@ class InvariantResult:
     message: str = ""
 
 
+@dataclass(frozen=True)
+class MetadataInvariantContract:
+    """Backend applicability contract for one metadata invariant check.
+
+    Attributes
+    ----------
+    name:
+        Stable check name used for dispatch introspection.
+    check:
+        Callable that runs the invariant.
+    applies_to:
+        Backend family this check currently runs on.
+    requires_capability:
+        Optional backend capability flag that must be truthy for the check to run.
+    """
+
+    name: str
+    check: MetadataInvariantFunc
+    applies_to: InvariantApplicability
+    requires_capability: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -108,13 +135,9 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     bool
         ``True`` if all invariants pass.
     """
-    from ..backends import get_backend_spec
-
-    spec = get_backend_spec(getattr(trace, "backend", "torch"))
-    if spec is not get_backend_spec("torch"):
-        return _check_backend_neutral_metadata_invariants(trace)
-
-    return _check_torch_metadata_invariants(trace)
+    for contract in _metadata_invariant_contracts_for_trace(trace):
+        contract.check(trace)
+    return True
 
 
 def _check_torch_metadata_invariants(trace: "Trace") -> bool:
@@ -131,31 +154,8 @@ def _check_torch_metadata_invariants(trace: "Trace") -> bool:
         ``True`` if all torch invariants pass.
     """
 
-    # --- Phase 1: structural invariants (A-L) ---
-    _check_trace_self_consistency(trace)  # A
-    _check_region_replay_provenance(trace)
-    _check_backward_graph_invariants(trace)  # T
-    _check_special_layer_lists(trace)  # B
-    _check_graph_topology(trace)  # C
-    _check_op_log_fields(trace)  # D
-    _check_recurrence_invariants(trace)  # E
-    _check_branching_invariants(trace)  # F
-    _check_conditional_invariants(trace)  # F2
-    _check_layer_pass_to_layer_log_xrefs(trace)  # G
-    _check_module_layer_containment(trace)  # H
-    _check_module_hierarchy(trace)  # I
-    _check_param_xrefs(trace)  # J
-    _check_buffer_xrefs(trace)  # K
-    _check_equivalence_symmetry(trace)  # L
-
-    # --- Phase 2: semantic invariants (M-R) ---
-    _check_graph_ordering(trace)  # M
-    _check_loop_detection_invariants(trace)  # N
-    _check_distance_invariants(trace)  # O
-    _check_graph_connectivity(trace)  # P
-    _check_module_containment_logic(trace)  # Q
-    _check_lookup_key_consistency(trace)  # R
-    check_func_call_id_invariant(trace)  # S
+    for contract in _metadata_invariant_contracts_for_backend("torch"):
+        contract.check(trace)
     return True
 
 
@@ -173,14 +173,8 @@ def _check_backend_neutral_metadata_invariants(trace: "Trace") -> bool:
         ``True`` if all backend-neutral invariants pass.
     """
 
-    _check_backend_identity_invariants(trace)
-    _check_trace_self_consistency(trace)
-    _check_region_replay_provenance(trace)
-    _check_non_torch_backward_inert(trace)
-    _check_backend_neutral_accessor_refs(trace)
-    _check_backend_neutral_module_mode_invariants(trace)
-    _check_graph_ordering(trace)
-    _check_lookup_key_consistency(trace)
+    for contract in _metadata_invariant_contracts_for_backend("non_torch"):
+        contract.check(trace)
     return True
 
 
@@ -431,12 +425,19 @@ def _module_claim_address(claim: str) -> str | None:
 
 
 def _check_backend_identity_invariants(trace: "Trace") -> None:
-    """Check backend identity and declared mode fields for non-torch traces.
+    """Check backend identity and declared mode fields.
+
+    Precondition contract: every completed trace, including torch traces, must
+    declare a registered backend, a backend-supported module identity mode, and
+    a param-source domain value. ``param_source='none'`` is legitimate for
+    parameterless captures, but it is corruption if parameter tensors are
+    reported elsewhere on the trace. Backend-specific address or resolver
+    coupling is intentionally outside this identity contract.
 
     Parameters
     ----------
     trace:
-        Postprocessed non-torch trace to validate.
+        Postprocessed trace to validate.
 
     Raises
     ------
@@ -507,12 +508,23 @@ def _check_non_torch_backward_inert(trace: "Trace") -> None:
 
 
 def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
-    """Check backend-neutral dtype/device/address resolver fields.
+    """Check structural backend-neutral dtype/device/address resolver fields.
+
+    Precondition contract: Op, Layer, and Param records may carry neutral mirror
+    fields independent of retained payloads. Missing or ``None`` dtype/device
+    refs and backend addresses are legitimate. When a neutral field is
+    populated, the structural contract is backend-neutral: ``resolver_status``
+    must be in the public status domain when present, dtype/device refs must
+    expose non-empty ``backend`` and ``name`` strings when present, and
+    ``backend_address`` must be a string when present. This check intentionally
+    does not compare ref names to legacy dtype/device payload values, and it
+    does not assert any ``backend_address`` <-> ``resolver_status`` semantic
+    coupling.
 
     Parameters
     ----------
     trace:
-        Postprocessed non-torch trace to validate.
+        Postprocessed trace to validate.
 
     Raises
     ------
@@ -522,11 +534,17 @@ def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
 
     name = "backend_neutral_accessor_refs"
     valid_statuses = {"resolved", "unresolved", "audit_only", "metadata_only"}
-    records = [*getattr(trace, "layer_list", ()), *list(getattr(trace, "param_logs", {}).values())]
+    records = [
+        *getattr(trace, "layer_list", ()),
+        *list(getattr(trace, "layer_logs", {}).values()),
+        *list(getattr(trace, "param_logs", {}).values()),
+    ]
     for record in records:
+        if not _record_has_backend_neutral_accessor_metadata(record):
+            continue
         label = getattr(record, "layer_label", getattr(record, "address", type(record).__name__))
         resolver_status = getattr(record, "resolver_status", None)
-        if resolver_status not in valid_statuses:
+        if resolver_status is not None and resolver_status not in valid_statuses:
             raise MetadataInvariantError(
                 name,
                 f"{label} has invalid resolver_status={resolver_status!r}",
@@ -545,15 +563,39 @@ def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
             raise MetadataInvariantError(name, f"{label} has non-string backend_address")
 
 
+def _record_has_backend_neutral_accessor_metadata(record: object) -> bool:
+    """Return whether ``record`` has any populated neutral accessor field.
+
+    Parameters
+    ----------
+    record:
+        Op-, Layer-, or Param-like object to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when a backend-neutral mirror field is present and non-``None``.
+    """
+
+    return any(
+        getattr(record, field_name, None) is not None
+        for field_name in ("resolver_status", "dtype_ref", "device_ref", "backend_address")
+    )
+
+
 def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     """Invariant S: func_call_id consistency.
 
-    For intervention-ready logs, every non-synthetic function output must have a
-    ``func_call_id``. Outputs from the same call must agree on function identity,
-    call stack, captured templates, and container spec; each output in the group
-    must have a unique ``container_path``; and same-call groups must not span
-    incompatible pass labels. Synthetic input, output, and buffer nodes are
-    exempt.
+    Precondition contract: torch exhaustive and predicate captures populate
+    ``func_call_id`` for non-synthetic compute outputs. Synthetic input,
+    output, buffer, and internal placeholder nodes are exempt. Sparse recording
+    projections may have empty templates, ``edge_use='unknown'`` records, and
+    ``container_spec=None``; those fields are not required for this invariant.
+    When a ``func_call_id`` group is populated, members must agree only on the
+    plain-capture-stable function name and container spec, and populated
+    container paths must be unique within the group. The old intervention
+    signature fields (argument templates and ``code_context`` reprs) are
+    intentionally outside this plain-capture contract.
 
     Parameters
     ----------
@@ -567,46 +609,41 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     """
 
     name = "func_call_id_consistency"
-    if not getattr(trace, "intervention_ready", False):
-        return InvariantResult(name=name, passed=True)
-
     groups: dict[int, list["Op"]] = defaultdict(list)
     for layer in trace.layer_list:
         if _is_func_call_id_exempt(layer):
             continue
-        if layer.func_call_id is None:
+        func_call_id = getattr(layer, "func_call_id", None)
+        if func_call_id is None:
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label} has no func_call_id",
             )
-        groups[layer.func_call_id].append(layer)
+        if not isinstance(func_call_id, int):
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} has non-integer func_call_id {func_call_id!r}",
+            )
+        groups[func_call_id].append(layer)
 
     for func_call_id, group in groups.items():
         reference = group[0]
-        expected_signature = _func_call_group_signature(reference)
-        container_paths = []
-        pass_indices = set()
-        no_call_labels = set()
+        expected_signature = _plain_func_call_group_signature(reference)
+        container_paths: list[tuple[object, ...]] = []
         for layer in group:
-            if _func_call_group_signature(layer) != expected_signature:
+            if _plain_func_call_group_signature(layer) != expected_signature:
                 raise MetadataInvariantError(
                     name,
                     f"func_call_id {func_call_id} has incompatible call metadata",
                 )
             container_path = tuple(getattr(layer, "container_path", ()) or ())
-            if container_path in container_paths:
+            if container_path and container_path in container_paths:
                 raise MetadataInvariantError(
                     name,
                     f"func_call_id {func_call_id} has duplicate container_path {container_path!r}",
                 )
-            container_paths.append(container_path)
-            pass_indices.add(layer.pass_index)
-            no_call_labels.add(layer.layer_label)
-        if len(pass_indices) > 1 and len(no_call_labels) > 1:
-            raise MetadataInvariantError(
-                name,
-                f"func_call_id {func_call_id} spans incompatible pass labels",
-            )
+            if container_path:
+                container_paths.append(container_path)
     return InvariantResult(name=name, passed=True)
 
 
@@ -779,6 +816,8 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             f"1..{trace.num_backward_passes}",
         )
     valid_pass_indices = set(actual_pass_indices)
+    _check_grad_fn_topology_invariants(trace, name)
+    _check_backward_pass_domain_invariants(trace, name, valid_pass_indices)
     for pass_index, backward_pass in getattr(trace, "backward_pass_logs", {}).items():
         if backward_pass.pass_index != pass_index:
             raise MetadataInvariantError(
@@ -800,6 +839,248 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                     f"{call.call_label} references missing backward pass "
                     f"{call.backward_pass_index}",
                 )
+
+
+def _check_grad_fn_topology_invariants(trace: "Trace", name: str) -> None:
+    """Check backward GradFn relation lists for reciprocal, resolvable links.
+
+    The precondition contract is backward-capture only: callers invoke this
+    helper after proving ``trace.grad_fn_logs`` is populated. Forward-only
+    traces legitimately have no GradFn topology and are skipped by
+    ``_check_backward_graph_invariants`` before this helper is reached.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward GradFn projections.
+    name:
+        Invariant check name to use in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a GradFn relation references a missing node or lacks its reciprocal
+        back-reference.
+    """
+
+    grad_fns_by_label = {
+        grad_fn_handle.label: grad_fn_handle for grad_fn_handle in trace.grad_fn_logs.values()
+    }
+    grad_fn_ids = set(trace.grad_fn_logs)
+    for grad_fn_handle in trace.grad_fn_logs.values():
+        missing_next_ids = [
+            next_id for next_id in grad_fn_handle.next_grad_fn_ids if next_id not in grad_fn_ids
+        ]
+        if missing_next_ids:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label} has next_grad_fn_ids missing from grad_fn_logs: "
+                f"{missing_next_ids!r}",
+            )
+
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "parents",
+            "children",
+            grad_fns_by_label,
+            name,
+        )
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "children",
+            "parents",
+            grad_fns_by_label,
+            name,
+        )
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "siblings",
+            "siblings",
+            grad_fns_by_label,
+            name,
+        )
+        _check_grad_fn_relation_list(
+            grad_fn_handle,
+            "co_parents",
+            "co_parents",
+            grad_fns_by_label,
+            name,
+        )
+
+        for flag_name, relation_name in (
+            ("has_parents", "parents"),
+            ("has_children", "children"),
+            ("has_siblings", "siblings"),
+            ("has_co_parents", "co_parents"),
+        ):
+            if getattr(grad_fn_handle, flag_name) != bool(getattr(grad_fn_handle, relation_name)):
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label} has inconsistent {flag_name}/{relation_name}",
+                )
+
+
+def _check_grad_fn_relation_list(
+    grad_fn_handle: object,
+    relation_name: str,
+    reciprocal_name: str,
+    grad_fns_by_label: Mapping[str, object],
+    name: str,
+) -> None:
+    """Check that one GradFn relation list resolves and reciprocates.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn object whose relation list is being validated.
+    relation_name:
+        Name of the outbound relation list.
+    reciprocal_name:
+        Name of the relation list expected on each target.
+    grad_fns_by_label:
+        Mapping from GradFn label to GradFn object.
+    name:
+        Invariant check name to use in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a relation label is missing or lacks the reciprocal label.
+    """
+
+    source_label = str(getattr(grad_fn_handle, "label"))
+    related_labels = getattr(grad_fn_handle, relation_name)
+    if not isinstance(related_labels, list):
+        raise MetadataInvariantError(
+            name,
+            f"{source_label} has non-list {relation_name}: {related_labels!r}",
+        )
+    for related_label in related_labels:
+        related = grad_fns_by_label.get(related_label)
+        if related is None:
+            raise MetadataInvariantError(
+                name,
+                f"{source_label} {relation_name} references missing GradFn {related_label!r}",
+            )
+        reciprocal_labels = getattr(related, reciprocal_name)
+        if source_label not in reciprocal_labels:
+            raise MetadataInvariantError(
+                name,
+                f"{source_label} {relation_name} references {related_label!r}, but "
+                f"{related_label!r} does not list {source_label!r} in {reciprocal_name}",
+            )
+
+
+def _check_backward_pass_domain_invariants(
+    trace: "Trace",
+    name: str,
+    valid_pass_indices: set[int],
+) -> None:
+    """Check backward-pass domain fields and root coverage.
+
+    The precondition contract is backward-capture only: this helper runs only
+    after ``grad_fn_logs`` and dense ``backward_pass_logs`` have been proven
+    present. It validates projected pass records against the event-domain
+    literals used by the torch backward capture path.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward-pass projections.
+    name:
+        Invariant check name to use in raised errors.
+    valid_pass_indices:
+        Dense set of known backward pass indices.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a BackwardPass field is outside its recorded domain or references a
+        missing pass/GradFn.
+    """
+
+    valid_triggers = {
+        "autograd_backward",
+        "autograd_grad",
+        "backward",
+        "implicit",
+        "recording_backward",
+        "replay",
+    }
+    valid_statuses = {"error", "ok"}
+    global_root_ids = set(trace.backward_root_grad_fn_object_ids)
+    roots_seen_by_pass: set[int] = set()
+    backward_pass_logs = getattr(trace, "backward_pass_logs", {})
+
+    for pass_index, backward_pass in backward_pass_logs.items():
+        if backward_pass.trigger not in valid_triggers:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid trigger {backward_pass.trigger!r}",
+            )
+        if backward_pass.status not in valid_statuses:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid status {backward_pass.status!r}",
+            )
+        if backward_pass.save_grads_policy is not None and not isinstance(
+            backward_pass.save_grads_policy,
+            str,
+        ):
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid save_grads_policy "
+                f"{backward_pass.save_grads_policy!r}",
+            )
+        if backward_pass.duration is not None and float(backward_pass.duration) < 0:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has negative duration {backward_pass.duration!r}",
+            )
+        if backward_pass.peak_memory is not None and backward_pass.peak_memory < 0:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has negative peak_memory {backward_pass.peak_memory!r}",
+            )
+        coverage = backward_pass.order_attribution_coverage
+        if coverage is not None and not 0.0 <= coverage <= 1.0:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} has invalid order_attribution_coverage {coverage!r}",
+            )
+        origin_pass = backward_pass.origin_backward_pass
+        if origin_pass is not None and origin_pass not in valid_pass_indices:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} references missing origin_backward_pass "
+                f"{origin_pass!r}",
+            )
+
+        missing_root_ids = [
+            root_id
+            for root_id in backward_pass.root_grad_fn_ids
+            if root_id not in trace.grad_fn_logs
+        ]
+        if missing_root_ids:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} root_grad_fn_ids are missing from grad_fn_logs: "
+                f"{missing_root_ids!r}",
+            )
+        roots_seen_by_pass.update(backward_pass.root_grad_fn_ids)
+
+    if len(backward_pass_logs) == 1:
+        pass_index, backward_pass = next(iter(backward_pass_logs.items()))
+        if set(backward_pass.root_grad_fn_ids) != global_root_ids:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass {pass_index} root_grad_fn_ids do not match trace roots",
+            )
+    elif roots_seen_by_pass != global_root_ids:
+        raise MetadataInvariantError(
+            name,
+            "BackwardPass root_grad_fn_ids union does not match trace roots",
+        )
 
 
 def _layer_postdates_all_backward_triggers(trace: "Trace", layer: "Layer | Op") -> bool:
@@ -1091,6 +1372,26 @@ def _is_func_call_id_exempt(layer: "Op") -> bool:
     }
 
 
+def _plain_func_call_group_signature(layer: "Op") -> tuple[object, ...]:
+    """Return plain-capture-stable same-call metadata.
+
+    Parameters
+    ----------
+    layer:
+        Layer pass to summarize.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Function name and container spec representation for same-call grouping.
+    """
+
+    return (
+        getattr(layer, "func_name", None),
+        repr(getattr(layer, "container_spec", None)),
+    )
+
+
 def _func_call_group_signature(layer: "Op") -> tuple[object, ...]:
     """Return comparable same-call metadata for Invariant S.
 
@@ -1360,6 +1661,91 @@ def _check_graph_topology(ml: "Trace") -> None:
             )
 
 
+def _check_edge_use_parent_arg_invariants(ml: "Trace") -> None:
+    """Check existing edge-use records and parent-arg references.
+
+    Precondition contract: edge-use metadata is optional on torch graph edges.
+    The torch eager builder emits ``_edge_uses`` only for args/kwargs-derived
+    parent entries. Buffer-source, output, control, module, and
+    intervention-injected edges may legitimately have no edge-use record. When
+    an ``_edge_uses`` record exists, its kind must be in ``EdgeUseKind`` and
+    its parent/child labels must resolve. When a ``parent_arg_positions`` entry
+    exists, its referenced parent label must resolve. This invariant never
+    asserts that every parent edge has a corresponding edge-use record.
+
+    Parameters
+    ----------
+    ml:
+        Postprocessed torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If populated edge-use or parent-arg-position metadata is malformed or
+        references labels that do not resolve.
+    """
+
+    name = "edge_use_parent_arg_consistency"
+    valid_edge_uses = {"arg", "kwarg", "container", "module", "buffer", "output", "control"}
+    valid_arg_kinds = {"positional", "keyword"}
+    for layer in ml.layer_list:
+        layer_label = getattr(layer, "layer_label", type(layer).__name__)
+        for record in getattr(layer, "_edge_uses", ()) or ():
+            edge_use = getattr(record, "edge_use", None)
+            if edge_use not in valid_edge_uses:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has invalid edge_use kind {edge_use!r}",
+                )
+            arg_kind = getattr(record, "arg_kind", None)
+            if arg_kind not in valid_arg_kinds:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has invalid edge arg_kind {arg_kind!r}",
+                )
+            parent_label = getattr(record, "parent_label", None)
+            if not isinstance(parent_label, str) or _resolve_trace_label(ml, parent_label) is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has edge-use record with unresolved parent "
+                    f"{parent_label!r}",
+                )
+            child_label = getattr(record, "child_label", None)
+            if not isinstance(child_label, str) or _resolve_trace_label(ml, child_label) is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' has edge-use record with unresolved child "
+                    f"{child_label!r}",
+                )
+
+        parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+        if not isinstance(parent_arg_positions, Mapping):
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{layer_label}' has non-mapping parent_arg_positions",
+            )
+        for arg_domain in ("args", "kwargs"):
+            entries = parent_arg_positions.get(arg_domain, {}) or {}
+            if not isinstance(entries, Mapping):
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' parent_arg_positions[{arg_domain!r}] is not a mapping",
+                )
+            for position, parent_label in entries.items():
+                if not isinstance(parent_label, str):
+                    raise MetadataInvariantError(
+                        name,
+                        f"Layer '{layer_label}' parent_arg_positions[{arg_domain!r}]"
+                        f"[{position!r}] is not a label string",
+                    )
+                if _resolve_trace_label(ml, parent_label) is None:
+                    raise MetadataInvariantError(
+                        name,
+                        f"Layer '{layer_label}' parent_arg_positions[{arg_domain!r}]"
+                        f"[{position!r}] references missing parent {parent_label!r}",
+                    )
+
+
 # ---------------------------------------------------------------------------
 # D. Op field consistency
 # ---------------------------------------------------------------------------
@@ -1471,6 +1857,287 @@ def _check_op_log_fields(ml: "Trace") -> None:
                 name,
                 f"Layer {label}: layer_label='{lpl.layer_label}' contains ':'",
             )
+
+
+def _check_payload_metadata_invariants(ml: "Trace") -> None:
+    """Check saved and transformed live payload metadata.
+
+    Precondition contract: tensor payload fields may be legitimately absent
+    because of selective save, loaded traces, detached/audit-only metadata,
+    disk-only storage, streaming finalization, or gradient eviction. This check
+    compares shape, dtype, and memory only when a live payload object is
+    present. Presence of a live raw or transformed activation requires
+    ``has_saved_activation=True``; presence of a live raw or transformed
+    gradient requires ``has_grad=True``. Missing payloads never imply
+    corruption by themselves.
+
+    Parameters
+    ----------
+    ml:
+        Postprocessed torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a present payload disagrees with its recorded metadata.
+    """
+
+    name = "payload_metadata_invariants"
+    for op in ml.layer_list:
+        label = getattr(op, "label", getattr(op, "layer_label", type(op).__name__))
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=_live_payload_value(op, "out"),
+            shape=getattr(op, "shape", None),
+            dtype=getattr(op, "dtype", None),
+            memory=getattr(op, "activation_memory", None),
+            presence_flag=getattr(op, "has_saved_activation", False),
+            presence_flag_name="has_saved_activation",
+            payload_name="out",
+        )
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=_live_payload_value(op, "transformed_out"),
+            shape=getattr(op, "transformed_out_shape", None),
+            dtype=getattr(op, "transformed_out_dtype", None),
+            memory=getattr(op, "transformed_activation_memory", None),
+            presence_flag=getattr(op, "has_saved_activation", False),
+            presence_flag_name="has_saved_activation",
+            payload_name="transformed_out",
+        )
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=_live_payload_value(op, "grad"),
+            shape=getattr(op, "grad_shape", None),
+            dtype=getattr(op, "grad_dtype", None),
+            memory=getattr(op, "gradient_memory", None),
+            presence_flag=getattr(op, "has_grad", False),
+            presence_flag_name="has_grad",
+            payload_name="grad",
+        )
+        _check_live_payload_metadata(
+            name,
+            label,
+            payload=_live_payload_value(op, "transformed_grad"),
+            shape=getattr(op, "transformed_grad_shape", None),
+            dtype=getattr(op, "transformed_grad_dtype", None),
+            memory=getattr(op, "transformed_gradient_memory", None),
+            presence_flag=getattr(op, "has_grad", False),
+            presence_flag_name="has_grad",
+            payload_name="transformed_grad",
+        )
+        for record in getattr(op, "_grad_records", ()) or ():
+            record_label = f"{label}.grad_record[{getattr(record, 'backward_pass_index', '?')}]"
+            _check_live_payload_metadata(
+                name,
+                record_label,
+                payload=_live_payload_value(record, "grad"),
+                shape=getattr(record, "shape", None),
+                dtype=getattr(record, "dtype", None),
+                memory=getattr(record, "memory", None),
+                presence_flag=getattr(record, "is_saved", False),
+                presence_flag_name="is_saved",
+                payload_name="grad",
+            )
+            _check_live_payload_metadata(
+                name,
+                record_label,
+                payload=_live_payload_value(record, "transformed_grad"),
+                shape=getattr(record, "transformed_grad_shape", None),
+                dtype=getattr(record, "transformed_grad_dtype", None),
+                memory=getattr(record, "transformed_gradient_memory", None),
+                presence_flag=getattr(record, "is_saved", False),
+                presence_flag_name="is_saved",
+                payload_name="transformed_grad",
+            )
+
+
+def _live_payload_value(owner: object, payload_name: str) -> object | None:
+    """Return an already-live payload without invoking guarded payload accessors.
+
+    Parameters
+    ----------
+    owner:
+        Object that owns the payload field.
+    payload_name:
+        Name of the payload field to inspect.
+
+    Returns
+    -------
+    object or None
+        The live payload object, or ``None`` when no payload is currently attached.
+    """
+
+    slot_getter = getattr(owner, "_slot", None)
+    if callable(slot_getter):
+        return slot_getter(payload_name, None)
+    return getattr(owner, payload_name, None)
+
+
+def _check_live_payload_metadata(
+    name: str,
+    label: str,
+    *,
+    payload: object | None,
+    shape: object,
+    dtype: object,
+    memory: object,
+    presence_flag: bool,
+    presence_flag_name: str,
+    payload_name: str,
+) -> None:
+    """Check metadata for one live tensor-like payload.
+
+    Parameters
+    ----------
+    name:
+        Invariant name used in raised errors.
+    label:
+        Owner label for diagnostics.
+    payload:
+        Live payload object, or ``None`` when absent.
+    shape:
+        Recorded shape metadata.
+    dtype:
+        Recorded dtype metadata.
+    memory:
+        Recorded memory metadata.
+    presence_flag:
+        Boolean metadata that should be true when payload is present.
+    presence_flag_name:
+        Name of ``presence_flag`` for diagnostics.
+    payload_name:
+        Payload field name for diagnostics.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If present payload metadata disagrees with the payload.
+    """
+
+    if payload is None:
+        return
+    if not presence_flag:
+        raise MetadataInvariantError(
+            name,
+            f"{label} has live {payload_name} payload but {presence_flag_name}=False",
+        )
+    actual_shape = _payload_shape(payload)
+    if actual_shape is not None and shape != actual_shape:
+        raise MetadataInvariantError(
+            name,
+            f"{label} {payload_name} shape metadata {shape!r} != payload shape {actual_shape!r}",
+        )
+    actual_dtype = _payload_dtype(payload)
+    if (
+        actual_dtype is not None
+        and dtype is not None
+        and not _dtype_values_match(dtype, actual_dtype)
+    ):
+        raise MetadataInvariantError(
+            name,
+            f"{label} {payload_name} dtype metadata {dtype!r} != payload dtype {actual_dtype!r}",
+        )
+    actual_memory = _payload_memory(payload)
+    if actual_memory is not None and memory is not None:
+        if not isinstance(memory, int):
+            raise MetadataInvariantError(
+                name,
+                f"{label} {payload_name} memory metadata {memory!r} is not an integer",
+            )
+        if memory != actual_memory:
+            raise MetadataInvariantError(
+                name,
+                f"{label} {payload_name} memory metadata {memory!r} != payload memory "
+                f"{actual_memory!r}",
+            )
+
+
+def _payload_shape(payload: object) -> tuple[int, ...] | None:
+    """Return a tuple shape for a tensor-like payload.
+
+    Parameters
+    ----------
+    payload:
+        Candidate tensor-like payload.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Shape tuple when available.
+    """
+
+    shape = getattr(payload, "shape", None)
+    if shape is None:
+        return None
+    try:
+        return tuple(int(dim) for dim in shape)
+    except TypeError:
+        return None
+
+
+def _payload_dtype(payload: object) -> object | None:
+    """Return dtype metadata from a tensor-like payload.
+
+    Parameters
+    ----------
+    payload:
+        Candidate tensor-like payload.
+
+    Returns
+    -------
+    object | None
+        Payload dtype when available.
+    """
+
+    return getattr(payload, "dtype", None)
+
+
+def _payload_memory(payload: object) -> int | None:
+    """Return byte memory for a tensor-like payload.
+
+    Parameters
+    ----------
+    payload:
+        Candidate tensor-like payload.
+
+    Returns
+    -------
+    int | None
+        Number of bytes when ``nelement`` and ``element_size`` are available.
+    """
+
+    nelement = getattr(payload, "nelement", None)
+    element_size = getattr(payload, "element_size", None)
+    if not callable(nelement) or not callable(element_size):
+        return None
+    return int(nelement() * element_size())
+
+
+def _dtype_values_match(left: object, right: object) -> bool:
+    """Return whether two dtype representations are equivalent.
+
+    Parameters
+    ----------
+    left:
+        Recorded dtype value.
+    right:
+        Payload dtype value.
+
+    Returns
+    -------
+    bool
+        ``True`` when exact or normalized string forms agree.
+    """
+
+    if left == right:
+        return True
+    left_str = str(left).replace("torch.", "")
+    right_str = str(right).replace("torch.", "")
+    return left_str == right_str
 
 
 # ---------------------------------------------------------------------------
@@ -2408,7 +3075,7 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                     raise MetadataInvariantError(
                         name,
                         f"ModuleCall '{addr}:{call_index}' ops contains "
-                        f"'{lbl}' not in layer_labels or layer_labels",
+                        f"'{lbl}' not in op_labels or layer_labels",
                     )
 
             if mpl.num_layers != len(mpl.ops):
@@ -2462,6 +3129,13 @@ def _check_module_layer_containment(ml: "Trace") -> None:
 def _check_module_hierarchy(ml: "Trace") -> None:
     """Check I: module address tree consistency and pass structure.
 
+    Precondition contract: rich ModuleCall checks run only for materialized
+    real ModuleCall records in called modules. Static uncalled child modules
+    are still handled by the existing address-level exceptions. ModuleCall
+    boundary inputs are allowed to be external to the call because they are
+    commonly produced in the parent scope; only output ops are required to be
+    produced inside the call's own ``ops`` list.
+
     Validates:
     - Root module 'self' exists.
     - Address parent-child bidirectionality (with exemptions for shared
@@ -2470,6 +3144,8 @@ def _check_module_hierarchy(ml: "Trace") -> None:
       ModuleLogs -- skip rather than error.
     - Pass dict keys are contiguous {1..N} and match num_passes.
     - call_parent and call_children reference valid modules.
+    - ModuleCall labels, output boundaries, call-tree links, stacks, and
+      output structures are internally consistent.
     """
     name = "module_hierarchy"
     mod_accessor = ml.modules
@@ -2559,6 +3235,255 @@ def _check_module_hierarchy(ml: "Trace") -> None:
                         f"contains '{cc}' not in module accessor",
                     )
 
+            _check_module_call_boundary_and_tree(ml, mpl, name)
+
+
+def _check_module_call_boundary_and_tree(
+    ml: "Trace",
+    module_call: object,
+    name: str,
+) -> None:
+    """Check one materialized ModuleCall boundary and dynamic call-tree links.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module-call metadata.
+    module_call:
+        ModuleCall record to validate.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If the ModuleCall's label, output boundary, call-tree links, stack, or
+        output structure references are inconsistent.
+    """
+
+    call_label = getattr(module_call, "call_label", None)
+    address = getattr(module_call, "address", None)
+    call_index = getattr(module_call, "call_index", None)
+    expected_call_label = f"{address}:{call_index}"
+    if call_label != expected_call_label:
+        raise MetadataInvariantError(
+            name,
+            f"ModuleCall {call_label!r} has address/call_index label {expected_call_label!r}",
+        )
+
+    call_ops = set(getattr(module_call, "ops", ()) or ())
+    call_ops_no_pass = {_strip_pass_suffix(label) for label in call_ops}
+    for output_op_label in getattr(module_call, "output_ops", ()) or ():
+        resolved_label = _resolve_trace_label(ml, output_op_label)
+        if resolved_label is None:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' output_ops contains unresolved {output_op_label!r}",
+            )
+        if output_op_label not in call_ops and _strip_pass_suffix(output_op_label) not in call_ops:
+            resolved_no_pass = _strip_pass_suffix(resolved_label)
+            if resolved_label not in call_ops and resolved_no_pass not in call_ops_no_pass:
+                raise MetadataInvariantError(
+                    name,
+                    f"ModuleCall '{call_label}' output_ops contains {output_op_label!r} "
+                    "outside its ops",
+                )
+
+    for input_op_label in getattr(module_call, "input_ops", ()) or ():
+        if _resolve_trace_label(ml, input_op_label) is None:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' input_ops contains unresolved {input_op_label!r}",
+            )
+
+    _check_module_call_tree_links(ml, module_call, name)
+    _check_module_call_output_structure_paths(ml, module_call, name)
+
+
+def _check_module_call_tree_links(ml: "Trace", module_call: object, name: str) -> None:
+    """Check ModuleCall parent/child links and stack prefixes.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module-call metadata.
+    module_call:
+        ModuleCall record to validate.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a call-tree relation is unresolved, non-bidirectional, or has an
+        inconsistent child stack prefix.
+    """
+
+    call_label = getattr(module_call, "call_label", "")
+    call_accessor = getattr(ml, "module_calls", {})
+    call_parent = getattr(module_call, "call_parent", None)
+    if call_parent is not None:
+        try:
+            parent_call = call_accessor[call_parent]
+        except (KeyError, IndexError):
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' call_parent={call_parent!r} is not a ModuleCall",
+            )
+        if call_label not in getattr(parent_call, "call_children", ()):
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' parent {call_parent!r} does not list it as a child",
+            )
+
+    for child_label in getattr(module_call, "call_children", ()) or ():
+        try:
+            child_call = call_accessor[child_label]
+        except (KeyError, IndexError):
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' call_children contains unresolved {child_label!r}",
+            )
+        if getattr(child_call, "call_parent", None) != call_label:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{call_label}' child {child_label!r} has call_parent="
+                f"{getattr(child_call, 'call_parent', None)!r}",
+            )
+        expected_prefix = list(getattr(module_call, "module_call_stack", ()) or ())
+        if call_label != "self:1":
+            expected_prefix.append(call_label)
+        child_stack = list(getattr(child_call, "module_call_stack", ()) or ())
+        if child_stack[: len(expected_prefix)] != expected_prefix:
+            raise MetadataInvariantError(
+                name,
+                f"ModuleCall '{child_label}' module_call_stack={child_stack!r} does not "
+                f"start with {expected_prefix!r}",
+            )
+
+
+def _check_module_call_output_structure_paths(
+    ml: "Trace",
+    module_call: object,
+    name: str,
+) -> None:
+    """Check complete output structures agree with retained output-op paths.
+
+    The precondition contract is intentionally narrow: retained outputs and
+    ``ContainerSpec`` leaves are only compared when both sides expose the same
+    number of non-root paths. Partial structures are legitimate for captures
+    that retain or project only part of a module output, and they are skipped
+    rather than treated as corruption.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module-call metadata.
+    module_call:
+        ModuleCall record to validate.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a complete retained output path set disagrees with a complete output
+        structure path set.
+    """
+
+    output_structure = getattr(module_call, "output_structure", None)
+    if output_structure is None:
+        return
+    structure_paths = set(_container_tensor_leaf_paths(output_structure))
+    output_paths: set[tuple[object, ...]] = set()
+    captured_output_paths = tuple(getattr(module_call, "output_paths", ()) or ())
+    if captured_output_paths:
+        output_paths.update(tuple(path) for path in captured_output_paths if tuple(path))
+    for output_op_label in getattr(module_call, "output_ops", ()) or ():
+        if captured_output_paths:
+            break
+        resolved_label = _resolve_trace_label(ml, output_op_label)
+        if resolved_label is None:
+            continue
+        output_op = ml[resolved_label]
+        output_path = tuple(getattr(output_op, "container_path", ()) or ())
+        if output_path:
+            output_paths.add(output_path)
+    if structure_paths and output_paths and len(structure_paths) == len(output_paths):
+        mismatched_paths = sorted(output_paths ^ structure_paths, key=repr)
+    else:
+        mismatched_paths = []
+    if mismatched_paths:
+        raise MetadataInvariantError(
+            name,
+            f"ModuleCall '{getattr(module_call, 'call_label', '')}' output_structure "
+            f"paths disagree with retained output paths {mismatched_paths!r}",
+        )
+
+
+def _container_tensor_leaf_paths(
+    spec: object, prefix: tuple[object, ...] = ()
+) -> list[tuple[object, ...]]:
+    """Return tensor leaf paths from a ``ContainerSpec``-like object.
+
+    Parameters
+    ----------
+    spec:
+        ContainerSpec-like object with ``child_specs``.
+    prefix:
+        Path prefix accumulated during recursion.
+
+    Returns
+    -------
+    list[tuple[object, ...]]
+        Tensor leaf paths in traversal order.
+    """
+
+    kind = getattr(spec, "kind", None)
+    if kind in {"literal", "opaque"}:
+        return []
+    components = _container_tensor_components(spec)
+    if not components:
+        return []
+    child_specs = tuple(getattr(spec, "child_specs", ()) or ())
+    child_by_component = dict(child_specs)
+    paths: list[tuple[object, ...]] = []
+    for component in components:
+        child_spec = child_by_component.get(component)
+        if child_spec is None:
+            paths.append((*prefix, component))
+        else:
+            paths.extend(_container_tensor_leaf_paths(child_spec, (*prefix, component)))
+    return paths
+
+
+def _container_tensor_components(spec: object) -> tuple[object, ...]:
+    """Return child components that may represent tensor leaves.
+
+    Parameters
+    ----------
+    spec:
+        ContainerSpec-like object.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Components in traversal order.
+    """
+
+    kind = getattr(spec, "kind", None)
+    if kind in {"tuple", "list", "registered"}:
+        return tuple(TupleIndex(index) for index in range(int(getattr(spec, "length", 0) or 0)))
+    if kind == "dict":
+        return tuple(DictKey(key) for key in getattr(spec, "keys", ()) or ())
+    if kind == "hf_model_output":
+        return tuple(HFKey(key) for key in getattr(spec, "keys", ()) or ())
+    if kind == "namedtuple":
+        return tuple(NamedField(field) for field in getattr(spec, "fields", ()) or ())
+    if kind == "dataclass":
+        return tuple(DataclassField(field) for field in getattr(spec, "fields", ()) or ())
+    return ()
+
 
 # ---------------------------------------------------------------------------
 # J. Param ↔ Layer ↔ Module cross-references
@@ -2568,9 +3493,22 @@ def _check_module_hierarchy(ml: "Trace") -> None:
 def _check_param_xrefs(ml: "Trace") -> None:
     """Check J: Param <-> Layer <-> Module cross-references.
 
+    Precondition contract: this torch-native check asserts deep reciprocal
+    references only for parameters that are actually used by at least one
+    operation in the captured graph. Unused or skipped-module parameters may
+    legitimately have no usage lists. ``Param.num_uses_by_ops`` is the
+    pass-qualified usage source of truth for reciprocal usage checks; the
+    stored ``num_calls`` field is compatibility metadata and is not used as the
+    invariant oracle. Layer-level aggregate checks deduplicate by no-pass
+    ``layer_label`` to match the trace aggregate semantics for recurrent and
+    weight-shared parameters.
+
     Validates:
     - Param.used_by_ops labels are valid op labels.
     - Param.used_by_layers labels are valid layer labels.
+    - Used Param usage lists reciprocate through Op/Layer ``_param_logs``.
+    - ``layers_with_params`` layer membership matches Param.used_by_layers.
+    - Co-parent params are symmetric and resolve.
     - uses_params == True implies _param_logs is non-empty.
     - layers_with_params values are valid layer labels.
     """
@@ -2601,6 +3539,11 @@ def _check_param_xrefs(ml: "Trace") -> None:
         except (KeyError, IndexError):
             pass  # Module was never invoked during forward pass
 
+        if param.num_uses_by_ops == 0 and not param.used_by_layers:
+            continue
+        _check_param_usage_reciprocal_links(ml, param, name)
+        _check_param_co_parent_links(ml, param, name)
+
     # uses_params forward check
     for lpl in ml.layer_list:
         if lpl.uses_params:
@@ -2619,6 +3562,232 @@ def _check_param_xrefs(ml: "Trace") -> None:
                     f"layers_with_params['{param_addr}'] contains '{lbl}' not in layer_labels",
                 )
 
+    _check_layers_with_params_matches_param_usage(ml, name)
+    _check_layer_param_aggregate_dedup(ml, name)
+
+
+def _check_param_usage_reciprocal_links(ml: "Trace", param: object, name: str) -> None:
+    """Check Param usage lists have reciprocal Op and Layer references.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    param:
+        Param record whose usage references should be checked.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a used operation or layer does not point back to ``param``.
+    """
+
+    address = getattr(param, "address", "<unknown>")
+    for op_label in getattr(param, "used_by_ops", ()):
+        op = ml[op_label]
+        if not _param_log_list_contains_param(getattr(op, "_param_logs", ()), param):
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' used_by_ops contains '{op_label}' but that Op does "
+                "not list the Param in _param_logs",
+            )
+    for layer_label in getattr(param, "used_by_layers", ()):
+        layer = ml.layer_logs[layer_label]
+        if not _param_log_list_contains_param(getattr(layer, "_param_logs", ()), param):
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' used_by_layers contains '{layer_label}' but that "
+                "Layer does not list the Param in _param_logs",
+            )
+
+
+def _check_param_co_parent_links(ml: "Trace", param: object, name: str) -> None:
+    """Check co-parent parameter links resolve and are symmetric.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    param:
+        Param record whose co-parent links should be checked.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a co-parent address is unresolved or not reciprocal.
+    """
+
+    address = getattr(param, "address", "<unknown>")
+    for co_parent_address in getattr(param, "co_parent_params", ()) or ():
+        co_parent = _param_by_address(ml, co_parent_address)
+        if co_parent is None:
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' co_parent_params contains unresolved {co_parent_address!r}",
+            )
+        if address not in getattr(co_parent, "co_parent_params", ()):
+            raise MetadataInvariantError(
+                name,
+                f"Param '{address}' links co-parent '{co_parent_address}' but the "
+                "reverse link is missing",
+            )
+
+
+def _check_layers_with_params_matches_param_usage(ml: "Trace", name: str) -> None:
+    """Check ``layers_with_params`` matches Param usage at the layer boundary.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If trace-level layer-with-param groups drift from Param usage lists.
+    """
+
+    expected_layer_union: set[str] = set()
+    for param in ml.param_logs:
+        if getattr(param, "num_uses_by_ops", 0) == 0 and not getattr(param, "used_by_layers", ()):
+            continue
+        expected_layer_union.update(getattr(param, "used_by_layers", ()) or ())
+    actual_layer_union: set[str] = set()
+    for group_key, layer_labels in getattr(ml, "layers_with_params", {}).items():
+        for layer_label in layer_labels:
+            actual_layer_union.add(layer_label)
+            layer = ml.layer_logs[layer_label]
+            if not getattr(layer, "_param_logs", ()):
+                raise MetadataInvariantError(
+                    name,
+                    f"layers_with_params[{group_key!r}] contains '{layer_label}' but the "
+                    "Layer has no _param_logs",
+                )
+    if actual_layer_union != expected_layer_union:
+        raise MetadataInvariantError(
+            name,
+            f"layers_with_params layer union {actual_layer_union!r} does not match "
+            f"Param.used_by_layers union {expected_layer_union!r}",
+        )
+
+
+def _check_layer_param_aggregate_dedup(ml: "Trace", name: str) -> None:
+    """Check trace param aggregate counts with layer-label deduplication.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing layer and parameter metadata.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If deduplicated layer parameter aggregates drift from trace totals.
+    """
+
+    seen_layer_labels: set[str] = set()
+    total_params = 0
+    trainable_params = 0
+    frozen_params = 0
+    layers_with_params = 0
+    for layer in ml.layer_list:
+        if layer.layer_label in seen_layer_labels:
+            continue
+        seen_layer_labels.add(layer.layer_label)
+        if not getattr(layer, "_param_logs", ()):
+            continue
+        layers_with_params += 1
+        total_params += getattr(layer, "num_params", 0)
+        trainable_params += getattr(layer, "num_params_trainable", 0)
+        frozen_params += getattr(layer, "num_params_frozen", 0)
+
+    if total_params != getattr(ml, "num_params", 0):
+        raise MetadataInvariantError(
+            name,
+            f"deduped layer param total {total_params} != trace.num_params={ml.num_params}",
+        )
+    if trainable_params != getattr(ml, "num_params_trainable", 0):
+        raise MetadataInvariantError(
+            name,
+            "deduped trainable param total "
+            f"{trainable_params} != trace.num_params_trainable={ml.num_params_trainable}",
+        )
+    if frozen_params != getattr(ml, "num_params_frozen", 0):
+        raise MetadataInvariantError(
+            name,
+            f"deduped frozen param total {frozen_params} != "
+            f"trace.num_params_frozen={ml.num_params_frozen}",
+        )
+    if layers_with_params != getattr(ml, "num_layers_with_params", 0):
+        raise MetadataInvariantError(
+            name,
+            f"deduped layers_with_params count {layers_with_params} != "
+            f"trace.num_layers_with_params={ml.num_layers_with_params}",
+        )
+
+
+def _param_log_list_contains_param(param_logs: object, param: object) -> bool:
+    """Return whether a parameter log collection contains ``param`` by identity.
+
+    Parameters
+    ----------
+    param_logs:
+        Iterable of Param records.
+    param:
+        Param record to look for.
+
+    Returns
+    -------
+    bool
+        ``True`` when any log has the same address or barcode as ``param``.
+    """
+
+    address = getattr(param, "address", None)
+    barcode = getattr(param, "barcode", None)
+    if not isinstance(param_logs, Iterable):
+        return False
+    return any(
+        candidate is param
+        or (
+            address is not None
+            and getattr(candidate, "address", None) == address
+            and getattr(candidate, "barcode", None) == barcode
+        )
+        for candidate in param_logs or ()
+    )
+
+
+def _param_by_address(ml: "Trace", address: str) -> object | None:
+    """Return a Param by primary or alias address.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing parameter metadata.
+    address:
+        Primary or alias parameter address.
+
+    Returns
+    -------
+    object | None
+        Matching Param record when present.
+    """
+
+    for param in ml.param_logs:
+        if getattr(param, "address", None) == address:
+            return param
+        if address in (getattr(param, "all_addresses", None) or ()):
+            return param
+    return None
+
 
 # ---------------------------------------------------------------------------
 # K. Buffer cross-references
@@ -2628,9 +3797,24 @@ def _check_param_xrefs(ml: "Trace") -> None:
 def _check_buffer_xrefs(ml: "Trace") -> None:
     """Check K: buffer layer and Buffer cross-references.
 
+    Precondition contract: torch registered buffers are represented by
+    ``Buffer`` entities whose versions are buffer Op nodes. Static read
+    versions and write versions share the same ``Buffer.versions`` list, so
+    write-only fields are only required for versions with
+    ``buffer_write_kind is not None``. Buffer addresses may live under an
+    uncalled child module, a container, or a top-level attribute; resolving any
+    ancestor module is sufficient. ``buffer_source`` is required to resolve
+    only when it is populated, because selective materialization may null it
+    when the producer raw label did not survive. ``buffer_replay_validated`` is
+    asserted as backed only for write versions that explicitly set it to
+    ``True``; static init-only buffers and write versions with ``None``/``False``
+    do not claim successful identity replay.
+
     Validates:
     - buffer_layers list entries are valid layer labels.
-    - Buffer objects have non-empty address and valid address.
+    - static Buffer version nodes resolve to buffer Ops at the same address.
+    - write versions have valid write-kind domains and dense pass sets per address.
+    - populated source and replay-validation metadata are backed by resolvable evidence.
     """
     name = "buffer_xrefs"
     label_set = set(ml.layer_labels)
@@ -2644,34 +3828,252 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
     # Check Buffer objects via buffer accessor
     if hasattr(ml, "_buffer_accessor") and ml._buffer_accessor is not None:
         for buf in ml.buffers:
-            if not buf.address:
-                raise MetadataInvariantError(
-                    name,
-                    f"Buffer '{buf.layer_label}' has empty address",
-                )
-            if not buf.versions:
-                raise MetadataInvariantError(
-                    name,
-                    f"Buffer '{buf.address}' has no version nodes",
-                )
-            # address references a valid module or an ancestor does.
-            # Buffers may live on modules that were never entered during the
-            # forward pass (e.g. anchor_generator creates buffers but they're
-            # consumed by parent code), or in non-module containers
-            # (ParameterList, top-level attrs like "rope"). Accept the buffer
-            # if any ancestor module is in the accessor.
-            addr = buf.address
-            found_ancestor = addr in ml.modules
-            while not found_ancestor and "." in addr:
-                addr = addr.rsplit(".", 1)[0]
-                found_ancestor = addr in ml.modules
-            if not found_ancestor and "" not in ml.modules:
-                raise MetadataInvariantError(
-                    name,
-                    f"Buffer '{buf.layer_label}' address="
-                    f"'{buf.address}' — no ancestor found in "
-                    f"module accessor",
-                )
+            _check_buffer_static_versions(ml, buf, name)
+            _check_buffer_write_versions(ml, buf, name)
+            _check_buffer_replay_validated_versions(ml, buf, name)
+
+
+def _check_buffer_static_versions(ml: "Trace", buf: object, name: str) -> None:
+    """Check static Buffer entity/version structure.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing buffer metadata.
+    buf:
+        Buffer entity from the trace buffer accessor.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If the Buffer entity has no address, no versions, non-buffer versions,
+        mismatched version addresses, or no acceptable ancestor module.
+    """
+
+    address = getattr(buf, "address", None)
+    layer_label = getattr(buf, "layer_label", None)
+    if not address:
+        raise MetadataInvariantError(
+            name,
+            f"Buffer '{layer_label}' has empty address",
+        )
+    versions = list(getattr(buf, "versions", ()) or ())
+    if not versions:
+        raise MetadataInvariantError(
+            name,
+            f"Buffer '{address}' has no version nodes",
+        )
+    for version in versions:
+        label = getattr(version, "layer_label", type(version).__name__)
+        if not getattr(version, "is_buffer", False):
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' is not a buffer Op",
+            )
+        if getattr(version, "address", None) != address:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' has address "
+                f"{getattr(version, 'address', None)!r}",
+            )
+        if label not in set(getattr(ml, "layer_dict_all_keys", {})):
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' does not resolve in trace",
+            )
+
+    if not _buffer_address_has_module_ancestor(ml, address):
+        raise MetadataInvariantError(
+            name,
+            f"Buffer '{layer_label}' address='{address}' — no ancestor found in module accessor",
+        )
+
+
+def _buffer_address_has_module_ancestor(ml: "Trace", address: str) -> bool:
+    """Return whether ``address`` or an ancestor is in the module accessor.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module metadata.
+    address:
+        Registered buffer address.
+
+    Returns
+    -------
+    bool
+        ``True`` when the buffer address satisfies the loose ancestry rule.
+    """
+
+    addr = address
+    found_ancestor = addr in ml.modules
+    while not found_ancestor and "." in addr:
+        addr = addr.rsplit(".", 1)[0]
+        found_ancestor = addr in ml.modules
+    return found_ancestor or "" in ml.modules
+
+
+def _check_buffer_write_versions(ml: "Trace", buf: object, name: str) -> None:
+    """Check write-version buffer metadata domains and resolvable populated fields.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing buffer metadata.
+    buf:
+        Buffer entity from the trace buffer accessor.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If write-kind domains are invalid, buffer passes are not dense as a
+        set, or populated source labels fail to resolve.
+    """
+
+    valid_write_kinds = {"reassign", "inplace", "fused", "data_reassign"}
+    address = getattr(buf, "address", None)
+    versions = list(getattr(buf, "versions", ()) or ())
+    write_versions = [
+        version for version in versions if getattr(version, "buffer_write_kind", None) is not None
+    ]
+    if not write_versions:
+        return
+
+    passes: list[int] = [
+        buffer_pass
+        for version in versions
+        if isinstance(buffer_pass := getattr(version, "buffer_pass", None), int)
+    ]
+    for version in write_versions:
+        label = getattr(version, "layer_label", type(version).__name__)
+        write_kind = getattr(version, "buffer_write_kind", None)
+        if write_kind not in valid_write_kinds:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' has invalid buffer_write_kind "
+                f"{write_kind!r}",
+            )
+        buffer_pass = getattr(version, "buffer_pass", None)
+        if not isinstance(buffer_pass, int) or buffer_pass < 1:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' has invalid buffer_pass {buffer_pass!r}",
+            )
+
+        source = getattr(version, "buffer_source", None)
+        if source is not None and _resolve_trace_label(ml, source) is None:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' has unresolved buffer_source {source!r}",
+            )
+
+    expected_passes = set(range(1, max(passes) + 1))
+    if set(passes) != expected_passes:
+        raise MetadataInvariantError(
+            name,
+            f"Buffer '{address}' write buffer_pass values must be dense as a set, got "
+            f"{sorted(passes)!r}",
+        )
+
+
+def _resolve_trace_label(ml: "Trace", label: str) -> str | None:
+    """Resolve a final or raw layer label to a known trace label.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing raw/final lookup maps.
+    label:
+        Raw or final label to resolve.
+
+    Returns
+    -------
+    str | None
+        Resolved label when present in the trace, otherwise ``None``.
+    """
+
+    all_keys = set(getattr(ml, "layer_dict_all_keys", {}))
+    final_label = getattr(ml, "_raw_to_final_layer_labels", {}).get(label)
+    if final_label in all_keys:
+        return final_label
+    if label in all_keys:
+        return label
+    return None
+
+
+def _check_buffer_replay_validated_versions(ml: "Trace", buf: object, name: str) -> None:
+    """Check explicit successful buffer replay claims have identity-replay evidence.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing buffer metadata.
+    buf:
+        Buffer entity from the trace buffer accessor.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a write version asserts ``buffer_replay_validated=True`` without the
+        source-parent and saved-argument evidence created by buffer replay
+        postprocessing.
+    """
+
+    address = getattr(buf, "address", None)
+    for version in getattr(buf, "versions", ()) or ():
+        if getattr(version, "buffer_write_kind", None) is None:
+            continue
+        if getattr(version, "buffer_replay_validated", None) is not True:
+            continue
+        label = getattr(version, "layer_label", type(version).__name__)
+        source = getattr(version, "buffer_source", None)
+        if source is None:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' claims replay validation without "
+                "buffer_source",
+            )
+        resolved_source = _resolve_trace_label(ml, source)
+        if resolved_source is None:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' replay source {source!r} does not resolve",
+            )
+        parents = set(getattr(version, "parents", ()) or ())
+        if resolved_source not in parents:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' replay source is not a parent",
+            )
+        parent_args = getattr(version, "parent_arg_positions", {}) or {}
+        arg_positions = parent_args.get("args", {}) if isinstance(parent_args, Mapping) else {}
+        resolved_arg0 = _resolve_trace_label(ml, arg_positions.get(0, ""))
+        if resolved_arg0 != resolved_source:
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' replay source is not args[0]",
+            )
+        if not getattr(version, "saved_args", None):
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' claims replay validation without "
+                "saved source argument",
+            )
+        if (
+            getattr(version, "out", None) is None
+            or getattr(ml[resolved_source], "out", None) is None
+        ):
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{label}' claims replay validation without "
+                "comparable payloads",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -3311,3 +4713,181 @@ def _check_lookup_key_consistency(ml: "Trace") -> None:
                 name,
                 f"_raw_to_final_layer_labels maps to '{final}' which is not a valid label",
             )
+
+
+METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
+    # Setup checks.
+    MetadataInvariantContract(
+        "backend_identity_invariants",
+        _check_backend_identity_invariants,
+        "all",
+    ),
+    # --- Phase 1: structural invariants (A-L) ---
+    MetadataInvariantContract("trace_self_consistency", _check_trace_self_consistency, "all"),
+    MetadataInvariantContract(
+        "region_replay_provenance",
+        _check_region_replay_provenance,
+        "all",
+    ),
+    MetadataInvariantContract(
+        "backward_graph_invariants",
+        _check_backward_graph_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "non_torch_backward_inert",
+        _check_non_torch_backward_inert,
+        "non_torch",
+    ),
+    MetadataInvariantContract(
+        "backend_neutral_accessor_refs",
+        _check_backend_neutral_accessor_refs,
+        "all",
+    ),
+    MetadataInvariantContract(
+        "backend_neutral_module_mode_invariants",
+        _check_backend_neutral_module_mode_invariants,
+        "non_torch",
+    ),
+    MetadataInvariantContract("special_layer_lists", _check_special_layer_lists, "torch"),
+    MetadataInvariantContract("graph_topology", _check_graph_topology, "torch"),
+    MetadataInvariantContract(
+        "edge_use_parent_arg_consistency",
+        _check_edge_use_parent_arg_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract("op_log_fields", _check_op_log_fields, "torch"),
+    MetadataInvariantContract(
+        "payload_metadata_invariants",
+        _check_payload_metadata_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract("recurrence_invariants", _check_recurrence_invariants, "torch"),
+    MetadataInvariantContract("branching_invariants", _check_branching_invariants, "torch"),
+    MetadataInvariantContract("conditional_invariants", _check_conditional_invariants, "torch"),
+    MetadataInvariantContract(
+        "layer_pass_layer_log_xrefs",
+        _check_layer_pass_to_layer_log_xrefs,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "module_layer_containment",
+        _check_module_layer_containment,
+        "torch",
+    ),
+    MetadataInvariantContract("module_hierarchy", _check_module_hierarchy, "torch"),
+    MetadataInvariantContract("param_xrefs", _check_param_xrefs, "torch"),
+    MetadataInvariantContract("buffer_xrefs", _check_buffer_xrefs, "torch"),
+    MetadataInvariantContract(
+        "equivalence_symmetry",
+        _check_equivalence_symmetry,
+        "torch",
+    ),
+    # --- Phase 2: semantic invariants (M-R) ---
+    MetadataInvariantContract("graph_ordering", _check_graph_ordering, "all"),
+    MetadataInvariantContract(
+        "loop_detection_invariants",
+        _check_loop_detection_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract("distance_invariants", _check_distance_invariants, "torch"),
+    MetadataInvariantContract("graph_connectivity", _check_graph_connectivity, "torch"),
+    MetadataInvariantContract(
+        "module_containment_logic",
+        _check_module_containment_logic,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "lookup_key_consistency",
+        _check_lookup_key_consistency,
+        "all",
+    ),
+    MetadataInvariantContract(
+        "func_call_id_consistency",
+        check_func_call_id_invariant,
+        "torch",
+    ),
+)
+
+
+def _metadata_invariant_contracts_for_trace(
+    trace: "Trace",
+) -> tuple[MetadataInvariantContract, ...]:
+    """Return metadata invariant contracts applicable to ``trace``.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backend selects the contract subset.
+
+    Returns
+    -------
+    tuple[MetadataInvariantContract, ...]
+        Ordered invariant contracts matching the trace backend and capability
+        requirements.
+    """
+
+    from ..backends import get_backend_spec
+
+    spec = get_backend_spec(getattr(trace, "backend", "torch"))
+    torch_spec = get_backend_spec("torch")
+    backend_family: Literal["torch", "non_torch"] = "torch" if spec is torch_spec else "non_torch"
+    return _metadata_invariant_contracts_for_backend(backend_family, spec=spec)
+
+
+def _metadata_invariant_contracts_for_backend(
+    backend_family: Literal["torch", "non_torch"],
+    *,
+    spec: "BackendSpec | None" = None,
+) -> tuple[MetadataInvariantContract, ...]:
+    """Return ordered metadata invariant contracts for a backend family.
+
+    Parameters
+    ----------
+    backend_family:
+        ``"torch"`` for torch traces, otherwise ``"non_torch"``.
+    spec:
+        Optional backend registry spec used for capability-gated contracts.
+
+    Returns
+    -------
+    tuple[MetadataInvariantContract, ...]
+        Ordered invariant contracts whose backend and capability contracts match.
+    """
+
+    return tuple(
+        contract
+        for contract in METADATA_INVARIANT_CONTRACTS
+        if _metadata_invariant_applies(contract, backend_family, spec)
+    )
+
+
+def _metadata_invariant_applies(
+    contract: MetadataInvariantContract,
+    backend_family: Literal["torch", "non_torch"],
+    spec: "BackendSpec | None",
+) -> bool:
+    """Return whether ``contract`` applies to a backend family and spec.
+
+    Parameters
+    ----------
+    contract:
+        Metadata invariant contract to evaluate.
+    backend_family:
+        Backend family selected from the trace backend.
+    spec:
+        Backend registry spec, when available.
+
+    Returns
+    -------
+    bool
+        True when backend applicability and optional capability gates match.
+    """
+
+    if contract.applies_to not in {"all", backend_family}:
+        return False
+    if contract.requires_capability is None:
+        return True
+    if spec is None:
+        return False
+    return bool(getattr(spec.capabilities, contract.requires_capability, False))

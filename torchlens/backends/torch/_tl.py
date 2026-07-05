@@ -21,6 +21,8 @@ __all__ = [
     "get_tensor_meta",
     "set_tensor_label",
     "get_tensor_label",
+    "get_live_tensor_label",
+    "get_live_label_list",
     "clear_tensor_label",
     "promote_label_to_buffer_source_and_clear_label",
     "set_buffer_address",
@@ -262,6 +264,55 @@ def get_tensor_label(t: Any) -> Optional[str]:
     """
     meta = get_tensor_meta(t)
     return None if meta is None else meta.label_raw
+
+
+def get_live_tensor_label(t: Any, live_labels: Iterable[str]) -> Optional[str]:
+    """Return a tensor label only when it belongs to the active trace.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object to inspect.
+    live_labels : Iterable[str]
+        Raw labels present in the active trace live index.
+
+    Returns
+    -------
+    Optional[str]
+        Raw label if it resolves in the active trace, otherwise ``None``.
+    """
+
+    label = get_tensor_label(t)
+    if label is None:
+        return None
+    if label in live_labels:
+        return label
+    clear_tensor_label(t)
+    return None
+
+
+def get_live_label_list(tensor_list: Iterable[Any], live_labels: Iterable[str]) -> List[str]:
+    """Return active-trace labels for tensors, clearing stale labels.
+
+    Parameters
+    ----------
+    tensor_list : Iterable[Any]
+        Tensor-like objects to inspect.
+    live_labels : Iterable[str]
+        Raw labels present in the active trace live index.
+
+    Returns
+    -------
+    List[str]
+        Labels that resolve in the active trace live index.
+    """
+
+    labels: List[str] = []
+    for tensor in tensor_list:
+        label = get_live_tensor_label(tensor, live_labels)
+        if label is not None:
+            labels.append(label)
+    return labels
 
 
 def clear_tensor_label(t: Any) -> None:

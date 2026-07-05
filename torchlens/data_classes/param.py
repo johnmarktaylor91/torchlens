@@ -676,6 +676,9 @@ class ParamAccessor(Accessor["Param"]):
 
     def _resolve_substring(self, key: str) -> "Param | None":
         """Resolve an unambiguous parameter short name."""
+        for param_log in self._list:
+            if key in param_log.all_addresses:
+                return param_log
         # Fallback: match by short name (e.g. 'weight', 'bias')
         matches = [pl for pl in self._list if pl.name == key]
         if len(matches) == 1:

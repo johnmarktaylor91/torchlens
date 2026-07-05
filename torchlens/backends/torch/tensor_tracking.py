@@ -798,6 +798,13 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
         # custom_methods (item, __format__) which re-enter logging and cause
         # infinite recursion.
         args_to_hash.append(f"{prefix}_tensor{arg.shape}")
+    elif isinstance(arg, (torch.TypedStorage, torch.UntypedStorage)):
+        # Same hazard as torch.Tensor above: str()/repr() on a Storage walks
+        # every element via wrapped __getitem__ (and even constructs a fresh
+        # wrapped tensor per element on some torch builds), re-entering
+        # logging and causing infinite/runaway recursion. Use size/dtype only.
+        dtype = getattr(arg, "dtype", None)
+        args_to_hash.append(f"{prefix}_storage{arg.size()}_{dtype}")
     elif isinstance(arg, dict):
         for k, v in arg.items():
             _append_arg_hash(v, f"{prefix}_dk{k}", args_to_hash, _depth + 1)

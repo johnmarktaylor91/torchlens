@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal, get_args, get_origin, get_type_hints
 import torch
 from torch import nn
 
+from ._torch_compat import get_torch_capability_snapshot
 from .rng import (
     set_random_seed,
     log_current_rng_states,
@@ -254,6 +255,23 @@ def _probe_fingerprint() -> DoctorCheck:
     return DoctorCheck("model fingerprint", status, fingerprint[:16] if fingerprint else "empty")
 
 
+def _probe_torch_capabilities() -> DoctorCheck:
+    """Return the torch capability snapshot doctor row.
+
+    Returns
+    -------
+    DoctorCheck
+        Snapshot of probed torch integration capabilities.
+    """
+
+    snapshot = get_torch_capability_snapshot()
+    missing = [name for name, available in snapshot.items() if not available]
+    detail = (
+        "missing=" + ",".join(missing) if missing else "all probed torch capabilities available"
+    )
+    return DoctorCheck("torch capabilities", "PASS", detail)
+
+
 def doctor() -> DoctorReport:
     """Run a TorchLens startup health check.
 
@@ -266,6 +284,7 @@ def doctor() -> DoctorReport:
 
     checks: list[DoctorCheck] = [
         DoctorCheck("pytorch", "PASS", torch.__version__),
+        _probe_torch_capabilities(),
         DoctorCheck(
             "cuda",
             "PASS" if torch.cuda.is_available() else "SKIP",

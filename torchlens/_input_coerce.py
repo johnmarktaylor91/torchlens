@@ -69,7 +69,16 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
     if _is_batched_text_input(input_args) or _is_batched_image_input(input_args):
         return _coerce_input(model, input_args)
     if isinstance(input_args, tuple):
-        return tuple(_coerce_input(model, item) for item in input_args)
+        # NamedTuple subclasses (e.g. a GNN model's batch container) are also
+        # ``tuple`` instances. Reconstruct through the original type so field
+        # access (``batch.some_field``) keeps working downstream instead of
+        # silently degrading to a plain ``tuple`` (issue: interatomic-potential
+        # GNN inputs like orb-models' ``AtomGraphs``).
+        coerced_items = [_coerce_input(model, item) for item in input_args]
+        arg_type = type(input_args)
+        if hasattr(arg_type, "_fields"):
+            return arg_type(*coerced_items)
+        return arg_type(coerced_items)
     if isinstance(input_args, list):
         return [_coerce_input(model, item) for item in input_args]
     return _coerce_input(model, input_args)

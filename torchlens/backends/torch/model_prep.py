@@ -33,6 +33,7 @@ import warnings
 from collections.abc import Callable
 from collections import defaultdict, deque
 from functools import wraps
+from types import ModuleType
 from typing import Any, TYPE_CHECKING, cast
 
 import torch
@@ -44,6 +45,7 @@ from ._tl import (
     clear_meta,
     get_buffer_address,
     get_label_list,
+    get_live_tensor_label,
     get_module_meta,
     get_param_meta,
     get_tensor_label,
@@ -534,6 +536,19 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     if not hasattr(trace, "_param_log_by_pid"):
         raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
 
+    # Fast (save_new_outs / second-pass) capture reuses the exhaustive-pass
+    # graph, so the Param log objects -- and the cross-reference metadata
+    # populated on them during the exhaustive pass (used_by_ops, used_by_layers,
+    # num_calls, co_parent_params) -- must be preserved. Rebuilding fresh Param
+    # objects here would (a) drop that metadata, leaving used_by_layers empty,
+    # and (b) desync trace.param_logs from the Op._param_logs that still point at
+    # the exhaustive-pass objects -- exactly the asymmetry the param
+    # cross-reference invariant flags. Re-tag the live tensors with their
+    # existing barcode/address instead of allocating new logs.
+    if trace.capture_mode == "fast" and len(trace.param_logs):
+        _retag_existing_session_param_logs(trace, model)
+        return
+
     optimized_param_ids: set[int] = set()
     if optimizer is not None:
         for group in optimizer.param_groups:
@@ -553,8 +568,12 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             if pid in seen_param_ids:
                 existing_address = param_id_to_address[pid]
                 alias_address = f"{address}.{param_name}" if address else param_name
-                if alias_address not in param_logs[existing_address].co_parent_params:
-                    param_logs[existing_address].co_parent_params.append(alias_address)
+                param_log = param_logs[existing_address]
+                if alias_address not in param_log.all_addresses:
+                    param_log.all_addresses.append(alias_address)
+                alias_module_address = address or "self"
+                if alias_module_address not in param_log.all_module_addresses:
+                    param_log.all_module_addresses.append(alias_module_address)
                 continue
             seen_param_ids.add(pid)
 
@@ -562,9 +581,14 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             param_address = f"{address}.{param_name}" if address else param_name
             param_id_to_address[pid] = param_address
 
-            # Save original requires_grad before forcing True.
+            # Save original requires_grad before forcing True. Integer/bool-dtype
+            # Parameters (e.g. a fixed nn.Parameter(torch.arange(...), requires_grad=False)
+            # lookup buffer) are legal PyTorch and never gradient-capable; forcing
+            # requires_grad on them raises, so only force floating/complex dtypes.
             requires_grad_before = param.requires_grad
-            if not getattr(trace, "backward_ready", False):
+            if not getattr(trace, "backward_ready", False) and (
+                torch.is_floating_point(param) or torch.is_complex(param)
+            ):
                 param.requires_grad = True
 
             barcode = make_random_barcode()
@@ -593,6 +617,63 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
 
     trace._param_log_by_pid = param_id_to_address
     trace.param_logs = ParamAccessor(param_logs)
+
+
+def _retag_existing_session_param_logs(trace: "Trace", model: nn.Module) -> None:
+    """Re-tag live parameters for a fast pass without rebuilding Param logs.
+
+    Mirrors the live-tensor side effects of :func:`_create_session_param_logs`
+    (force ``requires_grad`` outside ``backward_ready``, set ``_tl`` param meta,
+    refresh ``Param._param_ref``, rebuild ``_param_log_by_pid``) but keeps the
+    existing :class:`Param` objects so their exhaustive-pass cross-reference
+    metadata survives the second pass. Aliased/shared parameters resolve through
+    each Param's ``all_addresses``.
+    """
+
+    existing_by_address: dict[str, Param] = {pl.address: pl for pl in trace.param_logs}
+    alias_to_primary: dict[str, str] = {}
+    for primary_address, param_log in existing_by_address.items():
+        for alias in getattr(param_log, "all_addresses", []) or [primary_address]:
+            alias_to_primary[alias] = primary_address
+
+    param_id_to_address: dict[int, str] = {}
+    seen_param_ids: set[int] = set()
+    for module in model.modules():
+        address = _module_address(module)
+        for param_name, param in module._parameters.items():
+            if param is None:
+                continue
+            pid = id(param)
+            param_address = f"{address}.{param_name}" if address else param_name
+            primary_address = alias_to_primary.get(param_address, param_address)
+            # Distinct local for the ``Param | None`` lookup so the loop variable
+            # ``param_log`` (bound non-optional in the ``existing_by_address``
+            # iteration above) keeps its narrowed ``Param`` type after the
+            # ``is None`` guard -- avoids a mypy variable-reuse narrowing error.
+            existing_param_log = existing_by_address.get(primary_address)
+            if existing_param_log is None:
+                # Unexpected new parameter on the fast pass: the graph changed.
+                # Leave it untagged; downstream fast-pass alignment checks will
+                # surface the divergence rather than silently mis-saving.
+                continue
+            param_log = existing_param_log
+            if pid not in seen_param_ids:
+                seen_param_ids.add(pid)
+                param_id_to_address[pid] = primary_address
+                requires_grad_before = param.requires_grad
+                if not getattr(trace, "backward_ready", False) and (
+                    torch.is_floating_point(param) or torch.is_complex(param)
+                ):
+                    param.requires_grad = True
+                set_param_meta(
+                    param,
+                    barcode=param_log.barcode,
+                    address=primary_address,
+                    requires_grad_before=requires_grad_before,
+                )
+                param_log._param_ref = param
+
+    trace._param_log_by_pid = param_id_to_address
 
 
 # ---------------------------------------------------------------------------
@@ -1016,7 +1097,7 @@ def _record_module_entry_metadata(
         if is_functorch_wrapped_tensor(t):
             continue
         # Lazily register buffer tensors that haven't been logged yet.
-        label = get_tensor_label(t)
+        label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         buffer_address = cast(str, get_buffer_address(t))
         if label is None and buffer_address is not None:
             log_source_tensor(trace, t, "buffer", buffer_address)
@@ -1286,7 +1367,20 @@ def _ensure_module_output_tensor_logged(
     }
     address = _module_address(module)
     module_call_index = trace._mod_call_index[id(module)]
-    modules = [(address, module_call_index)] if address else []
+    if is_internal_source:
+        # A synthesized internal-source op must carry the FULL exhaustive module
+        # stack -- exactly like every real op (see sources.py / ops.py) -- not just
+        # its innermost frame. Truncating to [(address, idx)] mis-parented a
+        # deeply-nested internal source (e.g. esmfold's trunk.structure_module.ipa,
+        # synthesized when a vmap/state-leaked tensor enters a module untagged 2+
+        # levels deep) to the ROOT, breaking the [module_hierarchy] bidirectionality
+        # invariant. The intervention-replacement path keeps its explicit innermost
+        # frame (a forward-hook replacement fires with its own module context).
+        from .sources import _snapshot_exhaustive_module_stack
+
+        modules = _snapshot_exhaustive_module_stack(trace)
+    else:
+        modules = [(address, module_call_index)] if address else []
     equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
     module_args, module_kwargs = trace._module_forward_args.get(
         (address, module_call_index), ((), {})
@@ -1554,10 +1648,15 @@ def _make_user_forward_hook_wrapper(
         parent_labels = [
             label
             for tensor in get_vars_of_type_from_obj(original_output, torch.Tensor, search_depth=4)
-            if (label := get_tensor_label(tensor)) is not None
+            if (
+                label := get_live_tensor_label(tensor, trace.capture_events.live_index.by_raw_label)
+            )
+            is not None
         ]
         for replacement in get_vars_of_type_from_obj(result, torch.Tensor, search_depth=4):
-            replacement_label = get_tensor_label(replacement)
+            replacement_label = get_live_tensor_label(
+                replacement, trace.capture_events.live_index.by_raw_label
+            )
             if replacement_label is not None:
                 replace_op_event(trace, replacement_label, intervention_replaced=True)
             else:
@@ -1614,18 +1713,19 @@ def _record_module_exit_metadata(
         module_call_label=module_call_label,
     )
     output_tensor_labels_raw: list[str] = []
+    output_paths: list[tuple[object, ...]] = []
     per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
     output_names: list[str | None] = []
     for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
         # so the graph correctly shows the module boundary.
-        tensor_label = get_tensor_label(t)
+        tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         if (_module_type(module).lower() == "identity") or (
             tensor_label is not None and tensor_label in input_tensor_labels
         ):
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
-            tensor_label = get_tensor_label(t)
+            tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         if tensor_label is None:
             # An untagged module output is a genuine intervention replacement
             # only when the module has a raw forward hook that could have
@@ -1649,6 +1749,7 @@ def _record_module_exit_metadata(
         is_atomic_module = _is_bottom_level_submodule_exit(trace, t, module)
         atomic_module_call = (address, module_call_index) if is_atomic_module else None
         output_tensor_labels_raw.append(tensor_label)
+        output_paths.append(tuple(container_path))
         event = trace.capture_events.live_index.require_event(tensor_label)
         per_output_atomic.append(
             (
@@ -1675,6 +1776,7 @@ def _record_module_exit_metadata(
             forward_duration=forward_duration,
             output_structure=output_structure,
             output_tensor_labels_raw=tuple(output_tensor_labels_raw),
+            output_paths=tuple(output_paths),
             has_user_forward_hooks=bool(getattr(module, "_forward_hooks", None)),
             per_output_atomic=tuple(per_output_atomic),
             output_names=tuple(output_names),
@@ -1947,7 +2049,7 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     ``num_batches_tracked`` increment) and so would mis-flag multi-op leaves as
     atomic. This stub keeps the call site stable and always defers.
     """
-    tensor_label = get_tensor_label(t)
+    tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
     if tensor_label is None:
         raise KeyError("Tensor is missing TorchLens metadata")
     trace.capture_events.live_index.require_event(tensor_label)
@@ -1980,7 +2082,11 @@ def clear_hooks(hook_handles: list[Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_model_session(model: nn.Module, input_tensors: Any = None) -> None:
+def _cleanup_model_session(
+    model: nn.Module,
+    input_tensors: Any = None,
+    input_objects: Any = None,
+) -> None:
     """Clean up session-specific state after a ``trace`` call.
 
     Restores ``requires_grad`` to its original value on all parameters,
@@ -2003,31 +2109,113 @@ def _cleanup_model_session(model: nn.Module, input_tensors: Any = None) -> None:
     _undecorate_model_tensors(model)
 
     # Clean tensor labels from input tensors
+    seen: set[int] = set()
     if input_tensors:
         for t in input_tensors:
             clear_meta(t)
+            seen.add(id(t))
+    if input_objects is not None:
+        _clear_session_tensor_metadata(input_objects, seen)
+
+
+def _clear_session_tensor_metadata(value: Any, seen: set[int], depth: int = 0) -> None:
+    """Clear TorchLens tensor metadata from a model-owned object graph.
+
+    Parameters
+    ----------
+    value
+        Candidate object reachable from a prepared model.
+    seen
+        Object ids already visited during this cleanup scan.
+    depth
+        Current recursion depth, used to bound traversal through arbitrary
+        third-party helper objects.
+
+    Returns
+    -------
+    None
+        Mutates reachable tensors in place by removing TorchLens metadata.
+    """
+
+    if value is None or isinstance(value, (str, bytes, int, float, bool, ModuleType)):
+        return
+    if isinstance(value, torch.Tensor):
+        if not isinstance(value, torch.nn.Parameter):
+            clear_meta(value)
+        return
+    obj_id = id(value)
+    if obj_id in seen or depth >= 12:
+        return
+    seen.add(obj_id)
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _clear_session_tensor_metadata(key, seen, depth + 1)
+            _clear_session_tensor_metadata(item, seen, depth + 1)
+        return
+    if isinstance(value, (list, tuple, set, frozenset, deque)):
+        for item in value:
+            _clear_session_tensor_metadata(item, seen, depth + 1)
+        return
+    if isinstance(value, nn.Module):
+        return
+    namespace = getattr(value, "__dict__", None)
+    if namespace is None:
+        return
+    for item in namespace.values():
+        _clear_session_tensor_metadata(item, seen, depth + 1)
+
+
+def _clear_callable_session_tensor_metadata(callable_obj: Any, seen: set[int]) -> None:
+    """Clear TorchLens tensor metadata captured by a callable object.
+
+    Parameters
+    ----------
+    callable_obj
+        Candidate callable, such as a model's bound ``forward`` method.
+    seen
+        Object ids already visited during this cleanup scan.
+
+    Returns
+    -------
+    None
+        Mutates reachable tensor metadata in place.
+    """
+
+    raw_callable = getattr(callable_obj, "__func__", callable_obj)
+    defaults = getattr(raw_callable, "__defaults__", None) or ()
+    _clear_session_tensor_metadata(defaults, seen)
+    kwdefaults = getattr(raw_callable, "__kwdefaults__", None) or {}
+    _clear_session_tensor_metadata(kwdefaults, seen)
+    closure = getattr(raw_callable, "__closure__", None) or ()
+    for cell in closure:
+        try:
+            cell_value = cell.cell_contents
+        except ValueError:
+            continue
+        _clear_session_tensor_metadata(cell_value, seen)
+    globals_dict = getattr(raw_callable, "__globals__", None)
+    if not isinstance(globals_dict, dict):
+        return
+    code = getattr(raw_callable, "__code__", None)
+    if code is None:
+        return
+    for name in code.co_names:
+        if name in globals_dict:
+            _clear_session_tensor_metadata(globals_dict[name], seen)
 
 
 def _undecorate_model_tensors(model: nn.Module) -> None:
     """Remove session-scoped metadata from non-parameter tensors in the model.
 
-    Uses ``__dict__`` scan (fast) instead of ``iter_accessible_attributes`` (slow
-    dir() + getattr MRO walk). Handles tensors stored directly as attributes,
-    inside lists/tuples, and inside dicts.
+    Uses a bounded ``__dict__`` scan instead of ``iter_accessible_attributes``
+    (slow dir() + getattr MRO walk). Handles tensors stored directly as
+    attributes, inside Python containers, and inside model-owned helper objects.
     """
+    seen: set[int] = set()
     for submodule in model.modules():
         for attr_val in submodule.__dict__.values():
-            if isinstance(attr_val, torch.Tensor):
-                if not isinstance(attr_val, torch.nn.Parameter):
-                    clear_meta(attr_val)
-            elif isinstance(attr_val, (list, tuple, set)):
-                for item in attr_val:
-                    if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
-                        clear_meta(item)
-            elif isinstance(attr_val, dict):
-                for val in attr_val.values():
-                    if isinstance(val, torch.Tensor) and not isinstance(val, torch.nn.Parameter):
-                        clear_meta(val)
+            _clear_session_tensor_metadata(attr_val, seen)
+        _clear_callable_session_tensor_metadata(getattr(submodule, "forward", None), seen)
     # Also clean any tensors from the registered buffer dict (_buffers)
     for submodule in model.modules():
         for buf_tensor in submodule._buffers.values():
