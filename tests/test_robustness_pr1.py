@@ -5,7 +5,7 @@ Covers:
       silently corrupt the outer Trace.
     - Instrumented functorch / vmap / grad transforms warn at the boundary, while raw
       uninstrumented transform regions retain the one-shot warning.
-    - pyproject pins ``torch>=2.4`` (matching the autocast API already in use)
+    - pyproject pins the documented ``torch>=2.1`` compatibility floor
       and advertises Python 3.13 support.
 """
 
@@ -188,10 +188,9 @@ def test_non_vmap_forward_pass_emits_no_functorch_warning() -> None:
 
 
 def test_pyproject_pins_torch_floor() -> None:
-    """The torch dependency must pin >=2.4 — earlier versions lack the autocast
-    API signatures that TorchLens already uses (torch/amp refactor, 2.4).
-    """
+    """The torch dependency must pin exactly the documented >=2.1 floor."""
     from pathlib import Path
+    import re
 
     try:
         import tomllib
@@ -205,9 +204,11 @@ def test_pyproject_pins_torch_floor() -> None:
     deps = data["project"]["dependencies"]
     torch_pins = [d for d in deps if d.startswith("torch") and "=" in d]
     assert torch_pins, f"Expected a pinned torch dependency; got deps={deps}"
-    # The pin should be torch>=2.4 (or higher) — not a bare 'torch'.
     pin = torch_pins[0]
-    assert ">=2.4" in pin or ">=2.5" in pin or ">=2.6" in pin, f"torch floor too loose: {pin!r}"
+    floor_match = re.search(r">=\s*(\d+)\.(\d+)", pin)
+    assert floor_match is not None, f"Expected an explicit torch floor; got {pin!r}"
+    floor = tuple(int(part) for part in floor_match.groups())
+    assert floor == (2, 1), f"torch floor must match documented 2.1 support; got {pin!r}"
 
 
 def test_pyproject_advertises_python_313_classifier() -> None:
