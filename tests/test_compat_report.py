@@ -9,8 +9,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
 from torchlens.compat import CompatReport, report
 from torchlens.options import CaptureOptions
+from torchlens.utils._torch_compat import get_torch_capability_snapshot
 from torchlens.utils.rng import log_current_rng_states, set_rng_from_saved_states
 from torchlens.utils.tensor_utils import tensor_nanequal
 
@@ -270,6 +272,18 @@ def test_report_renderers_include_truth_table_rows() -> None:
     assert "`pass`" in markdown_table
 
 
+def test_report_surfaces_every_runtime_capability() -> None:
+    """Compatibility report capability row stays lockstep with defined flags."""
+
+    compat_report = report(SmallCnn(), torch.randn(2, 1, 4, 4))
+    row = compat_report.row("torch_capabilities")
+    expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
+    rendered = row.details.removeprefix("Runtime capabilities: ")
+    surfaced = {part.split("=", 1)[0] for part in rendered.split(";")[0].split(", ")}
+
+    assert surfaced == expected
+
+
 def test_report_detects_known_scope_and_broken_rows() -> None:
     """Wrappers with known semantics produce the expected row statuses."""
 
@@ -298,6 +312,20 @@ def test_quantized_tensor_nanequal_no_longer_crashes() -> None:
 
     assert tensor_nanequal(left, right)
     assert not tensor_nanequal(left, mismatch)
+
+
+def test_report_quantized_row_uses_shared_cycle_safe_tensor_walker() -> None:
+    """Quantized input detection survives shared tensors and cyclic containers."""
+
+    tensor = torch.quantize_per_tensor(
+        torch.tensor([1.0, 2.0]), scale=0.1, zero_point=10, dtype=torch.quint8
+    )
+    payload: list[object] = [tensor, {"again": tensor}]
+    payload.append(payload)
+
+    compat_report = report(QuantizedInputModel(), payload)
+
+    assert compat_report.row("quantized_tensor").status == "known_broken"
 
 
 def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> None:

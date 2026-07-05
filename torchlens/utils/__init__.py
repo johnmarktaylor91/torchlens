@@ -256,20 +256,55 @@ def _probe_fingerprint() -> DoctorCheck:
 
 
 def _probe_torch_capabilities() -> DoctorCheck:
-    """Return the torch capability snapshot doctor row.
+    """Return the runtime capability snapshot doctor row.
 
     Returns
     -------
     DoctorCheck
-        Snapshot of probed torch integration capabilities.
+        Snapshot of probed private integration capabilities.
+    """
+
+    snapshot = _runtime_capability_snapshot()
+    missing = [name for name, available in snapshot.items() if not available]
+    detail = _format_capability_snapshot(snapshot)
+    if missing:
+        detail += "; missing=" + ",".join(missing)
+    return DoctorCheck("runtime capabilities", "PASS", detail)
+
+
+def _runtime_capability_snapshot() -> dict[str, bool]:
+    """Return all runtime compatibility capability flags.
+
+    Returns
+    -------
+    dict[str, bool]
+        Mapping from capability flag names to availability.
     """
 
     snapshot = get_torch_capability_snapshot()
-    missing = [name for name, available in snapshot.items() if not available]
-    detail = (
-        "missing=" + ",".join(missing) if missing else "all probed torch capabilities available"
-    )
-    return DoctorCheck("torch capabilities", "PASS", detail)
+    try:
+        from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
+    except ImportError:
+        return snapshot
+    snapshot.update(get_tf_capability_snapshot())
+    return snapshot
+
+
+def _format_capability_snapshot(snapshot: dict[str, bool]) -> str:
+    """Format capability flags as a stable comma-separated list.
+
+    Parameters
+    ----------
+    snapshot:
+        Capability flags to format.
+
+    Returns
+    -------
+    str
+        Stable ``name=value`` list.
+    """
+
+    return ", ".join(f"{name}={available}" for name, available in sorted(snapshot.items()))
 
 
 def doctor() -> DoctorReport:
