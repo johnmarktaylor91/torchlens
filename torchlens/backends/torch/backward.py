@@ -279,6 +279,7 @@ def _close_implicit_backward_pass_if_open(trace: Any) -> None:
     )
     trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), int(pass_index))
     trace.__dict__.pop("_active_backward_pass_index", None)
+    _clear_pending_accumulate_grad_records(trace)
     trace._implicit_backward_pass_open = False
     _materialize_backward_projections(trace)
 
@@ -1444,6 +1445,7 @@ def _make_grad_fn_hook(
                 getattr(live_trace, "num_backward_passes", 0) + 1,
             )
         )
+        _set_live_grad_fn_call_backward_pass_index(grad_fn_handle, call_index, pass_index)
         if is_accumulate_grad:
             fire_records = _pop_pending_accumulate_grad_records(
                 live_trace, grad_fn_object_id, call_index
@@ -1609,6 +1611,34 @@ def _set_live_grad_fn_call_fire_ref(
         call.intervention_fire_ref = fire_ref
 
 
+def _set_live_grad_fn_call_backward_pass_index(
+    grad_fn_handle: Any,
+    call_index: int,
+    pass_index: int,
+) -> None:
+    """Set the active backward pass index on the just-logged GradFnCall.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Runtime GradFn record whose call accessor was just appended.
+    call_index:
+        One-based callback index.
+    pass_index:
+        One-based active backward pass index.
+
+    Returns
+    -------
+    None
+        Mutates the runtime call record when present.
+    """
+
+    calls = getattr(grad_fn_handle, "calls", None)
+    call = getattr(calls, "_dict", {}).get(call_index)
+    if call is not None:
+        call.backward_pass_index = pass_index
+
+
 def _pending_accumulate_grad_record_key(
     grad_fn_object_id: int,
     call_index: int,
@@ -1658,7 +1688,7 @@ def _store_pending_accumulate_grad_records(
 
     pending = trace.__dict__.setdefault("_tl_pending_accumulate_grad_fire_records", {})
     key = _pending_accumulate_grad_record_key(grad_fn_object_id, call_index)
-    pending.setdefault(key, []).extend(records)
+    pending[key] = list(records)
 
 
 def _pop_pending_accumulate_grad_records(
@@ -1691,6 +1721,23 @@ def _pop_pending_accumulate_grad_records(
     if not pending:
         trace.__dict__.pop("_tl_pending_accumulate_grad_fire_records", None)
     return records
+
+
+def _clear_pending_accumulate_grad_records(trace: Any) -> None:
+    """Drop unpaired AccumulateGrad prehook records at backward pass teardown.
+
+    Parameters
+    ----------
+    trace:
+        Active trace whose pending prehook records should be cleared.
+
+    Returns
+    -------
+    None
+        Removes the private trace-local pending queue if present.
+    """
+
+    trace.__dict__.pop("_tl_pending_accumulate_grad_fire_records", None)
 
 
 def _record_higher_order_terminals_from_tuple(
@@ -2394,6 +2441,7 @@ def _run_backward_with_capture(
             )
         )
         trace.__dict__.pop("_active_backward_pass_index", None)
+        _clear_pending_accumulate_grad_records(trace)
         if previous_had_save_grads_policy:
             trace._active_save_grads_policy = previous_save_grads_policy
         else:

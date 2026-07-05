@@ -681,6 +681,16 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         return label(str(target.selector_value))
     if target.selector_kind == "not":
         return ~_normalize_live_selector(target.selector_value)
+    if target.selector_kind in {"and", "or"}:
+        if not isinstance(target.selector_value, Sequence) or len(target.selector_value) != 2:
+            raise SiteResolutionError(
+                f"{target.selector_kind!r} target specs require two nested selectors."
+            )
+        left, right = target.selector_value
+        return CompositeSelector(
+            cast("Literal['and', 'or']", target.selector_kind),
+            (_normalize_live_selector(left), _normalize_live_selector(right)),
+        )
     raise SiteResolutionError(f"Unsupported live hook selector kind {target.selector_kind!r}.")
 
 

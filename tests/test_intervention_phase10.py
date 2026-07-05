@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -15,8 +17,9 @@ from torchlens.intervention.errors import (
     ReplayPreconditionError,
 )
 from torchlens.intervention.save import _write_tlspec_tensor_blob
+from torchlens.intervention.save import _sync_spec_records_from_log
 from torchlens.intervention.save import resolve_function_registry_key, save_intervention
-from torchlens.intervention.types import FireRecord, FunctionRegistryKey
+from torchlens.intervention.types import FireRecord, FunctionRegistryKey, InterventionSpec
 
 
 class _ReluModel(nn.Module):
@@ -140,6 +143,98 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
     assert backward_records
     assert backward_records[0].backward_pass_index == 1
     assert backward_records[0].call_index == 1
+
+
+def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> None:
+    """New intervention specs write v2 while the loader still accepts v1 specs."""
+
+    log = tl.trace(
+        _ReluModel(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+        hooks={tl.func("relu"): tl.zero_ablate()},
+    )
+    path = tmp_path / "versioned_records.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec_path = path / "spec.json"
+    manifest_path = path / "manifest.json"
+    spec_json = json.loads(spec_path.read_text(encoding="utf-8"))
+    manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert spec_json["format_version"] == "2"
+    assert manifest_json["format_version"] == "2"
+
+    spec_json["format_version"] = "1"
+    manifest_json["format_version"] = "1"
+    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest_json), encoding="utf-8")
+
+    loaded = tl.load_intervention_spec(path)
+    assert loaded.metadata["format_version"] == "1"
+
+    spec_json["format_version"] = "3"
+    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
+    with pytest.raises(ValueError, match="Unsupported intervention .tlspec format_version"):
+        tl.load_intervention_spec(path)
+
+
+def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
+    """Save-time ledger merge ignores timestamp for duplicate fire records."""
+
+    first = FireRecord(
+        target_label="relu_back_1_1",
+        call_label="relu_back_1_1:1",
+        engine="live",
+        helper=tl.grad_clamp(0, 0),
+        site_label="relu_back_1_1",
+        timing="post",
+        direction="backward",
+        helper_name="grad_clamp",
+        timestamp=1.0,
+        backward_pass_index=1,
+        call_index=1,
+        grad_kind="grad_input",
+        tuple_index=0,
+        replaced=True,
+    )
+    duplicate = FireRecord(
+        target_label="relu_back_1_1",
+        call_label="relu_back_1_1:1",
+        engine="live",
+        helper=tl.grad_clamp(0, 0),
+        site_label="relu_back_1_1",
+        timing="post",
+        direction="backward",
+        helper_name="grad_clamp",
+        timestamp=2.0,
+        backward_pass_index=1,
+        call_index=1,
+        grad_kind="grad_input",
+        tuple_index=0,
+        replaced=True,
+    )
+    distinct_tuple = FireRecord(
+        target_label="relu_back_1_1",
+        call_label="relu_back_1_1:1",
+        engine="live",
+        helper=tl.grad_clamp(0, 0),
+        site_label="relu_back_1_1",
+        timing="post",
+        direction="backward",
+        helper_name="grad_clamp",
+        timestamp=1.0,
+        backward_pass_index=1,
+        call_index=1,
+        grad_kind="grad_input",
+        tuple_index=1,
+        replaced=True,
+    )
+    spec = InterventionSpec(records=[first, duplicate, distinct_tuple])
+
+    _sync_spec_records_from_log(spec, SimpleNamespace(layer_list=[], grad_fn_logs={}))
+
+    assert spec.records == [first, distinct_tuple]
 
 
 @pytest.mark.smoke

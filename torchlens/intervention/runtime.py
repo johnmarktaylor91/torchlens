@@ -401,17 +401,17 @@ def _apply_live_backward_hooks(
         if result is not None:
             current = _validate_grad_tuple(result, current, grad_fn_handle=grad_fn_handle)
             mutated = True
-            fire_records.append(
-                _build_live_backward_fire_record(
-                    normalized_entry,
-                    grad_fn_handle=grad_fn_handle,
-                    call_index=call_index,
-                    grad_kind="grad_input",
-                    timing="post",
-                    previous=previous,
-                    current=current,
-                )
+        fire_records.append(
+            _build_live_backward_fire_record(
+                normalized_entry,
+                grad_fn_handle=grad_fn_handle,
+                call_index=call_index,
+                grad_kind="grad_input",
+                timing="post",
+                previous=previous,
+                current=current,
             )
+        )
     _append_active_spec_records(fire_records)
     return (current if mutated else None), tuple(fire_records)
 
@@ -471,17 +471,17 @@ def _apply_live_backward_prehooks(
         if result is not None:
             current = _validate_grad_tuple(result, current, grad_fn_handle=grad_fn_handle)
             mutated = True
-            fire_records.append(
-                _build_live_backward_fire_record(
-                    normalized_entry,
-                    grad_fn_handle=grad_fn_handle,
-                    call_index=call_index,
-                    grad_kind="grad_input",
-                    timing="pre",
-                    previous=previous,
-                    current=current,
-                )
+        fire_records.append(
+            _build_live_backward_fire_record(
+                normalized_entry,
+                grad_fn_handle=grad_fn_handle,
+                call_index=call_index,
+                grad_kind="grad_input",
+                timing="pre",
+                previous=previous,
+                current=current,
             )
+        )
     _append_active_spec_records(fire_records)
     return (current if mutated else None), tuple(fire_records)
 

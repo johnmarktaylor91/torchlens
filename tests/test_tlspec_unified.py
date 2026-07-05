@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends import BackendPayloadUnsupportedError
-from torchlens.intervention.types import FireRecord, InterventionSpec
+from torchlens.intervention.types import FireRecord, HelperSpec, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
 
@@ -342,6 +342,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     assert refs
     assert isinstance(refs[0], FireRecord)
     assert refs[0].direction == "backward"
+    assert isinstance(refs[0].helper, HelperSpec)
 
 
 @pytest.mark.smoke
@@ -425,7 +426,7 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     assert isinstance(loaded, InterventionSpec)
     assert manifest["kind"] == "intervention"
     assert manifest["tlspec_version"] == 1
-    assert manifest["format_version"] == "1"
+    assert manifest["format_version"] == "2"
     assert manifest["save_level"] == level
     assert loaded.metadata["save_level"] == level
 

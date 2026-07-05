@@ -115,6 +115,18 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 class HelperSpec:
     """Portable identity and hook factory for helper-built interventions."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "helper_name": FieldPolicy.KEEP,
+        "args": FieldPolicy.KEEP,
+        "kwargs": FieldPolicy.KEEP,
+        "kind": FieldPolicy.KEEP,
+        "portability": FieldPolicy.KEEP,
+        "factory": FieldPolicy.DROP,
+        "metadata": FieldPolicy.KEEP,
+        "batch_independent": FieldPolicy.KEEP,
+        "compatible_with_append": FieldPolicy.KEEP,
+    }
+
     helper_name: str
     args: tuple[Any, ...] = ()
     kwargs: tuple[tuple[str, Any], ...] = ()
@@ -252,7 +264,7 @@ class FireRecord:
         "func_call_id": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "engine": FieldPolicy.KEEP,
-        "helper": FieldPolicy.STRINGIFY,
+        "helper": FieldPolicy.KEEP,
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
         "direction": FieldPolicy.KEEP,

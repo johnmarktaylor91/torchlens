@@ -46,7 +46,8 @@ from .types import (
     TensorSliceSpec,
 )
 
-TLSPEC_FORMAT_VERSION = "1"
+TLSPEC_FORMAT_VERSION = "2"
+SUPPORTED_TLSPEC_FORMAT_VERSIONS = {"1", TLSPEC_FORMAT_VERSION}
 _SPEC_FILE = "spec.json"
 _MANIFEST_FILE = "manifest.json"
 _README_FILE = "README.md"
@@ -193,6 +194,7 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
     spec_path = Path(path)
     _reject_symlink_path(spec_path, context="intervention spec path")
     data = _read_json_file(spec_path / _SPEC_FILE)
+    _validate_format_version(data.get("format_version"))
     manifest = _read_json_file(spec_path / _MANIFEST_FILE)
     tensor_entries = [TensorEntry.from_dict(entry) for entry in manifest.get("tensor_entries", [])]
     tensors = _load_tensor_refs(spec_path, tensor_entries)
@@ -214,6 +216,28 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
     spec.metadata = metadata
     _verify_loaded_function_keys(data.get("function_registry_keys", []))
     return spec
+
+
+def _validate_format_version(format_version: Any) -> None:
+    """Validate an intervention spec format version.
+
+    Parameters
+    ----------
+    format_version:
+        Format version value read from ``spec.json``.
+
+    Returns
+    -------
+    None
+        Raises when the format is unsupported.
+    """
+
+    if str(format_version) not in SUPPORTED_TLSPEC_FORMAT_VERSIONS:
+        supported = ", ".join(sorted(SUPPORTED_TLSPEC_FORMAT_VERSIONS))
+        raise ValueError(
+            f"Unsupported intervention .tlspec format_version={format_version!r}; "
+            f"expected one of {supported}."
+        )
 
 
 def _append_state_for_json(log: Any) -> dict[str, Any]:
@@ -513,8 +537,8 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
     Returns
     -------
     tuple[Any, ...]
-        Key covering direction, site, helper, timing, callback index, and
-        timestamp.
+        Key covering direction, site, pass/call position, tuple slot, and
+        helper identity.
     """
 
     return (
@@ -522,13 +546,40 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
         record.engine,
         record.target_label,
         record.call_label,
+        record.site_label,
         record.helper_name,
+        _helper_identity(record.helper),
         record.timing,
         record.backward_pass_index,
         record.call_index,
         record.grad_kind,
         record.tuple_index,
-        record.timestamp,
+    )
+
+
+def _helper_identity(helper: HelperSpec | None) -> tuple[Any, ...] | None:
+    """Return a stable structural identity for a helper spec.
+
+    Parameters
+    ----------
+    helper:
+        Helper spec from a fire record.
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        Hashable helper identity, or ``None`` when no helper is attached.
+    """
+
+    if helper is None:
+        return None
+    return (
+        helper.name,
+        helper.kind,
+        helper.portability,
+        tuple(repr(arg) for arg in helper.args),
+        tuple((key, repr(value)) for key, value in helper.kwargs),
+        tuple(helper.metadata),
     )
 
 

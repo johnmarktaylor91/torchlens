@@ -768,15 +768,13 @@ def _grad_fn_has_backward_pass(site: "GradFn", pass_index: int) -> bool:
     Returns
     -------
     bool
-        Whether the grad_fn has a call or origin in the requested pass.
+        Whether the grad_fn has a call in the requested pass.
     """
 
-    if any(
+    return any(
         getattr(call, "backward_pass_index", None) == pass_index
         for call in _grad_fn_call_values(site)
-    ):
-        return True
-    return getattr(site, "origin_backward_pass", None) == pass_index
+    )
 
 
 def _grad_fn_call_values(site: "GradFn") -> tuple[Any, ...]:
@@ -997,7 +995,10 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         func,
         func_transform,
         grad_fn,
+        grad_input,
+        grad_output,
         head,
+        in_backward_pass,
         intervening,
         label,
         module,
@@ -1051,6 +1052,20 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
     if kind == "not":
         nested = _normalize_query(value)
         return ~nested
+    if kind in {"and", "or"}:
+        if not isinstance(value, Sequence) or len(value) != 2:
+            raise SiteResolutionError(f"{kind!r} target specs require two nested selectors.")
+        left, right = value
+        return CompositeSelector(
+            cast("Literal['and', 'or']", kind),
+            (_normalize_query(left), _normalize_query(right)),
+        )
+    if kind == "grad_kind":
+        return grad_input() if value == "grad_input" else grad_output()
+    if kind == "backward_pass":
+        if not isinstance(value, int):
+            raise SiteResolutionError("backward_pass target specs require an integer pass index.")
+        return in_backward_pass(value)
     raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
 
 

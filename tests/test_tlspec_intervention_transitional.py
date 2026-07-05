@@ -115,7 +115,7 @@ def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     manifest = _read_json(path / "manifest.json")
     assert manifest["tlspec_version"] == 1
     assert manifest["kind"] == "intervention"
-    assert manifest["format_version"] == "1"
+    assert manifest["format_version"] == "2"
     assert manifest["tensor_entries"] == []
     assert tl.io.detect_tlspec_format(path) == "v2.0_unified"
 
