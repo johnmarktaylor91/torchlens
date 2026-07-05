@@ -217,6 +217,7 @@ MODEL_LOG_FIELD_ORDER = [
     "total_param_memory",
     "total_param_gradient_memory",
     "forward_peak_memory",
+    "forward_memory_backend",
     # Time elapsed
     "capture_start_time",
     "capture_end_time",

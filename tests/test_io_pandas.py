@@ -329,7 +329,7 @@ def test_trace_to_pandas_covers_all_op_fields() -> None:
     """
 
     from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
-    from torchlens.data_classes.trace import _TO_PANDAS_EXCLUDED_OP_FIELDS
+    from torchlens.data_classes._trace_export import _TO_PANDAS_EXCLUDED_OP_FIELDS
 
     log = trace_fn(_CondConvModel(), torch.rand(1, 1, 8, 8), layers_to_save="all")
     try:

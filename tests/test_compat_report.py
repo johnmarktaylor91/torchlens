@@ -15,6 +15,28 @@ from torchlens.utils.rng import log_current_rng_states, set_rng_from_saved_state
 from torchlens.utils.tensor_utils import tensor_nanequal
 
 
+EXPECTED_COMPAT_ROW_KEYS = {
+    "accelerate_cpu_disk_offload",
+    "accelerate_device_map_auto",
+    "bitsandbytes_8bit_4bit",
+    "data_parallel",
+    "deepspeed",
+    "device_context_factory",
+    "distributed_data_parallel",
+    "fsdp",
+    "fx_graph_module",
+    "hf_transformers",
+    "lightning_training_step",
+    "multi_gpu_rng",
+    "quantized_tensor",
+    "single_thread_design",
+    "tied_parameters",
+    "torch_capabilities",
+    "torch_compile",
+    "vmap_functorch",
+}
+
+
 class SmallCnn(nn.Module):
     """Tiny convolutional reference model."""
 
@@ -227,7 +249,7 @@ def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -
 
     assert len(reports) == 5
     assert all(isinstance(item, CompatReport) for item in reports)
-    assert all(len(item.rows) == 17 for item in reports)
+    assert all({row.key for row in item.rows} == EXPECTED_COMPAT_ROW_KEYS for item in reports)
     assert reports[1].row("hf_transformers").detected is True
     assert reports[2].row("quantized_tensor").status == "known_broken"
     assert reports[3].row("multi_gpu_rng").detected is True

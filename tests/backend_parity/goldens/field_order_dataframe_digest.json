@@ -327,6 +327,7 @@
       "total_param_memory",
       "total_param_gradient_memory",
       "forward_peak_memory",
+      "forward_memory_backend",
       "capture_start_time",
       "capture_end_time",
       "setup_duration",
@@ -981,6 +982,7 @@
       "facet_registry_snapshot",
       "forward_docstring",
       "forward_duration",
+      "forward_memory_backend",
       "forward_peak_memory",
       "forward_signature",
       "forward_source_file",
@@ -1097,13 +1099,13 @@
     ]
   },
   "sha256_chunks": [
-    "2046f26d",
-    "f69c7950",
-    "b59f92e8",
-    "248bfdcb",
-    "1a86b7ad",
-    "8c172f8a",
-    "e3ead6a1",
-    "0d23c639"
+    "9cf7f86e",
+    "d9525107",
+    "67a48ebe",
+    "31964ce1",
+    "5c0a270e",
+    "1e6d348b",
+    "36e17908",
+    "ba08f98e"
   ]
 }
