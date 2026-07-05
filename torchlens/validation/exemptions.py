@@ -25,10 +25,9 @@ genuinely doesn't change the output for valid reasons (bool output, type
 casting, special-value args like all-zeros making perturbation irrelevant).
 """
 
-# TODO: Audit PyTorch ops more exhaustively for additional exemptions.
-# Current registries cover all cases encountered in the test suite as of 2026-03.
-# When adding new model tests, if perturbation fails for a new function,
-# add the exemption here (not in core.py).
+# Exemptions are tripwire-sensitive. Add a new exemption only when the predicate
+# is proved from runtime evidence and a negative test shows it cannot mask the
+# unintended value-sensitive case.
 
 from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING, Union
 
@@ -257,30 +256,38 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
 
     # Case 1: saved_args[1] is a bool tensor and perturbed layer matches it (mask arg)
     if (
-        isinstance(args[1], torch.Tensor)
+        _perturbed_parent_is_arg_position(layer, layers_to_perturb, 1)
+        and len(args) > 1
+        and isinstance(args[1], torch.Tensor)
         and args[1].dtype == torch.bool
-        and torch.equal(perturbed_tensor, args[1])
     ):
         return True
 
     # Case 2: saved_args[1] is a tuple whose first element is a bool tensor
     if (
-        type(args[1]) == tuple
+        _perturbed_parent_is_arg_position(layer, layers_to_perturb, 1)
+        and len(args) > 1
+        and type(args[1]) == tuple
         and isinstance(args[1][0], torch.Tensor)
         and args[1][0].dtype == torch.bool
-        and torch.equal(perturbed_tensor, args[1][0])
     ):
         return True
 
     # Case 3: perturbed layer is the destination (args[0]) and it's all-zeros/all-ones.
     # __setitem__ overwrites the destination, so perturbing a "blank slate" destination
     # (e.g. new_zeros used in BART position embeddings) has no effect.
-    if torch.equal(perturbed_tensor, args[0]) and _check_if_arg_is_special_val(args[0]):
+    if (
+        _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
+        and torch.equal(perturbed_tensor, args[0])
+        and _check_if_arg_is_special_val(args[0])
+    ):
         return True
 
     # Case 4: perturbed layer is the destination, but the indexed destination
     # slice is fully overwritten by the replacement value.
-    if _setitem_destination_slice_is_fully_overwritten(perturbed_tensor, args):
+    if _perturbed_parent_is_arg_position(
+        layer, layers_to_perturb, 0
+    ) and _setitem_destination_slice_is_fully_overwritten(perturbed_tensor, args):
         return True
 
     return False
@@ -861,26 +868,68 @@ def perturbed_layer_at_structural_position(
     layers_to_perturb: List[str],
     exempt_positions: Set[int],
 ) -> bool:
-    """Check if the perturbed layer's tensor occupies a structural arg position.
+    """Check if the perturbed layer occupies a structural arg position.
 
-    Compares the perturbed layer's out to saved_args at each
-    exempt position using ``torch.equal``.  If there is a match, the perturbed
-    layer controls structure (e.g., indices, masks) rather than values, so
-    perturbation is meaningless.
-
-    Note: uses ``torch.equal`` (exact elementwise match) which could
-    theoretically false-positive if two different parents have identical
-    tensor values, but this is exceedingly rare in practice.
+    The decision is based on ``parent_arg_positions`` identity, not tensor value
+    equality. Identical tensor values from another parent must not be enough to
+    classify the perturbed parent as structural.
     """
-    perturbed_tensor = self[layers_to_perturb[0]].out
+    del self
+    if len(layers_to_perturb) != 1:
+        return False
+    perturbed_label = layers_to_perturb[0]
+    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
     for pos in exempt_positions:
-        if pos >= len(layer.saved_args):
-            continue
-        arg_val = layer.saved_args[pos]
-        if not isinstance(arg_val, torch.Tensor):
-            continue
-        if torch.equal(perturbed_tensor, arg_val):
+        if parent_arg_positions.get("args", {}).get(pos) == perturbed_label:
             return True
+    return False
+
+
+def _binary_extrema_nonperturbed_arg_dominates(
+    func_name: str,
+    args: tuple[Any, ...],
+    layer: Op,
+    layers_to_perturb: List[str],
+) -> bool:
+    """Return whether a binary extrema output ignores the perturbed operand.
+
+    Parameters
+    ----------
+    func_name:
+        Captured extrema function name.
+    args:
+        Saved positional arguments.
+    layer:
+        Captured op being checked.
+    layers_to_perturb:
+        Parent labels currently being perturbed.
+
+    Returns
+    -------
+    bool
+        True when the non-perturbed tensor dominates the perturbed tensor at
+        every output element, proving the perturbed operand cannot affect the
+        selected extrema values.
+    """
+
+    if len(layers_to_perturb) != 1 or len(args) < 2:
+        return False
+    if not isinstance(args[0], torch.Tensor) or not isinstance(args[1], torch.Tensor):
+        return False
+    perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
+    if perturbed_positions == {0}:
+        perturbed, other = args[0], args[1]
+    elif perturbed_positions == {1}:
+        perturbed, other = args[1], args[0]
+    else:
+        return False
+    try:
+        if func_name in ("max", "maximum"):
+            return bool(torch.all(other >= perturbed).item())
+        if func_name in ("min", "minimum"):
+            return bool(torch.all(other <= perturbed).item())
+    except RuntimeError:
+        return False
     return False
 
 
@@ -954,13 +1003,21 @@ def posthoc_perturb_check(
     # __setitem__ same-shape replacement — full overwrite
     if (
         func_name == "__setitem__"
+        and _perturbed_parent_is_arg_position(layer_to_validate_parents_for, layers_to_perturb, 0)
+        and len(args) > 2
+        and isinstance(args[0], torch.Tensor)
         and isinstance(args[2], torch.Tensor)
         and args[0].shape == args[2].shape
     ):
         return True
 
     # __setitem__ non-tensor value — scalar set
-    if func_name == "__setitem__" and not isinstance(args[2], torch.Tensor):
+    if (
+        func_name == "__setitem__"
+        and _perturbed_parent_is_arg_position(layer_to_validate_parents_for, layers_to_perturb, 0)
+        and len(args) > 2
+        and not isinstance(args[2], torch.Tensor)
+    ):
         return True
 
     # __setitem__ into an UNINITIALIZED-MEMORY destination — perturbing
@@ -1029,10 +1086,13 @@ def posthoc_perturb_check(
 
     output_tensor = layer_to_validate_parents_for.out
 
-    # max/min/maximum/minimum with multiple args — binary max/min is insensitive
-    # to perturbation when one arg dominates (e.g., extreme negative vs normal value).
+    # max/min/maximum/minimum with multiple args — binary extrema are insensitive
+    # only when the non-perturbed operand provably dominates elementwise.
     if func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
-        return True
+        if _binary_extrema_nonperturbed_arg_dominates(
+            func_name, args, layer_to_validate_parents_for, layers_to_perturb
+        ):
+            return True
 
     # remainder/fmod divisor is locally irrelevant when the dividend is already
     # the result (e.g., 0 <= dividend < divisor elementwise).
@@ -1110,25 +1170,6 @@ def posthoc_perturb_check(
                     f"(all-zeros or all-ones), so validation still succeeds..."
                 )
             return True
-
-    # Float32 precision exemption: when a non-perturbed parent's magnitude dwarfs
-    # the perturbed parent's, the perturbation is swallowed by float32 arithmetic.
-    # E.g., add(~51, ~659344): perturbing ~51 by ±5 doesn't change the sum at
-    # float32 precision because 659344+51 and 659344+56 round to the same value.
-    for parent_label in layer_to_validate_parents_for.parents:
-        if parent_label in layers_to_perturb:
-            continue
-        parent_tensor = self[parent_label].out
-        if parent_tensor is None:
-            continue
-        other_mag = parent_tensor.float().abs().max().item()
-        for perturbed_label in layers_to_perturb:
-            perturbed_tensor = self[perturbed_label].out
-            if perturbed_tensor is None:
-                continue
-            perturbed_mag = perturbed_tensor.float().abs().max().item()
-            if perturbed_mag > 0 and other_mag / perturbed_mag > 100:
-                return True
 
     print(
         f"Activations for layer {layer_label} do not change when "
