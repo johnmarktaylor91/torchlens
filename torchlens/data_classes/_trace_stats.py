@@ -560,8 +560,7 @@ class TraceStatsMixin:
         Parameters
         ----------
         weights:
-            Optional mapping or ``CollapseWeights`` overriding default score
-            weights.
+            Ignored legacy mapping retained for call compatibility.
         mode:
             ``"auto"`` or ``"max"`` landmark policy.
 

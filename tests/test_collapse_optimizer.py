@@ -445,22 +445,14 @@ def test_role_components_split_heterogeneous_same_class_sequentials() -> None:
         trace.cleanup()
 
 
-def test_engine_default_routes_v2_env_override_and_rolled_auto(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The default auto engine is v2, env override works, and rolled uses v2."""
+def test_default_routes_v2_and_rolled_auto() -> None:
+    """The default auto/max and rolled collapse paths use v2."""
 
     trace = _trace(UniformStack(depth=4), torch.randn(2, 8))
     try:
-        monkeypatch.delenv("TORCHLENS_COLLAPSE_ENGINE", raising=False)
         v2_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
         assert hasattr(v2_fn, "_torchlens_v2_result")
 
-        monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v1")
-        v1_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
-        assert not hasattr(v1_fn, "_torchlens_v2_result")
-
-        monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
         rolled_context = RenderContext(vis_mode="rolled")
         rolled_fn = resolve_collapse_fn(trace, "auto", "rolled", context=rolled_context)
         assert hasattr(rolled_fn, "_torchlens_v2_result")
@@ -561,7 +553,6 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
 ) -> None:
     """Rolled v2 keeps recurrence counts in labels for digest-identical siblings."""
 
-    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
     trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
     try:
         context = RenderContext(vis_mode="rolled")
@@ -580,7 +571,6 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
 def test_rolled_v2_gru_auto_is_non_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rolled v2 auto produces a non-empty recurrent cut."""
 
-    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
     trace = _trace(GRUWrapper(), torch.randn(1, 6, 8))
     try:
         context = RenderContext(vis_mode="rolled")
@@ -702,7 +692,6 @@ def test_landmark_signals_ignore_interior_junctions_but_keep_boundary_merges() -
 def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None:
     """The v2 selected plan is deterministic and matches renderer planning."""
 
-    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
     trace = _trace(UniformStack(depth=12), torch.randn(2, 8))
     try:
         context = RenderContext()
@@ -722,7 +711,6 @@ def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None
 def test_trace_collapse_plan_public_diagnostic(monkeypatch: pytest.MonkeyPatch) -> None:
     """Trace.collapse_plan returns the v2 plan without adding top-level API names."""
 
-    monkeypatch.setenv("TORCHLENS_COLLAPSE_ENGINE", "v2")
     trace = _trace(UniformStack(depth=12), torch.randn(2, 8))
     try:
         plan = trace.collapse_plan(mode="auto")

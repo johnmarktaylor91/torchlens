@@ -24,47 +24,10 @@ if TYPE_CHECKING:
 
 
 GENERIC_CONTAINER_CLASSES = frozenset({"Sequential", "ModuleList", "ModuleDict", "ParameterList"})
-# v1-only crutch, dies with R4/R3c.
-STRUCTURED_CONTAINER_NAMES = frozenset(
-    {
-        "backbone",
-        "body",
-        "encoder",
-        "features",
-        "layers",
-        "module",
-        "stages",
-        "trunk",
-    }
-)
 _COUNT_MISMATCH_WARNING_EMITTED = False
 JUNCTION_FUNC_NAMES = frozenset({"__add__", "add", "cat", "concat", "concatenate"})
-# v1-only crutch, dies with R4/R3c.
-LEAF_BLOCK_MAX_OPS = 12
-# v1-only crutch, dies with R4/R3c.
-LEAF_BLOCK_WRAPPER_CLASSES = frozenset(
-    {"BasicConv2d", "Conv2dNormActivation", "ConvNormActivation"}
-)
-LEAF_BLOCK_CHILD_CLASS_PARTS = (
-    "Activation",
-    "BatchNorm",
-    "Conv",
-    "Dropout",
-    "GELU",
-    "Identity",
-    "LayerNorm",
-    "Pool",
-    "ReLU",
-    "SiLU",
-)
 _INDEXED_CHILD_RE = re.compile(r"^(?P<stem>.*?)(?:\.?\d+|_?\d+[a-z]?)$")
-# v1-only crutch, dies with R4/R3c.
-_STAGE_NAME_RE = re.compile(
-    r"^(?:denseblock\d*|transition\d*|layer\d+|stage\d*|mixed_[0-9a-z]+|mixed_\d+)$",
-    re.IGNORECASE,
-)
 RUN_FOLD_MIN_LENGTH = 3
-COLLAPSE_ENGINE = "v2"
 
 
 @dataclass(frozen=True)
@@ -108,43 +71,6 @@ class ModuleRunFold:
         """Return the number of folded sibling modules."""
 
         return len(self.addresses)
-
-
-@dataclass(frozen=True)
-class CollapseWeights:
-    """Weights for module collapse scoring.
-
-    Parameters
-    ----------
-    size:
-        Weight for hidden rendered operation count.
-    tangle:
-        Weight for internal-edge density.
-    repeat:
-        Weight for structural peer repetition.
-    named:
-        Weight for non-container class names.
-    landmark:
-        Penalty weight for fan-in/fan-out landmarks.
-    trunk:
-        Penalty weight for collapsing too much of the input-output trunk.
-    mass:
-        Optional parameter-mass weight.
-    grain:
-        Cut-level grain variance penalty weight.
-    peer:
-        Cut-level partial peer-group penalty weight.
-    """
-
-    size: float = 1.0
-    tangle: float = 0.6
-    repeat: float = 0.5
-    named: float = 0.15
-    landmark: float = 1.2
-    trunk: float = 1.0
-    mass: float = 0.0
-    grain: float = 0.4
-    peer: float = 0.8
 
 
 @dataclass(frozen=True)
@@ -329,10 +255,7 @@ def analyze_collapse(trace: "Trace") -> CollapseAnalysis:
         )
         for address, signal in signals_without_peers.items()
     }
-    scores = {
-        address: round(_score_module(trace, signal, CollapseWeights(), mode="auto"), 6)
-        for address, signal in signals.items()
-    }
+    scores = _signal_size_scores(signals)
     analysis = CollapseAnalysis(
         signals=signals,
         scores=scores,
@@ -363,18 +286,17 @@ def _child_condensed_flow_graphs(trace: "Trace") -> Mapping[str, ChildCondensedF
 
 def collapse_order(
     trace: "Trace",
-    weights: CollapseWeights | Mapping[str, float] | None = None,
+    weights: Mapping[str, float] | None = None,
     mode: Literal["auto", "max"] = "auto",
 ) -> list[tuple[str, float]]:
-    """Return collapse candidates sorted by score for a policy.
+    """Return v2 collapse diagnostics sorted by score for a policy.
 
     Parameters
     ----------
     trace:
         Trace to rank.
     weights:
-        Optional scoring weights. A mapping overrides matching
-        :class:`CollapseWeights` fields.
+        Ignored legacy parameter retained for call compatibility.
     mode:
         ``"auto"`` or ``"max"`` landmark policy.
 
@@ -384,13 +306,53 @@ def collapse_order(
         ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
     """
 
-    resolved_weights = _resolve_weights(weights)
+    _ = weights
+    if mode not in {"auto", "max"}:
+        raise ValueError("mode must be 'auto' or 'max'.")
     analysis = analyze_collapse(trace)
-    scores = {
-        address: round(_score_module(trace, signal, resolved_weights, mode=mode), 6)
-        for address, signal in analysis.signals.items()
-    }
+    scores = _v2_selected_module_scores(trace, analysis, mode=mode)
     return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+
+
+def _signal_size_scores(signals: Mapping[str, ModuleCollapseSignals]) -> dict[str, float]:
+    """Return non-selector signal-size diagnostics for cached analysis."""
+
+    max_hidden = max((signal.hidden_ops for signal in signals.values()), default=0)
+    if max_hidden <= 0:
+        return {address: 0.0 for address in signals}
+    return {
+        address: round(signal.hidden_ops / max_hidden, 6) if signal.eligible else 0.0
+        for address, signal in signals.items()
+    }
+
+
+def _v2_selected_module_scores(
+    trace: "Trace",
+    analysis: CollapseAnalysis,
+    *,
+    mode: Literal["auto", "max"],
+) -> dict[str, float]:
+    """Return same-shape scores derived from the v2 selected module set."""
+
+    from .collapse_optimizer import select_collapse_plan
+
+    result = select_collapse_plan(trace, RenderContext(), mode=mode)
+    selected = result.selected if not result.declined else frozenset()
+    hidden_max = max(
+        (
+            analysis.signals[address].hidden_ops
+            for address in selected
+            if address in analysis.signals
+        ),
+        default=0,
+    )
+    scores = {address: 0.0 for address in analysis.signals}
+    for address in selected:
+        signal = analysis.signals.get(address)
+        if signal is None or hidden_max <= 0:
+            continue
+        scores[address] = round(max(signal.hidden_ops / hidden_max, 1e-6), 6)
+    return scores
 
 
 def resolve_collapse_fn(
@@ -444,7 +406,7 @@ def resolve_collapse_fn(
         return None
     if collapse not in {"auto", "max"}:
         raise ValueError("collapse must be 'none', 'auto', 'max', or a float in [0.0, 1.0].")
-    if collapse in {"auto", "max"} and _collapse_engine() == "v2":
+    if collapse in {"auto", "max"}:
         from .collapse_optimizer import select_collapse_plan
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
@@ -461,19 +423,7 @@ def resolve_collapse_fn(
             setattr(v2_collapse_fn, "_torchlens_v2_result", result)
             setattr(v2_collapse_fn, "_torchlens_v2_mode", collapse)
             return v2_collapse_fn
-    selected = _select_modules(
-        trace,
-        collapse=collapse,
-        vis_mode=resolved_context.vis_mode,
-        context=resolved_context,
-    )
-
-    def collapse_fn(module: "Module") -> bool:
-        """Return whether ``module`` is selected for smart collapse."""
-
-        return module.address in selected
-
-    return collapse_fn
+    return None
 
 
 def resolve_run_folds(
@@ -618,21 +568,6 @@ def _always_collapse_module(module: "Module") -> bool:
 
     _ = module
     return True
-
-
-def _collapse_engine() -> Literal["v1", "v2"]:
-    """Return the active auto-collapse engine switch.
-
-    Returns
-    -------
-    Literal["v1", "v2"]
-        Active collapse engine, defaulting to ``"v2"`` unless overridden.
-    """
-
-    engine = os.environ.get("TORCHLENS_COLLAPSE_ENGINE", COLLAPSE_ENGINE).lower()
-    if engine not in {"v1", "v2"}:
-        raise ValueError("TORCHLENS_COLLAPSE_ENGINE must be 'v1' or 'v2'.")
-    return cast(Literal["v1", "v2"], engine)
 
 
 def _sibling_address_groups(trace: "Trace") -> dict[str | None, list[str]]:
@@ -822,11 +757,7 @@ def module_collapse_score(module: "Module") -> float:
     trace = module.trace
     if trace is None:
         return 0.0
-    analysis = analyze_collapse(trace)
-    signal = analysis.signals.get(module.address)
-    if signal is None or not signal.eligible:
-        return 0.0
-    return analysis.scores.get(module.address, 0.0)
+    return dict(collapse_order(trace)).get(module.address, 0.0)
 
 
 def _compute_dimless_structural_digests(trace: "Trace") -> dict[str, str]:
@@ -1597,21 +1528,6 @@ def _module_output_shape(trace: "Trace", address: str) -> str | None:
     if shape is None:
         return None
     return str(tuple(shape))
-
-
-def _resolve_weights(weights: CollapseWeights | Mapping[str, float] | None) -> CollapseWeights:
-    """Return a complete weight object from optional overrides."""
-
-    if weights is None:
-        return CollapseWeights()
-    if isinstance(weights, CollapseWeights):
-        return weights
-    values = CollapseWeights().__dict__.copy()
-    for key, value in weights.items():
-        if key not in values:
-            raise ValueError(f"Unknown collapse weight: {key}")
-        values[key] = float(value)
-    return CollapseWeights(**values)
 
 
 def _compute_signal_skeleton(trace: "Trace") -> dict[str, ModuleCollapseSignals]:
@@ -2460,287 +2376,6 @@ def _peer_scope_key(trace: "Trace", module: "Module") -> str | None:
     return f"{grandparent}:{parent_class}"
 
 
-def _score_module(
-    trace: "Trace",
-    signal: ModuleCollapseSignals,
-    weights: CollapseWeights,
-    mode: Literal["auto", "max"],
-) -> float:
-    """Return unrounded collapse benefit for one module."""
-
-    if not signal.eligible:
-        return 0.0
-    if mode == "auto" and _is_structured_container(trace, signal):
-        return 0.0
-    n = signal.hidden_ops
-    size = _clip((math.log2(1 + n) - math.log2(1 + 3)) / (math.log2(1 + 64) - math.log2(1 + 3)))
-    edge_total = signal.internal_edges + signal.input_edges + signal.output_edges
-    tangle = (
-        min(signal.internal_edges / edge_total, 1.0)
-        if signal.internal_edges >= 1 and edge_total > 0
-        else 0.0
-    )
-    repeat = 0.0 if mode == "max" else min((max(signal.peer_count, 1) - 1) / 5.0, 1.0)
-    module = cast("Module", trace.modules[signal.address])
-    named = 0.0 if mode == "max" or module.class_name in GENERIC_CONTAINER_CLASSES else 1.0
-    fan_threshold = 2 if mode == "auto" else 3
-    landmark = min(max(0, signal.landmark_edges - (fan_threshold - 1)) / 2.0, 1.0)
-    passthrough = 1.0 if mode == "auto" and signal.passthrough_edges > 0 else 0.0
-    if mode == "auto" and _is_named_stage(signal.address):
-        landmark = 0.0
-        passthrough = 0.0
-    trunk = 1.0 if _is_trunk_collapse(trace, signal) else 0.0
-    mass = _clip(math.log10(1 + max(signal.params, 0)) / 6.0)
-    depth_weight = 0.08 if mode == "auto" else 0.04
-    depth_bonus = depth_weight * min(signal.depth, 8)
-    stage_bonus = 0.6 if mode == "auto" and _is_named_stage(signal.address) else 0.0
-    return (
-        weights.size * size
-        + weights.tangle * tangle
-        + weights.repeat * repeat
-        + weights.named * named
-        + weights.mass * mass
-        + depth_bonus
-        + stage_bonus
-        - weights.landmark * landmark
-        - weights.landmark * passthrough
-        - weights.trunk * trunk
-    )
-
-
-def _is_named_stage(address: str) -> bool:
-    """Return whether ``address`` names a human-meaningful architecture stage."""
-
-    name = address.rsplit(".", 1)[-1]
-    return _STAGE_NAME_RE.match(name) is not None
-
-
-def _is_structured_container(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
-    """Return whether ``signal`` should be transparent in ``collapse='auto'``."""
-
-    try:
-        module = cast("Module", trace.modules[signal.address])
-    except KeyError:
-        return False
-    container_name = signal.address.rsplit(".", 1)[-1].lower()
-    if container_name not in STRUCTURED_CONTAINER_NAMES:
-        return False
-    if _is_flat_feature_leaf_container(trace, module):
-        return False
-    child_addresses = [
-        str(child_address)
-        for child_address in getattr(module, "address_children", ()) or ()
-        if child_address in trace.modules
-    ]
-    meaningful_children = [
-        child_address
-        for child_address in child_addresses
-        if _is_meaningful_stage_child(cast("Module", trace.modules[child_address]))
-    ]
-    if len(meaningful_children) < 2:
-        return bool(meaningful_children) and _sibling_stem(meaningful_children[0]) in {
-            "layers",
-            "stages",
-        }
-    return True
-
-
-def _is_flat_feature_leaf_container(trace: "Trace", module: "Module") -> bool:
-    """Return whether a container is a flat feature layer chain.
-
-    Parameters
-    ----------
-    trace:
-        Trace owning the module hierarchy.
-    module:
-        Candidate container module.
-
-    Returns
-    -------
-    bool
-        True for flat Sequential-like conv/norm/activation/pool feature chains.
-    """
-
-    if str(getattr(module, "class_name", "")) not in GENERIC_CONTAINER_CLASSES:
-        return False
-    child_addresses = [
-        str(child_address)
-        for child_address in getattr(module, "address_children", ()) or ()
-        if child_address in trace.modules
-    ]
-    if len(child_addresses) < 3:
-        return False
-    return all(
-        _is_leaf_block_ingredient(cast("Module", trace.modules[child_address]))
-        for child_address in child_addresses
-    )
-
-
-def _is_meaningful_stage_child(module: "Module") -> bool:
-    """Return whether a direct child is substantial enough to keep as a stage."""
-
-    return int(getattr(module, "num_layers", 0) or 0) >= 2
-
-
-def _is_meaningful_leaf_block(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
-    """Return whether a standalone small op chain should collapse as one block.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the module hierarchy.
-    signal:
-        Candidate module signals.
-
-    Returns
-    -------
-    bool
-        True when the module is a compact non-junction block whose internals
-        would otherwise render at a finer grain than neighboring stage boxes.
-    """
-
-    if not signal.eligible:
-        return False
-    try:
-        module = cast("Module", trace.modules[signal.address])
-    except KeyError:
-        return False
-    op_count = len(signal.subtree_ops)
-    forced_wrapper = (
-        module.class_name in LEAF_BLOCK_WRAPPER_CLASSES
-        or signal.address.rsplit(".", 1)[-1].lower() == "project"
-    )
-    if op_count < 2:
-        return False
-    if op_count > LEAF_BLOCK_MAX_OPS and not forced_wrapper:
-        return False
-    if signal.passthrough_edges > 0:
-        return False
-    if _is_structured_container(trace, signal):
-        return False
-    child_addresses = [
-        str(child_address)
-        for child_address in getattr(module, "address_children", ()) or ()
-        if child_address in trace.modules
-    ]
-    if not child_addresses and _is_tiny_norm_leaf(module, op_count):
-        return True
-    for child_address in child_addresses:
-        child_module = cast("Module", trace.modules[child_address])
-        if not _is_leaf_block_ingredient(child_module):
-            return False
-    if any(
-        _op_func_name(cast("Op", trace.ops[label])) in JUNCTION_FUNC_NAMES
-        for label in signal.subtree_ops
-    ):
-        return False
-    return signal.internal_edges >= 1
-
-
-def _is_leaf_block_ingredient(module: "Module") -> bool:
-    """Return whether a child module is an atomic layer inside a leaf block."""
-
-    class_name = str(getattr(module, "class_name", ""))
-    return any(part in class_name for part in LEAF_BLOCK_CHILD_CLASS_PARTS)
-
-
-def _is_tiny_norm_leaf(module: "Module", op_count: int) -> bool:
-    """Return whether a norm module should fold its primitive bookkeeping ops."""
-
-    class_name = str(getattr(module, "class_name", ""))
-    return 2 <= op_count <= 3 and "Norm" in class_name
-
-
-def _clip(value: float) -> float:
-    """Clip a value to the unit interval."""
-
-    return max(0.0, min(value, 1.0))
-
-
-def _is_trunk_collapse(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
-    """Return whether a module would over-collapse the top-level backbone."""
-
-    visible_after = max(1, len(trace.ops) - signal.hidden_ops)
-    if visible_after >= 4:
-        return False
-    op_set = set(signal.subtree_ops)
-    has_input = any(cast("Op", trace.ops[label]).is_input for label in op_set)
-    has_output = any(cast("Op", trace.ops[label]).is_output for label in op_set)
-    return has_input or has_output
-
-
-def _select_modules(
-    trace: "Trace",
-    *,
-    collapse: Literal["auto", "max"],
-    vis_mode: VisModeLiteral,
-    context: RenderContext | None = None,
-) -> frozenset[str]:
-    """Select an antichain of module addresses by greedy score."""
-
-    resolved_context = RenderContext(vis_mode=vis_mode) if context is None else context
-    analysis = analyze_collapse(trace)
-    band = (8, _readable_band_high(trace), 28) if collapse == "auto" else (4, 12, 7)
-    if collapse == "auto" and len(trace.ops) > 100:
-        band = (1, _readable_band_high(trace), 0)
-    floor = 1 if collapse == "auto" else 3
-    target = band[2]
-    if collapse == "auto" and len(trace.ops) > 15:
-        target = min(target, math.ceil(len(trace.ops) * 0.7))
-    selected: list[str] = []
-    base_count = count(plan_from_v1(trace, None, None, resolved_context))
-    hidden_counts = _rendered_module_hidden_counts(trace, resolved_context)
-    selected_hidden_ops = 0
-    visible_count = base_count
-    if collapse == "max":
-        selected = list(
-            _select_modules(
-                trace,
-                collapse="auto",
-                vis_mode=resolved_context.vis_mode,
-                context=resolved_context,
-            )
-        )
-        selected_hidden_ops = _selected_hidden_ops(hidden_counts, selected)
-        visible_count = base_count - selected_hidden_ops
-    ordered = collapse_order(trace, mode=collapse)
-    for address, score in ordered:
-        if score <= 0.0:
-            continue
-        signal = analysis.signals[address]
-        if not signal.eligible:
-            continue
-        if _selection_conflicts(address, selected, collapse=collapse):
-            continue
-        addresses = _selection_batch(address, analysis, selected, collapse=collapse)
-        tentative_selected = _selection_with_addresses(selected, addresses, collapse=collapse)
-        next_hidden_ops = _selected_hidden_ops(hidden_counts, tentative_selected)
-        next_visible = base_count - next_hidden_ops
-        if next_visible < floor and len(addresses) > 1:
-            addresses = (address,)
-            tentative_selected = _selection_with_addresses(selected, addresses, collapse=collapse)
-            next_hidden_ops = _selected_hidden_ops(hidden_counts, tentative_selected)
-            next_visible = base_count - next_hidden_ops
-        if next_visible < floor:
-            continue
-        selected = tentative_selected
-        selected_hidden_ops = next_hidden_ops
-        visible_count = next_visible
-        if band[0] <= visible_count <= target:
-            break
-    selected = _complete_leaf_block_selection(trace, analysis, selected, collapse=collapse)
-    selected_hidden_ops = _selected_hidden_ops(hidden_counts, selected)
-    visible_count = base_count - selected_hidden_ops
-    _assert_plan_count_for_selection(trace, selected, resolved_context, visible_count)
-    # Irregular stage containers remain a known general-algorithm gap; keep
-    # selection model-agnostic rather than adding per-class patches.
-    if collapse == "max":
-        return frozenset(selected)
-    if band[0] <= visible_count <= band[1]:
-        return frozenset(selected)
-    return frozenset(selected)
-
-
 def _readable_band_high(trace: "Trace") -> int:
     """Return the high watermark for a readable auto-collapsed render.
 
@@ -2758,24 +2393,16 @@ def _readable_band_high(trace: "Trace") -> int:
     return 25 if len(trace.ops) > 100 else 40
 
 
-def _selected_hidden_ops(hidden_counts: Mapping[str, int], selected: Sequence[str]) -> int:
-    """Return operation-node contribution hidden by ``selected``.
+def _is_trunk_collapse(trace: "Trace", signal: ModuleCollapseSignals) -> bool:
+    """Return whether a module would collapse nearly the whole input-output trunk."""
 
-    Parameters
-    ----------
-    hidden_counts:
-        Renderer-derived hidden contribution keyed by module address.
-    selected:
-        Module addresses selected for smart collapse. The caller is
-        responsible for preserving antichain semantics.
-
-    Returns
-    -------
-    int
-        Sum of v1 hidden-op deltas for selected modules.
-    """
-
-    return sum(hidden_counts.get(address, 0) for address in selected)
+    visible_after = max(1, len(trace.ops) - signal.hidden_ops)
+    if visible_after >= 4:
+        return False
+    op_set = set(signal.subtree_ops)
+    has_input = any(cast("Op", trace.ops[label]).is_input for label in op_set)
+    has_output = any(cast("Op", trace.ops[label]).is_output for label in op_set)
+    return has_input or has_output
 
 
 def _rendered_module_hidden_counts(trace: "Trace", context: RenderContext) -> dict[str, int]:
@@ -2821,59 +2448,6 @@ def _rendered_module_hidden_counts(trace: "Trace", context: RenderContext) -> di
         for address, absorbed_count in absorbed_counts.items()
         if absorbed_count > 1
     }
-
-
-def _selection_collapse_fn(selected: Sequence[str]) -> Callable[["Module"], bool]:
-    """Return a collapse predicate for a fixed selected-address sequence.
-
-    Parameters
-    ----------
-    selected:
-        Module addresses selected for smart collapse.
-
-    Returns
-    -------
-    Callable[[Module], bool]
-        Predicate matching modules by exact address.
-    """
-
-    selected_addresses = frozenset(selected)
-
-    def collapse_fn(module: "Module") -> bool:
-        """Return whether ``module`` is selected."""
-
-        return module.address in selected_addresses
-
-    return collapse_fn
-
-
-def _assert_plan_count_for_selection(
-    trace: "Trace",
-    selected: Sequence[str],
-    context: RenderContext,
-    running_count: int,
-) -> None:
-    """Assert that selection delta accounting matches the collapse plan.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    selected:
-        Final selected module addresses.
-    context:
-        Render context used for planning.
-    running_count:
-        Incrementally maintained rendered node count.
-    """
-
-    _assert_plan_count(
-        trace,
-        _selection_collapse_fn(selected),
-        None,
-        context,
-        running_count,
-    )
 
 
 def _assert_plan_count(
@@ -3028,207 +2602,3 @@ def _run_fold_delta(fold: ModuleRunFold, hidden_member_contributions: Mapping[st
 
     removed = sum(hidden_member_contributions.get(address, 0) for address in fold.addresses)
     return 2 - removed
-
-
-def _visible_count_after_selection(
-    trace: "Trace",
-    analysis: CollapseAnalysis,
-    selected: list[str],
-) -> int:
-    """Return the rendered op count estimate after collapsing ``selected``."""
-
-    hidden_ops = sum(analysis.signals[address].hidden_ops for address in selected)
-    return max(1, len(trace.ops) - hidden_ops)
-
-
-def _selection_with_addresses(
-    selected: list[str],
-    addresses: tuple[str, ...],
-    *,
-    collapse: Literal["auto", "max"],
-) -> list[str]:
-    """Return ``selected`` updated with ``addresses`` under mode overlap rules."""
-
-    if collapse == "auto":
-        return [*selected, *addresses]
-    selected_without_descendants = [
-        selected_address
-        for selected_address in selected
-        if selected_address not in addresses
-        and not any(selected_address.startswith(f"{address}.") for address in addresses)
-    ]
-    return [*selected_without_descendants, *addresses]
-
-
-def _complete_leaf_block_selection(
-    trace: "Trace",
-    analysis: CollapseAnalysis,
-    selected: list[str],
-    *,
-    collapse: Literal["auto", "max"],
-) -> list[str]:
-    """Add compatible standalone leaf-blocks for uniform collapse grain.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    analysis:
-        Precomputed collapse analysis.
-    selected:
-        Greedy collapse antichain selected so far.
-    collapse:
-        Active collapse mode.
-
-    Returns
-    -------
-    list[str]
-        Selection plus compatible leaf-block candidates.
-    """
-
-    completed = list(selected)
-    leaf_addresses = [
-        address
-        for address, signal in analysis.signals.items()
-        if _is_meaningful_leaf_block(trace, signal)
-    ]
-    leaf_addresses.sort(key=lambda address: (analysis.signals[address].depth, address))
-    for address in leaf_addresses:
-        if _selection_conflicts(address, completed, collapse=collapse):
-            continue
-        completed = _selection_with_addresses(completed, (address,), collapse=collapse)
-    return completed
-
-
-def _inside_selected(address: str, selected: list[str]) -> bool:
-    """Return whether ``address`` is already hidden by a selected ancestor."""
-
-    return any(address.startswith(f"{ancestor}.") for ancestor in selected)
-
-
-def _conflicts_selected(address: str, selected: list[str]) -> bool:
-    """Return whether ``address`` overlaps an already selected collapse target."""
-
-    return (
-        address in selected
-        or _inside_selected(address, selected)
-        or any(selected_address.startswith(f"{address}.") for selected_address in selected)
-    )
-
-
-def _selection_conflicts(
-    address: str,
-    selected: list[str],
-    *,
-    collapse: Literal["auto", "max"],
-) -> bool:
-    """Return whether a candidate conflicts under the active collapse mode."""
-
-    if collapse == "max":
-        return address in selected or _inside_selected(address, selected)
-    return _conflicts_selected(address, selected)
-
-
-def _selection_batch(
-    address: str,
-    analysis: CollapseAnalysis,
-    selected: list[str],
-    *,
-    collapse: Literal["auto", "max"],
-) -> tuple[str, ...]:
-    """Return peer addresses that should be selected together.
-
-    Parameters
-    ----------
-    address:
-        Candidate address from the greedy ranking.
-    analysis:
-        Precomputed collapse analysis.
-    selected:
-        Addresses already selected for collapse.
-    collapse:
-        Active collapse mode.
-
-    Returns
-    -------
-    tuple[str, ...]
-        The candidate plus eligible structural sibling peers when a repeated
-        peer group exists.
-    """
-
-    signal = analysis.signals[address]
-    if signal.peer_count <= 1:
-        branch_batch = _output_junction_batch(address, analysis, selected, collapse=collapse)
-        return branch_batch if len(branch_batch) > 1 else (address,)
-    for group in analysis.peer_groups.values():
-        if address not in group:
-            continue
-        return tuple(
-            peer_address
-            for peer_address in group
-            if analysis.signals[peer_address].eligible
-            and not _selection_conflicts(peer_address, selected, collapse=collapse)
-        )
-    return (address,)
-
-
-def _output_junction_batch(
-    address: str,
-    analysis: CollapseAnalysis,
-    selected: list[str],
-    *,
-    collapse: Literal["auto", "max"],
-) -> tuple[str, ...]:
-    """Return sibling modules that feed the same external junction.
-
-    Parameters
-    ----------
-    address:
-        Candidate module address.
-    analysis:
-        Precomputed collapse analysis.
-    selected:
-        Addresses already selected for collapse.
-    collapse:
-        Active collapse mode.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Eligible sibling addresses that feed at least one shared external
-        multi-parent junction.
-    """
-
-    signal = analysis.signals[address]
-    if not signal.output_junctions:
-        return (address,)
-    junctions = set(signal.output_junctions)
-    parent = _address_parent(address)
-    batch = [
-        peer_address
-        for peer_address, peer_signal in analysis.signals.items()
-        if peer_signal.eligible
-        and _address_parent(peer_address) == parent
-        and junctions.intersection(peer_signal.output_junctions)
-        and not _selection_conflicts(peer_address, selected, collapse=collapse)
-    ]
-    return tuple(sorted(batch))
-
-
-def _address_parent(address: str) -> str | None:
-    """Return the dotted parent address for a module address.
-
-    Parameters
-    ----------
-    address:
-        Module address.
-
-    Returns
-    -------
-    str | None
-        Parent address, or ``"self"`` for top-level children.
-    """
-
-    if "." not in address:
-        return "self"
-    return address.rsplit(".", 1)[0]
