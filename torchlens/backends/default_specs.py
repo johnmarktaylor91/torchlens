@@ -811,20 +811,6 @@ def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
     return TFBackend().validate_trace(*args, **kwargs)
 
 
-def _paddle_capture_backend() -> CaptureBackend:
-    """Return the Paddle Protocol adapter shell.
-
-    Returns
-    -------
-    CaptureBackend
-        Paddle capture backend once the Protocol adapter phase lands.
-    """
-
-    from .paddle import PaddleBackend
-
-    return cast(CaptureBackend, PaddleBackend())
-
-
 def register_default_backend_specs() -> None:
     """Register built-in torch and MLX backend specs.
 
@@ -981,7 +967,6 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=PADDLE_TRACE_OPTIONS,
             ),
-            capture_backend=_paddle_capture_backend,
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
                 body_format="safetensors",

@@ -20,12 +20,15 @@ from torchlens.backends import (
     BackendMismatchError,
     BackendSpec,
     BackendUnsupportedError,
+    CaptureBackend,
     SerializationPolicy,
     get_backend_spec,
     register_backend_spec,
+    registered_backend_specs,
     resolve_backend_spec,
     unregister_backend_spec,
 )
+from torchlens.capture.trace import _capture_backend_from_registry
 from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
@@ -350,6 +353,7 @@ def test_paddle_backend_registered_with_alias_and_priority() -> None:
 
     spec = get_backend_spec("paddle")
     assert spec.name == "paddle"
+    assert spec.capture_backend is None
     assert get_backend_spec("paddlepaddle") is spec
     assert spec.priority == 40
     assert get_backend_spec("torch").priority == 0
@@ -406,6 +410,23 @@ def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
     assert not _paddle_can_handle(_TinyModel(), torch.ones(1), None)
 
 
+def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:
+    """Paddle shared-orchestration lookup raises the canonical unsupported error."""
+
+    paddle = pytest.importorskip("paddle")
+
+    class _PaddleLayer(paddle.nn.Layer):
+        """Small Paddle layer for shared-capture resolution tests."""
+
+        def forward(self, x: Any) -> Any:
+            """Return the input unchanged."""
+
+            return x
+
+    with pytest.raises(BackendUnsupportedError, match="shared capture Protocol adapter"):
+        _capture_backend_from_registry("paddle", _PaddleLayer(), paddle.to_tensor([1.0]), None)
+
+
 def test_explicit_paddle_backend_resolves_to_spec() -> None:
     """Explicit Paddle backend and alias resolve to the Paddle spec."""
 
@@ -440,6 +461,32 @@ def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
 
     with pytest.raises(BackendUnsupportedError):
         tl.trace(_PaddleLayer(), paddle.to_tensor([1.0]), backend="paddle", backward_ready=True)
+
+
+def test_registered_capture_backends_conform_to_protocol() -> None:
+    """Every registered shared-capture adapter exposes the full protocol surface."""
+
+    required_attrs = tuple(CaptureBackend.__annotations__) + tuple(
+        name
+        for name, value in CaptureBackend.__dict__.items()
+        if not name.startswith("_") and callable(value)
+    )
+    dependency_modules = {
+        "jax": "jax",
+        "mlx": "mlx",
+        "paddle": "paddle",
+        "tf": "tensorflow",
+        "tinygrad": "tinygrad",
+    }
+
+    for spec in registered_backend_specs():
+        if spec.capture_backend is None:
+            continue
+        if spec.name in dependency_modules:
+            pytest.importorskip(dependency_modules[str(spec.name)])
+        backend = spec.capture_backend()
+        missing = [attr for attr in required_attrs if not hasattr(backend, attr)]
+        assert missing == [], f"{spec.name} capture backend missing attrs: {missing}"
 
 
 def test_public_trace_dispatches_through_backend_spec() -> None:
