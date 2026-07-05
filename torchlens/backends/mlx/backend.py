@@ -857,8 +857,19 @@ class MLXBackend:
 
         reject_unsupported_trace_options(
             {
+                "layers_to_save": layers_to_save,
+                "activation_transform": activation_transform,
+                "detach_saved_activations": detach_saved_activations,
+                "save_arg_values": save_arg_values,
                 "save_grads": save_grads,
+                "save_code_context": save_code_context,
+                "save_rng_states": save_rng_states,
+                "backward_ready": backward_ready,
+                "module_filter": module_filter,
+                "transform": transform,
                 "output_device": output_device,
+                "layer_visualizers": layer_visualizers,
+                "save_visualizations": save_visualizations,
             },
             MLX_PREVIEW_TRACE_OPTION_POLICY,
         )

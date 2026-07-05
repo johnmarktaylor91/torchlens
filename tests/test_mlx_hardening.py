@@ -222,6 +222,14 @@ def test_mlx_save_grads_raises() -> None:
 
 
 @pytest.mark.optional
+def test_mlx_layers_to_save_raises_typed_error() -> None:
+    """MLX capture rejects the unsupported legacy ``layers_to_save`` selector."""
+
+    with pytest.raises(BackendUnsupportedError, match="layers_to_save"):
+        tl.trace(TinyMLP(), _tiny_mlp_input(), backend="mlx", layers_to_save=["relu_1_3_raw:1"])
+
+
+@pytest.mark.optional
 def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
     """MLX leaf derived gradients should match a direct MLX AD oracle."""
 

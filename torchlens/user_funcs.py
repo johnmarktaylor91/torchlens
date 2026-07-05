@@ -304,7 +304,7 @@ def _trace_mlx_model(
         backward_ready=capture_options.backward_ready,
         name=capture_options.name,
         module_filter=capture_options.module_filter,
-        transform=capture_options.transform,
+        transform=None,
         raw_input=raw_input,
         save_raw_input=capture_options.save_raw_input,
         batch_render=capture_options.batch_render,

@@ -255,11 +255,26 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
 
 MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="MLX",
+    full_save_message="MLX backend preview does not support layers_to_save; use static save= selectors.",
     rejected_truthy_messages={
-        "save_grads": "backward capture is not supported on the mlx backend",
+        "save_grads": "MLX backend preview does not support save_grads; backward capture is unavailable.",
+    }
+    | {
+        name: f"MLX backend preview does not support {name}; forward capture only."
+        for name in (
+            "activation_transform",
+            "detach_saved_activations",
+            "save_arg_values",
+            "save_code_context",
+            "save_rng_states",
+            "backward_ready",
+            "module_filter",
+            "transform",
+            "layer_visualizers",
+            "save_visualizations",
+        )
     },
     output_device_message="MLX backend only supports output_device='same' in technical preview.",
-    output_device_error=ValueError,
 )
 """Unsupported public trace-option policy for the MLX backend object entry."""
 
