@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import TupleIndex
+from torchlens.ir.container import HFKey, NamedField, TupleIndex
 
 
 class DemoModelOutput(dict):
@@ -51,6 +51,67 @@ class HFLikeModel(nn.Module):
         return DemoModelOutput(
             logits=x + 1,
             past_key_values=((x + 2, x + 3),),
+        )
+
+
+class OpaqueCacheLayer:
+    """Opaque cache layer with tensor leaves in attributes."""
+
+    def __init__(self, keys: torch.Tensor, values: torch.Tensor) -> None:
+        """Create one cache layer.
+
+        Parameters
+        ----------
+        keys:
+            Key-cache tensor.
+        values:
+            Value-cache tensor.
+        """
+
+        self.keys = keys
+        self.values = values
+
+
+class OpaqueCache:
+    """Opaque cache container that TorchLens must discover by fallback BFS."""
+
+    def __init__(self, layers: list[OpaqueCacheLayer]) -> None:
+        """Create an opaque cache.
+
+        Parameters
+        ----------
+        layers:
+            Cache layers holding tensor leaves.
+        """
+
+        self.layers = layers
+
+
+class HFLikeOpaqueCacheModel(nn.Module):
+    """Return an HF-like output with an opaque nested cache."""
+
+    def forward(self, x: torch.Tensor) -> DemoModelOutput:
+        """Run the model.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        DemoModelOutput
+            Output with a tensor leaf and an opaque cache subtree.
+        """
+
+        return DemoModelOutput(
+            logits=x + 1,
+            past_key_values=OpaqueCache(
+                [
+                    OpaqueCacheLayer(x + 2, x + 3),
+                    OpaqueCacheLayer(x + 4, x + 5),
+                ]
+            ),
         )
 
 
@@ -187,6 +248,34 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
     )
     with pytest.raises(ValueError, match="No reconstructable final-output container"):
         default_trace.reconstruct_output()
+
+
+def test_opaque_nested_output_fallback_preserves_each_tensor_leaf() -> None:
+    """Opaque nested output fallback keeps unique paths for every tensor leaf."""
+
+    trace = tl.trace(HFLikeOpaqueCacheModel(), torch.tensor([1.0]))
+
+    assert trace.output_layers == ["output_1", "output_2", "output_3", "output_4", "output_5"]
+    assert [trace.ops[label].io_role for label in trace.output_layers] == [
+        "output.logits",
+        "output.past_key_values.layers.0.keys",
+        "output.past_key_values.layers.0.values",
+        "output.past_key_values.layers.1.keys",
+        "output.past_key_values.layers.1.values",
+    ]
+    assert trace.ops["output_2"].container_path == (
+        HFKey("past_key_values"),
+        NamedField("layers"),
+        TupleIndex(0),
+        NamedField("keys"),
+    )
+    assert [trace.ops[label].container_spec for label in trace.output_layers] == [
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
 
 
 def test_custom_registered_container_reconstructs() -> None:

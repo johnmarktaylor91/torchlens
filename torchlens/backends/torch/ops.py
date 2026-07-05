@@ -740,6 +740,33 @@ def _try_build_container_spec(value: Any) -> ContainerSpec | None:
         raise
 
 
+def _fallback_address_to_path(address: list[tuple[str, Any]]) -> tuple[OutputPathComponent, ...]:
+    """Convert a generic introspection address to a typed output path suffix.
+
+    Parameters
+    ----------
+    address
+        Programmatic address emitted by :func:`get_vars_of_type_from_obj`.
+
+    Returns
+    -------
+    tuple[OutputPathComponent, ...]
+        Best-effort typed path components for an opaque output subtree.
+    """
+
+    path: list[OutputPathComponent] = []
+    for kind, value in address:
+        if kind == "attr":
+            path.append(NamedField(str(value)))
+        elif kind == "ind" and isinstance(value, int):
+            path.append(TupleIndex(value))
+        elif kind == "ind":
+            path.append(DictKey(value))
+        else:
+            path.append(str(value))
+    return tuple(path)
+
+
 def _is_hf_model_output(value: Any) -> bool:
     """Return whether ``value`` looks like a HuggingFace ``ModelOutput``.
 
@@ -994,13 +1021,14 @@ def _walk_supported_output_container(
     # these output paths (caught by the module_hierarchy invariant). search_depth=5
     # matches the legacy whole-output BFS fallback; DynamicCache's tensors live at
     # depth ~5 and are missed by the default depth of 3.
-    for tensor in get_vars_of_type_from_obj(
+    for tensor, _address, fallback_address in get_vars_of_type_from_obj(
         out,
         which_type=torch.Tensor,
         subclass_exceptions=[torch.nn.Parameter],
         search_depth=5,
+        return_addresses=True,
     ):
-        yield tensor, path, root_spec
+        yield tensor, (*path, *_fallback_address_to_path(fallback_address)), root_spec
 
 
 def _walk_output_tensors_with_paths(
