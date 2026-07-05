@@ -2450,6 +2450,7 @@ class Trace(
             preserved_trace_user_annotations,
         )
         state_restore(self, replacement_state)
+        self.__dict__.pop("_validation_replay_status", None)
         _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
         _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
         self._rebind_fork_owner_refs()
@@ -2482,6 +2483,7 @@ class Trace(
             self._refresh_rerun_op_from(layer, new_by_raw[layer._layer_label_raw])
         self._refresh_rerun_layer_logs_from(new_log)
         self._refresh_rerun_trace_fields_from(new_log)
+        self.__dict__.pop("_validation_replay_status", None)
         _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
         _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
         self._rebind_fork_owner_refs()

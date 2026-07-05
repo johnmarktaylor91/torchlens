@@ -367,6 +367,26 @@ def validate_backward_pass(
                     break
         observed_param_grads = _param_grads(model)
 
+        if validate_layer_grads:
+            layer_report = _validate_layer_grads(
+                model,
+                input_args,
+                input_kwargs,
+                loss_fn,
+                atol=layer_grad_atol if layer_grad_atol is not None else atol,
+                rtol=layer_grad_rtol if layer_grad_rtol is not None else rtol,
+                random_seed=random_seed,
+            )
+            if not bool(layer_report):
+                return False
+            if not expected_param_grads:
+                warnings.warn(
+                    "validate_backward_pass could not verify parameter gradients because "
+                    "stock autograd produced zero parameter gradients.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return True
         if not expected_param_grads:
             warnings.warn(
                 "validate_backward_pass could not verify parameter gradients because "
@@ -388,17 +408,6 @@ def validate_backward_pass(
         )
         if not params_passed:
             return False
-        if validate_layer_grads:
-            layer_report = _validate_layer_grads(
-                model,
-                input_args,
-                input_kwargs,
-                loss_fn,
-                atol=layer_grad_atol if layer_grad_atol is not None else atol,
-                rtol=layer_grad_rtol if layer_grad_rtol is not None else rtol,
-                random_seed=random_seed,
-            )
-            return bool(layer_report)
         return True
     finally:
         model.load_state_dict(state_dict)

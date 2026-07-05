@@ -80,6 +80,8 @@ class ValidationDecision:
         Stable decision kind.
     reason:
         Stable reason code explaining the decision.
+    justification:
+        Optional human-readable proof that an exemption applies by design.
     """
 
     op_label: str | None
@@ -87,6 +89,7 @@ class ValidationDecision:
     phase: ValidationDecisionPhase
     decision: ValidationDecisionKind
     reason: str
+    justification: str | None = None
 
     def as_dict(self) -> dict[str, str | None]:
         """Return a JSON-stable representation of this decision.
@@ -97,13 +100,16 @@ class ValidationDecision:
             JSON-serializable decision payload.
         """
 
-        return {
+        decision = {
             "op_label": self.op_label,
             "func_name": self.func_name,
             "phase": self.phase,
             "decision": self.decision,
             "reason": self.reason,
         }
+        if self.justification is not None:
+            decision["justification"] = self.justification
+        return decision
 
 
 @dataclass
@@ -126,6 +132,7 @@ class ValidationDecisionRecorder:
         phase: ValidationDecisionPhase,
         decision: ValidationDecisionKind,
         reason: str,
+        justification: str | None = None,
     ) -> None:
         """Append a validation decision.
 
@@ -141,6 +148,8 @@ class ValidationDecisionRecorder:
             Stable decision kind.
         reason:
             Stable reason code explaining the decision.
+        justification:
+            Optional proof string for design exemptions.
         """
 
         self.decisions.append(
@@ -150,6 +159,7 @@ class ValidationDecisionRecorder:
                 phase=phase,
                 decision=decision,
                 reason=reason,
+                justification=justification,
             )
         )
 
@@ -225,10 +235,13 @@ class ValidationCheckResult:
         Stable decision kind.
     reason:
         Stable reason code explaining the decision.
+    justification:
+        Optional proof string for design exemptions.
     """
 
     decision: ValidationDecisionKind
     reason: str
+    justification: str | None = None
 
     @property
     def failed(self) -> bool:
@@ -294,13 +307,15 @@ class ValidationCheckResult:
         return cls("unverified", reason)
 
     @classmethod
-    def exempted(cls, reason: str) -> "ValidationCheckResult":
+    def exempted(cls, reason: str, justification: str | None = None) -> "ValidationCheckResult":
         """Build an exempted result.
 
         Parameters
         ----------
         reason:
             Stable reason code.
+        justification:
+            Optional proof string for design exemptions.
 
         Returns
         -------
@@ -308,7 +323,7 @@ class ValidationCheckResult:
             Exempted result.
         """
 
-        return cls("exempted", reason)
+        return cls("exempted", reason, justification)
 
 
 # Maximum number of random perturbation attempts before giving up on finding
@@ -725,8 +740,24 @@ def validate_parents_of_saved_layer(
     layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
     ops_to_validate = _validation_ops_for_entry(layer_to_validate_parents_for)
 
-    # Check that the arguments are logged correctly:
-    if not _check_layer_arguments_logged_correctly(self, layer_to_validate_parents_for_label):
+    # Check that the arguments are logged correctly when the evidence is
+    # available. Unverified evidence is recorded but does not preempt replay.
+    arg_logging_result = _check_layer_arguments_logged_correctly(
+        self, layer_to_validate_parents_for_label
+    )
+    skip_replay_after_arg_logging = False
+    if arg_logging_result.decision == "unverified":
+        if decision_recorder is not None:
+            decision_recorder.record(
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer_to_validate_parents_for, "func_name", None),
+                phase="replay",
+                decision="unverified",
+                reason=arg_logging_result.reason,
+            )
+        if arg_logging_result.reason == "missing_saved_args":
+            skip_replay_after_arg_logging = True
+    elif arg_logging_result.failed:
         print(
             f"Parent arguments for layer {layer_to_validate_parents_for_label} are not logged properly; "
             f"either a parent wasn't logged as an argument, or was logged an extra time"
@@ -747,80 +778,83 @@ def validate_parents_of_saved_layer(
                 op_label=layer_to_validate_parents_for_label,
                 func_name=getattr(layer_to_validate_parents_for, "func_name", None),
                 phase="replay",
-                decision="failed",
-                reason="arg_logging_mismatch",
+                decision=arg_logging_result.decision,
+                reason=arg_logging_result.reason,
             )
-        return ValidationCheckResult.failed_result("arg_logging_mismatch")
+        return arg_logging_result
 
-    # Forward replay: re-execute with correct parent values, expect same output.
     ops_to_replay = _representative_ops_for_replay(self, ops_to_validate)
-    for target_op in ops_to_replay:
-        if _is_intentional_intervention_replacement(target_op):
+    if not skip_replay_after_arg_logging:
+        # Forward replay: re-execute with correct parent values, expect same output.
+        for target_op in ops_to_replay:
+            if _is_intentional_intervention_replacement(target_op):
+                if decision_recorder is not None:
+                    decision_recorder.record(
+                        op_label=target_op.label,
+                        func_name=getattr(target_op, "func_name", None),
+                        phase="replay",
+                        decision="exempted",
+                        reason="intentional_intervention_replacement",
+                    )
+                continue
+            replay_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
+                self, target_op.label, perturb=False
+            )
             if decision_recorder is not None:
                 decision_recorder.record(
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     phase="replay",
-                    decision="exempted",
-                    reason="intentional_intervention_replacement",
+                    decision=replay_result.decision,
+                    reason=replay_result.reason,
+                    justification=replay_result.justification,
                 )
-            continue
-        replay_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
-            self, target_op.label, perturb=False
-        )
-        if decision_recorder is not None:
-            decision_recorder.record(
-                op_label=target_op.label,
-                func_name=getattr(target_op, "func_name", None),
-                phase="replay",
-                decision=replay_result.decision,
-                reason=replay_result.reason,
+            if replay_result.failed:
+                return replay_result
+
+        # Perturbation: for each parent, substitute random values and expect
+        # the output to change, proving that parent genuinely influences this layer.
+
+        representative_parent_edges = _representative_parent_edges(self, ops_to_replay)
+        for target_op, perturb_layer in representative_parent_edges:
+            if _is_intentional_intervention_replacement(target_op):
+                if decision_recorder is not None:
+                    decision_recorder.record(
+                        op_label=target_op.label,
+                        func_name=getattr(target_op, "func_name", None),
+                        phase="perturbation",
+                        decision="exempted",
+                        reason="intentional_intervention_replacement",
+                    )
+                continue
+            if target_op.func_name in SKIP_PERTURBATION_ENTIRELY:
+                if decision_recorder is not None:
+                    decision_recorder.record(
+                        op_label=target_op.label,
+                        func_name=getattr(target_op, "func_name", None),
+                        phase="perturbation",
+                        decision="exempted",
+                        reason=f"skip_perturbation_entirely:{target_op.func_name}",
+                    )
+                continue
+            perturb_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
+                self,
+                target_op.label,
+                perturb=True,
+                layers_to_perturb=[perturb_layer],
+                verbose=verbose,
             )
-        if replay_result.failed:
-            return replay_result
-
-    # Perturbation: for each parent, substitute random values and expect
-    # the output to change, proving that parent genuinely influences this layer.
-
-    representative_parent_edges = _representative_parent_edges(self, ops_to_replay)
-    for target_op, perturb_layer in representative_parent_edges:
-        if _is_intentional_intervention_replacement(target_op):
             if decision_recorder is not None:
                 decision_recorder.record(
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     phase="perturbation",
-                    decision="exempted",
-                    reason="intentional_intervention_replacement",
+                    decision=perturb_result.decision,
+                    reason=perturb_result.reason,
+                    justification=perturb_result.justification,
                 )
-            continue
-        if target_op.func_name in SKIP_PERTURBATION_ENTIRELY:
-            if decision_recorder is not None:
-                decision_recorder.record(
-                    op_label=target_op.label,
-                    func_name=getattr(target_op, "func_name", None),
-                    phase="perturbation",
-                    decision="exempted",
-                    reason=f"skip_perturbation_entirely:{target_op.func_name}",
-                )
-            continue
-        perturb_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
-            self,
-            target_op.label,
-            perturb=True,
-            layers_to_perturb=[perturb_layer],
-            verbose=verbose,
-        )
-        if decision_recorder is not None:
-            decision_recorder.record(
-                op_label=target_op.label,
-                func_name=getattr(target_op, "func_name", None),
-                phase="perturbation",
-                decision=perturb_result.decision,
-                reason=perturb_result.reason,
-            )
-        if perturb_result.failed:
-            return perturb_result
+            if perturb_result.failed:
+                return perturb_result
 
     # Record validated edges and enqueue parents whose ALL child edges are now validated.
     for parent_layer_label in layer_to_validate_parents_for.parents:
@@ -862,6 +896,37 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
         getattr(layer, "intervention_replaced", False)
         and not getattr(layer, "is_internal_source", False)
     )
+
+
+def _is_provable_functionless_source_or_boundary(layer: "Op") -> bool:
+    """Return whether a functionless op is a structural source or boundary.
+
+    Parameters
+    ----------
+    layer:
+        Operation pass being validated.
+
+    Returns
+    -------
+    bool
+        True only when captured metadata proves the absence of a callable is
+        expected by design, rather than a lost computational function.
+    """
+
+    if getattr(layer, "func", None) is not None:
+        return False
+    if _is_intentional_intervention_replacement(layer):
+        return True
+    source_category = (
+        bool(getattr(layer, "is_input", False))
+        or bool(getattr(layer, "is_output", False))
+        or bool(getattr(layer, "is_buffer", False))
+        or bool(getattr(layer, "input_was_parameter", False))
+        or bool(getattr(layer, "is_internal_source", False))
+    )
+    if not source_category:
+        return False
+    return str(getattr(layer, "func_name", "none")) in {"none", "input", "output", "buffer"}
 
 
 def _resolve_output_entry_for_index(
@@ -993,7 +1058,9 @@ def _validation_ops_for_entry(entry: Any) -> List[Op]:
     return [op_list[0]]
 
 
-def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: str) -> bool:
+def _check_layer_arguments_logged_correctly(
+    self: "Trace", target_layer_label: str
+) -> ValidationCheckResult:
     """Check whether the outs of the parent layers match the saved arguments of
     the target layer, and that the argument locations have been logged correctly.
 
@@ -1001,7 +1068,7 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
         target_layer_label: Layer to check
 
     Returns:
-        True if arguments logged accurately, False otherwise
+        Structured validation result for argument logging evidence.
     """
     target_entry = self[target_layer_label]
     target_ops = _representative_ops_for_replay(self, _validation_ops_for_entry(target_entry))
@@ -1013,15 +1080,7 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
         # forward-hook output replacements injected by the user. This skip is
         # deliberately narrow -- it must NOT swallow a real op that merely lost
         # its func, which would mask a capture bug.
-        is_genuine_replacement = getattr(
-            target_layer, "intervention_replaced", False
-        ) and not getattr(target_layer, "is_internal_source", False)
-        if target_layer.func is None and (
-            target_layer.is_input
-            or getattr(target_layer, "is_buffer", False)
-            or getattr(target_layer, "is_internal_source", False)
-            or is_genuine_replacement
-        ):
+        if _is_provable_functionless_source_or_boundary(target_layer):
             continue
 
         # Make sure that all parent layers appear in at least one argument and
@@ -1031,8 +1090,11 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
         for arg_type in ["args", "kwargs"]:
             parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
         if parents_in_args != data_parents:
-            _raise_if_replay_arg_version_data_incomplete(self, target_layer)
-            return False
+            try:
+                _raise_if_replay_arg_version_data_incomplete(self, target_layer)
+            except ValueError:
+                return ValidationCheckResult.unverified("missing_saved_args")
+            return ValidationCheckResult.failed_result("arg_logging_mismatch")
 
         argtype_dict = {
             "args": (enumerate, "saved_args"),
@@ -1048,20 +1110,14 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
                 iterfunc, argtype_field = argtype_dict[arg_type]
                 saved_values = getattr(target_layer, argtype_field)
                 if saved_values is None:
-                    _raise_if_replay_arg_version_data_incomplete(self, target_layer)
-                    raise ValueError(
-                        "Cannot validate saved layer "
-                        f"{target_layer.label}: {argtype_field} was not saved. "
-                        "Selective replay validation requires save_arg_values=True "
-                        "and saved argument payloads for the target op."
-                    )
+                    return ValidationCheckResult.unverified("missing_saved_args")
                 for key, val in iterfunc(saved_values):  # type: ignore[operator]
-                    validation_correct_for_arg_and_layer = _validate_layer_against_arg(
+                    validation_result_for_arg_and_layer = _validate_layer_against_arg(
                         self, target_layer, parent_layer, arg_type, key, val
                     )
-                    if not validation_correct_for_arg_and_layer:
-                        return False
-    return True
+                    if validation_result_for_arg_and_layer.decision != "validated":
+                        return validation_result_for_arg_and_layer
+    return ValidationCheckResult.validated("arg_logging_matched")
 
 
 def _raise_if_replay_arg_version_data_incomplete(self: "Trace", target_layer: Op) -> None:
@@ -1100,7 +1156,7 @@ def _validate_layer_against_arg(
     arg_type: str,
     key: Any,
     val: Any,
-) -> bool:
+) -> ValidationCheckResult:
     """Validate whether a parent layer is correctly logged for a specific argument of a target layer.
 
     Handles nested argument structures (lists, tuples, dicts) by recursing into them
@@ -1114,35 +1170,34 @@ def _validate_layer_against_arg(
         val: The saved argument value to inspect.
 
     Returns:
-        True if the parent layer is correctly logged for all sub-positions of this argument,
-        False if any position is inconsistently logged.
+        Structured validation result for this argument position.
     """
     if type(val) in [list, tuple]:
         for v, subval in enumerate(val):
             argloc_key = (key, v)
-            validation_correct_for_arg_and_layer = _check_arglocs_correct_for_arg(
+            validation_result_for_arg_and_layer = _check_arglocs_correct_for_arg(
                 self, target_layer, parent_layer, arg_type, argloc_key, subval
             )
-            if not validation_correct_for_arg_and_layer:
-                return False
+            if validation_result_for_arg_and_layer.decision != "validated":
+                return validation_result_for_arg_and_layer
 
     elif type(val) == dict:
         for subkey, subval in val.items():
             argloc_key = (key, subkey)
-            validation_correct_for_arg_and_layer = _check_arglocs_correct_for_arg(
+            validation_result_for_arg_and_layer = _check_arglocs_correct_for_arg(
                 self, target_layer, parent_layer, arg_type, argloc_key, subval
             )
-            if not validation_correct_for_arg_and_layer:
-                return False
+            if validation_result_for_arg_and_layer.decision != "validated":
+                return validation_result_for_arg_and_layer
     else:
         argloc_key = key
-        validation_correct_for_arg_and_layer = _check_arglocs_correct_for_arg(
+        validation_result_for_arg_and_layer = _check_arglocs_correct_for_arg(
             self, target_layer, parent_layer, arg_type, argloc_key, val
         )
-        if not validation_correct_for_arg_and_layer:
-            return False
+        if validation_result_for_arg_and_layer.decision != "validated":
+            return validation_result_for_arg_and_layer
 
-    return True
+    return ValidationCheckResult.validated("arg_logging_matched")
 
 
 def _parent_logged_for_any_arg_alias(target_layer: Op, parent_layer_labels: set[str]) -> bool:
@@ -1176,7 +1231,7 @@ def _check_arglocs_correct_for_arg(
     arg_type: str,
     argloc_key: str | tuple[Any, ...],
     saved_arg_val: Any,
-) -> bool:
+) -> ValidationCheckResult:
     """Check bidirectional consistency between a parent's tensor and a child's arg slot.
 
     Validates two directions:
@@ -1197,7 +1252,7 @@ def _check_arglocs_correct_for_arg(
         saved_arg_val: The saved argument value at that position.
 
     Returns:
-        True if the logging is consistent, False if an inconsistency is found.
+        Structured validation result for this argument location.
     """
     target_layer_label = target_layer.layer_label
     target_op_label = getattr(target_layer, "label", target_layer_label)
@@ -1212,6 +1267,8 @@ def _check_arglocs_correct_for_arg(
         parent_outs = parent_layer.out_versions_by_child[target_layer_label]
     else:
         parent_outs = parent_layer.out
+    if parent_outs is None:
+        return ValidationCheckResult.unverified("missing_saved_parent_payload")
 
     if isinstance(saved_arg_val, torch.Tensor):
         parent_layer_matches_arg = tensor_nanequal(
@@ -1253,7 +1310,7 @@ def _check_arglocs_correct_for_arg(
             f"{arg_type} {argloc_key} for {target_layer_label}, but is not logged as "
             f"such in parent_arg_positions."
         )
-        return False
+        return ValidationCheckResult.failed_result("arg_logging_mismatch")
 
     # Case 2 exemption: in-place RNG ops (bernoulli_) mutate the tensor
     # AFTER it was logged as an arg, so the saved out no longer matches
@@ -1263,7 +1320,7 @@ def _check_arglocs_correct_for_arg(
         and parent_layerged_as_arg
         and parent_layer.func_name == "bernoulli_"
     ):
-        return True
+        return ValidationCheckResult.validated("arg_logging_matched")
 
     # Case 3: parent is logged at this position but values don't match.
     if (not parent_layer_matches_arg) and parent_layerged_as_arg:
@@ -1271,9 +1328,9 @@ def _check_arglocs_correct_for_arg(
             f"Parent {parent_layer_label} of {target_layer_label} is logged as {arg_type} {argloc_key} to "
             f"{target_layer_label}, but its saved outs don't match the saved argument."
         )
-        return False
+        return ValidationCheckResult.failed_result("arg_logging_mismatch")
 
-    return True
+    return ValidationCheckResult.validated("arg_logging_matched")
 
 
 def _check_perturbation_exemptions(
@@ -1832,14 +1889,17 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
     # Early exits for layers that cannot or should not be replayed.
 
-    # Input layers and buffer layers without parents have no function to replay
-    # (func is None for model inputs and parentless buffers).
     if layer.func is None:
-        return ValidationCheckResult.exempted("functionless_source_or_boundary")
+        if _is_provable_functionless_source_or_boundary(layer):
+            return ValidationCheckResult.exempted("functionless_source_or_boundary")
+        return ValidationCheckResult.failed_result("functionless_computational_op")
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
     if layer.func_name in SKIP_VALIDATION_ENTIRELY:
-        return ValidationCheckResult.unverified(f"skip_validation_entirely:{layer.func_name}")
+        return ValidationCheckResult.exempted(
+            "uninitialized_by_design",
+            justification=SKIP_VALIDATION_ENTIRELY[layer.func_name],
+        )
 
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
@@ -2028,7 +2088,9 @@ def _prepare_input_args_for_validating_layer(
                     )
                 parent_values = parent_layer.out
             if parent_values is None:
-                return None, "missing_saved_parent_payload"
+                if parent_layer_arg in layers_to_perturb:
+                    return None, "missing_saved_parent_payload"
+                continue
             parent_values = parent_values.detach().clone()
 
             if parent_layer_arg in layers_to_perturb:

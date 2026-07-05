@@ -692,6 +692,7 @@ class TraceInterventionMixin:
         fork.state = self.state
         fork._warned_mutate_in_place = False
         fork._warned_direct_write = False
+        fork.__dict__.pop("_validation_replay_status", None)
 
         layer_map = fork._fork_layer_ops_from(
             self,

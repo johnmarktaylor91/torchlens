@@ -13,9 +13,11 @@ import torchlens as tl
 from torchlens.validation import core
 from torchlens.validation import backward as backward_validation
 from torchlens.validation.exemptions import (
+    SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
     perturbed_layer_at_structural_position,
 )
+from torchlens.validation.status import ValidationReplayStatus
 
 
 def _fake_layer(**kwargs: Any) -> Any:
@@ -75,7 +77,7 @@ def test_full_is_not_inplace_rng_arg_logging_exemption() -> None:
     )
     trace = {"full_1_1": parent}
 
-    assert not core._check_arglocs_correct_for_arg(  # noqa: SLF001
+    result = core._check_arglocs_correct_for_arg(  # noqa: SLF001
         trace,  # type: ignore[arg-type]
         child,
         parent,
@@ -83,6 +85,7 @@ def test_full_is_not_inplace_rng_arg_logging_exemption() -> None:
         0,
         torch.zeros(2),
     )
+    assert result.decision == "failed"
 
 
 def test_binary_extrema_requires_actual_nonperturbed_dominance() -> None:
@@ -112,6 +115,7 @@ class DetachedParamModel(nn.Module):
 
         super().__init__()
         self.weight = nn.Parameter(torch.ones(3))
+        self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return an output disconnected from parameters.
@@ -127,7 +131,7 @@ class DetachedParamModel(nn.Module):
             Output tensor depending only on input.
         """
 
-        return x * 2
+        return self.relu(x * 2)
 
 
 class OneHotModel(nn.Module):
@@ -150,6 +154,104 @@ class OneHotModel(nn.Module):
         return torch.nn.functional.one_hot(x, num_classes=4).float()
 
 
+class EmptyLikeModel(nn.Module):
+    """Model using uninitialized memory followed by a deterministic write."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a zeroed tensor allocated with ``empty_like``.
+
+        Parameters
+        ----------
+        x:
+            Input tensor used as the allocation template.
+
+        Returns
+        -------
+        torch.Tensor
+            Zero-valued tensor with the same shape as ``x``.
+        """
+
+        y = torch.empty_like(x)
+        y.zero_()
+        return y
+
+
+class AddReluModel(nn.Module):
+    """Small model with a replayable computational add op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return ReLU of an add.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            ReLU output.
+        """
+
+        return torch.relu(x + 1)
+
+
+class CholeskyModel(nn.Module):
+    """Model whose perturbation can make a valid replay input invalid."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a Cholesky factorization.
+
+        Parameters
+        ----------
+        x:
+            Positive-definite input matrix.
+
+        Returns
+        -------
+        torch.Tensor
+            Cholesky factor.
+        """
+
+        return torch.linalg.cholesky(x)
+
+
+def _first_op_with_func(trace: Any, func_name: str) -> Any:
+    """Return the first op in a trace with a matching function name.
+
+    Parameters
+    ----------
+    trace:
+        TorchLens trace.
+    func_name:
+        Captured function name to find.
+
+    Returns
+    -------
+    Any
+        Matching op.
+    """
+
+    return next(layer for layer in trace.layer_list if layer.func_name == func_name)
+
+
+def _first_output(trace: Any) -> torch.Tensor:
+    """Return a detached copy of the trace output.
+
+    Parameters
+    ----------
+    trace:
+        TorchLens trace.
+
+    Returns
+    -------
+    torch.Tensor
+        Detached output tensor.
+    """
+
+    return trace[trace.output_layers[0]].out.detach().clone()
+
+
 def test_backward_validation_zero_param_grads_is_not_pass() -> None:
     """Backward validation must not pass when no parameter grads are checked."""
 
@@ -160,6 +262,20 @@ def test_backward_validation_zero_param_grads_is_not_pass() -> None:
         torch.randn(2, 3),
         random_seed=5,
         validate_metadata=False,
+    )
+
+
+def test_backward_validation_zero_param_grads_still_runs_layer_grad_validation() -> None:
+    """Layer-grad validation should run when parameter grads are empty."""
+
+    model = DetachedParamModel()
+
+    assert backward_validation.validate_backward_pass(
+        model,
+        torch.randn(2, 3),
+        random_seed=5,
+        validate_metadata=False,
+        validate_layer_grads=True,
     )
 
 
@@ -174,3 +290,201 @@ def test_one_hot_index_perturbation_uses_valid_alternate_class() -> None:
     )
 
     assert trace.validate_forward_pass([torch.tensor([[0.0, 1.0, 0.0, 0.0]])])
+
+
+def test_skip_validation_registry_entries_have_justifications() -> None:
+    """Every uninitialized-memory replay exemption must carry a proof string."""
+
+    assert SKIP_VALIDATION_ENTIRELY
+    assert all(justification for justification in SKIP_VALIDATION_ENTIRELY.values())
+
+
+def test_empty_like_is_justified_exempted_not_unverified() -> None:
+    """Uninitialized-memory ops should pass as justified design exemptions."""
+
+    trace = tl.trace(
+        EmptyLikeModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    status = trace.validation_replay_status
+    assert status.state == "passed"
+    assert status.unverified_node_count == 0
+    assert status.exempted_reason_counts["uninitialized_by_design"] >= 1
+    decisions = [
+        decision
+        for decision in status.decisions
+        if decision.get("reason") == "uninitialized_by_design"
+    ]
+    assert decisions
+    assert all(decision.get("justification") for decision in decisions)
+
+
+def test_functionless_computational_op_fails_loudly() -> None:
+    """A lost callable on a computational op must not be source-exempted."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    _first_op_with_func(trace, "__add__").func = None
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is False
+    status = trace.validation_replay_status
+    assert status.state == "failed"
+    assert any(
+        decision["decision"] == "failed" and decision["reason"] == "functionless_computational_op"
+        for decision in status.decisions
+    )
+
+
+def test_missing_saved_args_yields_reason_coded_unverified() -> None:
+    """Missing saved args should produce status-visible unverified decisions."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=False,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert isinstance(result, ValidationReplayStatus)
+    assert result.state == "unverified"
+    assert result.unverified_reason_counts["missing_saved_args"] >= 1
+
+
+def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
+    """Missing parent payload should be surfaced as unverified, not an exception."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    add_op = _first_op_with_func(trace, "__add__")
+    trace[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert isinstance(result, ValidationReplayStatus)
+    assert result.state == "unverified"
+    assert result.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+
+
+def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
+    """Saved args must still let ordinary replay catch a real mismatch."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    add_op = _first_op_with_func(trace, "__add__")
+    trace[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
+
+    def wrong_add(input_tensor: torch.Tensor, *_args: Any, **_kwargs: Any) -> torch.Tensor:
+        """Return an intentionally wrong add result for replay testing.
+
+        Parameters
+        ----------
+        input_tensor:
+            First add operand from the replayed saved args.
+        *_args:
+            Ignored positional operands.
+        **_kwargs:
+            Ignored keyword operands.
+
+        Returns
+        -------
+        torch.Tensor
+            Zero tensor with the same shape as ``input_tensor``.
+        """
+
+        return torch.zeros_like(input_tensor)
+
+    add_op.func = wrong_add
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is False
+    status = trace.validation_replay_status
+    assert status.state == "failed"
+    assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert any(decision["reason"] == "replay_mismatch" for decision in status.decisions)
+
+
+def test_perturbation_exception_yields_reason_coded_unverified() -> None:
+    """Invalid perturbed inputs should be unverified rather than exempted."""
+
+    trace = tl.trace(
+        CholeskyModel(),
+        torch.eye(3).unsqueeze(0) * 2,
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert isinstance(result, ValidationReplayStatus)
+    assert result.state == "unverified"
+    assert result.unverified_reason_counts["perturbation_execution_exception"] >= 1
+
+
+def test_fully_saved_vanilla_model_has_zero_unverified_decisions() -> None:
+    """Healthy full-save traces should not produce unverified decisions."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    assert trace.validation_replay_status.unverified_node_count == 0
+
+
+def test_validation_status_cache_invalidated_after_same_shape_rerun() -> None:
+    """Rerunning a trace should clear cached replay-validation status."""
+
+    model = AddReluModel()
+    trace = tl.trace(model, torch.ones(2, 3), layers_to_save="all", save_arg_values=True)
+    trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+    old_status = trace.validation_replay_status
+
+    trace.run(model, torch.ones(2, 3) * 2)
+    new_status = trace.validation_replay_status
+
+    assert new_status is not old_status
+    assert new_status.state == "available"
+
+
+def test_validation_status_cache_invalidated_on_fork() -> None:
+    """Forks should not inherit a completed validation status."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    fork = trace.fork("status_check")
+
+    assert fork.validation_replay_status.state == "available"

@@ -124,6 +124,68 @@ class TinyIntervention(nn.Module):
         return torch.sigmoid(torch.relu(self.linear(x)))
 
 
+class TinyEmptyLike(nn.Module):
+    """Model with an uninitialized allocation followed by deterministic write."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run an ``empty_like`` allocation and zero it.
+
+        Parameters
+        ----------
+        x:
+            Input tensor used as the allocation template.
+
+        Returns
+        -------
+        torch.Tensor
+            Zeroed tensor.
+        """
+
+        y = torch.empty_like(x)
+        y.zero_()
+        return y
+
+
+class TinyAddRelu(nn.Module):
+    """Small model used for corruption and partial-save golden cases."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a replayable add followed by ReLU.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            ReLU output.
+        """
+
+        return torch.relu(x + 1)
+
+
+class TinyCholesky(nn.Module):
+    """Model whose perturbed parent can make replay execution invalid."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a Cholesky factorization.
+
+        Parameters
+        ----------
+        x:
+            Positive-definite input matrix.
+
+        Returns
+        -------
+        torch.Tensor
+            Cholesky factor.
+        """
+
+        return torch.linalg.cholesky(x)
+
+
 def _trace_output(trace: Any) -> torch.Tensor:
     """Return the first tensor output saved on a trace.
 
@@ -139,6 +201,46 @@ def _trace_output(trace: Any) -> torch.Tensor:
     """
 
     return trace[trace.output_layers[0]].out.detach().clone()
+
+
+def _first_op_with_func(trace: Any, func_name: str) -> Any:
+    """Return the first op whose captured function name matches.
+
+    Parameters
+    ----------
+    trace:
+        TorchLens trace.
+    func_name:
+        Function name to locate.
+
+    Returns
+    -------
+    Any
+        Matching operation.
+    """
+
+    return next(layer for layer in trace.layer_list if layer.func_name == func_name)
+
+
+def _wrong_add(input_tensor: torch.Tensor, *_args: Any, **_kwargs: Any) -> torch.Tensor:
+    """Return an intentionally wrong add replay result.
+
+    Parameters
+    ----------
+    input_tensor:
+        First add operand from saved replay args.
+    *_args:
+        Ignored positional operands.
+    **_kwargs:
+        Ignored keyword operands.
+
+    Returns
+    -------
+    torch.Tensor
+        Zero tensor with the same shape as ``input_tensor``.
+    """
+
+    return torch.zeros_like(input_tensor)
 
 
 def _status_for_trace(trace: Any, outputs: list[torch.Tensor]) -> ValidationReplayStatus:
@@ -253,6 +355,37 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     edited.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
     edited.rerun(intervention, x_intervention)
 
+    torch.manual_seed(15)
+    empty_like = TinyEmptyLike().eval()
+    x_empty = torch.randn(2, 3)
+    empty_trace = tl.trace(empty_like, x_empty, layers_to_save="all", save_arg_values=True)
+
+    torch.manual_seed(16)
+    corrupted = TinyAddRelu().eval()
+    x_corrupted = torch.randn(2, 3)
+    corrupted_trace = tl.trace(corrupted, x_corrupted, layers_to_save="all", save_arg_values=True)
+    _first_op_with_func(corrupted_trace, "__add__").func = _wrong_add
+
+    torch.manual_seed(17)
+    partial_save = TinyAddRelu().eval()
+    x_partial = torch.randn(2, 3)
+    partial_trace = tl.trace(
+        partial_save,
+        x_partial,
+        layers_to_save="all",
+        save_arg_values=False,
+    )
+
+    torch.manual_seed(18)
+    cholesky = TinyCholesky().eval()
+    x_cholesky = torch.eye(3).unsqueeze(0) * 2
+    cholesky_trace = tl.trace(
+        cholesky,
+        x_cholesky,
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
     return {
         "tiny_feed_forward": _case_summary(
             _seeded_status_for_trace(101, ff_trace, [_trace_output(ff_trace)])
@@ -266,6 +399,18 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         "tiny_intervention": _case_summary(
             _seeded_status_for_trace(104, edited, [_trace_output(edited)])
         ),
+        "tiny_empty_like": _case_summary(
+            _seeded_status_for_trace(105, empty_trace, [_trace_output(empty_trace)])
+        ),
+        "tiny_corrupted_replay": _case_summary(
+            _seeded_status_for_trace(106, corrupted_trace, [_trace_output(corrupted_trace)])
+        ),
+        "tiny_partial_save": _case_summary(
+            _seeded_status_for_trace(107, partial_trace, [_trace_output(partial_trace)])
+        ),
+        "tiny_cholesky": _case_summary(
+            _seeded_status_for_trace(108, cholesky_trace, [_trace_output(cholesky_trace)])
+        ),
     }
 
 
@@ -274,3 +419,30 @@ def test_validation_decision_snapshot_matches_golden() -> None:
 
     expected = json.loads(GOLDEN_PATH.read_text())
     assert build_validation_decision_snapshot() == expected
+
+
+def test_validation_decision_snapshot_covers_required_categories() -> None:
+    """Ensure the golden zoo covers every S1 decision category."""
+
+    snapshot = build_validation_decision_snapshot()
+    decisions = [decision for case in snapshot.values() for decision in case["decisions"]]
+    reason_decisions = {(decision["decision"], decision["reason"]) for decision in decisions}
+
+    assert any(decision["decision"] == "validated" for decision in decisions)
+    assert ("failed", "replay_mismatch") in reason_decisions
+    assert ("exempted", "uninitialized_by_design") in reason_decisions
+    assert ("exempted", "functionless_source_or_boundary") in reason_decisions
+    assert ("exempted", "intentional_intervention_replacement") in reason_decisions
+    assert ("unverified", "missing_saved_args") in reason_decisions
+    assert ("unverified", "perturbation_execution_exception") in reason_decisions
+
+
+def test_validation_decision_snapshot_detects_mutation() -> None:
+    """Ensure a changed decision stream is not equal to the golden payload."""
+
+    snapshot = build_validation_decision_snapshot()
+    mutated = json.loads(json.dumps(snapshot))
+    first_case = next(iter(mutated.values()))
+    first_case["decisions"][0]["reason"] = "mutated_reason"
+
+    assert mutated != snapshot

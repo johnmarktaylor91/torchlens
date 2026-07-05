@@ -234,7 +234,7 @@ def fn(params, x):
 
 params = {"w": jnp.ones((3, 2)), "b": jnp.zeros((2,))}
 trace = tl.trace(fn, (params, jnp.ones((4, 3))), backend="jax")
-assert trace.validate_forward_pass([])
+assert trace.validate_forward_pass([]) is True
 ```
 
 JAX leaf gradients are a derived-gradient preview, not backward capture:
@@ -322,7 +322,7 @@ def fn(x):
     return ((x + 1).relu() * 2).sum()
 
 trace = tl.trace(fn, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
-assert trace.validate_forward_pass([fn(Tensor([1.0, -2.0, 3.0]))])
+assert trace.validate_forward_pass([fn(Tensor([1.0, -2.0, 3.0]))]) is True
 ```
 
 tinygrad callable object models expose object-module hierarchy and native parameter records when

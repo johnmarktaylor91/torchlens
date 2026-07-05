@@ -45,13 +45,17 @@ if TYPE_CHECKING:
 # These funcs produce nondeterministic output (e.g. uninitialized memory),
 # so even forward replay would fail.
 # ---------------------------------------------------------------------------
-SKIP_VALIDATION_ENTIRELY: Set[str] = {
-    "empty_like",
-    "new",  # torch.Tensor.new() — uninitialized memory
-    "new_empty",  # torch.Tensor.new_empty() — uninitialized memory
-    "new_empty_strided",  # torch.Tensor.new_empty_strided() — uninitialized memory
-    "newempty",  # torch.Tensor.new_empty() — uninitialized memory
-    "newemptystrided",  # torch.Tensor.new_empty_strided() — uninitialized memory
+SKIP_VALIDATION_ENTIRELY: Dict[str, str] = {
+    "empty_like": "returns uninitialized memory by construction; saved bytes are not replayable",
+    "new": "torch.Tensor.new() returns uninitialized memory by construction",
+    "new_empty": "torch.Tensor.new_empty() returns uninitialized memory by construction",
+    "new_empty_strided": (
+        "torch.Tensor.new_empty_strided() returns uninitialized memory by construction"
+    ),
+    "newempty": "canonical torch.Tensor.new_empty() spelling returns uninitialized memory",
+    "newemptystrided": (
+        "canonical torch.Tensor.new_empty_strided() spelling returns uninitialized memory"
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -1171,6 +1175,8 @@ def posthoc_perturb_check(
                 )
             return True
 
+    # S1b: replace the removed swamped-fp32 magnitude shortcut with a proved
+    # ULP/nextafter predicate here, without weakening this default failure.
     print(
         f"Activations for layer {layer_label} do not change when "
         f"values for {layers_to_perturb} are changed (out of parent "

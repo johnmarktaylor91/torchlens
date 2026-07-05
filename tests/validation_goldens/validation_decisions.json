@@ -109,6 +109,169 @@
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
   },
+  "tiny_cholesky": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "cholesky",
+        "op_label": "cholesky_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "unverified",
+        "func_name": "cholesky",
+        "op_label": "cholesky_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_execution_exception"
+      }
+    ],
+    "exempted_reason_counts": {},
+    "failed_node_count": 0,
+    "replayed_node_count": 4,
+    "state": "unverified",
+    "unverified_node_count": 1,
+    "unverified_reason_counts": {
+      "perturbation_execution_exception": 1
+    }
+  },
+  "tiny_corrupted_replay": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "relu",
+        "op_label": "relu_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "relu",
+        "op_label": "relu_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "failed",
+        "func_name": "__add__",
+        "op_label": "add_1_1:1",
+        "phase": "replay",
+        "reason": "replay_mismatch"
+      }
+    ],
+    "exempted_reason_counts": {},
+    "failed_node_count": 1,
+    "replayed_node_count": 5,
+    "state": "failed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
+  "tiny_empty_like": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "zero_",
+        "op_label": "zero_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "zero_",
+        "op_label": "zero_1_2:1",
+        "phase": "perturbation",
+        "reason": "skip_perturbation_entirely:zero_"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "empty_like",
+        "justification": "returns uninitialized memory by construction; saved bytes are not replayable",
+        "op_label": "emptylike_1_1:1",
+        "phase": "replay",
+        "reason": "uninitialized_by_design"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "empty_like",
+        "justification": "returns uninitialized memory by construction; saved bytes are not replayable",
+        "op_label": "emptylike_1_1:1",
+        "phase": "perturbation",
+        "reason": "uninitialized_by_design"
+      }
+    ],
+    "exempted_reason_counts": {
+      "skip_perturbation_entirely:zero_": 1,
+      "uninitialized_by_design": 2
+    },
+    "failed_node_count": 0,
+    "replayed_node_count": 4,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
   "tiny_feed_forward": {
     "decisions": [
       {
@@ -256,6 +419,53 @@
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
+  },
+  "tiny_partial_save": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "unverified",
+        "func_name": "relu",
+        "op_label": "relu_1_2",
+        "phase": "replay",
+        "reason": "missing_saved_args"
+      },
+      {
+        "decision": "unverified",
+        "func_name": "__add__",
+        "op_label": "add_1_1",
+        "phase": "replay",
+        "reason": "missing_saved_args"
+      }
+    ],
+    "exempted_reason_counts": {},
+    "failed_node_count": 0,
+    "replayed_node_count": 3,
+    "state": "unverified",
+    "unverified_node_count": 2,
+    "unverified_reason_counts": {
+      "missing_saved_args": 2
+    }
   },
   "tiny_recurrent": {
     "decisions": [
