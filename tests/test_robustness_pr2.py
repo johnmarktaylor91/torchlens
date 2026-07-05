@@ -27,6 +27,7 @@ from torchlens._robustness import (
     UnsupportedTensorVariantError,
     _is_meta_tensor,
     _is_sparse_tensor,
+    _iter_tensors,
     check_model_and_input_variants,
 )
 from torchlens.utils.tensor_utils import safe_copy
@@ -276,6 +277,16 @@ def test_check_model_and_input_variants_clean_model_is_noop() -> None:
         warnings.simplefilter("always")
         check_model_and_input_variants(model, x, {})
     assert caught == []
+
+
+def test_shared_tensor_tree_walker_dedupes_and_handles_cycles() -> None:
+    """The consolidated tensor walker preserves robust traversal semantics."""
+
+    tensor = torch.randn(1)
+    payload: list[object] = [tensor, {"again": tensor}]
+    payload.append(payload)
+
+    assert list(_iter_tensors(payload)) == [tensor]
 
 
 # ---------------------------------------------------------------------------

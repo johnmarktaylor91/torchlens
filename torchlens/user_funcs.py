@@ -92,6 +92,7 @@ from .options import (
 from ._robustness import check_model_and_input_variants
 from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_kwargs
 from .utils.display import _vprint, warn_parallel
+from .utils._torch_compat import get_dynamo_optimized_module_type
 from .utils.introspection import _get_code_context, get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
 from .utils.tensor_utils import SaveMode
@@ -1546,18 +1547,14 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
             )
 
     # torch.compile -> torch._dynamo.eval_frame.OptimizedModule
-    try:
-        from torch._dynamo.eval_frame import OptimizedModule
-    except ImportError:
-        pass
-    else:
-        if isinstance(model, OptimizedModule):
-            raise RuntimeError(
-                "torchlens.trace does not support torch.compile'd "
-                "models: dynamo replaces the Python forward with a compiled "
-                "graph that byops TorchLens' function wrappers. "
-                "Call trace on the original (un-compiled) model."
-            )
+    optimized_module_type = get_dynamo_optimized_module_type()
+    if optimized_module_type is not None and isinstance(model, optimized_module_type):
+        raise RuntimeError(
+            "torchlens.trace does not support torch.compile'd "
+            "models: dynamo replaces the Python forward with a compiled "
+            "graph that byops TorchLens' function wrappers. "
+            "Call trace on the original (un-compiled) model."
+        )
 
     # torch.jit.script / torch.jit.trace -> ScriptModule
     if isinstance(model, torch.jit.ScriptModule):

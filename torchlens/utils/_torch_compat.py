@@ -38,8 +38,10 @@ keeps the modern signature but changes its version string.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+import ctypes
 import importlib
 import os
+import sys
 from typing import Any
 import warnings
 
@@ -56,6 +58,8 @@ __all__ = [
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
     "HAS_JIT_BUILTIN_TABLE",
+    "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
     "HAS_TORCH_VF",
     "HAS_VARIABLE_FUNCTIONS",
@@ -66,6 +70,7 @@ __all__ = [
     "get_current_function_mode_stack",
     "get_device_constructors",
     "get_device_context_type",
+    "get_dynamo_optimized_module_type",
     "get_functorch_maybe_current_level",
     "get_functorch_wrapped_tensor_checker",
     "get_fx_graph_module_type",
@@ -75,12 +80,13 @@ __all__ = [
     "get_torch_function_mode_stack_length",
     "get_torch_vf_namespace",
     "get_variable_function_names",
+    "fix_tensor_sequence_slot",
     "mark_torch_capability_missing",
 ]
 
 
 TorchCapabilitySnapshot = dict[str, bool]
-"""Stable mapping from torch capability flag name to availability."""
+"""Stable mapping from torch capability name to availability."""
 
 _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
@@ -298,6 +304,75 @@ def _probe_fx_graph_module() -> bool:
     return _nested_getattr_or_none(torch, ("fx", "GraphModule")) is not None
 
 
+def _probe_dynamo_optimized_module() -> bool:
+    """Return whether torch exposes the private Dynamo OptimizedModule type.
+
+    Returns
+    -------
+    bool
+        True when ``torch._dynamo.eval_frame.OptimizedModule`` is importable.
+    """
+
+    return _import_module_attr_or_none("torch._dynamo.eval_frame", "OptimizedModule") is not None
+
+
+class _PySequenceMethods(ctypes.Structure):
+    """Minimal ctypes mirror of CPython's PySequenceMethods struct."""
+
+    _fields_ = [
+        ("sq_length", ctypes.c_void_p),
+        ("sq_concat", ctypes.c_void_p),
+        ("sq_repeat", ctypes.c_void_p),
+        ("sq_item", ctypes.c_void_p),
+        ("was_sq_slice", ctypes.c_void_p),
+        ("sq_ass_item", ctypes.c_void_p),
+        ("was_sq_ass_slice", ctypes.c_void_p),
+        ("sq_contains", ctypes.c_void_p),
+        ("sq_inplace_concat", ctypes.c_void_p),
+        ("sq_inplace_repeat", ctypes.c_void_p),
+    ]
+
+
+class _PyTypeObject(ctypes.Structure):
+    """Partial ctypes mirror of CPython's PyTypeObject up to tp_as_sequence."""
+
+    _fields_ = [
+        ("ob_refcnt", ctypes.c_ssize_t),
+        ("ob_type", ctypes.c_void_p),
+        ("ob_size", ctypes.c_ssize_t),
+        ("tp_name", ctypes.c_char_p),
+        ("tp_basicsize", ctypes.c_ssize_t),
+        ("tp_itemsize", ctypes.c_ssize_t),
+        ("tp_dealloc", ctypes.c_void_p),
+        ("tp_vectorcall_offset", ctypes.c_ssize_t),
+        ("tp_getattr", ctypes.c_void_p),
+        ("tp_setattr", ctypes.c_void_p),
+        ("tp_as_async", ctypes.c_void_p),
+        ("tp_repr", ctypes.c_void_p),
+        ("tp_as_number", ctypes.c_void_p),
+        ("tp_as_sequence", ctypes.POINTER(_PySequenceMethods)),
+        ("tp_as_mapping", ctypes.c_void_p),
+    ]
+
+
+def _probe_tensor_sequence_slot_fix() -> bool:
+    """Return whether the CPython tensor ``sq_item`` slot fix can run.
+
+    Returns
+    -------
+    bool
+        True on CPython when the expected ``torch.Tensor`` type layout is visible.
+    """
+
+    if sys.implementation.name != "cpython":
+        return False
+    try:
+        type_obj = _PyTypeObject.from_address(id(torch.Tensor))
+    except Exception:
+        return False
+    return type_obj.tp_name == b"Tensor" and bool(type_obj.tp_as_sequence)
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -309,6 +384,8 @@ HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
 HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
+HAS_DYNAMO_OPTIMIZED_MODULE: bool = _probe_dynamo_optimized_module()
+HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 
 _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_AUTOCAST_DEVICE_TYPE_ARG",
@@ -323,6 +400,8 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_TENSOR_SEQUENCE_SLOT_FIX",
 )
 
 
@@ -363,10 +442,13 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     Returns
     -------
     TorchCapabilitySnapshot
-        Mapping from ``HAS_*`` flag name to boolean availability.
+        Mapping from ``HAS_*`` flag name, plus the legacy
+        ``AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED`` alias, to boolean availability.
     """
 
-    return {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
+    snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
+    snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
+    return snapshot
 
 
 def get_variable_function_names() -> list[str]:
@@ -613,6 +695,67 @@ def get_fx_graph_module_type() -> type[Any] | None:
         )
         return None
     return graph_module_type
+
+
+def get_dynamo_optimized_module_type() -> type[Any] | None:
+    """Return Dynamo's private ``OptimizedModule`` type when available.
+
+    Returns
+    -------
+    type[Any] | None
+        Dynamo OptimizedModule type, or ``None`` when unavailable.
+    """
+
+    optimized_module_type = _import_module_attr_or_none(
+        "torch._dynamo.eval_frame", "OptimizedModule"
+    )
+    if optimized_module_type is None:
+        mark_torch_capability_missing(
+            "HAS_DYNAMO_OPTIMIZED_MODULE",
+            "torch.compile wrapper detection is falling back to class-name matching",
+        )
+        return None
+    return optimized_module_type
+
+
+def fix_tensor_sequence_slot() -> bool:
+    """Clear the stale CPython ``sq_item`` slot on ``torch.Tensor`` when possible.
+
+    Wrapping ``torch.Tensor.__getitem__`` on CPython can leave the sequence
+    protocol's ``sq_item`` slot populated. If this capability is unavailable,
+    TorchLens still captures normally, but scalar tensors may again look like
+    sequences to CPython C APIs after wrap/unwrap cycles, which can break calls
+    such as ``torch.tensor([zero_dim_tensor])``.
+
+    Returns
+    -------
+    bool
+        True when the slot was inspected and cleared or already absent; False
+        when the private CPython layout was unavailable.
+    """
+
+    if sys.implementation.name != "cpython":
+        mark_torch_capability_missing(
+            "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+            "Tensor __getitem__ wrap/unwrap may leave scalar tensors sequence-like",
+        )
+        return False
+    try:
+        type_obj = _PyTypeObject.from_address(id(torch.Tensor))
+    except Exception:
+        mark_torch_capability_missing(
+            "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+            "Tensor sequence-slot layout could not be inspected",
+        )
+        return False
+    if type_obj.tp_name != b"Tensor" or not type_obj.tp_as_sequence:
+        mark_torch_capability_missing(
+            "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+            "Tensor sequence-slot layout did not match the expected CPython structure",
+        )
+        return False
+    type_obj.tp_as_sequence.contents.sq_item = None
+    return True
 
 
 # --- Legacy (torch 2.1-2.3) per-device fallbacks -------------------------------

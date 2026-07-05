@@ -35,7 +35,6 @@ Key design decisions:
    automatically. We detect active ``DeviceContext`` and inject the kwarg ourselves.
 """
 
-import ctypes
 import inspect
 import sys
 import sysconfig
@@ -75,6 +74,7 @@ from ...utils._torch_compat import (
     get_current_function_mode_stack,
     get_device_constructors,
     get_device_context_type,
+    fix_tensor_sequence_slot,
     get_functorch_maybe_current_level,
     get_jit_builtin_table,
     get_optional_torch_namespace,
@@ -178,89 +178,10 @@ def _nvtx_range_pop(enabled: bool) -> None:
         return
 
 
-#
-# When __getitem__ is replaced on a C extension type (like torch.Tensor) with
-# a Python function, CPython sets the sq_item slot in tp_as_sequence.  This
-# makes PySequence_Check(tensor) return True, which causes torch.tensor() to
-# try iterating 0-d tensor elements as sequences -- calling len() which raises
-# TypeError.  The sq_item slot is NEVER cleared by restoring the original
-# wrapper_descriptor or by delattr, because CPython's update_one_slot only
-# restores the exact slot the wrapper_descriptor wraps (mp_subscript), not
-# the collateral sq_item slot.
-#
-# We fix this by nulling sq_item directly via ctypes after any decoration or
-# undecoration cycle.  This is safe because tensor indexing uses mp_subscript
-# (mapping protocol), not sq_item (sequence protocol).
-
-
-class _PySequenceMethods(ctypes.Structure):
-    """Minimal ctypes mirror of CPython's PySequenceMethods struct."""
-
-    _fields_ = [
-        ("sq_length", ctypes.c_void_p),
-        ("sq_concat", ctypes.c_void_p),
-        ("sq_repeat", ctypes.c_void_p),
-        ("sq_item", ctypes.c_void_p),
-        ("was_sq_slice", ctypes.c_void_p),
-        ("sq_ass_item", ctypes.c_void_p),
-        ("was_sq_ass_slice", ctypes.c_void_p),
-        ("sq_contains", ctypes.c_void_p),
-        ("sq_inplace_concat", ctypes.c_void_p),
-        ("sq_inplace_repeat", ctypes.c_void_p),
-    ]
-
-
-class _PyTypeObject(ctypes.Structure):
-    """Partial ctypes mirror of CPython's PyTypeObject up to tp_as_sequence.
-
-    Layout is stable across CPython 3.8+ (tp_vectorcall_offset replaced
-    tp_print in 3.8; all earlier fields are pointer-sized regardless).
-    """
-
-    _fields_ = [
-        ("ob_refcnt", ctypes.c_ssize_t),
-        ("ob_type", ctypes.c_void_p),
-        ("ob_size", ctypes.c_ssize_t),
-        ("tp_name", ctypes.c_char_p),
-        ("tp_basicsize", ctypes.c_ssize_t),
-        ("tp_itemsize", ctypes.c_ssize_t),
-        ("tp_dealloc", ctypes.c_void_p),
-        ("tp_vectorcall_offset", ctypes.c_ssize_t),
-        ("tp_getattr", ctypes.c_void_p),
-        ("tp_setattr", ctypes.c_void_p),
-        ("tp_as_async", ctypes.c_void_p),
-        ("tp_repr", ctypes.c_void_p),
-        ("tp_as_number", ctypes.c_void_p),
-        ("tp_as_sequence", ctypes.POINTER(_PySequenceMethods)),
-        ("tp_as_mapping", ctypes.c_void_p),
-    ]
-
-
 def _fix_tensor_sequence_slot() -> None:
-    """Clear the stale sq_item C slot on torch.Tensor after dunder changes.
+    """Clear the stale sq_item C slot on torch.Tensor after dunder changes."""
 
-    Wrapping ``__getitem__`` on a C extension type pollutes the ``sq_item``
-    slot in ``tp_as_sequence``, making ``PySequence_Check(tensor)`` return
-    ``True``.  This breaks ``torch.tensor([0-d_tensor, ...])`` because the
-    C code then calls ``len()`` on each element.  Clearing ``sq_item`` to
-    NULL restores the clean-state behavior where tensors are NOT treated as
-    sequences.  Tensor indexing is unaffected because it goes through
-    ``mp_subscript`` (mapping protocol).
-
-    Safe to call multiple times.  Fails silently on non-CPython or if the
-    struct layout doesn't match (verified via ``tp_name``).
-    """
-    if sys.implementation.name != "cpython":
-        return
-    try:
-        type_obj = _PyTypeObject.from_address(id(torch.Tensor))
-        # Verify struct layout by checking tp_name
-        if type_obj.tp_name != b"Tensor":
-            return
-        if type_obj.tp_as_sequence:
-            type_obj.tp_as_sequence.contents.sq_item = None
-    except Exception:
-        pass  # Best-effort; non-CPython or unexpected layout
+    fix_tensor_sequence_slot()
 
 
 def _is_inside_functorch_transform() -> bool:

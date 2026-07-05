@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from .errors._base import ConfigurationError
+from .utils._torch_compat import get_dynamo_optimized_module_type
 
 _NON_GRAD_DTYPES = {
     torch.int8,
@@ -48,12 +49,7 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
         If ``model`` is a compiled ``OptimizedModule`` wrapper.
     """
 
-    try:
-        from torch._dynamo.eval_frame import OptimizedModule
-    except ImportError:
-        optimized_module_type: type[nn.Module] | None = None
-    else:
-        optimized_module_type = OptimizedModule
+    optimized_module_type = get_dynamo_optimized_module_type()
 
     is_optimized_module = optimized_module_type is not None and isinstance(
         model, optimized_module_type
