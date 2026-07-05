@@ -1,7 +1,13 @@
 """Packaging-diet tests for lazy pandas and IPython imports."""
 
+from pathlib import Path
+import importlib.util
+import subprocess
+import sys
 from unittest.mock import patch
+import zipfile
 
+import pytest
 import torch
 from torch import nn
 
@@ -102,3 +108,32 @@ def test_repr_html_missing_ipython_falls_back_to_text() -> None:
         html = log._repr_html_()
 
     assert html == repr(log)
+
+
+@pytest.mark.slow
+def test_built_wheel_includes_tlspec_json_schemas(tmp_path: Path) -> None:
+    """Built wheels must ship the public ``torchlens/schemas/*.json`` files."""
+
+    project_root = Path(__file__).resolve().parent.parent
+    wheel_dir = tmp_path / "wheelhouse"
+    wheel_dir.mkdir()
+
+    if importlib.util.find_spec("build") is not None:
+        command = [sys.executable, "-m", "build", "--wheel", "--outdir", str(wheel_dir)]
+    elif importlib.util.find_spec("pip") is not None:
+        command = [sys.executable, "-m", "pip", "wheel", ".", "--no-deps", "-w", str(wheel_dir)]
+    else:
+        pytest.skip("neither build nor pip is importable for wheel construction")
+
+    subprocess.run(command, cwd=project_root, check=True)
+    wheels = sorted(wheel_dir.glob("torchlens-*.whl"))
+    assert len(wheels) == 1
+
+    with zipfile.ZipFile(wheels[0]) as wheel_zip:
+        schema_members = [
+            member
+            for member in wheel_zip.namelist()
+            if member.startswith("torchlens/schemas/") and member.endswith(".json")
+        ]
+
+    assert schema_members, "expected at least one torchlens/schemas/*.json wheel member"

@@ -133,7 +133,7 @@ Repository = "https://github.com/johnmarktaylor91/torchlens"
 include = ["torchlens*"]
 
 [tool.setuptools.package-data]
-torchlens = ["autoroute/data/*.json", "autoroute/data/*.md"]
+torchlens = ["autoroute/data/*.json", "autoroute/data/*.md", "schemas/*.json"]
 
 [tool.pytest.ini_options]
 markers = [
