@@ -1216,7 +1216,7 @@ def draw(
     run_fold_ellipsis_nodes: set[str] = set()
     emitted_segment_nodes: set[str] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
-    self._pending_container_collapse_nodes = []
+    pending_container_collapse_nodes: list[dict[str, Any]] = []
     container_clusters: list[ContainerClusterSpec] = []
     collapsed_container_nodes = _collapsed_container_leaf_nodes(
         self,
@@ -1224,6 +1224,7 @@ def draw(
         vis_mode=vis_mode,
         show_containers=show_containers,
         container_max_inline=container_max_inline,
+        pending_nodes=pending_container_collapse_nodes,
     )
 
     for node in entries_to_plot.values():
@@ -1263,7 +1264,7 @@ def draw(
             emitted_segment_nodes,
         )
 
-    for node_args in getattr(self, "_pending_container_collapse_nodes", []):
+    for node_args in pending_container_collapse_nodes:
         dot.node(**node_args)
 
     container_overlay_edges: list[ContainerOverlayEdge] = []
@@ -2190,7 +2191,7 @@ def render_combined_graph(
             )
         except subprocess.CalledProcessError as e:
             _raise_graphviz_failure("combined graph", source_path, e)
-        finally:
+        else:
             if os.path.exists(source_path):
                 os.remove(source_path)
     return cast(str, dot.source)
@@ -3096,6 +3097,7 @@ def rendered_node_universe_from_v1(
         vis_mode=resolved_context.vis_mode,
         show_containers=resolved_context.show_containers,
         container_max_inline=12,
+        pending_nodes=[],
     )
     emissions = _enumerate_base_rendered_node_emissions(
         trace,
@@ -3680,6 +3682,7 @@ def _collapsed_container_leaf_nodes(
     vis_mode: str,
     show_containers: ShowContainersLiteral,
     container_max_inline: int,
+    pending_nodes: list[dict[str, Any]],
 ) -> dict[str, str]:
     """Return leaf-to-summary node names hidden by homogeneous collapse."""
 
@@ -3693,7 +3696,7 @@ def _collapsed_container_leaf_nodes(
         summary_node = _collapsed_container_node_name(group_id)
         for leaf in leaves:
             hidden[_render_node_label(leaf, vis_mode).replace(":", "pass")] = summary_node
-        _add_collapsed_container_node(trace, leaves, vis_mode=vis_mode)
+        _add_collapsed_container_node(pending_nodes, leaves, vis_mode=vis_mode)
     return hidden
 
 
@@ -3705,23 +3708,19 @@ def _container_leaf_shapes_identical(leaves: Sequence[GraphNode]) -> bool:
 
 
 def _add_collapsed_container_node(
-    trace: "Trace",
+    pending_nodes: list[dict[str, Any]],
     leaves: Sequence[GraphNode],
     *,
     vis_mode: str,
 ) -> None:
     """Record a collapsed container summary node for later emission."""
 
-    pending = getattr(trace, "_pending_container_collapse_nodes", None)
-    if pending is None:
-        pending = []
-        trace._pending_container_collapse_nodes = pending
     first = leaves[0]
     group_id = cast(str, _container_group_id(cast(BaseGraphNode, first)))
     kind = _container_kind(cast(BaseGraphNode, first)) or "container"
     shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
     node_name = _collapsed_container_node_name(group_id)
-    pending.append(
+    pending_nodes.append(
         {
             "name": node_name,
             "label": render_lines_to_html([f"{kind} x{len(leaves)}", shape]),
@@ -8004,7 +8003,7 @@ def _add_edges_for_node(
                 parent_node,
                 child_node,
                 edge_style,
-                module,
+                edge_module_key,
                 module_edge_dict,
                 graphviz_graph,
                 overrides,  # type: ignore[arg-type]

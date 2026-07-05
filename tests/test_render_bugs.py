@@ -46,6 +46,43 @@ class _LargeChainRenderModel(nn.Module):
         return x
 
 
+class _NestedTorchOpModel(nn.Module):
+    """Model with two non-module ops inside one nested module scope."""
+
+    class _Inner(nn.Module):
+        """Nested module whose internal op edge exposes cluster selection."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run two differentiable torch ops in the same nested scope."""
+
+            return torch.sigmoid(torch.relu(x))
+
+    class _Block(nn.Module):
+        """Outer module wrapping the nested op scope."""
+
+        def __init__(self) -> None:
+            """Initialize the inner module."""
+
+            super().__init__()
+            self.inner = _NestedTorchOpModel._Inner()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the nested module."""
+
+            return self.inner(x)
+
+    def __init__(self) -> None:
+        """Initialize nested modules."""
+
+        super().__init__()
+        self.block = self._Block()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        return self.block(x).sum()
+
+
 @pytest.fixture
 def forward_trace() -> Trace:
     """Return a tiny forward Trace."""
@@ -237,6 +274,87 @@ def test_combined_called_process_error_raises_typed_error(
             vis_save_only=True,
             vis_fileformat="svg",
         )
+
+
+def test_combined_render_keeps_dot_source_on_graphviz_failure(
+    backward_trace: Trace,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Combined rendering preserves DOT source when Graphviz fails."""
+
+    monkeypatch.setattr(subprocess, "run", _raise_called_process_error)
+    dot_path = tmp_path / "combined_failed"
+
+    with pytest.raises(GraphvizRenderError, match="DOT source was saved"):
+        backward_trace.draw_combined(
+            vis_outpath=str(tmp_path / "combined_failed"),
+            vis_save_only=True,
+            vis_fileformat="svg",
+        )
+
+    assert dot_path.exists()
+    assert "combined forward/backward graph" in dot_path.read_text()
+
+
+def test_grad_edges_use_preserved_edge_cluster_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forward render passes grad edges the same LCA cluster as dataflow edges."""
+
+    import torchlens.visualization.rendering as rendering
+
+    modules_by_edge: dict[tuple[str, str], str | int] = {}
+    original_add_grad_edge = rendering._add_grad_edge
+
+    def capture_add_grad_edge(
+        self: Trace,
+        parent_layer: object,
+        child_layer: object,
+        edge_style: str,
+        module: str | int,
+        module_edge_dict: dict[str, object],
+        graphviz_graph: object,
+        overrides: object,
+    ) -> None:
+        """Capture grad-edge cluster keys before delegating to the real implementation."""
+
+        modules_by_edge[
+            (
+                str(getattr(parent_layer, "func_name", "")),
+                str(getattr(child_layer, "func_name", "")),
+            )
+        ] = module
+        original_add_grad_edge(
+            self,
+            parent_layer,
+            child_layer,
+            edge_style,
+            module,
+            module_edge_dict,  # type: ignore[arg-type]
+            graphviz_graph,  # type: ignore[arg-type]
+            overrides,  # type: ignore[arg-type]
+        )
+
+    monkeypatch.setattr(rendering, "_add_grad_edge", capture_add_grad_edge)
+    trace = tl.trace(
+        _NestedTorchOpModel(),
+        torch.randn(2, 3, requires_grad=True),
+        save_grads="all",
+    )
+    try:
+        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.draw(
+            vis_outpath=str(tmp_path / "nested_grad"),
+            vis_save_only=True,
+            vis_fileformat="svg",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    assert modules_by_edge[("relu", "sigmoid")] == "block.inner:1"
 
 
 def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> None:
