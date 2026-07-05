@@ -196,6 +196,26 @@ class AddReluModel(nn.Module):
         return torch.relu(x + 1)
 
 
+class AddMulModel(nn.Module):
+    """Small model with a selectively saved downstream multiplication."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return an add followed by a multiplication.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Multiplied output tensor.
+        """
+
+        return (x + 1) * 2
+
+
 class CholeskyModel(nn.Module):
     """Model whose perturbation can make a valid replay input invalid."""
 
@@ -214,6 +234,54 @@ class CholeskyModel(nn.Module):
         """
 
         return torch.linalg.cholesky(x)
+
+
+class PackedSequenceStyleModel(nn.Module):
+    """Packed-sequence model with structural lengths metadata."""
+
+    def __init__(self) -> None:
+        """Initialize recurrent and projection layers."""
+
+        super().__init__()
+        self.lstm = nn.LSTM(8, 4, batch_first=False)
+        self.fc = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run pack, LSTM, unpack, and projection.
+
+        Parameters
+        ----------
+        x:
+            Input tensor with shape ``(seq_len, batch, features)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Projected final padded timestep.
+        """
+
+        lengths = torch.tensor([5, 3, 2])
+        packed = nn.utils.rnn.pack_padded_sequence(x, lengths, enforce_sorted=True)
+        output, _state = self.lstm(packed)
+        padded, _lens = nn.utils.rnn.pad_packed_sequence(output)
+        return self.fc(padded[-1])
+
+
+def _save_only_mul(ctx: Any) -> bool:
+    """Select only multiplication ops during predicate capture.
+
+    Parameters
+    ----------
+    ctx:
+        Predicate record context.
+
+    Returns
+    -------
+    bool
+        True when the op is a multiplication.
+    """
+
+    return ctx.func_name in {"__mul__", "mul"}
 
 
 def _first_op_with_func(trace: Any, func_name: str) -> Any:
@@ -364,6 +432,47 @@ def test_missing_saved_args_yields_reason_coded_unverified() -> None:
     assert result.unverified_reason_counts["missing_saved_args"] >= 1
 
 
+def test_selective_save_unchecked_surface_is_exempted_not_saved_by_user() -> None:
+    """Predicate-excluded replay data should be a by-design exemption."""
+
+    trace = tl.trace(
+        AddMulModel(),
+        torch.randn(2, 3),
+        save=_save_only_mul,
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    status = trace.validation_replay_status
+    assert status.state == "passed"
+    assert status.unverified_node_count == 0
+    assert status.exempted_reason_counts["not_saved_by_user"] >= 1
+    decisions = [
+        decision for decision in status.decisions if decision.get("reason") == "not_saved_by_user"
+    ]
+    assert decisions
+    assert all(decision.get("justification") for decision in decisions)
+
+
+def test_selective_save_checkable_mismatch_still_fails() -> None:
+    """A retained selective-save payload mismatch must still fail validation."""
+
+    model = AddMulModel()
+    x = torch.randn(2, 3)
+    trace = tl.trace(model, x, save=_save_only_mul, save_arg_values=True)
+    mul_op = _first_op_with_func(trace, "__mul__")
+    mul_op._internal_set("out", torch.zeros_like(mul_op.out))  # noqa: SLF001
+
+    result = trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
+
+    assert result is False
+    status = trace.validation_replay_status
+    assert status.state == "failed"
+    assert any(decision["reason"] == "arg_logging_mismatch" for decision in status.decisions)
+
+
 def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
     """Missing parent payload should be surfaced as unverified, not an exception."""
 
@@ -457,6 +566,25 @@ def test_fully_saved_vanilla_model_has_zero_unverified_decisions() -> None:
 
     assert result is True
     assert trace.validation_replay_status.unverified_node_count == 0
+
+
+def test_packed_sequence_structural_trace_passes() -> None:
+    """Packed-sequence structural metadata should not leave validation unverified."""
+
+    model = PackedSequenceStyleModel()
+    trace = tl.trace(
+        model,
+        torch.rand(5, 3, 8),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    status = trace.validation_replay_status
+    assert status.state == "passed"
+    assert status.unverified_node_count == 0
 
 
 def test_validation_status_cache_invalidated_after_same_shape_rerun() -> None:

@@ -97,6 +97,7 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "maskedfill": {1},  # mask tensor; TorchLens canonical name for Tensor.masked_fill
     "masked_fill": {1},  # mask tensor
     "masked_fill_": {1},  # mask tensor
+    "_pack_padded_sequence": {1},  # lengths tensor
     "_pad_packed_sequence": {1},  # lengths tensor
     "type_as": {1},  # type template tensor (value irrelevant)
     "new_tensor": {0},  # source tensor is a dtype/device/layout factory

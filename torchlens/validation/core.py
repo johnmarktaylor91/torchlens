@@ -745,6 +745,9 @@ def validate_parents_of_saved_layer(
     arg_logging_result = _check_layer_arguments_logged_correctly(
         self, layer_to_validate_parents_for_label
     )
+    arg_logging_result = _classify_user_excluded_replay_surface(
+        self, layer_to_validate_parents_for, arg_logging_result
+    )
     skip_replay_after_arg_logging = False
     if arg_logging_result.decision == "unverified":
         if decision_recorder is not None:
@@ -756,6 +759,18 @@ def validate_parents_of_saved_layer(
                 reason=arg_logging_result.reason,
             )
         if arg_logging_result.reason == "missing_saved_args":
+            skip_replay_after_arg_logging = True
+    elif arg_logging_result.decision == "exempted":
+        if decision_recorder is not None:
+            decision_recorder.record(
+                op_label=layer_to_validate_parents_for_label,
+                func_name=getattr(layer_to_validate_parents_for, "func_name", None),
+                phase="replay",
+                decision=arg_logging_result.decision,
+                reason=arg_logging_result.reason,
+                justification=arg_logging_result.justification,
+            )
+        if arg_logging_result.reason == "not_saved_by_user":
             skip_replay_after_arg_logging = True
     elif arg_logging_result.failed:
         print(
@@ -800,6 +815,7 @@ def validate_parents_of_saved_layer(
             replay_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
                 self, target_op.label, perturb=False
             )
+            replay_result = _classify_user_excluded_replay_surface(self, target_op, replay_result)
             if decision_recorder is not None:
                 decision_recorder.record(
                     op_label=target_op.label,
@@ -844,6 +860,7 @@ def validate_parents_of_saved_layer(
                 layers_to_perturb=[perturb_layer],
                 verbose=verbose,
             )
+            perturb_result = _classify_user_excluded_replay_surface(self, target_op, perturb_result)
             if decision_recorder is not None:
                 decision_recorder.record(
                     op_label=target_op.label,
@@ -895,6 +912,83 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     return bool(
         getattr(layer, "intervention_replaced", False)
         and not getattr(layer, "is_internal_source", False)
+    )
+
+
+def _classify_user_excluded_replay_surface(
+    trace: "Trace",
+    layer: Op,
+    result: ValidationCheckResult,
+) -> ValidationCheckResult:
+    """Convert selective-save replay omissions into explicit exemptions.
+
+    Parameters
+    ----------
+    trace:
+        Trace being validated.
+    layer:
+        Operation or layer whose replay data was requested.
+    result:
+        Raw validation result before save-policy classification.
+
+    Returns
+    -------
+    ValidationCheckResult
+        ``exempted:not_saved_by_user`` when predicate selective capture proves
+        that missing replay data was intentionally outside the user's saved
+        surface; otherwise ``result`` unchanged.
+    """
+
+    if result.decision != "unverified":
+        return result
+    if result.reason not in {"missing_saved_args", "missing_saved_parent_payload"}:
+        return result
+    justification = _not_saved_by_user_justification(trace, layer, result.reason)
+    if justification is None:
+        return result
+    return ValidationCheckResult.exempted("not_saved_by_user", justification)
+
+
+def _not_saved_by_user_justification(
+    trace: "Trace",
+    layer: Op,
+    original_reason: str,
+) -> str | None:
+    """Return predicate-save evidence for a by-design replay omission.
+
+    Parameters
+    ----------
+    trace:
+        Trace being validated.
+    layer:
+        Operation or layer whose replay payload is absent.
+    original_reason:
+        Raw unverified reason before taxonomy classification.
+
+    Returns
+    -------
+    str or None
+        Human-readable save-configuration proof, or ``None`` when the omission
+        is not known to come from predicate selective capture.
+    """
+
+    predicate_options = getattr(trace, "_predicate_save_options", None)
+    predicate_decisions = getattr(trace, "_predicate_save_decisions", None)
+    if predicate_options is None and not predicate_decisions:
+        return None
+    label = str(getattr(layer, "label", getattr(layer, "layer_label", "<unknown>")))
+    func_name = str(getattr(layer, "func_name", "<unknown>"))
+    has_saved_activation = bool(getattr(layer, "has_saved_activation", False))
+    saved_args_present = getattr(layer, "saved_args", None) is not None
+    default_op = getattr(predicate_options, "default_op", None)
+    keep_op = getattr(predicate_options, "keep_op", None)
+    keep_op_name = getattr(keep_op, "__name__", type(keep_op).__name__) if keep_op else None
+    return (
+        "predicate save configuration excluded replay payload "
+        f"(original_reason={original_reason}, op_label={label}, func_name={func_name}, "
+        f"has_saved_activation={has_saved_activation}, saved_args_present={saved_args_present}, "
+        f"save_arg_values={bool(getattr(trace, 'save_arg_values', False))}, "
+        f"default_op={default_op}, keep_op={keep_op_name})"
     )
 
 

@@ -166,6 +166,26 @@ class TinyAddRelu(nn.Module):
         return torch.relu(x + 1)
 
 
+class TinyAddMul(nn.Module):
+    """Small model with a selectively saved downstream multiplication."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run an add followed by a multiplication.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Multiplied output tensor.
+        """
+
+        return (x + 1) * 2
+
+
 class TinyCholesky(nn.Module):
     """Model whose perturbed parent can make replay execution invalid."""
 
@@ -241,6 +261,23 @@ def _wrong_add(input_tensor: torch.Tensor, *_args: Any, **_kwargs: Any) -> torch
     """
 
     return torch.zeros_like(input_tensor)
+
+
+def _save_only_mul(ctx: Any) -> bool:
+    """Select only multiplication ops during predicate capture.
+
+    Parameters
+    ----------
+    ctx:
+        Predicate record context.
+
+    Returns
+    -------
+    bool
+        True when the op is a multiplication.
+    """
+
+    return ctx.func_name in {"__mul__", "mul"}
 
 
 def _status_for_trace(trace: Any, outputs: list[torch.Tensor]) -> ValidationReplayStatus:
@@ -376,6 +413,16 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         save_arg_values=False,
     )
 
+    torch.manual_seed(19)
+    selective_save = TinyAddMul().eval()
+    x_selective = torch.randn(2, 3)
+    selective_trace = tl.trace(
+        selective_save,
+        x_selective,
+        save=_save_only_mul,
+        save_arg_values=True,
+    )
+
     torch.manual_seed(18)
     cholesky = TinyCholesky().eval()
     x_cholesky = torch.eye(3).unsqueeze(0) * 2
@@ -408,6 +455,9 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         "tiny_partial_save": _case_summary(
             _seeded_status_for_trace(107, partial_trace, [_trace_output(partial_trace)])
         ),
+        "tiny_selective_save": _case_summary(
+            _seeded_status_for_trace(109, selective_trace, [_trace_output(selective_trace)])
+        ),
         "tiny_cholesky": _case_summary(
             _seeded_status_for_trace(108, cholesky_trace, [_trace_output(cholesky_trace)])
         ),
@@ -433,6 +483,7 @@ def test_validation_decision_snapshot_covers_required_categories() -> None:
     assert ("exempted", "uninitialized_by_design") in reason_decisions
     assert ("exempted", "functionless_source_or_boundary") in reason_decisions
     assert ("exempted", "intentional_intervention_replacement") in reason_decisions
+    assert ("exempted", "not_saved_by_user") in reason_decisions
     assert ("unverified", "missing_saved_args") in reason_decisions
     assert ("unverified", "perturbation_execution_exception") in reason_decisions
 
