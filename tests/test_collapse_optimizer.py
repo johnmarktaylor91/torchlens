@@ -637,10 +637,18 @@ def test_bert_and_distilbert_small_config_auto_cuts_stay_pinned() -> None:
     bert_trace = _trace(transformers.BertModel(bert_config), torch.randint(0, 100, (1, 8)))
     try:
         bert_result = select_collapse_plan(bert_trace, RenderContext(), mode="auto")
-        assert bert_result.visible_count == 23
+        # Pinned plan for typed HF output-path capture: with faithful per-leaf
+        # output paths (last_hidden_state / pooler_output) the optimizer folds
+        # per-layer attention/output submodules instead of whole opaque
+        # BertLayer boxes, surfacing the post-attention residual edge and the
+        # FFN ops. Visually reviewed before pinning; stays within the readable
+        # band (40).
+        assert bert_result.visible_count == 29
         assert bert_result.selected == {
-            "encoder.layer.0",
-            "encoder.layer.1",
+            "encoder.layer.0.attention",
+            "encoder.layer.0.output",
+            "encoder.layer.1.attention",
+            "encoder.layer.1.output",
         }
     finally:
         bert_trace.cleanup()
@@ -659,7 +667,10 @@ def test_bert_and_distilbert_small_config_auto_cuts_stay_pinned() -> None:
     )
     try:
         distil_result = select_collapse_plan(distil_trace, RenderContext(), mode="auto")
-        assert distil_result.visible_count == 18
+        # 18 -> 19: the embeddings position_ids buffer is now surfaced as an
+        # explicit input node under typed HF output-path capture (same reviewed
+        # rebaseline as the BERT pin above); selected modules are unchanged.
+        assert distil_result.visible_count == 19
         assert distil_result.selected == {
             "embeddings",
             "transformer.layer.0.attention",
