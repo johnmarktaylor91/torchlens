@@ -1,0 +1,109 @@
+{
+  "cases": {
+    "conv_plateau": {
+      "auto": {
+        "dot_len": 15342,
+        "dot_sha256": "611118a2148276e27b7df80bf37464adf956b3d626689afbf35eac1a79e1599f",
+        "plan_repr_len": 47,
+        "plan_sha256": "681ece3cd8c502eb57b8e1c24fbd9105c70fa51c612f1f993ec885ae28bccf4f"
+      },
+      "max": {
+        "dot_len": 14340,
+        "dot_sha256": "882e211e52392d4a2b823a6d39a00cf926ca8129ad8d3333bdb60b6dd08a76a1",
+        "plan_repr_len": 61,
+        "plan_sha256": "308ee077abe95d24e0484b64b8f087c8db045db0be66a3ff70c520702069883b"
+      },
+      "none_default": {
+        "dot_len": 24142,
+        "dot_sha256": "b395a3551c56fd48b92d40839fb4a09dd65603f07904f42db99c685b8e1b312e"
+      },
+      "none_fold_False": {
+        "dot_len": 24142,
+        "dot_sha256": "b395a3551c56fd48b92d40839fb4a09dd65603f07904f42db99c685b8e1b312e"
+      },
+      "none_fold_True": {
+        "dot_len": 8752,
+        "dot_sha256": "4ff879d33105fefa4c70af50e83c65f5d8a0ad8a08779b5591eaa6a4dbd2d292"
+      }
+    },
+    "repeated_residual": {
+      "auto": {
+        "dot_len": 13290,
+        "dot_sha256": "604b4941ea24316866d9aaef566c56d57616dbba42ad2946de0f3c2d05df3407",
+        "plan_repr_len": 33,
+        "plan_sha256": "c5e1459291685012dcb96ef614acfe4fd866272941191aa2f06091a83ffbc526"
+      },
+      "max": {
+        "dot_len": 5753,
+        "dot_sha256": "de753138a90e9eb6f34f1aabfd28a532b8eea8c0b9f1b8685ee8e464f4b4770e",
+        "plan_repr_len": 45,
+        "plan_sha256": "98cbcef8b6f4a4de483df28fbdb2729926010cf9cb80a949a96272f094197515"
+      },
+      "none_default": {
+        "dot_len": 13277,
+        "dot_sha256": "cebd5b7b4e9e0f609c7e0c31549edd8d0b927b7b7b640e81b57d939a0869ebd7"
+      },
+      "none_fold_False": {
+        "dot_len": 13277,
+        "dot_sha256": "cebd5b7b4e9e0f609c7e0c31549edd8d0b927b7b7b640e81b57d939a0869ebd7"
+      },
+      "none_fold_True": {
+        "dot_len": 5639,
+        "dot_sha256": "a10b41714aadd97e837ef8e5e970c3916a3cb8c56ebdff5dbb2de12f989590a4"
+      }
+    },
+    "torchvision_resnet18": {
+      "auto": {
+        "dot_len": 24579,
+        "dot_sha256": "f34592e1d9529d3e173a60d649865615ab844af92b5aca91e4a073903d18ef54",
+        "plan_repr_len": 46,
+        "plan_sha256": "ebb06cd166356ec948c06c22a4a29962cd5e949c60505f041cfea62f98f4d646"
+      },
+      "max": {
+        "dot_len": 20959,
+        "dot_sha256": "5c0688ab21877afa7dcb4377b1381f83f94b31c08f38a974f2684aa9567ac934",
+        "plan_repr_len": 63,
+        "plan_sha256": "2073be9f9c406161163137f6ad7e6c93b991357ae959432209129fde4fe40189"
+      },
+      "none_default": {
+        "dot_len": 57302,
+        "dot_sha256": "56bc656008c33c6df3805e877e8c2ddc271972bc5766be823ea485ef88bdc523"
+      },
+      "none_fold_False": {
+        "dot_len": 57302,
+        "dot_sha256": "56bc656008c33c6df3805e877e8c2ddc271972bc5766be823ea485ef88bdc523"
+      },
+      "none_fold_True": {
+        "dot_len": 57302,
+        "dot_sha256": "56bc656008c33c6df3805e877e8c2ddc271972bc5766be823ea485ef88bdc523"
+      }
+    },
+    "uniform_stack": {
+      "auto": {
+        "dot_len": 11090,
+        "dot_sha256": "3e90a69c46c0db634ce84eb19642580f032def429fe72455c54c077e545bb8f6",
+        "plan_repr_len": 33,
+        "plan_sha256": "c5e1459291685012dcb96ef614acfe4fd866272941191aa2f06091a83ffbc526"
+      },
+      "max": {
+        "dot_len": 3566,
+        "dot_sha256": "01c64e85299fdbfc96801cd2aa75d70d50e87876badef71dd05de6e0de687951",
+        "plan_repr_len": 45,
+        "plan_sha256": "98cbcef8b6f4a4de483df28fbdb2729926010cf9cb80a949a96272f094197515"
+      },
+      "none_default": {
+        "dot_len": 11077,
+        "dot_sha256": "d3b83bd26000f3cdd62885389f1f3af3c3373bc45c62f5138c89947372a5690a"
+      },
+      "none_fold_False": {
+        "dot_len": 11077,
+        "dot_sha256": "d3b83bd26000f3cdd62885389f1f3af3c3373bc45c62f5138c89947372a5690a"
+      },
+      "none_fold_True": {
+        "dot_len": 3997,
+        "dot_sha256": "be6c662a0384143bd8401aadfa72a9593a93e50f3369ad2089d64d7bc917e02a"
+      }
+    }
+  },
+  "version": 1
+}
