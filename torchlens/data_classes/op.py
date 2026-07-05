@@ -879,7 +879,7 @@ class Op:
         "output_device": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "interventions": FieldPolicy.DROP,
+        "interventions": FieldPolicy.KEEP,
         "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,

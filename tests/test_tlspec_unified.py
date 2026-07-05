@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends import BackendPayloadUnsupportedError
-from torchlens.intervention.types import InterventionSpec
+from torchlens.intervention.types import FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
 
@@ -291,6 +291,57 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     assert [layer.layer_label for layer in loaded.layer_list] == [
         layer.layer_label for layer in log.layer_list
     ]
+
+
+@pytest.mark.smoke
+def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path: Path) -> None:
+    """Trace.save preserves per-op intervention fire records."""
+
+    log = tl.trace(
+        UnifiedTinyModel().eval(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+        hooks={tl.func("relu"): tl.zero_ablate()},
+    )
+    path = tmp_path / "trace_forward_intervention.tlspec"
+
+    log.save(path)
+    loaded = tl.load(path)
+
+    assert isinstance(loaded, tl.Trace)
+    records = [
+        record
+        for layer in loaded.layer_list
+        for record in getattr(layer, "interventions", []) or []
+    ]
+    assert records
+    assert all(isinstance(record, FireRecord) for record in records)
+    assert records[0].direction == "forward"
+
+
+@pytest.mark.smoke
+def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
+    """Trace.save preserves backward GradFnCall intervention fire refs."""
+
+    x = torch.randn(2, 3, requires_grad=True)
+    log = tl.trace(UnifiedTinyModel().eval(), x, save_grads="all", backward_ready=True)
+    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    path = tmp_path / "trace_backward_intervention.tlspec"
+
+    log.save(path)
+    loaded = tl.load(path)
+
+    assert isinstance(loaded, tl.Trace)
+    refs = [
+        call.intervention_fire_ref
+        for grad_fn in loaded.grad_fn_logs.values()
+        for call in grad_fn.calls._list
+        if call.intervention_fire_ref is not None
+    ]
+    assert refs
+    assert isinstance(refs[0], FireRecord)
+    assert refs[0].direction == "backward"
 
 
 @pytest.mark.smoke

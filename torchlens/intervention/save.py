@@ -35,6 +35,7 @@ from .resolver import (
     resolve_sites,
 )
 from .types import (
+    FireRecord,
     FrozenTargetSpec,
     FunctionRegistryKey,
     HelperSpec,
@@ -132,6 +133,7 @@ def save_intervention(
         (tmp_path / _TENSOR_DIR).mkdir()
 
         spec = getattr(log, "_intervention_spec", None) or InterventionSpec()
+        _sync_spec_records_from_log(spec, log)
         serialized_spec = _serialize_intervention_spec(spec, save_level, state)
         function_keys = _serialize_function_registry_keys(log)
         target_manifest = _build_target_manifest(log, spec)
@@ -420,9 +422,142 @@ def _serialize_intervention_spec(
         "hook_specs": [
             _serialize_hook_spec(hook_spec, save_level, state) for hook_spec in spec.hook_specs
         ],
-        "records": [asdict(record) for record in spec.records],
+        "records": [_serialize_fire_record(record, save_level, state) for record in spec.records],
         "metadata": _jsonish_metadata(spec.metadata),
     }
+
+
+def _sync_spec_records_from_log(spec: InterventionSpec, log: Any) -> None:
+    """Merge trace-local fire records into an intervention spec ledger.
+
+    Parameters
+    ----------
+    spec:
+        Mutable intervention spec about to be saved.
+    log:
+        Trace-like object that may hold per-op or backward-call records.
+
+    Returns
+    -------
+    None
+        Mutates ``spec.records`` with de-duplicated records.
+    """
+
+    merged: list[FireRecord] = []
+    seen: set[tuple[Any, ...]] = set()
+    for record in [*getattr(spec, "records", []), *_trace_fire_records(log)]:
+        key = _fire_record_key(record)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(record)
+    spec.records = merged
+
+
+def _trace_fire_records(log: Any) -> list[FireRecord]:
+    """Return all fire records materialized on a trace.
+
+    Parameters
+    ----------
+    log:
+        Trace-like object.
+
+    Returns
+    -------
+    list[FireRecord]
+        Forward and backward fire records found on the trace.
+    """
+
+    records: list[FireRecord] = []
+    for layer in getattr(log, "layer_list", []) or []:
+        records.extend(
+            record
+            for record in getattr(layer, "interventions", []) or []
+            if isinstance(record, FireRecord)
+        )
+    for grad_fn in getattr(log, "grad_fn_logs", {}).values():
+        for call in getattr(getattr(grad_fn, "calls", None), "_list", []):
+            records.extend(_flatten_fire_ref(getattr(call, "intervention_fire_ref", None)))
+    return records
+
+
+def _flatten_fire_ref(value: Any) -> list[FireRecord]:
+    """Flatten a GradFnCall fire-ref field into records.
+
+    Parameters
+    ----------
+    value:
+        FireRecord, tuple of records, or ``None``.
+
+    Returns
+    -------
+    list[FireRecord]
+        Fire records in the reference.
+    """
+
+    if isinstance(value, FireRecord):
+        return [value]
+    if isinstance(value, tuple):
+        return [item for item in value if isinstance(item, FireRecord)]
+    return []
+
+
+def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
+    """Return a stable de-duplication key for a fire record.
+
+    Parameters
+    ----------
+    record:
+        Fire record to identify.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Key covering direction, site, helper, timing, callback index, and
+        timestamp.
+    """
+
+    return (
+        record.direction,
+        record.engine,
+        record.target_label,
+        record.call_label,
+        record.helper_name,
+        record.timing,
+        record.backward_pass_index,
+        record.call_index,
+        record.grad_kind,
+        record.tuple_index,
+        record.timestamp,
+    )
+
+
+def _serialize_fire_record(
+    record: FireRecord,
+    save_level: SaveLevel,
+    state: _SerializedState,
+) -> dict[str, Any]:
+    """Serialize a fire record with callable-safe helper handling.
+
+    Parameters
+    ----------
+    record:
+        Fire record to serialize.
+    save_level:
+        Requested save level.
+    state:
+        Serialization tensor state.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-safe fire-record payload.
+    """
+
+    data = asdict(record)
+    data["helper"] = _serialize_value(record.helper, save_level, state)
+    data["container_path"] = _serialize_value(record.container_path, save_level, state)
+    return data
 
 
 def _serialize_target_value_spec(
@@ -677,7 +812,48 @@ def _deserialize_intervention_spec(
                 metadata=dict(item.get("metadata", {})),
             )
         )
+    spec.records = [_deserialize_fire_record(item, tensors) for item in data.get("records", [])]
     return spec
+
+
+def _deserialize_fire_record(data: dict[str, Any], tensors: dict[str, torch.Tensor]) -> FireRecord:
+    """Deserialize one fire record from JSON-safe data.
+
+    Parameters
+    ----------
+    data:
+        JSON fire-record payload.
+    tensors:
+        Loaded tensor refs.
+
+    Returns
+    -------
+    FireRecord
+        Runtime fire record.
+    """
+
+    helper = _deserialize_value(data.get("helper"), tensors)
+    container_path = _deserialize_value(data.get("container_path", ()), tensors)
+    return FireRecord(
+        target_label=str(data.get("target_label", "")),
+        call_label=data.get("call_label"),
+        func_call_id=data.get("func_call_id"),
+        container_path=tuple(container_path or ()),
+        engine=data.get("engine"),
+        helper=helper if isinstance(helper, HelperSpec) else None,
+        site_label=data.get("site_label"),
+        timing=data.get("timing"),
+        direction=data.get("direction"),
+        helper_name=data.get("helper_name"),
+        seed=data.get("seed"),
+        determinism_note=data.get("determinism_note"),
+        timestamp=data.get("timestamp"),
+        backward_pass_index=data.get("backward_pass_index"),
+        call_index=data.get("call_index"),
+        grad_kind=data.get("grad_kind"),
+        tuple_index=data.get("tuple_index"),
+        replaced=data.get("replaced"),
+    )
 
 
 def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
