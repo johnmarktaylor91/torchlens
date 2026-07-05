@@ -1,0 +1,42 @@
+name: Weekly
+
+on:
+  schedule:
+    - cron: "23 5 * * 6"
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  extended-tests:
+    name: Slow and rare tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install torch and TorchLens
+        run: |
+          uv pip install --system "torch==2.7.*" \
+            --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system -e ".[dev,test,tabular]"
+
+      - name: Run slow tests
+        run: |
+          pytest tests/ -m slow --tb=short
+
+      - name: Run rare tests
+        run: |
+          pytest tests/ -m rare --tb=short

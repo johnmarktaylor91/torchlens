@@ -1,0 +1,88 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  fast-tier:
+    name: Full fast tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install torch and TorchLens
+        run: |
+          uv pip install --system "torch==2.7.*" \
+            --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system -e ".[dev,test,tabular]"
+
+      - name: Run fast tests
+        run: |
+          pytest tests/ -m "not slow" --tb=short
+
+  preview-backends:
+    name: Preview backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install TorchLens and preview backends
+        run: |
+          uv pip install --system -e ".[dev,test,tabular]"
+          uv pip install --system tensorflow-cpu "jax[cpu]" tinygrad paddlepaddle
+          # MLX is Apple-silicon-only, so it is intentionally excluded on Linux CI.
+
+      - name: Run preview backend tests
+        run: |
+          pytest tests/backends/ -m "not slow" --tb=short
+
+  wheel:
+    name: Wheel package smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build wheel
+        run: |
+          uv pip install --system build
+          python -m build --wheel --outdir "${{ runner.temp }}/dist"
+
+      - name: Install wheel in a clean venv
+        run: |
+          python -m venv "${{ runner.temp }}/wheel-venv"
+          "${{ runner.temp }}/wheel-venv/bin/python" -m pip install --upgrade pip
+          "${{ runner.temp }}/wheel-venv/bin/python" -m pip install "${{ runner.temp }}"/dist/torchlens-*.whl
+
+      - name: Round-trip packaged tlspec
+        working-directory: ${{ runner.temp }}
+        run: |
+          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), layers_to_save='none'); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
