@@ -165,16 +165,19 @@ def format_model_repr(trace: "Trace") -> str:
         Short two-line representation.
     """
     state = getattr(getattr(trace, "state", None), "name", "UNKNOWN")
-    if not trace._tracing_finished:
+    model_class_name = getattr(trace, "model_class_name", None)
+    tracing_finished = getattr(trace, "_tracing_finished", True)
+    if not tracing_finished:
         return (
             f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
-            f"model_class_qualname={trace.model_class_name!r}, layers={_live_op_count(trace)}, "
+            f"model_class_qualname={model_class_name!r}, layers={_live_op_count(trace)}, "
             f"state={state})"
         )
 
+    layer_logs = getattr(trace, "layer_logs", {}) or {}
     return (
         f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
-        f"model_class_qualname={trace.model_class_name!r}, layers={len(trace.layer_logs)}, "
+        f"model_class_qualname={model_class_name!r}, layers={len(layer_logs)}, "
         f"state={state})"
     )
 

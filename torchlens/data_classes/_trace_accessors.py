@@ -206,6 +206,3 @@ _TRACE_OP_ACCESSOR_CACHE: weakref.WeakKeyDictionary[Any, tuple[int, TraceOpAcces
 _TRACE_LAYER_ACCESSOR_CACHE: weakref.WeakKeyDictionary[Any, tuple[int, Any]] = (
     weakref.WeakKeyDictionary()
 )
-_TRACE_MODULE_CALL_ACCESSOR_CACHE: weakref.WeakKeyDictionary[
-    Any, tuple[int, TraceModuleCallAccessor]
-] = weakref.WeakKeyDictionary()

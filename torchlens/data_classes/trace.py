@@ -142,8 +142,10 @@ from .op import Op, TensorLog
 from ._state_adapter import state_items, state_new, state_restore
 from ._trace_accessors import (
     _TRACE_LAYER_ACCESSOR_CACHE,
-    _TRACE_MODULE_CALL_ACCESSOR_CACHE,
     _TRACE_OP_ACCESSOR_CACHE,
+)
+from ._trace_export import (
+    _TO_PANDAS_EXCLUDED_OP_FIELDS,  # moved; import from _trace_export
 )
 
 if TYPE_CHECKING:
@@ -2450,7 +2452,6 @@ class Trace(
         state_restore(self, replacement_state)
         _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
         _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
-        _TRACE_MODULE_CALL_ACCESSOR_CACHE.pop(self, None)
         self._rebind_fork_owner_refs()
 
     def _refresh_matching_rerun_state_from(self, new_log: "Trace") -> bool:
@@ -2483,7 +2484,6 @@ class Trace(
         self._refresh_rerun_trace_fields_from(new_log)
         _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
         _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
-        _TRACE_MODULE_CALL_ACCESSOR_CACHE.pop(self, None)
         self._rebind_fork_owner_refs()
         return True
 

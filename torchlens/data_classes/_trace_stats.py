@@ -28,7 +28,6 @@ from ._trace_accessors import (
     TraceModuleCallAccessor,
     TraceOpAccessor,
     _TRACE_LAYER_ACCESSOR_CACHE,
-    _TRACE_MODULE_CALL_ACCESSOR_CACHE,
     _TRACE_OP_ACCESSOR_CACHE,
 )
 from .backward_pass import BackwardPass, BackwardPassAccessor
@@ -677,17 +676,11 @@ class TraceStatsMixin:
     def module_calls(self) -> TraceModuleCallAccessor:
         """Access per-invocation ModuleCall records by call label or index."""
 
-        num_calls = sum(len(module.calls) for module in self._module_logs)
-        cache_entry = _TRACE_MODULE_CALL_ACCESSOR_CACHE.get(self)
-        if cache_entry is not None and cache_entry[0] == num_calls:
-            return cache_entry[1]
         calls: OrderedDict[str, Any] = OrderedDict()
         for module in self._module_logs:
             for call in module.calls.values():
                 calls[call.call_label] = call
-        accessor = TraceModuleCallAccessor(calls)
-        _TRACE_MODULE_CALL_ACCESSOR_CACHE[self] = (num_calls, accessor)
-        return accessor
+        return TraceModuleCallAccessor(calls)
 
     @property
     def num_module_calls(self) -> int:
