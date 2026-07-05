@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import textwrap
 from collections.abc import Callable
 from typing import Any
 
@@ -11,6 +14,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
+from torchlens.utils.hashing import compute_graph_shape_hash
 
 
 HashPair = tuple[str, str]
@@ -363,6 +367,80 @@ class ParameterReuseModel(nn.Module):
         return self.proj(torch.relu(self.proj(x)))
 
 
+class DirectPackingModel(nn.Module):
+    """Model whose operations live under direct child modules."""
+
+    def __init__(self) -> None:
+        """Initialize the direct module packing."""
+
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+        self.activation = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the directly packed operations.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Model output.
+        """
+
+        return self.activation(self.proj(x))
+
+
+class NestedPackingModel(nn.Module):
+    """Model whose identical operations live under a nested module."""
+
+    def __init__(self) -> None:
+        """Initialize the nested module packing."""
+
+        super().__init__()
+        self.block = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the nested operations.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Model output.
+        """
+
+        return self.block(x)
+
+
+def _trace_model(model: nn.Module, example_input: Any) -> Any:
+    """Trace a model under deterministic inference settings.
+
+    Parameters
+    ----------
+    model:
+        Model to trace.
+    example_input:
+        Example input passed to ``tl.trace``.
+
+    Returns
+    -------
+    Any
+        TorchLens trace.
+    """
+
+    model.eval()
+    with torch.no_grad():
+        return tl.trace(model, example_input, capture=CaptureOptions(inference_only=True))
+
+
 def _trace_hash_pair(model: nn.Module, example_input: Any) -> HashPair:
     """Trace a model and return both graph-shape hashes.
 
@@ -379,10 +457,31 @@ def _trace_hash_pair(model: nn.Module, example_input: Any) -> HashPair:
         Public graph-shape hash and raw-event shape hash.
     """
 
-    model.eval()
-    with torch.no_grad():
-        trace = tl.trace(model, example_input, capture=CaptureOptions(inference_only=True))
+    trace = _trace_model(model, example_input)
     return str(trace.graph_shape_hash), str(trace._raw_event_shape_hash)  # noqa: SLF001
+
+
+def _graph_hash_for_tiny_mlp(seed: int, device: str = "cpu") -> str:
+    """Return the graph-shape hash for a seeded tiny MLP.
+
+    Parameters
+    ----------
+    seed:
+        Torch random seed used for model/input construction.
+    device:
+        Device for the model and input.
+
+    Returns
+    -------
+    str
+        Graph-shape hash.
+    """
+
+    torch.manual_seed(seed)
+    model = TinyMlp().to(device)
+    example_input = torch.randn(2, 4, device=device)
+    trace = _trace_model(model, example_input)
+    return str(compute_graph_shape_hash(trace))
 
 
 def _hashes_for_repeated_traces(factory: Callable[[], tuple[nn.Module, Any]]) -> list[HashPair]:
@@ -461,3 +560,72 @@ def test_graph_hash_is_shape_blind_but_raw_event_hash_catches_width_change() -> 
 
     assert graph_width_8 == graph_width_16
     assert raw_width_8 != raw_width_16
+
+
+def test_graph_shape_hash_matches_across_fresh_python_process() -> None:
+    """Graph-shape hash is deterministic across a fresh Python process."""
+
+    expected_hash = _graph_hash_for_tiny_mlp(seed=123)
+    script = textwrap.dedent(
+        """
+        import torch
+        from torch import nn
+
+        import torchlens as tl
+        from torchlens.options import CaptureOptions
+        from torchlens.utils.hashing import compute_graph_shape_hash
+
+
+        class TinyMlp(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.net = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 3))
+
+            def forward(self, x):
+                return self.net(x)
+
+
+        torch.manual_seed(123)
+        model = TinyMlp()
+        example_input = torch.randn(2, 4)
+        model.eval()
+        with torch.no_grad():
+            trace = tl.trace(model, example_input, capture=CaptureOptions(inference_only=True))
+        print(compute_graph_shape_hash(trace))
+        """
+    )
+
+    actual_hash = subprocess.check_output(
+        [sys.executable, "-c", script],
+        text=True,
+    ).strip()
+
+    assert actual_hash == expected_hash
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+def test_graph_shape_hash_matches_between_cpu_and_cuda() -> None:
+    """Graph-shape hash is device-blind for the same model topology."""
+
+    assert _graph_hash_for_tiny_mlp(seed=456, device="cpu") == _graph_hash_for_tiny_mlp(
+        seed=456, device="cuda"
+    )
+
+
+def test_graph_shape_hash_distinguishes_identical_ops_under_different_module_packings() -> None:
+    """Identical op sequences under different module addresses hash differently."""
+
+    torch.manual_seed(0)
+    example_input = torch.randn(2, 4)
+    direct_trace = _trace_model(DirectPackingModel(), example_input)
+    nested_trace = _trace_model(NestedPackingModel(), example_input)
+
+    direct_ops = [layer.func_name for layer in direct_trace.layer_list]
+    nested_ops = [layer.func_name for layer in nested_trace.layer_list]
+
+    assert direct_ops == nested_ops
+    assert compute_graph_shape_hash(direct_trace) != compute_graph_shape_hash(nested_trace)
+
+
+# Torch-version-matrix determinism is a manual CI-matrix gate: one test
+# environment cannot import and compare two independent torch versions.

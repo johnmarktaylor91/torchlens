@@ -20,13 +20,13 @@ import traceback
 from collections import Counter, defaultdict
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ContextManager, Mapping, Sequence, cast
 
 from menagerie import cluster_runner
-from menagerie.catalog import CatalogRow, load_rows
+from menagerie.catalog import CatalogRow, catalog_row_from_payload, load_rows
 from menagerie import envs
 from menagerie.recipe import (
     build_input_for_row,
@@ -73,6 +73,7 @@ from menagerie.ledger import (
     utc_now,
     with_machine_metadata,
 )
+from menagerie.worker_subprocess import run_worker_subprocess
 
 
 DEFAULT_OUT_DIR = Path("/tmp/torchlens_menagerie_validation")
@@ -3123,41 +3124,6 @@ def _lpt_sort_key(
     return (item.estimated_memory_mb, duration_estimates.get(item.row.stable_id, 0.0))
 
 
-def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
-    """Build a catalog row from a JSON-compatible payload.
-
-    Parameters
-    ----------
-    payload:
-        JSON-compatible row payload.
-
-    Returns
-    -------
-    CatalogRow
-        Catalog row.
-    """
-
-    return CatalogRow(
-        model_id=int(payload["model_id"]),
-        display_index=int(payload.get("display_index", payload["model_id"])),
-        stable_id=str(payload.get("stable_id", "")),
-        name=str(payload["name"]),
-        variant=str(payload.get("variant", "")),
-        family=str(payload["family"]),
-        family_normalized=str(payload["family_normalized"]),
-        domain=str(payload["domain"]),
-        zoo=str(payload["zoo"]),
-        constructor_call=str(payload["constructor_call"]),
-        input_shape=str(payload["input_shape"]),
-        input_dtype=str(payload["input_dtype"]),
-        era=str(payload["era"]),
-        verified=bool(payload["verified"]),
-        notes=str(payload["notes"]),
-        source=str(payload.get("source", "catalog")),
-        recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
-    )
-
-
 MIN_SCALED_SPATIAL_DIM = 32
 
 
@@ -4563,7 +4529,7 @@ def validate_with_timeout(
         "-m",
         "menagerie.validate_menagerie",
         "--worker-row-json",
-        json.dumps(row.__dict__),
+        json.dumps(asdict(row)),
         "--scope",
         scope,
         "--device",
@@ -4600,108 +4566,33 @@ def validate_with_timeout(
         tmp_dir.mkdir(parents=True, exist_ok=True)
         for key in ("TMPDIR", "TEMP", "TMP"):
             child_env[key] = str(tmp_dir)
-    timeout_start = time.monotonic()
-    peak_rss_mb: int | None = None
-    try:
-        import psutil
-    except Exception:
-        psutil = None
-    proc = subprocess.Popen(
+    # Drain stdout AND stderr concurrently while polling RSS and timeout inside
+    # the shared driver. On timeout it kills the whole process group so worker
+    # grandchildren cannot survive the failed validation attempt.
+    completed = run_worker_subprocess(
         command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
         env=child_env,
+        timeout_sec=timeout_sec,
+        poll_interval_sec=WORKER_TIMEOUT_POLL_INTERVAL_SEC,
+        sample_peak_rss=True,
     )
-    # Drain stdout AND stderr CONCURRENTLY on reader threads while we poll RSS and
-    # the timeout. The previous Popen+poll loop never read the pipes until exit;
-    # a chatty worker (torch/torchlens emit warnings on stderr) that wrote past
-    # the ~64KB OS pipe buffer would BLOCK on write(), never finish, and the loop
-    # would only escape via the timeout branch -- recording a false failed:timeout
-    # for a model that would have PASSED. subprocess.run(capture_output=True) does
-    # not have this bug precisely because it spawns reader threads; we restore
-    # that drain here while keeping the per-0.5s RSS sampler.
-    stdout_chunks: list[str] = []
-    stderr_chunks: list[str] = []
-
-    def _drain(stream: Any, sink: list[str]) -> None:
-        """Read a worker pipe to EOF into ``sink`` (prevents pipe-buffer deadlock)."""
-
-        try:
-            for chunk in iter(stream.readline, ""):
-                sink.append(chunk)
-        except Exception:
-            pass
-        finally:
-            try:
-                stream.close()
-            except Exception:
-                pass
-
-    stdout_reader = threading.Thread(target=_drain, args=(proc.stdout, stdout_chunks), daemon=True)
-    stderr_reader = threading.Thread(target=_drain, args=(proc.stderr, stderr_chunks), daemon=True)
-    stdout_reader.start()
-    stderr_reader.start()
-    psutil_proc = None
-    if psutil is not None:
-        try:
-            psutil_proc = psutil.Process(proc.pid)
-        except Exception:
-            psutil_proc = None
-    while proc.poll() is None:
-        if psutil_proc is not None:
-            try:
-                rss_bytes = psutil_proc.memory_info().rss
-                for child in psutil_proc.children(recursive=True):
-                    try:
-                        rss_bytes += child.memory_info().rss
-                    except Exception:
-                        continue
-                sampled_mb = int(rss_bytes // (1024**2))
-                peak_rss_mb = max(peak_rss_mb or 0, sampled_mb)
-            except Exception:
-                psutil_proc = None
-        if time.monotonic() - timeout_start >= timeout_sec:
-            try:
-                proc.kill()
-            finally:
-                proc.wait()
-                # Readers exit at EOF once the process is dead; join briefly so we
-                # do not leak threads. Output is discarded on a genuine timeout.
-                stdout_reader.join(timeout=5.0)
-                stderr_reader.join(timeout=5.0)
-            return ValidationResult(
-                row.name,
-                row.model_id,
-                "failed:timeout",
-                0,
-                False,
-                scope,
-                timeout_sec,
-                plan.cluster_key,
-                f"timed out after {timeout_sec:.1f}s",
-                stable_id=row.stable_id,
-                recipe_revision_sha256=row.recipe_revision_sha256,
-                peak_rss_mb=peak_rss_mb,
-                input_scale=input_scale,
-            )
-        time.sleep(WORKER_TIMEOUT_POLL_INTERVAL_SEC)
-    proc.wait()
-    # The process has exited; join the readers so every byte the worker wrote is
-    # captured (its single small JSON result line on stdout, plus any stderr).
-    stdout_reader.join()
-    stderr_reader.join()
-    completed = subprocess.CompletedProcess(
-        command,
-        proc.returncode,
-        "".join(stdout_chunks),
-        "".join(stderr_chunks),
-    )
-    if peak_rss_mb is None and psutil_proc is not None:
-        try:
-            peak_rss_mb = int(psutil_proc.memory_info().rss // (1024**2))
-        except Exception:
-            peak_rss_mb = None
+    peak_rss_mb = completed.peak_rss_mb
+    if completed.timed_out:
+        return ValidationResult(
+            row.name,
+            row.model_id,
+            "failed:timeout",
+            0,
+            False,
+            scope,
+            timeout_sec,
+            plan.cluster_key,
+            f"timed out after {timeout_sec:.1f}s",
+            stable_id=row.stable_id,
+            recipe_revision_sha256=row.recipe_revision_sha256,
+            peak_rss_mb=peak_rss_mb,
+            input_scale=input_scale,
+        )
     for line in reversed(completed.stdout.splitlines()):
         try:
             payload = json.loads(line)

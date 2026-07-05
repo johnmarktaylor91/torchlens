@@ -14,6 +14,7 @@ import pytest
 from menagerie.catalog import CatalogRow
 from menagerie.ledger import VerificationRun, append_verification_run, connect
 from menagerie.cluster_runner import ResourceRoute
+from menagerie.generate_menagerie import run_worker_subprocess as render_worker_subprocess
 from menagerie.runtime import DependencyPlan
 from menagerie.validate_menagerie import (
     BIG_MODEL_THRESHOLD_MB,
@@ -43,6 +44,8 @@ from menagerie.validate_menagerie import (
     validate_one,
     validate_with_timeout,
 )
+from menagerie.validate_menagerie import run_worker_subprocess as validate_worker_subprocess
+from menagerie.worker_subprocess import run_worker_subprocess
 
 
 def _row(stable_id: str = "m1", name: str = "UnitNet") -> CatalogRow:
@@ -530,6 +533,13 @@ def test_validate_with_timeout_records_peak_rss_on_timeout(
 
     assert result.status == "failed:timeout"
     assert result.peak_rss_mb == 12
+
+
+def test_validate_and_render_workers_share_subprocess_driver() -> None:
+    """Validate and render worker dispatch use the same process-group driver."""
+
+    assert validate_worker_subprocess is run_worker_subprocess
+    assert render_worker_subprocess is run_worker_subprocess
 
 
 def test_validate_with_timeout_drains_chatty_stderr_without_false_timeout(

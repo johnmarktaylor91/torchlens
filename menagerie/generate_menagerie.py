@@ -13,8 +13,6 @@ import json
 import os
 import re
 import shutil
-import signal
-import subprocess
 import sys
 import tempfile
 import threading
@@ -22,11 +20,11 @@ import time
 from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, ContextManager, Iterator, Mapping, Sequence
 
-from menagerie.catalog import CatalogRow, load_rows
+from menagerie.catalog import CatalogRow, catalog_row_from_payload, load_rows
 from menagerie.recipe import (
     build_input_for_row,
     instantiate_model,
@@ -56,6 +54,7 @@ from menagerie.runtime import (
     snapshot_cache,
     unrenderable_reason,
 )
+from menagerie.worker_subprocess import run_worker_subprocess
 
 
 DEFAULT_OUT_DIR = Path("/tmp/torchlens_menagerie_gallery")
@@ -570,41 +569,6 @@ def render_one(
     return attempt_render(model, input_tensor, "cpu")
 
 
-def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
-    """Build a catalog row from a JSON-compatible payload.
-
-    Parameters
-    ----------
-    payload:
-        JSON-compatible row payload.
-
-    Returns
-    -------
-    CatalogRow
-        Catalog row.
-    """
-
-    return CatalogRow(
-        model_id=int(payload["model_id"]),
-        display_index=int(payload.get("display_index", payload["model_id"])),
-        stable_id=str(payload.get("stable_id", "")),
-        name=str(payload["name"]),
-        variant=str(payload.get("variant", "")),
-        family=str(payload["family"]),
-        family_normalized=str(payload["family_normalized"]),
-        domain=str(payload["domain"]),
-        zoo=str(payload["zoo"]),
-        constructor_call=str(payload["constructor_call"]),
-        input_shape=str(payload["input_shape"]),
-        input_dtype=str(payload["input_dtype"]),
-        era=str(payload["era"]),
-        verified=bool(payload["verified"]),
-        notes=str(payload["notes"]),
-        source=str(payload.get("source", "catalog")),
-        recipe_revision_sha256=str(payload.get("recipe_revision_sha256", "")),
-    )
-
-
 def render_result_from_payload(payload: Mapping[str, Any]) -> RenderResult:
     """Build a render result from a JSON-compatible payload.
 
@@ -682,7 +646,7 @@ def render_with_timeout(
         "-m",
         "menagerie.generate_menagerie",
         "--worker-row-json",
-        json.dumps(row.__dict__),
+        json.dumps(asdict(row)),
         "--out-dir",
         str(out_dir),
         "--file-format",
@@ -702,29 +666,14 @@ def render_with_timeout(
             child_env[key] = str(tmp_dir)
     # Run the worker in its OWN session/process group so that on timeout we can
     # kill the entire group. The worker spawns graphviz children (``dot`` /
-    # ``neato``) for layout; ``subprocess.run``'s timeout only kills the direct
-    # child, orphaning those grandchildren -- they then reparent to init and can
-    # run for hours on pathologically dense graphs (load runaway). ``killpg``
-    # reaps the whole tree so a rerun is always safe and self-cleaning.
-    proc = subprocess.Popen(
+    # ``neato``) for layout; killing only the direct child can orphan those
+    # grandchildren on pathologically dense graphs.
+    completed = run_worker_subprocess(
         command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
         env=child_env,
-        start_new_session=True,
+        timeout_sec=timeout_sec,
     )
-    try:
-        stdout, stderr = proc.communicate(timeout=timeout_sec)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
-        try:
-            proc.communicate(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+    if completed.timed_out:
         return RenderResult(
             row.name,
             row.model_id,
@@ -737,7 +686,6 @@ def render_with_timeout(
             stable_id=row.stable_id,
             recipe_revision_sha256=row.recipe_revision_sha256,
         )
-    completed = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
     if completed.returncode != 0:
         stderr_tail = " | ".join(completed.stderr.strip().splitlines()[-5:])
         return RenderResult(

@@ -8,9 +8,9 @@ import re
 import sqlite3
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from menagerie.identity import ensure_stable_ids, recipe_revision_sha256
 from menagerie.schema import (
@@ -204,6 +204,33 @@ class CatalogRow:
     input_is_real: bool = True
     verification_expectation: str = "forward_required"
     quarantine: bool = False
+
+
+def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
+    """Build a catalog row from a JSON-compatible payload.
+
+    Parameters
+    ----------
+    payload:
+        JSON-compatible row payload.
+
+    Returns
+    -------
+    CatalogRow
+        Catalog row reconstructed from every dataclass field.
+    """
+
+    values: dict[str, Any] = {}
+    for field in fields(CatalogRow):
+        if field.name in payload:
+            values[field.name] = payload[field.name]
+        elif field.default is not MISSING:
+            values[field.name] = field.default
+        elif field.default_factory is not MISSING:
+            values[field.name] = field.default_factory()
+        else:
+            values[field.name] = payload[field.name]
+    return CatalogRow(**values)
 
 
 def macro_domain(raw: str) -> str:
