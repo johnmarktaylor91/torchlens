@@ -351,14 +351,15 @@ def plan_from_v1(
     """
 
     resolved_context = RenderContext() if context is None else context
-    from .rendering import rendered_node_universe_from_v1
+    from .render_ir import build_render_ir
 
-    emissions = rendered_node_universe_from_v1(
+    render_ir = build_render_ir(
         trace,
         collapse_fn=collapse_fn,
         run_folds=run_folds,
         context=resolved_context,
     )
+    emissions = render_ir.node_emissions
     nodes: list[PlanNode] = []
     consumed_ellipsis: set[str] = set()
     for emission in emissions:
