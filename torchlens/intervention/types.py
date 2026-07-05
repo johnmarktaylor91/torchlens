@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal, TypeAlias
+from typing import Any, ClassVar, Literal, TypeAlias
 
+from .._io import FieldPolicy
 from ..ir.container import (
     ContainerSpec,
     DataclassField,
@@ -245,6 +246,27 @@ class CapturedArgTemplate:
 class FireRecord:
     """Runtime record for one intervention firing."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "target_label": FieldPolicy.KEEP,
+        "call_label": FieldPolicy.KEEP,
+        "func_call_id": FieldPolicy.KEEP,
+        "container_path": FieldPolicy.KEEP,
+        "engine": FieldPolicy.KEEP,
+        "helper": FieldPolicy.STRINGIFY,
+        "site_label": FieldPolicy.KEEP,
+        "timing": FieldPolicy.KEEP,
+        "direction": FieldPolicy.KEEP,
+        "helper_name": FieldPolicy.KEEP,
+        "seed": FieldPolicy.KEEP,
+        "determinism_note": FieldPolicy.KEEP,
+        "timestamp": FieldPolicy.KEEP,
+        "backward_pass_index": FieldPolicy.KEEP,
+        "call_index": FieldPolicy.KEEP,
+        "grad_kind": FieldPolicy.KEEP,
+        "tuple_index": FieldPolicy.KEEP,
+        "replaced": FieldPolicy.KEEP,
+    }
+
     target_label: str = ""
     call_label: str | None = None
     func_call_id: int | None = None
@@ -258,6 +280,11 @@ class FireRecord:
     seed: int | None = None
     determinism_note: str | None = None
     timestamp: float | None = None
+    backward_pass_index: int | None = None
+    call_index: int | None = None
+    grad_kind: Literal["grad_input", "grad_output"] | None = None
+    tuple_index: int | None = None
+    replaced: bool | None = None
 
 
 @dataclass(frozen=True)

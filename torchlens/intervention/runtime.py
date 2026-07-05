@@ -318,6 +318,7 @@ def _apply_live_hooks(
             previous_notes=previous_notes,
             run_ctx=hook_context.run_ctx,
         )
+        _append_active_spec_records([record])
         fire_results.append(
             FireResult(
                 plan_id=str(
@@ -347,7 +348,7 @@ def _apply_live_backward_hooks(
     grad_output: tuple[torch.Tensor | None, ...] | None,
     grad_fn_handle: Any,
     call_index: int,
-) -> tuple[torch.Tensor | None, ...] | None:
+) -> tuple[tuple[torch.Tensor | None, ...] | None, tuple[FireRecord, ...]]:
     """Apply active grad_fn_handle post-hook helpers.
 
     Parameters
@@ -363,24 +364,31 @@ def _apply_live_backward_hooks(
 
     Returns
     -------
-    tuple[torch.Tensor | None, ...] | None
-        Mutated grad_input tuple, or None when no helper mutates it.
+    tuple[tuple[torch.Tensor | None, ...] | None, tuple[FireRecord, ...]]
+        Mutated grad_input tuple, or None when no helper mutates it, plus
+        immutable fire records for every matching helper.
     """
 
     hook_plan = _state._active_hook_plan
     if not hook_plan or grad_input is None:
-        return None
+        return None, ()
 
     current = grad_input
     mutated = False
+    fire_records: list[FireRecord] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
         if normalized_entry.metadata.get("direction", "forward") != "backward":
             continue
         if not live_backward_selector_matches(
-            normalized_entry.site_target, grad_fn_handle, call_index
+            normalized_entry.site_target,
+            grad_fn_handle,
+            call_index,
+            grad_input=current,
+            grad_output=grad_output,
         ):
             continue
+        previous = current
         with HOOK_REENTRANCY_GUARD:
             with pause_logging():
                 result = normalized_entry.normalized_callable(
@@ -393,14 +401,26 @@ def _apply_live_backward_hooks(
         if result is not None:
             current = _validate_grad_tuple(result, current, grad_fn_handle=grad_fn_handle)
             mutated = True
-    return current if mutated else None
+            fire_records.append(
+                _build_live_backward_fire_record(
+                    normalized_entry,
+                    grad_fn_handle=grad_fn_handle,
+                    call_index=call_index,
+                    grad_kind="grad_input",
+                    timing="post",
+                    previous=previous,
+                    current=current,
+                )
+            )
+    _append_active_spec_records(fire_records)
+    return (current if mutated else None), tuple(fire_records)
 
 
 def _apply_live_backward_prehooks(
     grad_input: tuple[torch.Tensor | None, ...],
     grad_fn_handle: Any,
     call_index: int,
-) -> tuple[torch.Tensor | None, ...] | None:
+) -> tuple[tuple[torch.Tensor | None, ...] | None, tuple[FireRecord, ...]]:
     """Apply active AccumulateGrad prehook helpers.
 
     Parameters
@@ -414,24 +434,31 @@ def _apply_live_backward_prehooks(
 
     Returns
     -------
-    tuple[torch.Tensor | None, ...] | None
-        Mutated grad_input tuple, or None when no helper mutates it.
+    tuple[tuple[torch.Tensor | None, ...] | None, tuple[FireRecord, ...]]
+        Mutated grad_input tuple, or None when no helper mutates it, plus
+        immutable fire records for every matching helper.
     """
 
     hook_plan = _state._active_hook_plan
     if not hook_plan:
-        return None
+        return None, ()
 
     current = grad_input
     mutated = False
+    fire_records: list[FireRecord] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
         if normalized_entry.metadata.get("direction", "forward") != "backward":
             continue
         if not live_backward_selector_matches(
-            normalized_entry.site_target, grad_fn_handle, call_index
+            normalized_entry.site_target,
+            grad_fn_handle,
+            call_index,
+            grad_input=current,
+            grad_output=None,
         ):
             continue
+        previous = current
         with HOOK_REENTRANCY_GUARD:
             with pause_logging():
                 result = normalized_entry.normalized_callable(
@@ -444,7 +471,19 @@ def _apply_live_backward_prehooks(
         if result is not None:
             current = _validate_grad_tuple(result, current, grad_fn_handle=grad_fn_handle)
             mutated = True
-    return current if mutated else None
+            fire_records.append(
+                _build_live_backward_fire_record(
+                    normalized_entry,
+                    grad_fn_handle=grad_fn_handle,
+                    call_index=call_index,
+                    grad_kind="grad_input",
+                    timing="pre",
+                    previous=previous,
+                    current=current,
+                )
+            )
+    _append_active_spec_records(fire_records)
+    return (current if mutated else None), tuple(fire_records)
 
 
 def _validate_grad_tuple(
@@ -590,6 +629,133 @@ def _build_live_fire_record(
         determinism_note="; ".join(str(note) for note in new_notes) if new_notes else None,
         timestamp=time.monotonic(),
     )
+
+
+def _build_live_backward_fire_record(
+    entry: NormalizedHookEntry,
+    *,
+    grad_fn_handle: Any,
+    call_index: int,
+    grad_kind: str,
+    timing: str,
+    previous: tuple[torch.Tensor | None, ...],
+    current: tuple[torch.Tensor | None, ...],
+) -> FireRecord:
+    """Build an audit record for one live backward hook fire.
+
+    Parameters
+    ----------
+    entry:
+        Hook entry that fired.
+    grad_fn_handle:
+        Backward site receiving the hook.
+    call_index:
+        One-based callback index for this grad_fn.
+    grad_kind:
+        Gradient tuple kind mutated by the hook.
+    timing:
+        Execution timing for the callback site.
+    previous:
+        Tuple before this helper ran.
+    current:
+        Tuple after this helper ran.
+
+    Returns
+    -------
+    FireRecord
+        Immutable backward fire record.
+    """
+
+    helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
+    tuple_index = _first_replaced_tuple_index(previous, current)
+    label = str(getattr(grad_fn_handle, "label", ""))
+    pass_index = _active_backward_pass_index(grad_fn_handle)
+    return FireRecord(
+        target_label=label,
+        call_label=f"{label}:{call_index}" if label else str(call_index),
+        func_call_id=None,
+        container_path=(),
+        engine="live",
+        helper=entry.helper_spec,
+        site_label=label,
+        timing=timing,  # type: ignore[arg-type]
+        direction="backward",
+        helper_name=_hook_display_name(entry),
+        seed=helper_kwargs.get("seed"),
+        timestamp=time.monotonic(),
+        backward_pass_index=pass_index,
+        call_index=call_index,
+        grad_kind=grad_kind,  # type: ignore[arg-type]
+        tuple_index=tuple_index,
+        replaced=tuple_index is not None or current is not previous,
+    )
+
+
+def _first_replaced_tuple_index(
+    previous: tuple[torch.Tensor | None, ...],
+    current: tuple[torch.Tensor | None, ...],
+) -> int | None:
+    """Return the first tuple slot whose object identity changed.
+
+    Parameters
+    ----------
+    previous:
+        Tuple before helper execution.
+    current:
+        Tuple after helper execution.
+
+    Returns
+    -------
+    int | None
+        First changed slot index, or ``None`` when object identities match.
+    """
+
+    for index, (before, after) in enumerate(zip(previous, current, strict=False)):
+        if before is not after:
+            return index
+    return None
+
+
+def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
+    """Return the active trace backward pass index for a grad_fn handle.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Runtime GradFn record or compatible test stub.
+
+    Returns
+    -------
+    int | None
+        Active one-based backward pass index, when available.
+    """
+
+    trace = getattr(grad_fn_handle, "source_trace", None)
+    if trace is None:
+        return None
+    value = getattr(trace, "_active_backward_pass_index", None)
+    return int(value) if isinstance(value, int) else None
+
+
+def _append_active_spec_records(records: list[FireRecord]) -> None:
+    """Append live fire records to the active intervention spec ledger.
+
+    Parameters
+    ----------
+    records:
+        Fire records produced by the current live callback.
+
+    Returns
+    -------
+    None
+        Mutates the active intervention spec when one is installed.
+    """
+
+    if not records:
+        return
+    spec = _state._active_intervention_spec
+    if spec is not None and hasattr(spec, "records"):
+        spec.records.extend(records)
 
 
 def _site_name(hook_context: HookContext | None) -> str:

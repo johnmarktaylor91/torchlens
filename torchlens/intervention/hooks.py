@@ -21,8 +21,10 @@ from .errors import (
 )
 from .selectors import (
     BaseSelector,
+    BackwardPassSelector,
     CompositeSelector,
     FacetSelector,
+    GradKindSelector,
     NotSelector,
     SelectorLike,
     _classify_selector_direction,
@@ -621,7 +623,18 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         Selector equivalent to the target spec.
     """
 
-    from .selectors import contains, func, grad_fn, intervening, label, module, where, without_op
+    from .selectors import (
+        contains,
+        func,
+        grad_fn,
+        grad_input,
+        grad_output,
+        in_backward_pass,
+        label,
+        module,
+        where,
+        without_op,
+    )
 
     if target.selector_kind == "label":
         return label(str(target.selector_value))
@@ -655,6 +668,13 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
             label=payload.get("grad_fn_label_pattern"),
             is_custom=payload.get("is_custom"),
         )
+    if target.selector_kind == "grad_kind":
+        return grad_input() if target.selector_value == "grad_input" else grad_output()
+    if target.selector_kind == "backward_pass":
+        pass_index = target.selector_value
+        if not isinstance(pass_index, int):
+            raise SiteResolutionError("backward_pass target specs require an integer pass index.")
+        return in_backward_pass(pass_index)
     if target.selector_kind in {"intervening", "without_op"}:
         return without_op()
     if target.selector_kind == "label":
@@ -668,6 +688,9 @@ def live_backward_selector_matches(
     selector_like: Any,
     grad_fn_handle: Any,
     call_index: int,
+    *,
+    grad_input: tuple[torch.Tensor | None, ...] | None = None,
+    grad_output: tuple[torch.Tensor | None, ...] | None = None,
 ) -> bool:
     """Return whether a selector can match one grad_fn_handle callback site.
 
@@ -679,6 +702,10 @@ def live_backward_selector_matches(
         GradFn receiving a backward hook callback.
     call_index:
         One-based callback index.
+    grad_input:
+        Current grad-input tuple, if available.
+    grad_output:
+        Current grad-output tuple, if available.
 
     Returns
     -------
@@ -686,11 +713,87 @@ def live_backward_selector_matches(
         Whether the selector matches this backward site.
     """
 
-    del call_index
     from .resolver import _resolve_unchecked
 
+    expected_call_index = _selector_call_index(selector_like)
+    if expected_call_index is not None and expected_call_index != call_index:
+        return False
     selector = _normalize_live_selector(selector_like)
+    if not _live_backward_context_matches(
+        selector,
+        grad_fn_handle=grad_fn_handle,
+        grad_input=grad_input,
+        grad_output=grad_output,
+    ):
+        return False
     return bool(_resolve_unchecked((grad_fn_handle,), selector, strict=False))
+
+
+def _selector_call_index(selector_like: Any) -> int | None:
+    """Return an explicit one-based call-index selector, if supplied.
+
+    Parameters
+    ----------
+    selector_like:
+        Selector or target spec.
+
+    Returns
+    -------
+    int | None
+        Expected callback index, or ``None`` when unconstrained.
+    """
+
+    metadata = getattr(selector_like, "metadata", None)
+    if isinstance(metadata, Mapping) and isinstance(metadata.get("call_index"), int):
+        return int(metadata["call_index"])
+    value = getattr(selector_like, "selector_value", None)
+    if isinstance(value, Mapping) and isinstance(value.get("call_index"), int):
+        return int(value["call_index"])
+    return None
+
+
+def _live_backward_context_matches(
+    selector: BaseSelector,
+    *,
+    grad_fn_handle: Any,
+    grad_input: tuple[torch.Tensor | None, ...] | None,
+    grad_output: tuple[torch.Tensor | None, ...] | None,
+) -> bool:
+    """Return whether live-only backward selector facets match this callback."""
+
+    if isinstance(selector, CompositeSelector):
+        left, right = selector.selectors
+        left_matches = _live_backward_context_matches(
+            _normalize_live_selector(left),
+            grad_fn_handle=grad_fn_handle,
+            grad_input=grad_input,
+            grad_output=grad_output,
+        )
+        right_matches = _live_backward_context_matches(
+            _normalize_live_selector(right),
+            grad_fn_handle=grad_fn_handle,
+            grad_input=grad_input,
+            grad_output=grad_output,
+        )
+        return (
+            (left_matches and right_matches)
+            if selector.operator == "and"
+            else (left_matches or right_matches)
+        )
+    if isinstance(selector, NotSelector):
+        return not _live_backward_context_matches(
+            _normalize_live_selector(selector.selector),
+            grad_fn_handle=grad_fn_handle,
+            grad_input=grad_input,
+            grad_output=grad_output,
+        )
+    if isinstance(selector, GradKindSelector):
+        values = grad_input if selector.grad_kind == "grad_input" else grad_output
+        return any(isinstance(value, torch.Tensor) for value in values or ())
+    if isinstance(selector, BackwardPassSelector):
+        trace = getattr(grad_fn_handle, "source_trace", None)
+        return getattr(trace, "_active_backward_pass_index", None) == selector.pass_index
+    return True
 
 
 def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> None:

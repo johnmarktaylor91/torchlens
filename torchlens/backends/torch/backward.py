@@ -1444,26 +1444,29 @@ def _make_grad_fn_hook(
                 getattr(live_trace, "num_backward_passes", 0) + 1,
             )
         )
-        for grad_value in tuple(grad_inputs or ()):
-            if isinstance(grad_value, torch.Tensor) and grad_value.grad_fn is not None:
-                _record_higher_order_terminal(
-                    live_trace,
-                    grad_value.grad_fn,
-                    creator_object_id=grad_fn_object_id,
-                    pass_index=pass_index,
-                )
-        events.append_backward(
-            GradFnFired(
-                object_id=grad_fn_object_id,
-                pass_index=pass_index,
-                grad_input_refs=stored_grad_inputs,
-                grad_output_refs=stored_grad_outputs,
-                intervention_fire_ref=None,
-                timestamp=event_timestamp,
-                seq=events.next_backward_seq(),
-            )
-        )
         if is_accumulate_grad:
+            fire_records = _pop_pending_accumulate_grad_records(
+                live_trace, grad_fn_object_id, call_index
+            )
+            fire_ref = _intervention_fire_ref(fire_records)
+            _set_live_grad_fn_call_fire_ref(grad_fn_handle, call_index, fire_ref)
+            _record_higher_order_terminals_from_tuple(
+                live_trace,
+                tuple(grad_inputs or ()),
+                creator_object_id=grad_fn_object_id,
+                pass_index=pass_index,
+            )
+            events.append_backward(
+                GradFnFired(
+                    object_id=grad_fn_object_id,
+                    pass_index=pass_index,
+                    grad_input_refs=stored_grad_inputs,
+                    grad_output_refs=stored_grad_outputs,
+                    intervention_fire_ref=fire_ref,
+                    timestamp=event_timestamp,
+                    seq=events.next_backward_seq(),
+                )
+            )
             param_address = getattr(live_trace, "_grad_fn_param_refs_by_object_id", {}).get(
                 grad_fn_object_id
             )
@@ -1482,7 +1485,30 @@ def _make_grad_fn_hook(
             return None
         from ...intervention.runtime import _apply_live_backward_hooks
 
-        return _apply_live_backward_hooks(grad_inputs, grad_outputs, grad_fn_handle, call_index)
+        result, fire_records = _apply_live_backward_hooks(
+            grad_inputs, grad_outputs, grad_fn_handle, call_index
+        )
+        fire_ref = _intervention_fire_ref(fire_records)
+        _set_live_grad_fn_call_fire_ref(grad_fn_handle, call_index, fire_ref)
+        terminal_grad_inputs = result if result is not None else grad_inputs
+        _record_higher_order_terminals_from_tuple(
+            live_trace,
+            tuple(terminal_grad_inputs or ()),
+            creator_object_id=grad_fn_object_id,
+            pass_index=pass_index,
+        )
+        events.append_backward(
+            GradFnFired(
+                object_id=grad_fn_object_id,
+                pass_index=pass_index,
+                grad_input_refs=stored_grad_inputs,
+                grad_output_refs=stored_grad_outputs,
+                intervention_fire_ref=fire_ref,
+                timestamp=event_timestamp,
+                seq=events.next_backward_seq(),
+            )
+        )
+        return result
 
     return hook
 
@@ -1519,9 +1545,188 @@ def _make_grad_fn_prehook(
         call_index = len(grad_fn_handle.calls) + 1
         from ...intervention.runtime import _apply_live_backward_prehooks
 
-        return _apply_live_backward_prehooks(grad_inputs, grad_fn_handle, call_index)
+        result, fire_records = _apply_live_backward_prehooks(
+            grad_inputs, grad_fn_handle, call_index
+        )
+        if fire_records:
+            _store_pending_accumulate_grad_records(
+                live_trace, grad_fn_object_id, call_index, fire_records
+            )
+        return result
 
     return prehook
+
+
+def _intervention_fire_ref(records: tuple[Any, ...]) -> Any | None:
+    """Return the compact event-side reference for backward fire records.
+
+    Parameters
+    ----------
+    records:
+        Fire records produced for one backward callback.
+
+    Returns
+    -------
+    Any | None
+        ``None`` for no fires, the single record for one fire, or a tuple for
+        multiple helpers fired at the same callback.
+    """
+
+    if not records:
+        return None
+    if len(records) == 1:
+        return records[0]
+    return records
+
+
+def _set_live_grad_fn_call_fire_ref(
+    grad_fn_handle: Any,
+    call_index: int,
+    fire_ref: Any | None,
+) -> None:
+    """Set the fire reference on the just-logged runtime GradFnCall.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Runtime GradFn record whose call accessor was just appended.
+    call_index:
+        One-based callback index.
+    fire_ref:
+        FireRecord, tuple of records, or ``None``.
+
+    Returns
+    -------
+    None
+        Mutates the runtime call record when a fire reference exists.
+    """
+
+    if fire_ref is None:
+        return
+    calls = getattr(grad_fn_handle, "calls", None)
+    call = getattr(calls, "_dict", {}).get(call_index)
+    if call is not None:
+        call.intervention_fire_ref = fire_ref
+
+
+def _pending_accumulate_grad_record_key(
+    grad_fn_object_id: int,
+    call_index: int,
+) -> tuple[int, int]:
+    """Return the trace-local key for pending AccumulateGrad prehook records.
+
+    Parameters
+    ----------
+    grad_fn_object_id:
+        Hooked grad_fn object id.
+    call_index:
+        One-based callback index.
+
+    Returns
+    -------
+    tuple[int, int]
+        Stable pending-record key.
+    """
+
+    return grad_fn_object_id, call_index
+
+
+def _store_pending_accumulate_grad_records(
+    trace: Any,
+    grad_fn_object_id: int,
+    call_index: int,
+    records: tuple[Any, ...],
+) -> None:
+    """Store AccumulateGrad prehook fire records until the posthook logs.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    grad_fn_object_id:
+        Hooked grad_fn object id.
+    call_index:
+        One-based callback index.
+    records:
+        Fire records emitted by the prehook.
+
+    Returns
+    -------
+    None
+        Mutates a private trace-local queue.
+    """
+
+    pending = trace.__dict__.setdefault("_tl_pending_accumulate_grad_fire_records", {})
+    key = _pending_accumulate_grad_record_key(grad_fn_object_id, call_index)
+    pending.setdefault(key, []).extend(records)
+
+
+def _pop_pending_accumulate_grad_records(
+    trace: Any,
+    grad_fn_object_id: int,
+    call_index: int,
+) -> tuple[Any, ...]:
+    """Pop AccumulateGrad prehook fire records for the matching posthook.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    grad_fn_object_id:
+        Hooked grad_fn object id.
+    call_index:
+        One-based callback index.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Pending records for this callback, if any.
+    """
+
+    pending = trace.__dict__.get("_tl_pending_accumulate_grad_fire_records")
+    if not pending:
+        return ()
+    key = _pending_accumulate_grad_record_key(grad_fn_object_id, call_index)
+    records = tuple(pending.pop(key, ()))
+    if not pending:
+        trace.__dict__.pop("_tl_pending_accumulate_grad_fire_records", None)
+    return records
+
+
+def _record_higher_order_terminals_from_tuple(
+    trace: Any,
+    grad_values: tuple[Any, ...],
+    *,
+    creator_object_id: int,
+    pass_index: int,
+) -> None:
+    """Register higher-order terminals found in a gradient tuple.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    grad_values:
+        Gradient tuple to inspect after live intervention mutation.
+    creator_object_id:
+        Backward grad_fn id that produced the tuple.
+    pass_index:
+        Active backward pass index.
+
+    Returns
+    -------
+    None
+        Mutates trace higher-order terminal state.
+    """
+
+    for grad_value in grad_values:
+        if isinstance(grad_value, torch.Tensor) and grad_value.grad_fn is not None:
+            _record_higher_order_terminal(
+                trace,
+                grad_value.grad_fn,
+                creator_object_id=creator_object_id,
+                pass_index=pass_index,
+            )
 
 
 def _memory_snapshot(device: torch.device) -> tuple[str, int]:
