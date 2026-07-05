@@ -21,27 +21,8 @@ from torch import nn as _nn
 
 __version__ = "2.28.0"
 
-from . import (
-    attribution,
-    bridge,
-    compat,
-    debug,
-    examples,
-    experimental,
-    export,
-    fastlog,
-    options,
-    partial,
-    report,
-    repgeom,
-    stats,
-    viz,
-)
-from .semantic import facets
-from ._io import JaxPayloadLoadHint, PayloadLoadHints
-from ._io.bundle import load, save
+from . import fastlog
 from .captured_run import ActivationLookup, CapturedRun
-from .stats import aggregate
 from .data_classes.layer import Layer
 from .data_classes.container import Container
 from .data_classes.op import Op
@@ -111,22 +92,44 @@ from .user_funcs import (
     show_bundle_graph,
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
-)
-from .backends import BackendName
-from .validation import (
     validate_backward_pass as _moved_validate_backward_pass,
     validate_forward_pass as _moved_validate_forward_pass,
     validate_saved_outs as _moved_validate_saved_outs,
 )
-from .io import load_intervention_spec as _moved_load_intervention_spec
+from .backends import BackendName
 from .observers import record_span, span, tap
+from . import options
 from .options import CaptureOptions as _CaptureOptions
 from .options import to_disk
-from .intervention.sites import sites as _sites_private
+from .intervention import load_intervention_spec as _moved_load_intervention_spec
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
-from .validation.consolidated import validate
 
 _REMOVED_IN = "v2.NN"
+
+_LAZY_ATTRS = {
+    "JaxPayloadLoadHint": ("torchlens._io", "JaxPayloadLoadHint"),
+    "PayloadLoadHints": ("torchlens._io", "PayloadLoadHints"),
+    "aggregate": ("torchlens.stats", "aggregate"),
+    "attribution": ("torchlens.attribution", None),
+    "bridge": ("torchlens.bridge", None),
+    "compat": ("torchlens.compat", None),
+    "debug": ("torchlens.debug", None),
+    "examples": ("torchlens.examples", None),
+    "experimental": ("torchlens.experimental", None),
+    "export": ("torchlens.export", None),
+    "facets": ("torchlens.semantic", "facets"),
+    "io": ("torchlens.io", None),
+    "load": ("torchlens._io.bundle", "load"),
+    "partial": ("torchlens.partial", None),
+    "report": ("torchlens.report", None),
+    "repgeom": ("torchlens.repgeom", None),
+    "save": ("torchlens._io.bundle", "save"),
+    "semantic": ("torchlens.semantic", None),
+    "stats": ("torchlens.stats", None),
+    "validate": ("torchlens.validation.consolidated", "validate"),
+    "validation": ("torchlens.validation", None),
+    "viz": ("torchlens.viz", None),
+}
 
 _MOVED_OBJECTS = {
     "ActivationPostfunc": ("torchlens.types", "ActivationPostfunc"),
@@ -198,6 +201,57 @@ _LEGACY_API_SHIMS = {
 }
 
 
+def _resolve_top_level(name: str) -> Any:
+    """Resolve a top-level TorchLens attribute, honoring existing globals.
+
+    Parameters
+    ----------
+    name:
+        Top-level attribute name.
+
+    Returns
+    -------
+    Any
+        Existing global value or lazily resolved attribute.
+    """
+
+    if name in globals():
+        return globals()[name]
+    return __getattr__(name)
+
+
+def _sync_validation_wrapper_metadata(validation_module: Any) -> None:
+    """Copy canonical validation signatures onto deprecated top-level wrappers.
+
+    Parameters
+    ----------
+    validation_module:
+        Lazily imported ``torchlens.validation`` module.
+    """
+
+    for wrapper_name in (
+        "validate_forward_pass",
+        "validate_backward_pass",
+        "validate_saved_outs",
+    ):
+        _functools.update_wrapper(globals()[wrapper_name], getattr(validation_module, wrapper_name))
+
+
+def _sync_io_wrapper_metadata(io_module: Any) -> None:
+    """Copy canonical I/O signatures onto deprecated top-level wrappers.
+
+    Parameters
+    ----------
+    io_module:
+        Lazily imported ``torchlens.io`` module.
+    """
+
+    _functools.update_wrapper(
+        globals()["load_intervention_spec"],
+        getattr(io_module, "load_intervention_spec"),
+    )
+
+
 def _warn_moved_name(name: str, new_module_path: str, new_attr: str) -> None:
     """Emit the standard top-level API move deprecation warning.
 
@@ -260,10 +314,10 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
         _warn_legacy_api_name(name, replacement)
         if name == "validate_model_activations":
             kwargs.setdefault("scope", "forward")
-            return validate(*args, **kwargs)
+            return _resolve_top_level("validate")(*args, **kwargs)
         if name == "validate_saved_activations":
             kwargs.setdefault("scope", "saved")
-            return validate(*args, **kwargs)
+            return _resolve_top_level("validate")(*args, **kwargs)
         if name in {"render_graph", "render_model_graph", "draw_model_graph"}:
             if args and isinstance(args[0], Trace):
                 return args[0].draw(*args[1:], **kwargs)
@@ -283,7 +337,7 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
 
 
 def __getattr__(name: str) -> Any:
-    """Return deprecated moved top-level names on demand.
+    """Return lazy package attributes or deprecated moved names on demand.
 
     Parameters
     ----------
@@ -293,14 +347,24 @@ def __getattr__(name: str) -> Any:
     Returns
     -------
     Any
-        The canonical moved object.
+        The requested lazy object or canonical moved object.
 
     Raises
     ------
     AttributeError
-        If ``name`` is not part of the deprecation state_history.
+        If ``name`` is not part of the lazy facade or deprecation state_history.
     """
 
+    if name in _LAZY_ATTRS:
+        module_path, attr_name = _LAZY_ATTRS[name]
+        module_obj = _importlib.import_module(module_path)
+        if name == "validation":
+            _sync_validation_wrapper_metadata(module_obj)
+        if name == "io":
+            _sync_io_wrapper_metadata(module_obj)
+        value = module_obj if attr_name is None else getattr(module_obj, attr_name)
+        globals()[name] = value
+        return value
     if name == "autoroute":
         module_obj = _importlib.import_module("torchlens.autoroute")
         globals()[name] = module_obj
@@ -317,6 +381,18 @@ def __getattr__(name: str) -> Any:
         module_obj = _importlib.import_module(new_module_path)
         return getattr(module_obj, new_attr)
     raise AttributeError(f"module 'torchlens' has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    """Return visible top-level TorchLens attributes.
+
+    Returns
+    -------
+    list[str]
+        Sorted eager globals plus lazy facade, moved-name, and legacy shim names.
+    """
+
+    return sorted([*globals(), *_LAZY_ATTRS, *_MOVED_OBJECTS, *_LEGACY_API_SHIMS, "autoroute"])
 
 
 def _phase_stub(name: str, phase: str) -> Any:
@@ -796,6 +872,8 @@ def validate_forward_pass(
     """
 
     _warn_moved_name("validate_forward_pass", "torchlens.validation", "validate_forward_pass")
+    from .validation.consolidated import validate
+
     return validate(
         model,
         input_args,
@@ -834,6 +912,8 @@ def validate_backward_pass(
     """
 
     _warn_moved_name("validate_backward_pass", "torchlens.validation", "validate_backward_pass")
+    from .validation.consolidated import validate
+
     return validate(
         model,
         input_args,
@@ -869,6 +949,8 @@ def validate_saved_outs(
     """
 
     _warn_moved_name("validate_saved_outs", "torchlens.validation", "validate_saved_outs")
+    from .validation.consolidated import validate
+
     return validate(
         model,
         input_args,
@@ -1001,7 +1083,6 @@ __all__ = [
     "Layer",
     "Container",
     "Op",
-    "ModelHistory",
     "Quantity",
     "Bytes",
     "Duration",
@@ -1051,13 +1132,4 @@ __all__ = [
     "grad_zero",
     "tap",
     "record_span",
-    "log_forward_pass",
-    "get_model_activations",
-    "validate_model_activations",
-    "validate_saved_activations",
-    "render_graph",
-    "render_model_graph",
-    "draw_model_graph",
-    "get_model_structure",
-    "show_model_structure",
 ]
