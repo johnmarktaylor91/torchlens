@@ -9,26 +9,30 @@ from typing import Any
 import torch
 
 
-def _lightning_callback_base() -> Any:
+def _lightning_callback_base() -> type[Any]:
     """Return Lightning's callback base when the optional extra is installed.
 
     Returns
     -------
-    Any
-        ``lightning.pytorch.callbacks.Callback`` or ``object``.
+    type[Any]
+        ``lightning.pytorch.callbacks.Callback``.
+
+    Raises
+    ------
+    ImportError
+        If Lightning is unavailable.
     """
 
     try:
         from lightning.pytorch.callbacks import Callback
-    except ImportError:
-        return object
+    except ImportError as exc:
+        raise ImportError(
+            "LayerProfilerCallback requires Lightning: install torchlens[lightning]."
+        ) from exc
     return Callback
 
 
-_LightningCallback: Any = _lightning_callback_base()
-
-
-class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
+class _LayerProfilerCallbackMixin:
     """Log TorchLens layer summaries from Lightning batch hooks."""
 
     def __init__(
@@ -249,4 +253,60 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
         return batch
 
 
-__all__ = ["LayerProfilerCallback"]
+def _build_layer_profiler_callback() -> type[_LayerProfilerCallbackMixin]:
+    """Build the Lightning callback class on first public use.
+
+    Returns
+    -------
+    type[_LayerProfilerCallbackMixin]
+        Callback class inheriting Lightning's callback base.
+    """
+
+    callback_base = _lightning_callback_base()
+
+    class LayerProfilerCallback(_LayerProfilerCallbackMixin, callback_base):  # type: ignore[misc, valid-type]
+        """Log TorchLens layer summaries from Lightning batch hooks."""
+
+    LayerProfilerCallback.__module__ = __name__
+    return LayerProfilerCallback
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve lazy Lightning callback exports.
+
+    Parameters
+    ----------
+    name:
+        Requested module attribute.
+
+    Returns
+    -------
+    Any
+        Lazily constructed callback class.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not exported by this module.
+    """
+
+    if name != "LayerProfilerCallback":
+        raise AttributeError(f"module 'torchlens.callbacks.lightning' has no attribute {name!r}")
+    callback_cls = _build_layer_profiler_callback()
+    globals()[name] = callback_cls
+    return callback_cls
+
+
+def __dir__() -> list[str]:
+    """Return visible Lightning callback module members.
+
+    Returns
+    -------
+    list[str]
+        Sorted module globals plus lazy exports.
+    """
+
+    return sorted([*globals(), "LayerProfilerCallback"])
+
+
+__all__ = ["LayerProfilerCallback"]  # noqa: F822
