@@ -66,7 +66,6 @@ from .aliasing import (
 )
 from .buffer_writes import resolve_registered_buffer_address
 from . import module_stack as _mstack
-from ...errors import CaptureError
 from ...fastlog._halt import HaltSignal
 from ...quantities import Bytes
 from ...utils.introspection import (
@@ -108,7 +107,7 @@ from ...ir.events import (
     OutputVersionEvent,
     ParentEdge,
 )
-from ...ir.buffer import replace_op_event
+from ...ir.capture_events import replace_op_event
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.container import (
     ContainerSpec,
@@ -173,12 +172,12 @@ from ...fastlog._storage_resolver import _resolve_storage
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.internal_types import FuncExecutionContext
 from ...capture.predicates import (
-    _evaluate_halt,
     _evaluate_intervene_op,
     _evaluate_keep_op,
     _is_halt_only_capture,
     build_op_record_context,
 )
+from ...capture.stop import evaluate_halt_stop, stop_directive_for_trace
 
 from ...capture.projections import (
     append_projected_event,
@@ -2068,7 +2067,7 @@ def _emit_predicate_operation_events(
         try:
             halt_only = _is_halt_only_capture(state.options)
             if halt_only:
-                _evaluate_halt(ctx, state.options, frontier_output=out)
+                evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
                 continue
             if out.grad_fn is not None:
                 state.grad_fn_to_context[out.grad_fn] = ctx
@@ -2147,7 +2146,7 @@ def _emit_predicate_operation_events(
                 function=function_ref,
                 container_path=container_path,
             )
-            _evaluate_halt(ctx, state.options, frontier_output=out)
+            evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except HaltSignal:
             raise
         except (TorchLensPostfuncError, TrainingModeConfigError):
@@ -2845,7 +2844,7 @@ def _emit_exhaustive_operation_events(
         options = getattr(self, "_predicate_save_options", None)
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
-            _evaluate_halt(halt_ctx, options, frontier_output=out_tensor)
+            evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)
 
 
 def _get_parent_contents(
@@ -4654,16 +4653,10 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     shape = tuple(tensor.shape)
     dtype = tensor.dtype
     parents = list(getattr(entry, "parents", []) or [])
-    message = (
-        "TorchLens capture stopped at first non-finite tensor: "
-        f"op={func_name!r}, layer={raw_label!r}, shape={shape}, dtype={dtype}."
-    )
-    raise CaptureError(
-        message,
-        affected_sites=[raw_label],
-        op=func_name,
-        layer=raw_label,
+    stop_directive_for_trace(self).raise_nonfinite(
+        raw_label=raw_label,
+        func_name=func_name,
         shape=shape,
-        dtype=str(dtype),
+        dtype=dtype,
         parents=parents,
     )

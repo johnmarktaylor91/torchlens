@@ -45,6 +45,8 @@ from ..backends import (
 from ..fastlog._halt import HaltSignal
 from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
+from .config import InternalCaptureConfig
+from .stop import StopDirective, evaluate_halt_stop, stop_directive_for_trace
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -270,11 +272,7 @@ def _run_predicate_forward_with_root_frame(
         Raw model output.
     """
 
-    from ..capture.predicates import (
-        _evaluate_halt,
-        _evaluate_keep_module,
-        _is_halt_only_capture,
-    )
+    from ..capture.predicates import _evaluate_keep_module, _is_halt_only_capture
     from ..capture.projections import (
         _build_record_context,
         append_projected_event,
@@ -313,7 +311,7 @@ def _run_predicate_forward_with_root_frame(
     halt_only = _is_halt_only_capture(state.options)
     try:
         if halt_only:
-            _evaluate_halt(enter_ctx, state.options)
+            evaluate_halt_stop(trace, enter_ctx, state.options)
         else:
             enter_spec = _evaluate_keep_module(enter_ctx, state.options)
             append_projected_event(
@@ -322,7 +320,7 @@ def _run_predicate_forward_with_root_frame(
                 enter_spec,
                 predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
             )
-            _evaluate_halt(enter_ctx, state.options)
+            evaluate_halt_stop(trace, enter_ctx, state.options)
     except HaltSignal:
         raise
     except Exception as exc:
@@ -366,7 +364,7 @@ def _run_predicate_forward_with_root_frame(
         )
         try:
             if halt_only:
-                _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
+                evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
             else:
                 exit_spec = _evaluate_keep_module(exit_ctx, state.options)
                 append_projected_event(
@@ -375,7 +373,7 @@ def _run_predicate_forward_with_root_frame(
                     exit_spec,
                     predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                 )
-                _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
+                evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
         except HaltSignal:
             if active_model_exc is None:
                 raise
@@ -929,6 +927,25 @@ def run_and_log_inputs_through_model(
         from ..ir import CaptureEvents
 
         self.capture_events = CaptureEvents()
+        if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
+            self._stop_directive = StopDirective(
+                halt_options=getattr(self, "_predicate_save_options", None),
+                raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+                forward_error_mode=getattr(
+                    getattr(self, "_predicate_save_options", None),
+                    "on_forward_error",
+                    "raise",
+                ),
+                inference_only=bool(getattr(self, "inference_only", False)),
+            )
+        self._capture_config = InternalCaptureConfig(
+            capture_mode=str(self.capture_mode),
+            layers_to_save=layers_to_save,
+            grad_layers_to_save=grad_layers_to_save,
+            random_seed=random_seed,
+            postprocess=postprocess,
+            stop=self._stop_directive,
+        )
 
         with _timed_phase(self, "ctx_build:model_prepare"):
             # One-time model preparation + incremental sys.modules crawl
@@ -1044,6 +1061,7 @@ def run_and_log_inputs_through_model(
         raise
 
     except Exception as e:
+        _ = stop_directive_for_trace(self).forward_disposition(e)
         backend.cleanup_failed_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )

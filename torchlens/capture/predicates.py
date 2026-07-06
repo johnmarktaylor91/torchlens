@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ..fastlog._halt import HaltSignal
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import CaptureSpec, ModuleStackFrame, RecordContext
 from ..intervention.predicates import as_intervention_decision
@@ -168,13 +167,9 @@ def _evaluate_halt(
         If ``options.halt`` returns a non-bool value.
     """
 
-    if options.halt is None:
-        return
-    result = options.halt(ctx)
-    if not isinstance(result, bool):
-        raise PredicateError("halt predicate must return bool", ctx=ctx, result=result)
-    if result:
-        raise HaltSignal(ctx.label, frontier_output=frontier_output)
+    from .stop import StopDirective
+
+    StopDirective(halt_options=options).evaluate_halt(ctx, frontier_output=frontier_output)
 
 
 def _is_halt_only_capture(options: "RecordingOptions") -> bool:

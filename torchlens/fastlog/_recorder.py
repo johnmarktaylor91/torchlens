@@ -20,6 +20,8 @@ from ..capture.projections import (
     active_recording_state,
 )
 from ..capture.predicates import validate_followed_by_capability
+from ..capture.config import InternalCaptureConfig
+from ..capture.stop import StopDirective, stop_directive_for_trace
 from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..ir import CaptureEvents
@@ -387,6 +389,20 @@ class Recorder:
         trace.capture_mode = "predicate"
         trace._fastlog_recording = self._state.recording
         trace._predicate_save_options = self.options
+        trace._stop_directive = StopDirective(
+            halt_options=self.options,
+            raise_on_nan=False,
+            forward_error_mode=self.options.on_forward_error,
+            inference_only=False,
+        )
+        trace._capture_config = InternalCaptureConfig(
+            capture_mode="predicate",
+            layers_to_save=[],
+            grad_layers_to_save=[],
+            random_seed=self.options.random_seed,
+            postprocess=False,
+            stop=trace._stop_directive,
+        )
         self._reset_state_for_pass(sample_id=sample_id)
         self._state.recording.start_times.append(time.time())
         try:
@@ -411,7 +427,8 @@ class Recorder:
             output = None
             return output
         except Exception as exc:
-            if self.options.on_forward_error == "raise":
+            forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
+            if forward_disposition == "raise":
                 self._state.abort_storage(str(exc))
                 raise
             partial_build_failed = False
@@ -419,13 +436,13 @@ class Recorder:
                 partial = self._mark_recording_failed(trace, exc)
                 self._failed = True
                 self._recording = partial
-                if self.options.on_forward_error == "attach_partial":
+                if forward_disposition == "attach_partial":
                     exc.partial_recording = partial  # type: ignore[attr-defined]
             except Exception:
                 partial_build_failed = True
             if partial_build_failed:
                 raise
-            if self.options.on_forward_error == "attach_partial":
+            if forward_disposition == "attach_partial":
                 raise
             return None
         finally:
