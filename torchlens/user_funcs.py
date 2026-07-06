@@ -2316,9 +2316,30 @@ def log_model_metadata(
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
 ) -> Trace:
-    """Return model metadata without saving any outs."""
+    """Return model metadata without saving any outs.
 
-    return trace(model, input_args, input_kwargs, layers_to_save=None)
+    Parameters
+    ----------
+    model:
+        Model whose metadata should be captured.
+    input_args:
+        Positional input arguments for ``model.forward``.
+    input_kwargs:
+        Keyword input arguments for ``model.forward``.
+
+    Returns
+    -------
+    Trace
+        Metadata-only trace with input/output distance metadata enabled.
+    """
+
+    return trace(
+        model,
+        input_args,
+        input_kwargs,
+        layers_to_save=None,
+        compute_input_output_distances=True,
+    )
 
 
 def get_model_metadata(*args: Any, **kwargs: Any) -> Trace:

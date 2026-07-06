@@ -982,6 +982,8 @@ class Trace(
         "_predicate_all_contexts": FieldPolicy.DROP,
         "_predicate_lookback": FieldPolicy.DROP,
         "_predicate_lookback_payload_policy": FieldPolicy.DROP,
+        "_capture_config": FieldPolicy.DROP,
+        "_stop_directive": FieldPolicy.DROP,
         "_halt_returns_partial_trace": FieldPolicy.DROP,
         "_predicate_save_decisions": FieldPolicy.DROP,
         "_predicate_contexts_by_label": FieldPolicy.DROP,

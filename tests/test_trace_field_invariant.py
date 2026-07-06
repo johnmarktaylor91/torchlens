@@ -60,6 +60,8 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_postprocessing_active",
         "_raw_event_shape_hash",
         "_replay_arg_version_data_complete",
+        "_capture_config",
+        "_stop_directive",
     }
 
     actual = set(trace.__dict__.keys())

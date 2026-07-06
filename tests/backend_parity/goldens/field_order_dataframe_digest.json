@@ -846,6 +846,7 @@
       "_buffer_write_events",
       "_buffer_write_tracker",
       "_build_state",
+      "_capture_config",
       "_capture_events",
       "_code_context_cache",
       "_containers",
@@ -926,6 +927,7 @@
       "_source_code_blob",
       "_source_model_ref",
       "_spec_revision",
+      "_stop_directive",
       "_tf_init_op_labels",
       "_tf_op_captures",
       "_tf_op_type_counts",
@@ -1099,13 +1101,13 @@
     ]
   },
   "sha256_chunks": [
-    "9cf7f86e",
-    "d9525107",
-    "67a48ebe",
-    "31964ce1",
-    "5c0a270e",
-    "1e6d348b",
-    "36e17908",
-    "ba08f98e"
+    "a2e1c42c",
+    "ea6a0e70",
+    "d3c5afb2",
+    "e5785fc5",
+    "b303478a",
+    "bff4be59",
+    "62a671ab",
+    "ae9a7d15"
   ]
 }
