@@ -12,7 +12,38 @@ from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
 from ..options import suppress_mutate_warnings
-from ..user_funcs import get_model_metadata, list_logs, log_model_metadata, reset_naming_counter
+
+
+def list_logs() -> tuple[Any, ...]:
+    """Return a snapshot of currently live TorchLens traces."""
+
+    from .. import user_funcs
+
+    return user_funcs.list_logs()
+
+
+def reset_naming_counter(class_name: str | None = None) -> None:
+    """Reset automatic TorchLens trace naming counters."""
+
+    from .. import user_funcs
+
+    user_funcs.reset_naming_counter(class_name)
+
+
+def log_model_metadata(*args: Any, **kwargs: Any) -> Any:
+    """Run metadata-only model capture through the public user_funcs surface."""
+
+    from .. import user_funcs
+
+    return user_funcs.log_model_metadata(*args, **kwargs)
+
+
+def get_model_metadata(*args: Any, **kwargs: Any) -> Any:
+    """Deprecated metadata alias routed through the public user_funcs surface."""
+
+    from .. import user_funcs
+
+    return user_funcs.get_model_metadata(*args, **kwargs)
 
 
 def detect_tlspec_format(path: str | Path) -> str:

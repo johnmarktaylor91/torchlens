@@ -96,7 +96,7 @@ from .._literals import (
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from ..captured_run import CapturedRun
-from ..ir.events import TraceBuildState
+from ..ir.trace_build_state import TraceBuildState
 from ..options import (
     InterventionOptions,
     ReplayOptions,

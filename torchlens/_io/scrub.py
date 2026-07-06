@@ -324,6 +324,8 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_pending_container_collapse_nodes",
         "_defer_streaming_bundle_finalization",
         "_capture_producer_policy",
+        "_capture_config",
+        "_stop_directive",
         "_retain_layers_to_save_output_parents",
         "_fast_raw_index_lookup",
         "_keep_outs_in_memory",
