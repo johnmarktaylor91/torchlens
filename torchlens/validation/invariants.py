@@ -679,6 +679,37 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
     if not trace.grad_fn_logs:
         return
 
+    valid_pass_indices = _check_backward_grad_fn_registry(trace, name)
+    _check_backward_grad_fn_handle_records(trace, name, valid_pass_indices)
+    _check_backward_layer_backpointers(trace, name)
+    _check_backward_saved_grad_records(trace, name)
+    _check_backward_pass_index_density(trace, name)
+    _check_grad_fn_topology_invariants(trace, name)
+    _check_backward_pass_domain_invariants(trace, name, valid_pass_indices)
+    _check_backward_pass_record_consistency(trace, name, valid_pass_indices)
+
+
+def _check_backward_grad_fn_registry(trace: "Trace", name: str) -> set[int]:
+    """Check backward GradFn registry and root references.
+
+    Parameters
+    ----------
+    trace:
+        Trace with populated backward GradFn metadata.
+    name:
+        Invariant check name for raised errors.
+
+    Returns
+    -------
+    set[int]
+        Valid backward pass indices.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If registry or root references are inconsistent.
+    """
+
     grad_fn_ids = set(trace.grad_fn_logs)
     order_ids = set(trace.grad_fn_order)
     if not order_ids <= grad_fn_ids:
@@ -698,7 +729,31 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             f"backward_root_grad_fn_object_ids {missing_root_ids!r} are not present in grad_fn_logs",
         )
 
-    valid_pass_indices = set(getattr(trace, "backward_pass_logs", {}).keys())
+    return set(getattr(trace, "backward_pass_logs", {}).keys())
+
+
+def _check_backward_grad_fn_handle_records(
+    trace: "Trace",
+    name: str,
+    valid_pass_indices: set[int],
+) -> None:
+    """Check per-GradFn handle metadata consistency.
+
+    Parameters
+    ----------
+    trace:
+        Trace with populated backward GradFn metadata.
+    name:
+        Invariant check name for raised errors.
+    valid_pass_indices:
+        Backward pass indices known on the trace.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a GradFn handle has inconsistent fields or call records.
+    """
+
     layer_labels = set(trace.layer_labels)
     for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
         if not re.fullmatch(r"[a-z0-9_]+_back_[1-9]\d*_[1-9]\d*", grad_fn_handle.label):
@@ -780,6 +835,23 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                     f"{grad_fn_handle.label}:{ordinal} is missing backward_pass_index",
                 )
 
+
+def _check_backward_layer_backpointers(trace: "Trace", name: str) -> None:
+    """Check forward-layer backpointers into backward GradFn handles.
+
+    Parameters
+    ----------
+    trace:
+        Trace with populated backward GradFn metadata.
+    name:
+        Invariant check name for raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a layer points to a missing or severed GradFn handle.
+    """
+
     for layer in trace.layer_list:
         grad_fn_object_id = layer.grad_fn_object_id
         if grad_fn_object_id is None:
@@ -799,6 +871,23 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 f"{grad_fn_object_id!r}",
             )
 
+
+def _check_backward_saved_grad_records(trace: "Trace", name: str) -> None:
+    """Check saved gradient-op records match layers that have gradients.
+
+    Parameters
+    ----------
+    trace:
+        Trace with populated backward GradFn metadata.
+    name:
+        Invariant check name for raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If saved-grad op labels and layer ``has_grad`` flags disagree.
+    """
+
     expected_saved_grad_labels = {layer.label for layer in trace.layer_list if layer.has_grad}
     saved_grad_labels = {op.label for op in trace.saved_grad_ops}
     if saved_grad_labels != expected_saved_grad_labels:
@@ -807,17 +896,29 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             "saved_grad_ops does not match layers with saved grad tensors",
         )
 
-    expected_pass_indices = list(range(1, trace.num_backward_passes + 1))
-    actual_pass_indices = sorted(getattr(trace, "backward_pass_logs", {}).keys())
-    if actual_pass_indices != expected_pass_indices:
-        raise MetadataInvariantError(
-            name,
-            f"backward_pass_logs keys {actual_pass_indices!r} are not dense "
-            f"1..{trace.num_backward_passes}",
-        )
-    valid_pass_indices = set(actual_pass_indices)
-    _check_grad_fn_topology_invariants(trace, name)
-    _check_backward_pass_domain_invariants(trace, name, valid_pass_indices)
+
+def _check_backward_pass_record_consistency(
+    trace: "Trace",
+    name: str,
+    valid_pass_indices: set[int],
+) -> None:
+    """Check backward pass logs and call references are internally consistent.
+
+    Parameters
+    ----------
+    trace:
+        Trace with populated backward GradFn metadata.
+    name:
+        Invariant check name for raised errors.
+    valid_pass_indices:
+        Backward pass indices known on the trace.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If backward pass logs are not dense or calls reference missing passes.
+    """
+
     for pass_index, backward_pass in getattr(trace, "backward_pass_logs", {}).items():
         if backward_pass.pass_index != pass_index:
             raise MetadataInvariantError(
@@ -839,6 +940,32 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                     f"{call.call_label} references missing backward pass "
                     f"{call.backward_pass_index}",
                 )
+
+
+def _check_backward_pass_index_density(trace: "Trace", name: str) -> None:
+    """Check backward pass log keys are dense.
+
+    Parameters
+    ----------
+    trace:
+        Trace with populated backward pass metadata.
+    name:
+        Invariant check name for raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If backward pass log keys are not exactly ``1..num_backward_passes``.
+    """
+
+    expected_pass_indices = list(range(1, trace.num_backward_passes + 1))
+    actual_pass_indices = sorted(getattr(trace, "backward_pass_logs", {}).keys())
+    if actual_pass_indices != expected_pass_indices:
+        raise MetadataInvariantError(
+            name,
+            f"backward_pass_logs keys {actual_pass_indices!r} are not dense "
+            f"1..{trace.num_backward_passes}",
+        )
 
 
 def _check_grad_fn_topology_invariants(trace: "Trace", name: str) -> None:
@@ -1661,6 +1788,64 @@ def _check_graph_topology(ml: "Trace") -> None:
             )
 
 
+def _check_backend_neutral_graph_topology(ml: "Trace") -> None:
+    """Check parent/child symmetry for non-torch traces where fields exist.
+
+    Parameters
+    ----------
+    ml:
+        Postprocessed non-torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a populated parent or child list references a missing layer or lacks
+        the reciprocal edge.
+    """
+
+    name = "backend_neutral_graph_topology"
+    labels = {
+        getattr(layer, "label", getattr(layer, "layer_label", ""))
+        for layer in getattr(ml, "layer_list", ())
+    } | {
+        getattr(layer, "layer_label", getattr(layer, "label", ""))
+        for layer in getattr(ml, "layer_list", ())
+    }
+    for layer in getattr(ml, "layer_list", ()):
+        label = getattr(layer, "layer_label", getattr(layer, "label", type(layer).__name__))
+        parents = list(getattr(layer, "parents", ()) or ())
+        children = list(getattr(layer, "children", ()) or ())
+        for parent_label in parents:
+            if parent_label not in labels:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {label} has parent {parent_label!r} outside trace labels",
+                )
+            parent = ml[parent_label]
+            parent_children = set(getattr(parent, "children", ()) or ())
+            if (
+                label not in parent_children
+                and getattr(layer, "label", label) not in parent_children
+            ):
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {label} lists {parent_label!r} as parent, but reciprocal child is missing",
+                )
+        for child_label in children:
+            if child_label not in labels:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {label} has child {child_label!r} outside trace labels",
+                )
+            child = ml[child_label]
+            child_parents = set(getattr(child, "parents", ()) or ())
+            if label not in child_parents and getattr(layer, "label", label) not in child_parents:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {label} lists {child_label!r} as child, but reciprocal parent is missing",
+                )
+
+
 def _check_edge_use_parent_arg_invariants(ml: "Trace") -> None:
     """Check existing edge-use records and parent-arg references.
 
@@ -2453,6 +2638,43 @@ def _check_conditional_invariants(ml: "Trace") -> None:
     branch_context_kinds = {"if_test", "elif_test", "ifexp"}
     wrapped_context_kinds = branch_context_kinds | {"bool_cast"}
 
+    _check_conditional_arm_entry_child_symmetry(ml, name, layer_label_set)
+    _check_conditional_derived_child_views(ml, name)
+    _check_conditional_child_labels_resolve(ml, name, valid_child_labels)
+    _check_conditional_bool_classification(
+        ml,
+        name,
+        branch_context_kinds,
+        wrapped_context_kinds,
+    )
+    _check_conditional_event_references(ml, name, event_id_set)
+    _check_conditional_branch_stack_monotonicity(ml, name)
+    _check_conditional_elif_key_contiguity(ml, name)
+    _check_conditional_bool_event_backrefs(ml, name, layer_label_set)
+    _check_conditional_layer_aggregate_views(ml, name)
+    _check_conditional_rolled_edge_call_indices(ml, name)
+    _check_conditional_transient_bool_keys_removed(ml, name)
+    _check_conditional_arm_child_pass_union(ml, name)
+    _check_conditional_branch_entry_edges(ml, name, layer_label_set)
+    _check_conditional_arm_edges_match_graph(ml, name)
+    _check_conditional_branch_membership_records(ml, name)
+
+
+def _check_conditional_arm_entry_child_symmetry(
+    ml: "Trace",
+    name: str,
+    layer_label_set: set[str],
+) -> None:
+    """Check conditional arm-entry edge and child-map symmetry.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 1: conditional_arm_entry_edges ↔ conditional_arm_children.
     for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
@@ -2490,6 +2712,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                             f"[{conditional_id}][{branch_kind!r}] includes {child_label!r} "
                             f"but conditional_arm_entry_edges[{(conditional_id, branch_kind)}]={model_edges}",
                         )
+
+
+def _check_conditional_derived_child_views(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check derived conditional child views match primary structures.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 2: per-layer derived views are exact projections of the primary structures.
     for layer in ml.layer_list:
@@ -2546,6 +2783,22 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{layer_log.conditional_else_children} != expected projection "
                 f"{expected_else_children}",
             )
+
+
+def _check_conditional_child_labels_resolve(
+    ml: "Trace",
+    name: str,
+    valid_child_labels: set[str],
+) -> None:
+    """Check conditional child labels resolve to known layers.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 3: every child label in conditional child views exists in the log.
     for layer in ml.layer_list:
@@ -2614,6 +2867,23 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"{child_label!r} for edge {(conditional_id, branch_kind, parent_label)}",
                 )
 
+
+def _check_conditional_bool_classification(
+    ml: "Trace",
+    name: str,
+    branch_context_kinds: set[str],
+    wrapped_context_kinds: set[str],
+) -> None:
+    """Check conditional bool classification fields are mutually consistent.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 4: bool classification fields are mutually consistent.
     for layer in ml.layer_list:
         expected_is_branch = layer.conditional_context_kind in branch_context_kinds
@@ -2648,6 +2918,22 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"conditional_context_kind={layer.conditional_context_kind!r}",
             )
 
+
+def _check_conditional_event_references(
+    ml: "Trace",
+    name: str,
+    event_id_set: set[int],
+) -> None:
+    """Check referenced conditional ids resolve to events.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 5: every referenced cond_id corresponds to a ConditionalEvent.
     referenced_cond_ids: set[int] = set()
     for layer in ml.layer_list:
@@ -2677,6 +2963,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"in Trace.conditional_records",
             )
 
+
+def _check_conditional_branch_stack_monotonicity(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check parent-child conditional stacks are monotone by prefix.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 6: parent->child stacks are monotone by prefix relation.
     for parent_op in ml.layer_list:
         for child_label in parent_op.children:
@@ -2701,6 +3002,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"child={child_layer.conditional_branch_stack}",
             )
 
+
+def _check_conditional_elif_key_contiguity(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check elif branch keys are contiguous on conditional events.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 7: elif keys are contiguous on ConditionalEvent.
     for event in ml.conditional_records:
         for field_name, mapping in (
@@ -2717,6 +3033,22 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"ConditionalEvent id={event.id} {field_name} has non-contiguous elif keys "
                     f"{elif_indices}",
                 )
+
+
+def _check_conditional_bool_event_backrefs(
+    ml: "Trace",
+    name: str,
+    layer_label_set: set[str],
+) -> None:
+    """Check conditional event bool-layer backreferences.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 8: ConditionalEvent.bool_layers back-reference to the event id.
     for event in ml.conditional_records:
@@ -2749,6 +3081,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"{getattr(mismatched_bool_ops[0], 'terminal_conditional_id', None)}",
                 )
 
+
+def _check_conditional_layer_aggregate_views(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check layer conditional aggregate views match pass-level data.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 9: Layer conditional aggregate views match pass-level data.
     for layer_log in ml.layer_logs.values():
         expected_stack_order: list[list[tuple[int, str]]] = []
@@ -2775,6 +3122,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{layer_log.conditional_branch_stack_ops} != expected "
                 f"{expected_stack_ops}",
             )
+
+
+def _check_conditional_rolled_edge_call_indices(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check rolled conditional edge call indices.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 10: rolled conditional_edge_call_indices reference known
     # layer-level arm-entry edges. Exact pass lists live only in
@@ -2832,6 +3194,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"conditional_edge_call_indices[{edge_key}]={ml.conditional_edge_call_indices.get(edge_key)}",
             )
 
+
+def _check_conditional_transient_bool_keys_removed(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check transient bool conditional keys were removed.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 11: no transient _bool_conditional_key remains after step 5c.
     for layer in ml.layer_list:
         if hasattr(layer, "_bool_conditional_key"):
@@ -2840,6 +3217,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 11,
                 f"{layer.layer_label} still has transient _bool_conditional_key attribute",
             )
+
+
+def _check_conditional_arm_child_pass_union(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check layer conditional arm children are exact pass unions.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 12: Layer conditional_arm_children is the exact pass union.
     for layer_log in ml.layer_logs.values():
@@ -2852,6 +3244,22 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{layer_log.conditional_arm_children} != expected pass union "
                 f"{expected_children_by_cond}",
             )
+
+
+def _check_conditional_branch_entry_edges(
+    ml: "Trace",
+    name: str,
+    layer_label_set: set[str],
+) -> None:
+    """Check legacy branch edges match conditional entry children.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 13: legacy IF-view conditional_branch_edges ↔ start-children.
     for parent_label, bool_label in ml.conditional_branch_edges:
@@ -2880,6 +3288,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"{bool_label!r} but conditional_branch_edges={ml.conditional_branch_edges}",
                 )
 
+
+def _check_conditional_arm_edges_match_graph(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check conditional arm-entry edges correspond to graph edges.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
     # Invariant 14: conditional arm-entry edges correspond to real graph edges.
     # Invariants 1-2 tie the THEN/ELIF/ELSE child views to the arm-entry edges;
     # this check closes the loop by tying those edges to the actual rolled
@@ -2903,6 +3326,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"({parent_label!r}, {child_label!r}) but the graph has no "
                     f"{rolled_edge[0]} -> {rolled_edge[1]} edge",
                 )
+
+
+def _check_conditional_branch_membership_records(
+    ml: "Trace",
+    name: str,
+) -> None:
+    """Check per-op conditional branch membership records agree.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
 
     # Invariant 15: per-op conditional-branch membership records agree.
     # ``conditional_branch_stack`` is the canonical per-op record of arm
@@ -3023,6 +3461,54 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
                     f"'{lpl.layer_label}' != "
                     f"parent Layer.layer_label='{ll.layer_label}'",
                 )
+
+
+def _check_pass_count_consistency(ml: "Trace") -> None:
+    """Check pass-count consistency across multi-pass layer records.
+
+    Parameters
+    ----------
+    ml:
+        Trace whose per-layer pass maps should be checked.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If layer call counts, op maps, and op pass metadata disagree.
+    """
+
+    name = "pass_count_consistency"
+    layer_num_calls = getattr(ml, "layer_num_calls", {}) or {}
+    for layer_label, layer_log in ml.layer_logs.items():
+        ops = getattr(layer_log, "ops", {}) or {}
+        expected_keys = set(range(1, getattr(layer_log, "num_passes", 0) + 1))
+        actual_keys = set(ops)
+        if actual_keys != expected_keys:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{layer_label}' ops keys {sorted(actual_keys)!r} do not match "
+                f"num_passes={getattr(layer_log, 'num_passes', None)!r}",
+            )
+        for pass_index, op in ops.items():
+            if getattr(op, "pass_index", None) != pass_index:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' stores op with pass_index="
+                    f"{getattr(op, 'pass_index', None)!r} under key {pass_index!r}",
+                )
+            if getattr(op, "num_passes", None) != getattr(layer_log, "num_passes", None):
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{layer_label}' op {getattr(op, 'label', pass_index)!r} has "
+                    f"num_passes={getattr(op, 'num_passes', None)!r}, expected "
+                    f"{getattr(layer_log, 'num_passes', None)!r}",
+                )
+        if layer_label in layer_num_calls and layer_num_calls[layer_label] != layer_log.num_passes:
+            raise MetadataInvariantError(
+                name,
+                f"layer_num_calls[{layer_label!r}]={layer_num_calls[layer_label]!r} "
+                f"!= Layer.num_passes={layer_log.num_passes!r}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -3829,6 +4315,7 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
     if hasattr(ml, "_buffer_accessor") and ml._buffer_accessor is not None:
         for buf in ml.buffers:
             _check_buffer_static_versions(ml, buf, name)
+            _check_buffer_semantic_ownership(ml, buf, name)
             _check_buffer_write_versions(ml, buf, name)
             _check_buffer_replay_validated_versions(ml, buf, name)
 
@@ -3913,6 +4400,118 @@ def _buffer_address_has_module_ancestor(ml: "Trace", address: str) -> bool:
         addr = addr.rsplit(".", 1)[0]
         found_ancestor = addr in ml.modules
     return found_ancestor or "" in ml.modules
+
+
+def _check_buffer_semantic_ownership(ml: "Trace", buf: object, name: str) -> None:
+    """Check buffer source versions are owned by their module or a consumer.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing module and buffer metadata.
+    buf:
+        Buffer entity from the trace buffer accessor.
+    name:
+        Invariant name used in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a buffer source version claims a module stack unrelated to the
+        registered buffer owner and unrelated to any active consumer op.
+    """
+
+    address = getattr(buf, "address", None)
+    if not isinstance(address, str) or not address:
+        return
+    owner_address = _owner_module_address_for_buffer(address)
+    for version in list(getattr(buf, "versions", ()) or ()):
+        version_label = getattr(version, "layer_label", type(version).__name__)
+        module_claims = _module_addresses_for_buffer_version(version)
+        if not module_claims:
+            continue
+        valid_addresses = {owner_address}
+        valid_addresses.update(_active_buffer_consumer_module_addresses(ml, version))
+        if module_claims.isdisjoint(valid_addresses):
+            raise MetadataInvariantError(
+                name,
+                f"Buffer '{address}' version '{version_label}' has module stack "
+                f"{sorted(module_claims)!r}, expected owner/consumer in "
+                f"{sorted(valid_addresses)!r}",
+            )
+
+
+def _owner_module_address_for_buffer(address: str) -> str:
+    """Return the owning module address for a registered buffer address.
+
+    Parameters
+    ----------
+    address:
+        Dotted registered buffer address.
+
+    Returns
+    -------
+    str
+        Owning module address, or ``"self"`` for top-level buffers.
+    """
+
+    if "." not in address:
+        return "self"
+    return address.rsplit(".", 1)[0]
+
+
+def _module_addresses_for_buffer_version(version: object) -> set[str]:
+    """Return module addresses claimed by a buffer version node.
+
+    Parameters
+    ----------
+    version:
+        Buffer op version.
+
+    Returns
+    -------
+    set[str]
+        Pass-stripped module addresses.
+    """
+
+    claims: set[str] = set()
+    for claim in _module_claims(cast("Op", version)):
+        address = _module_claim_address(claim)
+        if address:
+            claims.add(address)
+    return claims
+
+
+def _active_buffer_consumer_module_addresses(ml: "Trace", version: object) -> set[str]:
+    """Return module addresses for real active consumers of a buffer version.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing the graph.
+    version:
+        Buffer op version whose children should be inspected.
+
+    Returns
+    -------
+    set[str]
+        Pass-stripped module addresses claimed by child ops consuming the
+        buffer version.
+    """
+
+    addresses: set[str] = set()
+    for child_label in getattr(version, "children", ()) or ():
+        try:
+            child = ml[child_label]
+        except (KeyError, IndexError, ValueError, TypeError):
+            continue
+        if getattr(child, "is_output", False):
+            continue
+        for claim in _module_claims(child):
+            address = _module_claim_address(claim)
+            if address:
+                addresses.add(address)
+    return addresses
 
 
 def _check_buffer_write_versions(ml: "Trace", buf: object, name: str) -> None:
@@ -4752,6 +5351,11 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
     MetadataInvariantContract("special_layer_lists", _check_special_layer_lists, "torch"),
     MetadataInvariantContract("graph_topology", _check_graph_topology, "torch"),
     MetadataInvariantContract(
+        "backend_neutral_graph_topology",
+        _check_backend_neutral_graph_topology,
+        "non_torch",
+    ),
+    MetadataInvariantContract(
         "edge_use_parent_arg_consistency",
         _check_edge_use_parent_arg_invariants,
         "torch",
@@ -4788,6 +5392,11 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
     MetadataInvariantContract(
         "loop_detection_invariants",
         _check_loop_detection_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "pass_count_consistency",
+        _check_pass_count_consistency,
         "torch",
     ),
     MetadataInvariantContract("distance_invariants", _check_distance_invariants, "torch"),
