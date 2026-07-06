@@ -125,6 +125,7 @@ from .code_panel import (
     resolve_code_panel_source,
 )
 from .collapse_plan import CollapsePlan, RawOp, RenderContext, SegmentDescriptor
+from .render_ir import build_render_ir, projected_antiparallel_endpoint_pairs
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -789,6 +790,130 @@ class RenderedNodeEmission:
     fold: "ModuleRunFold | None" = None
 
 
+@dataclass(frozen=True)
+class ForwardDotCall:
+    """Recorded Graphviz call for forward DOT emission.
+
+    Parameters
+    ----------
+    kind:
+        Graphviz call kind.
+    args:
+        Positional arguments passed to the call.
+    kwargs:
+        Keyword arguments passed to the call.
+    children:
+        Nested calls for subgraph emission.
+    """
+
+    kind: Literal["node", "edge", "attr", "subgraph"]
+    args: tuple[Any, ...] = ()
+    kwargs: Mapping[str, Any] = field(default_factory=dict)
+    children: tuple["ForwardDotCall", ...] = ()
+
+
+@dataclass(frozen=True)
+class ForwardDotIR:
+    """Resolved forward DOT emission payload.
+
+    Parameters
+    ----------
+    render_ir:
+        Semantic render IR used to derive forward nodes, edges, and clusters.
+    calls:
+        Top-level Graphviz calls to replay.
+    module_cluster_dict:
+        Cluster accumulator consumed by subgraph emission.
+    top_level_sibling_rank_groups:
+        Optional sibling rank constraints emitted outside clusters.
+    captured_forward_edges:
+        Resolved forward edges captured for sibling-order verification.
+    container_overlay_edges:
+        Deferred container overlay edges emitted after clusters.
+    """
+
+    render_ir: Any
+    calls: tuple[ForwardDotCall, ...]
+    module_cluster_dict: Dict[str, Any]
+    top_level_sibling_rank_groups: tuple["SiblingOrderChain", ...]
+    captured_forward_edges: tuple["CapturedForwardEdge", ...]
+    container_overlay_edges: tuple["ContainerOverlayEdge", ...]
+
+
+class _ForwardDotRecorder:
+    """Minimal Graphviz-like recorder used while building forward render IR."""
+
+    def __init__(self) -> None:
+        """Initialize an empty recorder."""
+
+        self.calls: list[ForwardDotCall] = []
+
+    def node(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz node call."""
+
+        self.calls.append(ForwardDotCall("node", args=tuple(args), kwargs=dict(kwargs)))
+
+    def edge(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz edge call."""
+
+        self.calls.append(ForwardDotCall("edge", args=tuple(args), kwargs=dict(kwargs)))
+
+    def subgraph(self, *args: Any, **kwargs: Any) -> "_ForwardDotSubgraphRecorder":
+        """Record a nested Graphviz subgraph."""
+
+        return _ForwardDotSubgraphRecorder(self.calls, tuple(args), dict(kwargs))
+
+
+class _ForwardDotSubgraphRecorder:
+    """Context manager recording calls made inside a Graphviz subgraph."""
+
+    def __init__(
+        self,
+        parent_calls: list[ForwardDotCall],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> None:
+        """Initialize the nested recorder."""
+
+        self._parent_calls = parent_calls
+        self._args = args
+        self._kwargs = kwargs
+        self._children: list[ForwardDotCall] = []
+
+    def __enter__(self) -> "_ForwardDotSubgraphRecorder":
+        """Return the active nested recorder."""
+
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        """Append the subgraph call if the context exits successfully."""
+
+        if exc_type is None:
+            self._parent_calls.append(
+                ForwardDotCall(
+                    "subgraph",
+                    args=self._args,
+                    kwargs=self._kwargs,
+                    children=tuple(self._children),
+                )
+            )
+
+    def attr(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz attr call inside the subgraph."""
+
+        self._children.append(ForwardDotCall("attr", args=tuple(args), kwargs=dict(kwargs)))
+
+    def node(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz node call inside the subgraph."""
+
+        self._children.append(ForwardDotCall("node", args=tuple(args), kwargs=dict(kwargs)))
+
+    def edge(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz edge call inside the subgraph."""
+
+        self._children.append(ForwardDotCall("edge", args=tuple(args), kwargs=dict(kwargs)))
+
+
 def draw(
     self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
@@ -1193,6 +1318,7 @@ def draw(
     dot.graph_attr.update(graph_args)
     dot.node_attr.update({"ordering": "out", **theme_node_attrs(theme, font_size=font_size)})
     dot.edge_attr.update(theme_edge_attrs(theme, font_size=font_size))
+    forward_dot_recorder = _ForwardDotRecorder()
 
     # Accumulate edges per module cluster; actual Graphviz subgraphs are
     # created at the end in _setup_subgraphs to ensure proper nesting.
@@ -1226,6 +1352,18 @@ def draw(
         container_max_inline=container_max_inline,
         pending_nodes=pending_container_collapse_nodes,
     )
+    forward_render_ir = build_render_ir(
+        self,
+        collapse_fn=collapse_fn,
+        run_folds=run_folds,
+        context=RenderContext(
+            vis_mode=vis_mode,
+            show_buffer_layers=show_buffer_layers,
+            show_containers=show_containers,
+            engine="dot",
+        ),
+    )
+    antiparallel_projected_edges = projected_antiparallel_endpoint_pairs(forward_render_ir)
 
     for node in entries_to_plot.values():
         if node.layer_label in skipped_labels:
@@ -1235,7 +1373,7 @@ def draw(
         _add_node_to_graphviz(
             self,
             node,
-            dot,
+            cast(graphviz.Digraph, forward_dot_recorder),
             module_cluster_dict,
             edges_used,
             vis_mode,
@@ -1262,10 +1400,11 @@ def draw(
             run_fold_ellipsis_nodes,
             segments,
             emitted_segment_nodes,
+            antiparallel_projected_edges,
         )
 
     for node_args in pending_container_collapse_nodes:
-        dot.node(**node_args)
+        forward_dot_recorder.node(**node_args)
 
     container_overlay_edges: list[ContainerOverlayEdge] = []
     if show_containers == "nodes" and vis_mode == "unrolled":
@@ -1278,7 +1417,7 @@ def draw(
         )
         for overlay_node in container_overlay_nodes:
             if overlay_node.owner_key is None:
-                dot.node(**overlay_node.args)
+                forward_dot_recorder.node(**overlay_node.args)
             else:
                 module_cluster_dict[overlay_node.owner_key].setdefault("nodes", []).append(
                     overlay_node.args
@@ -1296,7 +1435,11 @@ def draw(
         _queue_container_clusters(module_cluster_dict, container_clusters)
 
     if vis_intervention_mode == "as_node":
-        _add_intervention_hook_nodes(dot, site_labels, vis_graph_overrides)
+        _add_intervention_hook_nodes(
+            cast(graphviz.Digraph, forward_dot_recorder),
+            site_labels,
+            vis_graph_overrides,
+        )
 
     sibling_order_chains: tuple[SiblingOrderChain, ...] = ()
     if _should_order_siblings(
@@ -1318,16 +1461,26 @@ def draw(
                     chain,
                 )
 
+    forward_dot_ir = ForwardDotIR(
+        render_ir=forward_render_ir,
+        calls=tuple(forward_dot_recorder.calls),
+        module_cluster_dict=module_cluster_dict,
+        top_level_sibling_rank_groups=tuple(top_level_sibling_rank_groups),
+        captured_forward_edges=tuple(captured_forward_edges),
+        container_overlay_edges=tuple(container_overlay_edges),
+    )
+    _replay_forward_dot_calls(dot, forward_dot_ir.calls)
+
     # Finally, set up the subgraphs.
     _setup_subgraphs(
         self,
         dot,
         vis_mode,
-        module_cluster_dict,
+        forward_dot_ir.module_cluster_dict,
         overrides,
-        top_level_sibling_rank_groups,
+        list(forward_dot_ir.top_level_sibling_rank_groups),
     )
-    for overlay_edge in container_overlay_edges:
+    for overlay_edge in forward_dot_ir.container_overlay_edges:
         dot.edge(
             tail_name=overlay_edge.tail_name,
             head_name=overlay_edge.head_name,
@@ -1424,6 +1577,31 @@ def draw(
     if return_graph:
         return dot
     return final_source
+
+
+def _replay_forward_dot_calls(dot: graphviz.Digraph, calls: Sequence[ForwardDotCall]) -> None:
+    """Replay recorded forward DOT calls into a Graphviz graph.
+
+    Parameters
+    ----------
+    dot:
+        Graphviz graph receiving the recorded calls.
+    calls:
+        Forward DOT calls recorded by the render IR builder.
+    """
+
+    for call in calls:
+        if call.kind == "node":
+            dot.node(*call.args, **call.kwargs)
+        elif call.kind == "edge":
+            dot.edge(*call.args, **call.kwargs)
+        elif call.kind == "attr":
+            dot.attr(*call.args, **call.kwargs)
+        elif call.kind == "subgraph":
+            with dot.subgraph(*call.args, **call.kwargs) as subgraph:
+                _replay_forward_dot_calls(subgraph, call.children)
+        else:
+            raise ValueError(f"Unknown forward DOT call kind: {call.kind}")
 
 
 _CODE_PANEL_COMPOSED_FORMATS = frozenset({"svg", "pdf", "png"})
@@ -4932,6 +5110,7 @@ def _add_node_to_graphviz(
     run_fold_ellipsis_nodes: set[str] | None = None,
     segments: Mapping[str, SegmentDescriptor] | None = None,
     emitted_segment_nodes: set[str] | None = None,
+    antiparallel_projected_edges: frozenset[tuple[str, str]] = frozenset(),
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -5034,6 +5213,7 @@ def _add_node_to_graphviz(
         run_fold_ellipsis_nodes,
         segments,
         segment,
+        antiparallel_projected_edges,
     )
 
 
@@ -7643,6 +7823,7 @@ def _add_edges_for_node(
     run_fold_ellipsis_nodes: set[str] | None = None,
     segments: Mapping[str, SegmentDescriptor] | None = None,
     parent_segment: SegmentDescriptor | None = None,
+    antiparallel_projected_edges: frozenset[tuple[str, str]] = frozenset(),
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -7896,6 +8077,8 @@ def _add_edges_for_node(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
+        if (tail_name, head_name) in antiparallel_projected_edges:
+            edge_dict.update(_projected_antiparallel_edge_attrs())
         metadata_base = (
             _base_node_for_metadata(metadata_child)
             if metadata_child is not None and not edge_has_boundary
@@ -8034,6 +8217,24 @@ def _add_edges_for_node(
                 graphviz_graph,
                 overrides,  # type: ignore[arg-type]
             )
+
+
+def _projected_antiparallel_edge_attrs() -> dict[str, str]:
+    """Return explicit DOT attrs for projected anti-parallel fold edges.
+
+    Returns
+    -------
+    dict[str, str]
+        Non-constraining edge style used to mark projection artifacts.
+    """
+
+    return {
+        "color": "#B36B00",
+        "fontcolor": "#8A5200",
+        "style": "dashed",
+        "constraint": "false",
+        "tooltip": "Projected anti-parallel fold edge",
+    }
 
 
 def _is_rolled_loop_carried_self_edge(
