@@ -237,6 +237,172 @@ def _clear_saved_activation_dedup_caches(trace: "Trace") -> None:
             registry.clear_live_state()
 
 
+def _run_predicate_forward_with_root_frame(
+    trace: "Trace",
+    backend: CaptureBackend,
+    model: nn.Module,
+    input_args: tuple[Any, ...] | list[Any],
+    input_kwargs: dict[Any, Any],
+    model_device: object | None,
+) -> Any:
+    """Run predicate capture through the shared root module-frame boundary.
+
+    Parameters
+    ----------
+    trace
+        Active predicate-mode trace.
+    backend
+        Backend adapter owning module-frame stack operations.
+    model
+        Model being captured.
+    input_args
+        Normalized model positional inputs.
+    input_kwargs
+        Normalized model keyword inputs.
+    model_device
+        Device used for forward peak-memory measurement.
+
+    Returns
+    -------
+    Any
+        Raw model output.
+    """
+
+    from ..capture.predicates import (
+        _evaluate_halt,
+        _evaluate_keep_module,
+        _is_halt_only_capture,
+    )
+    from ..capture.projections import (
+        _build_record_context,
+        append_projected_event,
+        get_active_recording_state,
+    )
+    from ..fastlog.types import CaptureSpec, ModuleStackFrame
+
+    state = get_active_recording_state()
+    root_frame = ModuleStackFrame(
+        address="",
+        module_type=type(model).__name__,
+        module_id=id(model),
+        pass_index=1,
+    )
+    skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
+    backend.push_existing_module_frame(trace, state.module_stack, root_frame)
+    state.event_index += 1
+    enter_ctx = _build_record_context(
+        kind="module_enter",
+        op_log_or_op_data={
+            "label": "root:enter:1",
+            "address": "",
+            "module_type": type(model).__name__,
+            "module_pass_index": root_frame.pass_index,
+        },
+        module_stack=state.module_stack,
+        history=tuple(state.history),
+        op_counts=state.op_counts,
+        pass_index=state.pass_index,
+        event_index=state.event_index,
+        step_index=None,
+        time_since_pass_start=time.time() - trace.capture_start_time,
+        include_source_events=state.options.include_source_events,
+        sample_id=state.sample_id,
+    )
+    halt_only = _is_halt_only_capture(state.options)
+    try:
+        if halt_only:
+            _evaluate_halt(enter_ctx, state.options)
+        else:
+            enter_spec = _evaluate_keep_module(enter_ctx, state.options)
+            append_projected_event(
+                trace,
+                enter_ctx,
+                enter_spec,
+                predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
+            )
+            _evaluate_halt(enter_ctx, state.options)
+    except HaltSignal:
+        raise
+    except Exception as exc:
+        state.handle_predicate_exception(enter_ctx, exc)
+        if not halt_only:
+            append_projected_event(
+                trace,
+                enter_ctx,
+                skipped_spec,
+                predicate_matched=False,
+            )
+    finally:
+        if not halt_only:
+            state.append_context(enter_ctx)
+    outputs = None
+    inference_context = (
+        torch.no_grad() if getattr(trace, "inference_only", False) else contextlib.nullcontext()
+    )
+    try:
+        with _timed_phase(trace, "dispatch:forward_model"):
+            with _forward_peak_memory_bracket(trace, model_device):
+                with inference_context:
+                    outputs = model(*input_args, **input_kwargs)
+    finally:
+        active_model_exc = sys.exc_info()[1]
+        state.event_index += 1
+        exit_ctx = _build_record_context(
+            kind="module_exit",
+            op_log_or_op_data={
+                "label": "root:exit:1",
+                "address": "",
+                "module_type": type(model).__name__,
+                "module_pass_index": root_frame.pass_index,
+            },
+            module_stack=state.module_stack,
+            history=tuple(state.history),
+            op_counts=state.op_counts,
+            pass_index=state.pass_index,
+            event_index=state.event_index,
+            step_index=None,
+            time_since_pass_start=time.time() - trace.capture_start_time,
+            include_source_events=state.options.include_source_events,
+            sample_id=state.sample_id,
+        )
+        try:
+            if halt_only:
+                _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
+            else:
+                exit_spec = _evaluate_keep_module(exit_ctx, state.options)
+                append_projected_event(
+                    trace,
+                    exit_ctx,
+                    exit_spec,
+                    predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
+                )
+                _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
+        except HaltSignal:
+            if active_model_exc is None:
+                raise
+        except Exception as exc:
+            if active_model_exc is None:
+                state.handle_predicate_exception(exit_ctx, exc)
+            else:
+                state.add_predicate_failure(exit_ctx, exc)
+            if not halt_only:
+                if active_model_exc is None or not any(
+                    event.raw_index == exit_ctx.event_index
+                    for event in trace.capture_events.op_events
+                ):
+                    append_projected_event(
+                        trace,
+                        exit_ctx,
+                        skipped_spec,
+                        predicate_matched=False,
+                    )
+        finally:
+            if not halt_only:
+                state.append_context(exit_ctx)
+            backend.pop_module_frame(trace, state.module_stack, root_frame)
+    return outputs
+
+
 def save_new_outs(
     self: "Trace",
     model: nn.Module,
@@ -788,140 +954,14 @@ def run_and_log_inputs_through_model(
             _register_model_input_container_snapshots(self, input_args, input_kwargs)
 
             if self.capture_mode == "predicate":
-                from ..capture.predicates import (
-                    _evaluate_halt,
-                    _evaluate_keep_module,
-                    _is_halt_only_capture,
+                outputs = _run_predicate_forward_with_root_frame(
+                    self,
+                    backend,
+                    model,
+                    input_args,
+                    input_kwargs,
+                    model_device,
                 )
-                from ..capture.projections import (
-                    _build_record_context,
-                    append_projected_event,
-                    get_active_recording_state,
-                )
-                from ..fastlog.types import CaptureSpec, ModuleStackFrame
-
-                state = get_active_recording_state()
-                root_frame = ModuleStackFrame(
-                    address="",
-                    module_type=type(model).__name__,
-                    module_id=id(model),
-                    pass_index=1,
-                )
-                skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
-                backend.push_existing_module_frame(self, state.module_stack, root_frame)
-                state.event_index += 1
-                enter_ctx = _build_record_context(
-                    kind="module_enter",
-                    op_log_or_op_data={
-                        "label": "root:enter:1",
-                        "address": "",
-                        "module_type": type(model).__name__,
-                        "module_pass_index": root_frame.pass_index,
-                    },
-                    module_stack=state.module_stack,
-                    history=tuple(state.history),
-                    op_counts=state.op_counts,
-                    pass_index=state.pass_index,
-                    event_index=state.event_index,
-                    step_index=None,
-                    time_since_pass_start=time.time() - self.capture_start_time,
-                    include_source_events=state.options.include_source_events,
-                    sample_id=state.sample_id,
-                )
-                halt_only = _is_halt_only_capture(state.options)
-                try:
-                    if halt_only:
-                        _evaluate_halt(enter_ctx, state.options)
-                    else:
-                        enter_spec = _evaluate_keep_module(enter_ctx, state.options)
-                        append_projected_event(
-                            self,
-                            enter_ctx,
-                            enter_spec,
-                            predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
-                        )
-                        _evaluate_halt(enter_ctx, state.options)
-                except HaltSignal:
-                    raise
-                except Exception as exc:
-                    state.handle_predicate_exception(enter_ctx, exc)
-                    if not halt_only:
-                        append_projected_event(
-                            self,
-                            enter_ctx,
-                            skipped_spec,
-                            predicate_matched=False,
-                        )
-                finally:
-                    if not halt_only:
-                        state.append_context(enter_ctx)
-                outputs = None
-                inference_context = (
-                    torch.no_grad()
-                    if getattr(self, "inference_only", False)
-                    else contextlib.nullcontext()
-                )
-                try:
-                    with _timed_phase(self, "dispatch:forward_model"):
-                        with _forward_peak_memory_bracket(self, model_device):
-                            with inference_context:
-                                outputs = model(*input_args, **input_kwargs)
-                finally:
-                    active_model_exc = sys.exc_info()[1]
-                    state.event_index += 1
-                    exit_ctx = _build_record_context(
-                        kind="module_exit",
-                        op_log_or_op_data={
-                            "label": "root:exit:1",
-                            "address": "",
-                            "module_type": type(model).__name__,
-                            "module_pass_index": root_frame.pass_index,
-                        },
-                        module_stack=state.module_stack,
-                        history=tuple(state.history),
-                        op_counts=state.op_counts,
-                        pass_index=state.pass_index,
-                        event_index=state.event_index,
-                        step_index=None,
-                        time_since_pass_start=time.time() - self.capture_start_time,
-                        include_source_events=state.options.include_source_events,
-                        sample_id=state.sample_id,
-                    )
-                    try:
-                        if halt_only:
-                            _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
-                        else:
-                            exit_spec = _evaluate_keep_module(exit_ctx, state.options)
-                            append_projected_event(
-                                self,
-                                exit_ctx,
-                                exit_spec,
-                                predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
-                            )
-                            _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
-                    except HaltSignal:
-                        if active_model_exc is None:
-                            raise
-                    except Exception as exc:
-                        if active_model_exc is None:
-                            state.handle_predicate_exception(exit_ctx, exc)
-                        else:
-                            state.add_predicate_failure(exit_ctx, exc)
-                        if not halt_only:
-                            if active_model_exc is None or not any(
-                                event.raw_index == exit_ctx.event_index
-                                for event in self.capture_events.op_events
-                            ):
-                                append_projected_event(
-                                    self,
-                                    exit_ctx,
-                                    skipped_spec,
-                                    predicate_matched=False,
-                                )
-                    finally:
-                        if not halt_only:
-                            state.append_context(exit_ctx)
-                        backend.pop_module_frame(self, state.module_stack, root_frame)
             else:
                 inference_context = (
                     torch.no_grad()
@@ -965,6 +1005,7 @@ def run_and_log_inputs_through_model(
         if not postprocess:
             backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
             self.capture_end_time = time.time()
+            self.__dict__.pop("_capture_producer_policy", None)
             return outputs
 
         output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
@@ -975,6 +1016,7 @@ def run_and_log_inputs_through_model(
         backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
+        self.__dict__.pop("_capture_producer_policy", None)
         return outputs
 
     except HaltSignal as halt_exc:
@@ -984,7 +1026,7 @@ def run_and_log_inputs_through_model(
             and getattr(options, "halt", None) is not None
             and getattr(self, "_halt_returns_partial_trace", False)
         ):
-            return _finalize_halted_trace(
+            halted_output = _finalize_halted_trace(
                 self,
                 backend,
                 halt_exc,
@@ -992,15 +1034,19 @@ def run_and_log_inputs_through_model(
                 input_tensors,
                 postprocess,
             )
+            self.__dict__.pop("_capture_producer_policy", None)
+            return halted_output
         backend.cleanup_halted_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs))
         )
+        self.__dict__.pop("_capture_producer_policy", None)
         raise
 
     except Exception as e:
         backend.cleanup_failed_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )
+        self.__dict__.pop("_capture_producer_policy", None)
         raise e
 
     finally:

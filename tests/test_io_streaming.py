@@ -280,22 +280,25 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         )
 
 
-def test_selective_streaming_save_is_rejected(tmp_path: Path) -> None:
-    """Selective streaming-to-bundle should fail instead of producing an empty bundle."""
+def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> None:
+    """Selective streaming-to-bundle saves matching payloads through the predicate spine."""
 
     bundle_path = tmp_path / "selective_stream_bundle.tl"
     model, inputs = _make_streaming_model()
 
-    with pytest.raises(TorchLensIOError, match='layers_to_save="all"'):
-        trace_fn(
-            model,
-            inputs,
-            layers_to_save="linear",
-            save_outs_to=bundle_path,
-            keep_outs_in_memory=False,
-        )
+    trace = trace_fn(
+        model,
+        inputs,
+        layers_to_save="linear",
+        save_outs_to=bundle_path,
+        keep_outs_in_memory=False,
+    )
 
-    assert not bundle_path.exists()
+    saved = _saved_layers(trace)
+    saved_types = {layer.layer_type for layer in saved}
+    assert bundle_path.exists()
+    assert "linear" in saved_types
+    assert saved_types <= {"linear", "output"}
 
 
 def test_selective_out_sink_still_works() -> None:

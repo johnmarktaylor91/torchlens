@@ -235,96 +235,6 @@ class CaptureProducerPolicy:
 _CAPTURE_PRODUCER_POLICIES: dict[CaptureProducerMode, CaptureProducerPolicy] = {}
 
 
-def _emit_exhaustive_policy(
-    self: "Trace",
-    func: Callable[..., Any],
-    func_name: str,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    arg_copies: tuple[Any, ...],
-    kwarg_copies: dict[str, Any],
-    out_orig: Any,
-    exec_ctx: FuncExecutionContext,
-    is_bottom_level_func: bool,
-    func_call_id: int,
-) -> None:
-    """Emit operation events through the exhaustive producer body."""
-
-    log_function_output_tensors_exhaustive(
-        self,
-        func,
-        func_name,
-        args,
-        kwargs,
-        arg_copies,
-        kwarg_copies,
-        out_orig,
-        exec_ctx,
-        is_bottom_level_func,
-        func_call_id,
-    )
-
-
-def _emit_fast_policy(
-    self: "Trace",
-    func: Callable[..., Any],
-    func_name: str,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    arg_copies: tuple[Any, ...],
-    kwarg_copies: dict[str, Any],
-    out_orig: Any,
-    exec_ctx: FuncExecutionContext,
-    is_bottom_level_func: bool,
-    func_call_id: int,
-) -> None:
-    """Emit operation events through the fast replay producer body."""
-
-    log_function_output_tensors_fast(
-        self,
-        func,
-        func_name,
-        args,
-        kwargs,
-        arg_copies,
-        kwarg_copies,
-        out_orig,
-        exec_ctx,
-        is_bottom_level_func,
-        func_call_id,
-    )
-
-
-def _emit_predicate_policy(
-    self: "Trace",
-    func: Callable[..., Any],
-    func_name: str,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    arg_copies: tuple[Any, ...],
-    kwarg_copies: dict[str, Any],
-    out_orig: Any,
-    exec_ctx: FuncExecutionContext,
-    is_bottom_level_func: bool,
-    func_call_id: int,
-) -> None:
-    """Emit operation events through the predicate producer body."""
-
-    del exec_ctx
-    log_function_output_tensors_predicate(
-        self,
-        func,
-        func_name,
-        args,
-        kwargs,
-        arg_copies,
-        kwarg_copies,
-        out_orig,
-        is_bottom_level_func,
-        func_call_id,
-    )
-
-
 def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:
     """Return the precomputed producer policy for ``mode``.
 
@@ -342,9 +252,11 @@ def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPol
     if not _CAPTURE_PRODUCER_POLICIES:
         _CAPTURE_PRODUCER_POLICIES.update(
             {
-                "exhaustive": CaptureProducerPolicy("exhaustive", _emit_exhaustive_policy),
-                "fast": CaptureProducerPolicy("fast", _emit_fast_policy),
-                "predicate": CaptureProducerPolicy("predicate", _emit_predicate_policy),
+                "exhaustive": CaptureProducerPolicy(
+                    "exhaustive", _emit_exhaustive_operation_events
+                ),
+                "fast": CaptureProducerPolicy("fast", _emit_fast_operation_events),
+                "predicate": CaptureProducerPolicy("predicate", _emit_predicate_operation_events),
             }
         )
     return _CAPTURE_PRODUCER_POLICIES[mode]
@@ -1546,6 +1458,70 @@ def log_function_output_tensors(
     )
 
 
+def _emit_operation_events(
+    policy: CaptureProducerPolicy,
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Emit operation events through the unified capture-producer entry point.
+
+    Parameters
+    ----------
+    policy
+        Precomputed capture producer policy selected at the capture boundary.
+    self
+        Active trace.
+    func
+        Original wrapped function.
+    func_name
+        Normalized function name used for TorchLens labels.
+    args
+        Function positional arguments.
+    kwargs
+        Function keyword arguments.
+    arg_copies
+        Pre-call positional argument copies.
+    kwarg_copies
+        Pre-call keyword argument copies.
+    out_orig
+        Raw function output.
+    exec_ctx
+        Function execution metadata.
+    is_bottom_level_func
+        Whether the wrapped call is bottom-level.
+    func_call_id
+        Monotonic function call id for this wrapped call.
+
+    Returns
+    -------
+    None
+        Appends or updates capture events for the active trace.
+    """
+
+    policy.emit(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+    )
+
+
 def apply_live_hooks_to_outputs(
     self: "Trace",
     func: Callable[..., Any],
@@ -2026,7 +2002,7 @@ def _record_predicate_output(
     return ram_payload, transformed_ram_payload
 
 
-def log_function_output_tensors_predicate(
+def _emit_predicate_operation_events(
     self: "Trace",
     func: Callable[..., Any],
     func_name: str,
@@ -2035,11 +2011,13 @@ def log_function_output_tensors_predicate(
     arg_copies: tuple[Any, ...],
     kwarg_copies: dict[str, Any],
     out_orig: Any,
+    exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
     func_call_id: int,
 ) -> None:
     """Predicate-mode logging for decorated torch function outputs."""
 
+    del exec_ctx
     state = get_active_recording_state()
     layer_type = func_name.lower().replace("_", "")
     arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
@@ -2101,34 +2079,37 @@ def log_function_output_tensors_predicate(
                 )
             ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
             grad_fn_handle = out.grad_fn if isinstance(out, torch.Tensor) else None
-            func_event_input = FunctionEventInput(
-                func=func,
-                func_name=func_name,
-                func_qualname=getattr(func, "__qualname__", None),
-                args=args,
-                kwargs=kwargs,
-                raw_output=out_orig,
-                arg_copies=arg_copies,
-                kwarg_copies=kwarg_copies,
-                module_stack=(),
-                is_bottom_level_func=is_bottom_level_func,
-                func_call_id=func_call_id,
-                expected_output_count=len(out_iter),
-            )
-            detect_backend_semantics = (
-                detect_torch_alias_contract
-                if _should_keep_alias_mutation_contract(self)
-                else detect_torch_output_alias_contract
-            )
-            backend_semantics = detect_backend_semantics(
-                func_event_input,
-                backend_grad_handle=grad_fn_handle,
-                grad_fn_class_name=type(grad_fn_handle).__name__
-                if grad_fn_handle is not None
-                else None,
-                autograd_memory=None,
-                num_autograd_tensors=None,
-            )
+            backend_semantics = None
+            keep_alias_contract = _should_keep_alias_mutation_contract(self)
+            if spec.save_out or spec.save_metadata or keep_alias_contract:
+                func_event_input = FunctionEventInput(
+                    func=func,
+                    func_name=func_name,
+                    func_qualname=getattr(func, "__qualname__", None),
+                    args=args,
+                    kwargs=kwargs,
+                    raw_output=out_orig,
+                    arg_copies=arg_copies,
+                    kwarg_copies=kwarg_copies,
+                    module_stack=(),
+                    is_bottom_level_func=is_bottom_level_func,
+                    func_call_id=func_call_id,
+                    expected_output_count=len(out_iter),
+                )
+                detect_backend_semantics = (
+                    detect_torch_alias_contract
+                    if keep_alias_contract
+                    else detect_torch_output_alias_contract
+                )
+                backend_semantics = detect_backend_semantics(
+                    func_event_input,
+                    backend_grad_handle=grad_fn_handle,
+                    grad_fn_class_name=type(grad_fn_handle).__name__
+                    if grad_fn_handle is not None
+                    else None,
+                    autograd_memory=None,
+                    num_autograd_tensors=None,
+                )
             function_ref = FunctionCallRef(
                 func=func,
                 func_name=func_name,
@@ -2701,7 +2682,7 @@ def _track_fast_parent_output_versions(
         parent_layer.has_out_variations = True
 
 
-def log_function_output_tensors_exhaustive(
+def _emit_exhaustive_operation_events(
     self: "Trace",
     func: Callable[..., Any],
     func_name: str,
@@ -2888,7 +2869,7 @@ def _get_parent_contents(
     raise ValueError("Parent layer not found in function arguments.")
 
 
-def log_function_output_tensors_fast(
+def _emit_fast_operation_events(
     self: "Trace",
     func: Callable[..., Any],
     func_name: str,
@@ -3104,6 +3085,97 @@ def log_function_output_tensors_fast(
             kwargs,
             orig_layer_entry.param_shapes,
         )
+
+
+def log_function_output_tensors_predicate(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Compatibility shim for predicate-mode operation emission."""
+
+    _emit_predicate_operation_events(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        FuncExecutionContext(time_elapsed=0.0, rng_states={}, autocast_state={}),
+        is_bottom_level_func,
+        func_call_id,
+    )
+
+
+def log_function_output_tensors_exhaustive(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Compatibility shim for exhaustive-mode operation emission."""
+
+    _emit_operation_events(
+        get_capture_producer_policy("exhaustive"),
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+    )
+
+
+def log_function_output_tensors_fast(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Compatibility shim for fast replay operation emission."""
+
+    _emit_operation_events(
+        get_capture_producer_policy("fast"),
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        arg_copies,
+        kwarg_copies,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+    )
 
 
 def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
@@ -3917,6 +3989,9 @@ def _save_predicate_activation_fields(
         disk_payload=disk_payload,
         transformed_disk_payload=transformed_disk_payload,
     )
+    out_sink = getattr(trace, "_out_sink", None)
+    if out_sink is not None and isinstance(ram_payload, torch.Tensor):
+        out_sink(fields_dict["_label_raw"], ram_payload)
 
 
 def _stream_predicate_payloads(
@@ -4236,6 +4311,12 @@ def _build_trace_predicate_context(
 
     history = tuple(getattr(trace, "_predicate_history", ()))
     raw_label = fields_dict["_label_raw"]
+    module_address = fields_dict.get("module")
+    module_pass_index = None
+    if isinstance(module_address, tuple) and len(module_address) == 2:
+        module_address, module_pass_index = module_address
+    module_address = None if module_address is None else str(module_address)
+    module_pass_index = None if module_pass_index is None else int(module_pass_index)
     return build_op_record_context(
         kind="op",
         label=raw_label,
@@ -4261,9 +4342,9 @@ def _build_trace_predicate_context(
         capture_start_time=float(getattr(trace, "capture_start_time", time.time())),
         include_source_events=False,
         sample_id=None,
-        address=fields_dict.get("module"),
+        address=module_address,
         module_type=None,
-        module_pass_index=None,
+        module_pass_index=module_pass_index,
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )

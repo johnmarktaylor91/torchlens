@@ -71,16 +71,22 @@ def test_trace_halt_module_exit_stops_after_module_output() -> None:
     assert not any(layer.func_name == "relu" for layer in trace.layer_list)
 
 
-def test_trace_halt_rejects_selective_two_pass_layers_to_save() -> None:
-    """halt= cannot be combined with the legacy two-pass selective save path."""
+def test_trace_halt_supports_selective_layers_to_save() -> None:
+    """halt= composes with predicate-backed selective ``layers_to_save``."""
 
-    with pytest.raises(ValueError, match="halt=predicate.*selective two-pass"):
-        tl.trace(
-            _ThreeStageModel(),
-            torch.ones(1, 3),
-            layers_to_save=["linear"],
-            halt=_halt_on_relu,
-        )
+    trace = tl.trace(
+        _ThreeStageModel(),
+        torch.ones(1, 3),
+        layers_to_save=["linear"],
+        halt=_halt_on_relu,
+    )
+
+    assert trace.halted is True
+    assert any(
+        layer.func_name == "linear" and layer.has_saved_activation for layer in trace.layer_list
+    )
+    assert any(layer.func_name == "relu" for layer in trace.layer_list)
+    assert not any(layer.func_name == "sigmoid" for layer in trace.layer_list)
 
 
 def test_halted_trace_validation_skips_full_model_output_only() -> None:

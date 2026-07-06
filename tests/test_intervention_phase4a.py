@@ -7,7 +7,6 @@ import torch
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.intervention.errors import InterventionReadyConflictError
 
 
 class _TinyInterventionModel(torch.nn.Module):
@@ -71,16 +70,18 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
 
 
 @pytest.mark.smoke
-def test_intervention_ready_rejects_nonempty_layers_to_save_list() -> None:
-    """Selective two-pass intervention readiness is deferred beyond Phase 4a."""
+def test_intervention_ready_supports_nonempty_layers_to_save_list() -> None:
+    """Predicate-backed selective saves compose with intervention readiness."""
 
-    with pytest.raises(InterventionReadyConflictError):
-        tl.trace(
-            _TinyInterventionModel(),
-            torch.randn(2, 3),
-            intervention_ready=True,
-            layers_to_save=["relu"],
-        )
+    trace = tl.trace(
+        _TinyInterventionModel(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+        layers_to_save=["relu"],
+    )
+
+    assert trace.intervention_ready is True
+    assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
 
 
 @pytest.mark.smoke

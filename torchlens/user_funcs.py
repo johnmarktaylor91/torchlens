@@ -108,6 +108,7 @@ from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
 from .intervention.resolver import resolve_sites
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
+from .fastlog.types import RecordContext
 from ._trace_state import TraceState
 
 _can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
@@ -2068,6 +2069,215 @@ def _split_save_options_and_predicate(
     raise TypeError("save must be a SaveOptions instance, predicate callable, selector, or None")
 
 
+def _is_selective_label_save(value: object) -> bool:
+    """Return whether ``layers_to_save`` needs predicate-time label matching.
+
+    Parameters
+    ----------
+    value
+        Normalized public ``layers_to_save`` value.
+
+    Returns
+    -------
+    bool
+        ``True`` for selective layer lists or selectors.
+    """
+
+    return value not in ("all", "none", None, [])
+
+
+def _label_save_candidates(ctx: RecordContext) -> set[str]:
+    """Return capture-time label spellings that can identify ``ctx``.
+
+    Parameters
+    ----------
+    ctx
+        Predicate context for one capture event.
+
+    Returns
+    -------
+    set[str]
+        Candidate labels, types, and function names available before postprocess.
+    """
+
+    candidates = {ctx.label}
+    if ctx.raw_label is not None:
+        candidates.add(ctx.raw_label)
+        if ctx.raw_label.endswith("_raw"):
+            candidates.add(ctx.raw_label[: -len("_raw")])
+    if ctx.layer_type is not None:
+        candidates.add(ctx.layer_type)
+        if ctx.type_index is not None:
+            candidates.add(f"{ctx.layer_type}_{ctx.type_index}")
+            candidates.add(f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_index}")
+            pass_index = ctx.module_pass_index if ctx.module_pass_index is not None else 1
+            indexed_candidates = {f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_index}"}
+            if ctx.raw_index is not None:
+                indexed_candidates.add(f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}")
+                if ctx.raw_index > 0:
+                    indexed_candidates.add(f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index - 1}")
+            for candidate in indexed_candidates:
+                candidates.add(f"{candidate}:{pass_index}")
+    if ctx.func_name is not None:
+        candidates.add(ctx.func_name)
+        candidates.add(ctx.func_name.lower().replace("_", ""))
+    if ctx.address:
+        candidates.add(ctx.address)
+        if ctx.module_pass_index is not None:
+            candidates.add(f"{ctx.address}:{ctx.module_pass_index}")
+        candidates.add(ctx.address.rsplit(".", 1)[-1])
+        if ctx.module_pass_index is not None:
+            candidates.add(f"{ctx.address.rsplit('.', 1)[-1]}:{ctx.module_pass_index}")
+    return candidates
+
+
+def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
+    """Translate selective ``layers_to_save`` values into a save predicate.
+
+    Parameters
+    ----------
+    layers_to_save
+        Public layer selection list or selector-like callable.
+
+    Returns
+    -------
+    PredicateFn
+        Predicate evaluated by the unified capture spine.
+    """
+
+    if isinstance(layers_to_save, BaseSelector):
+        return cast(PredicateFn, layers_to_save)
+    if callable(layers_to_save):
+        return cast(PredicateFn, layers_to_save)
+    requested = (
+        {layers_to_save}
+        if isinstance(layers_to_save, str)
+        else set(cast(Iterable[Any], layers_to_save))
+    )
+    requested_ints = {int(item) for item in requested if isinstance(item, int)}
+    requested_strings = {str(item) for item in requested if not isinstance(item, int)}
+    requested_string_bases = {item for item in requested_strings if ":" not in item}
+
+    def predicate(ctx: RecordContext) -> bool:
+        """Return whether this event matches the absorbed layer selection."""
+
+        if ctx.kind != "op":
+            return False
+        if ctx.raw_index in requested_ints or ctx.type_index in requested_ints:
+            return True
+        candidates = _label_save_candidates(ctx)
+        if candidates & requested_strings:
+            return True
+        return bool(candidates & requested_string_bases)
+
+    return cast(PredicateFn, predicate)
+
+
+def _layers_to_save_mentions_output(layers_to_save: object) -> bool:
+    """Return whether a selection names a postprocess output wrapper.
+
+    Parameters
+    ----------
+    layers_to_save
+        Public ``layers_to_save`` selection.
+
+    Returns
+    -------
+    bool
+        ``True`` when any token appears to target an output layer.
+    """
+
+    if isinstance(layers_to_save, str):
+        values = (layers_to_save,)
+    elif isinstance(layers_to_save, collections.abc.Iterable):
+        values = tuple(layers_to_save)
+    else:
+        return False
+    return any(str(value).startswith("output") for value in values)
+
+
+def _layers_to_save_has_negative_index(layers_to_save: object) -> bool:
+    """Return whether ``layers_to_save`` contains a negative op index.
+
+    Parameters
+    ----------
+    layers_to_save
+        Public ``layers_to_save`` selection.
+
+    Returns
+    -------
+    bool
+        ``True`` when the selection needs final graph cardinality to resolve.
+    """
+
+    if isinstance(layers_to_save, bool):
+        return False
+    if isinstance(layers_to_save, int):
+        return layers_to_save < 0
+    if isinstance(layers_to_save, collections.abc.Iterable) and not isinstance(
+        layers_to_save,
+        str,
+    ):
+        return any(
+            isinstance(value, int) and not isinstance(value, bool) and value < 0
+            for value in layers_to_save
+        )
+    return False
+
+
+def _layers_to_save_mentions_identity(layers_to_save: object) -> bool:
+    """Return whether ``layers_to_save`` targets pass-through identity layers.
+
+    Parameters
+    ----------
+    layers_to_save
+        Public ``layers_to_save`` selection.
+
+    Returns
+    -------
+    bool
+        ``True`` when matching needs the legacy module pass-through resolver.
+    """
+
+    if isinstance(layers_to_save, str):
+        values = (layers_to_save,)
+    elif isinstance(layers_to_save, collections.abc.Iterable):
+        values = tuple(layers_to_save)
+    else:
+        return False
+    return any(str(value).startswith("identity") for value in values)
+
+
+def _combine_save_predicates(
+    first: PredicateFn | None,
+    second: PredicateFn,
+) -> PredicateFn:
+    """Return a union predicate for public ``save=`` and ``layers_to_save``.
+
+    Parameters
+    ----------
+    first
+        Existing public save predicate, if supplied.
+    second
+        Predicate generated from ``layers_to_save``.
+
+    Returns
+    -------
+    PredicateFn
+        Predicate that saves when either input predicate matches.
+    """
+
+    if first is None:
+        return second
+
+    def predicate(ctx: RecordContext) -> bool:
+        """Return whether either constituent save predicate matches."""
+
+        return bool(first(ctx) or second(ctx))
+
+    return cast(PredicateFn, predicate)
+
+
 _TRACE_OPTION_FILTERED_NAMES = (
     *PUBLIC_OPTION_SPINE_TRACE_OPTIONS,
     "jax_static_argnums",
@@ -2885,44 +3095,64 @@ def _trace_torch_model(
         layers_to_save = layers_to_save.lower()
     if type(grads_to_save_resolved) is str:
         grads_to_save_resolved = grads_to_save_resolved.lower()
-    uses_two_pass = (layers_to_save not in ["all", "none", None, []]) or (
-        grads_to_save_resolved not in ["all", "none", None, []]
+    requested_layers_to_save = layers_to_save
+    uses_two_pass = grads_to_save_resolved not in ["all", "none", None, []] or (
+        _is_selective_label_save(layers_to_save)
+        and (
+            should_save_grads
+            or _layers_to_save_mentions_output(layers_to_save)
+            or _layers_to_save_has_negative_index(layers_to_save)
+            or _layers_to_save_mentions_identity(layers_to_save)
+        )
     )
+    uses_selective_layers_to_save = _is_selective_label_save(layers_to_save)
+    if uses_selective_layers_to_save and not uses_two_pass:
+        layers_predicate = _make_layers_to_save_predicate(layers_to_save)
+        save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
+        layers_to_save = "all"
+    if save_predicate is not None:
+        from .capture.predicates import validate_followed_by_capability
+
+        validate_followed_by_capability(
+            save_predicate,
+            api_name="trace(save=...)",
+            supports_retroactive=True,
+        )
     if intervention_ready and uses_two_pass:
         raise InterventionReadyConflictError(
             "intervention_ready=True is not compatible with selective two-pass "
-            "layers_to_save or save_grads. Use a predicate save=... capture "
-            "or set layers_to_save/save_grads to 'all', 'none', None, or []."
+            "save_grads. Use a predicate save=... capture "
+            "or set save_grads to 'all', 'none', None, or []."
         )
     if hooks is not None and uses_two_pass:
         raise InterventionReadyConflictError(
             "hooks/intervention capture is not compatible with selective two-pass "
-            "layers_to_save or save_grads. Use a predicate save=... capture "
+            "save_grads. Use a predicate save=... capture "
             "for single-pass selective saving."
         )
     if intervene is not None and uses_two_pass:
         raise InterventionReadyConflictError(
             "intervene=predicate capture is not compatible with selective two-pass "
-            "layers_to_save or save_grads. Use predicate save=... capture "
+            "save_grads. Use predicate save=... capture "
             "for single-pass selective saving."
         )
     if halt is not None and uses_two_pass:
         raise InterventionReadyConflictError(
             "trace(halt=predicate) is not compatible with selective two-pass "
-            "layers_to_save or save_grads. Use predicate save=... capture "
-            "or set layers_to_save/save_grads to 'all', 'none', None, or []."
+            "save_grads. Use predicate save=... capture "
+            "or set save_grads to 'all', 'none', None, or []."
         )
     if save_predicate is not None and uses_two_pass:
         raise ValueError(
             "trace(save=predicate) is single-pass selective save and cannot be combined with "
-            "specific layers_to_save or save_grads in this phase."
+            "specific save_grads in this phase."
         )
     log_name = name if name is not None else _state._auto_name(model)
     cache_path: Path | None = None
     cache_key: str | None = None
     if cache_enabled:
         cache_config = {
-            "layers_to_save": layers_to_save,
+            "layers_to_save": requested_layers_to_save,
             "keep_orphans": keep_orphans,
             "output_device": output_device,
             "save_arg_values": save_arg_values,
@@ -3236,6 +3466,14 @@ def _trace_torch_model(
         )
         trace.profile_enabled = profile_enabled
         trace.save_grads = save_grads_policy
+        if uses_selective_layers_to_save:
+            trace._layer_nums_to_save = [
+                op.raw_index
+                for op in trace.layer_list
+                if op.has_saved_activation and op.layer_type not in {"input", "output"}
+            ]
+            if not save_arg_values:
+                trace._replay_arg_version_data_complete = False
     else:
         # --- TWO-PASS path ---
         # Pass 1 (exhaustive): Run with layers_to_save=None so the full graph is
