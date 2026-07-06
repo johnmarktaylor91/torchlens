@@ -157,7 +157,7 @@ class TraceValidationMixin:
             verbose=verbose,
             validate_metadata=validate_metadata,
         )
-        if getattr(self, "backend", "torch") == "torch":
+        if spec.name == "torch":
             from ..validation.status import ValidationReplayStatus
 
             if isinstance(validation_result, ValidationReplayStatus):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import contextlib
 import inspect
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, Mapping, cast
@@ -28,8 +29,9 @@ from ...utils.arg_handling import (
     safe_copy_kwargs,
 )
 from ...utils.introspection import get_vars_of_type_from_obj, nested_assign
-from ...utils.rng import log_current_autocast_state, log_current_rng_states
-from ...utils.tensor_utils import safe_copy
+from ...utils.rng import log_current_autocast_state, log_current_rng_states, set_random_seed
+from ...utils.rng import set_rng_from_saved_states
+from ...utils.tensor_utils import _is_cuda_available, safe_copy
 from . import _tl
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
@@ -489,9 +491,87 @@ class TorchBackend:
         """Capture the current torch RNG state."""
         return log_current_rng_states(torch_only=True)
 
+    def seed_rng(self, session: object, seed: int) -> None:
+        """Seed torch, Python, NumPy, and CUDA RNG engines.
+
+        Parameters
+        ----------
+        session:
+            Active trace session, unused by torch RNG seeding.
+        seed:
+            Integer seed value.
+
+        Returns
+        -------
+        None
+            Process-local RNG engines are seeded in place.
+        """
+
+        del session
+        set_random_seed(seed)
+
+    def set_capture_producer_policy(self, session: object, capture_mode: object) -> None:
+        """Install torch producer policy metadata on the active trace.
+
+        Parameters
+        ----------
+        session:
+            Active trace session.
+        capture_mode:
+            Capture mode name.
+
+        Returns
+        -------
+        None
+            Torch producer policy metadata is updated in place.
+        """
+
+        from .ops import set_capture_producer_policy
+
+        set_capture_producer_policy(cast("Trace", session), cast(Any, capture_mode))
+
+    def restore_rng(self, session: object, rng_state: object) -> None:
+        """Restore a previously captured torch RNG state.
+
+        Parameters
+        ----------
+        session:
+            Active trace session, unused by torch RNG restoration.
+        rng_state:
+            Opaque RNG snapshot returned by :meth:`snapshot_rng`.
+
+        Returns
+        -------
+        None
+            The process-local torch RNG state is restored in place.
+        """
+
+        del session
+        set_rng_from_saved_states(cast(dict[str, Any], rng_state))
+
     def snapshot_autocast(self, session: object) -> object:
         """Capture the current torch autocast state."""
         return log_current_autocast_state()
+
+    def inference_context(self, session: object) -> AbstractContextManager[None]:
+        """Return the torch inference-only context for this session.
+
+        Parameters
+        ----------
+        session:
+            Active trace session whose ``inference_only`` flag controls the context.
+
+        Returns
+        -------
+        AbstractContextManager[None]
+            ``torch.no_grad()`` when requested, otherwise a null context.
+        """
+
+        return (
+            torch.no_grad()
+            if getattr(session, "inference_only", False)
+            else contextlib.nullcontext()
+        )
 
     def log_source_tensor(
         self,
@@ -902,6 +982,24 @@ class TorchBackend:
         print(
             "************\nFeature extraction failed; returning model and environment to normal\n*************"
         )
+
+    def cleanup_forward_memory(self, session: object) -> None:
+        """Release torch transient forward-memory caches.
+
+        Parameters
+        ----------
+        session:
+            Active trace session, unused by torch CUDA cache cleanup.
+
+        Returns
+        -------
+        None
+            CUDA allocator cache is cleared when CUDA is available.
+        """
+
+        del session
+        if _is_cuda_available():
+            torch.cuda.empty_cache()
 
 
 def _register_model_output_container_snapshot(

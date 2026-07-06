@@ -31,11 +31,8 @@ import random
 import sys
 import time
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
-
-import torch
-from torch import nn
 
 from .. import _state
 from ..backends import (
@@ -51,8 +48,6 @@ from ..quantities import Bytes, Duration
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
-from ..utils.tensor_utils import _is_cuda_available
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _timed_phase, _vprint
 
@@ -114,24 +109,31 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
         return
 
     device_type = getattr(device, "type", None)
-    if device_type == "cuda" and torch.cuda.is_available():
+    torch_module: Any = None
+    if device_type in {"cuda", "mps"}:
+        try:
+            import torch as torch_module
+        except ImportError:
+            torch_module = None
+
+    if device_type == "cuda" and torch_module is not None and torch_module.cuda.is_available():
         backend_label = "cuda"
-        cuda_device = cast(torch.device, device)
+        cuda_device = device
         with contextlib.suppress(Exception):
-            torch.cuda.reset_peak_memory_stats(cuda_device)
+            torch_module.cuda.reset_peak_memory_stats(cuda_device)
         try:
             yield
         finally:
             with contextlib.suppress(Exception):
                 trace.forward_peak_memory = Bytes(
-                    max(0, int(torch.cuda.max_memory_allocated(cuda_device)))
+                    max(0, int(torch_module.cuda.max_memory_allocated(cuda_device)))
                 )
             trace.forward_memory_backend = backend_label
         return
 
-    if device_type == "mps" and hasattr(torch, "mps"):
+    if device_type == "mps" and torch_module is not None and hasattr(torch_module, "mps"):
         backend_label = "mps"
-        before = int(torch.mps.current_allocated_memory())
+        before = int(torch_module.mps.current_allocated_memory())
     else:
         backend_label = "cpu"
         before = _process_rss_bytes()
@@ -152,8 +154,8 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
             if tracemalloc_started_here:
                 with contextlib.suppress(Exception):
                     tracemalloc.stop()
-        if backend_label == "mps":
-            after = int(torch.mps.current_allocated_memory())
+        if backend_label == "mps" and torch_module is not None:
+            after = int(torch_module.mps.current_allocated_memory())
         else:
             after = _process_rss_bytes()
         rss_delta = max(0, after - before)
@@ -240,7 +242,7 @@ def _clear_saved_activation_dedup_caches(trace: "Trace") -> None:
 def _run_predicate_forward_with_root_frame(
     trace: "Trace",
     backend: CaptureBackend,
-    model: nn.Module,
+    model: object,
     input_args: tuple[Any, ...] | list[Any],
     input_kwargs: dict[Any, Any],
     model_device: object | None,
@@ -336,14 +338,11 @@ def _run_predicate_forward_with_root_frame(
         if not halt_only:
             state.append_context(enter_ctx)
     outputs = None
-    inference_context = (
-        torch.no_grad() if getattr(trace, "inference_only", False) else contextlib.nullcontext()
-    )
     try:
         with _timed_phase(trace, "dispatch:forward_model"):
             with _forward_peak_memory_bracket(trace, model_device):
-                with inference_context:
-                    outputs = model(*input_args, **input_kwargs)
+                with backend.inference_context(trace):
+                    outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
     finally:
         active_model_exc = sys.exc_info()[1]
         state.event_index += 1
@@ -405,8 +404,8 @@ def _run_predicate_forward_with_root_frame(
 
 def save_new_outs(
     self: "Trace",
-    model: nn.Module,
-    input_args: torch.Tensor | list[Any],
+    model: object,
+    input_args: Any | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] = "all",
     grad_layers_to_save: str | list[Any] | None = "all",
@@ -470,9 +469,13 @@ def save_new_outs(
 
     # Switch to fast mode: reuse graph structure, only capture new outs.
     self.capture_mode = "fast"
-    from ..backends.torch.ops import set_capture_producer_policy
-
-    set_capture_producer_policy(self, "fast")
+    backend = _capture_backend_from_registry(
+        _backend_name_for_trace(self),
+        model,
+        input_args,
+        input_kwargs,
+    )
+    backend.set_capture_producer_policy(self, "fast")
     self._in_exhaustive_pass = False
 
     # Clear all existing outs from the previous pass.
@@ -656,10 +659,15 @@ def _register_model_input_container_snapshots(
 
     if not getattr(trace, "_capture_container_structure", False):
         return
+    capability = get_backend_spec(
+        str(_backend_name_for_trace(trace))
+    ).capabilities.input_container_structure
+    if capability == "none":
+        return
     registry = trace._ensure_build_state().container_registry
     first_spec = None
     for index, arg in enumerate(input_args):
-        result = walk_container(arg, role=Role.MODEL_INPUT, capability="full_spec")
+        result = walk_container(arg, role=Role.MODEL_INPUT, capability=capability)
         if result is None:
             continue
         if first_spec is None:
@@ -685,7 +693,7 @@ def _register_model_input_container_snapshots(
             reconstructable=result.reconstructable,
         )
     for key, value in input_kwargs.items():
-        result = walk_container(value, role=Role.MODEL_INPUT, capability="full_spec")
+        result = walk_container(value, role=Role.MODEL_INPUT, capability=capability)
         if result is None:
             continue
         if first_spec is None:
@@ -718,7 +726,7 @@ def _extract_and_mark_outputs(
     self: "Trace",
     outputs: Any,
     backend: CaptureBackend | None = None,
-) -> tuple[list[torch.Tensor], list[str]]:
+) -> tuple[list[Any], list[str]]:
     """Extract output tensors from model outputs through the active backend.
 
     Called AFTER the forward pass completes (outside ``active_logging``). The
@@ -737,7 +745,7 @@ def _extract_and_mark_outputs(
 
     Returns
     -------
-    tuple[list[torch.Tensor], list[str]]
+    tuple[list[Any], list[str]]
         Output tensors and output tensor addresses.
     """
     if backend is None:
@@ -751,15 +759,15 @@ def _extract_and_mark_outputs(
         self,
         outputs,
     )
-    return cast(list[torch.Tensor], output_tensors), output_tensor_addresses
+    return list(output_tensors), output_tensor_addresses
 
 
 def _finalize_halted_trace(
     self: "Trace",
     backend: CaptureBackend,
     halt_exc: HaltSignal,
-    model: nn.Module,
-    input_tensors: list[torch.Tensor],
+    model: object,
+    input_tensors: list[Any],
     postprocess: bool,
 ) -> Any | None:
     """Finalize a predicate trace that stopped at a halt frontier.
@@ -819,8 +827,8 @@ def _finalize_halted_trace(
 
 def run_and_log_inputs_through_model(
     self: "Trace",
-    model: nn.Module,
-    input_args: torch.Tensor | list[Any],
+    model: object,
+    input_args: Any | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[str | int] | None = "all",
     grad_layers_to_save: str | list[str | int] | None = "all",
@@ -840,19 +848,22 @@ def run_and_log_inputs_through_model(
       8. Log source tensors (inputs), then run ``model(*args, **kwargs)``.
       9. Exit logging context, extract/mark outputs, clean up, postprocess.
 
-    RNG ordering constraint: ``set_random_seed`` and ``log_current_rng_states``
-    are called BEFORE ``active_logging()`` because entering the logging context
-    may trigger decorated operations (e.g., module hooks) that consume RNG state.
-    The fast pass restores the same pre-forward RNG state so that stochastic
-    layers (dropout, etc.) produce identical graph structure.
+    RNG ordering constraint: backend seeding and snapshots happen BEFORE
+    ``active_logging()`` because entering the logging context may trigger
+    decorated operations (e.g., module hooks) that consume RNG state. The fast
+    pass restores the same pre-forward RNG state so stochastic layers produce
+    identical graph structure.
     """
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
     self.random_seed = random_seed  # type: ignore[assignment]
-    set_random_seed(random_seed)
-    from ..backends.torch.ops import set_capture_producer_policy
-
-    set_capture_producer_policy(self, cast(Any, self.capture_mode))
+    backend = _capture_backend_from_registry(
+        _backend_name_for_trace(self),
+        model,
+        input_args,
+        input_kwargs,
+    )
+    backend.set_capture_producer_policy(self, self.capture_mode)
 
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
@@ -876,12 +887,7 @@ def run_and_log_inputs_through_model(
             combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
 
-    backend = _capture_backend_from_registry(
-        _backend_name_for_trace(self),
-        model,
-        input_args,
-        input_kwargs,
-    )
+    backend.seed_rng(self, random_seed)
     input_args, input_kwargs, input_arg_names, model_device = backend.setup_inputs_and_device(
         self,
         model,
@@ -890,7 +896,7 @@ def run_and_log_inputs_through_model(
     )
 
     self.capture_start_time = time.time()
-    input_tensors: list[torch.Tensor] = []
+    input_tensors: list[Any] = []
 
     try:
         global _ACTIVE_CAPTURE_BACKEND
@@ -908,7 +914,7 @@ def run_and_log_inputs_through_model(
             )
         finally:
             _ACTIVE_CAPTURE_BACKEND = previous_capture_backend
-        input_tensors = cast(list[torch.Tensor], input_tensors_any)
+        input_tensors = list(input_tensors_any)
         self._input_tensor_addresses = list(input_tensor_addresses)
 
         # RNG state snapshot/restore for two-pass consistency (#58).
@@ -916,9 +922,9 @@ def run_and_log_inputs_through_model(
         # Fast pass: restore the snapshot so dropout masks, etc. are identical,
         # ensuring the same computational graph (counter alignment depends on this).
         if self.capture_mode == "exhaustive":
-            self._pre_forward_rng_states = log_current_rng_states()  # type: ignore[attr-defined]
+            self._pre_forward_rng_states = backend.snapshot_rng(self)  # type: ignore[attr-defined]
         elif self.capture_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
-            set_rng_from_saved_states(self._pre_forward_rng_states)
+            backend.restore_rng(self, self._pre_forward_rng_states)
 
         from ..ir import CaptureEvents
 
@@ -963,15 +969,10 @@ def run_and_log_inputs_through_model(
                     model_device,
                 )
             else:
-                inference_context = (
-                    torch.no_grad()
-                    if getattr(self, "inference_only", False)
-                    else contextlib.nullcontext()
-                )
                 with _timed_phase(self, "dispatch:forward_model"):
                     with _forward_peak_memory_bracket(self, model_device):
-                        with inference_context:
-                            outputs = model(*input_args, **input_kwargs)
+                        with backend.inference_context(self):
+                            outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
 
         backend.finalize_forward_session(self)
 
@@ -1011,7 +1012,7 @@ def run_and_log_inputs_through_model(
         output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
             self, outputs
         )
-        output_tensors = cast(list[torch.Tensor], output_tensors_any)
+        output_tensors = list(output_tensors_any)
 
         backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
@@ -1051,10 +1052,6 @@ def run_and_log_inputs_through_model(
 
     finally:
         _clear_saved_activation_dedup_caches(self)
-        # Release input tensor references so GC can reclaim CUDA memory.
-        # Gated behind cached cuda.is_available() so CPU-only runs don't pay
-        # the CUDA driver / NVML probe cost (per profiling audit 2026-04-27
-        # finding #4).
+        # Release input tensor references so GC can reclaim backend memory.
         input_tensors = None  # type: ignore[assignment]
-        if _is_cuda_available():
-            torch.cuda.empty_cache()
+        backend.cleanup_forward_memory(self)
