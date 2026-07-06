@@ -20,6 +20,7 @@ from torchlens.visualization.render_ir import (
     RenderIREdge,
     RenderIRCluster,
     build_render_ir,
+    projected_antiparallel_endpoint_pairs,
 )
 
 _MANIFEST_PATH = Path(__file__).parent / "fixtures" / "s5_render_golden_manifest.json"
@@ -208,6 +209,59 @@ def _assert_ir_shape(trace: tl.Trace) -> None:
     assert all(isinstance(cluster, RenderIRCluster) for cluster in render_ir.clusters)
     assert {node.kind for node in render_ir.nodes}.issuperset({"raw_op"})
     assert {edge.projection_reason for edge in render_ir.edges}.issuperset({"direct"})
+
+
+def test_s5_projected_antiparallel_pairs_require_projected_edges() -> None:
+    """Projected anti-parallel styling is driven by IR projection reasons."""
+
+    render_ir = RenderIR(
+        context=RenderContext(),
+        nodes=(),
+        edges=(
+            RenderIREdge(
+                source_unit="fold_a",
+                target_unit="fold_b",
+                source_originals=("a_1",),
+                target_originals=("b_1",),
+                owner_cluster=None,
+                occurrence_key=("edge", "a_1", "b_1"),
+                projection_reason="source_projected",
+            ),
+            RenderIREdge(
+                source_unit="fold_b",
+                target_unit="fold_a",
+                source_originals=("b_2",),
+                target_originals=("a_2",),
+                owner_cluster=None,
+                occurrence_key=("edge", "b_2", "a_2"),
+                projection_reason="both_projected",
+            ),
+            RenderIREdge(
+                source_unit="raw_a",
+                target_unit="raw_b",
+                source_originals=("raw_a",),
+                target_originals=("raw_b",),
+                owner_cluster=None,
+                occurrence_key=("edge", "raw_a", "raw_b"),
+                projection_reason="direct",
+            ),
+            RenderIREdge(
+                source_unit="fold_self",
+                target_unit="fold_self",
+                source_originals=("self_1",),
+                target_originals=("self_2",),
+                owner_cluster=None,
+                occurrence_key=("edge", "self_1", "self_2"),
+                projection_reason="both_projected",
+            ),
+        ),
+        clusters=(),
+        node_emissions=(),
+    )
+
+    assert projected_antiparallel_endpoint_pairs(render_ir) == frozenset(
+        {("fold_a", "fold_b"), ("fold_b", "fold_a")}
+    )
 
 
 @pytest.mark.slow

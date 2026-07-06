@@ -123,6 +123,29 @@ class RenderIR:
     node_emissions: tuple["RenderedNodeEmission", ...]
 
 
+def projected_antiparallel_endpoint_pairs(render_ir: RenderIR) -> frozenset[tuple[str, str]]:
+    """Return projected IR edge endpoints with an opposite projected edge.
+
+    Parameters
+    ----------
+    render_ir:
+        Render IR whose projected edge endpoints should be inspected.
+
+    Returns
+    -------
+    frozenset[tuple[str, str]]
+        Directed endpoint pairs that should receive explicit anti-parallel styling.
+    """
+
+    projected_edges = [edge for edge in render_ir.edges if edge.projection_reason != "direct"]
+    projected_pairs = {(edge.source_unit, edge.target_unit) for edge in projected_edges}
+    anti_parallel_pairs: set[tuple[str, str]] = set()
+    for source_unit, target_unit in projected_pairs:
+        if source_unit != target_unit and (target_unit, source_unit) in projected_pairs:
+            anti_parallel_pairs.add((source_unit, target_unit))
+    return frozenset(anti_parallel_pairs)
+
+
 def build_render_ir(
     trace: "Trace",
     *,
