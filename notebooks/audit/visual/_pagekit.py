@@ -236,14 +236,17 @@ def compose_page(
             sub, _path, err = panel_items[i]
             img = images[i]
             x0_in = side_margin_in + c * (panel_w_in + gutter_in)
-            # subtitle
+            # subtitle -- clipped to the panel width so neighbors never overlap
+            sub_fontsize = 10 if ncols <= 3 else 8.5
+            max_chars = max(int(panel_w_in * (14 if ncols <= 3 else 17)), 12)
+            sub_text = sub if len(sub) <= max_chars else sub[: max_chars - 3] + "..."
             fig.text(
                 x0_in / PAGE_W_IN,
                 y_frac(y_cursor + 0.14),
-                sub,
+                sub_text,
                 va="center",
                 ha="left",
-                fontsize=10,
+                fontsize=sub_fontsize,
                 fontstyle="italic",
                 color="#333333",
             )

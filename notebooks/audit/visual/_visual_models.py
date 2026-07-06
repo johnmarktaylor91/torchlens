@@ -167,6 +167,31 @@ class BlockStack(nn.Module):
         return self.head(y.mean(dim=(2, 3)))
 
 
+class MixedBuffers(nn.Module):
+    """BatchNorm (noise buffers) plus a MEANINGFUL registered buffer.
+
+    Built so show_buffer_layers' three modes all differ: 'never' hides both,
+    'meaningful' shows only the offset buffer (BN running stats are classified
+    as bookkeeping noise), 'always' shows everything.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(8, 8)
+        self.bn = nn.BatchNorm1d(8)
+        self.register_buffer("offset", torch.linspace(0, 1, 8))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.bn(self.fc(x)) + self.offset
+
+
+class DictInput(nn.Module):
+    """Consumes a dict input: {'a': tensor, 'b': tensor}."""
+
+    def forward(self, payload: dict) -> torch.Tensor:
+        return payload["a"] + payload["b"]
+
+
 class AltBlockA(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -233,6 +258,24 @@ class MiniInception(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.inc2(self.inc1(F.relu(self.stem(x))))
         return self.head(y.mean(dim=(2, 3)))
+
+
+class TinyTransformer(nn.Module):
+    """ONE TransformerEncoder layer on a short sequence.
+
+    Small enough that every node label stays readable at page scale, which is
+    what the attention-pattern and node_mode='attention' pages need.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        layer = nn.TransformerEncoderLayer(
+            d_model=16, nhead=2, dim_feedforward=32, batch_first=True
+        )
+        self.encoder = nn.TransformerEncoder(layer, num_layers=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.encoder(x)
 
 
 class MiniTransformer(nn.Module):
@@ -381,10 +424,13 @@ VZOO: dict[str, object] = {
     "weight_tied_loop_8": lambda: (WeightTiedLoop(steps=8), torch.randn(1, 8)),
     "branching_loop": lambda: (BranchingLoop(steps=4), torch.randn(1, 8)),
     # stacks / topology
-    "block_stack": lambda: (BlockStack(depth=8), torch.randn(1, 1, 8, 8)),
+    # eval(): train-mode BN scatters orphan buffer-update ops across every
+    # page; the one deliberate demo of that lives in Section A (a4_buffers).
+    "block_stack": lambda: (BlockStack(depth=8).eval(), torch.randn(1, 1, 8, 8)),
     "interleaved_stack": lambda: (InterleavedStack(pairs=4), torch.randn(1, 8)),
     "mini_inception": lambda: (MiniInception(), torch.randn(1, 1, 8, 8)),
     "mini_transformer": lambda: (MiniTransformer(), torch.randn(1, 6, 16)),
+    "tiny_transformer": lambda: (TinyTransformer(), torch.randn(1, 4, 16)),
     # multi-io
     "multi_in_multi_out": lambda: (MultiInMultiOut(), (torch.randn(2, 6), torch.randn(2, 4))),
     # degenerate
@@ -394,6 +440,8 @@ VZOO: dict[str, object] = {
     "paramless_deep": lambda: (ParamlessDeep(), torch.randn(2, 4)),
     "nan_midway": lambda: (NaNMidway(), torch.randn(2, 4)),
     "small_conv": lambda: (SmallConv(), torch.rand(2, 3, 32, 32)),
+    "mixed_buffers": lambda: (MixedBuffers(), torch.randn(4, 8)),
+    "dict_input": lambda: (DictInput(), {"a": torch.ones(2), "b": torch.ones(2) * 2}),
     # torchvision
     "resnet18": _resnet18,
     "resnet50": _resnet50,

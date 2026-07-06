@@ -98,25 +98,75 @@ def get_trace(model_key: str, variant: str = "plain", builder=None):
 
 
 def _intervened_trace(model_key: str):
+    """Intervention-ready trace with a PLANNED zero intervention at every relu.
+
+    The renderer marks planned intervention sites (trace.set on an
+    intervention_ready trace); live `intervene=` fire records are not what
+    the site/cone styling visualizes.
+    """
+
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+        trace = tl.trace(m, x, intervention_ready=True)
+        relu = next(layer for layer in trace.layer_list if layer.func_name == "relu")
+        trace.set(tl.func("relu"), torch.zeros(relu.shape))
+        return trace
 
     return _build
 
 
-def _transform_trace(model_key: str):
+def _preprocessed_trace(model_key: str):
+    """Trace carrying an input-preprocessing provenance record.
+
+    In the wild this record is populated by integration bridges (e.g. the
+    HF tokenizer capture); it is injected here so the pack can demonstrate
+    the show_input_transform_summary rendering without those dependencies.
+    """
+
     def _build():
+        from torchlens.data_classes.trace import ResolvedPreprocessing
+
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, transform=lambda inp: (inp - inp.mean()) / (inp.std() + 1e-6))
+        trace = tl.trace(m, x)
+        trace.input_preprocessor = ResolvedPreprocessing(
+            source="visual-audit demo",
+            identifier="demo-normalize",
+            verified=False,
+            config={"mean": 0.5, "std": 0.5},
+            description="normalize(mean=0.5, std=0.5)",
+        )
+        return trace
 
     return _build
 
 
 def _raw_input_trace(model_key: str):
+    """Trace a raw image batch through a transform: raw_input is only stored
+    (and thumbnails rendered) when `transform=` supplies the model-ready input."""
+
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, save_raw_input=True, save_raw_output=True)
+        return tl.trace(m, x, transform=lambda z: (z - 0.5) / 0.5)
+
+    return _build
+
+
+def _container_trace(model_key: str):
+    """Trace with final-output container structure enabled (intervention_ready)."""
+
+    def _build():
+        m, x = MODELS[model_key]()
+        return tl.trace(m, x, intervention_ready=True)
+
+    return _build
+
+
+def _structure_trace(model_key: str):
+    """Trace with full container-structure capture for overlay-node rendering."""
+
+    def _build():
+        m, x = MODELS[model_key]()
+        return tl.trace(m, x, capture_container_structure=True)
 
     return _build
 
@@ -145,7 +195,7 @@ def _collapsed_spec_tag(module_log, spec):
 
 def _collapse_res_blocks(module_log):
     """collapse_fn demo: collapse every SmallResBlock instance."""
-    return getattr(module_log, "module_type", "") == "SmallResBlock"
+    return getattr(module_log, "class_name", "") == "SmallResBlock"
 
 
 def _skip_relus(layer_log):
@@ -163,12 +213,9 @@ def _plan_subtitle(t: float):
     def _fn(trace) -> str:
         try:
             plan = trace.collapse_plan(mode=t)
-            total = getattr(plan, "total", None)
-            if total is None:
-                total = repr(plan)
-            return f"collapse={t} -- {total} visible nodes"
+            return f"t={t} -- {len(plan.nodes)} visible nodes"
         except Exception as exc:  # diagnostic subtitle must never kill the page
-            return f"collapse={t} (plan unavailable: {type(exc).__name__})"
+            return f"t={t} (plan unavailable: {type(exc).__name__})"
 
     return _fn
 
@@ -190,6 +237,7 @@ def _collapse_diag_text() -> str:
     lines.append("Trace.collapse_schedule() -- ordered monotone float schedule:")
     lines.append("")
     lines.append("      t      target  visible  #collapsed-module-addresses")
+    lines.append("      ('=' marks steps sharing the same t as the row above)")
     try:
         schedule = trace.collapse_schedule()
         steps = list(schedule.steps)
@@ -249,9 +297,10 @@ AXES: dict[str, str] = {
     "buffers:meaningful": "show_buffer_layers='meaningful' (default)",
     "buffers:always": "show_buffer_layers='always'",
     "containers:labels": "show_containers='labels'",
-    "containers:cluster": "show_containers='cluster'",
-    "containers:collapsed": "show_containers='collapsed'",
+    "containers:cluster": "show_containers='cluster' (single-owner required; falls back to labels)",
+    "containers:collapsed": "show_containers='collapsed' homogeneous-container merge",
     "containers:auto": "show_containers='auto'",
+    "containers:nodes": "show_containers='nodes' container overlay nodes (renderer-internal)",
     "container_max_inline": "container_max_inline threshold",
     "module_focus": "module= submodule focus with boundary stubs",
     "vis_call_depth": "vis_call_depth module-box nesting cutoff",
@@ -370,12 +419,12 @@ SECTIONS: list[Section] = [
                 label="a1_baseline",
                 title="Baseline render: the anatomy of a TorchLens graph",
                 caption=(
-                    "Default draw() of a 2-layer MLP. Vocabulary to internalize: rounded boxes are single "
-                    "operations; each label shows the op name with its layer index, the output shape, and (for "
-                    "parameter ops like linear) the parameter shapes. Parameter-bearing ops are shaded; "
-                    "parameter-free ops (relu) are white. The oval-ish nodes at the ends are the input and "
-                    "output boundary nodes. Rectangles around groups of ops are module boxes labeled with the "
-                    "module address and class.\n"
+                    "Default draw() of a 2-layer MLP. Vocabulary to internalize: every node is one operation; "
+                    "PARAMETER-BEARING ops (linear) render as shaded rectangles listing their parameter shapes, "
+                    "while parameter-free ops (relu) render as white ellipses. The green ellipse is the model "
+                    "input; the red ellipse is the model output. Each label shows the op name with its layer "
+                    "index, the output shape with its byte size, and the module address (@in_proj). The outer "
+                    "frame is the whole-model box with tensor/param totals.\n"
                     "CHECK: fonts render cleanly, arrowheads point along data flow (bottom-up by default), "
                     "nothing overlaps."
                 ),
@@ -426,28 +475,31 @@ SECTIONS: list[Section] = [
                 label="a4_buffers",
                 title="Buffer visibility: never / meaningful / always",
                 caption=(
-                    "BatchNorm keeps running_mean / running_var / num_batches_tracked buffers. "
-                    "show_buffer_layers controls their rendering: 'never' hides all buffer nodes, "
-                    "'meaningful' (the default) shows buffers that carry semantic content while hiding "
-                    "bookkeeping counters, 'always' shows every buffer.\n"
-                    "CHECK: in 'never'/'meaningful', ops whose buffers are hidden get a DOUBLE BORDER "
-                    "(peripheries=2) as an honest 'something is hidden here' marker; in 'always' the "
-                    "num_batches_tracked counter also appears."
+                    "A model with BOTH buffer kinds: BatchNorm bookkeeping (running_mean / running_var / "
+                    "num_batches_tracked -- classified as NOISE) and a semantically meaningful registered "
+                    "'offset' buffer added to the activations. show_buffer_layers: 'never' hides every "
+                    "buffer node; 'meaningful' (the default) shows only the offset buffer; 'always' shows "
+                    "everything -- dashed cylinders are buffer READ states, solid cylinders are post-update "
+                    "WRITE states, and the scalar add op is the num_batches_tracked increment.\n"
+                    "CHECK: ops whose buffers are hidden get a DOUBLE BORDER (peripheries=2) as an honest "
+                    "'something is hidden here' marker. KNOWN NIT: when BN buffers are hidden, the "
+                    "num_batches_tracked update op remains as a small DISCONNECTED dashed ellipse "
+                    "(FINDINGS F2) -- learn its shape so you can ignore it."
                 ),
                 panels=[
                     Panel(
                         "show_buffer_layers='never'",
-                        "batch_norm",
+                        "mixed_buffers",
                         kwargs={"show_buffer_layers": "never"},
                     ),
                     Panel(
                         "show_buffer_layers='meaningful' (default)",
-                        "batch_norm",
+                        "mixed_buffers",
                         kwargs={"show_buffer_layers": "meaningful"},
                     ),
                     Panel(
                         "show_buffer_layers='always'",
-                        "batch_norm",
+                        "mixed_buffers",
                         kwargs={"show_buffer_layers": "always"},
                     ),
                 ],
@@ -588,42 +640,63 @@ SECTIONS: list[Section] = [
         [
             Page(
                 label="c1_containers",
-                title="show_containers: labels / cluster / collapsed / auto",
+                title="show_containers: labels / collapsed / nodes (and the cluster fallback)",
                 caption=(
-                    "Models returning dict or tuple outputs. show_containers controls how container "
-                    "structure is drawn: 'labels' annotates leaf tensors with their key/index, 'cluster' "
-                    "wraps members in a dashed cluster box, 'collapsed' merges the container into a single "
-                    "node, 'auto' picks per container size (see container_max_inline on the next page).\n"
+                    "Container structure (dict/tuple inputs and outputs) is captured when the trace enables "
+                    "it (intervention_ready=True for final-output structure, capture_container_structure="
+                    "True for the full registry). 'labels' annotates edges into container leaves with their "
+                    "key/index. 'collapsed' merges a HOMOGENEOUS container bigger than container_max_inline "
+                    "into one dashed summary node ('tuple x4'). 'nodes' (renderer-internal mode, not yet in "
+                    "the public option list -- FINDINGS F4) draws explicit container overlay nodes "
+                    "('dict[2] (model input)', 'dict[2] (call output)') tied to their members by dashed, "
+                    "non-constraining edges. 'cluster' requires all leaves to share one module owner and "
+                    "otherwise FALLS BACK to labels -- no known model currently produces a cluster box "
+                    "(FINDINGS F3), so the fallback is what you will actually see.\n"
                     "CHECK: dict keys ('a'/'b', 'left'/'right') and tuple indices are correct; dashed "
-                    "grouping ties connect producers to mid-graph containers without implying data flow."
+                    "container ties must not be mistaken for data flow (no arrowheads, no layout pull)."
                 ),
                 panels=[
                     Panel(
-                        "dict output -- show_containers='labels'",
+                        "dict output -- 'labels' (edge key labels a/b)",
                         "dict_output",
                         kwargs={"show_containers": "labels"},
+                        trace_variant="container",
+                        trace_builder=_container_trace("dict_output"),
                     ),
                     Panel(
-                        "mid-graph container -- show_containers='cluster'",
-                        "mid_graph_container",
-                        kwargs={"show_containers": "cluster"},
-                    ),
-                    Panel(
-                        "tuple output -- show_containers='collapsed'",
+                        "tuple output -- 'collapsed', container_max_inline=2 (merged 'tuple x4')",
                         "tuple_output",
-                        kwargs={"show_containers": "collapsed"},
+                        kwargs={"show_containers": "collapsed", "container_max_inline": 2},
+                        trace_variant="container",
+                        trace_builder=_container_trace("tuple_output"),
                     ),
                     Panel(
-                        "dict output -- show_containers='auto'",
+                        "dict INPUT -- 'nodes' (boundary container overlay)",
+                        "dict_input",
+                        kwargs={"show_containers": "nodes"},
+                        trace_variant="structure",
+                        trace_builder=_structure_trace("dict_input"),
+                    ),
+                    Panel(
+                        "mid-graph dict -- 'nodes' (call-output container + member ties)",
+                        "mid_graph_container",
+                        kwargs={"show_containers": "nodes"},
+                        trace_variant="structure",
+                        trace_builder=_structure_trace("mid_graph_container"),
+                    ),
+                    Panel(
+                        "dict output -- 'cluster' (falls back to labels)",
                         "dict_output",
-                        kwargs={"show_containers": "auto"},
+                        kwargs={"show_containers": "cluster"},
+                        trace_variant="container",
+                        trace_builder=_container_trace("dict_output"),
                     ),
                 ],
                 covers=[
                     "containers:labels",
                     "containers:cluster",
                     "containers:collapsed",
-                    "containers:auto",
+                    "containers:nodes",
                     "node:container",
                     "edge:container_tie",
                 ],
@@ -633,24 +706,30 @@ SECTIONS: list[Section] = [
                 label="c2_container_max_inline",
                 title="container_max_inline: when 'auto' stops inlining",
                 caption=(
-                    "With show_containers='auto', containers with at most container_max_inline leaves are "
-                    "shown inline/labeled; larger ones are collapsed. LEFT: default threshold (12) keeps the "
-                    "4-tuple inline. RIGHT: threshold 2 forces the same 4-tuple to collapse.\n"
-                    "CHECK: the collapsed form labels the container with its size instead of showing leaves."
+                    "With show_containers='auto' (or 'collapsed'), homogeneous containers with at most "
+                    "container_max_inline leaves stay inline; larger ones merge into a dashed summary node. "
+                    "LEFT: default threshold (12) keeps the 4-tuple's leaves inline with index labels. "
+                    "RIGHT: threshold 2 forces the same 4-tuple to merge.\n"
+                    "CHECK: the merged form is a dashed 'tuple x4' box replacing all four output leaves; "
+                    "only homogeneous (identical-shape) containers ever merge."
                 ),
                 panels=[
                     Panel(
-                        "container_max_inline=12 (default)",
+                        "container_max_inline=12 (default) -- inline",
                         "tuple_output",
                         kwargs={"show_containers": "auto", "container_max_inline": 12},
+                        trace_variant="container",
+                        trace_builder=_container_trace("tuple_output"),
                     ),
                     Panel(
-                        "container_max_inline=2",
+                        "container_max_inline=2 -- merged",
                         "tuple_output",
                         kwargs={"show_containers": "auto", "container_max_inline": 2},
+                        trace_variant="container",
+                        trace_builder=_container_trace("tuple_output"),
                     ),
                 ],
-                covers=["container_max_inline"],
+                covers=["container_max_inline", "containers:auto"],
             ),
             Page(
                 label="c3_module_focus",
@@ -1014,9 +1093,13 @@ SECTIONS: list[Section] = [
                 caption=(
                     "Run folding elides REPEATED runs of same-class blocks into a representative plus an "
                     "ellipsis node. fold_runs=None is the default policy (folding active under "
-                    "collapse='auto'/'max'); True folds every legal run; False disables folding entirely.\n"
-                    "CHECK: folded panels show one representative block plus a '+N more ...' ellipsis; the "
-                    "False panel shows every block explicitly; block counts add up between the versions."
+                    "collapse='auto'/'max'); True folds every legal run; False disables folding entirely. "
+                    "On this model the default policy already folds every legal run, so the None and True "
+                    "panels are identical here -- the mode where True differs is collapse='none' "
+                    "(next page).\n"
+                    "CHECK: folded panels show one representative block plus a '+N more ...' ellipsis per "
+                    "run; the False panel shows every block explicitly; block counts add up between the "
+                    "versions."
                 ),
                 panels=[
                     Panel(
@@ -1066,8 +1149,10 @@ SECTIONS: list[Section] = [
                 title="The '+N more' ellipsis, up close",
                 caption=(
                     "An 8-block stack of SAME-CLASS but DIFFERENT-PARAMETER residual blocks under "
-                    "collapse='auto'. The run folds to ONE representative box (showing the stats of a single "
-                    "instance) plus an ellipsis node carrying the multiplicity.\n"
+                    "collapse='auto', fold_runs=True. The run folds to ONE representative box (showing the "
+                    "stats of a single instance) plus an ellipsis node carrying the multiplicity. (Without "
+                    "fold_runs=True, auto keeps all 8 boxes here: the graph is already inside the readable "
+                    "band, so the default policy applies no fold pressure.)\n"
                     "GRAMMAR (memorize this): '+N more Class' = N distinct same-type instances with their "
                     "own parameters (an ellipsis of siblings). '(xN)' = TRUE recurrence, the same parameters "
                     "applied N times (Section D). These are different claims and must never be conflated.\n"
@@ -1076,7 +1161,9 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "block_stack -- collapse='auto'", "block_stack", kwargs={"collapse": "auto"}
+                        "block_stack -- collapse='auto', fold_runs=True",
+                        "block_stack",
+                        kwargs={"collapse": "auto", "fold_runs": True},
                     ),
                 ],
                 covers=["node:ellipsis", "label:plusN"],
@@ -1101,16 +1188,26 @@ SECTIONS: list[Section] = [
                 label="e7_remainder_labels",
                 title="Remainder labels: 'N layers total' includes buffer leaves",
                 caption=(
-                    "block_stack at collapse='max'. Collapsed boxes must account for EVERYTHING they hide: "
-                    "the 'N layers total' remainder counts ops AND buffer leaves (each block's batch-norm "
-                    "reads running stats).\n"
-                    "CHECK: counts are consistent with the uncollapsed block (conv, bn, relu, add, plus "
-                    "buffer reads); no box under-reports what it swallowed."
+                    "block_stack at collapse='auto' (all 8 blocks as collapsed boxes) and at collapse='max' "
+                    "(the same blocks condensed further into segment ranges). Collapsed boxes and segments "
+                    "must account for EVERYTHING they hide: the 'N layers total' remainder on each collapsed "
+                    "box counts ops AND buffer leaves (each block's batch-norm reads its running stats), and "
+                    "the segment labels' block/op totals must add up to the whole stack.\n"
+                    "CHECK: per-box layer counts are consistent with one uncollapsed block (conv, bn, relu, "
+                    "add, plus buffer reads); segment op counts sum to the stack; nothing under-reports what "
+                    "it swallowed."
                 ),
                 panels=[
                     Panel(
-                        "block_stack -- collapse='max'", "block_stack", kwargs={"collapse": "max"}
-                    )
+                        "collapse='auto' -- per-block 'N layers total'",
+                        "block_stack",
+                        kwargs={"collapse": "auto"},
+                    ),
+                    Panel(
+                        "collapse='max' -- segment ranges with op/param totals",
+                        "block_stack",
+                        kwargs={"collapse": "max"},
+                    ),
                 ],
                 covers=["label:remainder"],
             ),
@@ -1173,44 +1270,59 @@ SECTIONS: list[Section] = [
                 caption=(
                     "Domain presets: 'vision' emphasizes conv-relevant fields (kernel/channels/spatial "
                     "shapes) -- shown on a conv net; 'attention' emphasizes attention-relevant fields -- "
-                    "shown on a transformer encoder.\n"
+                    "shown on a one-layer transformer encoder. Each panel gets the full page width so the "
+                    "extra label rows stay readable.\n"
                     "CHECK: the extra rows make sense for the domain and do not bloat unrelated ops."
                 ),
                 panels=[
                     Panel(
                         "mini_inception -- node_mode='vision'",
                         "mini_inception",
-                        kwargs={"node_mode": "vision"},
+                        kwargs={"node_mode": "vision", "dpi": 150},
                     ),
                     Panel(
-                        "mini_transformer -- node_mode='attention'",
-                        "mini_transformer",
-                        kwargs={"node_mode": "attention"},
+                        "tiny_transformer -- node_mode='attention'",
+                        "tiny_transformer",
+                        kwargs={"node_mode": "attention", "dpi": 150},
                     ),
                 ],
-                covers=["node_mode:vision", "node_mode:attention", "topology:transformer"],
+                covers=["node_mode:vision", "node_mode:attention"],
+                ncols=1,
             ),
             Page(
                 label="f3_overlays",
                 title="node_overlay: builtin metrics and custom scores",
                 caption=(
-                    "node_overlay tints node borders by a per-node score. Builtins read trace metadata "
-                    "('flops', 'time', 'magnitude', ...); a {layer_label: score} mapping supplies arbitrary "
-                    "external scores (here: op position in the graph).\n"
-                    "CHECK: border intensity varies across nodes and tracks the metric (heaviest linear "
-                    "should stand out under 'flops'); custom mapping ramps monotonically from input to "
-                    "output."
+                    "node_overlay recolors node BORDERS by a per-node score: pale green = low, pale red = "
+                    "high, grey = zero/no data, with penwidth=2 on scored nodes. Builtins read trace "
+                    "metadata ('flops', 'time', 'magnitude', ...); a {layer_label: score} mapping supplies "
+                    "arbitrary external scores (here: op position in the graph). The tint is deliberately "
+                    "subtle -- look at the border COLOR, not the fill.\n"
+                    "CHECK: border color varies across nodes and tracks the metric (the linears should "
+                    "redden under 'flops' while relu stays green/grey); the custom mapping ramps "
+                    "green-to-red from input to output."
                 ),
                 panels=[
-                    Panel("node_overlay='flops'", "tiny_mlp", kwargs={"node_overlay": "flops"}),
-                    Panel("node_overlay='time'", "tiny_mlp", kwargs={"node_overlay": "time"}),
                     Panel(
-                        "node_overlay='magnitude'", "tiny_mlp", kwargs={"node_overlay": "magnitude"}
+                        "node_overlay='flops'",
+                        "tiny_mlp",
+                        kwargs={"node_overlay": "flops", "dpi": 150},
+                    ),
+                    Panel(
+                        "node_overlay='time'",
+                        "tiny_mlp",
+                        kwargs={"node_overlay": "time", "dpi": 150},
+                    ),
+                    Panel(
+                        "node_overlay='magnitude'",
+                        "tiny_mlp",
+                        kwargs={"node_overlay": "magnitude", "dpi": 150},
                     ),
                     Panel(
                         "custom mapping {label: position}",
                         "tiny_mlp",
                         kwargs_fn=_custom_overlay_kwargs,
+                        kwargs={"dpi": 150},
                     ),
                 ],
                 covers=["overlay:flops", "overlay:time", "overlay:magnitude", "overlay:custom"],
@@ -1279,10 +1391,13 @@ SECTIONS: list[Section] = [
                 label="f7_typography",
                 title="Typography: font_size, dpi, for_paper",
                 caption=(
-                    "font_size scales label text; dpi scales raster density (crisper zoom, larger file); "
-                    "for_paper=True switches to publication styling (paper theme defaults, tuned linework).\n"
-                    "CHECK: font_size=16 is visibly larger; dpi=200 panel is denser/crisper at equal layout; "
-                    "for_paper looks print-ready (neutral background, Helvetica)."
+                    "font_size scales label text; dpi scales the RASTER density (the layout is unchanged "
+                    "but the rendered bitmap has more pixels, so the middle panel appears larger on this "
+                    "page and stays crisper when zoomed); for_paper=True switches to publication styling "
+                    "(paper theme defaults, tuned linework).\n"
+                    "CHECK: font_size=16 text is larger relative to its boxes; the dpi=200 panel is the "
+                    "same GRAPH at higher pixel density; for_paper looks print-ready (neutral fill, "
+                    "Helvetica)."
                 ),
                 panels=[
                     Panel("font_size=16", "tiny_mlp", kwargs={"font_size": 16}),
@@ -1293,17 +1408,18 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="f8_raw_io",
-                title="Raw input/output rendering on boundary nodes",
+                title="Raw input rendering: thumbnails on the input node",
                 caption=(
-                    "Tracing with save_raw_input=True / save_raw_output=True embeds thumbnails of image-like "
-                    "tensors directly in the input/output boundary nodes (batch items up to the batch_render "
-                    "limit).\n"
-                    "CHECK: thumbnails render inside the boundary nodes without distorting the layout; batch "
-                    "items are individually visible."
+                    "When the trace receives the RAW input plus a transform= that produces the model-ready "
+                    "tensor (trace(model, raw_images, transform=normalize)), TorchLens stores the raw input "
+                    "and the input boundary node renders a thumbnail montage of the image batch (up to the "
+                    "batch_render limit; random noise here, but real photos in practice).\n"
+                    "CHECK: the montage renders inside the input node without distorting the layout; each "
+                    "batch item is individually visible."
                 ),
                 panels=[
                     Panel(
-                        "small_conv -- save_raw_input + save_raw_output",
+                        "small_conv -- raw image batch + transform=normalize",
                         "small_conv",
                         trace_variant="raw_io",
                         trace_builder=_raw_input_trace("small_conv"),
@@ -1315,18 +1431,20 @@ SECTIONS: list[Section] = [
                 label="f9_input_transform",
                 title="show_input_transform_summary: preprocessing provenance",
                 caption=(
-                    "When a trace records an input preprocessor (trace(..., transform=fn)), "
+                    "When a trace carries an input-preprocessing provenance record, "
                     "show_input_transform_summary=True annotates the input node with an external label "
-                    "stating the preprocessing description and its verification status.\n"
-                    "CHECK: the input node carries a 'preprocess' xlabel with a verified/UNVERIFIED status "
-                    "line; without a recorded preprocessor this option renders nothing extra."
+                    "stating the preprocessing description and its verification status. Such records are "
+                    "populated by integration bridges (e.g. the HuggingFace tokenizer capture); this page "
+                    "injects a demo record to show the rendering without those dependencies.\n"
+                    "CHECK: the input node carries a 'preprocess' xlabel with the description and a "
+                    "verified/UNVERIFIED status line; without a record this option renders nothing extra."
                 ),
                 panels=[
                     Panel(
-                        "traced with transform=normalize -- summary on",
+                        "demo preprocessing record -- summary on",
                         "tiny_mlp",
-                        trace_variant="transform",
-                        trace_builder=_transform_trace("tiny_mlp"),
+                        trace_variant="preprocessed",
+                        trace_builder=_preprocessed_trace("tiny_mlp"),
                         kwargs={"show_input_transform_summary": True},
                     )
                 ],
@@ -1347,8 +1465,11 @@ SECTIONS: list[Section] = [
                     "The same MLP under every built-in theme. 'torchlens' is the default; 'paper' is "
                     "publication-neutral; 'dark' inverts for slides; 'colorblind' uses an accessible "
                     "palette; 'high_contrast' maximizes edge/border weight.\n"
-                    "CHECK: text stays readable in every theme (especially on the dark background); node "
-                    "type distinctions survive each palette; edges remain visible."
+                    "CHECK: node text stays readable in every theme; node type distinctions survive each "
+                    "palette; edges remain visible. KNOWN ARTIFACT (FINDINGS F6): in the 'dark' theme the "
+                    "whole-model header block ('TinyMLP / N tensors ...') keeps its dark text and nearly "
+                    "vanishes against the dark background -- the theme does not restyle the outer frame "
+                    "label."
                 ),
                 panels=[
                     Panel("torchlens (default)", "tiny_mlp", kwargs={"vis_theme": "torchlens"}),
@@ -1390,13 +1511,14 @@ SECTIONS: list[Section] = [
                         "draw_backward (rolled default)",
                         "linear_relu",
                         "draw_backward",
+                        kwargs={"vis_graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                     Panel(
                         "draw_backward vis_mode='unrolled'",
                         "linear_relu",
                         "draw_backward",
-                        kwargs={"vis_mode": "unrolled"},
+                        kwargs={"vis_mode": "unrolled", "vis_graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                 ],
@@ -1422,14 +1544,17 @@ SECTIONS: list[Section] = [
                         "vis_direction='leftright'",
                         "linear_relu",
                         "draw_backward",
-                        kwargs={"vis_direction": "leftright"},
+                        kwargs={
+                            "vis_direction": "leftright",
+                            "vis_graph_overrides": {"dpi": "150"},
+                        },
                         trace_variant="backward",
                     ),
                     Panel(
                         "bwd=1 (select first backward pass)",
                         "linear_relu",
                         "draw_backward",
-                        kwargs={"bwd": 1},
+                        kwargs={"bwd": 1, "vis_graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                 ],
@@ -1450,12 +1575,14 @@ SECTIONS: list[Section] = [
                         "linear_relu -- draw_combined",
                         "linear_relu",
                         "draw_combined",
+                        kwargs={"vis_graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                     Panel(
                         "scalar_out -- draw_combined",
                         "scalar_out",
                         "draw_combined",
+                        kwargs={"vis_graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                 ],
@@ -1476,14 +1603,20 @@ SECTIONS: list[Section] = [
                         "intervening_cluster='upstream' (default)",
                         "linear_relu",
                         "draw_combined",
-                        kwargs={"intervening_cluster": "upstream"},
+                        kwargs={
+                            "intervening_cluster": "upstream",
+                            "vis_graph_overrides": {"dpi": "150"},
+                        },
                         trace_variant="backward",
                     ),
                     Panel(
                         "intervening_cluster='own'",
                         "linear_relu",
                         "draw_combined",
-                        kwargs={"intervening_cluster": "own"},
+                        kwargs={
+                            "intervening_cluster": "own",
+                            "vis_graph_overrides": {"dpi": "150"},
+                        },
                         trace_variant="backward",
                     ),
                 ],
@@ -1505,8 +1638,10 @@ SECTIONS: list[Section] = [
                     "TorchLens records the arm that actually EXECUTED. LEFT: simple if/else -- the taken arm "
                     "(relu) appears with an IF arm label; the untaken arm (sigmoid) is absent. RIGHT: an "
                     "elif ladder -- the matching ELIF arm renders with its label.\n"
-                    "CHECK: arm labels (IF/ELIF/ELSE) are present and attached to the right ops; nothing "
-                    "from untaken arms appears."
+                    "CHECK: arm labels are present and attached to the right ops; nothing from untaken arms "
+                    "appears. KNOWN NIT (FINDINGS F7): in the elif ladder several condition edges currently "
+                    "carry a bare 'IF' label instead of distinctly numbered IF/ELIF labels -- trust the "
+                    "taken-arm op, not the label numbering."
                 ),
                 panels=[
                     Panel("simple_if_else -- taken arm only", "simple_if_else"),
@@ -1530,7 +1665,9 @@ SECTIONS: list[Section] = [
                 label="i3_intervention_modes",
                 title="vis_intervention_mode: 'node_mark' vs 'as_node'",
                 caption=(
-                    "A trace captured with an intervention (zero-ablating every relu). 'node_mark' (default) "
+                    "An intervention-ready trace with a PLANNED zero intervention registered at the relu "
+                    "site (trace.set(tl.func('relu'), zeros) -- the renderer visualizes planned "
+                    "intervention sites). 'node_mark' (default) "
                     "marks the intervened op node itself (magenta site styling); 'as_node' inserts explicit "
                     "hook nodes showing where the intervention fires in the data path.\n"
                     "CHECK: LEFT -- relu nodes carry the intervention site color; RIGHT -- separate hook "
@@ -1558,7 +1695,8 @@ SECTIONS: list[Section] = [
                 label="i4_cone",
                 title="vis_show_cone: the downstream affected region",
                 caption=(
-                    "The intervention CONE is every op downstream of an intervention site -- the region "
+                    "Same planned-intervention trace as the previous page. The intervention CONE is every "
+                    "op downstream of an intervention site -- the region "
                     "whose values the intervention could have changed. vis_show_cone=True (default) tints "
                     "it; False renders sites only.\n"
                     "CHECK: LEFT -- everything downstream of the first intervened relu is tinted (lighter "
@@ -1609,12 +1747,20 @@ SECTIONS: list[Section] = [
                 label="j2_transformer",
                 title="Transformer encoder, fully unrolled",
                 caption=(
-                    "Two TransformerEncoder layers at full detail: the attention pattern (q/k/v projections, "
-                    "matmul-softmax-matmul diamond, residual adds, layernorms, feedforward) repeated twice.\n"
+                    "One TransformerEncoder layer at full detail on a 4-token sequence (kept to a single "
+                    "layer so every node label stays readable at page scale): the attention pattern -- "
+                    "in-projection to q/k/v, the matmul-softmax-matmul diamond, residual adds, layernorms, "
+                    "and the feedforward block.\n"
                     "CHECK: the attention diamond is recognizable; residual skip edges route around the "
-                    "blocks cleanly; the two layers render identically."
+                    "blocks cleanly; node text is legible."
                 ),
-                panels=[Panel("mini_transformer -- unrolled", "mini_transformer")],
+                panels=[
+                    Panel(
+                        "tiny_transformer -- unrolled, one layer",
+                        "tiny_transformer",
+                        kwargs={"dpi": 150},
+                    )
+                ],
                 covers=["topology:transformer"],
             ),
             Page(
@@ -1624,7 +1770,9 @@ SECTIONS: list[Section] = [
                     "Two inception blocks: each splits into four parallel branches (1x1, 3x3, 5x5, pool) "
                     "that merge in a concat.\n"
                     "CHECK: branch fan-out and concat fan-in are visually clean; branches keep left-to-right "
-                    "execution order (order_siblings); no edge crossings that could be avoided."
+                    "execution order (order_siblings). Residuals to tolerate: some edge crossings around the "
+                    "concat merges, and sub-branch cluster labels (@inc1.b5 etc.) that sit on the cluster "
+                    "border line -- both are Graphviz layout floor, not data errors."
                 ),
                 panels=[Panel("mini_inception -- unrolled", "mini_inception")],
                 covers=["topology:parallel"],
