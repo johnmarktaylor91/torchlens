@@ -33,8 +33,10 @@ import traceback
 
 _VISUAL_DIR = pathlib.Path(__file__).resolve().parent
 _AUDIT_DIR = _VISUAL_DIR.parent  # notebooks/audit/
+_REPO_ROOT = _VISUAL_DIR.parents[2]  # repo root: this checkout's torchlens must win
 sys.path.insert(0, str(_AUDIT_DIR))
 sys.path.insert(0, str(_VISUAL_DIR))
+sys.path.insert(0, str(_REPO_ROOT))
 
 import matplotlib
 
@@ -43,6 +45,16 @@ matplotlib.use("Agg")
 import torch
 
 import torchlens as tl
+
+# Guard: a pip -e install of a DIFFERENT checkout must never silently supply
+# the renderer under audit (that would render the wrong code and lie to the pack).
+_tl_file = pathlib.Path(tl.__file__).resolve()
+if _REPO_ROOT not in _tl_file.parents:
+    raise RuntimeError(
+        f"torchlens imported from {_tl_file}, not from this checkout "
+        f"({_REPO_ROOT}). Refusing to render the wrong code."
+    )
+print(f"torchlens under audit: {_tl_file}")
 from _models import ZOO
 from _pagekit import Page, Panel, Section, compose_page, compose_text_page
 from _visual_models import VZOO
@@ -71,11 +83,12 @@ def get_trace(model_key: str, variant: str = "plain", builder=None):
         trace = builder()
     else:
         m, x = MODELS[model_key]()
-        xs = x if isinstance(x, tuple) else (x,)
+        # Multi-input models supply a tuple; tl.trace takes input_args as a list.
+        xs = list(x) if isinstance(x, tuple) else x
         if variant == "plain":
-            trace = tl.trace(m, *xs)
+            trace = tl.trace(m, xs)
         elif variant == "backward":
-            trace = tl.trace(m, *xs, backward_ready=True)
+            trace = tl.trace(m, xs, backward_ready=True)
             out = trace[-1].out
             trace.log_backward(out)
         else:
@@ -136,8 +149,8 @@ def _collapse_res_blocks(module_log):
 
 
 def _skip_relus(layer_log):
-    """skip_fn demo: keep everything EXCEPT relu ops."""
-    return getattr(layer_log, "func_name", "") != "relu"
+    """skip_fn demo: skip (hide) every relu op."""
+    return getattr(layer_log, "func_name", "") == "relu"
 
 
 def _custom_overlay_kwargs(trace) -> dict:
@@ -676,7 +689,7 @@ SECTIONS: list[Section] = [
                 label="c5_skip_fn",
                 title="skip_fn: hiding layers while chaining edges through",
                 caption=(
-                    "skip_fn is a keep-predicate: layers for which it returns False are hidden and their "
+                    "skip_fn is a skip-predicate: layers for which it returns True are hidden and their "
                     "in/out edges are chained through. RIGHT panel hides every relu.\n"
                     "CHECK: relu nodes are gone on the right; linear ops connect DIRECTLY to each other "
                     "(the data path is preserved, just abbreviated). Input/output nodes can never be skipped."
