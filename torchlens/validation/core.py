@@ -2090,8 +2090,14 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # there's a valid excuse (bool output, special-value args, type cast, etc.).
     # Uses exact equality (no tolerance) since any change should be detectable.
     if perturb and tensor_nanequal(recomputed_output, layer.out, allow_tolerance=False):
-        perturb_ok = posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
-        if not perturb_ok:
+        posthoc_decision = posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
+        if posthoc_decision.exempt:
+            return ValidationCheckResult.exempted(posthoc_decision.reason)
+        if _perturbation_delta_below_output_spacing(layer, layers_to_perturb, input_args):
+            return ValidationCheckResult.exempted("ulp_swamped_perturbation")
+        if _generic_parent_effect_probe(self, layer, layers_to_perturb, verbose):
+            return ValidationCheckResult.exempted("generic_invariant_output_probe")
+        if not posthoc_decision.exempt:
             # ADD-ONLY: a genuine perturbation-insensitivity failure (the output
             # did not change when a parent's value was perturbed and no posthoc
             # excuse applied). Record the structured reason -- this NEVER changes
@@ -2116,9 +2122,448 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                 ),
             )
             return ValidationCheckResult.failed_result("perturbation_insensitive")
-        return ValidationCheckResult.exempted("posthoc_perturbation_exemption")
 
     return ValidationCheckResult.validated("perturbation_changed" if perturb else "replay_matched")
+
+
+def _perturbation_delta_below_output_spacing(
+    layer: Op,
+    layers_to_perturb: list[str],
+    input_args: dict[str, Any],
+) -> bool:
+    """Return whether additive perturbation was smaller than output ULP spacing.
+
+    Parameters
+    ----------
+    layer:
+        Child op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    input_args:
+        Rebuilt replay arguments containing the actual perturbed parent values.
+
+    Returns
+    -------
+    bool
+        True only for unit-sensitivity additive ops where the actual rebuilt
+        parent delta is strictly below the saved output's representable spacing.
+    """
+
+    if layer.func_name not in {"__add__", "add", "__radd__", "__sub__", "sub", "__rsub__"}:
+        return False
+    output_tensor = layer.out
+    if (
+        not isinstance(output_tensor, torch.Tensor)
+        or not output_tensor.is_floating_point()
+        or output_tensor.numel() == 0
+    ):
+        return False
+    deltas = _actual_perturbed_parent_deltas(layer, layers_to_perturb, input_args)
+    if not deltas:
+        return False
+    spacing = _output_representable_spacing(output_tensor)
+    if spacing is None:
+        return False
+    try:
+        for delta in deltas:
+            if not _delta_is_broadcastable_below_spacing(delta, spacing):
+                return False
+    except RuntimeError:
+        return False
+    return True
+
+
+def _actual_perturbed_parent_deltas(
+    layer: Op,
+    layers_to_perturb: list[str],
+    input_args: dict[str, Any],
+) -> list[torch.Tensor]:
+    """Return actual deltas for perturbed parents present in rebuilt args.
+
+    Parameters
+    ----------
+    layer:
+        Child op with saved and rebuilt arguments.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    input_args:
+        Rebuilt replay arguments containing perturbed values.
+
+    Returns
+    -------
+    list[torch.Tensor]
+        Absolute deltas for every verified perturbed-parent occurrence.
+    """
+
+    deltas: list[torch.Tensor] = []
+    saved_args = tuple(getattr(layer, "saved_args", ()) or ())
+    saved_kwargs = dict(getattr(layer, "saved_kwargs", {}) or {})
+    for arg_domain in ("args", "kwargs"):
+        entries = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+        for key, parent_label in entries.items():
+            if parent_label not in layers_to_perturb:
+                continue
+            original = _read_replay_arg_value(saved_args, saved_kwargs, arg_domain, key)
+            rebuilt = _read_replay_arg_value(
+                tuple(input_args["args"]),
+                input_args["kwargs"],
+                arg_domain,
+                key,
+            )
+            if not isinstance(original, torch.Tensor) or not isinstance(rebuilt, torch.Tensor):
+                continue
+            if torch.equal(original, rebuilt):
+                continue
+            deltas.append(
+                (rebuilt.detach().to(torch.float64) - original.detach().to(torch.float64)).abs()
+            )
+    return deltas
+
+
+def _output_representable_spacing(output_tensor: torch.Tensor) -> torch.Tensor | None:
+    """Return per-element spacing to adjacent representable output values.
+
+    Parameters
+    ----------
+    output_tensor:
+        Saved floating-point output tensor.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Minimum adjacent spacing for finite elements, or ``None`` when spacing
+        cannot prove a finite ULP bound.
+    """
+
+    finite = torch.isfinite(output_tensor)
+    if not bool(torch.all(finite).item()):
+        return None
+    positive_inf = torch.full_like(output_tensor, float("inf"))
+    negative_inf = torch.full_like(output_tensor, float("-inf"))
+    next_up = torch.nextafter(output_tensor, positive_inf)
+    next_down = torch.nextafter(output_tensor, negative_inf)
+    spacing = torch.minimum((next_up - output_tensor).abs(), (output_tensor - next_down).abs())
+    if not bool(torch.all(torch.isfinite(spacing)).item()):
+        return None
+    if not bool(torch.all(spacing > 0).item()):
+        return None
+    return spacing.to(torch.float64)
+
+
+def _delta_is_broadcastable_below_spacing(
+    delta: torch.Tensor,
+    spacing: torch.Tensor,
+) -> bool:
+    """Return whether ``delta`` is strictly smaller than output spacing.
+
+    Parameters
+    ----------
+    delta:
+        Actual perturbed-parent absolute delta.
+    spacing:
+        Per-output-element representable spacing.
+
+    Returns
+    -------
+    bool
+        True when ``delta`` can broadcast to the output and every element is
+        below the corresponding spacing.
+    """
+
+    delta_broadcast, spacing_broadcast = torch.broadcast_tensors(delta, spacing)
+    return bool(torch.all(delta_broadcast < spacing_broadcast).item())
+
+
+def _generic_parent_effect_probe(
+    self: "Trace",
+    layer: Op,
+    layers_to_perturb: list[str],
+    verbose: bool,
+) -> bool:
+    """Probe whether a perturbed parent can affect the layer output.
+
+    Parameters
+    ----------
+    self:
+        Trace containing saved parent payloads.
+    layer:
+        Child op whose unchanged perturbation output is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    verbose:
+        Whether replay exceptions should print diagnostics.
+
+    Returns
+    -------
+    bool
+        True only when two distinct rebuilt parent values both replay to the
+        exact saved output, proving the validation perturbation is not a
+        one-sample coincidence under the S1b probe contract.
+    """
+
+    probe_values = _generic_effect_probe_values(self, layer, layers_to_perturb)
+    if probe_values is None:
+        return False
+    for values_by_parent in probe_values:
+        input_args, unverified_reason = _prepare_input_args_for_validating_layer(self, layer, [])
+        if input_args is None:
+            if verbose:
+                print(f"Generic effect probe skipped: {unverified_reason}")
+            return False
+        if not _install_probe_parent_values(layer, layers_to_perturb, values_by_parent, input_args):
+            return False
+        recomputed = _execute_func_with_restored_state(
+            layer,
+            input_args,
+            layers_to_perturb,
+            layer.label,
+            verbose,
+        )
+        if recomputed is None or not tensor_nanequal(recomputed, layer.out, allow_tolerance=False):
+            return False
+    return True
+
+
+def _generic_effect_probe_values(
+    self: "Trace",
+    layer: Op,
+    layers_to_perturb: list[str],
+) -> list[dict[str, torch.Tensor]] | None:
+    """Build two distinct probe values for every perturbed parent.
+
+    Parameters
+    ----------
+    self:
+        Trace containing saved parent payloads.
+    layer:
+        Child op whose output scale informs floating probes.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+
+    Returns
+    -------
+    list[dict[str, torch.Tensor]] or None
+        Two parent-label-to-probe mappings, or ``None`` if probes cannot be
+        built without silently weakening validation.
+    """
+
+    first: dict[str, torch.Tensor] = {}
+    second: dict[str, torch.Tensor] = {}
+    for parent_label in layers_to_perturb:
+        parent = self[parent_label]
+        parent_out = getattr(parent, "out", None)
+        if not isinstance(parent_out, torch.Tensor) or parent_out.numel() == 0:
+            return None
+        parent_first, parent_second = _probe_pair_for_tensor(parent_out, layer.out)
+        if parent_first is None or parent_second is None:
+            return None
+        first[parent_label] = parent_first
+        second[parent_label] = parent_second
+    return [first, second]
+
+
+def _probe_pair_for_tensor(
+    parent_out: torch.Tensor,
+    output_out: torch.Tensor,
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+    """Return two distinct probe tensors for one parent tensor.
+
+    Parameters
+    ----------
+    parent_out:
+        Saved parent tensor.
+    output_out:
+        Saved child output tensor used to choose a visible floating scale.
+
+    Returns
+    -------
+    tuple[torch.Tensor or None, torch.Tensor or None]
+        Two distinct tensors with the parent's dtype/device, or ``(None, None)``
+        when safe probes cannot be produced.
+    """
+
+    if parent_out.dtype == torch.bool:
+        return torch.zeros_like(parent_out), torch.ones_like(parent_out)
+    if parent_out.is_floating_point():
+        finite_output = output_out.detach().float().abs()
+        finite_output = finite_output[torch.isfinite(finite_output)]
+        scale = finite_output.max().item() if finite_output.numel() else 1.0
+        magnitude = max(2.0, float(scale) * 2.0)
+        dtype_info = torch.finfo(parent_out.dtype)
+        magnitude = min(magnitude, dtype_info.max * 0.25)
+        first = torch.zeros_like(parent_out)
+        second = torch.full_like(parent_out, magnitude)
+        if torch.equal(first, second):
+            return None, None
+        return first, second
+    if parent_out.dtype in (
+        torch.int,
+        torch.long,
+        torch.short,
+        torch.uint8,
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+    ):
+        info = torch.iinfo(parent_out.dtype)
+        first_value = max(info.min, 0)
+        second_value = min(info.max, first_value + 1)
+        if first_value == second_value:
+            return None, None
+        return (
+            torch.full_like(parent_out, first_value),
+            torch.full_like(parent_out, second_value),
+        )
+    return None, None
+
+
+def _install_probe_parent_values(
+    layer: Op,
+    layers_to_perturb: list[str],
+    values_by_parent: dict[str, torch.Tensor],
+    input_args: dict[str, Any],
+) -> bool:
+    """Install probe tensors into every rebuilt arg occurrence for parents.
+
+    Parameters
+    ----------
+    layer:
+        Child op whose parent-argument map is used.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    values_by_parent:
+        Probe tensor by parent label.
+    input_args:
+        Rebuilt replay arguments to mutate.
+
+    Returns
+    -------
+    bool
+        True when every perturbed parent participated in at least one rebuilt
+        positional or keyword argument.
+    """
+
+    seen: set[str] = set()
+    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    for arg_domain in ("args", "kwargs"):
+        for key, parent_label in (parent_arg_positions.get(arg_domain, {}) or {}).items():
+            if parent_label not in values_by_parent:
+                continue
+            _write_replay_arg_value(input_args, arg_domain, key, values_by_parent[parent_label])
+            seen.add(parent_label)
+    return seen == set(layers_to_perturb)
+
+
+def _read_replay_arg_value(
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_domain: str,
+    key: Any,
+) -> Any:
+    """Read a replay argument by TorchLens parent-argument position key.
+
+    Parameters
+    ----------
+    args:
+        Positional replay arguments.
+    kwargs:
+        Keyword replay arguments.
+    arg_domain:
+        Either ``"args"`` or ``"kwargs"``.
+    key:
+        Parent-argument position key, possibly nested as a tuple.
+
+    Returns
+    -------
+    Any
+        Value stored at the requested replay argument position.
+    """
+
+    root = args if arg_domain == "args" else kwargs
+    if not isinstance(key, tuple):
+        return root[key]
+    value = root[key[0]]
+    for nested_key in key[1:]:
+        value = _read_nested_value(value, nested_key)
+    return value
+
+
+def _read_nested_value(value: Any, key: Any) -> Any:
+    """Read one nested list/tuple/dict value.
+
+    Parameters
+    ----------
+    value:
+        Container value.
+    key:
+        Nested key.
+
+    Returns
+    -------
+    Any
+        Nested value.
+    """
+
+    return value[key]
+
+
+def _write_replay_arg_value(
+    input_args: dict[str, Any],
+    arg_domain: str,
+    key: Any,
+    value: torch.Tensor,
+) -> None:
+    """Write a replay argument by TorchLens parent-argument position key.
+
+    Parameters
+    ----------
+    input_args:
+        Replay argument dictionary to mutate.
+    arg_domain:
+        Either ``"args"`` or ``"kwargs"``.
+    key:
+        Parent-argument position key, possibly nested as a tuple.
+    value:
+        Probe tensor to write.
+    """
+
+    if not isinstance(key, tuple):
+        input_args[arg_domain][key] = value
+        return
+    input_args[arg_domain][key[0]] = _write_nested_replay_arg_value(
+        input_args[arg_domain][key[0]],
+        key[1:],
+        value,
+    )
+
+
+def _write_nested_replay_arg_value(
+    container: Any,
+    key_path: tuple[Any, ...],
+    value: torch.Tensor,
+) -> Any:
+    """Write a nested replay argument by key path.
+
+    Parameters
+    ----------
+    container:
+        Nested list, tuple, or dict containing the value to replace.
+    key_path:
+        One or more nested keys beneath the replay arg root.
+    value:
+        Replacement tensor.
+
+    Returns
+    -------
+    Any
+        Updated container, rebuilding tuple levels as needed.
+    """
+
+    if len(key_path) == 1:
+        return assign_to_sequence_or_dict(container, key_path[0], value)
+    child = _write_nested_replay_arg_value(container[key_path[0]], key_path[1:], value)
+    return assign_to_sequence_or_dict(container, key_path[0], child)
 
 
 def _prepare_input_args_for_validating_layer(
@@ -2199,8 +2644,10 @@ def _prepare_input_args_for_validating_layer(
             if type(key) != tuple:
                 input_args[arg_type][key] = parent_layer_func_values
             else:
-                input_args[arg_type][key[0]] = assign_to_sequence_or_dict(
-                    input_args[arg_type][key[0]], key[1], parent_layer_func_values
+                input_args[arg_type][key[0]] = _write_nested_replay_arg_value(
+                    input_args[arg_type][key[0]],
+                    key[1:],
+                    parent_layer_func_values,
                 )
 
     return input_args, None
@@ -2229,10 +2676,174 @@ def _perturb_parent_values_for_layer(
         differing from the saved parent.
     """
 
+    domain_values = _perturb_domain_sensitive_parent_values(layer, parent_label, parent_values)
+    if domain_values is not None:
+        return domain_values
+    selection_values = _perturb_selection_parent_values(layer, parent_label, parent_values)
+    if selection_values is not None:
+        return selection_values
     one_hot_values = _perturb_one_hot_indices(layer, parent_label, parent_values)
     if one_hot_values is not None:
         return one_hot_values
     return _perturb_layer_outs(parent_values, layer.out)
+
+
+def _perturb_selection_parent_values(
+    layer: Op,
+    parent_label: str,
+    parent_values: torch.Tensor,
+) -> torch.Tensor | None:
+    """Return deterministic perturbations for tensor selection data parents.
+
+    Parameters
+    ----------
+    layer:
+        Child op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved parent tensor values.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Data-parent perturbation for selection ops, otherwise ``None``.
+    """
+
+    if layer.func_name not in {"__getitem__", "unbind", "unique", "_unique2"}:
+        return None
+    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return None
+    if parent_values.dtype == torch.bool:
+        return torch.logical_not(parent_values)
+    if parent_values.dtype in (
+        torch.int,
+        torch.long,
+        torch.short,
+        torch.uint8,
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+    ):
+        return _integer_step_distinct_from(parent_values)
+    if parent_values.is_floating_point():
+        finite_parent = torch.nan_to_num(parent_values.detach().float(), nan=0.0)
+        return (finite_parent + 1.0).to(parent_values.dtype)
+    return None
+
+
+def _integer_step_distinct_from(tensor: torch.Tensor) -> torch.Tensor:
+    """Return an integer tensor with every element stepped to a distinct value.
+
+    Parameters
+    ----------
+    tensor:
+        Integer tensor to perturb.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor with each element moved by one where the dtype permits it.
+    """
+
+    info = torch.iinfo(tensor.dtype)
+    stepped = torch.where(
+        tensor < info.max,
+        tensor + torch.ones_like(tensor),
+        tensor - torch.ones_like(tensor),
+    )
+    return stepped.to(tensor.dtype)
+
+
+def _perturb_domain_sensitive_parent_values(
+    layer: Op,
+    parent_label: str,
+    parent_values: torch.Tensor,
+) -> torch.Tensor | None:
+    """Return deterministic valid perturbations for domain-sensitive ops.
+
+    Parameters
+    ----------
+    layer:
+        Child op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved parent tensor values.
+
+    Returns
+    -------
+    torch.Tensor or None
+        A valid alternate parent value for ops whose naive range sampling can
+        stay inside a saturated/invalid region, otherwise ``None``.
+    """
+
+    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return None
+    if not parent_values.is_floating_point():
+        return None
+    if layer.func_name == "log":
+        return _finite_fill_distinct_from(parent_values, 2.0, 3.0)
+    if layer.func_name in {"__pow__", "pow"}:
+        exponent = _pow_exponent(layer)
+        if isinstance(exponent, (int, float)) and exponent > 0:
+            return _finite_fill_distinct_from(parent_values, 0.5, 2.0)
+    if layer.func_name in {"relu", "relu_"}:
+        parent_float = torch.nan_to_num(parent_values.detach().float(), nan=-1.0)
+        candidate = torch.where(
+            parent_float > 0, torch.zeros_like(parent_float), torch.ones_like(parent_float)
+        )
+        return candidate.to(parent_values.dtype)
+    return None
+
+
+def _finite_fill_distinct_from(
+    tensor: torch.Tensor,
+    primary: float,
+    fallback: float,
+) -> torch.Tensor:
+    """Return a finite fill tensor distinct from ``tensor`` when possible.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor whose dtype/device/shape should be preserved.
+    primary:
+        Preferred fill value.
+    fallback:
+        Alternate fill value when the primary exactly matches ``tensor``.
+
+    Returns
+    -------
+    torch.Tensor
+        Filled tensor with the same dtype/device/shape as ``tensor``.
+    """
+
+    candidate = torch.full_like(tensor, primary)
+    if torch.equal(candidate, tensor):
+        return torch.full_like(tensor, fallback)
+    return candidate
+
+
+def _pow_exponent(layer: Op) -> Any:
+    """Return a captured exponent operand for ``pow``-style ops.
+
+    Parameters
+    ----------
+    layer:
+        Candidate power op.
+
+    Returns
+    -------
+    Any
+        Positional or keyword exponent value, if captured.
+    """
+
+    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    if len(saved_args) > 1:
+        return saved_args[1]
+    return (getattr(layer, "saved_kwargs", {}) or {}).get("exponent")
 
 
 def _perturb_one_hot_indices(
@@ -2573,9 +3184,9 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
       unique value), widen the range to [-10, 11) or [0, 11).  Retries up to
       ``MAX_PERTURB_ATTEMPTS`` to avoid accidentally reproducing the original.
     - **Bool**: random 0/1, retried to ensure difference.
-    - **Float/complex**: scaled random normal, where the scale is derived from
-      the output tensor's mean absolute value (plus random jitter) to produce
-      perturbations of comparable magnitude.
+    - **Float/complex**: finite range-based random values. Floating tensors
+      whose saved values are entirely non-finite are perturbed to finite zeros
+      so NaN-aware equality cannot turn the perturbation into a no-op.
 
     Args:
         parent_outs: The original parent tensor to perturb.
@@ -2674,8 +3285,12 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
                 torch.rand(parent_outs.shape, device=device) * (i_hi - i_lo) + i_lo,
             ).type(parent_outs.dtype)
         else:
-            lo = parent_outs.float().min().item()
-            hi = parent_outs.float().max().item()
+            parent_float = parent_outs.float()
+            finite_parent = parent_float[torch.isfinite(parent_float)]
+            if finite_parent.numel() == 0:
+                return torch.zeros_like(parent_outs)
+            lo = finite_parent.min().item()
+            hi = finite_parent.max().item()
             finite_output = output_outs.detach().float().abs()
             finite_output = finite_output[torch.isfinite(finite_output)]
             output_scale = finite_output.max().item() if finite_output.numel() else 0.0
