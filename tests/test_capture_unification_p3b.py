@@ -259,6 +259,8 @@ def test_followed_by_intervene_and_halt_fail_at_capture_start() -> None:
         tl.trace(TinyLinear(), x, halt=selector)
     with pytest.raises(PredicateError, match="unsupported followed_by predicate shape"):
         tl.trace(TinyLinear(), x, halt=tl.followed_by(tl.func("relu")))
+
+
 def test_tf_trace_exercises_backend_neutral_topology_invariant() -> None:
     """A real TensorFlow trace should satisfy backend-neutral topology checks."""
 
