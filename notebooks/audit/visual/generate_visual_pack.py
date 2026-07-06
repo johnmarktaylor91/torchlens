@@ -770,8 +770,10 @@ SECTIONS: list[Section] = [
                 caption=(
                     "skip_fn is a skip-predicate: layers for which it returns True are hidden and their "
                     "in/out edges are chained through. RIGHT panel hides every relu.\n"
-                    "CHECK: relu nodes are gone on the right; linear ops connect DIRECTLY to each other "
-                    "(the data path is preserved, just abbreviated). Input/output nodes can never be skipped."
+                    "CHECK: the linear ops on the right connect DIRECTLY to each other (the data path is "
+                    "preserved, just abbreviated). Input/output nodes can never be skipped. KNOWN NIT "
+                    "(FINDINGS F9): the skipped relu currently still renders as a detached, edge-less "
+                    "ellipse instead of disappearing -- ignore the orphan."
                 ),
                 panels=[
                     Panel("default (all ops)", "tiny_mlp"),
@@ -1293,14 +1295,14 @@ SECTIONS: list[Section] = [
                 label="f3_overlays",
                 title="node_overlay: builtin metrics and custom scores",
                 caption=(
-                    "node_overlay recolors node BORDERS by a per-node score: pale green = low, pale red = "
-                    "high, grey = zero/no data, with penwidth=2 on scored nodes. Builtins read trace "
-                    "metadata ('flops', 'time', 'magnitude', ...); a {layer_label: score} mapping supplies "
-                    "arbitrary external scores (here: op position in the graph). The tint is deliberately "
-                    "subtle -- look at the border COLOR, not the fill.\n"
-                    "CHECK: border color varies across nodes and tracks the metric (the linears should "
-                    "redden under 'flops' while relu stays green/grey); the custom mapping ramps "
-                    "green-to-red from input to output."
+                    "node_overlay appends a SCORE ROW to every node's label ('flops: 272 FLOPs', "
+                    "'time: 0.116 ms', 'overlay: 3') and bolds the border (penwidth=2) of nodes with a "
+                    "nonzero score. Builtins read trace metadata ('flops', 'time', 'magnitude', ...); a "
+                    "{layer_label: score} mapping supplies arbitrary external scores (here: op position in "
+                    "the graph). Only the 'nan' (orange) and 'intervention' (pink) overlays recolor borders "
+                    "-- the metric overlays are numeric rows, not a heatmap tint.\n"
+                    "CHECK: every node carries the metric row with sane units; nonzero-scored nodes have "
+                    "the thicker border; the custom mapping counts 0,1,2,... from input to output."
                 ),
                 panels=[
                     Panel(
@@ -1414,8 +1416,8 @@ SECTIONS: list[Section] = [
                     "tensor (trace(model, raw_images, transform=normalize)), TorchLens stores the raw input "
                     "and the input boundary node renders a thumbnail montage of the image batch (up to the "
                     "batch_render limit; random noise here, but real photos in practice).\n"
-                    "CHECK: the montage renders inside the input node without distorting the layout; each "
-                    "batch item is individually visible."
+                    "CHECK: the montage renders inside the input boundary node (which grows to hold it) and "
+                    "each batch item is individually visible."
                 ),
                 panels=[
                     Panel(
@@ -1466,10 +1468,11 @@ SECTIONS: list[Section] = [
                     "publication-neutral; 'dark' inverts for slides; 'colorblind' uses an accessible "
                     "palette; 'high_contrast' maximizes edge/border weight.\n"
                     "CHECK: node text stays readable in every theme; node type distinctions survive each "
-                    "palette; edges remain visible. KNOWN ARTIFACT (FINDINGS F6): in the 'dark' theme the "
-                    "whole-model header block ('TinyMLP / N tensors ...') keeps its dark text and nearly "
-                    "vanishes against the dark background -- the theme does not restyle the outer frame "
-                    "label."
+                    "palette; edges remain visible. KNOWN ARTIFACTS (FINDINGS F6): in the 'dark' theme "
+                    "(a) the whole-model header block ('TinyMLP / N tensors ...') keeps its dark text and "
+                    "nearly vanishes against the dark background, and (b) parameter ops keep their light-"
+                    "grey fill while the font goes near-white, leaving the linear labels barely readable. "
+                    "Both are theme gaps, not data errors."
                 ),
                 panels=[
                     Panel("torchlens (default)", "tiny_mlp", kwargs={"vis_theme": "torchlens"}),

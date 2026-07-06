@@ -439,7 +439,7 @@ VZOO: dict[str, object] = {
     "scalar_out": lambda: (ScalarOut(), torch.randn(2, 4)),
     "paramless_deep": lambda: (ParamlessDeep(), torch.randn(2, 4)),
     "nan_midway": lambda: (NaNMidway(), torch.randn(2, 4)),
-    "small_conv": lambda: (SmallConv(), torch.rand(2, 3, 32, 32)),
+    "small_conv": lambda: (SmallConv(), torch.rand(2, 3, 64, 64)),
     "mixed_buffers": lambda: (MixedBuffers(), torch.randn(4, 8)),
     "dict_input": lambda: (DictInput(), {"a": torch.ones(2), "b": torch.ones(2) * 2}),
     # torchvision

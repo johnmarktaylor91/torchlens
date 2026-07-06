@@ -38,9 +38,10 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `buffers:meaningful` | show_buffer_layers='meaningful' (default) | p3, p6 |
 | `buffers:always` | show_buffer_layers='always' | p6 |
 | `containers:labels` | show_containers='labels' | p15 |
-| `containers:cluster` | show_containers='cluster' | p15 |
-| `containers:collapsed` | show_containers='collapsed' | p15 |
-| `containers:auto` | show_containers='auto' | p15 |
+| `containers:cluster` | show_containers='cluster' (single-owner required; falls back to labels) | p15 |
+| `containers:collapsed` | show_containers='collapsed' homogeneous-container merge | p15 |
+| `containers:auto` | show_containers='auto' | p16 |
+| `containers:nodes` | show_containers='nodes' container overlay nodes (renderer-internal) | p15 |
 | `container_max_inline` | container_max_inline threshold | p16 |
 | `module_focus` | module= submodule focus with boundary stubs | p17 |
 | `vis_call_depth` | vis_call_depth module-box nesting cutoff | p18 |
@@ -106,7 +107,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `label:arm` | conditional IF/ELIF/ELSE arm labels | p59 |
 | `control_flow:branch` | tensor-driven if/else taken-arm rendering | p29, p59, p60 |
 | `topology:parallel` | parallel branch / merge topology | p5, p11, p66 |
-| `topology:transformer` | transformer / attention block topology | p43, p65 |
+| `topology:transformer` | transformer / attention block topology | p65 |
 | `scale:real_model` | real torchvision-scale architecture | p32, p34, p37, p64 |
 | `degenerate` | degenerate graphs (single op, no modules, scalar out) | p68 |
 | `regression:large_bbox` | large-graph bbox non-blank regression | p12 |
@@ -135,14 +136,14 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 3 | A | `a1_baseline` | Baseline render: the anatomy of a TorchLens graph | `tiny_mlp` | 1 |
 | 4 | A | `a2_kitchen_sink` | Kitchen sink: nesting, buffers, functional ops, randomness | `demo_model` | 1 |
 | 5 | A | `a3_multi_io` | Multiple inputs and multiple outputs | `multi_in_multi_out` | 1 |
-| 6 | A | `a4_buffers` | Buffer visibility: never / meaningful / always | `batch_norm` | 3 |
+| 6 | A | `a4_buffers` | Buffer visibility: never / meaningful / always | `mixed_buffers` | 3 |
 | 7 | A | `a5_edge_multiplicity` | Edge multiplicity: the same tensor used twice | `add_twice`, `cat_twice` | 2 |
 | 8 | A | `a6_legend` | The built-in legend | `tiny_mlp` | 1 |
 | 10 | B | `b1_direction` | direction: bottomup / topdown / leftright | `tiny_mlp` | 3 |
 | 11 | B | `b2_order_siblings` | order_siblings: execution order vs raw dot order | `parallel_fanout` | 2 |
 | 12 | B | `b3_large_chain` | REGRESSION: deep-chain bounding box | `large_chain` | 1 |
 | 13 | B | `b4_placement` | vis_node_placement: 'dot' vs 'rank' | `large_chain` | 2 |
-| 15 | C | `c1_containers` | show_containers: labels / cluster / collapsed / auto | `dict_output`, `mid_graph_container`, `tuple_output` | 4 |
+| 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes (and the cluster fallback) | `dict_input`, `dict_output`, `mid_graph_container`, `tuple_output` | 5 |
 | 16 | C | `c2_container_max_inline` | container_max_inline: when 'auto' stops inlining | `tuple_output` | 2 |
 | 17 | C | `c3_module_focus` | module=: focus on one submodule | `demo_model` | 1 |
 | 18 | C | `c4_call_depth` | vis_call_depth: limiting module-box nesting | `demo_model` | 2 |
@@ -163,17 +164,17 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 35 | E | `e4_standalone_fold` | Standalone folding: fold_runs=True with collapse='none' | `block_stack` | 2 |
 | 36 | E | `e5_ellipsis_grammar` | The '+N more' ellipsis, up close | `block_stack` | 1 |
 | 37 | E | `e6_segments` | Segment boxes: max-mode condensed ranges | `resnet50` | 1 |
-| 38 | E | `e7_remainder_labels` | Remainder labels: 'N layers total' includes buffer leaves | `block_stack` | 1 |
+| 38 | E | `e7_remainder_labels` | Remainder labels: 'N layers total' includes buffer leaves | `block_stack` | 2 |
 | 39 | E | `e8_interleaved_artifact` | KNOWN ARTIFACT: interleaved run-folds can look like a cycle | `interleaved_stack` | 2 |
 | 40 | E | `e9_collapse_diagnostics` | Diagnostics: Trace.collapse_plan() and Trace.collapse_schedule() | `(text page)` | - |
 | 42 | F | `f1_node_modes` | node_mode: 'default' vs 'profiling' | `tiny_mlp` | 2 |
-| 43 | F | `f2_domain_modes` | node_mode: 'vision' and 'attention' | `mini_inception`, `mini_transformer` | 2 |
+| 43 | F | `f2_domain_modes` | node_mode: 'vision' and 'attention' | `mini_inception`, `tiny_transformer` | 2 |
 | 44 | F | `f3_overlays` | node_overlay: builtin metrics and custom scores | `tiny_mlp` | 4 |
 | 45 | F | `f4_nan_overlay` | node_overlay='nan': finding the first non-finite op | `nan_midway` | 1 |
 | 46 | F | `f5_label_fields` | node_label_fields: choosing the label rows | `tiny_mlp` | 2 |
 | 47 | F | `f6_code_panel` | code_panel: source code alongside the graph | `demo_model` | 2 |
 | 48 | F | `f7_typography` | Typography: font_size, dpi, for_paper | `tiny_mlp` | 3 |
-| 49 | F | `f8_raw_io` | Raw input/output rendering on boundary nodes | `small_conv` | 1 |
+| 49 | F | `f8_raw_io` | Raw input rendering: thumbnails on the input node | `small_conv` | 1 |
 | 50 | F | `f9_input_transform` | show_input_transform_summary: preprocessing provenance | `tiny_mlp` | 1 |
 | 52 | G | `g1_themes` | vis_theme: torchlens / paper / dark / colorblind / high_contrast | `tiny_mlp` | 5 |
 | 54 | H | `h1_backward` | draw_backward: the grad_fn graph | `linear_relu` | 2 |
@@ -185,7 +186,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 61 | I | `i3_intervention_modes` | vis_intervention_mode: 'node_mark' vs 'as_node' | `tiny_mlp` | 2 |
 | 62 | I | `i4_cone` | vis_show_cone: the downstream affected region | `tiny_mlp` | 2 |
 | 64 | J | `j1_resnet_overview` | ResNet-18 at collapse='auto': the intended overview experience | `resnet18` | 1 |
-| 65 | J | `j2_transformer` | Transformer encoder, fully unrolled | `mini_transformer` | 1 |
+| 65 | J | `j2_transformer` | Transformer encoder, fully unrolled | `tiny_transformer` | 1 |
 | 66 | J | `j3_inception` | Inception-style branching: parallel paths and concat merges | `mini_inception` | 1 |
 | 68 | K | `k1_degenerate` | Degenerate graphs: single op, no modules, scalar out, no params | `no_submodules`, `paramless_deep`, `scalar_out`, `single_op` | 4 |
 
