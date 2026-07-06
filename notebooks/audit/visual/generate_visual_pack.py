@@ -1045,16 +1045,22 @@ SECTIONS: list[Section] = [
                 title="GRUCell loop vs fused nn.LSTM: what rolling can and cannot see",
                 caption=(
                     "LEFT: nn.GRUCell in a Python loop rolls like the other cells. RIGHT: fused nn.LSTM -- "
-                    "the entire sequence is ONE fused kernel call, so the graph shows a single lstm op and "
-                    "there is NOTHING to roll. This is the documented limitation: fused kernels do not "
-                    "expose per-timestep internals.\n"
-                    "CHECK: left rolls to a compact loop; right is one op node with weight/bias params "
-                    "attached -- if you expected per-step structure from nn.LSTM, this page is why you "
-                    "don't get it."
+                    "the entire 4-timestep sequence executes as ONE fused kernel call, so there is NO "
+                    "per-timestep structure to roll. (The single call still surfaces as THREE lstm op "
+                    "nodes -- one per output tensor of the (out, h, c) return -- the same multi-output "
+                    "accounting as FINDINGS F11/F15.) This is the documented limitation: fused kernels do "
+                    "not expose per-timestep internals.\n"
+                    "CHECK: left rolls to a compact loop with a '(xN)' multiplier; right has NO recurrence "
+                    "structure at all, just the fused call's output nodes -- if you expected per-step "
+                    "structure from nn.LSTM, this page is why you don't get it."
                 ),
                 panels=[
                     Panel("gru_cell_seq -- rolled", "gru_cell_seq", kwargs={"vis_mode": "rolled"}),
-                    Panel("fused nn.LSTM -- one kernel call", "fused_lstm"),
+                    Panel(
+                        "fused nn.LSTM -- one kernel call (3 output nodes)",
+                        "fused_lstm",
+                        kwargs={"dpi": 150},
+                    ),
                 ],
                 covers=["label:xN"],
             ),
@@ -1494,11 +1500,12 @@ SECTIONS: list[Section] = [
                     "code_panel renders the model source captured at trace time in a side panel. True shows "
                     "the forward method; 'init+forward' includes the constructor. ('forward' and 'class' "
                     "variants use the same machinery with different excerpts.) The composed side-by-side "
-                    "layout needs an SVG-composable pipeline; with the 'rank' placement engine (or a non "
-                    "svg/pdf/png format) the source falls back to an EMBEDDED code cluster inside the "
-                    "graph itself (RIGHT panel).\n"
-                    "CHECK: code is readable, aligned with the graph, and matches the actual model source; "
-                    "in the fallback panel the code box sits inside the graph canvas rather than beside it."
+                    "layout needs an SVG-composable pipeline; with the 'rank' placement engine the code is "
+                    "DOCUMENTED to fall back to an embedded in-graph cluster, but currently it silently "
+                    "DISAPPEARS instead (KNOWN BUG, FINDINGS F14) -- the third panel exists to show that "
+                    "failure mode so you recognize it (note also rank's rough cluster geometry).\n"
+                    "CHECK: panels 1-2 -- code is readable and matches the actual model source; panel 3 -- "
+                    "confirm the code box is ABSENT (that absence is the documented bug, not your mistake)."
                 ),
                 panels=[
                     Panel("code_panel=True", "demo_model", kwargs={"code_panel": True}),
@@ -1508,7 +1515,7 @@ SECTIONS: list[Section] = [
                         kwargs={"code_panel": "init+forward"},
                     ),
                     Panel(
-                        "fallback: code_panel=True + vis_node_placement='rank'",
+                        "rank engine: code panel silently dropped (bug F14)",
                         "demo_model",
                         kwargs={"code_panel": True, "vis_node_placement": "rank"},
                     ),
