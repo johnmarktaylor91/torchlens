@@ -78,6 +78,13 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `draw_backward:bwd` | draw_backward bwd= pass selection | p55 |
 | `draw_combined` | draw_combined forward+backward graph | p56 |
 | `combined:intervening_cluster` | draw_combined intervening_cluster placement | p57 |
+| `backward_node_spec_fn` | draw_combined backward-half styling callback | p56 |
+| `overlay:intervention` | node_overlay='intervention' fired-site borders | p45 |
+| `code_panel:fallback` | code_panel embedded-cluster fallback (rank engine / non-composable format) | p47 |
+| `batch_render` | batch_render thumbnail policy (auto/all/first/first_n/shape_only) | p49 |
+| `raw_output_render` | decoded-output label grammar on the output node | p49 |
+| `surface:fastlog_preview` | Trace.preview_fastlog predicate-decision coloring | p70 |
+| `surface:bundle_diff` | tl.viz.bundle_diff paired clean-vs-intervened delta render | p71 |
 | `node:raw_op` | plain operation node | p3 |
 | `node:param_op` | parameter-bearing op node styling | p3 |
 | `node:boundary_io` | input/output boundary nodes | p3 |
@@ -123,11 +130,14 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `vis_renderer:dagua` | Experimental opt-in backend (torchlens.experimental.dagua); not part of the stable visual language. |
 | `placement:auto` | 'auto' just selects dot or rank by cost estimate; both concrete engines are shown on the placement page. |
 | `code_panel:forward_class` | code_panel='forward' and 'class' use the same panel machinery as True / 'init+forward' (shown); only the excerpt differs. |
-| `overlay:others` | node_overlay 'bytes'/'grad-norm'/'intervention'/'bundle_delta' use the same border-intensity machinery as the overlays shown. |
+| `overlay:others` | node_overlay 'bytes'/'grad-norm'/'bundle_delta' use the same generic numeric-row + bold-border machinery as the overlays shown ('nan' and 'intervention', the two color-coded overlays, both have pages). |
 | `combined:cluster_rest` | intervening_cluster 'outside'/'downstream' mirror the two placements shown ('upstream'/'own') with different cluster targets. |
 | `overrides:grad_edge` | vis_grad_edge_overrides styles gradient edges via the same override dict machinery as vis_edge_overrides (shown). |
 | `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides-free aliases (vis_opt, view, depth, renderer, layout, node_style, vis_node_mode, vis_buffers, vis_direction) have no visual identity of their own. |
-| `show:dispatcher` | Trace.show() dispatches to draw()/repr; no separate visuals. |
+| `show:dispatcher` | Trace.show(method='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
+| `html_repr` | Trace._repr_html_() is a bespoke HTML identity card (layers/ops/save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz render, so it cannot appear in this PDF. |
+| `animate_ops` | Trace.animate_ops() returns an HTML play/pause widget for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
+| `code_panel:callable` | code_panel=<callable> reuses the same panel box styling as the string modes; only the text source differs. |
 
 ## Page inventory
 
@@ -140,7 +150,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 7 | A | `a5_edge_multiplicity` | Edge multiplicity: the same tensor used twice | `add_twice`, `cat_twice` | 2 |
 | 8 | A | `a6_legend` | The built-in legend | `tiny_mlp` | 1 |
 | 10 | B | `b1_direction` | direction: bottomup / topdown / leftright | `tiny_mlp` | 3 |
-| 11 | B | `b2_order_siblings` | order_siblings: execution order vs raw dot order | `parallel_fanout` | 2 |
+| 11 | B | `b2_order_siblings` | order_siblings: execution order vs raw dot order | `mini_inception` | 2 |
 | 12 | B | `b3_large_chain` | REGRESSION: deep-chain bounding box | `large_chain` | 1 |
 | 13 | B | `b4_placement` | vis_node_placement: 'dot' vs 'rank' | `large_chain` | 2 |
 | 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes (and the cluster fallback) | `dict_input`, `dict_output`, `mid_graph_container`, `tuple_output` | 5 |
@@ -150,7 +160,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 19 | C | `c5_skip_fn` | skip_fn: hiding layers while chaining edges through | `tiny_mlp` | 2 |
 | 20 | C | `c6_collapse_fn` | collapse_fn: custom module collapse + remainder labels | `block_stack` | 1 |
 | 21 | C | `c7_node_spec_fn` | node_spec_fn / collapsed_node_spec_fn: per-node customization | `block_stack`, `tiny_mlp` | 2 |
-| 22 | C | `c8_overrides` | Raw Graphviz override dicts: graph / edge / module | `tiny_mlp` | 3 |
+| 22 | C | `c8_overrides` | Raw Graphviz override dicts: graph / edge / module | `demo_model`, `tiny_mlp` | 3 |
 | 24 | D | `d1_rolled_concept` | The concept: unrolled vs rolled on a reused op | `reused_relu_loop` | 2 |
 | 25 | D | `d2_rnn_cell` | RNNCell over a sequence: hidden-state back-edge | `rnn_cell_seq` | 2 |
 | 26 | D | `d3_lstm_cell` | LSTMCell: TWO recurrent states, two back-edges | `lstm_cell_seq` | 2 |
@@ -170,16 +180,16 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 42 | F | `f1_node_modes` | node_mode: 'default' vs 'profiling' | `tiny_mlp` | 2 |
 | 43 | F | `f2_domain_modes` | node_mode: 'vision' and 'attention' | `mini_inception`, `tiny_transformer` | 2 |
 | 44 | F | `f3_overlays` | node_overlay: builtin metrics and custom scores | `tiny_mlp` | 4 |
-| 45 | F | `f4_nan_overlay` | node_overlay='nan': finding the first non-finite op | `nan_midway` | 1 |
+| 45 | F | `f4_nan_overlay` | Diagnostic overlays: 'nan' and 'intervention' recolor borders | `nan_midway`, `tiny_mlp` | 2 |
 | 46 | F | `f5_label_fields` | node_label_fields: choosing the label rows | `tiny_mlp` | 2 |
-| 47 | F | `f6_code_panel` | code_panel: source code alongside the graph | `demo_model` | 2 |
+| 47 | F | `f6_code_panel` | code_panel: source code alongside the graph | `demo_model` | 3 |
 | 48 | F | `f7_typography` | Typography: font_size, dpi, for_paper | `tiny_mlp` | 3 |
-| 49 | F | `f8_raw_io` | Raw input rendering: thumbnails on the input node | `small_conv` | 1 |
+| 49 | F | `f8_raw_io` | Raw input thumbnails and decoded-output rows on boundary nodes | `small_conv` | 3 |
 | 50 | F | `f9_input_transform` | show_input_transform_summary: preprocessing provenance | `tiny_mlp` | 1 |
 | 52 | G | `g1_themes` | vis_theme: torchlens / paper / dark / colorblind / high_contrast | `tiny_mlp` | 5 |
 | 54 | H | `h1_backward` | draw_backward: the grad_fn graph | `linear_relu` | 2 |
 | 55 | H | `h2_backward_opts` | draw_backward options: direction and pass selection | `linear_relu` | 2 |
-| 56 | H | `h3_combined` | draw_combined: forward and backward in one graph | `linear_relu`, `scalar_out` | 2 |
+| 56 | H | `h3_combined` | draw_combined: forward and backward in one graph | `linear_relu`, `scalar_out` | 3 |
 | 57 | H | `h4_combined_cluster` | draw_combined: intervening_cluster placement | `linear_relu` | 2 |
 | 59 | I | `i1_conditionals` | if/else and elif ladders: taken-arm rendering | `elif_ladder`, `simple_if_else` | 2 |
 | 60 | I | `i2_branch_cnn` | Conditional dual-head CNN | `tiny_branch_cnn` | 1 |
@@ -189,6 +199,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 65 | J | `j2_transformer` | Transformer encoder, fully unrolled | `tiny_transformer` | 1 |
 | 66 | J | `j3_inception` | Inception-style branching: parallel paths and concat merges | `mini_inception` | 1 |
 | 68 | K | `k1_degenerate` | Degenerate graphs: single op, no modules, scalar out, no params | `no_submodules`, `paramless_deep`, `scalar_out`, `single_op` | 4 |
+| 70 | L | `l1_fastlog_preview` | preview_fastlog: which ops would a predicate keep? | `tiny_mlp` | 1 |
+| 71 | L | `l2_bundle_diff` | bundle_diff: clean vs intervened, per-node delta | `tiny_mlp` | 1 |
 
 ## How to extend
 

@@ -2012,7 +2012,10 @@ SECTIONS: list[Section] = [
                     "pair by the relative-L2 delta of its activations -- red intensity = how much the "
                     "intervention changed that op's output.\n"
                     "CHECK: ops upstream of the first relu show no delta; the ablated relu and everything "
-                    "downstream redden; the two columns stay structurally aligned."
+                    "downstream redden; the two columns stay structurally aligned. KNOWN NIT (FINDINGS "
+                    "F12): the caption embedded in the render itself is a hardcoded fixture ('top: clean, "
+                    "bottom: ablated ... layer1.0.relu') that matches neither this layout (columns) nor "
+                    "this intervention -- trust the panel subtitle and the delta_map legend."
                 ),
                 panels=[
                     Panel(
