@@ -18,10 +18,8 @@ from ...data_classes.derived_grad import (
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.layer import Layer
-from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace, _init_module_hierarchy_data
+from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
 from ...ir.buffer import CaptureEvents
 from ...ir.events import (
@@ -37,10 +35,12 @@ from ...ir.predicate import RecordContext, _DEFERRED_VALUE
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._materialize import materialize_from_events
-from ...postprocess.finalization import _build_module_logs, _build_root_module_log
 from ...quantities import Duration
 from ...validation.status import ValidationReplayStatus, ValidationReplaySource
-from .._options import PADDLE_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
+from .._finalize import attach_function_root_module, attach_object_module_logs
+from .._finalize import finalize_single_pass_trace
+from .._options import PADDLE_EXTRA_KWARG_POLICY, PADDLE_PREVIEW_TRACE_OPTION_POLICY
+from .._options import reject_extra_trace_kwargs, reject_unsupported_trace_options
 from .model_prep import (
     PaddleModuleTree,
     cleanup_model_session,
@@ -1408,149 +1408,26 @@ class PaddleBackend:
     def _finish_trace(self, trace: Trace, module_tree: PaddleModuleTree | None = None) -> None:
         """Finalize a manually captured Paddle Trace."""
 
-        seen_param_barcodes: set[str] = set()
-        for raw_index, (label, op_log) in enumerate(trace._raw_layer_dict.items()):
-            pass_label = f"{label}:1"
-            op_log._label_raw = label
-            op_log._layer_label_raw = label
-            op_log.label = pass_label
-            op_log.label_short = pass_label
-            op_log.layer_label = label
-            op_log.layer_label_short = label
-            op_log.lookup_keys = [label, pass_label]
-            op_log.pass_index = 1
-            op_log.num_passes = 1
-            trace.layer_list.append(op_log)
-            trace.layer_dict_main_keys[label] = op_log
-            trace.layer_dict_all_keys[label] = op_log
-            trace.layer_dict_all_keys[pass_label] = op_log
-            trace.op_labels.append(pass_label)
-            trace.layer_labels.append(label)
-            trace.layer_num_calls[label] = 1
-            trace._lookup_keys_to_layer_num_dict[label] = raw_index
-            trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
-            _attach_paddle_op_params(op_log, trace.param_logs, seen_param_barcodes)
-            for param in getattr(op_log, "_param_logs", []):
-                if op_log.label not in param.used_by_ops:
-                    param.used_by_ops.append(op_log.label)
-                if op_log.layer_label not in param.used_by_layers:
-                    param.used_by_layers.append(op_log.layer_label)
-                if op_log.layer_label not in trace.layers_with_params[param.barcode]:
-                    trace.layers_with_params[param.barcode].append(op_log.layer_label)
-            layer_log = Layer(op_log)
-            layer_log.ops[1] = op_log
-            layer_log.call_labels.append(pass_label)
-            trace.layer_logs[label] = layer_log
-        trace.num_ops = sum(
-            1
-            for op_log in trace.layer_list
-            if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
+        finalize_single_pass_trace(
+            trace,
+            backend_name=self.name,
+            module_tree=module_tree,
+            attach_function_root_module=attach_function_root_module,
+            attach_object_module_logs=self._attach_object_module_logs,
+            attach_op_params=_attach_paddle_op_params_for_finalize,
         )
-        trace._layers_logged = True
-        trace._layers_saved = True
-        trace._tracing_finished = True
-        trace.has_backward_pass = False
-        trace.capture_end_time = time.time()
-        trace.backend = cast(BackendName, self.name)
-        if module_tree is None:
-            trace.module_identity_mode = "function_root"
-            self._attach_function_root_module(trace)
-        else:
-            trace.module_identity_mode = "object_module"
-            self._attach_object_module_logs(trace, module_tree)
 
     def _attach_object_module_logs(self, trace: Trace, tree: PaddleModuleTree) -> None:
         """Build public module logs for a Paddle object-module trace."""
 
-        trace._module_build_data = _init_module_hierarchy_data()
-        trace._module_forward_args = dict(tree.forward_args_by_call)
-        trace._module_metadata = tree.metadata
-        mbd = trace._module_build_data
-        for address, metadata in tree.metadata.items():
-            if address not in mbd["addresses"]:
-                mbd["addresses"].append(address)
-            mbd["module_types"][address] = str(metadata.get("class_name", ""))
-            mbd["module_training_modes"][address] = bool(metadata.get("training", False))
-            mbd["module_num_calls"][address] = max(1, tree.call_counts.get(address, 1))
-            for child_address in metadata.get("address_children", []):
-                if child_address not in mbd["module_children"][address]:
-                    mbd["module_children"][address].append(child_address)
-            if address != "self" and _nearest_metadata_parent(address, tree.metadata) == "self":
-                mbd["top_level_modules"].append(address)
-        for param in trace.param_logs:
-            owner = param.module_address
-            mbd["module_nparams"][owner] += param.num_params
-            if param.is_trainable:
-                mbd["module_nparams_trainable"][owner] += param.num_params
-            else:
-                mbd["module_nparams_frozen"][owner] += param.num_params
-        self._populate_object_module_build_data(trace)
-        _build_module_logs(trace)
-
-    def _populate_object_module_build_data(self, trace: Trace) -> None:
-        """Populate module hierarchy side channels from attributed Paddle ops."""
-
-        mbd = trace._module_build_data
-        seen_layers: dict[str, set[str]] = defaultdict(set)
-        seen_pass_layers: dict[str, set[str]] = defaultdict(set)
-        seen_module_ops: set[str] = set()
-        seen_top_level_ops: set[str] = set()
-        seen_pass_children: dict[str, set[str]] = defaultdict(set)
-        seen_addresses = set(mbd["addresses"])
-        for op_log in trace.layer_list:
-            normalized_calls = _paddle_op_module_calls(op_log.modules)
-            op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
-            op_log.module = op_log.modules[-1] if op_log.modules else None
-            parent_call_label: str | None = None
-            for module_index, (address, call_index) in enumerate(normalized_calls):
-                call_label = f"{address}:{call_index}"
-                if mbd["module_num_calls"][address] < call_index:
-                    mbd["module_num_calls"][address] = call_index
-                mbd["module_num_tensors"][address] += 1
-                mbd["module_call_index_tensors"][call_label] += 1
-                if op_log.layer_label not in seen_layers[address]:
-                    seen_layers[address].add(op_log.layer_label)
-                    mbd["module_layers"][address].append(op_log.layer_label)
-                if op_log.label not in seen_pass_layers[call_label]:
-                    seen_pass_layers[call_label].add(op_log.label)
-                    mbd["module_pass_layers"][call_label].append(op_log.label)
-                if address not in seen_addresses:
-                    seen_addresses.add(address)
-                    mbd["addresses"].append(address)
-                if call_label not in seen_module_ops:
-                    seen_module_ops.add(call_label)
-                    mbd["module_ops"].append(call_label)
-                if module_index == 0:
-                    if call_label not in seen_top_level_ops:
-                        seen_top_level_ops.add(call_label)
-                        mbd["top_level_module_ops"].append(call_label)
-                    if address != "self" and address not in mbd["top_level_modules"]:
-                        mbd["top_level_modules"].append(address)
-                elif (
-                    parent_call_label is not None
-                    and call_label not in seen_pass_children[parent_call_label]
-                ):
-                    seen_pass_children[parent_call_label].add(call_label)
-                    mbd["module_pass_children"][parent_call_label].append(call_label)
-                parent_call_label = call_label
-
-    def _attach_function_root_module(self, trace: Trace) -> None:
-        """Attach a function-root module accessor to ``trace``."""
-
-        mbd = trace._module_build_data
-        mbd["top_level_modules"] = ["self"]
-        mbd["top_level_module_ops"] = ["self:1"]
-        trace._module_metadata = {
-            "self": {
-                "cls": None,
-                "class_name": trace.model_class_name,
-                "class_qualname": trace.model_class_qualname,
-                "all_addresses": ["self"],
-                "training": False,
-            }
-        }
-        root = _build_root_module_log(trace, {}, mbd)
-        trace._module_logs = ModuleAccessor({"self": root})
+        attach_object_module_logs(
+            trace,
+            tree,
+            normalize_module_calls=_paddle_op_module_calls,
+            metadata_top_level=_paddle_metadata_top_level,
+            op_top_level=_paddle_op_top_level,
+            training_mode=_paddle_training_mode,
+        )
 
     def _iter_tensors_with_paths(
         self,
@@ -1700,6 +1577,31 @@ def _attach_paddle_op_params(
     seen_param_barcodes.update(param.barcode for param in params)
 
 
+def _attach_paddle_op_params_for_finalize(
+    op_log: Any,
+    trace: Trace,
+    seen_param_barcodes: set[str],
+) -> None:
+    """Attach Paddle params through the shared finalization hook.
+
+    Parameters
+    ----------
+    op_log:
+        Operation log being finalized.
+    trace:
+        Trace whose parameter accessor owns Paddle param logs.
+    seen_param_barcodes:
+        Param barcodes already attached to earlier ops.
+
+    Returns
+    -------
+    None
+        Mutates ``op_log`` in place when new params are attached.
+    """
+
+    _attach_paddle_op_params(op_log, trace.param_logs, seen_param_barcodes)
+
+
 def _paddle_op_module_calls(value: Any) -> tuple[tuple[str, int], ...]:
     """Normalize an op's raw module tuple list."""
 
@@ -1714,6 +1616,66 @@ def _paddle_op_module_calls(value: Any) -> tuple[tuple[str, int], ...]:
         if separator and index_text.isdigit():
             calls.append((address, int(index_text)))
     return tuple(calls)
+
+
+def _paddle_metadata_top_level(
+    address: str,
+    metadata: dict[str, Any],
+    metadata_by_address: dict[str, dict[str, Any]],
+) -> bool:
+    """Return whether a Paddle metadata address is top-level.
+
+    Parameters
+    ----------
+    address:
+        Module address from the discovered Paddle module tree.
+    metadata:
+        Metadata for ``address``, unused by Paddle.
+    metadata_by_address:
+        Complete module metadata mapping.
+
+    Returns
+    -------
+    bool
+        True when the nearest discovered parent is ``"self"``.
+    """
+
+    del metadata
+    return address != "self" and _nearest_metadata_parent(address, metadata_by_address) == "self"
+
+
+def _paddle_op_top_level(address: str) -> bool:
+    """Return whether a Paddle op module address is top-level.
+
+    Parameters
+    ----------
+    address:
+        Module address observed in an op call stack.
+
+    Returns
+    -------
+    bool
+        True for every non-root first frame, matching the previous Paddle loop.
+    """
+
+    return address != "self"
+
+
+def _paddle_training_mode(metadata: dict[str, Any]) -> bool:
+    """Return Paddle module training state from metadata.
+
+    Parameters
+    ----------
+    metadata:
+        Module metadata from ``PaddleModuleTree``.
+
+    Returns
+    -------
+    bool
+        Stored training-state flag, defaulting to ``False``.
+    """
+
+    return bool(metadata.get("training", False))
 
 
 def _resolve_paddle_module_identity_mode(
@@ -1922,36 +1884,7 @@ def _default_if_missing(value: Any, default: Any) -> Any:
 def _reject_extra_kwargs(extra_kwargs: dict[str, Any]) -> None:
     """Reject explicit unsupported public kwargs that reach Paddle capture."""
 
-    inert_values = {
-        "lookback": 0,
-        "lookback_payload_policy": "metadata_only",
-        "capture": None,
-        "save": None,
-        "intervene": None,
-        "halt": None,
-        "storage": None,
-        "streaming": None,
-        "inference_only": False,
-        "cache": False,
-        "stop_after": None,
-        "raise_on_nan": False,
-        "profile": False,
-        "recipes": None,
-        "payload_policy": None,
-        "save_preview": None,
-        "chunk_size": None,
-        "chunk_paths": None,
-    }
-    unsupported = {
-        key: value
-        for key, value in extra_kwargs.items()
-        if value is not MISSING
-        and value not in (None, False)
-        and inert_values.get(key, object()) != value
-    }
-    if unsupported:
-        names = ", ".join(sorted(unsupported))
-        raise BackendUnsupportedError(f"Paddle backend preview does not support: {names}.")
+    reject_extra_trace_kwargs(extra_kwargs, PADDLE_EXTRA_KWARG_POLICY)
 
 
 class _PaddleIntermediateTapObserver:
