@@ -1797,16 +1797,19 @@ def test_functional_after_submodule_not_box():
 # =============================================================================
 
 
-def test_output_layer_saved_with_layers_to_save():
+def test_output_layer_saved_with_layers_to_save() -> None:
     """Output layers should have out even when layers_to_save is a subset (issue #46).
 
     The output layer copies out from its parent, so the parent must
     also be saved during the fast pass.
     """
-    model = example_models.FunctionalAfterSubmodule()
+    model = torch.nn.Sequential(
+        torch.nn.Linear(5, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2),
+    )
     x = torch.rand(2, 5)
-    # Save only the relu layer (not explicitly the output)
-    mh = trace(model, x, layers_to_save=["relu_1"])
+    mh = trace(model, x, layers_to_save=["relu"])
     for label in mh.output_layers:
         entry = mh[label]
         assert entry.out is not None, f"Output layer {label} should have out"

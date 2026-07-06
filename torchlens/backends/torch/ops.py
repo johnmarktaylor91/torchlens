@@ -2869,6 +2869,85 @@ def _get_parent_contents(
     raise ValueError("Parent layer not found in function arguments.")
 
 
+def _fast_raw_index_lookup(self: "Trace") -> dict[int, Any]:
+    """Return a raw-index lookup for the postprocessed exhaustive graph.
+
+    Parameters
+    ----------
+    self
+        Trace currently being refreshed in fast mode.
+
+    Returns
+    -------
+    dict[int, Any]
+        Mapping from raw realtime index to the retained operation entry.
+    """
+
+    lookup = getattr(self, "_fast_raw_index_lookup", None)
+    if isinstance(lookup, dict):
+        return lookup
+
+    lookup = {int(op.raw_index): op for op in self.layer_list}
+    self._fast_raw_index_lookup = lookup
+    return lookup
+
+
+def _align_fast_label_after_skipped_buffers(
+    self: "Trace",
+    layer_type: str,
+    type_index: int,
+    raw_index: int,
+    label_raw: str,
+) -> str:
+    """Advance fast counters across exhaustive-only buffer write records.
+
+    BatchNorm buffer writes are tracked during the exhaustive pass, while the
+    fast pass intentionally does not reinstall the buffer-write tracker.  When
+    retained buffer rows sit between the current fast counter and the next real
+    operation, consume only those buffer rows and then require the same operation
+    type and type index to line up.
+
+    Parameters
+    ----------
+    self
+        Trace currently being refreshed in fast mode.
+    layer_type
+        Normalized layer type for the current decorated operation.
+    type_index
+        Per-type index already assigned to the current operation.
+    raw_index
+        Realtime index already assigned to the current operation.
+    label_raw
+        Raw label reconstructed from the current counters.
+
+    Returns
+    -------
+    str
+        Raw label after conservative buffer-write alignment.
+    """
+
+    if label_raw in self._raw_to_final_layer_labels:
+        return label_raw
+
+    lookup = _fast_raw_index_lookup(self)
+    skipped_buffer_type_index = int(self._raw_layer_type_counter["buffer"])
+    search_index = raw_index
+    while True:
+        recorded = lookup.get(search_index)
+        if recorded is None:
+            return label_raw
+        recorded_type = str(recorded.layer_type)
+        recorded_type_index = int(getattr(recorded, "type_index", -1))
+        if recorded_type == layer_type and recorded_type_index == type_index:
+            self._layer_counter = int(recorded.raw_index)
+            self._raw_layer_type_counter["buffer"] = skipped_buffer_type_index
+            return str(recorded._label_raw)
+        if recorded_type != "buffer":
+            return label_raw
+        skipped_buffer_type_index = max(skipped_buffer_type_index, recorded_type_index)
+        search_index += 1
+
+
 def _emit_fast_operation_events(
     self: "Trace",
     func: Callable[..., Any],
@@ -2929,6 +3008,19 @@ def _emit_fast_operation_events(
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         # Skip orphans — these were pruned from the graph during postprocessing.
         if _label_raw in self._orphan_labels:
+            continue
+        _label_raw = _align_fast_label_after_skipped_buffers(
+            self,
+            layer_type,
+            type_index,
+            raw_index,
+            _label_raw,
+        )
+        if _label_raw not in self._raw_to_final_layer_labels and (
+            str(func_name).endswith("_") or func_name == "identity"
+        ):
+            self._layer_counter -= 1
+            self._raw_layer_type_counter[layer_type] -= 1
             continue
         # Map parent raw labels → final labels for graph-change verification.
         parent_layer_labels_raw = get_label_list(arg_tensors)

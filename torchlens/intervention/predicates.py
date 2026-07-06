@@ -69,6 +69,7 @@ def when(
             return decision
         return None
 
+    _predicate.selector = condition  # type: ignore[attr-defined]
     return _predicate
 
 

@@ -47,6 +47,42 @@ class RecurrentToy(nn.Module):
         return x
 
 
+class FinalLabelDriftToy(nn.Module):
+    """Model whose raw and final labels differ after the input source."""
+
+    def __init__(self) -> None:
+        """Initialize a linear layer used before repeated relu ops."""
+
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run ops whose final labels are offset from raw labels."""
+
+        x = self.fc(x)
+        x = torch.relu(x)
+        return torch.relu(x)
+
+
+class IntegerSelectorToy(nn.Module):
+    """Model where raw ordinals and per-type indices do not match layer-list indices."""
+
+    def __init__(self) -> None:
+        """Initialize three linear layers."""
+
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+        self.fc3 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a chain with mixed repeated operation types."""
+
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return self.fc3(x)
+
+
 def _pseudo_random_subset(ctx: RecordContext) -> bool:
     """Select a deterministic subset of operation contexts."""
 
@@ -70,7 +106,7 @@ def _assert_saved_ops_match_full_trace(
     ]
     assert saved_ops
     for saved_op in saved_ops:
-        expected = full[saved_op.label].out
+        expected = full.layer_dict_all_keys[saved_op._label_raw].out
         assert torch.equal(saved_op.out, expected), saved_op.label
     for unsaved_op in selective.layer_list:
         if unsaved_op.layer_type in {"input", "output"} or unsaved_op.has_saved_activation:
@@ -131,6 +167,72 @@ def test_selective_save_oracle_matches_full_trace_for_recurrent_passes() -> None
     x = torch.randn(2, 4)
     _assert_saved_ops_match_full_trace(PredicateToy(), x, _pseudo_random_subset)
     _assert_saved_ops_match_full_trace(RecurrentToy(passes=4), x, _pseudo_random_subset)
+
+
+def test_layers_to_save_retains_output_parent_when_selector_misses_parent() -> None:
+    """Absorbed selective layers_to_save keeps output payloads available."""
+
+    model = PredicateToy()
+    x = torch.randn(2, 4)
+    log = tl.trace(model, x, layers_to_save=["relu"], random_seed=17)
+
+    output = log["output_1"]
+    assert output.has_saved_activation is True
+    assert isinstance(output.out, torch.Tensor)
+    assert any(
+        op.layer_type == "add" and op.has_saved_activation
+        for op in log.layer_list
+        if op.layer_type not in {"input", "output"}
+    )
+
+
+@pytest.mark.parametrize(
+    ("selector", "expected_relu_labels"),
+    [
+        ("relu", {"relu_1_2", "relu_2_3"}),
+        ("relu_1", {"relu_1_2", "relu_2_3"}),
+        ("relu_1_2", {"relu_1_2", "relu_2_3"}),
+        ("relu_1_2:1", {"relu_1_2", "relu_2_3"}),
+        ("relu_1_3", {"relu_1_2", "relu_2_3"}),
+        ("relu_1_3_raw", {"relu_1_2", "relu_2_3"}),
+        ("relu_2", {"relu_2_3"}),
+        ("relu_2_3", {"relu_2_3"}),
+        ("relu_2_3:1", {"relu_2_3"}),
+        ("relu_2_4", {"relu_2_3"}),
+        ("relu_2_4_raw", {"relu_2_3"}),
+    ],
+)
+def test_layers_to_save_matches_legacy_label_spellings(
+    selector: str,
+    expected_relu_labels: set[str],
+) -> None:
+    """Absorbed label matching accepts legacy final, short, raw, and pass forms."""
+
+    model = FinalLabelDriftToy()
+    x = torch.randn(2, 4)
+    log = tl.trace(model, x, layers_to_save=[selector], random_seed=19)
+
+    saved_relu_labels = {
+        op.layer_label
+        for op in log.layer_list
+        if op.layer_type == "relu" and op.has_saved_activation
+    }
+    assert saved_relu_labels == expected_relu_labels
+
+
+def test_integer_layers_to_save_uses_single_legacy_layer_index() -> None:
+    """Integer selectors resolve through the legacy layer-list index only."""
+
+    model = IntegerSelectorToy()
+    x = torch.randn(2, 4)
+    log = tl.trace(model, x, layers_to_save=[2], random_seed=23)
+
+    saved_compute_labels = [
+        op.layer_label
+        for op in log.layer_list
+        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+    ]
+    assert saved_compute_labels == ["relu_1_2", "linear_3_5"]
 
 
 def test_layers_to_save_unqualified_module_label_saves_all_passes() -> None:

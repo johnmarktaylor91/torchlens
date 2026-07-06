@@ -240,3 +240,21 @@ def test_followed_by_trace_supported_record_rejected_and_bad_shapes_error() -> N
         _ = ~tl.followed_by(tl.func("relu"))
     with pytest.raises(SelectorCompositionError):
         _ = tl.func("linear") | tl.followed_by(tl.func("relu"))
+
+
+def test_followed_by_intervene_and_halt_fail_at_capture_start() -> None:
+    """followed_by selectors on intervene/halt raise preflight capability errors."""
+
+    x = torch.ones(2, 4)
+    selector = tl.func("linear") & tl.followed_by(tl.func("relu"))
+
+    with pytest.raises(PredicateError, match="trace\\(intervene=.*does not support"):
+        tl.trace(
+            TinyLinear(),
+            x,
+            intervene=tl.when(selector, tl.add(0.0)),
+        )
+    with pytest.raises(PredicateError, match="trace\\(halt=.*does not support"):
+        tl.trace(TinyLinear(), x, halt=selector)
+    with pytest.raises(PredicateError, match="unsupported followed_by predicate shape"):
+        tl.trace(TinyLinear(), x, halt=tl.followed_by(tl.func("relu")))

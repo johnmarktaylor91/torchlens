@@ -170,6 +170,26 @@ def test_chunk_size_with_save_predicate_appends_saved_payloads_only() -> None:
         _ = trace["input_1"].out
 
 
+def test_chunk_size_with_layers_to_save_keeps_selective_scope() -> None:
+    """Chunked absorbed layers_to_save passes the combined predicate to chunks."""
+
+    model = DeterministicToy().eval()
+    trace = tl.trace(model, _toy_inputs(), chunk_size=4, layers_to_save=["relu"])
+
+    relu = trace.find_sites(tl.func("relu")).first()
+    assert relu.out.shape[0] == 10
+    assert trace.layers_to_save != "all"
+    assert "relu_1_2:1" in trace.layers_to_save
+    saved_types = {
+        op.layer_type
+        for op in trace.layer_list
+        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+    }
+    assert saved_types == {"relu", "linear"}
+    with pytest.raises(ValueError, match="was not saved"):
+        _ = trace["linear_1_1"].out
+
+
 def test_explicit_path_keeps_shared_matrix_unsplit() -> None:
     """Explicit chunk paths split only selected leaves."""
 

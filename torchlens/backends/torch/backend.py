@@ -11,7 +11,9 @@ import torch
 
 from ... import _state
 from ...data_classes.internal_types import FuncExecutionContext
-from ...fastlog.types import ModuleStackFrame
+from ..._io import BlobRef as PortableBlobRef
+from ...fastlog.types import CaptureSpec, ModuleStackFrame, StorageIntent
+from ...ir import replace_op_event
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.container import ContainerSpec, OutputPathComponent
@@ -79,6 +81,171 @@ def _get_input_arg_names(model: torch.nn.Module, input_args: list[Any]) -> list[
         for i in range(len(input_arg_names), len(input_args)):
             input_arg_names.append(f"{spec.varargs}_{i}")
     return input_arg_names
+
+
+def _tensor_memory_bytes(tensor: torch.Tensor) -> int:
+    """Return the byte size of a tensor payload.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor whose payload memory should be measured.
+
+    Returns
+    -------
+    int
+        Number of bytes occupied by the tensor storage view.
+    """
+
+    return int(tensor.nelement() * tensor.element_size())
+
+
+def _write_output_parent_blob(
+    trace: "Trace",
+    label_raw: str,
+    payload: torch.Tensor | None,
+    kind: str,
+) -> PortableBlobRef | None:
+    """Write a promoted output-parent payload to the active bundle writer.
+
+    Parameters
+    ----------
+    trace:
+        Trace that may own an output bundle writer.
+    label_raw:
+        Raw label for the output-parent operation.
+    payload:
+        Tensor payload to persist, if any.
+    kind:
+        Bundle payload kind, such as ``"out"`` or ``"transformed_out"``.
+
+    Returns
+    -------
+    PortableBlobRef | None
+        Blob reference for the persisted payload, or ``None`` when no payload
+        was written.
+    """
+
+    writer = getattr(trace, "_out_writer", None)
+    if writer is None or payload is None:
+        return None
+    blob_id = writer.next_blob_id()
+    writer.write_blob(blob_id, payload, kind=kind, label=label_raw)
+    return PortableBlobRef(blob_id=blob_id, kind=kind)
+
+
+def _promote_layers_to_save_output_parent(
+    trace: "Trace",
+    event: OpEvent,
+    tensor: torch.Tensor,
+) -> OpEvent:
+    """Attach a saved payload to an absorbed ``layers_to_save`` output parent.
+
+    Parameters
+    ----------
+    trace:
+        Predicate-mode trace whose selective ``layers_to_save`` request must
+        preserve the legacy output-parent rule.
+    event:
+        Existing operation event for the tensor returned by the model.
+    tensor:
+        Live model-output tensor corresponding to ``event``.
+
+    Returns
+    -------
+    OpEvent
+        Event updated with output-parent state and, when required, saved payload
+        references.
+    """
+
+    if (
+        not getattr(trace, "_retain_layers_to_save_output_parents", False)
+        or getattr(trace, "_predicate_save_options", None) is None
+        or event.output.has_saved_activation
+    ):
+        return dataclasses.replace(event, is_output_parent=True)
+
+    from ...capture.projections import _record_context_from_event
+    from ...fastlog._storage_resolver import _resolve_storage
+
+    ctx = dataclasses.replace(_record_context_from_event(event), is_output_parent=True)
+    options = trace._predicate_save_options
+    streaming = options.streaming
+    intent = StorageIntent(
+        in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
+        on_disk=streaming is not None and streaming.bundle_path is not None,
+    )
+    output_device = getattr(trace, "output_device", None)
+    if output_device == "same":
+        output_device = None
+    spec = CaptureSpec(
+        save_out=True,
+        save_metadata=True,
+        keep_grad=False,
+        device=output_device,
+        save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
+    )
+    ram_payload, disk_payload, transformed_ram_payload, transformed_disk_payload = _resolve_storage(
+        tensor,
+        spec,
+        intent,
+        activation_transform=getattr(trace, "activation_transform", None),
+        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        ctx=ctx,
+        kind="activation",
+    )
+    raw_blob_ref = _write_output_parent_blob(trace, event.label_raw, disk_payload, "out")
+    transformed_blob_ref = _write_output_parent_blob(
+        trace,
+        event.label_raw,
+        transformed_disk_payload,
+        "transformed_out",
+    )
+    tensor_ref = dataclasses.replace(
+        event.output.tensor,
+        shape=tuple(tensor.shape),
+        dtype=str(tensor.dtype),
+        device=str(tensor.device),
+        requires_grad=tensor.requires_grad,
+        memory=_tensor_memory_bytes(tensor),
+        payload=ram_payload,
+        blob_ref=cast(Any, raw_blob_ref),
+        backend_handle_id=str(id(tensor)),
+    )
+    transformed_ref = event.output.transformed_tensor
+    if transformed_ram_payload is not None:
+        transformed_ref = TensorRef(
+            label_raw=event.label_raw,
+            shape=tuple(transformed_ram_payload.shape),
+            dtype=str(transformed_ram_payload.dtype),
+            device=str(transformed_ram_payload.device),
+            requires_grad=transformed_ram_payload.requires_grad,
+            memory=_tensor_memory_bytes(transformed_ram_payload),
+            payload=transformed_ram_payload,
+            blob_ref=cast(Any, transformed_blob_ref),
+            backend_handle_id=str(id(transformed_ram_payload)),
+        )
+    elif transformed_disk_payload is not None and transformed_ref is not None:
+        transformed_ref = dataclasses.replace(
+            transformed_ref,
+            blob_ref=cast(Any, transformed_blob_ref),
+        )
+    output_ref = dataclasses.replace(
+        event.output,
+        tensor=tensor_ref,
+        transformed_tensor=transformed_ref,
+        has_saved_activation=True,
+    )
+    policy = dataclasses.replace(event.policy, save_payload=True)
+    return dataclasses.replace(
+        event,
+        output=output_ref,
+        policy=policy,
+        predicate_matched=True,
+        is_output_parent=True,
+        capture_spec=spec,
+        record_context=ctx,
+    )
 
 
 class TorchBackend:
@@ -467,12 +634,20 @@ class TorchBackend:
                 self_trace.output_layers.append(_label_raw)
                 event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
                 if event is not None:
-                    updated_event = dataclasses.replace(event, is_output_parent=True)
-                    self_trace.capture_events.op_event_by_label_raw[_label_raw] = updated_event
-                    for index, existing_event in enumerate(self_trace.capture_events.op_events):
-                        if existing_event.label_raw == _label_raw:
-                            self_trace.capture_events.op_events[index] = updated_event
-                            break
+                    updated_event = _promote_layers_to_save_output_parent(
+                        self_trace,
+                        event,
+                        t,
+                    )
+                    replace_op_event(
+                        self_trace,
+                        _label_raw,
+                        is_output_parent=True,
+                        output=updated_event.output,
+                        policy=updated_event.policy,
+                        predicate_matched=updated_event.predicate_matched,
+                        capture_spec=updated_event.capture_spec,
+                    )
 
         return output_tensors, output_tensor_addresses
 

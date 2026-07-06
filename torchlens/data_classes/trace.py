@@ -878,7 +878,6 @@ class Trace(
         "tlspec_version": FieldPolicy.KEEP,
         "_tracing_finished": FieldPolicy.KEEP,
         "capture_mode": FieldPolicy.KEEP,
-        "_capture_producer_policy": FieldPolicy.DROP,
         "halted": FieldPolicy.KEEP,
         "halt_reason": FieldPolicy.KEEP,
         "halt_frontier": FieldPolicy.KEEP,

@@ -1675,6 +1675,7 @@ def _run_model_and_save_specified_outs(
     halt_predicate: HaltPredicateFn | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
+    retain_output_parents_for_layers_to_save: bool = False,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -1766,6 +1767,9 @@ def _run_model_and_save_specified_outs(
         lookback_payload_policy: Candidate payload retention policy for retroactive
             ``followed_by`` saves. Memory cost is bounded by ``lookback`` times
             the candidate payload size.
+        retain_output_parents_for_layers_to_save: Whether this predicate capture
+            originated from selective ``layers_to_save`` and must preserve the
+            legacy output-parent payload rule.
 
     Returns:
         Fully-populated Trace.
@@ -1871,6 +1875,8 @@ def _run_model_and_save_specified_outs(
     trace._defer_streaming_bundle_finalization = grad_storage_path is not None
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
+    if retain_output_parents_for_layers_to_save:
+        trace._retain_layers_to_save_output_parents = True
     if save_predicate is not None or intervene_predicate is not None or halt_predicate is not None:
         predicate_history_size = lookback if lookback > 0 else 8
         default_op = save_predicate is None and layers_to_save == "all"
@@ -2087,7 +2093,7 @@ def _is_selective_label_save(value: object) -> bool:
 
 
 def _label_save_candidates(ctx: RecordContext) -> set[str]:
-    """Return capture-time label spellings that can identify ``ctx``.
+    """Return legacy lookup-key spellings that can identify ``ctx``.
 
     Parameters
     ----------
@@ -2110,13 +2116,14 @@ def _label_save_candidates(ctx: RecordContext) -> set[str]:
         if ctx.type_index is not None:
             candidates.add(f"{ctx.layer_type}_{ctx.type_index}")
             candidates.add(f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_index}")
-            pass_index = ctx.module_pass_index if ctx.module_pass_index is not None else 1
+            pass_index = ctx.pass_index
             indexed_candidates = {f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_index}"}
             if ctx.raw_index is not None:
                 indexed_candidates.add(f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}")
                 if ctx.raw_index > 0:
                     indexed_candidates.add(f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index - 1}")
             for candidate in indexed_candidates:
+                candidates.add(candidate)
                 candidates.add(f"{candidate}:{pass_index}")
     if ctx.func_name is not None:
         candidates.add(ctx.func_name)
@@ -2163,7 +2170,7 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
 
         if ctx.kind != "op":
             return False
-        if ctx.raw_index in requested_ints or ctx.type_index in requested_ints:
+        if ctx.raw_index in requested_ints:
             return True
         candidates = _label_save_candidates(ctx)
         if candidates & requested_strings:
@@ -2221,6 +2228,34 @@ def _layers_to_save_has_negative_index(layers_to_save: object) -> bool:
         return any(
             isinstance(value, int) and not isinstance(value, bool) and value < 0
             for value in layers_to_save
+        )
+    return False
+
+
+def _layers_to_save_has_integer_selector(layers_to_save: object) -> bool:
+    """Return whether ``layers_to_save`` contains a legacy integer selector.
+
+    Parameters
+    ----------
+    layers_to_save
+        Public ``layers_to_save`` selection.
+
+    Returns
+    -------
+    bool
+        ``True`` when the selection contains an integer layer-list index.
+    """
+
+    if isinstance(layers_to_save, bool):
+        return False
+    if isinstance(layers_to_save, int):
+        return True
+    if isinstance(layers_to_save, collections.abc.Iterable) and not isinstance(
+        layers_to_save,
+        str,
+    ):
+        return any(
+            isinstance(value, int) and not isinstance(value, bool) for value in layers_to_save
         )
     return False
 
@@ -2842,6 +2877,7 @@ def _trace_torch_model(
     capture_output_structure: bool | MissingType = MISSING,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
+    retain_output_parents_for_layers_to_save: bool = False,
 ) -> Trace:
     """Run the registry-owned torch trace implementation.
 
@@ -3101,6 +3137,7 @@ def _trace_torch_model(
         and (
             should_save_grads
             or _layers_to_save_mentions_output(layers_to_save)
+            or _layers_to_save_has_integer_selector(layers_to_save)
             or _layers_to_save_has_negative_index(layers_to_save)
             or _layers_to_save_mentions_identity(layers_to_save)
         )
@@ -3110,13 +3147,26 @@ def _trace_torch_model(
         layers_predicate = _make_layers_to_save_predicate(layers_to_save)
         save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
         layers_to_save = "all"
-    if save_predicate is not None:
+    if save_predicate is not None or intervene is not None or halt is not None:
         from .capture.predicates import validate_followed_by_capability
 
+    if save_predicate is not None:
         validate_followed_by_capability(
             save_predicate,
             api_name="trace(save=...)",
             supports_retroactive=True,
+        )
+    if intervene is not None:
+        validate_followed_by_capability(
+            intervene,
+            api_name="trace(intervene=...)",
+            supports_retroactive=False,
+        )
+    if halt is not None:
+        validate_followed_by_capability(
+            halt,
+            api_name="trace(halt=...)",
+            supports_retroactive=False,
         )
     if intervention_ready and uses_two_pass:
         raise InterventionReadyConflictError(
@@ -3262,7 +3312,7 @@ def _trace_torch_model(
             compute_input_output_distances=compute_input_output_distances,
             recurrence_detection=recurrence_detection,
             capture=None,
-            save=save,
+            save=save_predicate,
             intervene=None,
             halt=halt,
             lookback=lookback,
@@ -3287,6 +3337,7 @@ def _trace_torch_model(
             capture_output_structure=MISSING,
             chunk_size=None,
             chunk_paths=None,
+            retain_output_parents_for_layers_to_save=uses_selective_layers_to_save,
         )
         initial_chunk_size = min(normalized_chunk_size, chunk_plan.total_size)
         initial_record = {
@@ -3343,7 +3394,7 @@ def _trace_torch_model(
                 compute_input_output_distances=compute_input_output_distances,
                 recurrence_detection=recurrence_detection,
                 capture=None,
-                save=save,
+                save=save_predicate,
                 intervene=None,
                 halt=halt,
                 lookback=lookback,
@@ -3368,6 +3419,7 @@ def _trace_torch_model(
                 capture_output_structure=MISSING,
                 chunk_size=None,
                 chunk_paths=None,
+                retain_output_parents_for_layers_to_save=uses_selective_layers_to_save,
             )
             appended_chunk_size = min(
                 normalized_chunk_size,
@@ -3387,6 +3439,14 @@ def _trace_torch_model(
         trace.last_run["chunk_size"] = normalized_chunk_size
         trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths_value)
         trace.profile_enabled = profile_enabled
+        if uses_selective_layers_to_save:
+            trace._layer_nums_to_save = [
+                op.raw_index
+                for op in trace.layer_list
+                if op.has_saved_activation and op.layer_type not in {"input", "output"}
+            ]
+            if not save_arg_values:
+                trace._replay_arg_version_data_complete = False
         if layer_visualizers_value:
             _render_layer_visualizers(trace, layer_visualizers_value)
         if unwrap_when_done:
@@ -3463,6 +3523,9 @@ def _trace_torch_model(
             halt_predicate=halt,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
+            retain_output_parents_for_layers_to_save=(
+                retain_output_parents_for_layers_to_save or uses_selective_layers_to_save
+            ),
         )
         trace.profile_enabled = profile_enabled
         trace.save_grads = save_grads_policy

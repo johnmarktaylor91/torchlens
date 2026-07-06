@@ -244,6 +244,9 @@ def _is_supported_followed_by_predicate(predicate: Any) -> bool:
         ``True`` for ``candidate & tl.followed_by(successor)``.
     """
 
+    selector = getattr(predicate, "selector", None)
+    if selector is not None:
+        return _is_supported_followed_by_predicate(selector)
     if not isinstance(predicate, CompositeSelector) or predicate.operator != "and":
         return False
     left, right = predicate.selectors
