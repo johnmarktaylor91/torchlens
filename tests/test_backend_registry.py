@@ -7,7 +7,7 @@ import builtins
 import inspect
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import torch
@@ -221,8 +221,44 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
     assert explicit.layer_labels == legacy.layer_labels
 
 
+def test_capture_backend_factory_checked_at_registration() -> None:
+    """Registration rejects incomplete shared capture protocol adapters."""
+
+    def bad_capture_backend() -> CaptureBackend:
+        """Return an object missing the shared capture protocol.
+
+        Returns
+        -------
+        CaptureBackend
+            Deliberately invalid adapter for conformance coverage.
+        """
+
+        return cast(CaptureBackend, object())
+
+    with pytest.raises(TypeError, match="capture_backend.*missing"):
+        register_backend_spec(
+            BackendSpec(
+                name="fake_conformance",
+                can_handle=_fake_can_handle,
+                capture_trace=_fake_capture_trace,
+                validate_entry=_fake_validate_entry,
+                validate_trace=_fake_validate_trace,
+                capabilities=BackendCapabilities(
+                    backward_capture=False,
+                    validation_replay=False,
+                    fastlog=False,
+                    interventions=False,
+                    rng_replay=False,
+                    payload_materialization=False,
+                    streaming=False,
+                ),
+                capture_backend=bad_capture_backend,
+            )
+        )
+
+
 def test_capability_sources_agree_for_preview_backends() -> None:
-    """Default specs and per-backend capability mirrors stay in lockstep."""
+    """Compatibility capability modules read from the registered specs."""
 
     jax_spec = get_backend_spec("jax")
     mlx_spec = get_backend_spec("mlx")

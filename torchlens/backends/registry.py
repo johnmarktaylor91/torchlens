@@ -9,6 +9,12 @@ from ._protocol import CaptureBackend
 
 
 BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "tf", "fake"] | str
+"""Backend name accepted by public APIs.
+
+The ``"fake"`` literal is reserved for tests and downstream conformance fixtures
+that register process-local specs; TorchLens intentionally does not ship a
+default fake backend.
+"""
 CanHandleFn: TypeAlias = Callable[[object, object, dict[Any, Any] | None], bool]
 CaptureTraceFn: TypeAlias = Callable[..., Any]
 ValidateEntryFn: TypeAlias = Callable[..., bool]
@@ -35,8 +41,8 @@ TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 """Ordered public trace-option capability epochs.
 
-Each epoch must update the registry spec, per-backend capability mirrors,
-``CaptureOptions``, cache-key coverage, docs, and tests in one patch.
+Each epoch must update registry capabilities, ``CaptureOptions``, cache-key
+coverage, docs, and tests in one patch.
 """
 
 PUBLIC_OPTION_SPINE_TRACE_OPTIONS: tuple[str, ...] = tuple(
@@ -236,6 +242,81 @@ class BackendSpec:
 
 _REGISTRY: dict[str, BackendSpec] = {}
 
+_CAPTURE_BACKEND_REQUIRED_ATTRIBUTES: tuple[str, ...] = (
+    "active_logging",
+    "apply_live_hooks",
+    "build_record_context",
+    "cleanup_failed_forward_session",
+    "cleanup_forward_memory",
+    "cleanup_halted_forward_session",
+    "cleanup_model_session",
+    "copy_replacement_metadata",
+    "detect_backend_semantics",
+    "detect_in_place_isolation_required",
+    "emit_function_outputs",
+    "extract_and_mark_outputs",
+    "fetch_label_move_input_tensors",
+    "finalize_forward_session",
+    "inference_context",
+    "is_parameter",
+    "is_tensor",
+    "is_wrapped",
+    "isolate_same_object_returns",
+    "log_source_tensor",
+    "mark_same_object_candidates",
+    "name",
+    "pause_logging",
+    "pop_module_frame",
+    "prepare_model",
+    "prepare_model_once",
+    "prepare_model_session",
+    "push_existing_module_frame",
+    "restore_rng",
+    "safe_copy",
+    "set_tensor_label",
+    "setup_inputs_and_device",
+    "seed_rng",
+    "set_capture_producer_policy",
+    "snapshot_autocast",
+    "snapshot_rng",
+    "supports_backward_capture",
+    "tensor_ref",
+    "unwrap",
+    "wrap",
+)
+"""Runtime attributes required when a spec exposes a shared capture adapter."""
+
+
+def _validate_capture_backend_factory(spec: BackendSpec) -> None:
+    """Validate a supplied shared capture backend factory.
+
+    Parameters
+    ----------
+    spec:
+        Backend spec being registered.
+
+    Returns
+    -------
+    None
+        Returns when no factory is supplied or all required attributes exist.
+    """
+
+    if spec.capture_backend is None:
+        return
+    try:
+        backend = spec.capture_backend()
+    except ImportError as exc:
+        if "partially initialized module" in str(exc):
+            return
+        raise
+    missing = [name for name in _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES if not hasattr(backend, name)]
+    if missing:
+        names = ", ".join(sorted(missing))
+        raise TypeError(
+            f"Backend {spec.name!r} capture_backend is missing CaptureBackend "
+            f"attribute(s): {names}."
+        )
+
 
 def register_backend_spec(spec: BackendSpec, *, replace: bool = False) -> None:
     """Register a backend spec.
@@ -257,6 +338,7 @@ def register_backend_spec(spec: BackendSpec, *, replace: bool = False) -> None:
     for name in names:
         if not replace and name in _REGISTRY:
             raise ValueError(f"Backend {name!r} is already registered.")
+    _validate_capture_backend_factory(spec)
     for name in names:
         _REGISTRY[name] = spec
 

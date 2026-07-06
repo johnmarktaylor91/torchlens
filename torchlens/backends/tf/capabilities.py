@@ -1,22 +1,25 @@
-"""Capability flags for the TensorFlow backend preview."""
+"""Registry-backed capability exports for the TensorFlow backend preview."""
 
 from __future__ import annotations
 
-from ..registry import TF_TRACE_OPTIONS
+from ..registry import get_backend_spec
 
-supports_backward_capture = False
-supports_fastlog = False
-supports_intervention = False
-supports_intermediate_derived_grads = False
-supports_payload_materialization = True
-supports_rng_replay = False
-supports_streaming = False
-supports_validation_replay = True
-input_container_structure = "paths_only"
-output_container_structure = "paths_only"
-module_identity_modes = ("function_root", "object_module")
-payload_policy = "array_payloads"
-trace_options = TF_TRACE_OPTIONS
+_SPEC = get_backend_spec("tf")
+_CAPABILITIES = _SPEC.capabilities
+
+supports_backward_capture = _CAPABILITIES.backward_capture
+supports_fastlog = _CAPABILITIES.fastlog
+supports_intervention = _CAPABILITIES.interventions
+supports_intermediate_derived_grads = _CAPABILITIES.intermediate_derived_grads
+supports_payload_materialization = _CAPABILITIES.payload_materialization
+supports_rng_replay = _CAPABILITIES.rng_replay
+supports_streaming = _CAPABILITIES.streaming
+supports_validation_replay = _CAPABILITIES.validation_replay
+input_container_structure = _CAPABILITIES.input_container_structure
+output_container_structure = _CAPABILITIES.output_container_structure
+module_identity_modes = _CAPABILITIES.module_identity_modes
+payload_policy = _SPEC.serialization_policy.payload_policy
+trace_options = _CAPABILITIES.trace_options
 
 __all__ = [
     "input_container_structure",
