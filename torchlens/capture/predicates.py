@@ -93,14 +93,16 @@ def _evaluate_keep_op(
     if options.keep_op is None:
         result = None
     else:
+        uses_supported_followed_by = _is_supported_followed_by_predicate(options.keep_op)
         result = _evaluate_retroactive_followed_by(ctx, options)
         if result is None:
-            result = options.keep_op(ctx)
+            result = False if uses_supported_followed_by else options.keep_op(ctx)
         if (
             result is False
             and ctx.kind == "op"
             and ctx.layer_type is not None
             and ctx.type_index is not None
+            and not uses_supported_followed_by
         ):
             alias_ctx = replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}")
             result = options.keep_op(alias_ctx)
@@ -226,6 +228,82 @@ def _evaluate_retroactive_followed_by(
         target_raw_labels=target_labels,
         spec=CaptureSpec(save_out=True, save_metadata=True),
     )
+
+
+def _is_supported_followed_by_predicate(predicate: Any) -> bool:
+    """Return whether ``predicate`` is the supported retroactive selector shape.
+
+    Parameters
+    ----------
+    predicate
+        Candidate save predicate.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``candidate & tl.followed_by(successor)``.
+    """
+
+    if not isinstance(predicate, CompositeSelector) or predicate.operator != "and":
+        return False
+    left, right = predicate.selectors
+    return (
+        isinstance(right, FollowedBySelector)
+        and isinstance(left, BaseSelector)
+        or isinstance(left, FollowedBySelector)
+        and isinstance(right, BaseSelector)
+    )
+
+
+def validate_followed_by_capability(
+    predicate: Any,
+    *,
+    api_name: str,
+    supports_retroactive: bool,
+) -> None:
+    """Raise a typed error when ``followed_by`` cannot run on this surface.
+
+    Parameters
+    ----------
+    predicate
+        Public save predicate to inspect.
+    api_name
+        User-facing API name for the error message.
+    supports_retroactive
+        Whether the capture surface can replace prior candidate events.
+
+    Returns
+    -------
+    None
+        Raises only for unsupported ``followed_by`` usage.
+    """
+
+    if not _predicate_contains_followed_by(predicate):
+        return
+    if not _is_supported_followed_by_predicate(predicate):
+        raise PredicateError(
+            "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
+            f"{api_name} received an unsupported followed_by predicate shape."
+        )
+    if not supports_retroactive:
+        raise PredicateError(
+            f"{api_name} does not support tl.followed_by(...) retroactive capture; "
+            "use trace(save=...) with lookback and lookback_payload_policy instead."
+        )
+
+
+def _predicate_contains_followed_by(predicate: Any) -> bool:
+    """Return whether a predicate tree contains ``FollowedBySelector``."""
+
+    if isinstance(predicate, FollowedBySelector):
+        return True
+    if isinstance(predicate, CompositeSelector):
+        left, right = predicate.selectors
+        return _predicate_contains_followed_by(left) or _predicate_contains_followed_by(right)
+    selector = getattr(predicate, "selector", None)
+    if selector is not None:
+        return _predicate_contains_followed_by(selector)
+    return False
 
 
 def _matching_recent_parent_labels(

@@ -19,6 +19,7 @@ from ..capture.projections import (
     _empty_recording,
     active_recording_state,
 )
+from ..capture.predicates import validate_followed_by_capability
 from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..ir import CaptureEvents
@@ -272,6 +273,11 @@ class Recorder:
             save_raw_gradients=save_raw_gradients,
         )
         validate_recording_options(self.options)
+        validate_followed_by_capability(
+            self.options.keep_op,
+            api_name="record(save=...)",
+            supports_retroactive=False,
+        )
         self._state: RecordingState | None = None
         self._recording: Recording | None = None
         self._capture_events: CaptureEvents | None = None

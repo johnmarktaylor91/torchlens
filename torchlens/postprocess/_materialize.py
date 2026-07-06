@@ -1666,6 +1666,10 @@ def _event_address(event: OpEvent) -> str | None:
     buffer_address = get_buffer_address(event.output.tensor.payload)
     if buffer_address is not None:
         return buffer_address
+    record_context = getattr(event, "record_context", None)
+    input_output_address = getattr(record_context, "input_output_address", None)
+    if isinstance(input_output_address, str):
+        return input_output_address
     if event.module_stack:
         return event.module_stack[-1].address
     return None

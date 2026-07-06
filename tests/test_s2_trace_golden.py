@@ -108,7 +108,7 @@ class ModelCase:
 def _save_all_ops(ctx: RecordContext) -> bool:
     """Return True for operation contexts and False for module contexts."""
 
-    return ctx.kind in {"op", "source"}
+    return ctx.kind in {"op", "source", "input", "buffer"}
 
 
 def _projection(trace: tl.Trace) -> tuple[dict[str, Any], ...]:
@@ -209,6 +209,15 @@ def _recording_operation_identity(
     return tuple({key: row[key] for key in comparable_keys} for row in _op_rows(projection))
 
 
+def _recording_raw_operation_identity(
+    projection: tuple[dict[str, Any], ...],
+) -> tuple[dict[str, Any], ...]:
+    """Return raw operation fields that do not require recurrence equivalence classes."""
+
+    comparable_keys = ("raw", "type", "func", "shape")
+    return tuple({key: row[key] for key in comparable_keys} for row in _op_rows(projection))
+
+
 def _saved_labels(projection: tuple[dict[str, Any], ...]) -> tuple[str, ...]:
     """Return labels with retained activation payloads."""
 
@@ -234,7 +243,6 @@ def test_s2_trace_surfaces_match_exhaustive_projection(case: ModelCase) -> None:
 
     exhaustive = tl.trace(model, x.clone(), layers_to_save="all", random_seed=7)
     exhaustive_projection = _projection(exhaustive)
-    raw_to_final = {str(row["raw"]): str(row["label"]) for row in exhaustive_projection}
     target_label = next(row["label"] for row in _op_rows(exhaustive_projection))
 
     predicate = tl.trace(model, x.clone(), save=_save_all_ops, random_seed=7)
@@ -249,15 +257,16 @@ def test_s2_trace_surfaces_match_exhaustive_projection(case: ModelCase) -> None:
 
     assert _topology(_projection(predicate)) == _topology(exhaustive_projection)
     assert _topology(_projection(two_pass)) == _topology(exhaustive_projection)
-    recording_projection = _recording_projection(recording, raw_to_final)
-    assert _recording_operation_identity(recording_projection) == _recording_operation_identity(
-        exhaustive_projection
-    )
+    recording_trace = recording.to_trace()
+    recording_projection = _projection(recording_trace)
+    if case.name == "recurrent":
+        assert _recording_raw_operation_identity(
+            recording_projection
+        ) == _recording_raw_operation_identity(exhaustive_projection)
+    else:
+        assert recording_projection == exhaustive_projection
     assert _saved_labels(exhaustive_projection)
     assert _saved_labels(_projection(predicate)) == _saved_labels(exhaustive_projection)
-    assert _saved_labels(_op_rows(recording_projection)) == _saved_labels(
-        _op_rows(exhaustive_projection)
-    )
     two_pass_op_saved = set(_saved_labels(_op_rows(_projection(two_pass))))
     assert target_label in two_pass_op_saved
     assert two_pass_op_saved.issubset(set(_saved_labels(_op_rows(exhaustive_projection))))

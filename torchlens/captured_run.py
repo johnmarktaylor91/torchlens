@@ -47,10 +47,13 @@ class CapturedRun:
         events = getattr(self, "capture_events", None)
         if events is not None:
             return events
-        events = _EVENT_STREAMS.get(self)
+        events = getattr(self, "_capture_events", None)
         if events is not None:
             return events
-        return getattr(self, "_capture_events", None)
+        try:
+            return _EVENT_STREAMS.get(self)
+        except TypeError:
+            return None
 
     @property
     def op_events(self) -> tuple[Any, ...]:

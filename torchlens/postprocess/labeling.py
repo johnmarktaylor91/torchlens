@@ -740,7 +740,7 @@ def _add_lookup_keys_for_layer_entry(
 
     # Allow using buffer/input/output address as key, too:
     if layer_entry.is_buffer:
-        if self.buffer_num_calls[layer_entry.address] == 1:
+        if self.buffer_num_calls.get(layer_entry.address, 1) == 1:
             lookup_keys_for_tensor.append(layer_entry.address)
         lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
