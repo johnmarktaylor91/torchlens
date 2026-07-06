@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
 from .._deprecations import MISSING
@@ -23,12 +24,16 @@ class ExtraKwargPolicy:
         Message template used for non-runtime extras. It receives ``names``.
     always_runtime:
         Whether every rejected extra should use ``runtime_message``.
+    inert_values:
+        Backend-specific explicit values that remain equivalent to an omitted
+        public option.
     """
 
     runtime_option_names: frozenset[str]
     runtime_message: str
     fallback_message: str
     always_runtime: bool = False
+    inert_values: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -127,8 +132,51 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     ),
     fallback_message="",
     always_runtime=True,
+    inert_values={
+        "lookback": 0,
+        "lookback_payload_policy": "metadata_only",
+        "capture": None,
+        "save": None,
+        "intervene": None,
+        "halt": None,
+        "storage": None,
+        "streaming": None,
+        "inference_only": False,
+        "cache": False,
+        "stop_after": None,
+        "raise_on_nan": False,
+        "profile": False,
+        "recipes": None,
+        "payload_policy": None,
+        "save_preview": None,
+        "chunk_size": None,
+        "chunk_paths": None,
+    },
 )
 """Extra public-kwarg rejection policy for the Paddle preview backend."""
+
+
+TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
+    runtime_option_names=frozenset(
+        {
+            "halt",
+            "intervene",
+            "recipes",
+            "stop_after",
+            "storage",
+            "streaming",
+        }
+    ),
+    runtime_message=(
+        "tf backend preview does not support runtime-mutation or stop-early options: {names}."
+    ),
+    fallback_message="tf backend preview does not support: {names}.",
+    inert_values={
+        "lookback": 0,
+        "lookback_payload_policy": "metadata_only",
+    },
+)
+"""Extra public-kwarg rejection policy for the TensorFlow preview backend."""
 
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
@@ -279,6 +327,31 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
 """Unsupported public trace-option policy for the MLX backend object entry."""
 
 
+TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
+    backend_name="tf",
+    full_save_message="tf backend preview is full-save only.",
+    rejected_truthy_messages={
+        name: f"tf backend preview does not support {name}; full-save forward capture only."
+        for name in (
+            "activation_transform",
+            "detach_saved_activations",
+            "save_grads",
+            "save_arg_values",
+            "save_code_context",
+            "save_rng_states",
+            "backward_ready",
+            "module_filter",
+            "transform",
+            "layer_visualizers",
+            "save_visualizations",
+        )
+    },
+    output_device_message="tf backend preview only supports output_device='same'.",
+    save_raw_activations_false_message="tf backend preview is full-save only.",
+)
+"""Unsupported public trace-option policy for the TensorFlow preview backend."""
+
+
 def is_missing(value: object) -> bool:
     """Return whether ``value`` is the public missing sentinel.
 
@@ -331,9 +404,14 @@ def reject_extra_trace_kwargs(kwargs: dict[str, Any], policy: ExtraKwargPolicy) 
         Returns when no non-default extras are present.
     """
 
-    rejected = {
-        key: value for key, value in kwargs.items() if value is not None and not is_missing(value)
-    }
+    inert_values = policy.inert_values or {}
+    rejected = {}
+    for key, value in kwargs.items():
+        if is_missing(value) or value is None:
+            continue
+        if key in inert_values and inert_values[key] == value:
+            continue
+        rejected[key] = value
     if not rejected:
         return
     names = ", ".join(sorted(rejected))
