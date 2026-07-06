@@ -548,7 +548,7 @@ def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
 
 
 def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
-    """Dispatch to the Paddle backend preview shell.
+    """Dispatch to the Paddle backend preview.
 
     Parameters
     ----------
@@ -558,7 +558,7 @@ def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
     Returns
     -------
     Any
-        Captured trace once the Paddle capture phase lands.
+        Captured trace.
     """
 
     from .paddle import PaddleBackend
@@ -567,7 +567,7 @@ def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
 
 
 def _tf_capture_trace(*args: Any, **kwargs: Any) -> Any:
-    """Dispatch to the TensorFlow backend preview shell.
+    """Dispatch to the TensorFlow backend preview.
 
     Parameters
     ----------
@@ -577,7 +577,7 @@ def _tf_capture_trace(*args: Any, **kwargs: Any) -> Any:
     Returns
     -------
     Any
-        Captured trace once the TensorFlow capture phase lands.
+        Captured trace.
     """
 
     from .tf import TFBackend
@@ -671,7 +671,7 @@ def _paddle_validate_entry(*args: Any, **kwargs: Any) -> bool:
     Returns
     -------
     bool
-        Validation result once the Paddle validation phase lands.
+        Validation result.
     """
 
     from .paddle import PaddleBackend
@@ -690,7 +690,7 @@ def _tf_validate_entry(*args: Any, **kwargs: Any) -> bool:
     Returns
     -------
     bool
-        Validation result once the TensorFlow validation phase lands.
+        Validation result.
     """
 
     from .tf import TFBackend
@@ -784,7 +784,7 @@ def _paddle_validate_trace(*args: Any, **kwargs: Any) -> Any:
     Returns
     -------
     Any
-        Validation result once the Paddle validation phase lands.
+        Validation result.
     """
 
     from .paddle import PaddleBackend
@@ -803,7 +803,7 @@ def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
     Returns
     -------
     Any
-        Validation result once the TensorFlow validation phase lands.
+        Validation result.
     """
 
     from .tf import TFBackend
