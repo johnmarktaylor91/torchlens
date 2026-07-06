@@ -438,6 +438,55 @@ class BufferOwnerModel(nn.Module):
         return self.bn(x) + self.bn.running_mean
 
 
+class TrainingInstanceNormModel(nn.Module):
+    """InstanceNorm model with training-mode running-stat buffers."""
+
+    def __init__(self) -> None:
+        """Initialize the InstanceNorm model."""
+
+        super().__init__()
+        self.norm = nn.InstanceNorm1d(3, track_running_stats=True)
+        self.norm.train()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run training-mode InstanceNorm.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Normalized tensor.
+        """
+
+        return self.norm(x)
+
+
+class ScalarMaskedFillAllSelectedModel(nn.Module):
+    """In-place scalar masked-fill model with a fully selected mask."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Fill all positions of a clone with a Python scalar.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Zero-filled clone.
+        """
+
+        y = x.clone()
+        mask = torch.ones(1, 1, x.shape[-1], dtype=torch.bool, device=x.device)
+        return y.masked_fill_(mask, 0.0)
+
+
 class EmptyLikeModel(nn.Module):
     """Model using uninitialized memory followed by a deterministic write."""
 
@@ -743,6 +792,42 @@ def test_boundary_crossing_validates_piecewise_constant_ops() -> None:
             "locally_constant_by_construction"
             not in trace.validation_replay_status.exempted_reason_counts
         )
+
+
+def test_instance_norm_running_stats_are_training_update_targets() -> None:
+    """Training InstanceNorm running stats should use the normalization proof."""
+
+    trace = tl.trace(
+        TrainingInstanceNormModel(),
+        torch.randn(2, 3, 4),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    status = trace.validation_replay_status
+    assert status.failed_node_count == 0
+    assert status.exempted_reason_counts["pre_perturbation_exemption"] >= 1
+
+
+def test_scalar_masked_fill_all_selected_input_parent_is_structural() -> None:
+    """A fully selected scalar ``masked_fill_`` proves the input parent irrelevant."""
+
+    trace = tl.trace(
+        ScalarMaskedFillAllSelectedModel(),
+        torch.randn(1, 2, 10),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    status = trace.validation_replay_status
+    assert status.failed_node_count == 0
+    assert status.exempted_reason_counts["pre_perturbation_exemption"] >= 1
 
 
 def test_corrupted_piecewise_constant_wrong_edges_still_fail() -> None:

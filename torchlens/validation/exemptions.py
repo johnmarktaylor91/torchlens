@@ -30,6 +30,7 @@ casting, special-value args like all-zeros making perturbation irrelevant).
 # unintended value-sensitive case.
 
 from dataclasses import dataclass
+from numbers import Number
 from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
@@ -801,7 +802,7 @@ def _where_saved_condition_selectedness(
 def _masked_fill_saved_mask_selectedness(
     mask: torch.Tensor,
     input_tensor: torch.Tensor,
-    value: torch.Tensor,
+    value: torch.Tensor | Number,
 ) -> tuple[int, int] | None:
     """Return selected fill-value count over the full saved ``masked_fill`` shape.
 
@@ -812,7 +813,7 @@ def _masked_fill_saved_mask_selectedness(
     input_tensor:
         Saved input/destination tensor.
     value:
-        Saved scalar tensor fill value.
+        Saved scalar tensor or Python scalar fill value.
 
     Returns
     -------
@@ -824,10 +825,11 @@ def _masked_fill_saved_mask_selectedness(
 
     try:
         mask_bool = mask.to(dtype=torch.bool)
+        value_shape = tuple(value.shape) if isinstance(value, torch.Tensor) else ()
         output_shape = torch.broadcast_shapes(
             tuple(mask_bool.shape),
             tuple(input_tensor.shape),
-            tuple(value.shape),
+            value_shape,
         )
         broadcast_mask = torch.broadcast_to(mask_bool, output_shape)
         total_elements = int(broadcast_mask.numel())
@@ -859,7 +861,7 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: List[
     if not (
         isinstance(input_tensor, torch.Tensor)
         and isinstance(mask, torch.Tensor)
-        and isinstance(value, torch.Tensor)
+        and isinstance(value, (torch.Tensor, Number))
     ):
         return False
     if not perturbed_positions.issubset({0, 2}):
@@ -877,15 +879,15 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: List[
     return False
 
 
-def _check_batch_norm_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
-    """Exempt BatchNorm running-stat update parents in training mode.
+def _check_norm_running_stat_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
+    """Exempt normalization running-stat update parents in training mode.
 
     Parameters
     ----------
     self:
         Trace containing saved parent payloads.
     layer:
-        ``batch_norm`` op being validated.
+        ``batch_norm`` or ``instance_norm`` op being validated.
     layers_to_perturb:
         Parent layer labels currently being perturbed.
 
@@ -893,8 +895,9 @@ def _check_batch_norm_exempt(self: "Trace", layer: Op, layers_to_perturb: List[s
     -------
     bool
         True when the perturbed parent is ``running_mean`` or ``running_var``
-        for a training-mode BatchNorm call. Those buffers are update targets in
-        training mode; batch statistics determine the output value.
+        for a training-mode BatchNorm/InstanceNorm call. Those buffers are
+        update targets in training mode; batch/input statistics determine the
+        output value.
     """
 
     del self
@@ -921,7 +924,8 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", Op, List[str]], bool]] = {
     "maskedfill": _check_masked_fill_exempt,
     "masked_fill": _check_masked_fill_exempt,
     "masked_fill_": _check_masked_fill_exempt,
-    "batch_norm": _check_batch_norm_exempt,
+    "batch_norm": _check_norm_running_stat_exempt,
+    "instance_norm": _check_norm_running_stat_exempt,
 }
 
 
