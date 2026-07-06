@@ -6,12 +6,19 @@ import inspect
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.validation import core
 from torchlens.validation import backward as backward_validation
+from torchlens.validation.invariants import (
+    MetadataInvariantError,
+    _check_backend_neutral_graph_topology,
+    _check_pass_count_consistency,
+    check_metadata_invariants,
+)
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
@@ -152,6 +159,139 @@ class OneHotModel(nn.Module):
         """
 
         return torch.nn.functional.one_hot(x, num_classes=4).float()
+
+
+class SwampedAddModel(nn.Module):
+    """Model with an additive parent perturbation below fp32 output spacing."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add a large same-dtype tensor that swamps small x perturbations.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Additive output with large representable spacing.
+        """
+
+        return x + torch.full_like(x, 1.0e8)
+
+
+class SimilarMagnitudeAddModel(nn.Module):
+    """Model whose add parent perturbation remains representable."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add a similar-magnitude tensor.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Additive output whose spacing should not hide perturbations.
+        """
+
+        return x + torch.full_like(x, 10.0)
+
+
+class MultiplyByZeroModel(nn.Module):
+    """Model where a parent is provably annihilated by another parent."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Multiply by a zero tensor.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Zero output independent of ``x``.
+        """
+
+        return x * torch.zeros_like(x)
+
+
+class LoopOutputBookkeepingModel(nn.Module):
+    """Small loop model that exercises output bookkeeping perturbation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a parameter-free loop.
+
+        Parameters
+        ----------
+        x:
+            Positive floating point input.
+
+        Returns
+        -------
+        torch.Tensor
+            Loop output.
+        """
+
+        y = x + 2.0
+        for _ in range(3):
+            y = torch.log(y)
+            y = torch.sin(y)
+        return y + 3.0
+
+
+class CrossEntropyKwargModel(nn.Module):
+    """Model passing a structural target tensor by keyword."""
+
+    def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute cross entropy with keyword target.
+
+        Parameters
+        ----------
+        logits:
+            Class logits.
+        target:
+            Integer class labels.
+
+        Returns
+        -------
+        torch.Tensor
+            Cross entropy loss.
+        """
+
+        return torch.nn.functional.cross_entropy(input=logits, target=target)
+
+
+class BufferOwnerModel(nn.Module):
+    """BatchNorm model with registered buffers under a child module."""
+
+    def __init__(self) -> None:
+        """Initialize the BatchNorm model."""
+
+        super().__init__()
+        self.bn = nn.BatchNorm1d(4)
+        self.bn.eval()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run BatchNorm and consume a registered buffer outside the owner.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            BatchNorm output plus running mean.
+        """
+
+        return self.bn(x) + self.bn.running_mean
 
 
 class EmptyLikeModel(nn.Module):
@@ -358,6 +498,114 @@ def test_one_hot_index_perturbation_uses_valid_alternate_class() -> None:
     )
 
     assert trace.validate_forward_pass([torch.tensor([[0.0, 1.0, 0.0, 0.0]])])
+
+
+def test_swamped_fp32_add_uses_ulp_predicate() -> None:
+    """Swamped fp32 add should pass only through the ULP spacing predicate."""
+
+    x = torch.tensor([10000.0, 10001.0], dtype=torch.float32)
+    trace = tl.trace(
+        SwampedAddModel(),
+        x,
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    status = trace.validation_replay_status
+    assert status.exempted_reason_counts["ulp_swamped_perturbation"] >= 1
+    assert status.failed_node_count == 0
+
+
+def test_similar_magnitude_influential_add_is_not_ulp_exempted() -> None:
+    """A representable add perturbation must not receive the ULP exemption."""
+
+    x = torch.tensor([10.0, 11.0], dtype=torch.float32)
+    trace = tl.trace(
+        SimilarMagnitudeAddModel(),
+        x,
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    assert "ulp_swamped_perturbation" not in trace.validation_replay_status.exempted_reason_counts
+
+
+def test_generic_effect_probe_exempts_annihilated_parent() -> None:
+    """The generic double-perturbation probe should replace special-value cascades."""
+
+    trace = tl.trace(
+        MultiplyByZeroModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    assert (
+        trace.validation_replay_status.exempted_reason_counts["generic_invariant_output_probe"] >= 1
+    )
+
+
+def test_generic_effect_probe_does_not_exempt_influential_parent() -> None:
+    """The generic probe must not exempt a genuinely influential add parent."""
+
+    trace = tl.trace(
+        SimilarMagnitudeAddModel(),
+        torch.tensor([10.0, 11.0], dtype=torch.float32),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    assert (
+        "generic_invariant_output_probe"
+        not in trace.validation_replay_status.exempted_reason_counts
+    )
+
+
+def test_output_bookkeeping_projection_is_structural() -> None:
+    """Loop outputs with NaNs should use meaningful perturbation candidates."""
+
+    trace = tl.trace(
+        LoopOutputBookkeepingModel(),
+        torch.full((2, 3), 1.5),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    assert trace.validation_replay_status.failed_node_count == 0
+
+
+def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
+    """Structural arg exemptions should use kwarg parent-position metadata."""
+
+    logits = torch.tensor([[2.0, -1.0, 0.5], [0.1, 0.4, 0.7]], dtype=torch.float32)
+    target = torch.tensor([0, 2], dtype=torch.long)
+    trace = tl.trace(
+        CrossEntropyKwargModel(),
+        logits,
+        input_kwargs={"target": target},
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is True
+    assert trace.validation_replay_status.exempted_reason_counts["pre_perturbation_exemption"] >= 1
 
 
 def test_skip_validation_registry_entries_have_justifications() -> None:
@@ -616,3 +864,55 @@ def test_validation_status_cache_invalidated_on_fork() -> None:
     fork = trace.fork("status_check")
 
     assert fork.validation_replay_status.state == "available"
+
+
+def test_buffer_semantic_ownership_invariant_fires_on_wrong_module_stack() -> None:
+    """Buffer source nodes must claim the owner or an active consumer module."""
+
+    trace = tl.trace(
+        BufferOwnerModel(),
+        torch.randn(3, 4),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    buffer_op = next(layer for layer in trace.layer_list if layer.is_buffer)
+    buffer_op._internal_set("modules", ["self:1"])  # noqa: SLF001
+    buffer_op._internal_set("module", "self:1")  # noqa: SLF001
+
+    with pytest.raises(MetadataInvariantError, match="buffer_xrefs"):
+        check_metadata_invariants(trace)
+
+
+def test_backend_neutral_graph_topology_invariant_fires_on_asymmetric_edge() -> None:
+    """Non-torch graph topology should catch parent/child asymmetry."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    child = _first_op_with_func(trace, "relu")
+    removed_parent = child.parents[0]
+    child._internal_set("parents", [])  # noqa: SLF001
+
+    with pytest.raises(MetadataInvariantError, match="backend_neutral_graph_topology"):
+        _check_backend_neutral_graph_topology(trace)
+
+    assert removed_parent
+
+
+def test_pass_count_consistency_invariant_fires_on_op_count_mismatch() -> None:
+    """Layer aggregate pass counts must agree with contained op records."""
+
+    trace = tl.trace(
+        AddReluModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    layer = _first_op_with_func(trace, "__add__")
+    layer._internal_set("num_passes", layer.num_passes + 1)  # noqa: SLF001
+
+    with pytest.raises(MetadataInvariantError, match="pass_count_consistency"):
+        _check_pass_count_consistency(trace)

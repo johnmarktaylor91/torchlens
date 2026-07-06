@@ -206,6 +206,46 @@ class TinyCholesky(nn.Module):
         return torch.linalg.cholesky(x)
 
 
+class TinySwampedAdd(nn.Module):
+    """Tiny additive model whose perturbation can be hidden by fp32 spacing."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add a large fp32 tensor.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Swamped additive output.
+        """
+
+        return x + torch.full_like(x, 1.0e8)
+
+
+class TinyMultiplyByZero(nn.Module):
+    """Tiny model for the generic invariant-output probe."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Multiply by a zero tensor.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Zero-valued output.
+        """
+
+        return x * torch.zeros_like(x)
+
+
 def _trace_output(trace: Any) -> torch.Tensor:
     """Return the first tensor output saved on a trace.
 
@@ -433,6 +473,26 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         save_arg_values=True,
     )
 
+    torch.manual_seed(20)
+    swamped = TinySwampedAdd().eval()
+    x_swamped = torch.tensor([10000.0, 10001.0], dtype=torch.float32)
+    swamped_trace = tl.trace(
+        swamped,
+        x_swamped,
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
+    torch.manual_seed(21)
+    multiply_zero = TinyMultiplyByZero().eval()
+    x_multiply_zero = torch.randn(2, 3)
+    multiply_zero_trace = tl.trace(
+        multiply_zero,
+        x_multiply_zero,
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+
     return {
         "tiny_feed_forward": _case_summary(
             _seeded_status_for_trace(101, ff_trace, [_trace_output(ff_trace)])
@@ -461,6 +521,16 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         "tiny_cholesky": _case_summary(
             _seeded_status_for_trace(108, cholesky_trace, [_trace_output(cholesky_trace)])
         ),
+        "tiny_swamped_add": _case_summary(
+            _seeded_status_for_trace(110, swamped_trace, [_trace_output(swamped_trace)])
+        ),
+        "tiny_multiply_zero": _case_summary(
+            _seeded_status_for_trace(
+                111,
+                multiply_zero_trace,
+                [_trace_output(multiply_zero_trace)],
+            )
+        ),
     }
 
 
@@ -484,6 +554,8 @@ def test_validation_decision_snapshot_covers_required_categories() -> None:
     assert ("exempted", "functionless_source_or_boundary") in reason_decisions
     assert ("exempted", "intentional_intervention_replacement") in reason_decisions
     assert ("exempted", "not_saved_by_user") in reason_decisions
+    assert ("exempted", "ulp_swamped_perturbation") in reason_decisions
+    assert ("exempted", "generic_invariant_output_probe") in reason_decisions
     assert ("unverified", "missing_saved_args") in reason_decisions
     assert ("unverified", "perturbation_execution_exception") in reason_decisions
 

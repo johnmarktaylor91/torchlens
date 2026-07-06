@@ -420,6 +420,75 @@
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
   },
+  "tiny_multiply_zero": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__mul__",
+        "op_label": "mul_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "__mul__",
+        "op_label": "mul_1_2:1",
+        "phase": "perturbation",
+        "reason": "generic_invariant_output_probe"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__mul__",
+        "op_label": "mul_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "zeros_like",
+        "op_label": "zeroslike_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "zeros_like",
+        "op_label": "zeroslike_1_1:1",
+        "phase": "perturbation",
+        "reason": "skip_perturbation_entirely:zeros_like"
+      }
+    ],
+    "exempted_reason_counts": {
+      "generic_invariant_output_probe": 1,
+      "skip_perturbation_entirely:zeros_like": 1
+    },
+    "failed_node_count": 0,
+    "replayed_node_count": 6,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
   "tiny_partial_save": {
     "decisions": [
       {
@@ -655,6 +724,75 @@
     },
     "failed_node_count": 0,
     "replayed_node_count": 3,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
+  "tiny_swamped_add": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__add__",
+        "op_label": "add_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "__add__",
+        "op_label": "add_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "__add__",
+        "op_label": "add_1_2:1",
+        "phase": "perturbation",
+        "reason": "ulp_swamped_perturbation"
+      },
+      {
+        "decision": "validated",
+        "func_name": "full_like",
+        "op_label": "fulllike_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "full_like",
+        "op_label": "fulllike_1_1:1",
+        "phase": "perturbation",
+        "reason": "skip_perturbation_entirely:full_like"
+      }
+    ],
+    "exempted_reason_counts": {
+      "skip_perturbation_entirely:full_like": 1,
+      "ulp_swamped_perturbation": 1
+    },
+    "failed_node_count": 0,
+    "replayed_node_count": 6,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
