@@ -29,6 +29,7 @@ casting, special-value args like all-zeros making perturbation irrelevant).
 # is proved from runtime evidence and a negative test shows it cannot mask the
 # unintended value-sensitive case.
 
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
@@ -103,6 +104,37 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "new_tensor": {0},  # source tensor is a dtype/device/layout factory
     "newtensor": {0},  # canonicalized torch.Tensor.new_tensor spelling
 }
+
+
+STRUCTURAL_ARG_KWARG_ALIASES: Dict[str, Dict[int, Set[str]]] = {
+    "cross_entropy": {1: {"target"}},
+    "embedding": {1: {"indices", "input"}},
+    "gather": {2: {"index"}},
+    "index_select": {2: {"index"}},
+    "scatter_": {2: {"index"}},
+    "maskedfill": {1: {"mask"}},
+    "masked_fill": {1: {"mask"}},
+    "masked_fill_": {1: {"mask"}},
+    "_pack_padded_sequence": {1: {"lengths"}},
+    "_pad_packed_sequence": {1: {"lengths"}},
+    "type_as": {1: {"tensor", "other"}},
+}
+
+
+@dataclass(frozen=True)
+class PosthocPerturbDecision:
+    """Structured decision returned by posthoc perturbation predicates.
+
+    Attributes
+    ----------
+    exempt:
+        Whether the unchanged perturbation output is justified.
+    reason:
+        Stable reason code for diagnostics and golden snapshots.
+    """
+
+    exempt: bool
+    reason: str
 
 
 # ---------------------------------------------------------------------------
@@ -884,9 +916,17 @@ def perturbed_layer_at_structural_position(
         return False
     perturbed_label = layers_to_perturb[0]
     parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    func_name = getattr(layer, "func_name", None)
+    alias_by_position = (
+        STRUCTURAL_ARG_KWARG_ALIASES.get(func_name, {}) if isinstance(func_name, str) else {}
+    )
     for pos in exempt_positions:
         if parent_arg_positions.get("args", {}).get(pos) == perturbed_label:
             return True
+        aliases = alias_by_position.get(pos, set())
+        for alias in aliases:
+            if parent_arg_positions.get("kwargs", {}).get(alias) == perturbed_label:
+                return True
     return False
 
 
@@ -950,7 +990,7 @@ def posthoc_perturb_check(
     layer_to_validate_parents_for: Op,
     layers_to_perturb: List[str],
     verbose: bool = False,
-) -> bool:
+) -> PosthocPerturbDecision:
     """Post-hoc exemption check: called when perturbation did NOT change the output.
 
     This function runs AFTER execution, handling dynamic cases that cannot be
@@ -963,115 +1003,84 @@ def posthoc_perturb_check(
     4. **Full overwrite** (__setitem__ with same-shape replacement).
     5. **Small tensor coincidence** (__getitem__/unbind with numel < 20).
     6. **Redundant safety net** for *_like/meshgrid/broadcast_tensors.
-    7. **All-inf/all-NaN output** -- extreme values.
-    8. **Special-value arg loop** -- if ANY non-perturbed arg is all-zeros or
-       all-ones, that single arg can explain output invariance (e.g.,
-       multiplication by zero annihilates the other operand).  This correctly
-       returns True on the first such special arg found.
+    The old name/value cascade for constant outputs and all-zero/all-one
+    non-perturbed operands is deliberately absent; S1b routes those through the
+    replay-level generic double-perturbation effect probe instead.
 
-    Returns True if there's a valid excuse (validation ops), False otherwise
-    (validation fails with a printed message).
+    Returns a structured decision. ``exempt=False`` means replay-level probes
+    may still provide a proof before validation fails.
     """
-    func_name = layer_to_validate_parents_for.func_name
-    layer_label = layer_to_validate_parents_for.layer_label
-    args = layer_to_validate_parents_for.saved_args
+    args = layer_to_validate_parents_for.saved_args or ()
 
-    # Bool output — discrete, perturbation may not change it
-    if layer_to_validate_parents_for.dtype == torch.bool:
-        return True
+    decision = _posthoc_discrete_output_decision(layer_to_validate_parents_for)
+    if decision.exempt:
+        return decision
+    decision = _posthoc_structural_output_decision(layer_to_validate_parents_for, args)
+    if decision.exempt:
+        return decision
+    decision = _posthoc_overwrite_decision(layer_to_validate_parents_for, layers_to_perturb, args)
+    if decision.exempt:
+        return decision
+    decision = _posthoc_value_proof_decision(layer_to_validate_parents_for, layers_to_perturb, args)
+    if decision.exempt:
+        return decision
 
-    # topk/sort/max/min indices — discrete output insensitive to value perturbation.
-    # max(tensor, dim) and min(tensor, dim) return (values, indices); the indices
-    # output is integer and may not change when values are perturbed.
-    if func_name in (
-        "topk",
-        "sort",
-        "max",
-        "min",
-    ) and layer_to_validate_parents_for.dtype in (
+    del self, layers_to_perturb, verbose
+    return PosthocPerturbDecision(False, "no_posthoc_exemption")
+
+
+def _posthoc_discrete_output_decision(layer: Op) -> PosthocPerturbDecision:
+    """Return the explicit posthoc decision for discrete output tensors.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision for bool/index outputs, otherwise a non-exempt result.
+    """
+
+    if layer.dtype == torch.bool:
+        return PosthocPerturbDecision(True, "discrete_bool_output")
+    if layer.func_name in ("topk", "sort", "max", "min") and layer.dtype in (
         torch.int,
         torch.long,
         torch.int32,
         torch.int64,
     ):
-        return True
+        return PosthocPerturbDecision(True, "discrete_index_output")
+    if _check_one_arg_where_index_exempt(layer):
+        return PosthocPerturbDecision(True, "discrete_index_output")
+    return PosthocPerturbDecision(False, "not_discrete_output")
 
-    # One-arg ``torch.where(condition)`` == ``nonzero(condition, as_tuple=True)``: a discrete
-    # INDEX output, same category as the topk/sort/max/min index exemption above.
-    if _check_one_arg_where_index_exempt(layer_to_validate_parents_for):
-        return True
 
-    # to() with tensor arg — type casting
-    if func_name == "to" and len(args) > 1 and isinstance(args[1], torch.Tensor):
-        return True
+def _posthoc_structural_output_decision(
+    layer: Op,
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return posthoc decisions for structural output-template operations.
 
-    # __setitem__ same-shape replacement — full overwrite
-    if (
-        func_name == "__setitem__"
-        and _perturbed_parent_is_arg_position(layer_to_validate_parents_for, layers_to_perturb, 0)
-        and len(args) > 2
-        and isinstance(args[0], torch.Tensor)
-        and isinstance(args[2], torch.Tensor)
-        and args[0].shape == args[2].shape
-    ):
-        return True
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+    args:
+        Saved positional arguments for ``layer``.
 
-    # __setitem__ non-tensor value — scalar set
-    if (
-        func_name == "__setitem__"
-        and _perturbed_parent_is_arg_position(layer_to_validate_parents_for, layers_to_perturb, 0)
-        and len(args) > 2
-        and not isinstance(args[2], torch.Tensor)
-    ):
-        return True
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision for structural cases, otherwise a non-exempt result.
+    """
 
-    # __setitem__ into an UNINITIALIZED-MEMORY destination — perturbing
-    # uninitialized memory is meaningless by construction.
-    #
-    # Idiom (RoPE/normalizing-flow interleave):
-    #   out = torch.empty_like(x); out[..., 0::2] = a   # this op
-    #   out[..., 1::2] = b                              # sibling __setitem__
-    # The destination `out` (args[0]) is uninitialized memory from
-    # empty/empty_like/new_empty. A strided/partial __setitem__ writes only some
-    # positions; the UNWRITTEN positions retain garbage that is overwritten by a
-    # sibling write and never meaningfully consumed. Perturbing that garbage is
-    # not a real data dependency, so the perturbation check's sensitivity
-    # contract does not apply.
-    #
-    # NARROW + tripwire-safe: exempt ONLY when the PERTURBED parent is ITSELF a
-    # direct uninitialized-memory allocation (empty/empty_like/new_empty) AND it
-    # occupies the destination slot. A REAL data tensor feeding the destination
-    # -- INCLUDING a prior in-place write (index_copy_/__setitem__) whose buffer
-    # was allocated by empty_like but which now holds real written data -- stays
-    # strict, so a genuine dropped-dependency capture bug still fails. The
-    # exemption deliberately does NOT chain through intermediate in-place writes:
-    # the B1 adversarial review found that following the destination chain back to
-    # the allocation masked a real perturbation failure on the second write of an
-    # empty_like + chained index_copy_ idiom (the second write consumes the first
-    # write's live data). (empty_like et al. are already nondeterministic-skipped
-    # for their OWN replay; this extends that same correctness to their direct
-    # consumption as the destination of one in-place index/scatter write.) Covers
-    # the RoPE / normalizing-flow / torch_geometric "partition-write into an
-    # uninitialized buffer" idiom where the perturbed destination is the bare
-    # allocation.
-    if (
-        func_name in INPLACE_DESTINATION_WRITE_FUNCS
-        and _perturbed_parent_is_uninitialized_setitem_dest(
-            layer_to_validate_parents_for, layers_to_perturb
-        )
-    ):
-        return True
-
-    # __getitem__/unbind numel < 20 — small tensor coincidence
-    if func_name in ["__getitem__", "unbind"] and layer_to_validate_parents_for.out.numel() < 20:
-        return True
-
-    # Redundant safety net: *_like ops, meshgrid, broadcast_tensors
-    # (should be caught by SKIP_PERTURBATION_ENTIRELY / SKIP_VALIDATION_ENTIRELY,
-    # but kept as belt-and-suspenders)
-    if func_name in ["meshgrid", "broadcast_tensors"]:
-        return True
-    if func_name in [
+    if layer.func_name == "to" and len(args) > 1 and isinstance(args[1], torch.Tensor):
+        return PosthocPerturbDecision(True, "type_template_output")
+    if layer.func_name in ["meshgrid", "broadcast_tensors"]:
+        return PosthocPerturbDecision(True, "structural_output_template")
+    if layer.func_name in [
         "full_like",
         "zeros_like",
         "ones_like",
@@ -1079,112 +1088,94 @@ def posthoc_perturb_check(
         "rand_like",
         "randn_like",
     ]:
-        return True
+        return PosthocPerturbDecision(True, "structural_output_template")
+    if layer.func_name == "bernoulli" and "p" in layer.saved_kwargs:
+        return PosthocPerturbDecision(True, "rng_probability_template")
+    return PosthocPerturbDecision(False, "not_structural_output")
 
-    # __getitem__ tensor index with < 20 unique values — coincidence
+
+def _posthoc_overwrite_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return posthoc decisions for overwrite-style destination parents.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision for proved overwrite cases, otherwise non-exempt.
+    """
+
     if (
-        func_name == "__getitem__"
-        and isinstance(args[1], torch.Tensor)
-        and len(args[1].unique()) < 20  # type: ignore[no-untyped-call]
+        layer.func_name == "__setitem__"
+        and _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
+        and len(args) > 2
+        and isinstance(args[0], torch.Tensor)
+        and isinstance(args[2], torch.Tensor)
+        and args[0].shape == args[2].shape
     ):
-        return True
+        return PosthocPerturbDecision(True, "full_destination_overwrite")
+    if (
+        layer.func_name == "__setitem__"
+        and _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
+        and len(args) > 2
+        and not isinstance(args[2], torch.Tensor)
+    ):
+        return PosthocPerturbDecision(True, "scalar_destination_overwrite")
+    if layer.func_name in INPLACE_DESTINATION_WRITE_FUNCS and (
+        _perturbed_parent_is_uninitialized_setitem_dest(layer, layers_to_perturb)
+    ):
+        return PosthocPerturbDecision(True, "uninitialized_destination_overwrite")
+    return PosthocPerturbDecision(False, "not_overwrite")
 
-    output_tensor = layer_to_validate_parents_for.out
 
-    # max/min/maximum/minimum with multiple args — binary extrema are insensitive
-    # only when the non-perturbed operand provably dominates elementwise.
-    if func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
+def _posthoc_value_proof_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return explicit value-proof decisions that are not generic probes.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision for narrow proved cases, otherwise non-exempt.
+    """
+
+    if layer.func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
         if _binary_extrema_nonperturbed_arg_dominates(
-            func_name, args, layer_to_validate_parents_for, layers_to_perturb
+            layer.func_name, args, layer, layers_to_perturb
         ):
-            return True
-
-    # remainder/fmod divisor is locally irrelevant when the dividend is already
-    # the result (e.g., 0 <= dividend < divisor elementwise).
-    if func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
+            return PosthocPerturbDecision(True, "binary_extrema_dominated")
+    if layer.func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
         dividend, divisor = args[:2]
         if isinstance(dividend, torch.Tensor) and isinstance(divisor, torch.Tensor):
-            arg_positions = layer_to_validate_parents_for.parent_arg_positions.get("args", {})
+            arg_positions = layer.parent_arg_positions.get("args", {})
             perturbed_label = layers_to_perturb[0]
-            perturbed_is_divisor = arg_positions.get(1) == perturbed_label
-            if perturbed_is_divisor and torch.equal(output_tensor, dividend):
-                return True
-
-    # max non-floating-point — discrete
-    if func_name == "max" and not torch.is_floating_point(args[0]):
-        return True
-
-    # bernoulli with scalar p kwarg — self tensor is just a shape template,
-    # output is determined entirely by p and RNG state, not self's values.
-    if func_name == "bernoulli" and "p" in layer_to_validate_parents_for.saved_kwargs:
-        return True
-
-    # Constant output — function is structurally constant-valued
-    # (e.g., softmax on a dimension with size 1 always produces all-ones).
-    if output_tensor.numel() > 0:
-        flat_output = output_tensor.reshape(-1)
-        if torch.equal(flat_output, flat_output[0].expand_as(flat_output)):
-            return True
-
-    # All-inf / all-NaN output — extreme values
-    num_inf = torch.isinf(output_tensor.abs()).int().sum()
-    num_nan = torch.isnan(output_tensor.abs()).int().sum()
-    if (num_inf == output_tensor.numel()) or (num_nan == output_tensor.numel()):
-        return True
-
-    # Special-value arg loop — all-zeros/all-ones in other args
-    arg_type_dict = {
-        "args": (enumerate, "saved_args"),
-        "kwargs": (lambda x: x.items(), "saved_kwargs"),
-    }
-
-    for arg_type in ["args", "kwargs"]:
-        iterfunc, fieldname = arg_type_dict[arg_type]
-        for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):  # type: ignore[operator]
-            # Skip if it's the argument being perturbed
-            if (
-                key in layer_to_validate_parents_for.parent_arg_positions[arg_type]
-                and layer_to_validate_parents_for.parent_arg_positions[arg_type][key]
-                in layers_to_perturb
-            ):
-                continue
-            if _check_if_arg_is_special_val(val):
-                if verbose:
-                    print(
-                        f"Activations for layer {layer_label} do not change when "
-                        f"values for {layers_to_perturb} are changed (out of parent "
-                        f"layers {layer_to_validate_parents_for.parents}), but "
-                        f"{arg_type[:-1]} {key} is all zeros or all-ones, so validation "
-                        f"still succeeds..."
-                    )
-                return True
-
-    # Check non-perturbed parent tensors directly — catches nested args
-    # (e.g. einsum receives operands as a tuple, so the special-value loop
-    # above can't see inside).
-    for parent_label in layer_to_validate_parents_for.parents:
-        if parent_label in layers_to_perturb:
-            continue
-        parent_tensor = self[parent_label].out
-        if parent_tensor is not None and _check_if_arg_is_special_val(parent_tensor):
-            if verbose:
-                print(
-                    f"Activations for layer {layer_label} do not change when "
-                    f"values for {layers_to_perturb} are changed, but "
-                    f"non-perturbed parent {parent_label} has special values "
-                    f"(all-zeros or all-ones), so validation still succeeds..."
-                )
-            return True
-
-    # S1b: replace the removed swamped-fp32 magnitude shortcut with a proved
-    # ULP/nextafter predicate here, without weakening this default failure.
-    print(
-        f"Activations for layer {layer_label} do not change when "
-        f"values for {layers_to_perturb} are changed (out of parent "
-        f"layers {layer_to_validate_parents_for.parents}), and the other "
-        f'arguments are not "special" (all-ones or all-zeros) tensors.'
-    )
-    return False
+            if arg_positions.get(1) == perturbed_label and torch.equal(layer.out, dividend):
+                return PosthocPerturbDecision(True, "mod_divisor_irrelevant")
+    if layer.func_name == "max" and len(args) > 0 and not torch.is_floating_point(args[0]):
+        return PosthocPerturbDecision(True, "discrete_value_output")
+    return PosthocPerturbDecision(False, "not_value_proved")
 
 
 def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]) -> bool:
