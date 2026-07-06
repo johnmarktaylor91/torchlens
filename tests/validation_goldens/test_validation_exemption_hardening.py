@@ -13,6 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.validation import core
 from torchlens.validation import backward as backward_validation
+from torchlens.validation.diagnostics import get_validation_failure
 from torchlens.validation.invariants import (
     MetadataInvariantError,
     _check_backend_neutral_graph_topology,
@@ -199,6 +200,149 @@ class SimilarMagnitudeAddModel(nn.Module):
         """
 
         return x + torch.full_like(x, 10.0)
+
+
+class SaturatingSignExpModel(nn.Module):
+    """Model whose sign output is constant over the captured exp range."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return sign(exp(x)).
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Positive sign output.
+        """
+
+        return torch.sign(torch.exp(x))
+
+
+class QuantizedCeilSigmoidModel(nn.Module):
+    """Model whose ceil output is constant over the captured sigmoid range."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return ceil(sigmoid(x)).
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Unit-valued ceil output.
+        """
+
+        return torch.ceil(torch.sigmoid(x))
+
+
+class ExpOverflowModel(nn.Module):
+    """Model with legitimate exponential overflow."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return exp(x).
+
+        Parameters
+        ----------
+        x:
+            Large floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Exponential output that may overflow to infinity.
+        """
+
+        return torch.exp(x)
+
+
+class InfTimesFiniteModel(nn.Module):
+    """Model multiplying an infinite operand by a finite operand."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return an all-inf product through finite dataflow parents.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            All-infinite product tensor.
+        """
+
+        infinite = x * 0 + float("inf")
+        finite = x * 0 + 2.0
+        return infinite * finite
+
+
+class BigSquareOverflowModel(nn.Module):
+    """Model whose square overflows to infinity."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Square a very large finite tensor.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            All-infinite squared tensor.
+        """
+
+        big = x + 1.0e30
+        return big * big
+
+
+class GetitemMaxModel(nn.Module):
+    """Selection model with data values at the fp32 finite maximum."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a slice of ``x``.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            First selected element.
+        """
+
+        return x[:1]
+
+
+class UniqueMaxModel(nn.Module):
+    """Unique-value model with data values at the fp32 finite maximum."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return unique values from ``x``.
+
+        Parameters
+        ----------
+        x:
+            Floating point input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Unique values.
+        """
+
+        return torch.unique(x)
 
 
 class MultiplyByZeroModel(nn.Module):
@@ -460,6 +604,46 @@ def _first_output(trace: Any) -> torch.Tensor:
     return trace[trace.output_layers[0]].out.detach().clone()
 
 
+def _install_constant_replay(trace: Any, func_name: str) -> None:
+    """Replace the last matching op replay callable with a constant replay.
+
+    Parameters
+    ----------
+    trace:
+        TorchLens trace to corrupt.
+    func_name:
+        Function name identifying the op to corrupt.
+
+    Returns
+    -------
+    None
+        ``trace`` is mutated in place.
+    """
+
+    op = [layer for layer in trace.layer_list if layer.func_name == func_name][-1]
+    saved_output = op.out.detach().clone()
+
+    def constant_replay(*_args: Any, **_kwargs: Any) -> torch.Tensor:
+        """Return the saved output while ignoring replay inputs.
+
+        Parameters
+        ----------
+        *_args:
+            Ignored positional replay arguments.
+        **_kwargs:
+            Ignored keyword replay arguments.
+
+        Returns
+        -------
+        torch.Tensor
+            Saved output clone.
+        """
+
+        return saved_output.detach().clone()
+
+    op.func = constant_replay
+
+
 def test_backward_validation_zero_param_grads_is_not_pass() -> None:
     """Backward validation must not pass when no parameter grads are checked."""
 
@@ -536,8 +720,126 @@ def test_similar_magnitude_influential_add_is_not_ulp_exempted() -> None:
     assert "ulp_swamped_perturbation" not in trace.validation_replay_status.exempted_reason_counts
 
 
-def test_generic_effect_probe_exempts_annihilated_parent() -> None:
-    """The generic double-perturbation probe should replace special-value cascades."""
+def test_boundary_crossing_validates_piecewise_constant_ops() -> None:
+    """Piecewise-constant ops should validate through boundary-crossing candidates."""
+
+    cases = (
+        (SaturatingSignExpModel(), torch.tensor([1.0, 2.0], dtype=torch.float32)),
+        (QuantizedCeilSigmoidModel(), torch.tensor([1.0, 2.0], dtype=torch.float32)),
+    )
+    for model, x in cases:
+        trace = tl.trace(
+            model,
+            x,
+            layers_to_save="all",
+            save_arg_values=True,
+        )
+
+        result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+        assert result is True
+        assert trace.validation_replay_status.failed_node_count == 0
+        assert (
+            "locally_constant_by_construction"
+            not in trace.validation_replay_status.exempted_reason_counts
+        )
+
+
+def test_corrupted_piecewise_constant_wrong_edges_still_fail() -> None:
+    """Wrong replay edges for quantizing ops must not receive sampling exemptions."""
+
+    cases = (
+        (SaturatingSignExpModel(), torch.tensor([1.0, 2.0], dtype=torch.float32), "sign"),
+        (QuantizedCeilSigmoidModel(), torch.tensor([1.0, 2.0], dtype=torch.float32), "ceil"),
+        (InfTimesFiniteModel(), torch.tensor([1.0, 2.0], dtype=torch.float32), "__mul__"),
+    )
+    for model, x, func_name in cases:
+        trace = tl.trace(
+            model,
+            x,
+            layers_to_save="all",
+            save_arg_values=True,
+        )
+        _install_constant_replay(trace, func_name)
+
+        result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+        assert result is False
+        assert trace.validation_replay_status.failed_node_count >= 1
+        assert any(
+            decision["decision"] == "failed" and decision["reason"] == "perturbation_insensitive"
+            for decision in trace.validation_replay_status.decisions
+        )
+
+
+def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
+    """All-inf legitimate ops should not false-fail after boundary perturbation."""
+
+    cases = (
+        (ExpOverflowModel(), torch.full((2,), 100.0, dtype=torch.float32)),
+        (ExpOverflowModel(), torch.full((2,), 20.0, dtype=torch.float16)),
+        (InfTimesFiniteModel(), torch.tensor([1.0, 2.0], dtype=torch.float32)),
+        (BigSquareOverflowModel(), torch.tensor([1.0, 2.0], dtype=torch.float32)),
+    )
+    for model, x in cases:
+        trace = tl.trace(
+            model,
+            x,
+            layers_to_save="all",
+            save_arg_values=True,
+        )
+
+        result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+        assert result is True
+        assert trace.validation_replay_status.failed_node_count == 0
+
+
+def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
+    """Selection data perturbations should not no-op at finite dtype maxima."""
+
+    x = torch.full((2,), torch.finfo(torch.float32).max, dtype=torch.float32)
+    for model in (GetitemMaxModel(), UniqueMaxModel()):
+        trace = tl.trace(
+            model,
+            x,
+            layers_to_save="all",
+            save_arg_values=True,
+        )
+
+        result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+        assert result is True
+        assert trace.validation_replay_status.failed_node_count == 0
+
+
+def test_corrupted_swamped_add_replay_fails_without_generic_probe_exemption() -> None:
+    """A constant replay callable must fail even if generic probes match."""
+
+    trace = tl.trace(
+        SwampedAddModel(),
+        torch.tensor([10000.0, 10001.0], dtype=torch.float32),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    _install_constant_replay(trace, "__add__")
+
+    result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
+
+    assert result is False
+    status = trace.validation_replay_status
+    assert "generic_invariant_output_probe" not in status.exempted_reason_counts
+    assert any(
+        decision["decision"] == "failed" and decision["reason"] == "perturbation_insensitive"
+        for decision in status.decisions
+    )
+    failure = get_validation_failure(trace)
+    assert failure is not None
+    assert failure.extra["generic_invariant_probe_matched"] is True
+
+
+def test_multiplicative_zero_annihilator_uses_structural_proof() -> None:
+    """Multiplication by a saved zero operand should use a structural proof."""
 
     trace = tl.trace(
         MultiplyByZeroModel(),
@@ -550,12 +852,20 @@ def test_generic_effect_probe_exempts_annihilated_parent() -> None:
 
     assert result is True
     assert (
-        trace.validation_replay_status.exempted_reason_counts["generic_invariant_output_probe"] >= 1
+        trace.validation_replay_status.exempted_reason_counts["multiplicative_zero_annihilator"]
+        >= 1
     )
+    decisions = [
+        decision
+        for decision in trace.validation_replay_status.decisions
+        if decision.get("reason") == "multiplicative_zero_annihilator"
+    ]
+    assert decisions
+    assert all(decision.get("justification") for decision in decisions)
 
 
-def test_generic_effect_probe_does_not_exempt_influential_parent() -> None:
-    """The generic probe must not exempt a genuinely influential add parent."""
+def test_generic_probe_does_not_exempt_influential_parent() -> None:
+    """The generic diagnostic probe must not exempt a genuinely influential add parent."""
 
     trace = tl.trace(
         SimilarMagnitudeAddModel(),

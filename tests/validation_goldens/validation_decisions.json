@@ -453,9 +453,10 @@
       {
         "decision": "exempted",
         "func_name": "__mul__",
+        "justification": "non-perturbed multiplication operand at args[1] is all zero",
         "op_label": "mul_1_2:1",
         "phase": "perturbation",
-        "reason": "generic_invariant_output_probe"
+        "reason": "multiplicative_zero_annihilator"
       },
       {
         "decision": "validated",
@@ -480,7 +481,7 @@
       }
     ],
     "exempted_reason_counts": {
-      "generic_invariant_output_probe": 1,
+      "multiplicative_zero_annihilator": 1,
       "skip_perturbation_entirely:zeros_like": 1
     },
     "failed_node_count": 0,

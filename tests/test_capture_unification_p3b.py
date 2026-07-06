@@ -13,6 +13,7 @@ import torchlens as tl
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.errors import SelectorCompositionError
+from torchlens.validation.invariants import _check_backend_neutral_graph_topology
 
 
 class ViewThenMutate(nn.Module):
@@ -258,3 +259,15 @@ def test_followed_by_intervene_and_halt_fail_at_capture_start() -> None:
         tl.trace(TinyLinear(), x, halt=selector)
     with pytest.raises(PredicateError, match="unsupported followed_by predicate shape"):
         tl.trace(TinyLinear(), x, halt=tl.followed_by(tl.func("relu")))
+def test_tf_trace_exercises_backend_neutral_topology_invariant() -> None:
+    """A real TensorFlow trace should satisfy backend-neutral topology checks."""
+
+    tf = pytest.importorskip("tensorflow")
+    keras = pytest.importorskip("keras")
+    if keras.backend.backend() != "tensorflow":
+        pytest.skip(f"active keras backend is {keras.backend.backend()!r}")
+
+    trace = tl.trace(tf.identity, tf.constant([1.0, 2.0]), backend="tf")
+
+    assert trace.backend == "tf"
+    _check_backend_neutral_graph_topology(trace)

@@ -69,7 +69,6 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
     "new_ones",
     "zero_",
     "copy_",
-    "clamp",
     "fill_",
     "zeros_like",
     "ones_like",
@@ -131,10 +130,13 @@ class PosthocPerturbDecision:
         Whether the unchanged perturbation output is justified.
     reason:
         Stable reason code for diagnostics and golden snapshots.
+    justification:
+        Optional human-readable proof for design exemptions.
     """
 
     exempt: bool
     reason: str
+    justification: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -875,6 +877,34 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: List[
     return False
 
 
+def _check_batch_norm_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
+    """Exempt BatchNorm running-stat update parents in training mode.
+
+    Parameters
+    ----------
+    self:
+        Trace containing saved parent payloads.
+    layer:
+        ``batch_norm`` op being validated.
+    layers_to_perturb:
+        Parent layer labels currently being perturbed.
+
+    Returns
+    -------
+    bool
+        True when the perturbed parent is ``running_mean`` or ``running_var``
+        for a training-mode BatchNorm call. Those buffers are update targets in
+        training mode; batch statistics determine the output value.
+    """
+
+    del self
+    args = layer.saved_args
+    if args is None or len(args) <= 5 or args[5] is not True:
+        return False
+    perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
+    return bool(perturbed_positions) and perturbed_positions.issubset({3, 4})
+
+
 # ---------------------------------------------------------------------------
 # Registry 4: Custom exemption checks keyed by func name.
 # ---------------------------------------------------------------------------
@@ -891,6 +921,7 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", Op, List[str]], bool]] = {
     "maskedfill": _check_masked_fill_exempt,
     "masked_fill": _check_masked_fill_exempt,
     "masked_fill_": _check_masked_fill_exempt,
+    "batch_norm": _check_batch_norm_exempt,
 }
 
 
@@ -1001,14 +1032,12 @@ def posthoc_perturb_check(
        not value-dependent.
     3. **Type casting** (``to()``) -- value irrelevant when casting type.
     4. **Full overwrite** (__setitem__ with same-shape replacement).
-    5. **Small tensor coincidence** (__getitem__/unbind with numel < 20).
-    6. **Redundant safety net** for *_like/meshgrid/broadcast_tensors.
-    The old name/value cascade for constant outputs and all-zero/all-one
-    non-perturbed operands is deliberately absent; S1b routes those through the
-    replay-level generic double-perturbation effect probe instead.
+    5. **Structural output templates** for *_like/meshgrid/broadcast_tensors.
+    6. **Narrow value proofs** such as a non-perturbed multiplicative zero
+       operand or a dominated binary extrema operand.
 
     Returns a structured decision. ``exempt=False`` means replay-level probes
-    may still provide a proof before validation fails.
+    may still provide diagnostic evidence before validation fails.
     """
     args = layer_to_validate_parents_for.saved_args or ()
 
@@ -1091,7 +1120,124 @@ def _posthoc_structural_output_decision(
         return PosthocPerturbDecision(True, "structural_output_template")
     if layer.func_name == "bernoulli" and "p" in layer.saved_kwargs:
         return PosthocPerturbDecision(True, "rng_probability_template")
+    if _unique_disabled_auxiliary_output(layer):
+        return PosthocPerturbDecision(
+            True,
+            "structural_output_template",
+            "disabled unique auxiliary output is empty by construction",
+        )
+    if _pad_packed_sequence_lengths_output(layer):
+        return PosthocPerturbDecision(
+            True,
+            "structural_output_template",
+            "pad_packed_sequence lengths output is structural metadata",
+        )
+    if _pack_padded_sequence_metadata_output(layer):
+        return PosthocPerturbDecision(
+            True,
+            "structural_output_template",
+            "pack_padded_sequence batch metadata output is structural",
+        )
+    if _empty_getitem_output(layer):
+        return PosthocPerturbDecision(
+            True,
+            "structural_output_template",
+            "getitem output is empty, so no selected data values can change",
+        )
     return PosthocPerturbDecision(False, "not_structural_output")
+
+
+def _unique_disabled_auxiliary_output(layer: Op) -> bool:
+    """Return whether a unique op output is a disabled auxiliary tensor.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+
+    Returns
+    -------
+    bool
+        True when this is an empty ``unique``/``_unique2`` auxiliary output
+        produced because inverse/count outputs were not requested.
+    """
+
+    output = getattr(layer, "out", None)
+    return (
+        layer.func_name in {"unique", "_unique2"}
+        and isinstance(output, torch.Tensor)
+        and output.numel() == 0
+        and not bool((getattr(layer, "saved_kwargs", {}) or {}).get("return_inverse", False))
+        and not bool((getattr(layer, "saved_kwargs", {}) or {}).get("return_counts", False))
+    )
+
+
+def _pad_packed_sequence_lengths_output(layer: Op) -> bool:
+    """Return whether a pad_packed_sequence output is structural lengths metadata.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+
+    Returns
+    -------
+    bool
+        True when the output is the integer lengths tensor from
+        ``pad_packed_sequence``.
+    """
+
+    output = getattr(layer, "out", None)
+    return (
+        layer.func_name == "_pad_packed_sequence"
+        and isinstance(output, torch.Tensor)
+        and output.dtype in {torch.int, torch.long, torch.int32, torch.int64}
+    )
+
+
+def _pack_padded_sequence_metadata_output(layer: Op) -> bool:
+    """Return whether a pack_padded_sequence output is structural metadata.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+
+    Returns
+    -------
+    bool
+        True when the output is an integer metadata tensor from
+        ``pack_padded_sequence``.
+    """
+
+    output = getattr(layer, "out", None)
+    return (
+        layer.func_name == "_pack_padded_sequence"
+        and isinstance(output, torch.Tensor)
+        and output.dtype in {torch.int, torch.long, torch.int32, torch.int64}
+    )
+
+
+def _empty_getitem_output(layer: Op) -> bool:
+    """Return whether ``__getitem__`` produced an empty tensor output.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+
+    Returns
+    -------
+    bool
+        True when the output is an empty tensor selected by ``__getitem__``.
+    """
+
+    output = getattr(layer, "out", None)
+    return (
+        layer.func_name == "__getitem__"
+        and isinstance(output, torch.Tensor)
+        and output.numel() == 0
+    )
 
 
 def _posthoc_overwrite_decision(
@@ -1161,21 +1307,399 @@ def _posthoc_value_proof_decision(
         Exempt decision for narrow proved cases, otherwise non-exempt.
     """
 
+    if layer.func_name in {"__mul__", "mul"} and len(args) > 1:
+        decision = _multiplicative_zero_annihilator_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+        decision = _locally_constant_nan_multiplication_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+    if layer.func_name in {"__matmul__", "matmul", "mm", "bmm"} and len(args) > 1:
+        decision = _matmul_zero_annihilator_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+    if layer.func_name == "linear" and len(args) > 1:
+        decision = _linear_zero_weight_input_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+    if layer.func_name in {"conv1d", "conv2d", "conv3d"} and len(args) > 1:
+        decision = _conv_zero_weight_input_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+    if layer.func_name in {"__add__", "add", "__radd__", "__sub__", "sub", "__rsub__"}:
+        decision = _locally_constant_nonfinite_addition_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
     if layer.func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
         if _binary_extrema_nonperturbed_arg_dominates(
             layer.func_name, args, layer, layers_to_perturb
         ):
-            return PosthocPerturbDecision(True, "binary_extrema_dominated")
+            return PosthocPerturbDecision(
+                True,
+                "binary_extrema_dominated",
+                "non-perturbed extrema operand dominates every output element",
+            )
     if layer.func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
         dividend, divisor = args[:2]
         if isinstance(dividend, torch.Tensor) and isinstance(divisor, torch.Tensor):
             arg_positions = layer.parent_arg_positions.get("args", {})
             perturbed_label = layers_to_perturb[0]
             if arg_positions.get(1) == perturbed_label and torch.equal(layer.out, dividend):
-                return PosthocPerturbDecision(True, "mod_divisor_irrelevant")
+                return PosthocPerturbDecision(
+                    True,
+                    "mod_divisor_irrelevant",
+                    "saved dividend is already the output, so divisor value is irrelevant",
+                )
     if layer.func_name == "max" and len(args) > 0 and not torch.is_floating_point(args[0]):
-        return PosthocPerturbDecision(True, "discrete_value_output")
+        return PosthocPerturbDecision(
+            True,
+            "discrete_value_output",
+            "non-floating max output is a discrete value result",
+        )
     return PosthocPerturbDecision(False, "not_value_proved")
+
+
+def _multiplicative_zero_annihilator_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for multiplication by a saved zero operand.
+
+    Parameters
+    ----------
+    layer:
+        Multiplication op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the non-perturbed operand is provably zero,
+        otherwise non-exempt.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) == perturbed_label:
+        other_position = 1
+    elif arg_positions.get(1) == perturbed_label:
+        other_position = 0
+    else:
+        return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
+    if len(args) <= other_position:
+        return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
+    if _is_all_zero_value(args[other_position]):
+        return PosthocPerturbDecision(
+            True,
+            "multiplicative_zero_annihilator",
+            f"non-perturbed multiplication operand at args[{other_position}] is all zero",
+        )
+    return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
+
+
+def _locally_constant_nan_multiplication_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for multiplication by a saved NaN operand.
+
+    Parameters
+    ----------
+    layer:
+        Multiplication op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the non-perturbed operand is all NaN and the
+        output is therefore locally constant under finite perturbations of the
+        other operand.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_locally_constant_nan_multiplication")
+    if not _is_all_nan_value(getattr(layer, "out", None)):
+        return PosthocPerturbDecision(False, "not_locally_constant_nan_multiplication")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) == perturbed_label:
+        other_position = 1
+    elif arg_positions.get(1) == perturbed_label:
+        other_position = 0
+    else:
+        return PosthocPerturbDecision(False, "not_locally_constant_nan_multiplication")
+    if _is_all_nan_value(args[other_position]):
+        return PosthocPerturbDecision(
+            True,
+            "locally_constant_by_construction",
+            (
+                f"non-perturbed multiplication operand at args[{other_position}] is all-NaN; "
+                "any finite perturbation of the other operand remains all-NaN"
+            ),
+        )
+    return PosthocPerturbDecision(False, "not_locally_constant_nan_multiplication")
+
+
+def _matmul_zero_annihilator_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for matmul by a saved zero operand.
+
+    Parameters
+    ----------
+    layer:
+        Matrix multiplication op whose unchanged perturbed replay is being
+        classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the non-perturbed matrix operand is all zero and
+        the output is all zero.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_matmul_zero_annihilator")
+    if not _is_all_zero_value(getattr(layer, "out", None)):
+        return PosthocPerturbDecision(False, "not_matmul_zero_annihilator")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) == perturbed_label:
+        other_position = 1
+    elif arg_positions.get(1) == perturbed_label:
+        other_position = 0
+    else:
+        return PosthocPerturbDecision(False, "not_matmul_zero_annihilator")
+    if _is_all_zero_value(args[other_position]):
+        return PosthocPerturbDecision(
+            True,
+            "multiplicative_zero_annihilator",
+            f"non-perturbed matmul operand at args[{other_position}] is all zero",
+        )
+    return PosthocPerturbDecision(False, "not_matmul_zero_annihilator")
+
+
+def _linear_zero_weight_input_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for a linear input under all-zero weights.
+
+    Parameters
+    ----------
+    layer:
+        Linear op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the perturbed parent is the input and the saved
+        weight matrix is all zero.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) != perturbed_label:
+        return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
+    if _is_all_zero_value(args[1]):
+        return PosthocPerturbDecision(
+            True,
+            "multiplicative_zero_annihilator",
+            "linear input is annihilated by an all-zero saved weight matrix",
+        )
+    return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
+
+
+def _conv_zero_weight_input_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for convolution input under all-zero kernels.
+
+    Parameters
+    ----------
+    layer:
+        Convolution op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the perturbed parent is the input and the saved
+        convolution kernel is all zero.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) != perturbed_label:
+        return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
+    if _is_all_zero_value(args[1]):
+        return PosthocPerturbDecision(
+            True,
+            "multiplicative_zero_annihilator",
+            "convolution input is annihilated by an all-zero saved kernel",
+        )
+    return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
+
+
+def _locally_constant_nonfinite_addition_decision(
+    layer: Op,
+    layers_to_perturb: List[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for finite addends swamped by saved non-finites.
+
+    Parameters
+    ----------
+    layer:
+        Additive op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when a non-perturbed non-finite operand proves the
+        perturbed finite operand cannot affect the representable output.
+    """
+
+    if len(layers_to_perturb) != 1 or len(args) < 2:
+        return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) == perturbed_label:
+        other_position = 1
+    elif arg_positions.get(1) == perturbed_label:
+        other_position = 0
+    else:
+        return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
+    if _is_all_inf_value(args[other_position]):
+        if not _is_all_inf_value(getattr(layer, "out", None)):
+            return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
+        return PosthocPerturbDecision(
+            True,
+            "locally_constant_by_construction",
+            (
+                f"non-perturbed additive operand at args[{other_position}] is all-inf; "
+                "any finite perturbation of the other operand remains all-inf in this dtype"
+            ),
+        )
+    if _is_all_nan_value(args[other_position]):
+        if not _is_all_nan_value(getattr(layer, "out", None)):
+            return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
+        return PosthocPerturbDecision(
+            True,
+            "locally_constant_by_construction",
+            (
+                f"non-perturbed additive operand at args[{other_position}] is all-NaN; "
+                "any finite perturbation of the other operand remains all-NaN"
+            ),
+        )
+    return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
+
+
+def _is_all_zero_value(value: Any) -> bool:
+    """Return whether ``value`` is provably an all-zero tensor/scalar.
+
+    Parameters
+    ----------
+    value:
+        Candidate scalar or tensor value.
+
+    Returns
+    -------
+    bool
+        True when ``value`` can be inspected and every element is zero.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        try:
+            value = torch.tensor(value)
+        except (TypeError, ValueError, RuntimeError):
+            return False
+    if value.numel() == 0:
+        return False
+    return bool(torch.all(torch.eq(value, 0)).item())
+
+
+def _is_all_inf_value(value: Any) -> bool:
+    """Return whether ``value`` is provably an all-infinite tensor/scalar.
+
+    Parameters
+    ----------
+    value:
+        Candidate scalar or tensor value.
+
+    Returns
+    -------
+    bool
+        True when ``value`` can be inspected and every element is infinite.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        try:
+            value = torch.tensor(value)
+        except (TypeError, ValueError, RuntimeError):
+            return False
+    if value.numel() == 0:
+        return False
+    return bool(torch.all(torch.isinf(value)).item())
+
+
+def _is_all_nan_value(value: Any) -> bool:
+    """Return whether ``value`` is provably an all-NaN tensor/scalar.
+
+    Parameters
+    ----------
+    value:
+        Candidate scalar or tensor value.
+
+    Returns
+    -------
+    bool
+        True when ``value`` can be inspected and every element is NaN.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        try:
+            value = torch.tensor(value)
+        except (TypeError, ValueError, RuntimeError):
+            return False
+    if value.numel() == 0:
+        return False
+    return tensor_all_nan(value)
 
 
 def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]) -> bool:

@@ -2092,11 +2092,15 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if perturb and tensor_nanequal(recomputed_output, layer.out, allow_tolerance=False):
         posthoc_decision = posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
         if posthoc_decision.exempt:
-            return ValidationCheckResult.exempted(posthoc_decision.reason)
+            return ValidationCheckResult.exempted(
+                posthoc_decision.reason,
+                posthoc_decision.justification,
+            )
         if _perturbation_delta_below_output_spacing(layer, layers_to_perturb, input_args):
             return ValidationCheckResult.exempted("ulp_swamped_perturbation")
-        if _generic_parent_effect_probe(self, layer, layers_to_perturb, verbose):
-            return ValidationCheckResult.exempted("generic_invariant_output_probe")
+        generic_probe_matched = _generic_parent_effect_probe(
+            self, layer, layers_to_perturb, verbose
+        )
         if not posthoc_decision.exempt:
             # ADD-ONLY: a genuine perturbation-insensitivity failure (the output
             # did not change when a parent's value was perturbed and no posthoc
@@ -2118,7 +2122,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                         "output insensitive to perturbing parent(s) "
                         f"{layers_to_perturb}; the parent does not influence this op's value"
                     ),
-                    extra={"perturbed_parents": list(layers_to_perturb)},
+                    extra={
+                        "perturbed_parents": list(layers_to_perturb),
+                        "generic_invariant_probe_matched": generic_probe_matched,
+                    },
                 ),
             )
             return ValidationCheckResult.failed_result("perturbation_insensitive")
@@ -2214,10 +2221,74 @@ def _actual_perturbed_parent_deltas(
                 continue
             if torch.equal(original, rebuilt):
                 continue
-            deltas.append(
-                (rebuilt.detach().to(torch.float64) - original.detach().to(torch.float64)).abs()
-            )
+            sensitivity = _additive_parent_sensitivity(layer, arg_domain, key)
+            if sensitivity is None:
+                continue
+            raw_delta = (
+                rebuilt.detach().to(torch.float64) - original.detach().to(torch.float64)
+            ).abs()
+            deltas.append(raw_delta * abs(sensitivity))
     return deltas
+
+
+def _additive_parent_sensitivity(layer: Op, arg_domain: str, key: Any) -> float | None:
+    """Return the additive output sensitivity for one replay parent argument.
+
+    Parameters
+    ----------
+    layer:
+        Additive child op being classified.
+    arg_domain:
+        Either ``"args"`` or ``"kwargs"``.
+    key:
+        Parent-argument position key.
+
+    Returns
+    -------
+    float or None
+        Absolute linear sensitivity of the output to this parent, honoring
+        ``alpha`` for add/sub where applicable. ``None`` means the position is
+        not understood well enough for a ULP proof.
+    """
+
+    if isinstance(key, tuple):
+        return None
+    alpha = _additive_alpha(layer)
+    if arg_domain == "kwargs":
+        if key in {"input", "self"}:
+            return 1.0
+        if key in {"other", "tensor"}:
+            return alpha
+        return None
+    if key == 0:
+        return 1.0
+    if key == 1:
+        return alpha
+    return None
+
+
+def _additive_alpha(layer: Op) -> float:
+    """Return the scalar ``alpha`` argument for add/sub replay.
+
+    Parameters
+    ----------
+    layer:
+        Additive op whose saved kwargs may contain ``alpha``.
+
+    Returns
+    -------
+    float
+        Captured alpha value, or ``1.0`` when absent/non-scalar.
+    """
+
+    alpha = (getattr(layer, "saved_kwargs", {}) or {}).get("alpha", 1.0)
+    if isinstance(alpha, torch.Tensor):
+        if alpha.numel() != 1:
+            return 1.0
+        alpha = alpha.item()
+    if isinstance(alpha, (int, float)):
+        return float(alpha)
+    return 1.0
 
 
 def _output_representable_spacing(output_tensor: torch.Tensor) -> torch.Tensor | None:
@@ -2728,9 +2799,37 @@ def _perturb_selection_parent_values(
     ):
         return _integer_step_distinct_from(parent_values)
     if parent_values.is_floating_point():
-        finite_parent = torch.nan_to_num(parent_values.detach().float(), nan=0.0)
-        return (finite_parent + 1.0).to(parent_values.dtype)
+        return _floating_step_distinct_from(parent_values)
     return None
+
+
+def _floating_step_distinct_from(tensor: torch.Tensor) -> torch.Tensor:
+    """Return a floating tensor stepped to adjacent representable values.
+
+    Parameters
+    ----------
+    tensor:
+        Floating tensor to perturb.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor with each finite element moved by one representable step where
+        possible, preserving dtype and device.
+    """
+
+    positive_inf = torch.full_like(tensor, float("inf"))
+    negative_inf = torch.full_like(tensor, float("-inf"))
+    stepped_up = torch.nextafter(tensor, positive_inf)
+    stepped_down = torch.nextafter(tensor, negative_inf)
+    finite = torch.isfinite(tensor)
+    use_down = finite & torch.isinf(stepped_up)
+    candidate = torch.where(use_down, stepped_down, stepped_up)
+    finite_zero = torch.zeros_like(tensor)
+    candidate = torch.where(finite, candidate, finite_zero)
+    unchanged = candidate == tensor
+    fallback = torch.where(tensor == 0, torch.ones_like(tensor), torch.zeros_like(tensor))
+    return torch.where(unchanged, fallback, candidate).to(tensor.dtype)
 
 
 def _integer_step_distinct_from(tensor: torch.Tensor) -> torch.Tensor:
@@ -2779,16 +2878,32 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
-    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
-        return None
     if not parent_values.is_floating_point():
+        return None
+    if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
+        return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
+    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
         return None
     if layer.func_name == "log":
         return _finite_fill_distinct_from(parent_values, 2.0, 3.0)
+    if layer.func_name == "exp":
+        return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
     if layer.func_name in {"__pow__", "pow"}:
         exponent = _pow_exponent(layer)
         if isinstance(exponent, (int, float)) and exponent > 0:
             return _finite_fill_distinct_from(parent_values, 0.5, 2.0)
+    if layer.func_name == "sign":
+        return _sign_boundary_crossing_values(parent_values)
+    if layer.func_name == "ceil":
+        return _ceil_boundary_crossing_values(parent_values)
+    if layer.func_name == "floor":
+        return _floor_boundary_crossing_values(parent_values)
+    if layer.func_name == "round":
+        return _round_boundary_crossing_values(parent_values)
+    if layer.func_name == "clamp":
+        return _clamp_boundary_crossing_values(layer, parent_values)
+    if layer.func_name in {"hardtanh", "hardsigmoid"}:
+        return _saturated_activation_boundary_values(layer, parent_values)
     if layer.func_name in {"relu", "relu_"}:
         parent_float = torch.nan_to_num(parent_values.detach().float(), nan=-1.0)
         candidate = torch.where(
@@ -2796,6 +2911,282 @@ def _perturb_domain_sensitive_parent_values(
         )
         return candidate.to(parent_values.dtype)
     return None
+
+
+def _sign_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
+    """Return sign-op inputs across the zero boundary.
+
+    Parameters
+    ----------
+    parent_values:
+        Saved sign input tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Candidate values on the opposite side of zero.
+    """
+
+    parent_float = torch.nan_to_num(parent_values.detach().float(), nan=0.0)
+    candidate = torch.where(
+        parent_float >= 0, -torch.ones_like(parent_float), torch.ones_like(parent_float)
+    )
+    return candidate.to(parent_values.dtype)
+
+
+def _ceil_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
+    """Return ceil-op inputs across the nearest integer boundary.
+
+    Parameters
+    ----------
+    parent_values:
+        Saved ceil input tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Candidate values whose ceil should differ from the saved ceil result.
+    """
+
+    parent_float = parent_values.detach().float()
+    finite = torch.isfinite(parent_float)
+    floored = torch.floor(torch.where(finite, parent_float, torch.zeros_like(parent_float)))
+    is_integer = finite & (parent_float == floored)
+    candidate = torch.where(is_integer, parent_float + 1.0, floored)
+    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
+
+
+def _floor_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
+    """Return floor-op inputs across the nearest integer boundary.
+
+    Parameters
+    ----------
+    parent_values:
+        Saved floor input tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Candidate values whose floor should differ from the saved floor result.
+    """
+
+    parent_float = parent_values.detach().float()
+    finite = torch.isfinite(parent_float)
+    ceiled = torch.ceil(torch.where(finite, parent_float, torch.zeros_like(parent_float)))
+    is_integer = finite & (parent_float == ceiled)
+    candidate = torch.where(is_integer, parent_float - 1.0, ceiled)
+    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
+
+
+def _round_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
+    """Return round-op inputs across a rounding boundary.
+
+    Parameters
+    ----------
+    parent_values:
+        Saved round input tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Candidate values whose rounded result should differ from the saved
+        rounded result.
+    """
+
+    parent_float = parent_values.detach().float()
+    finite = torch.isfinite(parent_float)
+    rounded = torch.round(torch.where(finite, parent_float, torch.zeros_like(parent_float)))
+    candidate = rounded + 1.0
+    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
+
+
+def _clamp_boundary_crossing_values(layer: Op, parent_values: torch.Tensor) -> torch.Tensor | None:
+    """Return clamp inputs across a clamp edge when scalar bounds are known.
+
+    Parameters
+    ----------
+    layer:
+        Clamp op being replayed.
+    parent_values:
+        Saved clamp input tensor.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Boundary-crossing candidate, or ``None`` when bounds are not scalar.
+    """
+
+    lower, upper = _clamp_scalar_bounds(layer)
+    if lower is None and upper is None:
+        return None
+    return _bounded_activation_candidate(parent_values, lower, upper)
+
+
+def _saturated_activation_boundary_values(
+    layer: Op,
+    parent_values: torch.Tensor,
+) -> torch.Tensor | None:
+    """Return inputs across known saturated activation edges.
+
+    Parameters
+    ----------
+    layer:
+        Saturating activation op being replayed.
+    parent_values:
+        Saved activation input tensor.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Boundary-crossing candidate for known scalar-bound activations.
+    """
+
+    if layer.func_name == "hardsigmoid":
+        return _bounded_activation_candidate(parent_values, -3.0, 3.0)
+    lower, upper = _clamp_scalar_bounds(layer)
+    return _bounded_activation_candidate(parent_values, lower, upper)
+
+
+def _bounded_activation_candidate(
+    parent_values: torch.Tensor,
+    lower: float | None,
+    upper: float | None,
+) -> torch.Tensor | None:
+    """Return candidate values crossing scalar lower/upper saturation edges.
+
+    Parameters
+    ----------
+    parent_values:
+        Saved activation input tensor.
+    lower:
+        Lower saturation edge, if any.
+    upper:
+        Upper saturation edge, if any.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Candidate tensor, or ``None`` when no finite edge can be crossed.
+    """
+
+    if lower is None and upper is None:
+        return None
+    parent_float = parent_values.detach().float()
+    finite = torch.isfinite(parent_float)
+    inside = _inside_scalar_bounds(lower, upper)
+    if lower is not None and upper is not None:
+        below_candidate = torch.full_like(parent_float, inside)
+        above_candidate = torch.full_like(parent_float, inside)
+        interior_candidate = torch.full_like(parent_float, upper + 1.0)
+        candidate = torch.where(parent_float <= lower, below_candidate, interior_candidate)
+        candidate = torch.where(parent_float >= upper, above_candidate, candidate)
+    elif lower is not None:
+        below_candidate = torch.full_like(parent_float, lower + 1.0)
+        interior_candidate = torch.full_like(parent_float, lower - 1.0)
+        candidate = torch.where(parent_float <= lower, below_candidate, interior_candidate)
+    else:
+        assert upper is not None
+        above_candidate = torch.full_like(parent_float, upper - 1.0)
+        interior_candidate = torch.full_like(parent_float, upper + 1.0)
+        candidate = torch.where(parent_float >= upper, above_candidate, interior_candidate)
+    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
+
+
+def _inside_scalar_bounds(lower: float | None, upper: float | None) -> float:
+    """Return a finite value inside scalar saturation bounds.
+
+    Parameters
+    ----------
+    lower:
+        Lower edge, if any.
+    upper:
+        Upper edge, if any.
+
+    Returns
+    -------
+    float
+        A value inside the bounded region.
+    """
+
+    if lower is not None and upper is not None:
+        return (lower + upper) / 2.0
+    if lower is not None:
+        return lower + 1.0
+    if upper is not None:
+        return upper - 1.0
+    return 0.0
+
+
+def _clamp_scalar_bounds(layer: Op) -> tuple[float | None, float | None]:
+    """Return scalar clamp-style bounds from saved args/kwargs.
+
+    Parameters
+    ----------
+    layer:
+        Clamp-like op.
+
+    Returns
+    -------
+    tuple[float or None, float or None]
+        Lower and upper scalar bounds when available.
+    """
+
+    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    saved_kwargs = getattr(layer, "saved_kwargs", {}) or {}
+    lower = saved_kwargs.get("min", saved_kwargs.get("min_val"))
+    upper = saved_kwargs.get("max", saved_kwargs.get("max_val"))
+    if lower is None and len(saved_args) > 1:
+        lower = saved_args[1]
+    if upper is None and len(saved_args) > 2:
+        upper = saved_args[2]
+    return _scalar_float_or_none(lower), _scalar_float_or_none(upper)
+
+
+def _scalar_float_or_none(value: Any) -> float | None:
+    """Return ``value`` as a finite scalar float when possible.
+
+    Parameters
+    ----------
+    value:
+        Candidate scalar value.
+
+    Returns
+    -------
+    float or None
+        Finite scalar float, otherwise ``None``.
+    """
+
+    if isinstance(value, torch.Tensor):
+        if value.numel() != 1:
+            return None
+        value = value.item()
+    if not isinstance(value, (int, float)):
+        return None
+    value_float = float(value)
+    if not torch.isfinite(torch.tensor(value_float)):
+        return None
+    return value_float
+
+
+def _output_is_all_inf(output: Any) -> bool:
+    """Return whether ``output`` is a non-empty all-inf tensor.
+
+    Parameters
+    ----------
+    output:
+        Candidate operation output.
+
+    Returns
+    -------
+    bool
+        True when ``output`` is a tensor whose elements are all infinite.
+    """
+
+    return (
+        isinstance(output, torch.Tensor)
+        and output.numel() > 0
+        and bool(torch.all(torch.isinf(output)).item())
+    )
 
 
 def _finite_fill_distinct_from(

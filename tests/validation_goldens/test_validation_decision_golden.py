@@ -555,7 +555,8 @@ def test_validation_decision_snapshot_covers_required_categories() -> None:
     assert ("exempted", "intentional_intervention_replacement") in reason_decisions
     assert ("exempted", "not_saved_by_user") in reason_decisions
     assert ("exempted", "ulp_swamped_perturbation") in reason_decisions
-    assert ("exempted", "generic_invariant_output_probe") in reason_decisions
+    assert ("exempted", "multiplicative_zero_annihilator") in reason_decisions
+    assert ("exempted", "generic_invariant_output_probe") not in reason_decisions
     assert ("unverified", "missing_saved_args") in reason_decisions
     assert ("unverified", "perturbation_execution_exception") in reason_decisions
 
