@@ -96,6 +96,29 @@ it is in this pack:
 
 ## Known traps
 
+- **Import the checkout under audit:** `python3 path/to/script.py` puts the
+  SCRIPT directory (not the cwd) at `sys.path[0]`, so a pip `-e` install of a
+  DIFFERENT checkout can silently supply the renderer. The script injects the
+  repo root into `sys.path` and hard-fails if `torchlens.__file__` resolves
+  elsewhere. Do not remove that guard.
+- **Feature preconditions** (a panel silently showing nothing usually means a
+  missing trace flag, not a broken renderer):
+  - intervention site/cone/hook styling marks PLANNED interventions:
+    `tl.trace(..., intervention_ready=True)` then `trace.set(...)`. Live
+    `intervene=` fire records do not style nodes.
+  - raw-input thumbnails need `tl.trace(model, raw, transform=fn)` (raw input
+    is only stored when a transform produced the model-ready tensor).
+  - container labels/collapsed need `intervention_ready=True`;
+    `show_containers='nodes'` needs `capture_container_structure=True`;
+    'cluster' currently always falls back to labels; 'collapsed' only merges
+    homogeneous containers larger than `container_max_inline`.
+  - `show_input_transform_summary` renders only when the trace carries an
+    input-preprocessing record (bridge-populated; the pack injects a demo one).
+  - `collapse_fn`/`skip_fn`: the Module predicate matches on `.class_name`;
+    `skip_fn(layer) is True` means SKIP (inputs/outputs may never be skipped).
+- **Train-mode BatchNorm noise:** BN models traced in train mode scatter
+  orphaned dashed buffer-update ops when buffers are hidden; `.eval()` your
+  demo models unless that artifact is the point of the page.
 - **AI-review image caps:** when inspecting pages with a vision model, convert
   with `pdftoppm -png -r 100` and keep each image <= 2000 px on the longest
   side (crop or lower `-r`); multi-image requests reject larger panels.
