@@ -1752,10 +1752,13 @@ SECTIONS: list[Section] = [
                 caption=(
                     "One TransformerEncoder layer at full detail on a 4-token sequence (kept to a single "
                     "layer so every node label stays readable at page scale): the attention pattern -- "
-                    "in-projection to q/k/v, the matmul-softmax-matmul diamond, residual adds, layernorms, "
-                    "and the feedforward block.\n"
-                    "CHECK: the attention diamond is recognizable; residual skip edges route around the "
-                    "blocks cleanly; node text is legible."
+                    "the in-projection splitting into the three-way q/k/v fan (view/transpose branches), "
+                    "which converge on ONE scaleddotproductattention node -- PyTorch fuses the "
+                    "matmul-softmax-matmul core, and TorchLens honestly shows the fused kernel as a single "
+                    "op (same lesson as the fused nn.LSTM page in Section D) -- then out-projection, "
+                    "residual adds, layernorms, and the feedforward block.\n"
+                    "CHECK: the three-branch q/k/v fan into the fused attention op is recognizable; "
+                    "residual skip edges route around the blocks cleanly; node text is legible."
                 ),
                 panels=[
                     Panel(
