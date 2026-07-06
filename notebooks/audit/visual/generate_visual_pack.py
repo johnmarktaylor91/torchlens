@@ -115,6 +115,76 @@ def _intervened_trace(model_key: str):
     return _build
 
 
+def _live_intervened_trace(model_key: str):
+    """Trace captured with a LIVE intervene= (fires during capture).
+
+    Live fire records feed the node_overlay='intervention' border overlay --
+    the complement of the PLANNED-intervention styling shown in Section I.
+    """
+
+    def _build():
+        m, x = MODELS[model_key]()
+        return tl.trace(m, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+
+    return _build
+
+
+def _raw_input_first_trace(model_key: str):
+    """Raw-input trace with batch_render='first' (single-thumbnail policy)."""
+
+    def _build():
+        m, x = MODELS[model_key]()
+        return tl.trace(m, x, transform=lambda z: (z - 0.5) / 0.5, batch_render="first")
+
+    return _build
+
+
+def _decoded_output_trace(model_key: str):
+    """Trace with a decoded-output record (label-score rows on the output node).
+
+    In the wild trace.decoded_output is populated by output autorouting
+    (classification labels / HF text decoding); injected here to demonstrate
+    the output-node label grammar.
+    """
+
+    def _build():
+        m, x = MODELS[model_key]()
+        trace = tl.trace(m, x)
+        trace.decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
+        return trace
+
+    return _build
+
+
+def _ablation_bundle(model_key: str):
+    """Build a clean-vs-ablated Bundle for the bundle_diff renderer page."""
+
+    def _build():
+        import warnings
+
+        m, x = MODELS[model_key]()
+        trace = tl.trace(m, x, intervention_ready=True)
+        fork = trace.fork("ablated")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fork.do(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        return tl.bundle({"clean": trace, "ablated": fork}, baseline="clean")
+
+    return _build
+
+
+def _fastlog_reject_relu(ctx) -> bool:
+    """preview_fastlog demo predicate: keep everything except relu ops."""
+    return getattr(ctx, "func_name", "") != "relu"
+
+
+def _bwd_spec_gold(grad_fn_log, spec):
+    """backward_node_spec_fn demo: paint the BACKWARD half of a combined graph."""
+    spec.fillcolor = "#FFF3C4"
+    spec.color = "#8a6d00"
+    return spec
+
+
 def _preprocessed_trace(model_key: str):
     """Trace carrying an input-preprocessing provenance record.
 
@@ -338,6 +408,13 @@ AXES: dict[str, str] = {
     "draw_backward:bwd": "draw_backward bwd= pass selection",
     "draw_combined": "draw_combined forward+backward graph",
     "combined:intervening_cluster": "draw_combined intervening_cluster placement",
+    "backward_node_spec_fn": "draw_combined backward-half styling callback",
+    "overlay:intervention": "node_overlay='intervention' fired-site borders",
+    "code_panel:fallback": "code_panel embedded-cluster fallback (rank engine / non-composable format)",
+    "batch_render": "batch_render thumbnail policy (auto/all/first/first_n/shape_only)",
+    "raw_output_render": "decoded-output label grammar on the output node",
+    "surface:fastlog_preview": "Trace.preview_fastlog predicate-decision coloring",
+    "surface:bundle_diff": "tl.viz.bundle_diff paired clean-vs-intervened delta render",
     # --- node kinds ---
     "node:raw_op": "plain operation node",
     "node:param_op": "parameter-bearing op node styling",
@@ -389,8 +466,9 @@ NA_AXES: dict[str, str] = {
     "engines are shown on the placement page.",
     "code_panel:forward_class": "code_panel='forward' and 'class' use the same panel "
     "machinery as True / 'init+forward' (shown); only the excerpt differs.",
-    "overlay:others": "node_overlay 'bytes'/'grad-norm'/'intervention'/'bundle_delta' "
-    "use the same border-intensity machinery as the overlays shown.",
+    "overlay:others": "node_overlay 'bytes'/'grad-norm'/'bundle_delta' use the same "
+    "generic numeric-row + bold-border machinery as the overlays shown ('nan' and "
+    "'intervention', the two color-coded overlays, both have pages).",
     "combined:cluster_rest": "intervening_cluster 'outside'/'downstream' mirror the two "
     "placements shown ('upstream'/'own') with different cluster targets.",
     "overrides:grad_edge": "vis_grad_edge_overrides styles gradient edges via the same "
@@ -399,7 +477,15 @@ NA_AXES: dict[str, str] = {
     "vis_graph_overrides-free aliases (vis_opt, view, depth, renderer, layout, "
     "node_style, vis_node_mode, vis_buffers, vis_direction) have no visual identity "
     "of their own.",
-    "show:dispatcher": "Trace.show() dispatches to draw()/repr; no separate visuals.",
+    "show:dispatcher": "Trace.show(method='graph'/'repr') dispatches to draw()/repr(). "
+    "method='html' returns Trace._repr_html_() -- see the html_repr entry.",
+    "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
+    "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
+    "render, so it cannot appear in this PDF.",
+    "animate_ops": "Trace.animate_ops() returns an HTML play/pause widget for "
+    "repeated-pass ops; interactive HTML, out of scope for a static PDF.",
+    "code_panel:callable": "code_panel=<callable> reuses the same panel box styling "
+    "as the string modes; only the text source differs.",
 }
 
 # ---------------------------------------------------------------------------
@@ -446,7 +532,9 @@ SECTIONS: list[Section] = [
                     "DemoModel exercises several vocabulary items at once: a cos op on the input, an addition "
                     "that reads a registered buffer (buffer node styled distinctly, edge into the add), a "
                     "two-level nested module (inner_module containing loop_module), and an op fed by a fresh "
-                    "random tensor.\n"
+                    "random tensor. It also previews CONTROL-FLOW vocabulary covered fully in Section I: the "
+                    "model branches on a runtime value, so a yellow boolean node shows the condition's result "
+                    "(TRUE) and the edges of the executed arm carry IF/THEN labels.\n"
                     "CHECK: the buffer node is visually distinct from data ops; module boxes nest without "
                     "clipping; edges crossing module-box boundaries stay attached to their nodes."
                 ),
@@ -511,9 +599,10 @@ SECTIONS: list[Section] = [
                 caption=(
                     "LEFT: add(x, x) -- the same input feeds both arguments, so TWO parallel edges run from "
                     "the input to the add node. RIGHT: cat([x, x]) -- sequence-argument multiplicity, again "
-                    "two edges.\n"
-                    "CHECK: both edges are individually visible (not overdrawn into one), with correct "
-                    "argument labeling."
+                    "two edges. Note: add and cat are COMMUTATIVE ops, so arg-position edge labels are "
+                    "suppressed by design (they would be pure clutter); non-commutative ops like matmul do "
+                    "label their argument edges (see the degenerate-cases page).\n"
+                    "CHECK: both edges are individually visible (not overdrawn into one)."
                 ),
                 panels=[
                     Panel("add_twice -- add(x, x)", "add_twice"),
@@ -526,8 +615,11 @@ SECTIONS: list[Section] = [
                 title="The built-in legend",
                 caption=(
                     "show_legend=True appends a legend box decoding the node color/shape vocabulary.\n"
-                    "CHECK: legend entries match the actual styling used in the graph above them; legend "
-                    "does not overlap the graph."
+                    "CHECK: the legend does not overlap the graph. KNOWN NIT (FINDINGS F10): several legend "
+                    "swatches have drifted from the actual node styling -- e.g. the legend draws "
+                    "'parameterized' as a blue rounded box while real parameter ops are grey rectangles, "
+                    "and swatch shapes are uniform rounded-rects while real nodes are ellipses/rectangles. "
+                    "Trust the graph, not the legend, until the legend is re-synced."
                 ),
                 panels=[
                     Panel("tiny_mlp -- show_legend=True", "tiny_mlp", kwargs={"show_legend": True})
@@ -568,20 +660,23 @@ SECTIONS: list[Section] = [
                 label="b2_order_siblings",
                 title="order_siblings: execution order vs raw dot order",
                 caption=(
-                    "Four parallel projection branches executed in a fixed order. With order_siblings=True "
-                    "(the default) a post-pass re-orders true parallel siblings left-to-right by execution "
-                    "order; with False you get whatever order Graphviz dot picks.\n"
-                    "CHECK: in the LEFT panel the branches appear in execution order (proj_0..proj_3); the "
-                    "RIGHT panel may show them shuffled -- that difference is exactly what the option buys."
+                    "An inception-style block whose four parallel branches (1x1 conv, 3x3 tower, 5x5 tower, "
+                    "pool tower) execute in a fixed order. With order_siblings=True (the default) a "
+                    "post-pass re-orders true parallel siblings left-to-right by execution order; with "
+                    "False you get whatever order Graphviz dot picks. (On trivially symmetric fanouts dot "
+                    "often happens to agree, so this page uses asymmetric branches where the difference is "
+                    "real.)\n"
+                    "CHECK: the two panels lay the branches out DIFFERENTLY; in the True panel the branch "
+                    "order matches execution order (b1, b3 tower, b5 tower, pool tower left-to-right)."
                 ),
                 panels=[
                     Panel(
                         "order_siblings=True (default)",
-                        "parallel_fanout",
+                        "mini_inception",
                         kwargs={"order_siblings": True},
                     ),
                     Panel(
-                        "order_siblings=False", "parallel_fanout", kwargs={"order_siblings": False}
+                        "order_siblings=False", "mini_inception", kwargs={"order_siblings": False}
                     ),
                 ],
                 covers=["order_siblings:on", "order_siblings:off", "topology:parallel"],
@@ -652,7 +747,7 @@ SECTIONS: list[Section] = [
                     "non-constraining edges. 'cluster' requires all leaves to share one module owner and "
                     "otherwise FALLS BACK to labels -- no known model currently produces a cluster box "
                     "(FINDINGS F3), so the fallback is what you will actually see.\n"
-                    "CHECK: dict keys ('a'/'b', 'left'/'right') and tuple indices are correct; dashed "
+                    "CHECK: dict keys ('a'/'b', 'payload.a'/'payload.b') and tuple indices are correct; dashed "
                     "container ties must not be mistaken for data flow (no arrowheads, no layout pull)."
                 ),
                 panels=[
@@ -754,9 +849,12 @@ SECTIONS: list[Section] = [
                 title="vis_call_depth: limiting module-box nesting",
                 caption=(
                     "vis_call_depth caps how deep module boxes nest. LEFT: unlimited (default 1000) shows "
-                    "inner_module containing loop_module. RIGHT: depth 1 draws only the outermost module "
-                    "boxes; deeper structure is flattened (op nodes remain, boxes disappear).\n"
-                    "CHECK: at depth 1 no box appears INSIDE another box."
+                    "inner_module containing loop_module at full detail. RIGHT: depth 1 keeps only the "
+                    "outermost module level -- modules deeper than the cap COLLAPSE into single summary "
+                    "boxes carrying an honest 'N layers total' remainder (the same collapsed-box element "
+                    "as Section E).\n"
+                    "CHECK: at depth 1 no box appears INSIDE another box, and the collapsed inner_module "
+                    "box reports the layer/param count it swallowed."
                 ),
                 panels=[
                     Panel("vis_call_depth=1000 (default)", "demo_model"),
@@ -848,8 +946,8 @@ SECTIONS: list[Section] = [
                         kwargs={"vis_edge_overrides": {"color": "red", "penwidth": "2"}},
                     ),
                     Panel(
-                        "vis_module_overrides={'color': 'blue', 'style': 'dashed'}",
-                        "tiny_mlp",
+                        "vis_module_overrides: dashed blue module boxes",
+                        "demo_model",
                         kwargs={"vis_module_overrides": {"color": "blue", "style": "dashed"}},
                     ),
                 ],
@@ -923,14 +1021,21 @@ SECTIONS: list[Section] = [
                     "nn.LSTMCell carries both h and c between timesteps, so rolled mode must close TWO "
                     "recurrence loops.\n"
                     "CHECK: both back-edges present and separately routed; tuple unpacking of (h, c) does "
-                    "not produce stray nodes; unrolled and rolled agree on op content."
+                    "not produce stray nodes. KNOWN NIT (FINDINGS F11): the loop runs 4 timesteps but the "
+                    "rolled multiplier reads (x8) -- each LSTMCell call logs one pass per OUTPUT tensor "
+                    "(h and c), double-counting multi-output ops. Compare with the RNNCell page, where a "
+                    "single-output cell over the same 4 steps correctly reads (x4)."
                 ),
                 panels=[
-                    Panel("unrolled", "lstm_cell_seq", kwargs={"vis_mode": "unrolled"}),
+                    Panel(
+                        "unrolled",
+                        "lstm_cell_seq",
+                        kwargs={"vis_mode": "unrolled", "dpi": 150},
+                    ),
                     Panel(
                         "rolled -- h and c back-edges",
                         "lstm_cell_seq",
-                        kwargs={"vis_mode": "rolled"},
+                        kwargs={"vis_mode": "rolled", "dpi": 150},
                     ),
                 ],
                 covers=["edge:back_edge", "label:xN"],
@@ -1332,21 +1437,33 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="f4_nan_overlay",
-                title="node_overlay='nan': finding the first non-finite op",
+                title="Diagnostic overlays: 'nan' and 'intervention' recolor borders",
                 caption=(
-                    "A model that goes NaN in the middle (sqrt of a negative shift). The 'nan' overlay "
-                    "highlights ops whose outputs contain non-finite values -- the debugging money shot: "
-                    "the clean prefix stays unmarked, the sqrt and everything downstream lights up.\n"
-                    "CHECK: the boundary between clean and NaN ops is exactly at the sqrt."
+                    "The two overlays with bespoke BORDER COLORS (unlike the numeric overlays on the "
+                    "previous page). LEFT: a model that goes NaN in the middle (sqrt of a negative shift) "
+                    "-- node_overlay='nan' paints thick ORANGE borders on every op whose output contains "
+                    "non-finite values: the clean prefix stays unmarked, the sqrt and everything downstream "
+                    "lights up. RIGHT: a trace captured with a LIVE intervene= (zero-ablating relu) -- "
+                    "node_overlay='intervention' paints thick PINK borders on ops that carry intervention "
+                    "fire records.\n"
+                    "CHECK: LEFT -- the orange boundary sits exactly at the sqrt; RIGHT -- exactly the relu "
+                    "carries the pink border."
                 ),
                 panels=[
                     Panel(
                         "nan_midway -- node_overlay='nan'",
                         "nan_midway",
-                        kwargs={"node_overlay": "nan"},
-                    )
+                        kwargs={"node_overlay": "nan", "dpi": 150},
+                    ),
+                    Panel(
+                        "live intervene= trace -- node_overlay='intervention'",
+                        "tiny_mlp",
+                        kwargs={"node_overlay": "intervention", "dpi": 150},
+                        trace_variant="live_intervened",
+                        trace_builder=_live_intervened_trace("tiny_mlp"),
+                    ),
                 ],
-                covers=["overlay:nan"],
+                covers=["overlay:nan", "overlay:intervention"],
             ),
             Page(
                 label="f5_label_fields",
@@ -1376,8 +1493,12 @@ SECTIONS: list[Section] = [
                 caption=(
                     "code_panel renders the model source captured at trace time in a side panel. True shows "
                     "the forward method; 'init+forward' includes the constructor. ('forward' and 'class' "
-                    "variants use the same machinery with different excerpts.)\n"
-                    "CHECK: code is readable, aligned with the graph, and matches the actual model source."
+                    "variants use the same machinery with different excerpts.) The composed side-by-side "
+                    "layout needs an SVG-composable pipeline; with the 'rank' placement engine (or a non "
+                    "svg/pdf/png format) the source falls back to an EMBEDDED code cluster inside the "
+                    "graph itself (RIGHT panel).\n"
+                    "CHECK: code is readable, aligned with the graph, and matches the actual model source; "
+                    "in the fallback panel the code box sits inside the graph canvas rather than beside it."
                 ),
                 panels=[
                     Panel("code_panel=True", "demo_model", kwargs={"code_panel": True}),
@@ -1386,8 +1507,13 @@ SECTIONS: list[Section] = [
                         "demo_model",
                         kwargs={"code_panel": "init+forward"},
                     ),
+                    Panel(
+                        "fallback: code_panel=True + vis_node_placement='rank'",
+                        "demo_model",
+                        kwargs={"code_panel": True, "vis_node_placement": "rank"},
+                    ),
                 ],
-                covers=["code_panel:true", "code_panel:init_forward"],
+                covers=["code_panel:true", "code_panel:init_forward", "code_panel:fallback"],
             ),
             Page(
                 label="f7_typography",
@@ -1410,24 +1536,41 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="f8_raw_io",
-                title="Raw input rendering: thumbnails on the input node",
+                title="Raw input thumbnails and decoded-output rows on boundary nodes",
                 caption=(
-                    "When the trace receives the RAW input plus a transform= that produces the model-ready "
-                    "tensor (trace(model, raw_images, transform=normalize)), TorchLens stores the raw input "
-                    "and the input boundary node renders a thumbnail montage of the image batch (up to the "
-                    "batch_render limit; random noise here, but real photos in practice).\n"
-                    "CHECK: the montage renders inside the input boundary node (which grows to hold it) and "
-                    "each batch item is individually visible."
+                    "LEFT: when the trace receives the RAW input plus a transform= that produces the "
+                    "model-ready tensor (trace(model, raw_images, transform=normalize)), the input boundary "
+                    "node renders a thumbnail montage of the image batch (random noise here, real photos in "
+                    "practice). MIDDLE: batch_render='first' renders only the first batch item -- the other "
+                    "policies ('auto' shows up to 4 with a '+N more' note, 'all' up to 16, 'first_n:<N>', "
+                    "and 'shape_only' which disables thumbnails entirely) tune the same montage. RIGHT: the "
+                    "OUTPUT side -- when trace.decoded_output carries decoded predictions (populated by "
+                    "output autorouting for classifiers/HF text; injected here), the output node renders "
+                    "label-score rows instead of a bare shape.\n"
+                    "CHECK: montage items are individually visible; the 'first' panel shows exactly one "
+                    "thumbnail; the output node reads like a prediction ('tabby cat 87%')."
                 ),
                 panels=[
                     Panel(
-                        "small_conv -- raw image batch + transform=normalize",
+                        "raw image batch + transform (montage)",
                         "small_conv",
                         trace_variant="raw_io",
                         trace_builder=_raw_input_trace("small_conv"),
-                    )
+                    ),
+                    Panel(
+                        "batch_render='first' (single item)",
+                        "small_conv",
+                        trace_variant="raw_io_first",
+                        trace_builder=_raw_input_first_trace("small_conv"),
+                    ),
+                    Panel(
+                        "decoded output -- label-score rows",
+                        "small_conv",
+                        trace_variant="decoded_out",
+                        trace_builder=_decoded_output_trace("small_conv"),
+                    ),
                 ],
-                covers=["raw_io_render"],
+                covers=["raw_io_render", "batch_render", "raw_output_render"],
             ),
             Page(
                 label="f9_input_transform",
@@ -1569,9 +1712,12 @@ SECTIONS: list[Section] = [
                 caption=(
                     "draw_combined renders forward ops and backward grad_fns side by side (default "
                     "leftright), with DASHED correspondence ties linking each forward op to the grad_fn "
-                    "that differentiates it.\n"
+                    "that differentiates it. The THIRD panel exercises backward_node_spec_fn -- a callback "
+                    "that styles ONLY the backward half (here: gold fill), independent of node_spec_fn for "
+                    "the forward half.\n"
                     "CHECK: the forward and backward halves are visually separable; dashed ties pair the "
-                    "right nodes; gradient edges run opposite to data edges."
+                    "right nodes; gradient edges run opposite to data edges; in panel 3 exactly the "
+                    "grad_fn nodes turn gold."
                 ),
                 panels=[
                     Panel(
@@ -1588,8 +1734,23 @@ SECTIONS: list[Section] = [
                         kwargs={"vis_graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
+                    Panel(
+                        "backward_node_spec_fn tints ONLY the backward half",
+                        "linear_relu",
+                        "draw_combined",
+                        kwargs={
+                            "backward_node_spec_fn": _bwd_spec_gold,
+                            "vis_graph_overrides": {"dpi": "150"},
+                        },
+                        trace_variant="backward",
+                    ),
                 ],
-                covers=["draw_combined", "edge:fwd_bwd_tie", "edge:backward"],
+                covers=[
+                    "draw_combined",
+                    "edge:fwd_bwd_tie",
+                    "edge:backward",
+                    "backward_node_spec_fn",
+                ],
             ),
             Page(
                 label="h4_combined_cluster",
@@ -1812,6 +1973,60 @@ SECTIONS: list[Section] = [
             ),
         ],
     ),
+    # =====================================================================
+    Section(
+        "L",
+        "Adjacent Rendering Surfaces",
+        "Graphviz outputs that live NEXT TO Trace.draw(): the fastlog predicate "
+        "preview (which ops would a sparse-capture predicate keep?) and the "
+        "bundle diff renderer (clean vs intervened traces, per-node delta).",
+        [
+            Page(
+                label="l1_fastlog_preview",
+                title="preview_fastlog: which ops would a predicate keep?",
+                caption=(
+                    "Trace.preview_fastlog(keep_op=...) repaints the model graph by PREDICATE DECISION "
+                    "before you run a sparse tl.record() capture: GREEN = the predicate keeps the op, "
+                    "GREY = rejected. (Two further colors exist in this vocabulary: AMBER for ops the "
+                    "preview could not reach and MAGENTA-PINK for ops where the predicate itself raised.) "
+                    "Here the predicate keeps everything except relu.\n"
+                    "CHECK: exactly the relu ops are grey; everything else is green; the coloring answers "
+                    "'what would my predicate capture?' at a glance."
+                ),
+                panels=[
+                    Panel(
+                        "keep_op = everything except relu",
+                        "tiny_mlp",
+                        "preview_fastlog",
+                        kwargs={"keep_op": _fastlog_reject_relu, "dpi": 150},
+                    )
+                ],
+                covers=["surface:fastlog_preview"],
+            ),
+            Page(
+                label="l2_bundle_diff",
+                title="bundle_diff: clean vs intervened, per-node delta",
+                caption=(
+                    "tl.viz.bundle_diff(bundle) renders a PAIRED layout of two traces from one bundle "
+                    "(here: a clean trace and a fork with every relu zero-ablated) and colors each node "
+                    "pair by the relative-L2 delta of its activations -- red intensity = how much the "
+                    "intervention changed that op's output.\n"
+                    "CHECK: ops upstream of the first relu show no delta; the ablated relu and everything "
+                    "downstream redden; the two columns stay structurally aligned."
+                ),
+                panels=[
+                    Panel(
+                        "clean vs relu-ablated tiny_mlp -- relative_l2 deltas",
+                        "tiny_mlp",
+                        "bundle_diff",
+                        trace_variant="ablation_bundle",
+                        trace_builder=_ablation_bundle("tiny_mlp"),
+                    )
+                ],
+                covers=["surface:bundle_diff"],
+            ),
+        ],
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -1830,7 +2045,13 @@ def _render_panel(page: Page, panel: Panel, idx: int) -> tuple[str, pathlib.Path
             kwargs.update(panel.kwargs_fn(trace))
         if panel.subtitle_fn is not None:
             subtitle = panel.subtitle_fn(trace)
-        fn = getattr(trace, panel.method)
+        if panel.method == "bundle_diff":
+            # Bundle-level renderer: not a Trace method. trace_builder returns a Bundle.
+            import functools
+
+            fn = functools.partial(tl.viz.bundle_diff, trace)
+        else:
+            fn = getattr(trace, panel.method)
         fn(vis_outpath=str(stem), vis_fileformat="png", vis_save_only=True, **kwargs)
         png = pathlib.Path(str(stem) + ".png")
         if not png.exists():
@@ -1873,6 +2094,10 @@ def _toc_body(plan: list[tuple[str, object]]) -> str:
         "  'N layers total' collapsed-box remainder: everything hidden inside, incl. buffers",
         "  dashed segment  adjacency-only range: consecutive siblings, NOT a real module",
         "  double border   this op has hidden buffer dependencies (peripheries=2)",
+        "  yellow node     runtime boolean that decided a branch; IF/THEN/ELIF/ELSE edge",
+        "                  labels mark the arm that actually executed (Section I)",
+        "  FINDINGS Fn     tags reference the maintainers' known-issue ledger; each such",
+        "                  caption tells you which quirks to ignore vs report",
     ]
     return "\n".join(lines)
 

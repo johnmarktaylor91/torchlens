@@ -109,7 +109,6 @@ def compose_page(
     if ncols <= 0:
         ncols = 1 if n <= 1 else (2 if n == 2 else min(3, n))
     ncols = min(ncols, max(n, 1))
-    nrows = (n + ncols - 1) // ncols if n else 0
 
     # --- measure images ---
     images: list[Optional[Image.Image]] = []
@@ -122,12 +121,40 @@ def compose_page(
 
     gutter_in = 0.25
     side_margin_in = 0.35
-    panel_w_in = (PAGE_W_IN - 2 * side_margin_in - (ncols - 1) * gutter_in) / ncols
+    content_w_in = PAGE_W_IN - 2 * side_margin_in
+    panel_w_in = (content_w_in - (ncols - 1) * gutter_in) / ncols
+
+    # Row packing: an image whose natural size (~100 dpi) is much wider than a
+    # grid cell gets its own FULL-WIDTH row -- squeezing wide graphs into a
+    # grid cell renders them illegible, which defeats the page.
+    def _is_wide(img: Optional[Image.Image]) -> bool:
+        return ncols > 1 and img is not None and (img.width / 100.0) > panel_w_in * 1.55
+
+    rows: list[list[int]] = []
+    current: list[int] = []
+    for i in range(n):
+        if _is_wide(images[i]):
+            if current:
+                rows.append(current)
+                current = []
+            rows.append([i])
+        else:
+            current.append(i)
+            if len(current) == ncols:
+                rows.append(current)
+                current = []
+    if current:
+        rows.append(current)
+
+    def _row_panel_w(row: list[int]) -> float:
+        if len(row) == 1 and _is_wide(images[row[0]]):
+            return content_w_in
+        return panel_w_in
 
     # display size rule: never blow a small render up past its native size at
     # ~100 dpi (blurry); cap very deep graphs at MAX_PANEL_H_IN.
-    def _disp_size(img: Image.Image) -> tuple[float, float]:
-        disp_w = min(panel_w_in, img.width / 100.0)
+    def _disp_size(img: Image.Image, width_budget: float) -> tuple[float, float]:
+        disp_w = min(width_budget, img.width / 100.0)
         disp_h = disp_w * img.height / img.width
         if disp_h > MAX_PANEL_H_IN:
             disp_h = MAX_PANEL_H_IN
@@ -137,13 +164,14 @@ def compose_page(
     # per-row display heights
     subtitle_h_in = 0.28
     row_heights: list[float] = []
-    for r in range(nrows):
-        row_imgs = images[r * ncols : (r + 1) * ncols]
+    for row in rows:
+        budget = _row_panel_w(row)
         h = 1.2  # min height (error placeholder)
-        for img in row_imgs:
-            if img is not None:
-                h = max(h, _disp_size(img)[1])
+        for i in row:
+            if images[i] is not None:
+                h = max(h, _disp_size(images[i], budget)[1])
         row_heights.append(h + subtitle_h_in)
+    nrows = len(rows)
 
     caption_lines = _wrap(caption).count("\n") + 1
     header_h_in = 0.42
@@ -227,18 +255,16 @@ def compose_page(
     y_cursor += caption_h_in
 
     # --- panels ---
-    for r in range(nrows):
+    for r, row in enumerate(rows):
         row_h = row_heights[r]
-        for c in range(ncols):
-            i = r * ncols + c
-            if i >= n:
-                break
+        row_budget = _row_panel_w(row)
+        for c, i in enumerate(row):
             sub, _path, err = panel_items[i]
             img = images[i]
             x0_in = side_margin_in + c * (panel_w_in + gutter_in)
             # subtitle -- clipped to the panel width so neighbors never overlap
             sub_fontsize = 10 if ncols <= 3 else 8.5
-            max_chars = max(int(panel_w_in * (14 if ncols <= 3 else 17)), 12)
+            max_chars = max(int(row_budget * (14 if ncols <= 3 else 17)), 12)
             sub_text = sub if len(sub) <= max_chars else sub[: max_chars - 3] + "..."
             fig.text(
                 x0_in / PAGE_W_IN,
@@ -252,7 +278,7 @@ def compose_page(
             )
             img_top_in = y_cursor + subtitle_h_in
             if img is not None:
-                disp_w, disp_h = _disp_size(img)
+                disp_w, disp_h = _disp_size(img, row_budget)
                 ax = fig.add_axes(
                     (
                         x0_in / PAGE_W_IN,
@@ -309,6 +335,13 @@ def compose_text_page(
     banner: bool = False,
 ) -> None:
     """Compose a text-only page (TOC, section header, diagnostics)."""
+
+    # Wrap long prose lines so section blurbs never clip at the page edge.
+    body = "\n".join(
+        wrapped
+        for line in body.splitlines()
+        for wrapped in (textwrap.wrap(line, width=112) or [""])
+    )
 
     n_lines = body.count("\n") + 1
     header_h_in = 0.42

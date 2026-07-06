@@ -51,6 +51,7 @@ Single render-then-staple script (a locked design decision):
 | I | Control flow & interventions |
 | J | Real architectures at page scale (resnet18 auto, transformer, inception) |
 | K | Degenerate & edge cases |
+| L | Adjacent rendering surfaces (fastlog predicate preview, bundle_diff) |
 
 ## The visual-grammar cheat sheet
 
