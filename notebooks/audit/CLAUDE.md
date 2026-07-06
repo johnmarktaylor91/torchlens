@@ -54,7 +54,16 @@ done
 # 4. Regenerate the visual pack
 python notebooks/audit/visual/generate_visual_pack.py
 # => writes notebooks/audit/visual/visual_audit.pdf
+
+# 5. BEFORE COMMITTING: strip outputs from the on-disk notebooks
+nbstripout notebooks/audit/[0-9]*.ipynb
 ```
+
+Step 5 matters: the `detect-secrets` pre-commit hook scans WORKING-TREE files, and
+executed notebooks with inline images (the collapse slider embeds, matplotlib figures)
+contain base64 blobs it flags as high-entropy secrets. The `nbstripout` git filter
+only cleans the staged blob, not the file on disk — so commit attempts fail until you
+strip. The HTML in `_exports/` keeps the executed outputs for review.
 
 Execution-time expectations: 00-06 and 08-10 run in ~20-30 s each; 07 (intervention),
 11 (visualization), 12 (debug), 13 (export sweep) run ~30-90 s; 14 (HF, guarded)
