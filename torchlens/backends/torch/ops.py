@@ -3016,8 +3016,9 @@ def _emit_fast_operation_events(
             raw_index,
             _label_raw,
         )
+        is_inplace_style_name = str(func_name).endswith("_") and not str(func_name).startswith("__")
         if _label_raw not in self._raw_to_final_layer_labels and (
-            str(func_name).endswith("_") or func_name == "identity"
+            is_inplace_style_name or func_name == "identity"
         ):
             self._layer_counter -= 1
             self._raw_layer_type_counter[layer_type] -= 1

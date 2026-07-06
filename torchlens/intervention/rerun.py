@@ -889,6 +889,11 @@ def _capture_with_active_spec(
         save_predicate=save_predicate,
         lookback=lookback,
         lookback_payload_policy=lookback_payload_policy,
+        retain_output_parents_for_layers_to_save=getattr(
+            log,
+            "_retain_layers_to_save_output_parents",
+            False,
+        ),
     )
 
 
