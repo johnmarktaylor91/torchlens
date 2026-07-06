@@ -24,7 +24,7 @@ from ...data_classes.derived_grad import (
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
-from ...ir.buffer import CaptureEvents
+from ...ir.capture_events import CaptureEvents
 from ...ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
@@ -32,12 +32,12 @@ from ...ir.events import (
     OpEvent,
     OutputRef,
     ParentEdge,
-    TraceBuildState,
 )
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext, _DEFERRED_VALUE
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...ir.trace_build_state import TraceBuildState
 from ...postprocess._materialize import materialize_from_events
 from ...quantities import Duration
 from .._finalize import attach_function_root_module, attach_object_module_logs

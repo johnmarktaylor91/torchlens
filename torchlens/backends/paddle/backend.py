@@ -21,7 +21,7 @@ from ...data_classes.derived_grad import (
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
-from ...ir.buffer import CaptureEvents
+from ...ir.capture_events import CaptureEvents
 from ...ir.events import (
     ArgTemplateRef,
     FunctionCallRef,

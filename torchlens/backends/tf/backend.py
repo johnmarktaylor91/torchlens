@@ -13,7 +13,7 @@ from ..._deprecations import MISSING
 from ...backends import BackendName
 from ...data_classes.param import ParamAccessor
 from ...data_classes.trace import Trace
-from ...ir.buffer import CaptureEvents
+from ...ir.capture_events import CaptureEvents
 from ...intervention.selectors import BaseSelector
 from ...postprocess._materialize import materialize_from_events
 from ...quantities import Duration

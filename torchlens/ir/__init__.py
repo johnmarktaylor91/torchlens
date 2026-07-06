@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .buffer import (
+from .capture_events import (
     CaptureEvents,
     LiveOpRecord,
     live_record_for_label,
@@ -48,7 +48,6 @@ from .events import (
     OutputRef,
     OutputVersionEvent,
     ParentEdge,
-    TraceBuildState,
     edge_use_kind,
     is_control_edge_use,
     is_value_edge_use,
@@ -64,6 +63,7 @@ from .predicate import (
 )
 from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from .semantics import BackendSemantics, CapturePolicy
+from .trace_build_state import TraceBuildState
 
 __all__ = [
     "ArgTemplateRef",

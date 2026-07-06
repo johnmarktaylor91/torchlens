@@ -15,13 +15,14 @@ from ...data_classes.internal_types import FuncExecutionContext
 from ..._io import BlobRef as PortableBlobRef
 from ...fastlog.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from ...ir import replace_op_event
-from ...ir.events import OpEvent, TraceBuildState
+from ...ir.events import OpEvent
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.container import ContainerSpec, OutputPathComponent
 from ...ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, Role
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...ir.trace_build_state import TraceBuildState
 from ...utils.arg_handling import (
     INPUT_WAS_PARAMETER_ATTR,
     normalize_input_args,

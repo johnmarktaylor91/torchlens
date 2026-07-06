@@ -5,11 +5,12 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from typing import Any, Protocol
 
-from ..ir.events import OpEvent, TraceBuildState
+from ..ir.events import OpEvent
 from ..ir.intervention import FireResult, FunctionEventInput
 from ..ir.predicate import RecordContext
 from ..ir.refs import ReservedLabel, TensorRef
 from ..ir.semantics import BackendSemantics, CapturePolicy
+from ..ir.trace_build_state import TraceBuildState
 
 
 class CaptureBackend(Protocol):

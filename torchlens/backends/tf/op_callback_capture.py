@@ -9,7 +9,7 @@ from typing import Any, Callable
 import numpy as np
 
 from ...fastlog.types import CaptureSpec
-from ...ir.buffer import CaptureEvents
+from ...ir.capture_events import CaptureEvents
 from ...ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
