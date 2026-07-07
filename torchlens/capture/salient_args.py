@@ -28,12 +28,17 @@ SalientArgs = dict[str, Any]
 Extractor = Callable[[SalientArgs, list[Shape]], SalientArgs]
 
 _EXTRACTORS: dict[str, Extractor] = {}
+_ARG_NAME_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "transpose": ("input", "dim0", "dim1"),
+}
 
 
 def _register(*layer_types: str) -> Callable[[Extractor], Extractor]:
     """Decorator to register an extractor for one or more normalized layer types."""
 
     def decorator(fn: Extractor) -> Extractor:
+        """Register one extractor function and return it unchanged."""
+
         for lt in layer_types:
             _EXTRACTORS[lt] = fn
         return fn
@@ -54,7 +59,11 @@ def _build_arg_name_map(
     Returns a dict combining positional args (mapped by name) and kwargs.
     If argnames aren't available, returns just kwargs.
     """
-    argnames = _st._arg_names.get(func_name.strip("_"), ())
+    normalized_func_name = func_name.strip("_")
+    argnames = _st._arg_names.get(
+        normalized_func_name,
+        _ARG_NAME_FALLBACKS.get(normalized_func_name, ()),
+    )
     result = dict(kwargs)
     for i, val in enumerate(args):
         if i < len(argnames):
@@ -109,6 +118,8 @@ def _all_same(val: Any, scalar_default: Any) -> bool:
 
 @_register("conv1d", "conv2d", "conv3d", "convolution")
 def _conv(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient convolution channel, kernel, and layout parameters."""
+
     result: SalientArgs = {}
     if len(param_shapes) >= 1:
         w = param_shapes[0]
@@ -134,6 +145,8 @@ def _conv(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("convtranspose1d", "convtranspose2d", "convtranspose3d")
 def _conv_transpose(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient transposed-convolution parameters."""
+
     result = _conv(named, param_shapes)
     output_padding = _get(named, "output_padding")
     if output_padding is not None and not _all_same(output_padding, 0):
@@ -143,6 +156,8 @@ def _conv_transpose(named: SalientArgs, param_shapes: list[Shape]) -> SalientArg
 
 @_register("linear")
 def _linear(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient linear-layer feature counts."""
+
     result: SalientArgs = {}
     if len(param_shapes) >= 1:
         w = param_shapes[0]
@@ -154,6 +169,8 @@ def _linear(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("batchnorm", "batchnorm1d", "batchnorm2d", "batchnorm3d")
 def _batch_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient batch-normalization parameters."""
+
     result: SalientArgs = {}
     eps = _get(named, "eps")
     if eps is not None:
@@ -166,6 +183,8 @@ def _batch_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("layernorm")
 def _layer_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient layer-normalization parameters."""
+
     result: SalientArgs = {}
     ns = _get(named, "normalized_shape")
     if ns is not None:
@@ -178,6 +197,8 @@ def _layer_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("groupnorm")
 def _group_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient group-normalization parameters."""
+
     result: SalientArgs = {}
     ng = _get(named, "num_groups")
     if ng is not None:
@@ -190,6 +211,8 @@ def _group_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("instancenorm", "instancenorm1d", "instancenorm2d", "instancenorm3d")
 def _instance_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient instance-normalization parameters."""
+
     result: SalientArgs = {}
     eps = _get(named, "eps")
     if eps is not None:
@@ -202,12 +225,16 @@ def _instance_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs
 
 @_register("dropout", "dropout1d", "dropout2d", "dropout3d", "alphadropout", "featurealphadropout")
 def _dropout(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient dropout probability."""
+
     p = _get(named, "p")
     return {"p": p} if p is not None else {}
 
 
 @_register("maxpool1d", "maxpool2d", "maxpool3d")
 def _max_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient max-pooling window parameters."""
+
     result: SalientArgs = {}
     ks = _get(named, "kernel_size")
     if ks is not None:
@@ -223,6 +250,8 @@ def _max_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("avgpool1d", "avgpool2d", "avgpool3d")
 def _avg_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient average-pooling window parameters."""
+
     result: SalientArgs = {}
     ks = _get(named, "kernel_size")
     if ks is not None:
@@ -238,30 +267,40 @@ def _avg_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("adaptiveavgpool1d", "adaptiveavgpool2d", "adaptiveavgpool3d")
 def _adaptive_avg_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient adaptive-average-pooling output size."""
+
     os = _get(named, "output_size")
     return {"output_size": os} if os is not None else {}
 
 
 @_register("adaptivemaxpool1d", "adaptivemaxpool2d", "adaptivemaxpool3d")
 def _adaptive_max_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient adaptive-max-pooling output size."""
+
     os = _get(named, "output_size")
     return {"output_size": os} if os is not None else {}
 
 
 @_register("leakyrelu")
 def _leaky_relu(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient leaky-ReLU slope."""
+
     ns = _get(named, "negative_slope")
     return {"negative_slope": ns} if ns is not None else {}
 
 
 @_register("elu")
 def _elu(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient ELU alpha."""
+
     a = _get(named, "alpha")
     return {"alpha": a} if a is not None else {}
 
 
 @_register("hardtanh")
 def _hardtanh(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient hardtanh bounds."""
+
     result: SalientArgs = {}
     mn = _get(named, "min_val")
     if mn is not None:
@@ -274,6 +313,8 @@ def _hardtanh(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("threshold")
 def _threshold(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient threshold activation values."""
+
     result: SalientArgs = {}
     t = _get(named, "threshold")
     if t is not None:
@@ -286,12 +327,16 @@ def _threshold(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("softmax", "logsoftmax")
 def _softmax(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient softmax dimension."""
+
     dim = _get(named, "dim")
     return {"dim": dim} if dim is not None else {}
 
 
 @_register("scaleddotproductattention")
 def _sdpa(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient scaled-dot-product-attention parameters."""
+
     result: SalientArgs = {}
     dp = _get(named, "dropout_p")
     if dp is not None and dp != 0.0:
@@ -307,6 +352,8 @@ def _sdpa(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("interpolate", "upsample", "upsamplebilinear", "upsamplenearest")
 def _interpolate(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient interpolation size, scale, and mode parameters."""
+
     result: SalientArgs = {}
     size = _get(named, "size")
     if size is not None:
@@ -322,6 +369,8 @@ def _interpolate(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("embedding")
 def _embedding(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient embedding table dimensions and padding index."""
+
     result: SalientArgs = {}
     if len(param_shapes) >= 1:
         w = param_shapes[0]
@@ -336,18 +385,24 @@ def _embedding(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("cat")
 def _cat(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient concatenation dimension."""
+
     dim = _get(named, "dim")
     return {"dim": dim} if dim is not None else {}
 
 
 @_register("stack", "hstack", "vstack", "dstack")
 def _stack(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient stacking dimension."""
+
     dim = _get(named, "dim")
     return {"dim": dim} if dim is not None else {}
 
 
 @_register("sum", "mean", "prod", "amax", "amin", "nansum", "nanmean")
 def _reduction(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient reduction axis parameters."""
+
     result: SalientArgs = {}
     dim = _get(named, "dim")
     if dim is not None:
@@ -360,6 +415,8 @@ def _reduction(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("max", "min", "argmax", "argmin")
 def _reduction_simple(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient extrema-reduction axis parameters."""
+
     result: SalientArgs = {}
     dim = _get(named, "dim")
     if dim is not None:
@@ -372,12 +429,16 @@ def _reduction_simple(named: SalientArgs, param_shapes: list[Shape]) -> SalientA
 
 @_register("permute")
 def _permute(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient permutation dimensions."""
+
     dims = _get(named, "dims")
     return {"dims": dims} if dims is not None else {}
 
 
 @_register("transpose")
 def _transpose(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient transpose dimensions."""
+
     result: SalientArgs = {}
     d0 = _get(named, "dim0")
     if d0 is not None:
@@ -390,6 +451,8 @@ def _transpose(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("pad")
 def _pad(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient padding parameters."""
+
     result: SalientArgs = {}
     p = _get(named, "pad")
     if p is not None:
@@ -405,6 +468,8 @@ def _pad(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
 @_register("clamp", "clip")
 def _clamp(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    """Return salient clamp bounds."""
+
     result: SalientArgs = {}
     mn = _get(named, "min")
     if mn is not None:
@@ -429,16 +494,23 @@ def extract_salient_args(
 ) -> SalientArgs:
     """Extract salient hyperparameters for a logged operation.
 
-    Args:
-        layer_type: Normalized layer type (lowercase, underscores stripped).
-        func_name: Original function name (used for argname lookup).
-        args: Positional arguments to the function.
-        kwargs: Keyword arguments to the function.
-        param_shapes: Shapes of parent parameters (for deriving
-            in/out channels, features, etc.).
+    Parameters
+    ----------
+    layer_type:
+        Normalized layer type (lowercase, underscores stripped).
+    func_name:
+        Original function name used for argument-name lookup.
+    args:
+        Positional arguments passed to the function.
+    kwargs:
+        Keyword arguments passed to the function.
+    param_shapes:
+        Shapes of parent parameters, used to derive channel and feature counts.
 
-    Returns:
-        Dict of salient args. Empty ``{}`` for unregistered operations.
+    Returns
+    -------
+    SalientArgs
+        Salient argument mapping, or an empty dict for unregistered operations.
     """
     extractor = _EXTRACTORS.get(layer_type)
     if extractor is None:

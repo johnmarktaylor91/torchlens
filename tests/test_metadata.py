@@ -1531,3 +1531,25 @@ class TestConditionalBranchDetection:
             assert len(mh[label].conditional_then_children) == 0, (
                 f"THEN children should be empty without source context: {label}"
             )
+
+
+def test_transpose_positional_args_expose_salient_dims():
+    """Positional torch.transpose calls expose dim0/dim1 via the arg-name fallback."""
+    import torch
+    from torch import nn
+
+    import torchlens as tl
+
+    class _TransposeModel(nn.Module):
+        def forward(self, x):
+            return torch.transpose(x, 0, 1).contiguous()
+
+    trace = tl.trace(
+        _TransposeModel(),
+        torch.randn(2, 3),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    op = next(o for o in trace.layer_list if "transpose" in o.func_name)
+    assert op.func_config.get("dim0") == 0
+    assert op.func_config.get("dim1") == 1
