@@ -16,6 +16,7 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.rerun import rerun
 from torchlens.intervention.types import InterventionSpec, Relationship, TargetSpec
+from torchlens.options import CaptureOptions
 
 
 class ReluAdd(torch.nn.Module):
@@ -138,7 +139,7 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured log.
     """
 
-    return tl.trace(model, x, intervention_ready=True)
+    return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
 
 @pytest.mark.smoke

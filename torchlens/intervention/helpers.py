@@ -1060,7 +1060,25 @@ def helper_from_serialized(
 
     portability = data["portability"]
     if portability == "import_ref":
-        return import_resolver(data["import_path"])
+        import_path = str(data["import_path"])
+
+        def factory() -> Callable[..., Any]:
+            """Resolve and call the imported helper factory lazily.
+
+            Returns
+            -------
+            Callable[..., Any]
+                Hook callable produced by the imported helper factory.
+            """
+
+            return import_resolver(import_path)()
+
+        return HelperSpec(
+            helper_name=str(data.get("name", "import_ref")),
+            portability="import_ref",
+            factory=factory,
+            metadata=(("import_path", import_path),),
+        )
     if portability == "opaque_audit":
         return HelperSpec(
             helper_name=data.get("name", "opaque_audit"),

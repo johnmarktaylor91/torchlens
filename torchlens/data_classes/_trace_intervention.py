@@ -29,7 +29,7 @@ from ..intervention.types import (
     MODEL_LOG_FIELD_FORK_POLICY,
     TargetSpec,
 )
-from ..options import InterventionOptions, merge_intervention_options
+from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from .layer import Layer, OpAccessor
 from .op import Op
 from ._state_adapter import state_items, state_new, state_restore
@@ -506,9 +506,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         if selected_engine == "set_only":
             return self
         if selected_engine == "replay":
-            return self.push(strict=strict_value)
+            return self.push(replay=ReplayOptions(strict=strict_value))
         assert model is not None
-        return self.run(model, x, strict=strict_value)
+        return self.run(model, x, replay=ReplayOptions(strict=strict_value))
 
     def fork(self: "Trace", name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.

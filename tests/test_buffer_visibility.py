@@ -10,6 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.trace import Trace
+from torchlens.options import CaptureOptions
 
 
 class _BatchNormOnly(nn.Module):
@@ -80,7 +81,11 @@ def _log_model(model: nn.Module) -> Trace:
     """
 
     model.eval()
-    return tl.trace(model, torch.randn(2, 4), layers_to_save="none")
+    return tl.trace(
+        model,
+        torch.randn(2, 4),
+        capture=CaptureOptions(layers_to_save="none"),
+    )
 
 
 def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> str:

@@ -8,6 +8,7 @@ import torch.nn as nn
 
 import example_models
 import torchlens as tl
+from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 
 
@@ -120,7 +121,11 @@ def test_phase1_event_materializer_buffers_and_conditionals() -> None:
 
     conditional_model = example_models.ConditionalBranching().eval()
     conditional_input = torch.ones(2, 3, 8, 8)
-    conditional_trace = tl.trace(conditional_model, conditional_input, save_code_context=True)
+    conditional_trace = tl.trace(
+        conditional_model,
+        conditional_input,
+        capture=CaptureOptions(save_code_context=True),
+    )
     _assert_trace_structure(conditional_trace)
     assert conditional_trace.has_conditional_branching
     assert validate_forward_pass(conditional_model, conditional_input)

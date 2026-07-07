@@ -1,12 +1,11 @@
 """Focused coverage for glossary-conformance phase B2c structural fields."""
 
-from typing import Any
-
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 
 
 class _B2cModel(nn.Module):
@@ -24,19 +23,19 @@ class _B2cModel(nn.Module):
         return torch.relu(self.linear(x)) * scale
 
 
-def _make_trace(**kwargs: Any) -> tl.Trace:
+def _make_trace(capture: CaptureOptions | None = None) -> tl.Trace:
     """Create a small B2c trace."""
 
     model = _B2cModel()
     x = torch.randn(2, 3, requires_grad=True)
-    return tl.trace(model, x, **kwargs)
+    return tl.trace(model, x, capture=capture)
 
 
 @pytest.mark.smoke
 def test_trace_parent_and_root_trace_resolve_fork_lineage() -> None:
     """Trace parent/root properties resolve the legacy parent_run weakrefs."""
 
-    root = _make_trace(layers_to_save="all")
+    root = _make_trace(CaptureOptions(layers_to_save="all"))
     child = root.fork("child")
     grandchild = child.fork("grandchild")
 
@@ -52,7 +51,7 @@ def test_trace_parent_and_root_trace_resolve_fork_lineage() -> None:
 def test_trace_source_introspection_fields_are_captured() -> None:
     """Trace exposes source model docstrings and signatures."""
 
-    trace = _make_trace(layers_to_save="all")
+    trace = _make_trace(CaptureOptions(layers_to_save="all"))
 
     assert trace.class_docstring == _B2cModel.__doc__
     assert trace.init_signature == "(self) -> None"
@@ -65,7 +64,7 @@ def test_trace_source_introspection_fields_are_captured() -> None:
 def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     """GradFn.calls replaces ops and GradFnCall.is_saved mirrors saved grad payloads."""
 
-    trace = _make_trace(layers_to_save="all", save_grads=True)
+    trace = _make_trace(CaptureOptions(layers_to_save="all", save_grads=True))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     grad_fn = next(record for record in trace.grad_fns if record.num_calls)
     grad_fn_call = grad_fn.calls[0]
@@ -81,7 +80,7 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
 def test_module_boundary_fields_are_populated_from_calls() -> None:
     """Module aggregate input/output fields are derived from ModuleCall boundaries."""
 
-    trace = _make_trace(layers_to_save="all")
+    trace = _make_trace(CaptureOptions(layers_to_save="all"))
     module = trace.modules["linear"]
     call = module.calls[0]
 
@@ -96,9 +95,9 @@ def test_module_boundary_fields_are_populated_from_calls() -> None:
 def test_trace_layers_to_save_public_view() -> None:
     """Trace.layers_to_save exposes saved Op labels instead of raw indexes."""
 
-    all_trace = _make_trace(layers_to_save="all")
+    all_trace = _make_trace(CaptureOptions(layers_to_save="all"))
     selected_label = all_trace.output_layers[0]
-    selected_trace = _make_trace(layers_to_save=[selected_label])
+    selected_trace = _make_trace(CaptureOptions(layers_to_save=[selected_label]))
 
     assert all_trace.layers_to_save == "all"
     assert selected_trace.layers_to_save

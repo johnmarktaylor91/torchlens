@@ -298,14 +298,15 @@ def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(
-        model,
-        x,
-        activation_transform=lambda out: out.half(),
-        grad_transform=lambda grad: grad.half(),
-        save_grads=True,
-        backward_ready=True,
-    )
+    with pytest.warns(DeprecationWarning):
+        trace = tl.trace(
+            model,
+            x,
+            activation_transform=lambda out: out.half(),
+            grad_transform=lambda grad: grad.half(),
+            save_grads=True,
+            backward_ready=True,
+        )
     relu_op = next(op for op in trace.ops if op.func_name == "relu")
 
     trace.log_backward(_output_loss(trace), retain_graph=True)

@@ -52,7 +52,7 @@ jobs:
       - name: Install TorchLens and preview backends
         run: |
           uv pip install --system -e ".[dev,test,tabular]"
-          uv pip install --system tensorflow-cpu "jax[cpu]" tinygrad paddlepaddle
+          uv pip install --system tensorflow-cpu "jax[cpu]" equinox flax tinygrad paddlepaddle
           # MLX is Apple-silicon-only, so it is intentionally excluded on Linux CI.
 
       - name: Run preview backend tests

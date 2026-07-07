@@ -7,7 +7,8 @@ import torch
 
 import torchlens as tl
 from torchlens._trace_state import TraceState
-from torchlens.intervention.errors import LiveModeLabelError
+from torchlens.intervention.errors import LiveModeLabelError, SiteResolutionError
+from torchlens.options import CaptureOptions
 
 
 class _ReluReturnModel(torch.nn.Module):
@@ -156,8 +157,10 @@ def test_live_func_hook_replaces_returned_and_saved_out() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.func("relu"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("relu"): _zero_hook},
+        ),
     )
 
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
@@ -180,8 +183,10 @@ def test_live_label_error_for_finalized_style_label() -> None:
         tl.trace(
             _ReluReturnModel(),
             torch.randn(2, 3),
-            intervention_ready=True,
-            hooks={tl.label("relu_4_27:2"): _identity_hook},
+            capture=CaptureOptions(
+                intervention_ready=True,
+                hooks={tl.label("relu_4_27:2"): _identity_hook},
+            ),
         )
 
 
@@ -192,8 +197,10 @@ def test_module_selector_matches_capture_time_module_context() -> None:
     log = tl.trace(
         _LinearModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.module("linear"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.module("linear"): _zero_hook},
+        ),
     )
 
     hooked_layers = [layer for layer in log.layer_list if layer.interventions]
@@ -209,8 +216,10 @@ def test_module_selector_does_not_overmatch_other_live_modules() -> None:
     log = tl.trace(
         _TwoModuleModel(),
         torch.tensor([-1.0, 2.0]),
-        intervention_ready=True,
-        hooks={tl.module("b"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.module("b"): _zero_hook},
+        ),
     )
 
     hooked_labels = {layer.layer_label for layer in log.layer_list if layer.interventions}
@@ -225,14 +234,18 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
     regex_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.regex("relu"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.regex("relu"): _zero_hook},
+        ),
     )
     chunk_log = tl.trace(
         _ChunkModel(),
         torch.randn(2, 4),
-        intervention_ready=True,
-        hooks={tl.output_at(1): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.output_at(1): _zero_hook},
+        ),
     )
 
     assert any(layer.interventions for layer in regex_log.layer_list if layer.func_name == "relu")
@@ -242,6 +255,20 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
     assert len(hooked_chunk_paths) == 1
 
 
+def test_input_at_live_hook_target_rejects_with_honest_error() -> None:
+    """Input-path selectors resolve placeholders but are not live hook sites."""
+
+    with pytest.raises(SiteResolutionError, match="not live hook application sites"):
+        tl.trace(
+            _ReluReturnModel(),
+            torch.randn(2, 3),
+            capture=CaptureOptions(
+                intervention_ready=True,
+                hooks={tl.input_at(0): _zero_hook},
+            ),
+        )
+
+
 @pytest.mark.smoke
 def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     """Raw labels, predicates, and module containment selectors resolve live."""
@@ -249,7 +276,7 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     raw_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
     raw_label = next(
         layer._layer_label_raw for layer in raw_log.layer_list if layer.func_name == "relu"
@@ -258,20 +285,26 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     label_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.label(raw_label): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.label(raw_label): _zero_hook},
+        ),
     )
     where_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.where(lambda p: p.func_name == "relu"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.where(lambda p: p.func_name == "relu"): _zero_hook},
+        ),
     )
     in_module_log = tl.trace(
         _LinearModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.in_module("linear"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.in_module("linear"): _zero_hook},
+        ),
     )
 
     assert any(layer.interventions for layer in label_log.layer_list)
@@ -286,7 +319,7 @@ def test_no_hooks_preserves_pristine_run_state() -> None:
     log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
 
     assert log.state is TraceState.PRISTINE
@@ -299,8 +332,10 @@ def test_live_replacement_metadata_matches_saved_out() -> None:
     log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.func("relu"): _zero_hook},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("relu"): _zero_hook},
+        ),
     )
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
 

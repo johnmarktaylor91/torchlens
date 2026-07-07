@@ -12,6 +12,7 @@ import torchlens as tl
 import torch.nn as nn
 
 from torchlens.data_classes.trace import Trace
+from torchlens.options import CaptureOptions
 
 
 class SimpleIfElseModel(nn.Module):
@@ -165,7 +166,7 @@ def _render_dot_source(
     Tuple[str, Trace]
         Rendered DOT source and the populated model log.
     """
-    trace = tl.trace(model, x, save_code_context=True)
+    trace = tl.trace(model, x, capture=CaptureOptions(save_code_context=True))
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.draw(

@@ -56,6 +56,7 @@ profiler = []
 lightning = ["lightning~=2.4"]
 wandb = ["wandb>=0.16"]
 mlx = ["mlx>=0.26,<0.27"]
+jax = ["jax[cpu]", "equinox", "flax"]
 tinygrad = ["tinygrad>=0.13,<0.14"]
 paddle = ["paddlepaddle>=3.3,<3.4"]
 tf = ["tensorflow>=2.16"]
@@ -150,14 +151,14 @@ markers = [
 addopts = "-m 'not rare'"
 xfail_strict = true
 filterwarnings = [
-    # TorchLens-originated warnings should be deliberate and locally asserted.
-    "error::DeprecationWarning:torchlens(\\.|$)",
-    "error::UserWarning:torchlens(\\.|$)",
     # Public compatibility aliases are intentionally exercised across legacy tests;
     # deprecation-specific tests assert these warnings locally.
     "default:`.*` is deprecated; use `.*` instead\\..*:DeprecationWarning",
     # Legacy bundle compatibility tests intentionally load older manifest versions.
     "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:DeprecationWarning",
+    # TorchLens-originated warnings should be deliberate and locally asserted.
+    "error::DeprecationWarning:torchlens(\\.|$)",
+    "error::UserWarning:torchlens(\\.|$)",
     # External: torchvision model init deprecations
     "ignore:The default weight initialization of.*:FutureWarning",
     # External: torch.meshgrid indexing argument

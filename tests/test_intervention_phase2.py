@@ -15,6 +15,7 @@ from torchlens.intervention.errors import (
     SiteResolutionError,
 )
 from torchlens.intervention.resolver import SiteTable
+from torchlens.validation import resolve_sites
 
 
 class _Phase2Block(torch.nn.Module):
@@ -153,13 +154,13 @@ def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.Trace) -> Non
     """Resolver fails closed for strict strings, empty matches, and excess fanout."""
 
     with pytest.raises(SiteResolutionError, match="Bare strings"):
-        tl.resolve_sites(phase2_log, "relu", strict=True)
+        resolve_sites(phase2_log, "relu", strict=True)
 
     with pytest.raises(SiteResolutionError, match="matched 0 sites"):
         phase2_log.resolve_sites(tl.func("does_not_exist"))
 
     with pytest.raises(SiteResolutionError, match="max_fanout=None"):
-        tl.resolve_sites(phase2_log, tl.func("relu"), max_fanout=None)  # type: ignore[arg-type]
+        resolve_sites(phase2_log, tl.func("relu"), max_fanout=None)  # type: ignore[arg-type]
 
     with pytest.raises(SiteAmbiguityError, match="exceeding max_fanout=1"):
         phase2_log.resolve_sites(tl.func("relu"), max_fanout=1)

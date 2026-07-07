@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.options import CaptureOptions
 
 
 class _Tiny(nn.Module):
@@ -74,7 +75,7 @@ def test_nested_trace_via_forward_hook_raises() -> None:
     outer.a.register_forward_hook(evil_hook)
 
     with pytest.raises(RuntimeError, match="not re-entrant"):
-        tl.trace(outer, x, layers_to_save="none")
+        tl.trace(outer, x, capture=CaptureOptions(layers_to_save="none"))
 
 
 def test_logging_state_cleared_after_guard_fires() -> None:
@@ -91,7 +92,7 @@ def test_logging_state_cleared_after_guard_fires() -> None:
     assert _state._active_trace is None
 
     # Follow-up forward pass should succeed — the outer `with` cleaned up.
-    log = tl.trace(model, x, layers_to_save="none")
+    log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
     assert len(log.layer_logs) > 0
 
 
@@ -121,7 +122,7 @@ def test_vmap_emits_userwarning_once_per_session() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(model, x, layers_to_save="none")
+        tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
 
     vmap_warnings = [
         w
@@ -158,10 +159,10 @@ def test_vmap_warning_flag_resets_between_sessions() -> None:
 
     with warnings.catch_warnings(record=True) as first:
         warnings.simplefilter("always")
-        tl.trace(model, x, layers_to_save="none")
+        tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
     with warnings.catch_warnings(record=True) as second:
         warnings.simplefilter("always")
-        tl.trace(model, x, layers_to_save="none")
+        tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
 
     first_count = sum(1 for w in first if "functorch" in str(w.message).lower())
     second_count = sum(1 for w in second if "functorch" in str(w.message).lower())
@@ -176,7 +177,7 @@ def test_non_vmap_forward_pass_emits_no_functorch_warning() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(model, x, layers_to_save="none")
+        tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
 
     functorch_warnings = [w for w in caught if "functorch" in str(w.message).lower()]
     assert functorch_warnings == []

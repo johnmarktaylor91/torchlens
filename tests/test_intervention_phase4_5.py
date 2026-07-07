@@ -8,6 +8,7 @@ import torch
 import torchlens as tl
 from torchlens import _state
 from torchlens._trace_state import TraceState
+from torchlens.options import CaptureOptions
 
 
 class _TinyReluModel(torch.nn.Module):
@@ -122,12 +123,12 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_log = tl.trace(
         baseline_model,
         x,
-        intervention_ready=False,
+        capture=CaptureOptions(intervention_ready=False),
     )
     ready_log = tl.trace(
         ready_model,
         x,
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
 
     assert baseline_model.latest is not None
@@ -149,8 +150,10 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
         tl.trace(
             model,
             torch.randn(2, 3),
-            intervention_ready=True,
-            hooks={tl.func("relu"): _bad_hook},
+            capture=CaptureOptions(
+                intervention_ready=True,
+                hooks={tl.func("relu"): _bad_hook},
+            ),
         )
 
     assert _state._logging_enabled is False
@@ -172,8 +175,10 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
         tl.trace(
             _TinyReluModel(),
             torch.randn(2, 3),
-            intervention_ready=True,
-            hooks={tl.func("relu"): _bad_hook},
+            capture=CaptureOptions(
+                intervention_ready=True,
+                hooks={tl.func("relu"): _bad_hook},
+            ),
         )
 
     assert _state._hook_reentrancy_depth == 0

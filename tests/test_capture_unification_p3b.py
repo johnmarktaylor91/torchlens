@@ -95,8 +95,17 @@ def test_alias_contract_snapshots_unsaved_mutated_parent(
 
     model = model_factory()
     x = torch.ones(2, 4)
-    full = tl.trace(model, x.clone(), layers_to_save="all", save_arg_values=True)
-    selective = tl.trace(model, x.clone(), save=_save_only_mul, save_arg_values=True)
+    full = tl.trace(
+        model,
+        x.clone(),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
+    selective = tl.trace(
+        model,
+        x.clone(),
+        save=_save_only_mul,
+        capture=tl.options.CaptureOptions(save_arg_values=True),
+    )
     saved_children = [
         op
         for op in selective.layer_list
@@ -125,8 +134,8 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
     log = tl.trace(
         TinyLinear(),
         torch.randn(2, 4),
-        layers_to_save=["linear"],
-        save_outs_to=bundle_path,
+        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
@@ -139,7 +148,7 @@ def test_layers_to_save_absorbed_path_honors_substrings() -> None:
     log = tl.trace(
         TinyLinear(),
         torch.randn(2, 4),
-        layers_to_save=["lin"],
+        capture=tl.options.CaptureOptions(layers_to_save=["lin"]),
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
@@ -165,9 +174,11 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
     log = tl.trace(
         TinyLinear(),
         torch.randn(2, 4),
-        layers_to_save=["linear"],
-        save_grads=["linear"],
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(
+            layers_to_save=["linear"],
+            save_grads=["linear"],
+            backward_ready=True,
+        ),
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
@@ -181,15 +192,16 @@ def test_layers_to_save_supports_intervention_ready_and_hooks() -> None:
     intervention_ready = tl.trace(
         TinyLinear(),
         x,
-        layers_to_save=["linear"],
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(
+            layers_to_save=["linear"],
+            intervention_ready=True,
+        ),
     )
     observer = tl.tap(tl.func("relu"))
     hooked = tl.trace(
         TinyLinear(),
         x,
-        layers_to_save=["linear"],
-        hooks=observer,
+        capture=tl.options.CaptureOptions(layers_to_save=["linear"], hooks=observer),
     )
     assert any(
         op.has_saved_activation and op.layer_type == "linear"
@@ -207,19 +219,19 @@ def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:
     intervened = tl.trace(
         TinyLinear(),
         x,
-        layers_to_save=["linear"],
+        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
         intervene=tl.when(tl.func("relu"), tl.add(0.0)),
     )
     union_saved = tl.trace(
         TinyLinear(),
         x,
-        layers_to_save=["linear"],
+        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
         save=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
     )
     halted = tl.trace(
         TinyLinear(),
         x,
-        layers_to_save=["linear"],
+        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
         halt=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
     )
 
@@ -235,7 +247,12 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
     """Saved orphan payloads are exposed regardless of graph pruning mode."""
 
     x = torch.ones(2, 2)
-    pruned = tl.trace(SavedOrphan(), x, save=tl.func("randn"), random_seed=1)
+    pruned = tl.trace(
+        SavedOrphan(),
+        x,
+        save=tl.func("randn"),
+        capture=tl.options.CaptureOptions(random_seed=1),
+    )
     assert pruned.orphan_records
     assert pruned.orphan_records[0]["raw_label"].startswith("randn")
     assert isinstance(pruned.orphan_records[0]["payload_ref"], torch.Tensor)
@@ -245,8 +262,7 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
         SavedOrphan(),
         x,
         save=tl.func("randn"),
-        random_seed=1,
-        keep_orphans=True,
+        capture=tl.options.CaptureOptions(random_seed=1, keep_orphans=True),
     )
     assert retained.orphan_records
     assert retained.orphans

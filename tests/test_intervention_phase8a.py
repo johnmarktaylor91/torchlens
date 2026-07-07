@@ -11,6 +11,7 @@ import torchlens as tl
 from torchlens.io import TraceState
 from torchlens.intervention.errors import SpecMutationError
 from torchlens.intervention.handles import HookHandle
+from torchlens.options import CaptureOptions
 
 
 class ReluAdd(torch.nn.Module):
@@ -65,7 +66,7 @@ def _capture() -> Any:
     return tl.trace(
         ReluAdd(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
 
 
@@ -222,9 +223,9 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
     """Successful rerun advances the out recipe revision."""
 
     x = torch.randn(2, 3)
-    log = tl.trace(ReluAdd(), x, intervention_ready=True)
+    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(intervention_ready=True))
 
-    log.set(tl.func("relu"), torch.zeros(2, 3))
+    log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
     assert log._out_recipe_revision == 0
 
     result = log.run(ReluAdd(), x)

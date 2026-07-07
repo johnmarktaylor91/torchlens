@@ -21,6 +21,7 @@ from torchlens.constants import (
 )
 from torchlens.data_classes.op import Op
 from torchlens.data_classes.trace import Trace
+from torchlens.options import CaptureOptions
 
 
 pytestmark = pytest.mark.backend_parity
@@ -130,7 +131,15 @@ def _default_trace() -> Trace:
     """
 
     model, x = _seeded_mlp_input()
-    return tl.trace(model, x, layers_to_save="all", random_seed=1701, save_arg_values=True)
+    return tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            layers_to_save="all",
+            random_seed=1701,
+            save_arg_values=True,
+        ),
+    )
 
 
 def _selective_trace() -> Trace:
@@ -143,7 +152,7 @@ def _selective_trace() -> Trace:
     """
 
     model, x = _seeded_branchy_input()
-    return tl.trace(model, x, save=tl.func("tanh"), random_seed=1702)
+    return tl.trace(model, x, save=tl.func("tanh"), capture=CaptureOptions(random_seed=1702))
 
 
 def _backward_ready_trace() -> Trace:
@@ -159,10 +168,12 @@ def _backward_ready_trace() -> Trace:
     trace = tl.trace(
         model,
         x,
-        layers_to_save="all",
-        save_grads="all",
-        backward_ready=True,
-        random_seed=1701,
+        capture=CaptureOptions(
+            layers_to_save="all",
+            save_grads="all",
+            backward_ready=True,
+            random_seed=1701,
+        ),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
@@ -543,7 +554,8 @@ def test_tlspec_roundtrip_and_manifest_goldens(tmp_path: Path) -> None:
     trace = _default_trace()
     bundle_path = tmp_path / "default_trace.tlspec"
     tl.save(trace, bundle_path)
-    loaded = cast(Trace, tl.load(bundle_path))
+    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
+        loaded = cast(Trace, tl.load(bundle_path))
 
     _assert_projection_matches_golden(
         "tlspec_roundtrip_digest",

@@ -24,6 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 from torchlens.user_funcs import _unwrap_data_parallel
 
 
@@ -117,7 +118,7 @@ def test_fsdp_error_from_trace_entry() -> None:
     x = torch.randn(2, 4)
 
     with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
-        tl.trace(wrapped, x, layers_to_save="none")
+        tl.trace(wrapped, x, capture=CaptureOptions(layers_to_save="none"))
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ def test_huggingface_batch_encoding_like_input_logs() -> None:
     model = _BatchEncodingAcceptingModel()
     batch = _BatchEncodingLike({"input_ids": torch.randn(2, 4)})
 
-    log = tl.trace(model, [batch], layers_to_save="all")
+    log = tl.trace(model, [batch], capture=CaptureOptions(layers_to_save="all"))
     assert len(log.layer_logs) > 0
 
 
@@ -194,7 +195,7 @@ def test_dataclass_output_does_not_crash() -> None:
     model = _HFOutputModel()
     x = torch.randn(2, 4)
 
-    log = tl.trace(model, x, layers_to_save="none")
+    log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
     # At minimum the Linear projection should be logged.
     layer_types = [ll.layer_type for ll in log.layer_logs.values()]
     assert any("linear" in t.lower() or "addmm" in t.lower() for t in layer_types), (
@@ -212,5 +213,5 @@ def test_standard_model_still_logs_cleanly() -> None:
     """Nothing in PR 3 should regress the golden path."""
     model = _Tiny()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save="all")
+    log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
     assert len(log.layer_logs) > 0

@@ -16,6 +16,7 @@ import torch.nn as nn
 from torchlens import trace as trace_fn
 from torchlens.data_classes.op import Op
 from torchlens.data_classes.trace import ConditionalEvent, Trace
+from torchlens.options import CaptureOptions
 
 
 class SimpleIfElseModel(nn.Module):
@@ -138,7 +139,11 @@ def _log_model(
         Postprocessed model log.
     """
 
-    return trace_fn(model, x, save_code_context=save_code_context)
+    return trace_fn(
+        model,
+        x,
+        capture=CaptureOptions(save_code_context=save_code_context),
+    )
 
 
 def _get_only_event(trace: Trace) -> ConditionalEvent:

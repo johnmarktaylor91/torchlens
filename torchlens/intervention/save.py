@@ -175,7 +175,7 @@ def save_intervention(
         _sync_spec_records_from_log(spec, log)
         serialized_spec = _serialize_intervention_spec(spec, save_level, state)
         function_keys = _serialize_function_registry_keys(log)
-        target_manifest = _build_target_manifest(log, spec)
+        target_manifest = _build_target_manifest(log, spec, save_level)
         _write_tensor_sidecars(
             tmp_path,
             state.tensor_refs,
@@ -473,7 +473,7 @@ def _serialize_intervention_spec(
     """
 
     return {
-        "targets": [_target_spec_to_json(target) for target in spec.targets],
+        "targets": [_target_spec_to_json(target, save_level) for target in spec.targets],
         "helper": _serialize_value(spec.helper, save_level, state),
         "value": _serialize_value(spec.value, save_level, state),
         "hook": _serialize_value(spec.hook, save_level, state),
@@ -672,7 +672,7 @@ def _serialize_target_value_spec(
     """
 
     return {
-        "site_target": _target_spec_to_json(value_spec.site_target),
+        "site_target": _target_spec_to_json(value_spec.site_target, save_level),
         "value": _serialize_value(value_spec.value, save_level, state),
         "metadata": _jsonish_metadata(value_spec.metadata),
     }
@@ -703,7 +703,7 @@ def _serialize_hook_spec(
     helper = hook_spec.helper if hook_spec.helper is not None else None
     hook_value = helper if helper is not None else hook_spec.hook
     return {
-        "site_target": _target_spec_to_json(hook_spec.site_target),
+        "site_target": _target_spec_to_json(hook_spec.site_target, save_level),
         "hook": _serialize_value(hook_value, save_level, state),
         "helper": _serialize_value(helper, save_level, state),
         "handle": hook_spec.handle,
@@ -1068,13 +1068,18 @@ def _deserialize_output_path_component(
     raise SiteResolutionError(f"Unsupported output path component kind {kind!r}.")
 
 
-def _target_spec_to_json(target: TargetSpec | FrozenTargetSpec) -> dict[str, Any]:
+def _target_spec_to_json(
+    target: TargetSpec | FrozenTargetSpec,
+    save_level: SaveLevel,
+) -> dict[str, Any]:
     """Serialize a target spec.
 
     Parameters
     ----------
     target:
         Target spec.
+    save_level:
+        Requested save level.
 
     Returns
     -------
@@ -1085,7 +1090,7 @@ def _target_spec_to_json(target: TargetSpec | FrozenTargetSpec) -> dict[str, Any
     metadata = dict(target.metadata) if isinstance(target.metadata, tuple) else target.metadata
     return {
         "selector_kind": target.selector_kind,
-        "selector_value": _selector_value_to_json(target.selector_value),
+        "selector_value": _selector_value_to_json(target.selector_value, save_level),
         "strict": bool(target.strict),
         "slice_spec": asdict(target.slice_spec) if target.slice_spec is not None else None,
         "metadata": _jsonish_metadata(metadata),
@@ -1117,13 +1122,15 @@ def _target_spec_from_json(data: dict[str, Any]) -> TargetSpec:
     )
 
 
-def _selector_value_to_json(value: Any) -> Any:
+def _selector_value_to_json(value: Any, save_level: SaveLevel) -> Any:
     """Serialize selector payloads.
 
     Parameters
     ----------
     value:
         Selector payload.
+    save_level:
+        Requested save level.
 
     Returns
     -------
@@ -1132,18 +1139,31 @@ def _selector_value_to_json(value: Any) -> Any:
     """
 
     if isinstance(value, TargetSpec | FrozenTargetSpec):
-        return {"__target_spec__": _target_spec_to_json(value)}
+        return {"__target_spec__": _target_spec_to_json(value, save_level)}
     if isinstance(value, Mapping):
         return {
-            "__dict__": {str(key): _selector_value_to_json(item) for key, item in value.items()}
+            "__dict__": {
+                str(key): _selector_value_to_json(item, save_level) for key, item in value.items()
+            }
         }
     if isinstance(value, tuple):
-        return {"__tuple__": [_selector_value_to_json(item) for item in value]}
+        return {"__tuple__": [_selector_value_to_json(item, save_level) for item in value]}
     if isinstance(value, list):
-        return {"__list__": [_selector_value_to_json(item) for item in value]}
+        return {"__list__": [_selector_value_to_json(item, save_level) for item in value]}
     if isinstance(value, str | int | float | bool) or value is None:
         return value
-    return {"__repr__": repr(value), "__type__": type(value).__name__}
+    if callable(value):
+        if save_level != SaveLevel.AUDIT:
+            raise OpaqueCallableInExecutableSaveError(
+                f"Callable selector payload {value!r} is non-portable and can only be saved "
+                "at audit level."
+            )
+        return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}
+    if save_level != SaveLevel.AUDIT:
+        raise OpaqueCallableInExecutableSaveError(
+            f"Selector payload {value!r} is non-portable and can only be saved at audit level."
+        )
+    return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}
 
 
 def _selector_value_from_json(value: Any) -> Any:
@@ -1162,6 +1182,9 @@ def _selector_value_from_json(value: Any) -> Any:
 
     if isinstance(value, dict) and "__target_spec__" in value:
         return _target_spec_from_json(value["__target_spec__"])
+    if isinstance(value, dict) and "__opaque_audit__" in value:
+        payload = value["__opaque_audit__"]
+        return str(payload.get("repr", ""))
     if isinstance(value, dict) and "__dict__" in value:
         return {
             str(key): _selector_value_from_json(item) for key, item in value["__dict__"].items()
@@ -1177,7 +1200,11 @@ def _selector_value_from_json(value: Any) -> Any:
     return value
 
 
-def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, Any]]:
+def _build_target_manifest(
+    log: Any,
+    spec: InterventionSpec,
+    save_level: SaveLevel,
+) -> list[dict[str, Any]]:
     """Build the saved target manifest for all recipe selectors.
 
     Parameters
@@ -1186,6 +1213,8 @@ def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, A
         Source model log.
     spec:
         Intervention spec.
+    save_level:
+        Requested save level.
 
     Returns
     -------
@@ -1215,7 +1244,7 @@ def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, A
             )
             manifest.append(
                 {
-                    "selector": _target_spec_to_json(target),
+                    "selector": _target_spec_to_json(target, save_level),
                     "resolved_labels": [],
                     "resolved_status": status,
                     "resolution_error": str(exc),
@@ -1226,7 +1255,7 @@ def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, A
             continue
         manifest.append(
             {
-                "selector": _target_spec_to_json(target),
+                "selector": _target_spec_to_json(target, save_level),
                 "resolved_labels": list(resolved.labels()),
                 "resolved_status": "resolved",
                 "graph_shape_hash": getattr(log, "graph_shape_hash", None),

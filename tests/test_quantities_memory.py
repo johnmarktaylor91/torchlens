@@ -18,6 +18,7 @@ from torchlens.constants import (
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
+from torchlens.options import CaptureOptions
 
 
 class _MemoryModel(nn.Module):
@@ -41,7 +42,11 @@ def _trace_memory_model() -> tl.Trace:
 
     model = _MemoryModel()
     x = torch.randn(3, 4, requires_grad=True)
-    return tl.trace(model, x, layers_to_save="all", save_grads="all")
+    return tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+    )
 
 
 @pytest.mark.smoke

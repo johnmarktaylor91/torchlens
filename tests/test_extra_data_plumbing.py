@@ -19,6 +19,7 @@ from torchlens.constants import (
 from torchlens.data_classes.layer import Layer
 from torchlens.data_classes.op import Op
 from torchlens.data_classes.trace import Trace
+from torchlens.options import CaptureOptions
 
 
 class TinyExtraDataModel(nn.Module):
@@ -39,7 +40,11 @@ def _fresh_log() -> Trace:
     torch.manual_seed(0)
     model = TinyExtraDataModel()
     inputs = torch.ones(1, 2)
-    return tl.trace(model, inputs, layers_to_save="all", random_seed=0)
+    return tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(layers_to_save="all", random_seed=0),
+    )
 
 
 def _first_logs(trace: Trace) -> Tuple[Op, Layer]:

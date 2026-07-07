@@ -216,6 +216,7 @@ def normalize_hook_plan(
     entries: list[NormalizedHookEntry] = []
     for order, (site_target, hook_like) in enumerate(pairs):
         helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
+        _validate_live_site_target(site_target)
         for concrete_direction in _hook_directions(
             hook_like,
             helper_spec,
@@ -243,6 +244,41 @@ def normalize_hook_plan(
                 )
             )
     return entries
+
+
+def _validate_live_site_target(site_target: Any) -> None:
+    """Reject selector targets that cannot be live hook application sites.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target passed to live hook attachment.
+    """
+
+    selector = _normalize_live_selector(site_target)
+    _reject_input_at_selector(selector)
+
+
+def _reject_input_at_selector(selector: BaseSelector) -> None:
+    """Raise for ``input_at`` selectors nested in a live hook target.
+
+    Parameters
+    ----------
+    selector:
+        Normalized selector to inspect.
+    """
+
+    if selector.selector_kind == "input_at":
+        raise SiteResolutionError(
+            "tl.input_at(...) resolves saved input placeholders, but model inputs are not live "
+            "hook application sites. Use trace(..., intervene=...) on downstream ops or mutate "
+            "the model input before capture."
+        )
+    if isinstance(selector, CompositeSelector):
+        for child in selector.selectors:
+            _reject_input_at_selector(_normalize_live_selector(child))
+    if isinstance(selector, NotSelector):
+        _reject_input_at_selector(_normalize_live_selector(selector.selector))
 
 
 def _hook_directions(
@@ -765,12 +801,15 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
     from .selectors import (
         contains,
         func,
+        func_transform,
         grad_fn,
         grad_input,
         grad_output,
         in_backward_pass,
         label,
         module,
+        output_at,
+        regex,
         where,
         without_op,
     )
@@ -790,8 +829,20 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         from .selectors import output
 
         return output(cast("int | str", target.selector_value))
+    if target.selector_kind == "output_at":
+        return output_at(target.selector_value)
+    if target.selector_kind == "input_at":
+        raise SiteResolutionError(
+            "tl.input_at(...) resolves saved input placeholders, but model inputs are not live "
+            "hook application sites. Use trace(..., intervene=...) on downstream ops or mutate "
+            "the model input before capture."
+        )
     if target.selector_kind == "contains":
         return contains(str(target.selector_value))
+    if target.selector_kind == "regex":
+        return regex(str(target.selector_value))
+    if target.selector_kind == "func_transform":
+        return func_transform(None if target.selector_value is None else str(target.selector_value))
     if target.selector_kind == "in_module":
         from .selectors import in_module as make_in_module
 
@@ -816,8 +867,6 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         return in_backward_pass(pass_index)
     if target.selector_kind in {"intervening", "without_op"}:
         return without_op()
-    if target.selector_kind == "label":
-        return label(str(target.selector_value))
     if target.selector_kind == "not":
         return ~_normalize_live_selector(target.selector_value)
     if target.selector_kind in {"and", "or"}:
@@ -1576,6 +1625,10 @@ def make_live_site_proxy(
         output_of_module_calls=fields.get("output_of_module_calls", []),
         output_of_modules=fields.get("output_of_modules", []),
         _tl_module_boundary=bool(fields.get("_tl_module_boundary", False)),
+        is_transform=bool(fields.get("is_transform", False)),
+        transform_kind=fields.get("transform_kind"),
+        transform_chain=tuple(fields.get("transform_chain", ())),
+        transform_config=dict(fields.get("transform_config", {})),
         call_index=1,
         lookup_keys=[],
     )

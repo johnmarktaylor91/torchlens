@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 
 
 class _B2bModel(nn.Module):
@@ -34,7 +35,11 @@ def _make_trace() -> Any:
 
     model = _B2bModel()
     x = torch.randn(3, 4, requires_grad=True)
-    return tl.trace(model, x, layers_to_save="all", save_grads="all")
+    return tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+    )
 
 
 @pytest.mark.smoke

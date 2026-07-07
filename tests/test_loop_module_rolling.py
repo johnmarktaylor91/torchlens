@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 from torchlens.visualization.rendering import compute_default_node_lines
 
 
@@ -528,7 +529,7 @@ def _trace(model: nn.Module) -> tl.Trace:
     """Trace a demo model deterministically."""
 
     torch.manual_seed(0)
-    return tl.trace(model, torch.randn(1, 4), layers_to_save="none")
+    return tl.trace(model, torch.randn(1, 4), capture=CaptureOptions(layers_to_save="none"))
 
 
 def _first_layer(trace: tl.Trace, layer_type: str) -> tl.Layer:

@@ -8,6 +8,7 @@ import torchlens as tl
 from torchlens.data_classes.layer import Layer
 from torchlens.data_classes.trace import Trace
 from torchlens.data_classes.op import Op
+from torchlens.options import CaptureOptions
 
 
 # ---------------------------------------------------------------------------
@@ -51,13 +52,13 @@ class ColonNamedModule(nn.Module):
 @pytest.fixture
 def simple_log():
     model = SimpleModel()
-    return tl.trace(model, torch.randn(1, 5), layers_to_save="all")
+    return tl.trace(model, torch.randn(1, 5), capture=CaptureOptions(layers_to_save="all"))
 
 
 @pytest.fixture
 def recurrent_log():
     model = RecurrentModel()
-    return tl.trace(model, torch.randn(1, 5), layers_to_save="all")
+    return tl.trace(model, torch.randn(1, 5), capture=CaptureOptions(layers_to_save="all"))
 
 
 def _assert_layer_labels_are_not_doubled(trace: Trace) -> None:
@@ -128,7 +129,7 @@ class TestLayerLogConstruction:
         model = transformers.DistilBertModel(config)
         model.eval()
         input_ids = torch.randint(0, config.vocab_size, (1, 4))
-        trace = tl.trace(model, input_ids, layers_to_save="all")
+        trace = tl.trace(model, input_ids, capture=CaptureOptions(layers_to_save="all"))
 
         _assert_layer_labels_are_not_doubled(trace)
 

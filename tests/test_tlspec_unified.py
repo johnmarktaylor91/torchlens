@@ -126,6 +126,24 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     )
 
 
+def _load_older_tlspec(path: Path) -> Any:
+    """Load an intentionally old fixture while asserting its version warning.
+
+    Parameters
+    ----------
+    path:
+        ``.tlspec`` path.
+
+    Returns
+    -------
+    Any
+        Loaded TorchLens object.
+    """
+
+    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
+        return tl.load(path)
+
+
 def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
     """Return a schema v2 non-torch audit manifest based on a torch fixture.
 
@@ -281,7 +299,7 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
 
     log.save(path, level=level)
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -300,13 +318,15 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     log = tl.trace(
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.func("relu"): tl.zero_ablate()},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("relu"): tl.zero_ablate()},
+        ),
     )
     path = tmp_path / "trace_forward_intervention.tlspec"
 
     log.save(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
 
     assert isinstance(loaded, tl.Trace)
     records = [
@@ -324,13 +344,17 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     """Trace.save preserves backward GradFnCall intervention fire refs."""
 
     x = torch.randn(2, 3, requires_grad=True)
-    log = tl.trace(UnifiedTinyModel().eval(), x, save_grads="all", backward_ready=True)
+    log = tl.trace(
+        UnifiedTinyModel().eval(),
+        x,
+        capture=CaptureOptions(save_grads="all", backward_ready=True),
+    )
     log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
     log.save(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
 
     assert isinstance(loaded, tl.Trace)
     refs = [
@@ -350,13 +374,18 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
     """Portable saves preserve orphan record payload tensors."""
 
     x = torch.ones(2, 2)
-    log = tl.trace(UnifiedSavedOrphanModel(), x, save=tl.func("randn"), random_seed=1)
+    log = tl.trace(
+        UnifiedSavedOrphanModel(),
+        x,
+        save=tl.func("randn"),
+        capture=CaptureOptions(random_seed=1),
+    )
     path = tmp_path / "orphan_records.tlspec"
     expected_payload = log.orphan_records[0]["payload_ref"].detach().clone()
 
     log.save(path, level="portable")
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -379,7 +408,7 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
 
     log.save(path, level="portable")
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -399,7 +428,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
 
     bundle.save(path, level=level)
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Bundle)
@@ -466,13 +495,13 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     torch.manual_seed(2101)
     model = UnifiedTinyModel().eval()
     x = torch.randn(2, 3, requires_grad=True)
-    log = tl.trace(model, x, save_grads=True)
+    log = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
     log.log_backward(log[log.output_layers[0]].out.sum())
     path = tmp_path / "backward.tlspec"
 
     log.save(path)
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -497,7 +526,7 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
     torch.manual_seed(2102)
     model = UnifiedTinyModel().eval()
     x = torch.randn(2, 3, requires_grad=True)
-    log = tl.trace(model, x, save_grads=True)
+    log = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
     log.log_backward(log[log.output_layers[0]].out.sum())
     path = tmp_path / "bad_backward_kind.tlspec"
     log.save(path)
@@ -532,7 +561,7 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     _captured_log().save(path)
     _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
 
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.backend == "mlx"
@@ -561,7 +590,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
     _write_manifest(path, manifest)
 
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = _load_older_tlspec(path)
     saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
 
     assert isinstance(loaded, tl.Trace)

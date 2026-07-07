@@ -801,8 +801,7 @@ def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.T
     trace = tl.trace(
         _IdentityReluModel(),
         x,
-        backward_ready=True,
-        save_grads=True,
+        capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
         intervene=tl.when(selector, helper),
     )
     trace.backward(trace[trace.output_layers[0]].out, retain_graph=True)
@@ -852,8 +851,7 @@ def test_forward_helper_on_backward_selector_warns() -> None:
         tl.trace(
             _IdentityReluModel(),
             torch.ones(1, 3, requires_grad=True),
-            backward_ready=True,
-            save_grads=True,
+            capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
             intervene=tl.when(tl.grad_fn(type="relu"), tl.zero_ablate()),
         )
 

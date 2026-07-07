@@ -9,6 +9,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens.io import suppress_mutate_warnings
 from torchlens.io import TraceState
 from torchlens.intervention.errors import (
     DirectActivationWriteWarning,
@@ -16,6 +17,7 @@ from torchlens.intervention.errors import (
     ModelMismatchError,
     MutateInPlaceWarning,
 )
+from torchlens.options import CaptureOptions, InterventionOptions
 
 
 class ReluLinear(torch.nn.Module):
@@ -113,7 +115,7 @@ def _capture(
     log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
     return log, capture_x
 
@@ -137,25 +139,25 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
     assert warnings_record == []
 
     session, _ = _capture()
-    with tl.suppress_mutate_warnings():
+    with suppress_mutate_warnings():
         with warnings.catch_warnings(record=True) as warnings_record:
             warnings.simplefilter("always")
             session.set(tl.func("relu"), torch.zeros(2, 3))
     assert warnings_record == []
 
     callable_session, _ = _capture()
-    tl.suppress_mutate_warnings(False)
-    assert tl.suppress_mutate_warnings.is_suppressed is False
+    suppress_mutate_warnings(False)
+    assert suppress_mutate_warnings.is_suppressed is False
     try:
-        returned = tl.suppress_mutate_warnings(True)
-        assert returned is tl.suppress_mutate_warnings
-        assert tl.suppress_mutate_warnings.is_suppressed is True
+        returned = suppress_mutate_warnings(True)
+        assert returned is suppress_mutate_warnings
+        assert suppress_mutate_warnings.is_suppressed is True
         with warnings.catch_warnings(record=True) as warnings_record:
             warnings.simplefilter("always")
             callable_session.set(tl.func("relu"), torch.zeros(2, 3))
         assert warnings_record == []
     finally:
-        tl.suppress_mutate_warnings(False)
+        suppress_mutate_warnings(False)
 
 
 @pytest.mark.smoke
@@ -178,7 +180,7 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
         warnings.simplefilter("always")
         fork.set(tl.func("relu"), torch.zeros_like(fork_relu_pass.out))
     assert warnings_record == []
-    fork.replay()
+    fork.push()
 
     assert list(relu_pass.interventions) == parent_initial_log
     assert len(fork_relu_pass.interventions) > len(parent_initial_log)
@@ -209,7 +211,11 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     """``do`` dispatches to replay, rerun, set-only, and top-level alias paths."""
 
     replay_log, _ = _capture()
-    replay_result = tl.do(replay_log, {tl.func("relu"): _zero_hook}, confirm_mutation=True)
+    replay_result = tl.do(
+        replay_log,
+        {tl.func("relu"): _zero_hook},
+        intervention=InterventionOptions(confirm_mutation=True),
+    )
     assert replay_result is replay_log
     assert replay_log.state is TraceState.REPLAY_PROPAGATED
     assert replay_log.state_history[-1]["op"] == "replay"
@@ -221,7 +227,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
         {tl.func("relu"): _zero_hook},
         model=ReluLinear(),
         x=x,
-        confirm_mutation=True,
+        intervention=InterventionOptions(confirm_mutation=True),
     )
     assert rerun_result is rerun_log
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
@@ -231,8 +237,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     set_only_log.do(
         tl.func("relu"),
         torch.zeros(2, 3),
-        engine="set_only",
-        confirm_mutation=True,
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     assert set_only_log.state is TraceState.SPEC_STALE
     assert set_only_log.state_history[-1]["op"] == "do"
@@ -245,10 +250,18 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     log, x = _capture()
 
     with pytest.raises(EngineDispatchError):
-        log.do({tl.func("relu"): _zero_hook}, x=x, confirm_mutation=True)
+        log.do(
+            {tl.func("relu"): _zero_hook},
+            x=x,
+            intervention=InterventionOptions(confirm_mutation=True),
+        )
 
     with pytest.raises(EngineDispatchError):
-        log.do({tl.func("relu"): _zero_hook}, model=ReluLinear(), confirm_mutation=True)
+        log.do(
+            {tl.func("relu"): _zero_hook},
+            model=ReluLinear(),
+            intervention=InterventionOptions(confirm_mutation=True),
+        )
 
     history_len = len(log.state_history)
     spec_revision = log._spec_revision
@@ -257,7 +270,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
             {tl.func("relu"): _zero_hook},
             model=WrongModel(),
             x=torch.randn(2, 99),
-            confirm_mutation=True,
+            intervention=InterventionOptions(confirm_mutation=True),
         )
     assert len(log.state_history) == history_len
     assert log._spec_revision == spec_revision
@@ -274,11 +287,11 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
 
     log.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
     with pytest.warns(DirectActivationWriteWarning):
-        log.replay()
+        log.push()
 
     relu_pass.out = relu_pass.out
     log.set(tl.func("relu"), torch.ones_like(relu_pass.out), confirm_mutation=True)
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        log.replay()
+        log.push()
     assert warnings_record == []

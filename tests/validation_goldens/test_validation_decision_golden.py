@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 from torchlens.validation.status import ValidationReplayStatus
 
 
@@ -405,12 +406,13 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     torch.manual_seed(11)
     ff = TinyFeedForward().eval()
     x_ff = torch.randn(2, 4)
-    ff_trace = tl.trace(ff, x_ff, layers_to_save="all", save_arg_values=True)
+    full_capture = CaptureOptions(layers_to_save="all", save_arg_values=True)
+    ff_trace = tl.trace(ff, x_ff, capture=full_capture)
 
     torch.manual_seed(12)
     bn = TinyBatchNorm().eval()
     x_bn = torch.randn(3, 4)
-    bn_trace = tl.trace(bn, x_bn, layers_to_save="all", save_arg_values=True)
+    bn_trace = tl.trace(bn, x_bn, capture=full_capture)
 
     torch.manual_seed(13)
     recurrent = TinyRecurrent().eval()
@@ -418,15 +420,17 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     recurrent_trace = tl.trace(
         recurrent,
         x_recurrent,
-        layers_to_save="all",
-        save_arg_values=True,
-        random_seed=13,
+        capture=CaptureOptions(
+            layers_to_save="all",
+            save_arg_values=True,
+            random_seed=13,
+        ),
     )
 
     torch.manual_seed(14)
     intervention = TinyIntervention().eval()
     x_intervention = torch.randn(2, 3)
-    clean = tl.trace(intervention, x_intervention, layers_to_save="all", save_arg_values=True)
+    clean = tl.trace(intervention, x_intervention, capture=full_capture)
     edited = clean.fork("zero_relu")
     relu_pass = next(layer for layer in edited.layer_list if layer.func_name == "relu")
     edited.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
@@ -435,12 +439,12 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     torch.manual_seed(15)
     empty_like = TinyEmptyLike().eval()
     x_empty = torch.randn(2, 3)
-    empty_trace = tl.trace(empty_like, x_empty, layers_to_save="all", save_arg_values=True)
+    empty_trace = tl.trace(empty_like, x_empty, capture=full_capture)
 
     torch.manual_seed(16)
     corrupted = TinyAddRelu().eval()
     x_corrupted = torch.randn(2, 3)
-    corrupted_trace = tl.trace(corrupted, x_corrupted, layers_to_save="all", save_arg_values=True)
+    corrupted_trace = tl.trace(corrupted, x_corrupted, capture=full_capture)
     _first_op_with_func(corrupted_trace, "__add__").func = _wrong_add
 
     torch.manual_seed(17)
@@ -449,8 +453,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     partial_trace = tl.trace(
         partial_save,
         x_partial,
-        layers_to_save="all",
-        save_arg_values=False,
+        capture=CaptureOptions(layers_to_save="all", save_arg_values=False),
     )
 
     torch.manual_seed(19)
@@ -460,7 +463,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         selective_save,
         x_selective,
         save=_save_only_mul,
-        save_arg_values=True,
+        capture=CaptureOptions(save_arg_values=True),
     )
 
     torch.manual_seed(18)
@@ -469,8 +472,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     cholesky_trace = tl.trace(
         cholesky,
         x_cholesky,
-        layers_to_save="all",
-        save_arg_values=True,
+        capture=full_capture,
     )
 
     torch.manual_seed(20)
@@ -479,8 +481,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     swamped_trace = tl.trace(
         swamped,
         x_swamped,
-        layers_to_save="all",
-        save_arg_values=True,
+        capture=full_capture,
     )
 
     torch.manual_seed(21)
@@ -489,8 +490,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     multiply_zero_trace = tl.trace(
         multiply_zero,
         x_multiply_zero,
-        layers_to_save="all",
-        save_arg_values=True,
+        capture=full_capture,
     )
 
     return {

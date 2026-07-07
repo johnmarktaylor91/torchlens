@@ -334,6 +334,7 @@ def _apply_live_hooks(
             container_path=container_path,
             previous_notes=previous_notes,
             run_ctx=hook_context.run_ctx,
+            replaced=result is not current_out,
         )
         _append_active_spec_records([record])
         fire_results.append(
@@ -899,6 +900,7 @@ def _build_live_fire_record(
     container_path: tuple[Any, ...],
     previous_notes: tuple[Any, ...],
     run_ctx: dict[str, Any],
+    replaced: bool,
 ) -> FireRecord:
     """Build a record for one live hook fire.
 
@@ -914,6 +916,8 @@ def _build_live_fire_record(
         Operation-history notes present before hook execution.
     run_ctx:
         Shared hook run context after execution.
+    replaced:
+        Whether the hook returned a replacement tensor object.
 
     Returns
     -------
@@ -938,6 +942,7 @@ def _build_live_fire_record(
         seed=helper_kwargs.get("seed"),
         determinism_note="; ".join(str(note) for note in new_notes) if new_notes else None,
         timestamp=time.monotonic(),
+        replaced=replaced,
     )
 
 

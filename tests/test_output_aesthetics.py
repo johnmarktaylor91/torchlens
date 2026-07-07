@@ -32,6 +32,7 @@ import torch.nn as nn
 
 import example_models
 from torchlens import func, trace as trace_fn
+from torchlens.options import CaptureOptions
 from torchlens.visualization import show_model_graph
 
 # ---------------------------------------------------------------------------
@@ -152,7 +153,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section(f"Model: {name} — {description}", level=1))
 
     # Log the forward pass
-    log = trace_fn(model, x, random_seed=42)
+    log = trace_fn(model, x, capture=CaptureOptions(random_seed=42))
 
     # ===== A. Trace Overview =====
     out.write(_section("A. Trace Overview", level=2))

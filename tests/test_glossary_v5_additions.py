@@ -12,6 +12,7 @@ from torchlens.data_classes import ParamAccessor
 from torchlens.data_classes.layer import OpAccessor
 from torchlens.data_classes.module import Module, ModuleCall
 from torchlens.data_classes.op import Op
+from torchlens.options import CaptureOptions
 
 
 class _NestedModel(nn.Module):
@@ -34,7 +35,11 @@ def _make_trace() -> Any:
     """Return a trace with argument templates enabled."""
 
     model = _NestedModel()
-    return tl.trace(model, torch.randn(1, 4), intervention_ready=True)
+    return tl.trace(
+        model,
+        torch.randn(1, 4),
+        capture=CaptureOptions(intervention_ready=True),
+    )
 
 
 @pytest.mark.smoke

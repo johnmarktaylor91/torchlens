@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.io import load_intervention_spec
 from torchlens.ir.container import TupleIndex
 from torchlens.intervention.errors import (
     MultiMatchWarning,
@@ -23,7 +24,13 @@ from torchlens.intervention.resolver import _selector_from_spec
 from torchlens.intervention.save import _write_tlspec_tensor_blob
 from torchlens.intervention.save import _sync_spec_records_from_log
 from torchlens.intervention.save import resolve_function_registry_key, save_intervention
-from torchlens.intervention.types import FireRecord, FunctionRegistryKey, InterventionSpec
+from torchlens.intervention.types import (
+    FireRecord,
+    FunctionRegistryKey,
+    HelperSpec,
+    InterventionSpec,
+)
+from torchlens.validation import check_spec_compat
 
 
 class _ReluModel(nn.Module):
@@ -104,7 +111,7 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.trace(model, x, intervention_ready=True)
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
 
 @pytest.mark.smoke
@@ -113,7 +120,7 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate())
+    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "mylog.tlspec"
 
     log.save_intervention(path, level="audit")
@@ -123,9 +130,9 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert (path / "manifest.json").exists()
     assert (path / "README.md").exists()
     assert (path / "tensors").is_dir()
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
     assert tl.load(path) == spec
-    compat = tl.check_spec_compat(spec, _log(_ReluModel(), x))
+    compat = check_spec_compat(spec, _log(_ReluModel(), x))
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
     assert compat.targets_resolve_identically is True
 
@@ -137,19 +144,22 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
     log = tl.trace(
         _ReluModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.func("relu"): tl.zero_ablate()},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("relu"): tl.zero_ablate()},
+        ),
     )
     path = tmp_path / "forward_records.tlspec"
 
     assert log._intervention_spec.records
 
     log.save_intervention(path, level="portable")
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
 
     assert spec.records
     assert all(isinstance(record, FireRecord) for record in spec.records)
     assert any(record.direction == "forward" for record in spec.records)
+    assert any(record.replaced is True for record in spec.records)
 
 
 @pytest.mark.smoke
@@ -161,7 +171,7 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     log = tl.trace(
         _ReluModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
     path = tmp_path / "predicate_intervention.tlspec"
@@ -169,7 +179,7 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     assert log._intervention_spec.records
 
     log.save_intervention(path, level="portable")
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
 
     assert spec.targets
     assert spec.hook_specs
@@ -183,13 +193,15 @@ def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> No
     log = tl.trace(
         _ChunkModel(),
         torch.randn(2, 4),
-        intervention_ready=True,
-        hooks={tl.func("chunk"): tl.zero_ablate()},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("chunk"): tl.zero_ablate()},
+        ),
     )
     path = tmp_path / "chunk_intervention.tlspec"
 
     log.save_intervention(path)
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
 
     assert {record.container_path for record in spec.records} == {
         (TupleIndex(0),),
@@ -198,30 +210,40 @@ def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> No
 
 
 def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path) -> None:
-    """Live ``tl.where`` hook specs save at every supported intervention level."""
+    """Live ``tl.where`` hook specs are audit-only when the predicate is opaque."""
 
-    for level in ("audit", "executable_with_callables", "portable"):
-        log = _log(_ReluModel(), torch.randn(2, 3))
-        log.attach_hooks(
-            tl.where(lambda ctx: ctx.func_name == "relu", name_hint="relu predicate"),
-            tl.zero_ablate(),
-            strict=False,
-            confirm_mutation=True,
-        )
+    log = _log(_ReluModel(), torch.randn(2, 3))
+    log.attach_hooks(
+        tl.where(lambda ctx: ctx.func_name == "relu", name_hint="relu predicate"),
+        tl.zero_ablate(),
+        strict=False,
+        confirm_mutation=True,
+    )
+    audit_path = tmp_path / "where_audit.tlspec"
+
+    log.save_intervention(audit_path, level="audit")
+
+    manifest = json.loads((audit_path / "manifest.json").read_text())
+    selector = manifest["spec_compat_info"]["target_manifest"][0]["selector"]
+    assert manifest["spec_compat_info"]["target_manifest"][0]["resolved_status"] == (
+        "unresolved_nonportable"
+    )
+    assert "__opaque_audit__" in selector["selector_value"]
+
+    for level in ("executable_with_callables", "portable"):
         path = tmp_path / f"where_{level}.tlspec"
-
-        log.save_intervention(path, level=level)
-
-        manifest = json.loads((path / "manifest.json").read_text())
-        assert manifest["spec_compat_info"]["target_manifest"][0]["resolved_status"] == (
-            "unresolved_nonportable"
-        )
+        with pytest.raises(OpaqueCallableInExecutableSaveError, match="Callable selector"):
+            log.save_intervention(path, level=level)
 
 
 def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() -> None:
     """TargetSpec rehydration supports output_at, input_at, and regex selectors."""
 
-    log = tl.trace(_ChunkModel(), torch.randn(2, 4), intervention_ready=True)
+    log = tl.trace(
+        _ChunkModel(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
 
     with pytest.warns(MultiMatchWarning):
         output_labels = log.resolve_sites(tl.output_at(0).to_target_spec()).labels()
@@ -241,12 +263,43 @@ def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> Non
     path = tmp_path / "forward_execute.tlspec"
 
     log.save_intervention(path, level="portable")
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
     fresh = _log(_ReluModel(), x)
     fresh._intervention_spec = spec
     rerun = fresh.run(_ReluModel(), x)
 
     assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones_like(x))
+
+
+def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
+    tmp_path: Path,
+) -> None:
+    """Loaded path and pattern selector hook specs execute after save/load."""
+
+    x = torch.ones(1, 4)
+    output_log = _log(_ChunkModel(), x)
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        output_log.attach_hooks(tl.output_at(1), tl.zero_ablate(), confirm_mutation=True)
+    output_path = tmp_path / "loaded_output_at.tlspec"
+    output_log.save_intervention(output_path, level="portable")
+    output_spec = load_intervention_spec(output_path)
+    output_fresh = _log(_ChunkModel(), x)
+    output_fresh._intervention_spec = output_spec
+    output_rerun = output_fresh.run(_ChunkModel(), x)
+
+    output_tensor = output_rerun[output_rerun.output_layers[1]].out
+    assert torch.count_nonzero(output_tensor) == 0
+
+    regex_log = _log(_ReluModel(), torch.ones(1, 3))
+    regex_log.attach_hooks(tl.regex("relu"), tl.scale(0.0), confirm_mutation=True)
+    regex_path = tmp_path / "loaded_regex.tlspec"
+    regex_log.save_intervention(regex_path, level="portable")
+    regex_spec = load_intervention_spec(regex_path)
+    regex_fresh = _log(_ReluModel(), torch.ones(1, 3))
+    regex_fresh._intervention_spec = regex_spec
+    regex_rerun = regex_fresh.run(_ReluModel(), torch.ones(1, 3))
+
+    assert torch.equal(regex_rerun[regex_rerun.output_layers[0]].out, torch.ones(1, 3))
 
 
 def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Path) -> None:
@@ -272,7 +325,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         sentinel.unlink()
         sys.modules.pop("side_effect_mod", None)
 
-        spec = tl.load_intervention_spec(path)
+        spec = load_intervention_spec(path)
 
         assert not sentinel.exists()
         fresh = _log(_ReluModel(), torch.ones(1, 3))
@@ -286,18 +339,70 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
             sys.path.remove(str(tmp_path))
 
 
+def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
+    tmp_path: Path,
+) -> None:
+    """Helper import refs load lazily and remain executable helper specs."""
+
+    module_path = tmp_path / "side_effect_helper_mod.py"
+    sentinel = tmp_path / "helper_sentinel"
+    module_path.write_text(
+        "from pathlib import Path\n"
+        "SENTINEL = Path(__file__).with_name('helper_sentinel')\n"
+        "SENTINEL.write_text('imported')\n"
+        "def make_hook():\n"
+        "    def hook(out, *, hook):\n"
+        "        return out * 0\n"
+        "    return hook\n"
+    )
+    sys.path.insert(0, str(tmp_path))
+    try:
+        import side_effect_helper_mod
+
+        helper = HelperSpec(
+            helper_name="side_effect_helper",
+            portability="import_ref",
+            factory=side_effect_helper_mod.make_hook,
+        )
+        log = _log(_ReluModel(), torch.ones(1, 3))
+        log.attach_hooks(tl.func("relu"), helper, confirm_mutation=True)
+        path = tmp_path / "lazy_helper_import.tlspec"
+        log.save_intervention(path, level="executable_with_callables")
+        sentinel.unlink()
+        sys.modules.pop("side_effect_helper_mod", None)
+
+        spec = load_intervention_spec(path)
+
+        assert not sentinel.exists()
+        assert spec.hook_specs[0].helper is not None
+        assert spec.hook_specs[0].helper.name == "side_effect_helper"
+        fresh = _log(_ReluModel(), torch.ones(1, 3))
+        fresh._intervention_spec = spec
+        rerun = fresh.run(_ReluModel(), torch.ones(1, 3))
+        assert sentinel.exists()
+        assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones(1, 3))
+    finally:
+        sys.modules.pop("side_effect_helper_mod", None)
+        if str(tmp_path) in sys.path:
+            sys.path.remove(str(tmp_path))
+
+
 @pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live backward hook records survive intervention spec save/load."""
 
     x = torch.randn(2, 3, requires_grad=True)
-    log = tl.trace(_ReluModel(), x, save_grads="all", backward_ready=True)
+    log = tl.trace(
+        _ReluModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
     log.save_intervention(path, level="portable")
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
 
     backward_records = [record for record in spec.records if record.direction == "backward"]
     assert backward_records
@@ -309,17 +414,25 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
     """Structured grad_fn selector payloads execute after save/load."""
 
     x = torch.ones(1, 3, requires_grad=True)
-    log = tl.trace(_ReluModel(), x, save_grads="all", backward_ready=True)
+    log = tl.trace(
+        _ReluModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
     log.save_intervention(path, level="portable")
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
 
     assert isinstance(spec.hook_specs[0].site_target.selector_value, dict)
     x_fresh = torch.ones(1, 3, requires_grad=True)
-    fresh = tl.trace(_ReluModel(), x_fresh, save_grads="all", backward_ready=True)
+    fresh = tl.trace(
+        _ReluModel(),
+        x_fresh,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     fresh._intervention_spec = spec
     fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
@@ -332,16 +445,24 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
     """Sticky backward recipes save unresolved and resolve at execution time."""
 
     x = torch.ones(1, 3, requires_grad=True)
-    log = tl.trace(_ReluModel(), x, save_grads="all", backward_ready=True)
+    log = tl.trace(
+        _ReluModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
-    spec = tl.load_intervention_spec(path)
+    spec = load_intervention_spec(path)
 
     assert spec.metadata["target_manifest"][0]["resolved_status"] == "unresolved_backward"
     x_fresh = torch.ones(1, 3, requires_grad=True)
-    fresh = tl.trace(_ReluModel(), x_fresh, save_grads="all", backward_ready=True)
+    fresh = tl.trace(
+        _ReluModel(),
+        x_fresh,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     fresh._intervention_spec = spec
     fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
@@ -354,8 +475,10 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     log = tl.trace(
         _ReluModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        hooks={tl.func("relu"): tl.zero_ablate()},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.func("relu"): tl.zero_ablate()},
+        ),
     )
     path = tmp_path / "versioned_records.tlspec"
 
@@ -373,13 +496,13 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
     manifest_path.write_text(json.dumps(manifest_json), encoding="utf-8")
 
-    loaded = tl.load_intervention_spec(path)
+    loaded = load_intervention_spec(path)
     assert loaded.metadata["format_version"] == "1"
 
     spec_json["format_version"] = "3"
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
     with pytest.raises(ValueError, match="Unsupported intervention .tlspec format_version"):
-        tl.load_intervention_spec(path)
+        load_intervention_spec(path)
 
 
 def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
@@ -465,7 +588,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         del hook
         return out
 
-    log.attach_hooks({tl.func("relu"): opaque_hook})
+    log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
     with pytest.raises(OpaqueCallableInExecutableSaveError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
@@ -489,12 +612,12 @@ def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate())
+    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "target.tlspec"
     log.save_intervention(path, level="audit")
 
-    spec = tl.load_intervention_spec(path)
-    compat = tl.check_spec_compat(spec, _log(_TanhModel(), x))
+    spec = load_intervention_spec(path)
+    compat = check_spec_compat(spec, _log(_TanhModel(), x))
 
     assert compat.outcome == "FAIL"
     assert compat.diff.missing_labels
@@ -505,7 +628,7 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
     """A tensor-sidecar write exception leaves no final partial tlspec dir."""
 
     log = _log()
-    log.set(tl.func("relu"), torch.zeros(2, 3))
+    log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
     target = tmp_path / "crash.tlspec"
 
     def crashing_writer(**kwargs: Any) -> Any:

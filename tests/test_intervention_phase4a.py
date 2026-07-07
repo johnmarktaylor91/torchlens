@@ -7,6 +7,7 @@ import torch
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.options import CaptureOptions
 
 
 class _TinyInterventionModel(torch.nn.Module):
@@ -57,7 +58,7 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     model = _TinyInterventionModel()
     x = torch.randn(2, 3)
 
-    log = tl.trace(model, x, intervention_ready=True)
+    log = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
     assert log.intervention_ready is True
     assert log.model_object_id == id(model)
@@ -76,8 +77,7 @@ def test_intervention_ready_supports_nonempty_layers_to_save_list() -> None:
     trace = tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        layers_to_save=["relu"],
+        capture=CaptureOptions(intervention_ready=True, layers_to_save=["relu"]),
     )
 
     assert trace.intervention_ready is True
@@ -91,13 +91,12 @@ def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        layers_to_save=[],
+        capture=CaptureOptions(intervention_ready=True, layers_to_save=[]),
     )
 
 
@@ -108,7 +107,7 @@ def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
     log = tl.trace(
         _MultiOutputModel(),
         torch.randn(4, 5),
-        intervention_ready=True,
+        capture=CaptureOptions(intervention_ready=True),
     )
 
     ids = [layer.func_call_id for layer in log.layer_list if layer.func_call_id is not None]
