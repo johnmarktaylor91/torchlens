@@ -1,4 +1,8 @@
-"""Backward-pass graph walking, grad_fn_handle hooks, and Trace APIs."""
+"""Capture torch backward execution and autograd graph metadata.
+
+This module installs backward/grad wrappers, walks grad_fn graphs, records hook
+events, and exposes Trace/Recording backward helpers.
+"""
 
 from __future__ import annotations
 
@@ -1419,6 +1423,7 @@ def _make_grad_fn_hook(
     trace_ref = weakref.ref(trace)
 
     def hook(*hook_args: Any) -> tuple[torch.Tensor | None, ...] | None:
+        """Record one autograd grad_fn hook firing and apply live interventions."""
         live_trace = trace_ref()
         if live_trace is None:
             return None
@@ -1537,6 +1542,7 @@ def _make_grad_fn_prehook(
     trace_ref = weakref.ref(trace)
 
     def prehook(*hook_args: Any) -> tuple[torch.Tensor | None, ...] | None:
+        """Apply pending AccumulateGrad prehook interventions for one call."""
         live_trace = trace_ref()
         if live_trace is None:
             return None
@@ -2627,7 +2633,7 @@ def uninstall_autograd_wrappers() -> None:
 
 
 def _ensure_layer_grad_hooks(trace: Any) -> None:
-    """Enable legacy gradient retention after op-record-time hook installation.
+    """Enable gradient retention when saved-out hook installation was deferred.
 
     Parameters
     ----------
@@ -2722,6 +2728,7 @@ class RecordingBackward:
         *,
         save_grads: Any | MissingType = MISSING,
     ) -> None:
+        """Store context state for temporary ``Tensor.backward`` patching."""
         self.trace = trace
         self.save_grads = save_grads
         self._original_backward: Callable[..., Any] | None = None

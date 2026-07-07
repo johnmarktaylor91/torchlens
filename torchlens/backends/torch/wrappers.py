@@ -1,38 +1,7 @@
-"""Lazy torch function wrapping with explicit wrap/unwrap lifecycle.
+"""Lazy torch function wrapping for capture-time operation interception.
 
-This module implements the core interception mechanism for TorchLens.  Torch
-functions are wrapped **lazily** — ``import torchlens`` has no side effects.
-Wrapping happens on the first call to ``trace()`` (or any other
-entry point that needs logging) and stays in place afterward.  Users can
-explicitly control the lifecycle via ``wrap_torch()`` / ``unwrap_torch()`` /
-``wrapped()``.
-
-Every function listed in ``ORIG_TORCH_FUNCS`` is replaced with a thin wrapper
-that checks a single boolean (``_state._logging_enabled``) on each call:
-
-  - **Logging off** (default): one branch check, near-zero overhead, original function called.
-  - **Logging on**: all tensor outputs are captured into the active ``Trace``.
-
-Key design decisions:
-
-1. **Lazy wrapping** — torch is clean after ``import torchlens``.  Wrapping is
-   triggered automatically on first use and persists until ``unwrap_torch()`` is
-   called.  The toggle makes persistent wrapping safe for production use.
-
-2. **Shared originals reuse wrappers**: If ``torch.cos`` and ``torch._VF.cos`` point to the
-   same C builtin, only one wrapper is created and both namespaces point to it. This keeps
-   ``_orig_to_decorated`` / JIT builtin table mappings 1:1.
-
-3. **sys.modules crawl** (``patch_detached_references``): Code like ``from torch import cos``
-   captures a reference to the *original* function before decoration. The crawl replaces
-   these stale references in module dicts, class dicts, and function defaults.
-
-4. **JIT compatibility**: Decorated wrappers are registered in ``torch.jit._builtins._builtin_table``
-   so ``torch.jit.script`` recognizes them as known ATen ops.
-
-5. **DeviceContext bypass**: Python wrappers bypass PyTorch's C-level ``TorchFunctionMode``
-   dispatch, so ``torch.device('meta')`` context managers won't inject ``device`` kwargs
-   automatically. We detect active ``DeviceContext`` and inject the kwarg ourselves.
+Wrappers persist after first installation and branch on ``_state._logging_enabled``.
+This module also patches detached torch references and torch transform boundaries.
 """
 
 import inspect
@@ -422,6 +391,7 @@ def transform_builder_decorator(
 
     @wraps(builder)
     def wrapped_builder(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Build a transform callable and attach TorchLens boundary metadata."""
         built = builder(func, *args, **kwargs)
         if not callable(built):
             return built
@@ -440,6 +410,7 @@ def transform_builder_decorator(
 
         @wraps(raw_built)
         def wrapped_transform(*call_args: Any, **call_kwargs: Any) -> Any:
+            """Record one call to a torch.func-style transform boundary."""
             if not _state._logging_enabled or _state._active_trace is None:
                 return raw_built(*call_args, **call_kwargs)
 
@@ -520,6 +491,7 @@ def direct_transform_decorator(
 
     @wraps(direct_func)
     def wrapped_direct(user_fn: Callable[..., Any], inputs: Any, *args: Any, **kwargs: Any) -> Any:
+        """Record one direct-call transform as a boundary operation."""
         if not _state._logging_enabled or _state._active_trace is None:
             return direct_func(user_fn, inputs, *args, **kwargs)
 
@@ -831,6 +803,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
+        """Dispatch a decorated torch callable through the logging gate."""
         # ---- Fast path ----
         # When logging is off, pass through with minimal overhead.
         # DeviceContext injection is still needed even when not logging,
@@ -1572,11 +1545,6 @@ def wrapped() -> Iterator[None]:
         unwrap_torch()
 
 
-# Keep old names as private aliases for internal use
-undecorate_all_globally = unwrap_torch
-redecorate_all_globally = wrap_torch
-
-
 # ---------------------------------------------------------------------------
 # sys.modules deep crawl
 # ---------------------------------------------------------------------------
@@ -1612,13 +1580,13 @@ def patch_detached_references(full: bool = False) -> None:
     The default policy preserves the Level-1 direct-reference scan for every
     eligible module, and skips Level 2/3 only for readable Python modules whose
     source does not contain the substring ``"torch"``. Pass ``full=True`` to
-    force the older deep scan for every module that is not in the legacy skip
+    force the deep scan for every module that is not in the skip
     set.
 
     Parameters
     ----------
     full:
-        If True, bypass source pre-filtering and run the legacy deep crawl.
+        If True, bypass source pre-filtering and run the deep crawl.
 
     Returns
     -------

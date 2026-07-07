@@ -1,26 +1,7 @@
-"""Model preparation: two-phase setup of nn.Modules for out logging.
+"""Prepare torch ``nn.Module`` objects for capture sessions.
 
-This module implements the model preparation pipeline, which has two phases:
-
-**Phase 1 — One-time preparation** (``_prepare_model_once``):
-  Runs once per model instance (cached in ``_state._prepared_models`` WeakSet).
-  Assigns permanent ``_tl`` module metadata and
-  wraps each submodule's ``forward`` with ``module_forward_decorator``. These
-  survive across multiple ``trace`` calls.
-
-**Phase 2 — Per-session preparation** (``_prepare_model_session``):
-  Runs on every ``trace`` call. Populates session-scoped tracking
-  dicts on Trace (pass counters, entered/exited labels), captures module
-  metadata, forces ``requires_grad=True`` on all parameters (needed for
-  ``grad_fn_handle`` metadata), creates ``Param`` objects, and tags buffer tensors.
-  Session data is GC'd with the Trace — no per-module cleanup needed.
-
-The ``module_forward_decorator`` wraps each submodule's ``forward`` with a
-toggle-gated wrapper that reads ``trace`` from ``_state._active_trace``
-(not closed-over). In exhaustive mode, it calls ``_record_module_entry_metadata`` /
-``_record_module_exit_metadata`` to track which tensors enter and exit each module. In
-fast mode, it skips entry/exit tracking entirely but still handles
-``nn.Identity`` and pass-through detection via ``torch.identity``.
+One-time preparation installs persistent forward wrappers and module metadata.
+Per-session preparation populates Trace state, parameter logs, and buffer labels.
 """
 
 import copy
@@ -356,6 +337,7 @@ def _prepare_model_once(model: nn.Module) -> None:
         child_entries: list[tuple[str, nn.Module, str]],
         is_root: bool,
     ) -> None:
+        """Prepare one module and recursively visit its children once."""
         # Replace any original torch functions stored as instance attributes
         # (e.g. self.act = torch.relu assigned before decoration).
         for func_name, func in list(module.__dict__.items()):
@@ -998,7 +980,7 @@ def _tag_untagged_buffers(module: nn.Module) -> None:
             address = f"{module_addr}.{buffer_name}"
         set_buffer_address(buffer_tensor, address)
         # If this buffer was already logged as an intermediate tensor, save the
-        # old label as parent and reset so it gets a proper buffer source entry.
+        # previous label as parent and reset so it gets a proper buffer source entry.
         promote_label_to_buffer_source_and_clear_label(buffer_tensor)
 
 
@@ -1821,6 +1803,7 @@ def module_forward_decorator(
 
     @wraps(orig_forward)
     def decorated_forward(*args: Any, **kwargs: Any) -> Any:
+        """Route one module forward call through TorchLens capture bookkeeping."""
         # ---- Toggle gate: near-zero overhead when logging is off ----
         if not _state._logging_enabled or _state._active_trace is None:
             return orig_forward(*args, **kwargs)
@@ -2248,8 +2231,3 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     # redundant full crawl for models that were already prepared.
     if not already_prepared:
         patch_model_instance(model)  # level 4 — model instance attrs
-
-
-# Keep old names as aliases for backward compatibility during transition
-prepare_model = _prepare_model_session
-cleanup_model = _cleanup_model_session

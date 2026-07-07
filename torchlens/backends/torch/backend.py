@@ -148,7 +148,7 @@ def _promote_layers_to_save_output_parent(
     ----------
     trace:
         Predicate-mode trace whose selective ``layers_to_save`` request must
-        preserve the legacy output-parent rule.
+        preserve the output-parent retention rule.
     event:
         Existing operation event for the tensor returned by the model.
     tensor:

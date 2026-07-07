@@ -1,35 +1,7 @@
-"""Functions for logging output tensors produced by decorated torch operations.
+"""Log tensors produced by decorated torch operations.
 
-This module handles the creation and population of Op entries for every
-tensor produced during a forward pass.  It covers both *exhaustive* mode (full
-metadata collection) and *fast* mode (re-use of a previously logged graph with
-new outs).
-
-Architecture overview:
-    Every decorated torch function wrapper calls ``log_function_output_tensors``
-    after executing the original function.  This dispatcher routes to either:
-
-    - ``log_function_output_tensors_exhaustive``: builds a complete
-      ``fields_dict`` of ~80 fields per tensor, creates a Op entry,
-      updates family links (parent/child/sibling/spouse), and optionally
-      saves the out value.
-
-    - ``log_function_output_tensors_fast``: skips metadata collection entirely.
-      Increments counters to maintain alignment with the exhaustive pass,
-      verifies the graph hasn't changed, and saves new out values into
-      the existing Op entries.
-
-Label format convention:
-    Raw labels follow ``{layer_type}_{type_num}_{realtime_num}_raw``, e.g.
-    ``"conv2d_3_47_raw"``.  During postprocessing, these are mapped to final
-    labels like ``"conv2d_3:1"`` (layer 3, pass 1).
-
-pause_logging usage:
-    ``pause_logging()`` temporarily disables the logging toggle so that
-    utility operations (e.g., ``get_memory_amount``, ``safe_copy``,
-    ``activation_transform``) don't get logged as model operations.  It is
-    used inside ``save_activation`` and wherever helper functions call
-    decorated torch custom_methods on tensors.
+This module creates Op entries, emits capture events, applies predicate
+interventions, and saves or streams activation payloads for torch captures.
 """
 
 import copy
@@ -1100,7 +1072,7 @@ def _walk_supported_output_container(
     # leaves ``output_structure`` unset so it is later back-filled from an
     # unrelated output layer, producing a structure whose leaf paths disagree with
     # these output paths (caught by the module_hierarchy invariant). search_depth=5
-    # matches the legacy whole-output BFS fallback; DynamicCache's tensors live at
+    # matches the whole-output BFS fallback; DynamicCache's tensors live at
     # depth ~5 and are missed by the default depth of 3.
     for tensor, _address, fallback_address in get_vars_of_type_from_obj(
         out,

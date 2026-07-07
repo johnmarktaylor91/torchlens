@@ -1,24 +1,7 @@
-"""Functions for logging source tensors (inputs and buffers) during model tracing.
+"""Log torch capture source tensors.
 
-Source tensors are the starting points of the computational graph: model inputs
-and module buffers.  This module handles creating Op entries for these
-tensors in both exhaustive and fast logging modes.
-
-Source tensors differ from function-output tensors in several ways:
-  - They have no parent layers (``parents=[]``).
-  - Inputs are roots with ``has_input_ancestor=True``; buffers are internally
-    initialized with ``has_internal_source_ancestor=True``.
-  - Their ``func`` is None and ``func_name`` is ``"none"``.
-  - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
-  - Buffers may carry ``_tl.buffer_source`` metadata (set during model prep)
-    identifying the module that owns them.
-  - Buffer entries are instantiated as ``Buffer`` (a Op subclass
-    that adds ``name`` and ``address`` fields).
-
-The ``equivalence_class`` for inputs encodes shape+dtype (so inputs
-with different shapes are distinct equivalence classes).  For buffers, it
-encodes the buffer's module address (so the same buffer across ops is
-recognized as the same layer).
+This module creates input and buffer Op entries, updates fast-capture source
+payloads, and preserves source equivalence metadata for postprocessing.
 """
 
 from collections import defaultdict

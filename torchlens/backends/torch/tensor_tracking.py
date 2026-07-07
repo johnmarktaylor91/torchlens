@@ -1,32 +1,7 @@
-"""Functions for tracking tensor lineage, family relationships, and operation equivalence.
+"""Track torch tensor provenance, family links, and equivalence classes.
 
-Handles backward hooks for grad capture, parent-child-sibling-spouse linkage,
-parameter pass tracking, and structural fingerprinting of operations for loop detection.
-
-Key concepts:
-
-**Family links** (parent/child/sibling/spouse):
-    When a new tensor is created by a function, its input tensors become parents,
-    co-parents become spouses, and children of the same parent become siblings.
-    All links are bidirectional and updated immediately at creation time.
-
-**Operation equivalence type** (``_get_equivalence_class``):
-    A structural fingerprint string that identifies operations as "the same layer"
-    across loop iterations.  Used by loop detection to group operations into
-    equivalence classes.  For parameterized ops, the fingerprint is based on the
-    parameter barcodes + op type (e.g. ``"conv2d_abc123_def456"``).  For
-    non-parameterized ops, it hashes non-tensor args, output index, and
-    containing module.
-
-**Backward hooks** (``_add_tensor_backward_hook``):
-    Uses ``weakref.ref(Trace)`` to avoid preventing garbage collection of the
-    Trace after the user is done with it.  The hook closure captures the weakref
-    and the raw tensor label (a string, not the tensor itself).
-
-**Parent arg position tracking** (``_locate_parent_tensors_in_args``):
-    Records where each parent tensor appeared in the function's args/kwargs,
-    supporting up to 2 levels of nesting (e.g., ``args[0]`` or ``args[1][2]``).
-    Deeper nesting is not tracked.
+This module owns tensor backward hooks, parent argument positions, parameter pass
+tracking, and structural fingerprints used by loop detection.
 """
 
 import time
@@ -77,6 +52,7 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
     trace_ref = weakref.ref(trace)
 
     def log_grad_to_model_history(grad: torch.Tensor) -> None:
+        """Emit and optionally retain one gradient observed by a tensor hook."""
         active_trace = trace_ref()
         if active_trace is not None:
             _emit_tensor_grad_event(active_trace, grad, tensor_label)

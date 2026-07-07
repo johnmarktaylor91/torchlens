@@ -1,11 +1,7 @@
-"""Canonical module-stack management for TorchLens capture.
+"""Manage the torch capture module-call stack.
 
-Both fastlog/predicate mode and exhaustive mode (added in later phases)
-push and pop ModuleStackFrames through this helper. Direct
-``state.module_stack.append/pop`` calls are forbidden outside this file.
-
-The counter ``trace._mod_call_index`` is the ONLY per-module call
-counter; this helper is the only incrementer of that counter.
+All capture modes push and pop ``ModuleStackFrame`` objects here, and this
+module is the only incrementer of ``trace._mod_call_index``.
 """
 
 from __future__ import annotations
