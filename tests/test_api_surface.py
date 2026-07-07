@@ -14,6 +14,8 @@ TARGET_ALL = [
     "facets",
     "record",
     "Recording",
+    "ActivationLookup",
+    "CapturedRun",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "load",
@@ -32,6 +34,12 @@ TARGET_ALL = [
     "extract_dataset",
     "batched_extract",
     "validate",
+    "decide_recording_of_batch",
+    "record_kpi_in_graph",
+    "register_tensor_connection",
+    "show_bundle_graph",
+    "options",
+    "to_disk",
     "AmbiguousOpLookupError",
     "ReentrantTraceError",
     "Trace",
@@ -50,6 +58,9 @@ TARGET_ALL = [
     "func_transform",
     "followed_by",
     "grad_fn",
+    "grad_input",
+    "grad_output",
+    "in_backward_pass",
     "intervening",
     "without_op",
     "regex",
@@ -114,7 +125,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_79() -> None:
+def test_all_size_exactly_90() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -134,11 +145,15 @@ def test_all_size_exactly_79() -> None:
     `push_from`, `run`, `pluck`, `extract_dataset`, `without_op`, `regex`,
     `span`; removes `sites` = 76. Internal sprint 2 adds `export` and
     `AmbiguousOpLookupError` = 78. Tech-debt sprint adds
-    `ReentrantTraceError` = 79. Paper-era compatibility shims remain available
-    through ``__getattr__`` but are not advertised in ``__all__``.
+    `ReentrantTraceError` = 79. Capture unification and backward/public option
+    follow-ups add `ActivationLookup`, `CapturedRun`, `decide_recording_of_batch`,
+    `record_kpi_in_graph`, `register_tensor_connection`, `show_bundle_graph`,
+    `options`, `to_disk`, `grad_input`, `grad_output`, and `in_backward_pass` = 90.
+    Paper-era compatibility shims remain available through ``__getattr__`` but
+    are not advertised in ``__all__``.
     """
 
-    assert len(torchlens.__all__) == 79
+    assert len(torchlens.__all__) == 90
     assert torchlens.__all__ == TARGET_ALL
 
 

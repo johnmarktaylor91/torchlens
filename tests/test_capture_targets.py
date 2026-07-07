@@ -219,7 +219,8 @@ def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
 def test_trace_reference_save_mode_raises_if_saved_out_mutates() -> None:
     """Reference-mode saved outputs fail loudly after mutation."""
 
-    log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
+    with pytest.warns(UserWarning, match="save_mode='reference'"):
+        log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
     op = next(layer for layer in log.layer_list if layer.func_name == "relu")
     saved_out = op._slot("out")
 

@@ -34,12 +34,16 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     """
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+    draw_kwargs = {
+        "vis_save_only": True,
+        "vis_fileformat": "svg",
+        "vis_outpath": str(tmp_path / "graph"),
         **kwargs,
-    )
+    }
+    if kwargs.get("node_mode") in {"attention", "vision"}:
+        with pytest.warns(DeprecationWarning, match="moving out of core"):
+            return log.draw(**draw_kwargs)
+    return log.draw(**draw_kwargs)
 
 
 def test_default_mode_unchanged_from_phase1(tmp_path: Path) -> None:

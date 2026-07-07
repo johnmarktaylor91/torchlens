@@ -452,8 +452,9 @@ def test_bundle_version_policy_rows(
 
     if expectation == "python_major_mismatch":
         (bundle_path / "metadata.pkl").write_bytes(b"not a pickle")
-        with pytest.raises(TorchLensIOError, match="python_version=999.0.0"):
-            load(bundle_path)
+        with pytest.warns(UserWarning, match="python_version=999.0.0"):
+            with pytest.raises(TorchLensIOError, match="python_version=999.0.0"):
+                load(bundle_path)
         return
 
     if expectation == "extra_blob_warning":

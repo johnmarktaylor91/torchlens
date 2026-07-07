@@ -11,7 +11,11 @@ import torch
 
 import torchlens as tl
 from torchlens.io import TraceState
-from torchlens.intervention.errors import ControlFlowDivergenceWarning, ReplayPreconditionError
+from torchlens.intervention.errors import (
+    ControlFlowDivergenceWarning,
+    MultiMatchWarning,
+    ReplayPreconditionError,
+)
 from torchlens.intervention.replay import cone_of_effect
 
 replay_mod = importlib.import_module("torchlens.intervention.replay")
@@ -421,7 +425,8 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
     for site in max_sites:
         site._internal_set("func", counted_max)
 
-    log.replay(hooks={tl.func("max"): _identity_hook})
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        log.replay(hooks={tl.func("max"): _identity_hook})
 
     assert calls["count"] == 1
 

@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.trace import Trace
+from torchlens.intervention.errors import MultiMatchWarning
 
 
 class _TinyAnnotatedModel(nn.Module):
@@ -140,7 +141,8 @@ def test_annotate_uses_large_default_fanout() -> None:
 
     trace = tl.trace(_ManyReluModel(), torch.randn(1, 4), layers_to_save="none")
 
-    trace.annotate(tl.func("relu"), data={"fanout": True})
+    with pytest.warns(MultiMatchWarning, match="matched 10 sites"):
+        trace.annotate(tl.func("relu"), data={"fanout": True})
 
     annotated = [
         op

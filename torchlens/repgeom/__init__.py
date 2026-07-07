@@ -11,11 +11,13 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 import tempfile
 from typing import Any, Literal, TypeAlias, TypedDict
+import warnings
 
 import numpy as np
 from PIL import Image, ImageDraw
 import torch
 
+from ..intervention.errors import MultiMatchWarning
 from ..viz.node_plots import render_heatmap, render_image_scatter, render_lineplot
 
 DistanceMetric: TypeAlias = Literal["euclidean", "cosine", "correlation"]
@@ -1402,7 +1404,9 @@ def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, An
     if save is None:
         return _default_saved_mds_sites(trace)
 
-    sites = list(trace.resolve_sites(save, max_fanout=1_000_000))
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=MultiMatchWarning)
+        sites = list(trace.resolve_sites(save, max_fanout=1_000_000))
     selected_by_layer: dict[str, list[Any]] = OrderedDict()
     for site in sites:
         selected_by_layer.setdefault(str(getattr(site, "layer_label")), []).append(site)

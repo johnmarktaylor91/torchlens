@@ -177,14 +177,15 @@ def test_halt_from_inside_module_enter_predicate() -> None:
             tl.fastlog.halt("module enter")
         return True
 
-    recording = _as_recording(
-        tl.fastlog.record(
-            ChildModuleModel(),
-            torch.ones(1, 3),
-            keep_module=keep_module,
-            default_op=False,
+    with pytest.warns(DeprecationWarning, match="keep_module"):
+        recording = _as_recording(
+            tl.fastlog.record(
+                ChildModuleModel(),
+                torch.ones(1, 3),
+                keep_module=keep_module,
+                default_op=False,
+            )
         )
-    )
 
     assert recording.halted is True
     assert recording.halt_reason == "module enter"
@@ -201,14 +202,15 @@ def test_halt_from_inside_module_exit_predicate() -> None:
             tl.fastlog.halt("module exit")
         return True
 
-    recording = _as_recording(
-        tl.fastlog.record(
-            ChildModuleModel(),
-            torch.ones(1, 3),
-            keep_module=keep_module,
-            default_op=False,
+    with pytest.warns(DeprecationWarning, match="keep_module"):
+        recording = _as_recording(
+            tl.fastlog.record(
+                ChildModuleModel(),
+                torch.ones(1, 3),
+                keep_module=keep_module,
+                default_op=False,
+            )
         )
-    )
 
     assert recording.halted is True
     assert recording.halt_reason == "module exit"

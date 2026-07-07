@@ -1202,7 +1202,7 @@ def _self_loop_is_single_op_module(trace: "Trace", node: GraphNode) -> bool:
     address = str(modules[-1]).rsplit(":", 1)[0]
     if address not in trace.modules:
         return False
-    return _module_has_single_rendered_op(cast("Module", trace.modules[address]))
+    return _module_has_single_rendered_op(cast(Any, trace.modules[address]))
 
 
 def _label_node_arguments_if_needed(

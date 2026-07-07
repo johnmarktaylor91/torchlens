@@ -1319,15 +1319,17 @@ def test_styletts():
     input_lengths = torch.ones(1, dtype=torch.long) * 10
     m = torch.ones(1, 10, dtype=torch.bool)
     model_inputs = (tokens, input_lengths, m)
-    show_model_graph(
-        model,
-        model_inputs,
-        random_seed=1,
-        vis_save_only=True,
-        vis_mode="unrolled",
-        vis_outpath=opj(VIS_OUTPUT_DIR, "text-to-speech", "styletts_text_encoder"),
-    )
-    assert validate_forward_pass(model, model_inputs, random_seed=1)
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        show_model_graph(
+            model,
+            model_inputs,
+            random_seed=1,
+            vis_save_only=True,
+            vis_mode="unrolled",
+            vis_outpath=opj(VIS_OUTPUT_DIR, "text-to-speech", "styletts_text_encoder"),
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, model_inputs, random_seed=1)
 
 
 def test_qml():

@@ -12,6 +12,7 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens.intervention.errors import MultiMatchWarning  # noqa: E402
 from torchlens.validation import MetadataInvariantError  # noqa: E402
 from torchlens.validation import check_metadata_invariants  # noqa: E402
 
@@ -193,7 +194,8 @@ def test_mlx_shared_submodule_aliases_use_primary_address() -> None:
     assert shared.all_addresses == ["left", "right"]
     assert shared.num_calls == 2
     assert shared.call_labels == ["left:1", "left:2"]
-    left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
     assert any("left:1" in trace[label].modules for label in left_labels)
     assert any("left:2" in trace[label].modules for label in left_labels)
     assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}

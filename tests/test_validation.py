@@ -903,7 +903,8 @@ def _make_mid_forward_backward_log() -> Trace:
 
     model = _MidForwardGradModel()
     x = torch.randn(2, 5, requires_grad=True)
-    return trace_fn(model, x, save_grads="all", random_seed=42)
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        return trace_fn(model, x, save_grads="all", random_seed=42)
 
 
 def test_clean_log_ops_all_invariants():
