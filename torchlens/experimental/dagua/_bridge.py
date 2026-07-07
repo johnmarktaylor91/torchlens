@@ -120,6 +120,20 @@ class TorchLensRenderAudit:
         }
 
 
+# Deprecated property aliases that must never be invoked by blind dir()/getattr()
+# reflection: reading them fires torchlens's own DeprecationWarning as a pure side
+# effect of introspection, from inside torchlens.experimental.dagua rather than
+# from any user code. Skip them during field enumeration instead of exercising
+# their deprecated-vs-canonical getter semantics.
+_DEPRECATED_FIELD_NAMES: frozenset[str] = frozenset(
+    {
+        "conditional_then_entry_edges",
+        "conditional_elif_entry_edges",
+        "conditional_else_entry_edges",
+    }
+)
+
+
 def _list_public_fields(obj: Any) -> list[str]:
     """Return non-callable public attribute names available on an object.
 
@@ -137,6 +151,8 @@ def _list_public_fields(obj: Any) -> list[str]:
     names: list[str] = []
     for name in dir(obj):
         if name.startswith("_"):
+            continue
+        if name in _DEPRECATED_FIELD_NAMES:
             continue
         try:
             value = getattr(obj, name)

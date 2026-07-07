@@ -676,7 +676,7 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
 
     from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 
-    return _fork_policy_table(
+    table = _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,
         share={
             "out",
@@ -689,6 +689,16 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
         },
         reconstruct={"source_trace", "_construction_done"},
     )
+    # `_facets_cache` is not part of LAYER_PASS_LOG_FIELD_ORDER (it is a lazily
+    # populated runtime cache, not a portable/user-facing field), so the loop
+    # above never assigns it a policy. Left unset, a forked Op would fall
+    # through to the generic default policy and attempt copy.deepcopy() on the
+    # cached FacetView -- which self-references its owning Op and crashes with
+    # RecursionError. Reconstruct it instead (discarded immediately afterward
+    # by _rebind_fork_owner_refs's `del layer_pass.facets` in any case),
+    # mirroring how Op.__getstate__ already excludes this field for pickling.
+    table["_facets_cache"] = ForkFieldPolicy.FORK_RECONSTRUCT
+    return table
 
 
 MODEL_LOG_FIELD_FORK_POLICY = _build_trace_fork_policy()

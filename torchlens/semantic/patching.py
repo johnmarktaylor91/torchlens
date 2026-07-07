@@ -475,7 +475,7 @@ def _run_patch(
 
     patched_log = corrupted_log.fork(name)
     patched_log.attach_hooks(selector, hook)
-    patched_log.rerun(model, corrupted_input)
+    patched_log.run(model, corrupted_input)
     return patched_log
 
 

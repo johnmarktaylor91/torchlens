@@ -567,6 +567,16 @@ class FacetSpec:
             raise TypeError("Facet scatter_update requires a tensor edited slice.")
         updated = home_out.clone(memory_format=torch.preserve_format)
         target = self.apply(updated)
+        if target.untyped_storage().data_ptr() != updated.untyped_storage().data_ptr():
+            # A primitive in the transform chain (typically "reshape"/"heads" on a
+            # non-contiguous tensor) silently fell back to a copy instead of
+            # returning a view. Writing into `target` here would edit a
+            # disconnected tensor and silently no-op the intervention -- refuse
+            # instead, mirroring the identical guard in write_mask().
+            raise RuntimeError(
+                f"Facet {self.recipe_id!r} did not produce a writable view of home "
+                f"{self.home_label or self.home_address or '<unknown>'!r}."
+            )
         _copy_scatter_value(target, edited_slice, mode=mode)
         return updated
 
@@ -1088,6 +1098,14 @@ class FacetView(Mapping[FacetKey, Any]):
     def __getattr__(self, name: str) -> Any:
         """Return a facet value by attribute name."""
 
+        if name.startswith("__") and name.endswith("__"):
+            # Dunder names are never facet keys. Rejecting them immediately
+            # (rather than falling through to the facet-lookup machinery)
+            # keeps a half-initialized FacetView shell (e.g. a blank instance
+            # under construction by copy.deepcopy/pickle) from re-entering
+            # __getattr__ via `self._cache` before __init__ has run, which
+            # would recurse without bound.
+            raise AttributeError(name)
         if not name.isidentifier() or name in _FACET_VIEW_RESERVED_NAMES:
             raise AttributeError(name)
         try:
