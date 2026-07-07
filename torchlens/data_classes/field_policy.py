@@ -28,7 +28,9 @@ class RecordFieldPolicy:
     default_fill:
         Default used when older serialized state is missing this field.
     cleanup_class:
-        Cleanup/reference family tag. ``None`` means no special cleanup handling.
+        Reserved cleanup/reference family tag. ``None`` means no special cleanup
+        classification is recorded; cleanup dispatch is still implemented by
+        explicit scrubber helpers.
     user_facing:
         Whether the field belongs to the record's public FIELD_ORDER surface.
     """
@@ -67,7 +69,7 @@ def build_record_field_policy_table(
     default_fill_state:
         Optional default-fill values by field name.
     cleanup_classes:
-        Optional cleanup/reference family tags by field name.
+        Optional reserved cleanup/reference family tags by field name.
 
     Returns
     -------

@@ -33,6 +33,21 @@ class RecurrentModel(nn.Module):
         return x
 
 
+class ColonNamedModule(nn.Module):
+    """Model with a legal PyTorch submodule name containing a colon."""
+
+    def __init__(self) -> None:
+        """Register a colon-bearing submodule name."""
+
+        super().__init__()
+        self.add_module("a:b", nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the colon-bearing submodule."""
+
+        return self._modules["a:b"](x)
+
+
 @pytest.fixture
 def simple_log():
     model = SimpleModel()
@@ -147,6 +162,17 @@ class TestSinglePassDelegation:
             pass_log = layer_log.ops[0]
             # func_autocast_state is per-pass, not an explicit @property
             assert layer_log.func_autocast_state is pass_log.func_autocast_state
+
+    def test_multi_pass_fallback_getattr_raises_guided_value_error(
+        self: "TestSinglePassDelegation",
+        recurrent_log: Trace,
+    ) -> None:
+        """Multi-pass fallback fields raise the documented ValueError guidance."""
+
+        layer_log = next(layer for layer in recurrent_log.layers if layer.num_passes > 1)
+
+        with pytest.raises(ValueError, match=r"ops\[0\]\.var_names"):
+            _ = layer_log.var_names
 
     def test_tracing_finished_reads_from_trace(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
@@ -338,6 +364,14 @@ class TestLayerNumPasses:
             ops = log.layer_num_calls.get(label)
             assert ops is not None, f"No ops for {label}"
             assert isinstance(ops, int), f"Expected int, got {type(ops)} for {label}"
+
+
+def test_colon_named_module_traces_without_postprocess_split_error() -> None:
+    """Module call labels parse from the right when module names contain colons."""
+
+    trace = tl.trace(ColonNamedModule(), torch.randn(1, 5), layers_to_save="all")
+
+    assert "a:b" in trace.modules
 
 
 class TestSliceIndexing:

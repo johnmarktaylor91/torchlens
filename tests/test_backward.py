@@ -549,10 +549,12 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
 @pytest.mark.filterwarnings("ignore:`random_seed` is deprecated:DeprecationWarning")
 @pytest.mark.filterwarnings("ignore:`save_grads` is deprecated:DeprecationWarning")
 def test_validate_backward_pass_perturbed() -> None:
-    """validate_backward_pass returns False after perturbation sanity check."""
+    """The inert saved-grad perturbation option is loudly unsupported."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert not tl_validation.validate_backward_pass(model, x, perturb_saved_grads=True)
+    with pytest.warns(DeprecationWarning, match="perturb_saved_grads"):
+        with pytest.raises(ValueError, match="unsupported"):
+            tl_validation.validate_backward_pass(model, x, perturb_saved_grads=True)
 
 
 @pytest.mark.smoke

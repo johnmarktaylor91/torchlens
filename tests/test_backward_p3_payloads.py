@@ -220,15 +220,13 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
         trace.cleanup()
 
 
-def test_to_pandas_represents_ambiguous_grad_without_raising() -> None:
-    """Trace.to_pandas exposes ambiguous per-pass grads as None plus a count."""
+def test_to_pandas_raises_on_ambiguous_multi_backward_grad() -> None:
+    """Trace.to_pandas uses the canonical Op.grad ambiguity policy."""
 
     trace = _trace_with_two_backward_passes()
     try:
-        frame = trace.to_pandas()
-        grad_rows = frame[frame["num_saved_grads"] > 1]
-        assert not grad_rows.empty
-        assert grad_rows["grad"].isna().all()
+        with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
+            trace.to_pandas()
     finally:
         trace.cleanup()
 

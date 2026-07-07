@@ -24,7 +24,7 @@ Key design patterns:
 
 * **module build state** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
-  (postprocessing step 17) and then cleared.  Initialised via
+  (postprocessing step 16) and then cleared.  Initialised via
   ``_init_module_hierarchy_data()``.
 """
 
@@ -335,7 +335,7 @@ class ResolvedPostprocessing:
 def _init_module_hierarchy_data() -> dict[str, Any]:
     """Create the transient dict used to accumulate module hierarchy data during logging.
 
-    Consumed by ``_build_module_logs`` (step 17) and then cleared.
+    Consumed by ``_build_module_logs`` (step 16) and then cleared.
     """
     return {
         "addresses": [],
@@ -732,7 +732,11 @@ class Trace(
         state_field = self._build_state_attr_map().get(name)
         if state_field is None:
             raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
-        if "_build_state" not in self.__dict__ and self.__dict__.get("_tracing_finished", True):
+        if (
+            name != "_in_exhaustive_pass"
+            and "_build_state" not in self.__dict__
+            and self.__dict__.get("_tracing_finished", True)
+        ):
             raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
         return getattr(self._ensure_build_state(), state_field)
 
@@ -743,6 +747,12 @@ class Trace(
         if state_field is None:
             super().__setattr__(name, value)
             return
+        if (
+            name != "_in_exhaustive_pass"
+            and "_build_state" not in self.__dict__
+            and self.__dict__.get("_tracing_finished", True)
+        ):
+            raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
         setattr(self._ensure_build_state(), state_field, value)
 
     def __delattr__(self, name: str) -> None:

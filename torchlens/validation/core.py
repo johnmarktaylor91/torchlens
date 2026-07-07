@@ -538,6 +538,33 @@ def validate_saved_outs(
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
     if not getattr(self, "halted", False):
+        if len(self.output_layers) != len(ground_truth_output_tensors):
+            message = (
+                "Trace output boundary count does not match ground truth: "
+                f"{len(self.output_layers)} logged vs {len(ground_truth_output_tensors)} expected."
+            )
+            print(message)
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check=CHECK_OUTPUT_MISSING,
+                    message=message,
+                    extra={
+                        "logged_output_count": len(self.output_layers),
+                        "ground_truth_output_count": len(ground_truth_output_tensors),
+                    },
+                ),
+            )
+            decision_recorder.record(
+                op_label=None,
+                func_name=None,
+                phase="ground_truth",
+                decision="failed",
+                reason="output_count_mismatch",
+            )
+            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+            setattr(self, "_validation_replay_status", status)
+            return status
         output_label_counts: dict[str, int] = defaultdict(int)
         for i, output_layer_label in enumerate(self.output_layers):
             output_layer = _resolve_output_entry_for_index(
@@ -598,9 +625,10 @@ def validate_saved_outs(
                 reason="ground_truth_matched",
             )
 
-    # BFS backward from outputs + internally terminated layers.
-    # Edge-counting approach: a parent is enqueued only after ALL its child
-    # edges are validated (validated_child_edges == set(children)).
+    # BFS backward from outputs + internally terminated layers. A parent is
+    # enqueued once at least one validated child proves a path to the boundary;
+    # validated_child_edges_for_each_layer records all proved child edges for
+    # diagnostics and later completeness checks.
     validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
     seed_ops: dict[str, Op] = {}
     seed_output_label_counts: dict[str, int] = defaultdict(int)
@@ -728,8 +756,10 @@ def validate_parents_of_saved_layer(
        Ops in ``SKIP_PERTURBATION_ENTIRELY`` skip this step.
 
     After all checks pass, each parent's validated-child-edge set is updated.
-    When a parent has ALL its child edges validated, it is added to the BFS
-    work queue (unless it is an input layer or a parentless buffer).
+    When a parent has at least one child edge validated, it is added to the BFS
+    work queue (unless it is an input layer or a parentless buffer). The
+    validated-child-edge set is still retained for diagnostics and structural
+    completeness checks.
 
     Args:
         layer_to_validate_parents_for_label: Label of the layer whose parent edges are being validated.
@@ -1527,12 +1557,8 @@ def _execute_func_with_restored_state(
     during forward replay.
 
     **Exception handling**: catches ALL exceptions and returns ``None``.
-    The caller treats ``None`` as:
-    - For ``perturb=True``: an exempt perturbation (perturbation caused an
-      invalid input combination, e.g., out-of-range indices -- this is
-      expected and not a validation failure).
-    - For ``perturb=False``: a failed validation (the layer's own function
-      can't be replayed, which IS a problem).
+    The caller treats ``None`` as a failed replay execution for normal replay
+    and an unverified perturbation execution exception for perturbation replay.
 
     Returns the recomputed output tensor, or None on exception.
     """
@@ -3590,6 +3616,8 @@ def _deep_clone_tensors(val: Any) -> Any:
     elif isinstance(val, (list, tuple)):
         cloned = [_deep_clone_tensors(v) for v in val]
         # Preserve the original container type (list vs tuple vs namedtuple).
+        if isinstance(val, tuple) and hasattr(val, "_fields"):
+            return type(val)(*cloned)
         return type(val)(cloned)
     elif isinstance(val, dict):
         return {k: _deep_clone_tensors(v) for k, v in val.items()}

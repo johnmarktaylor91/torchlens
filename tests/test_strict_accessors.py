@@ -33,6 +33,22 @@ class StrictAccessorModel(torch.nn.Module):
         return z * self.scale
 
 
+class DuplicateShortNameParamModel(torch.nn.Module):
+    """Model with two parameters sharing the short name ``weight``."""
+
+    def __init__(self) -> None:
+        """Initialize duplicate short-name modules."""
+
+        super().__init__()
+        self.left = torch.nn.Linear(3, 3, bias=False)
+        self.right = torch.nn.Linear(3, 3, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run both linear layers."""
+
+        return self.left(x) + self.right(x)
+
+
 def _strict_trace() -> tl.Trace:
     """Return a trace with a multi-pass Linear layer."""
 
@@ -82,6 +98,66 @@ def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
 
     with pytest.raises(AmbiguousOpLookupError):
         trace.ops["linear_1_1"]
+
+
+def test_layer_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
+    """A bare multi-pass Layer label is rejected by the scoped layer.ops accessor."""
+
+    trace = _strict_trace()
+    layer = trace.layers["linear_1_1"]
+
+    with pytest.raises(AmbiguousOpLookupError):
+        layer.ops["linear_1_1"]
+
+
+def test_param_accessor_contains_is_false_for_ambiguous_short_name() -> None:
+    """Param membership is false when indexing would raise ambiguity."""
+
+    trace = tl.trace(DuplicateShortNameParamModel(), torch.randn(2, 3))
+
+    assert "weight" not in trace.params
+    with pytest.raises(AmbiguousOpLookupError):
+        trace.params["weight"]
+
+
+def _legacy_param_state(address: str) -> dict[str, object]:
+    """Return a minimal legacy Param state without ``co_parent_params``."""
+
+    return {
+        "name": "weight",
+        "address": address,
+        "all_addresses": [address],
+        "shape": (),
+        "num_params": 0,
+        "num_params_trainable": 0,
+        "num_params_frozen": 0,
+        "is_trainable": False,
+        "param_memory": 0,
+        "_grad_memory": 0,
+        "dtype": None,
+        "device": None,
+        "used_by_ops": [],
+        "used_by_layers": [],
+        "num_uses_by_ops": 0,
+        "num_uses_by_layers": 0,
+        "num_calls": 0,
+    }
+
+
+def test_legacy_param_restore_gets_independent_co_parent_list() -> None:
+    """Legacy Param states do not share a class-level co_parent_params list."""
+
+    first = Param.__new__(Param)
+    second = Param.__new__(Param)
+
+    with pytest.warns(DeprecationWarning):
+        first.__setstate__(_legacy_param_state("left.weight"))
+    with pytest.warns(DeprecationWarning):
+        second.__setstate__(_legacy_param_state("right.weight"))
+    first.co_parent_params.append("other.weight")
+
+    assert first.co_parent_params == ["other.weight"]
+    assert second.co_parent_params == []
 
 
 def test_ambiguous_op_lookup_error_remains_value_error_compatible() -> None:

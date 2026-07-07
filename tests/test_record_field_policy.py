@@ -21,7 +21,9 @@ from torchlens.constants import (
     MODULE_LOG_FIELD_ORDER,
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
+    BACKWARD_PASS_FIELD_ORDER,
 )
+from torchlens.data_classes.backward_pass import BackwardPass
 from torchlens.data_classes.buffer import Buffer
 from torchlens.data_classes.field_policy import (
     field_order_from_policy,
@@ -55,6 +57,7 @@ RECORD_CASES = (
     RecordCase(GradFnCall, GRAD_FN_PASS_LOG_FIELD_ORDER),
     RecordCase(ModuleCall, MODULE_PASS_LOG_FIELD_ORDER),
     RecordCase(Module, MODULE_LOG_FIELD_ORDER),
+    RecordCase(BackwardPass, BACKWARD_PASS_FIELD_ORDER),
 )
 OPTIONAL_LIVE_FIELDS: dict[type[Any], set[str]] = {
     Trace: {"input_structure", "_containers"},
@@ -138,6 +141,24 @@ def _record_instances(trace: Trace, cls: type[Any]) -> Iterable[Any]:
         yield next(iter(trace.module_calls))
     elif cls is Module:
         yield next(iter(trace.modules))
+    elif cls is BackwardPass:
+        yield next(iter(trace.backward_passes))
+
+
+def test_layer_field_order_includes_live_aggregate_fields() -> None:
+    """Layer FIELD_ORDER includes aggregate fields kept by FIELD_POLICY."""
+
+    expected_fields = {
+        "io_role",
+        "is_atomic_module",
+        "output_of_modules",
+        "output_of_module_calls",
+        "has_input_ancestor",
+        "buffer_write_kind",
+        "buffer_pass",
+    }
+
+    assert expected_fields.issubset(LAYER_LOG_FIELD_ORDER)
 
 
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)

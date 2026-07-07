@@ -711,6 +711,20 @@ def test_raw_transform_escape_flag_does_not_leak_across_captures() -> None:
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> None:
+    """Replay validation fails when raw transform escape leaves no output boundary."""
+
+    x = torch.randn(3, 4)
+
+    with pytest.warns(UserWarning, match="functorch"):
+        assert not validate_forward_pass(
+            RawPreBuiltTransformModel().eval(),
+            x,
+            validate_metadata=False,
+        )
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_raising_inner_transform_cleans_up_logging_state() -> None:
     """Exceptions from transform bodies leave logging state sane."""
 

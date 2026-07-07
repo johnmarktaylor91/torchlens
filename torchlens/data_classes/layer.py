@@ -15,7 +15,7 @@ Why ValueError instead of AttributeError: Python's property protocol treats
 through to ``__getattr__``.  Using ``ValueError`` avoids this trap and gives
 the user a clear error message.
 
-**_build_layer_logs merge rules** (in postprocess/layer_log.py):
+**_build_layer_logs merge rules** (in ``postprocess/finalization.py``):
 When merging multiple ops into one Layer, these aggregate fields are merged:
   - ``has_input_ancestor``: OR across ops
   - ``io_role``: character-level merge of "I", "O", "IO" strings
@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, cas
 from .._deprecations import MISSING
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from ..constants import LAYER_LOG_FIELD_ORDER
+from ..constants import LAYER_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
 from ._accessor_base import Accessor
@@ -125,16 +125,6 @@ class OpAccessor(Accessor["Op"]):
                 only_op.raw_label,
             }:
                 return only_op
-        for op_log in self._dict.values():
-            if key in {
-                op_log.layer_label,
-                op_log.label,
-                op_log.layer_label_short,
-                op_log.label_short,
-                op_log._label_raw,
-                op_log.raw_label,
-            }:
-                return op_log
         parent_matches = [
             op_log
             for op_log in self._dict.values()
@@ -149,6 +139,14 @@ class OpAccessor(Accessor["Op"]):
                 "integer position or a pass-qualified label like "
                 f"'{parent_label}:1'. Available Op labels: {qualified}{suffix}."
             )
+        for op_log in self._dict.values():
+            if key in {
+                op_log.label,
+                op_log.label_short,
+                op_log._label_raw,
+                op_log.raw_label,
+            }:
+                return op_log
         return None
 
 
@@ -209,6 +207,7 @@ class Layer:
         "total_autograd_memory": FieldPolicy.KEEP,
         "num_autograd_tensors": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
+        "visualizer_path": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "intervention_replaced": FieldPolicy.KEEP,
@@ -328,6 +327,7 @@ class Layer:
 
         # Config
         self.output_device = first_pass.output_device
+        self.visualizer_path = first_pass.visualizer_path
         self.activation_transform = first_pass.activation_transform
         self.annotations: Dict[str, Any] = {}
         self.intervention_replaced = first_pass.intervention_replaced
@@ -1165,6 +1165,15 @@ class Layer:
                 return getattr(ops[0], name)
             except AttributeError:
                 pass
+        if (
+            ops
+            and len(ops) > 1
+            and (
+                name in LAYER_PASS_LOG_FIELD_ORDER
+                or any(name in getattr(op, "__dict__", {}) for op in ops.values())
+            )
+        ):
+            return self._single_pass_or_error(name)
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # ********************************************
@@ -1477,7 +1486,7 @@ class LayerAccessor(Accessor["Layer"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            raise ValueError(
+            raise AmbiguousOpLookupError(
                 f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers. "
                 "Use the full Layer label."
             )

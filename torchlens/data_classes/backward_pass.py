@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import weakref
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from ..constants import BACKWARD_PASS_FIELD_ORDER
 from ..quantities import Duration
 from ._accessor_base import Accessor
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -30,7 +32,7 @@ class BackwardPass:
         Optional outer TorchLens trigger context when this pass was nested.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
         "pass_index": FieldPolicy.KEEP,
         "trigger": FieldPolicy.KEEP,
         "implicit": FieldPolicy.KEEP,
@@ -51,6 +53,13 @@ class BackwardPass:
         "grad_fn_calls": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
+    FIELD_POLICY = build_record_field_policy_table(
+        BACKWARD_PASS_FIELD_ORDER,
+        _PORTABLE_STATE_POLICY,
+    )
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
+        FIELD_POLICY
+    )
 
     pass_index: int
     trigger: str

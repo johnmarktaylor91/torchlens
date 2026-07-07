@@ -690,7 +690,7 @@ class TorchBackend:
                 return_addresses=True,
                 allow_repeats=True,
             )
-        # Remove duplicate addresses (same tensor at multiple output positions).
+        # Remove duplicate structural output addresses.
         addresses_seen = set()
         output_tensors_w_addresses = []
         for entry in output_tensors_w_addresses_all:

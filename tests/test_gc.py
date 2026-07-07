@@ -8,6 +8,7 @@ import gc
 import tracemalloc
 import weakref
 
+import pytest
 import torch
 import torchlens as tl
 from torch import nn
@@ -194,3 +195,14 @@ class TestTraceGC:
         assert not hasattr(trace, "_raw_layer_dict")
         trace.cleanup()
         assert not hasattr(trace, "_raw_layer_dict")
+
+    def test_transient_write_after_finish_does_not_recreate_build_state(self) -> None:
+        """Finished traces reject writes to transient build-state aliases."""
+
+        model = _TwoLayerNet()
+        trace = tl.trace(model, torch.randn(1, 5))
+
+        with pytest.raises(AttributeError):
+            trace._mod_call_index = {"x": 1}
+
+        assert "_build_state" not in trace.__dict__

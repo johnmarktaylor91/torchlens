@@ -39,6 +39,7 @@ from typing import (
 
 import torch
 
+from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs
@@ -131,7 +132,7 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
                 return call
         parent_matches = [call for call in self._dict.values() if key == call.address]
         if len(parent_matches) > 1:
-            raise ValueError(
+            raise AmbiguousOpLookupError(
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )

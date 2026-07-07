@@ -52,7 +52,7 @@ layer.ops             # dict[int, Op]
   views as canonical.
 
 ## Module/Param/Buffer/Grad Logs
-- `Module` and `ModuleCall` are built in postprocess Step 17 from `_module_build_data`.
+- `Module` and `ModuleCall` are built in postprocess Step 16 from `_module_build_data`.
 - `Param` keeps `_param_ref` for lazy grad access; call `release_param_ref()` when
   breaking model references.
 - Buffer graph nodes are plain `Op` records with `is_buffer=True`; `Buffer` is the

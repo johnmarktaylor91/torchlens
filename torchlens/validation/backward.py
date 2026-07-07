@@ -285,8 +285,9 @@ def validate_backward_pass(
         Optional callable that maps model outputs to a scalar loss. Defaults to
         summing all returned tensors.
     perturb_saved_grads:
-        If True, perturb captured saved grads before comparison; the
-        validation should then return False.
+        Deprecated unsupported option. The previous implementation did not
+        compare the perturbed captured grads and therefore had no detection
+        power.
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
     random_seed:
@@ -313,6 +314,18 @@ def validate_backward_pass(
 
     if _is_appended_trace(model):
         return _warn_and_skip_appended_trace_validation(model)
+    if perturb_saved_grads:
+        warnings.warn(
+            "perturb_saved_grads=True is deprecated and unsupported because the previous "
+            "implementation was an inert flag-driven check, not a captured-gradient "
+            "comparison.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        raise ValueError(
+            "perturb_saved_grads=True is unsupported: TorchLens does not currently provide "
+            "a sound saved-gradient perturbation validation check."
+        )
 
     warn_parallel()
     _reject_opaque_wrappers(model)
@@ -363,11 +376,6 @@ def validate_backward_pass(
         trace.log_backward(logged_loss)
         if validate_metadata:
             check_metadata_invariants(trace)
-        if perturb_saved_grads:
-            for layer in trace.layer_list:
-                if layer.has_grad and isinstance(layer.grad, torch.Tensor):
-                    layer._internal_set("grad", layer.grad + torch.randn_like(layer.grad))
-                    break
         observed_param_grads = _param_grads(model)
 
         if validate_layer_grads:
@@ -400,14 +408,11 @@ def validate_backward_pass(
             return False
         if expected_param_grads.keys() != observed_param_grads.keys():
             return False
-        params_passed = (
-            all(
-                torch.allclose(
-                    observed_param_grads[name], expected_param_grads[name], atol=atol, rtol=rtol
-                )
-                for name in expected_param_grads
+        params_passed = all(
+            torch.allclose(
+                observed_param_grads[name], expected_param_grads[name], atol=atol, rtol=rtol
             )
-            and not perturb_saved_grads
+            for name in expected_param_grads
         )
         if not params_passed:
             return False

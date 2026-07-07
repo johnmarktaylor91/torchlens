@@ -4,6 +4,7 @@ Covers: import paths, registry consistency, perturbation unit tests,
 deep clone helpers, and integration tests through specific exemption paths.
 """
 
+from collections import namedtuple
 from types import SimpleNamespace
 from typing import cast
 
@@ -626,6 +627,19 @@ def test_deep_clone_nested_dict_of_tensors():
     assert isinstance(cloned["b"], dict)
     assert torch.equal(cloned["a"], original["a"])
     assert torch.equal(cloned["b"]["c"], original["b"]["c"])
+
+
+def test_deep_clone_preserves_namedtuple_type() -> None:
+    """Namedtuple containers are reconstructed with positional fields."""
+
+    point_type = namedtuple("Point", ["x", "y"])
+    original = point_type(torch.tensor([1.0]), torch.tensor([2.0]))
+
+    cloned = _deep_clone_tensors(original)
+
+    assert isinstance(cloned, point_type)
+    assert torch.equal(cloned.x, original.x)
+    assert torch.equal(cloned.y, original.y)
 
 
 def test_deep_clone_independence():

@@ -6,6 +6,7 @@ import weakref
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Dict, cast
 
+from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
@@ -310,7 +311,7 @@ class BufferAccessor(Accessor["Buffer"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            raise KeyError(f"Ambiguous short name '{key}' -- use full address")
+            raise AmbiguousOpLookupError(f"Ambiguous short name '{key}' -- use full address")
         return None
 
     def _resolve_pass_qualified(self, key: str) -> "Buffer | None":

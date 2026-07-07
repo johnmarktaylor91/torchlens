@@ -635,7 +635,7 @@ def postprocess_fast(self: "Trace") -> None:
     and labels. It only needs to:
     1. Copy out data from each output's parent tensor into the output node.
     2. Trim and reorder fields.
-    3. Build lookup keys and refresh saved-output summaries.
+    3. Refresh saved-output summaries.
     4. Undecorate saved tensors.
     5. Build Layer aggregates.
     6. Mark the pass as finished.

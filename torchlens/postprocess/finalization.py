@@ -650,7 +650,7 @@ def _resolve_call_hierarchy(
     call_children_all = []
     for module_call_log in ops.values():
         for child_call_label in module_call_log.call_children:
-            cc_addr = child_call_label.split(":")[0]
+            cc_addr = child_call_label.rsplit(":", 1)[0]
             if cc_addr not in call_children_all:
                 call_children_all.append(cc_addr)
 
@@ -658,7 +658,7 @@ def _resolve_call_hierarchy(
     if ops:
         first_pass = next(iter(ops.values()))
         if first_pass.call_parent and first_pass.call_parent != "self:1":
-            call_parent_addr = first_pass.call_parent.split(":")[0]
+            call_parent_addr = first_pass.call_parent.rsplit(":", 1)[0]
         elif first_pass.call_parent == "self:1":
             call_parent_addr = "self"
 
@@ -936,8 +936,7 @@ def _build_layer_logs(self: "Trace") -> None:
     function info, param info, etc. are identical across ops.
 
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
-    (same structural position implies same modules). The comment in layer_log.py:107
-    ("may be updated") is misleading — no such update occurs.
+    (same structural position implies same modules).
     """
     from collections import OrderedDict
 

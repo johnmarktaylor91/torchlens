@@ -78,9 +78,14 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
     "randn_like",
     "meshgrid",
     "broadcast_tensors",
-    # torchvision C++ ops (PyCapsule): nms, roi_align, etc. Perturbed coordinates
-    # can segfault these native extensions since they bypass Python exception handling.
-    "_op",
+    # torchvision C++ ops (PyCapsule): perturbed coordinates can segfault
+    # these native extensions since they bypass Python exception handling.
+    "nms",
+    "deform_conv2d",
+    "ps_roi_align",
+    "ps_roi_pool",
+    "roi_align",
+    "roi_pool",
     # In-place RNG ops: output is determined by RNG state, not input values.
     "exponential_",
 }
@@ -313,17 +318,7 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
     ):
         return True
 
-    # Case 3: perturbed layer is the destination (args[0]) and it's all-zeros/all-ones.
-    # __setitem__ overwrites the destination, so perturbing a "blank slate" destination
-    # (e.g. new_zeros used in BART position embeddings) has no effect.
-    if (
-        _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
-        and torch.equal(perturbed_tensor, args[0])
-        and _check_if_arg_is_special_val(args[0])
-    ):
-        return True
-
-    # Case 4: perturbed layer is the destination, but the indexed destination
+    # Case 3: perturbed layer is the destination, but the indexed destination
     # slice is fully overwritten by the replacement value.
     if _perturbed_parent_is_arg_position(
         layer, layers_to_perturb, 0
@@ -350,7 +345,8 @@ def _setitem_destination_slice_is_fully_overwritten(
     -------
     bool
         True when the perturbed tensor is the destination, the replacement is a
-        tensor, and ``destination[index]`` has exactly the replacement shape.
+        tensor, ``destination[index]`` has exactly the replacement shape, and
+        the selected region covers the whole destination.
     """
 
     if len(args) < 3:
@@ -366,7 +362,10 @@ def _setitem_destination_slice_is_fully_overwritten(
         selected = destination[index]
     except (IndexError, TypeError, RuntimeError):
         return False
-    return tuple(selected.shape) == tuple(replacement.shape)
+    return (
+        tuple(selected.shape) == tuple(replacement.shape)
+        and selected.numel() == destination.numel()
+    )
 
 
 def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:

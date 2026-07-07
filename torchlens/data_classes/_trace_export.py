@@ -303,10 +303,7 @@ class TraceExportMixin(_TraceMixinBase):
                         layer_entry.conditional_branch_stack
                     )
                 elif field_name == "grad":
-                    grad_records = getattr(layer_entry, "_grad_records", ())
-                    layer_dict[field_name] = (
-                        next(iter(grad_records)).grad if len(grad_records) == 1 else None
-                    )
+                    layer_dict[field_name] = getattr(layer_entry, "grad")
                 elif field_name == "num_saved_grads":
                     layer_dict[field_name] = len(getattr(layer_entry, "_grad_records", ()))
                 elif field_name == "output_role":

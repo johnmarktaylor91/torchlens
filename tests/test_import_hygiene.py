@@ -62,3 +62,28 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
 
     assert trace.num_layers > 0
     assert any(op.func_name == "conv2d" for op in trace.ops)
+
+
+@pytest.mark.optional
+def test_torchvision_cpp_ops_record_real_func_name() -> None:
+    """Torchvision PyCapsule ops keep their public op name in TorchLens metadata."""
+
+    torchvision_ops = pytest.importorskip("torchvision.ops")
+
+    import torchlens as tl
+
+    class NmsModel(torch.nn.Module):
+        """Tiny module that calls torchvision NMS."""
+
+        def forward(self, inputs: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+            """Run torchvision NMS on boxes and scores."""
+
+            boxes, scores = inputs
+            return torchvision_ops.nms(boxes, scores, 0.5)
+
+    boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0], [0.1, 0.1, 1.1, 1.1], [3.0, 3.0, 4.0, 4.0]])
+    scores = torch.tensor([0.9, 0.8, 0.7])
+    trace = tl.trace(NmsModel(), (boxes, scores), layers_to_save="all")
+
+    assert any(op.func_name == "nms" for op in trace.ops)
+    assert any(op.has_saved_activation for op in trace.ops if op.func_name == "nms")

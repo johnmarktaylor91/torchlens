@@ -639,6 +639,27 @@ _torch_function_mode_len = None
 _DeviceContext = None
 
 
+def _recorded_func_name(namespace_name: str, attr_name: str) -> str:
+    """Return the TorchLens function name for a decorated torch callable.
+
+    Parameters
+    ----------
+    namespace_name:
+        Dotted torch namespace path containing the callable attribute.
+    attr_name:
+        Attribute name used for installation on the namespace.
+
+    Returns
+    -------
+    str
+        User-facing function name recorded on captured Ops.
+    """
+
+    if namespace_name.startswith("torch.ops.torchvision.") and attr_name == "_op":
+        return namespace_name.rsplit(".", 1)[-1]
+    return attr_name
+
+
 def _get_active_device() -> str | None:
     """Return the device from the innermost active ``DeviceContext``, or ``None``.
 
@@ -1254,7 +1275,8 @@ def decorate_all_once() -> None:
                     pass
                 continue
 
-            new_func = torch_func_decorator(orig_func, func_name)
+            recorded_name = _recorded_func_name(namespace_name, func_name)
+            new_func = torch_func_decorator(orig_func, recorded_name)
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")

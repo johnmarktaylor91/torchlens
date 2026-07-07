@@ -265,16 +265,16 @@ def _build_module_hierarchy_dicts(self: "Trace") -> None:
     """Derive top_level_modules and module_children from their pass-level counterparts."""
     mbd = self._module_build_data
     for module in mbd["top_level_module_ops"]:
-        module_no_pass = module.split(":")[0]
+        module_no_pass = module.rsplit(":", 1)[0]
         if module_no_pass == "self":
             continue
         if module_no_pass not in mbd["top_level_modules"]:
             mbd["top_level_modules"].append(module_no_pass)
 
     for module_parent, module_children in mbd["module_pass_children"].items():
-        module_parent_nopass = module_parent.split(":")[0]
+        module_parent_nopass = module_parent.rsplit(":", 1)[0]
         for module_child in module_children:
-            module_child_nopass = module_child.split(":")[0]
+            module_child_nopass = module_child.rsplit(":", 1)[0]
             if module_child_nopass == module_parent_nopass:
                 continue
             if module_child_nopass not in mbd["module_children"][module_parent_nopass]:
@@ -739,7 +739,7 @@ def _add_lookup_keys_for_layer_entry(
 
     # Allow indexing by modules exited as well:
     for module_pass in layer_entry.output_of_module_calls:
-        module_name, _ = module_pass.split(":")
+        module_name, _ = module_pass.rsplit(":", 1)
         lookup_keys_for_tensor.append(f"{module_pass}")
         if self._module_build_data["module_num_calls"][module_name] == 1:
             lookup_keys_for_tensor.append(f"{module_name}")

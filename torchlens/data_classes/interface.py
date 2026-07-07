@@ -207,7 +207,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
                 if len(entries_with_substr) > 10
                 else ""
             )
-            raise ValueError(
+            raise AmbiguousOpLookupError(
                 f"Ambiguous lookup: '{ix}' matches {len(entries_with_substr)} layers: "
                 f"{matches_str}{suffix}. Please use a more specific key."
             )
@@ -358,7 +358,7 @@ def _module_hierarchy_str(self: "Trace") -> str:
     if root_pass is None:
         return s
     for module_pass in root_pass.call_children:
-        module, call_index = module_pass.split(":")
+        module, call_index = module_pass.rsplit(":", 1)
         s += f"\n\t\t{module}"
         if cast(Any, self.modules[module]).num_calls > 1:
             s += f":{call_index}"
@@ -384,7 +384,7 @@ def _module_hierarchy_str_recursive(self: "Trace", module_pass: str, level: int)
     )
     if any_grandchild_modules or len(children) == 0:
         for submodule_pass in children:
-            submodule, call_index = submodule_pass.split(":")
+            submodule, call_index = submodule_pass.rsplit(":", 1)
             s += f"\n\t\t{'    ' * level}{submodule}"
             if cast(Any, self.modules[submodule]).num_calls > 1:
                 s += f":{call_index}"
@@ -392,7 +392,7 @@ def _module_hierarchy_str_recursive(self: "Trace", module_pass: str, level: int)
     else:
         submodule_list = []
         for submodule_pass in children:
-            submodule, call_index = submodule_pass.split(":")
+            submodule, call_index = submodule_pass.rsplit(":", 1)
             if cast(Any, self.modules[submodule]).num_calls == 1:
                 submodule_list.append(submodule)
             else:

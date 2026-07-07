@@ -15,8 +15,8 @@ This module provides the helper stack behind Trace cleanup operations:
 3. **_scrub_conditional_fields_after_removal()** — repairs conditional metadata
    after one or more labels are removed.
 
-4. **_LIST_FIELDS_TO_CLEAN** — canonical list fields that must stay aligned
-   with the removal helpers.
+4. **_LIST_FIELDS_TO_CLEAN** — canonical Trace list fields filtered by both
+   single-entry and batch removal helpers.
 """
 
 from dataclasses import fields, is_dataclass, replace
@@ -451,10 +451,8 @@ def _record_mentions_removed_label(record: Any, labels_to_remove: Set[str]) -> b
     return False
 
 
-# List fields on Trace that hold tensor labels and need filtering during
-# entry removal.  Must stay in sync between _batch_remove_log_entries and
-# _remove_log_entry_references — if you add a new label-holding list field
-# to Trace, add it here AND to _remove_log_entry_references.
+# List fields on Trace that hold tensor labels and need filtering during entry
+# removal. Both single-entry and batch removal iterate this list.
 _LIST_FIELDS_TO_CLEAN = [
     "input_layers",
     "output_layers",
@@ -475,7 +473,6 @@ _OP_LABEL_FIELDS_TO_CLEAN = (
     "conditional_entry_children",
     "conditional_then_children",
     "conditional_else_children",
-    "op_equivalence_classes",
     "equivalent_ops",
     "recurrent_ops",
 )
@@ -485,20 +482,16 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
     """Removes all references to a single Op from the Trace's list/dict fields.
 
     This is the single-entry counterpart to the reference-cleaning logic in
-    ``_batch_remove_log_entries``. Both must clean the same set of fields —
-    if you add a new field to one, update the other as well.
+    ``_batch_remove_log_entries``. Both iterate ``_LIST_FIELDS_TO_CLEAN`` for
+    Trace list fields.
 
     Args:
         layer_to_remove: The label of the log entry to remove.
     """
     # Clear any fields in Trace referring to the entry.
 
-    remove_entry_from_list(self.input_layers, layer_to_remove)
-    remove_entry_from_list(self.output_layers, layer_to_remove)
-    remove_entry_from_list(self.buffer_layers, layer_to_remove)
-    remove_entry_from_list(self.internal_source_ops, layer_to_remove)
-    remove_entry_from_list(self.internal_sink_ops, layer_to_remove)
-    remove_entry_from_list(self.internally_terminated_bool_ops, layer_to_remove)
+    for field_name in _LIST_FIELDS_TO_CLEAN:
+        remove_entry_from_list(getattr(self, field_name), layer_to_remove)
 
     _scrub_conditional_fields_after_removal(self, {layer_to_remove}, self)
 

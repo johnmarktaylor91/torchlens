@@ -57,15 +57,13 @@ class Accessor(Generic[T]):
 
     def __contains__(self, key: object) -> bool:
         """Return whether ``key`` resolves to an item."""
-        if isinstance(key, int):
-            return 0 <= key < len(self._list)
-        if not isinstance(key, str):
+        if not isinstance(key, (int, str)):
             return False
-        if key in self._dict:
-            return True
-        if ":" in key and self._resolve_pass_qualified(key) is not None:
-            return True
-        return self._resolve_substring(key) is not None
+        try:
+            self[key]
+        except (KeyError, TypeError, IndexError, ValueError):
+            return False
+        return True
 
     def __iter__(self) -> Iterator[T]:
         """Iterate over log objects in accessor order."""

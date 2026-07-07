@@ -171,7 +171,7 @@ class TraceModuleCallAccessor(Accessor[Any]):
         if len(parent_matches) == 1:
             return parent_matches[0]
         if len(parent_matches) > 1:
-            raise ValueError(
+            raise AmbiguousOpLookupError(
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )
@@ -193,7 +193,7 @@ class TraceGradFnCallAccessor(Accessor[Any]):
         if len(parent_matches) == 1:
             return parent_matches[0]
         if len(parent_matches) > 1:
-            raise ValueError(
+            raise AmbiguousOpLookupError(
                 f"GradFn '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )

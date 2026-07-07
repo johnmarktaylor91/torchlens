@@ -23,6 +23,7 @@ from torchlens.validation.invariants import (
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
+    _check_setitem_exempt,
     perturbed_layer_at_structural_position,
 )
 from torchlens.validation.status import ValidationReplayStatus
@@ -150,6 +151,32 @@ def test_reduction_depth_withholds_shallow_late_lenience() -> None:
     )
 
     assert core._op_reduction_depth(layer) == 1  # noqa: SLF001
+
+
+class PartialSetitemDestinationModel(nn.Module):
+    """Model that partially overwrites an all-zero setitem destination."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a partially overwritten scratch tensor."""
+
+        buffer = torch.zeros(4, 2)
+        buffer[:1] = x[:1]
+        return buffer
+
+
+def test_setitem_blank_destination_partial_overwrite_is_not_exempt() -> None:
+    """Blank destination values do not prove setitem perturbation insensitivity."""
+
+    trace = tl.trace(
+        PartialSetitemDestinationModel(),
+        torch.randn(4, 2),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    setitem_op = next(op for op in trace.layer_list if op.func_name == "__setitem__")
+    destination_label = setitem_op.parent_arg_positions["args"][0]
+
+    assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
 
 
 class DetachedParamModel(nn.Module):

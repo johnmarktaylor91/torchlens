@@ -23,17 +23,34 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 
 | File | Purpose |
 |------|---------|
+| `__init__.py` | Public exports for core data classes and accessors |
+| `_accessor_base.py` | Shared ordered dict-like accessor base |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
+| `_trace_accessors.py` | Trace-level typed accessor construction |
+| `_trace_export.py` | Trace tabular export and decoded-output helpers |
+| `_trace_intervention.py` | Trace intervention, fork, replay, and rerun helpers |
+| `_trace_profile.py` | Trace profiling and timing helpers |
+| `_trace_stats.py` | Trace aggregate stats and backward-pass projections |
+| `_trace_validation.py` | Trace validation and log-entry removal helpers |
+| `_trace_viz.py` | Trace visualization entrypoints |
 | `op.py` | `Op`, `TensorLog` alias, tensor save and per-pass fields |
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |
 | `buffer.py` | `Buffer` and `BufferAccessor` |
 | `module.py` | `ModuleCall`, `Module`, `ModuleAccessor` |
 | `param.py` | `Param`, lazy grad access, `ParamAccessor` |
+| `backward_pass.py` | Per-invocation backward-pass records and accessor |
 | `grad_fn.py` | Backward graph `GradFn` and accessor |
 | `grad_fn_call.py` | Per-pass backward graph record |
+| `container.py` | Structured output/container specs and reconstruction helpers |
+| `derived_grad.py` | Derived-gradient payload records |
+| `field_policy.py` | Structural field policy table helpers |
 | `func_call_location.py` | Structured call stack frames and lazy source access |
 | `interface.py` | Imported `Trace` access/query custom_methods |
 | `_lookup_keys.py` | Lookup help and fuzzy key feedback |
+| `_module_role_hints.py` | Module input/output role hint helpers |
+| `_repr.py` | Shared formatting helpers for user-facing reprs |
+| `_runtime_handles.py` | Runtime object handle resolution helpers |
+| `_state_adapter.py` | Trace build-state iteration and deletion adapters |
 | `_summary.py` | Small formatting helpers for summaries |
 | `internal_types.py` | Internal dataclasses such as `FuncExecutionContext` |
 | `cleanup.py` | Cycle breaking and field scrubbing after layer removal |

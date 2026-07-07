@@ -2777,13 +2777,16 @@ class Op:
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
         However, certain fields are shallow-copied (shared by reference) because:
 
-        * ``func``, ``grad_fn_class_name`` - function objects, immutable/shared.
+        * ``func``, ``grad_fn_class_name``, ``grad_fn_handle`` - function or
+          autograd handle objects, immutable/shared.
         * ``source_trace`` - must point to the same Trace instance.
         * ``func_rng_states`` - large state dicts, not mutated after capture.
-        * ``saved_args``, ``saved_kwargs`` - may contain large tensors;
-          deep-copying them is expensive and unnecessary.
+        * ``saved_args``, ``saved_kwargs``, ``args_template``,
+          ``kwargs_template`` - may contain large tensors or structured
+          templates; deep-copying them is expensive and unnecessary.
         * ``parent_params`` - references to nn.Parameters, must stay shared.
-        * ``out``, ``out_versions_by_child`` - large tensors;
+        * ``out``, ``transformed_out``, ``transformed_grad``,
+          ``out_versions_by_child`` - large tensors;
           shared references are safe since they're replaced (not mutated).
         * ``container_spec`` - frozen dataclass shared by sibling output leaves.
 
@@ -2794,7 +2797,6 @@ class Op:
         fields_not_to_deepcopy = [
             "func",
             "grad_fn_class_name",
-            "grad_fn_handle",
             "grad_fn_handle",
             "source_trace",
             "func_rng_states",

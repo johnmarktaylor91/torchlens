@@ -1,14 +1,14 @@
 """Shared constants: field-order tuples and function discovery for TorchLens.
 
-**FIELD_ORDER lists** define the *canonical* set of fields for each data class
-(Trace, Op, Layer, etc.).  They serve two purposes:
+**FIELD_ORDER lists** define the ordered user-facing/export field surface for
+each data class (Trace, Op, Layer, etc.).  They serve two purposes:
 
 1. **Canonical ordering** — __repr__, iteration, and serialization use these lists
    to present fields in a consistent, human-readable order.
-2. **Completeness contract** — every attribute a data class exposes must appear in
-   its FIELD_ORDER.  When adding a new field to a class, you MUST also add it here
-   (and vice versa).  These lists are NOT used for filtering; they define the full
-   set of fields.
+2. **User-facing completeness contract** — every public/exported attribute a data
+   class exposes must appear in its FIELD_ORDER.  Runtime-only and portable
+   internal state belongs in the class FIELD_POLICY / PORTABLE_STATE_SPEC even
+   when it is intentionally not exported as a user-facing column.
 
 **Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the
 master list of ``(namespace_str, func_name)`` pairs that ``decorate_all_once()``
@@ -490,6 +490,7 @@ LAYER_LOG_FIELD_ORDER = [
     "num_autograd_tensors",
     # Config
     "output_device",
+    "visualizer_path",
     "activation_transform",
     "annotations",
     "intervention_replaced",
@@ -521,6 +522,10 @@ LAYER_LOG_FIELD_ORDER = [
     "is_buffer",
     "address",
     "buffer_source",
+    "buffer_write_kind",
+    "has_input_ancestor",
+    "io_role",
+    "buffer_pass",
     "is_internal_source",
     "is_internal_sink",
     "is_terminal_bool",
@@ -538,6 +543,9 @@ LAYER_LOG_FIELD_ORDER = [
     # Module (static containment)
     "module",
     "modules",
+    "output_of_modules",
+    "output_of_module_calls",
+    "is_atomic_module",
     # Function config
     "func_config",
     # Pass management
@@ -838,6 +846,27 @@ GRAD_FN_LOG_FIELD_ORDER = [
     "call_labels",
     "backward_duration",
     "total_backward_duration",
+]
+
+BACKWARD_PASS_FIELD_ORDER = [
+    "pass_index",
+    "trigger",
+    "implicit",
+    "outer_context",
+    "backward_call_context",
+    "root_grad_fn_ids",
+    "root_meta",
+    "root_grad_arguments",
+    "inputs_subset",
+    "order",
+    "origin_backward_pass",
+    "engine_flags",
+    "save_grads_policy",
+    "duration",
+    "peak_memory",
+    "status",
+    "order_attribution_coverage",
+    "grad_fn_calls",
 ]
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import weakref
 
 import torch
 
+from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ..quantities import Duration
@@ -136,7 +137,7 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
             return None
         if len(self._dict) == 1:
             return next(iter(self._dict.values()))
-        raise ValueError(
+        raise AmbiguousOpLookupError(
             f"GradFn '{key}' has {len(self._dict)} calls. Use a 0-based integer "
             f"position or a call-qualified label like '{key}:1'."
         )

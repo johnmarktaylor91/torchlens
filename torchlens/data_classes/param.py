@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import torch
 
+from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from .._errors import PostTraceParamUnavailable
 from ..constants import PARAM_LOG_FIELD_ORDER
@@ -656,6 +657,7 @@ class Param:
                 "device_ref": None,
                 "backend_address": state.get("address"),
                 "resolver_status": "resolved",
+                "co_parent_params": [],
                 "_derived_grad_payload": None,
                 "_derived_grad_record_path": None,
             },
@@ -721,7 +723,7 @@ class ParamAccessor(Accessor["Param"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            raise KeyError(f"Ambiguous short name '{key}' — use full address")
+            raise AmbiguousOpLookupError(f"Ambiguous short name '{key}' -- use full address")
         return None
 
     def _resolve_pass_qualified(self, key: str) -> "Param | None":
@@ -739,9 +741,10 @@ class ParamAccessor(Accessor["Param"]):
     def __contains__(self, key: object) -> bool:
         """Check membership by full address, short name, or integer index (#84)."""
         try:
-            return super().__contains__(key)
-        except KeyError:
-            return True
+            self[key]  # type: ignore[index]
+        except (KeyError, TypeError, IndexError, ValueError):
+            return False
+        return True
 
     def __repr__(self) -> str:
         """Format as a dict-like string of parameter addresses with shapes and status."""
@@ -771,6 +774,3 @@ class ParamAccessor(Accessor["Param"]):
 
         rows = [_param_log_to_row(param_log) for param_log in self._list]
         return pd.DataFrame(rows, columns=PARAM_LOG_FIELD_ORDER)
-
-
-setattr(Param, "co_parent_params", [])
