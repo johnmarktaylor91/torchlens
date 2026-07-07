@@ -1626,7 +1626,7 @@ def _classify_selector_direction(
 
     if isinstance(sel, TargetSpec):
         kind = sel.selector_kind
-        if kind in {"grad_fn", "intervening", "without_op", "label"}:
+        if kind in {"grad_fn", "intervening", "without_op"}:
             return "backward"
         if kind in {"func", "func_transform"}:
             return "forward"

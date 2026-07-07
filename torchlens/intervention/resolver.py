@@ -42,7 +42,16 @@ if TYPE_CHECKING:
 else:
     Site: TypeAlias = Any
 DIRECTION_AGNOSTIC_KINDS = frozenset(
-    {"label", "in_module", "module", "contains", "regex", "predicate", "func_transform"}
+    {
+        "label",
+        "func",
+        "in_module",
+        "module",
+        "contains",
+        "regex",
+        "predicate",
+        "func_transform",
+    }
 )
 
 

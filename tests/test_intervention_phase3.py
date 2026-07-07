@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import Any
 
 import pytest
 import torch
@@ -58,6 +59,35 @@ def _context() -> HookContext:
             "address": "block",
             "call_index": 1,
         },
+    )
+
+
+def _context_with_args(*args: Any) -> HookContext:
+    """Return a representative hook context with captured call inputs.
+
+    Parameters
+    ----------
+    *args:
+        Positional call inputs to expose to input-routed helpers.
+
+    Returns
+    -------
+    HookContext
+        Context with call inputs.
+    """
+
+    return make_hook_context(
+        name="test",
+        layer_log={
+            "layer_label": "linear_1_1",
+            "layer_type": "linear",
+            "shape": (2, 3),
+            "dtype": torch.float32,
+            "tensor_device": torch.device("cpu"),
+            "address": "fc",
+            "call_index": 1,
+        },
+        args=args,
     )
 
 
@@ -268,4 +298,26 @@ def test_splice_module_dtype_error_is_specific() -> None:
     hook = tl.splice_module(_DoubleModule())()
 
     with pytest.raises(SpliceModuleDtypeError):
-        hook(torch.ones(2, 3), hook=_context())
+        hook(torch.ones(2, 3), hook=_context_with_args(torch.ones(2, 3)))
+
+
+@pytest.mark.smoke
+def test_splice_module_default_replaces_with_module_on_input() -> None:
+    """splice_module defaults to documented input-splice semantics."""
+
+    class _HundredModule(torch.nn.Module):
+        """Replacement module that makes input-vs-output routing observable."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return ``100 * x``."""
+
+            return 100 * x
+
+    hook = tl.splice_module(_HundredModule())()
+    original_input = torch.tensor([[1.0, 2.0, 3.0]])
+    original_output = 2 * original_input
+
+    result = hook(original_output, hook=_context_with_args(original_input))
+
+    assert torch.equal(result, 100 * original_input)
+    assert not torch.equal(result, 100 * original_output)

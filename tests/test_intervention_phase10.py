@@ -127,6 +127,29 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
 
 
 @pytest.mark.smoke
+def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
+    tmp_path: Path,
+) -> None:
+    """Predicate interventions save executable targets and hook specs."""
+
+    log = tl.trace(
+        _ReluModel(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+    )
+    path = tmp_path / "predicate_intervention.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec = tl.load_intervention_spec(path)
+
+    assert spec.targets
+    assert spec.hook_specs
+    assert spec.hook_specs[0].site_target.selector_kind == "label"
+    assert spec.hook_specs[0].helper is not None
+
+
+@pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live backward hook records survive intervention spec save/load."""
 

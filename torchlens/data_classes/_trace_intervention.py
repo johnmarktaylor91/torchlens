@@ -86,6 +86,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         site: Any,
         value: Any,
         *,
+        direction: str = "forward",
         strict: bool = False,
         confirm_mutation: bool = False,
     ) -> "Trace":
@@ -98,6 +99,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         value:
             Static replacement tensor or one-shot callable accepting the
             matched out and returning a replacement tensor.
+        direction:
+            Signal direction to replace: ``"forward"``, ``"backward"``, or
+            ``"both"``.
         strict:
             Whether site resolution should reject non-portable selectors.
         confirm_mutation:
@@ -111,6 +115,35 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
+        if direction not in {"forward", "backward", "both"}:
+            raise ValueError("set(..., direction=...) must be 'forward', 'backward', or 'both'.")
+        if direction in {"backward", "both"}:
+
+            def _backward_set_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+                """Return a static or callable gradient replacement."""
+
+                del hook
+                if callable(value):
+                    return cast(torch.Tensor, value(grad))
+                return cast(torch.Tensor, value)
+
+            self.attach_hooks(
+                site,
+                _backward_set_hook,
+                direction="backward",
+                strict=strict,
+                confirm_mutation=True,
+            )
+            if direction == "backward":
+                self._record_operation(
+                    "set",
+                    site=repr(site),
+                    value_kind=type(value).__name__,
+                    strict=strict,
+                    callable=callable(value),
+                    direction=direction,
+                )
+                return self
         from ..intervention.hooks import is_facet_target
 
         if is_facet_target(site):
@@ -139,6 +172,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             self.attach_hooks(
                 site,
                 _facet_replacement_hook,
+                direction="forward",
                 strict=strict,
                 confirm_mutation=True,
             )
@@ -149,6 +183,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 strict=strict,
                 callable=callable(value),
                 facet_scatter=True,
+                direction="forward",
             )
             return self
         self._validate_intervention_site(site, strict=strict)
@@ -165,6 +200,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             value_kind=type(value).__name__,
             strict=strict,
             callable=callable(value),
+            direction="forward",
         )
         return self
 
@@ -176,6 +212,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         strict: bool = False,
         prepend: bool = False,
         confirm_mutation: bool = False,
+        direction: str | None = None,
     ) -> Any:
         """Attach sticky hooks to the current intervention spec.
 
@@ -199,6 +236,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         confirm_mutation:
             Suppress the once-per-root mutate-in-place warning for callers that
             intentionally mutate this log.
+        direction:
+            Optional signal direction override: ``"forward"``, ``"backward"``,
+            or ``"both"``.
 
         Returns
         -------
@@ -211,14 +251,19 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.handles import HookHandle
         from ..intervention.hooks import normalize_hook_plan
 
+        if direction is not None and direction not in {"forward", "backward", "both"}:
+            raise ValueError(
+                "attach_hooks(..., direction=...) must be 'forward', 'backward', or 'both'."
+            )
         if extra_hooks:
             if hook is None:
                 raise HookSignatureError("extra hooks require an initial hook argument.")
             entries = normalize_hook_plan(
-                [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)]
+                [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)],
+                direction=cast(Any, direction),
             )
         else:
-            entries = normalize_hook_plan(hooks_or_site, hook)
+            entries = normalize_hook_plan(hooks_or_site, hook, direction=cast(Any, direction))
         from ..intervention.hooks import expand_facet_hook_entries
 
         entries = expand_facet_hook_entries(self, entries)
@@ -246,6 +291,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             strict=strict,
             prepend=prepend,
             handles=tuple(handle_ids),
+            direction=direction,
         )
         self._last_hook_handle_ids = tuple(handle_ids)
         scoped_handle = HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
@@ -389,6 +435,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         intervention: InterventionOptions | None = None,
+        direction: str | None = None,
     ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only.
 
@@ -409,6 +456,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             intentionally mutate this log.
         strict:
             Whether selector and propagation checks should raise.
+        direction:
+            Optional signal direction override for hook-style mutations.
 
         Returns
         -------
@@ -444,6 +493,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             engine=selected_engine,
             strict=strict_value,
             confirm_mutation=confirm_mutation_value,
+            direction=direction,
         )
         self._record_operation(
             "do",
@@ -453,6 +503,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             model_supplied=model is not None,
             x_supplied=x is not None,
             strict=strict_value,
+            direction=direction,
         )
 
         if selected_engine == "set_only":
@@ -576,6 +627,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
         confirm_mutation: bool,
+        direction: str | None,
     ) -> str:
         """Apply the mutation part of ``do`` and report its kind.
 
@@ -591,6 +643,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether selector checks should be strict.
         confirm_mutation:
             Whether root mutation warnings should be suppressed.
+        direction:
+            Optional signal direction override.
 
         Returns
         -------
@@ -602,6 +656,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             self.set(
                 hooks_or_site,
                 value_or_hook,
+                direction=direction or "forward",
                 strict=strict,
                 confirm_mutation=confirm_mutation,
             )
@@ -610,6 +665,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             self.set(
                 hooks_or_site,
                 value_or_hook,
+                direction=direction or "forward",
                 strict=strict,
                 confirm_mutation=confirm_mutation,
             )
@@ -617,6 +673,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         self.attach_hooks(
             hooks_or_site,
             value_or_hook,
+            direction=direction,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )

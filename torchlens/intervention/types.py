@@ -108,6 +108,7 @@ class FrozenTargetSpec:
 
 
 HelperKind: TypeAlias = Literal["forward", "backward"]
+HelperDirection: TypeAlias = Literal["forward", "backward", "both"]
 HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 
 
@@ -123,6 +124,7 @@ class HelperSpec:
         "portability": FieldPolicy.KEEP,
         "factory": FieldPolicy.DROP,
         "metadata": FieldPolicy.KEEP,
+        "direction": FieldPolicy.KEEP,
         "batch_independent": FieldPolicy.KEEP,
         "compatible_with_append": FieldPolicy.KEEP,
     }
@@ -136,6 +138,7 @@ class HelperSpec:
         default=None, compare=False, repr=False
     )
     metadata: tuple[tuple[str, Any], ...] = ()
+    direction: HelperDirection | None = None
     batch_independent: bool = False
     compatible_with_append: bool = False
 
@@ -193,6 +196,7 @@ class InterventionDecision:
     template_ref: Any | None = None
     keep_grad: bool = False
     isolate: bool = False
+    direction: HelperDirection = "forward"
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import torch
@@ -15,7 +15,7 @@ from .errors import (
     SpliceModuleDtypeError,
 )
 from .hooks import HookContext, normalize_hook
-from .types import HelperPortability, HelperSpec
+from .types import HelperDirection, HelperPortability, HelperSpec
 
 HELPER_REGISTRY_VERSION = "1"
 
@@ -577,7 +577,7 @@ def swap_with(
 def splice_module(
     module: nn.Module,
     *,
-    input: str = "out",
+    input: str = "in",
     output: str = "out",
     force_shape_change: bool = False,
 ) -> HelperSpec:
@@ -588,7 +588,8 @@ def splice_module(
     module:
         Module to call under ``pause_logging()`` in the execution helper.
     input:
-        Input routing policy. Only ``"out"`` is supported.
+        Input routing policy. ``"in"`` runs ``module`` on the original call
+        inputs; ``"out"`` preserves the legacy output-transform route.
     output:
         Output routing policy. Only ``"out"`` is supported.
     force_shape_change:
@@ -600,8 +601,8 @@ def splice_module(
         Built-in forward helper spec.
     """
 
-    if input != "out" or output != "out":
-        raise HookValueError("splice_module only supports out input/output routing")
+    if input not in {"in", "out"} or output != "out":
+        raise HookValueError("splice_module only supports input in {'in', 'out'} and output='out'")
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for module splicing.
@@ -615,7 +616,15 @@ def splice_module(
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Call the spliced module and validate dtype/device."""
 
-            result = module(out)
+            if input == "in":
+                first_input = _first_tensor_input(hook.args, hook.kwargs)
+                if first_input is None:
+                    raise HookValueError(
+                        "splice_module input routing requires captured call inputs"
+                    )
+                result = module(first_input)
+            else:
+                result = module(out)
             if not isinstance(result, torch.Tensor):
                 raise HookValueError("splice_module must return a torch.Tensor")
             if not force_shape_change and result.dtype != out.dtype:
@@ -638,6 +647,34 @@ def splice_module(
         batch_independent=False,
         compatible_with_append=False,
     )
+
+
+def _first_tensor_input(
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+) -> torch.Tensor | None:
+    """Return the first tensor from captured call inputs.
+
+    Parameters
+    ----------
+    args:
+        Captured positional inputs.
+    kwargs:
+        Captured keyword inputs.
+
+    Returns
+    -------
+    torch.Tensor | None
+        First tensor input, or ``None`` when no tensor was captured.
+    """
+
+    for value in args:
+        if isinstance(value, torch.Tensor):
+            return value
+    for value in kwargs.values():
+        if isinstance(value, torch.Tensor):
+            return value
+    return None
 
 
 def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
@@ -674,6 +711,7 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True},
+        direction="backward",
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -715,6 +753,7 @@ def grad_zero(*, force_shape_change: bool = False) -> HelperSpec:
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
+        direction="backward",
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -759,6 +798,7 @@ def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
+        direction="backward",
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -818,6 +858,7 @@ def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
+        direction="backward",
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -879,6 +920,7 @@ def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
+        direction="backward",
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -929,6 +971,7 @@ def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
+        direction="backward",
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -943,6 +986,7 @@ def _helper_spec(
     portability: HelperPortability = "builtin",
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
+    direction: HelperDirection | None = None,
     batch_independent: bool = False,
     compatible_with_append: bool = False,
 ) -> HelperSpec:
@@ -964,6 +1008,8 @@ def _helper_spec(
         Runtime hook factory.
     metadata:
         Extra helper metadata.
+    direction:
+        Optional default signal direction requested by legacy helpers.
     batch_independent:
         Whether this helper can be applied independently to each batch item.
     compatible_with_append:
@@ -983,6 +1029,7 @@ def _helper_spec(
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
+        direction=direction,
         batch_independent=batch_independent,
         compatible_with_append=compatible_with_append,
     )

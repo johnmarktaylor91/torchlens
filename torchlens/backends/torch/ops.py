@@ -112,9 +112,11 @@ from ...intervention.types import (
     CapturedArgTemplate,
     EdgeUseRecord,
     FunctionRegistryKey,
+    InterventionDecision,
     LiteralTensor,
     LiteralValue,
     ParentRef,
+    TargetSpec,
     Unsupported,
 )
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
@@ -1596,7 +1598,11 @@ def apply_live_hooks_to_outputs(
         all_fire_results: list[FireResult] = []
         if _st._active_hook_plan:
             hooked, fire_results = _apply_live_hooks(
-                hooked, site=site, container_path=container_path
+                hooked,
+                site=site,
+                container_path=container_path,
+                call_args=args,
+                call_kwargs=kwargs,
             )
             all_fire_results.extend(fire_results)
         if predicate_intervene_active:
@@ -1610,6 +1616,8 @@ def apply_live_hooks_to_outputs(
                 output_index=_live_output_index(container_path),
                 is_bottom_level_func=is_bottom_level_func,
                 container_path=container_path,
+                args=args,
+                kwargs=kwargs,
             )
             all_fire_results.extend(fire_results)
         fire_results = tuple(all_fire_results)
@@ -1683,6 +1691,7 @@ def _apply_predicate_mode_interventions_to_outputs(
         decision = _evaluate_intervene_op(ctx, options)
         if decision is None:
             continue
+        _record_predicate_intervention_spec(trace, ctx, decision)
         site = make_live_site_proxy(
             _layer_label_raw=raw_label,
             func_name=func_name,
@@ -1700,6 +1709,7 @@ def _apply_predicate_mode_interventions_to_outputs(
         hook_entries = normalize_hook_plan(
             decision.hook,
             default_site_target=make_label_selector(ctx.raw_label or ctx.label),
+            direction=decision.direction,
         )
         from ...intervention.runtime import _apply_live_hooks
 
@@ -1707,7 +1717,13 @@ def _apply_predicate_mode_interventions_to_outputs(
             intervention_spec=_st._active_intervention_spec,
             hook_plan=hook_entries,
         ):
-            hooked, fire_results = _apply_live_hooks(out, site=site, container_path=container_path)
+            hooked, fire_results = _apply_live_hooks(
+                out,
+                site=site,
+                container_path=container_path,
+                call_args=args,
+                call_kwargs=kwargs,
+            )
         if fire_results:
             _set_tensor_live_fire_results(hooked, fire_results)
         if hooked is not out:
@@ -1726,6 +1742,64 @@ def _trace_intervene_options(trace: "Trace") -> Any | None:
     if options is None or options.intervene is None:
         return None
     return options
+
+
+def _record_predicate_intervention_spec(
+    trace: "Trace",
+    ctx: RecordContext,
+    decision: InterventionDecision,
+) -> None:
+    """Persist a fired predicate intervention as a normal hook spec.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving the executable intervention recipe.
+    ctx:
+        Predicate context for the matched op.
+    decision:
+        Normalized intervention decision returned by ``intervene=``.
+
+    Returns
+    -------
+    None
+        Mutates ``trace._intervention_spec`` once per matched target/helper/direction.
+    """
+
+    if decision.hook is None:
+        return
+    target_label = ctx.raw_label or ctx.label
+    if not target_label:
+        return
+    seen = trace.__dict__.setdefault("_tl_predicate_intervention_spec_keys", set())
+    key = (target_label, repr(decision.hook), decision.direction)
+    if key in seen:
+        return
+    seen.add(key)
+    target = TargetSpec("label", target_label)
+    entries = normalize_hook_plan(
+        target,
+        decision.hook,
+        direction=decision.direction,
+    )
+    spec = trace._ensure_intervention_spec()
+    if not any(existing.freeze() == target.freeze() for existing in spec.targets):
+        spec.targets.append(target)
+    for entry in entries:
+        metadata = {
+            **dict(entry.metadata),
+            "created_by": "intervene_predicate",
+            "direction": entry.metadata.get("direction", decision.direction),
+        }
+        spec.add_hook(
+            target,
+            entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
+            helper=entry.helper_spec,
+            metadata=metadata,
+        )
+    trace.__dict__.pop("intervention_spec", None)
+    trace.__dict__.pop("_frozen_intervention_spec", None)
+    trace.__dict__.pop("_cached_frozen_intervention_spec", None)
 
 
 def _live_output_index(container_path: tuple[OutputPathComponent, ...]) -> int | None:
@@ -1752,6 +1826,8 @@ def _apply_predicate_intervention(
     output_index: int | None,
     is_bottom_level_func: bool,
     container_path: tuple[OutputPathComponent, ...],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
 ) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
     """Evaluate and apply a current-op predicate intervention."""
 
@@ -1770,9 +1846,11 @@ def _apply_predicate_intervention(
     decision = _evaluate_intervene_op(ctx, options)
     if decision is None:
         return out, ()
+    _record_predicate_intervention_spec(trace, ctx, decision)
     hook_entries = normalize_hook_plan(
         decision.hook,
         default_site_target=make_label_selector(ctx.raw_label or ctx.label),
+        direction=decision.direction,
     )
     from ...intervention.runtime import _apply_live_hooks
 
@@ -1780,7 +1858,13 @@ def _apply_predicate_intervention(
         intervention_spec=_st._active_intervention_spec,
         hook_plan=hook_entries,
     ):
-        return _apply_live_hooks(out, site=site, container_path=container_path)
+        return _apply_live_hooks(
+            out,
+            site=site,
+            container_path=container_path,
+            call_args=args,
+            call_kwargs=kwargs,
+        )
 
 
 def _iter_loggable_live_outputs(

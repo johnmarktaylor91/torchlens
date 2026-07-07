@@ -254,6 +254,8 @@ def _apply_live_hooks(
     *,
     site: Any,
     container_path: tuple[Any, ...] = (),
+    call_args: tuple[Any, ...] = (),
+    call_kwargs: dict[str, Any] | None = None,
 ) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
     """Apply active live post-hooks to one capture-time output tensor.
 
@@ -265,6 +267,10 @@ def _apply_live_hooks(
         Capture-time site proxy for selector matching and hook context.
     container_path:
         Stable path inside a multi-output container.
+    call_args:
+        Original positional call inputs for input-routed helpers.
+    call_kwargs:
+        Original keyword call inputs for input-routed helpers.
 
     Returns
     -------
@@ -294,8 +300,8 @@ def _apply_live_hooks(
             direction="forward",
             layer_log=site,
             run_ctx=_live_run_ctx(),
-            args=(current_out,),
-            kwargs={},
+            args=call_args or (current_out,),
+            kwargs=call_kwargs or {},
         )
         previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
         pre_hook_shape = tuple(current_out.shape)

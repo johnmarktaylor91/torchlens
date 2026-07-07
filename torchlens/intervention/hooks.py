@@ -32,7 +32,8 @@ from .types import HelperSpec, HookSpec, InterventionSpec, TargetSpec, TargetVal
 
 HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
-HookCallable: TypeAlias = Callable[..., torch.Tensor]
+HookDirectionRequest: TypeAlias = Literal["forward", "backward", "both"]
+HookCallable: TypeAlias = Callable[..., Any]
 HookInput: TypeAlias = Callable[..., Any] | HelperSpec
 _FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
 _DEFAULT_HEAD_FACET_NAMES = ("q", "k", "v")
@@ -186,6 +187,7 @@ def normalize_hook_plan(
     *,
     default_site_target: Any | None = None,
     force_shape_change: bool = False,
+    direction: HookDirectionRequest | None = None,
 ) -> list[NormalizedHookEntry]:
     """Normalize all supported attach-hook shapes into hook-plan entries.
 
@@ -200,6 +202,9 @@ def normalize_hook_plan(
         fail closed because they do not imply a model-log site.
     force_shape_change:
         Escape hatch metadata consumed by execution.
+    direction:
+        Optional signal direction override. ``"both"`` expands to one forward
+        and one backward entry.
 
     Returns
     -------
@@ -211,9 +216,16 @@ def normalize_hook_plan(
     entries: list[NormalizedHookEntry] = []
     for order, (site_target, hook_like) in enumerate(pairs):
         helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
-        for direction in _hook_directions(hook_like, helper_spec):
-            _validate_helper_mount(site_target, helper_spec)
-            normalized_callable = _normalize_directional_hook(hook_like, direction=direction)
+        for concrete_direction in _hook_directions(
+            hook_like,
+            helper_spec,
+            requested_direction=direction,
+        ):
+            _validate_helper_mount(site_target, helper_spec, direction=concrete_direction)
+            normalized_callable = _normalize_directional_hook(
+                hook_like,
+                direction=concrete_direction,
+            )
             entries.append(
                 NormalizedHookEntry(
                     site_target=site_target,
@@ -224,7 +236,7 @@ def normalize_hook_plan(
                             "attach_order": order,
                             "composition": "left_to_right",
                             "force_shape_change": force_shape_change,
-                            "direction": direction,
+                            "direction": concrete_direction,
                             "timing": "post",
                         }
                     ),
@@ -234,7 +246,10 @@ def normalize_hook_plan(
 
 
 def _hook_directions(
-    hook_like: HookInput, helper_spec: HelperSpec | None
+    hook_like: HookInput,
+    helper_spec: HelperSpec | None,
+    *,
+    requested_direction: HookDirectionRequest | None = None,
 ) -> tuple[HookDirection, ...]:
     """Return hook directions requested by a hook-like object.
 
@@ -244,6 +259,8 @@ def _hook_directions(
         User callable, observer, or helper spec.
     helper_spec:
         Helper spec when ``hook_like`` is a built-in helper.
+    requested_direction:
+        Explicit caller direction override.
 
     Returns
     -------
@@ -251,6 +268,14 @@ def _hook_directions(
         One or two concrete hook directions.
     """
 
+    if requested_direction == "both":
+        return ("forward", "backward")
+    if requested_direction in {"forward", "backward"}:
+        return (cast(HookDirection, requested_direction),)
+    if helper_spec is not None and helper_spec.direction == "both":
+        return ("forward", "backward")
+    if helper_spec is not None and helper_spec.direction in {"forward", "backward"}:
+        return (cast(HookDirection, helper_spec.direction),)
     if helper_spec is not None:
         return (helper_spec.kind,)
     direction = getattr(hook_like, "direction", "forward")
@@ -279,7 +304,106 @@ def _normalize_directional_hook(hook_like: HookInput, *, direction: HookDirectio
 
     if direction == "backward" and hasattr(hook_like, "record_backward"):
         return normalize_hook(getattr(hook_like, "record_backward"), direction=direction)
-    return normalize_hook(hook_like, direction=direction)
+    helper_spec: HelperSpec | None = hook_like if isinstance(hook_like, HelperSpec) else None
+    hook_callable = normalize_hook(hook_like, direction=direction)
+    if direction == "backward" and _needs_tensor_backward_adapter(hook_callable, helper_spec):
+        return _adapt_tensor_backward_hook(hook_callable, helper_spec)
+    return hook_callable
+
+
+def _needs_tensor_backward_adapter(
+    hook_callable: HookCallable,
+    helper_spec: HelperSpec | None,
+) -> bool:
+    """Return whether a backward hook expects one tensor instead of grad tuples.
+
+    Parameters
+    ----------
+    hook_callable:
+        Normalized callable being mounted on the backward signal.
+    helper_spec:
+        Helper spec when the hook came from a built-in helper.
+
+    Returns
+    -------
+    bool
+        Whether the callable should be adapted to a ``GradFn`` tuple callback.
+    """
+
+    if helper_spec is not None and dict(helper_spec.metadata).get("mount_shape") == "tuple":
+        return False
+    try:
+        signature = inspect.signature(hook_callable)
+    except (TypeError, ValueError):
+        return True
+    tuple_callback_params = {"grad_output", "grad_fn_handle", "call_index", "run_ctx"}
+    return not bool(tuple_callback_params & set(signature.parameters))
+
+
+def _adapt_tensor_backward_hook(
+    hook_callable: HookCallable,
+    helper_spec: HelperSpec | None,
+) -> HookCallable:
+    """Wrap a tensor-gradient hook for PyTorch ``GradFn`` tuple callbacks.
+
+    Parameters
+    ----------
+    hook_callable:
+        Callable accepting one gradient tensor and ``hook=HookContext``.
+    helper_spec:
+        Helper spec used for display metadata.
+
+    Returns
+    -------
+    HookCallable
+        Callable accepting ``grad_input`` tuple callback arguments.
+    """
+
+    helper_name = helper_spec.name if helper_spec is not None else "user_backward_hook"
+
+    def _tuple_hook(
+        grad_input: tuple[torch.Tensor | None, ...],
+        *,
+        grad_output: tuple[torch.Tensor | None, ...] | None,
+        grad_fn_handle: Any,
+        call_index: int,
+        run_ctx: dict[str, Any],
+    ) -> tuple[torch.Tensor | None, ...] | None:
+        """Apply a tensor hook independently to each non-None grad_input slot."""
+
+        updated: list[torch.Tensor | None] = []
+        changed = False
+        for index, grad in enumerate(grad_input):
+            if grad is None:
+                updated.append(None)
+                continue
+            context = make_hook_context(
+                name=helper_name,
+                direction="backward",
+                layer_log=getattr(grad_fn_handle, "op", grad_fn_handle),
+                run_ctx=run_ctx,
+                args=(grad,),
+                kwargs={
+                    "grad_output": grad_output,
+                    "grad_fn_handle": grad_fn_handle,
+                    "call_index": call_index,
+                    "tuple_index": index,
+                },
+            )
+            result = hook_callable(grad, hook=context)
+            if result is None:
+                updated.append(grad)
+                continue
+            if not isinstance(result, torch.Tensor):
+                raise HookSignatureError(
+                    f"backward tensor hook {helper_name!r} returned "
+                    f"{type(result).__name__}; expected torch.Tensor or None"
+                )
+            updated.append(result)
+            changed = changed or result is not grad
+        return tuple(updated) if changed else None
+
+    return cast(HookCallable, _tuple_hook)
 
 
 def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedHookEntry]:
@@ -486,7 +610,17 @@ def _normalize_sticky_hook_specs(hook_specs: Sequence[HookSpec]) -> list[Normali
     entries: list[NormalizedHookEntry] = []
     for hook_spec in hook_specs:
         hook_like = hook_spec.helper if hook_spec.helper is not None else hook_spec.hook
-        normalized_entries = normalize_hook_plan(hook_spec.site_target, hook_like)
+        metadata_direction = hook_spec.metadata.get("direction")
+        requested_direction = (
+            cast(HookDirectionRequest, metadata_direction)
+            if metadata_direction in {"forward", "backward", "both"}
+            else None
+        )
+        normalized_entries = normalize_hook_plan(
+            hook_spec.site_target,
+            hook_like,
+            direction=requested_direction,
+        )
         for entry in normalized_entries:
             metadata = {**entry.metadata, **hook_spec.metadata}
             entries.append(
@@ -804,7 +938,12 @@ def _live_backward_context_matches(
     return True
 
 
-def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> None:
+def _validate_helper_mount(
+    site_target: Any,
+    helper_spec: HelperSpec | None,
+    *,
+    direction: HookDirection,
+) -> None:
     """Validate helper/selector mount compatibility at attach time.
 
     Parameters
@@ -813,6 +952,8 @@ def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> 
         Selector-like site target.
     helper_spec:
         Helper spec, if the hook came from a built-in helper.
+    direction:
+        Concrete signal direction requested for this hook entry.
 
     Returns
     -------
@@ -827,6 +968,12 @@ def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> 
     from .resolver import _selector_resolution_direction
 
     selector_direction = _selector_resolution_direction(site_target)
+    if direction == "backward":
+        if helper_metadata.get("requires_grad_output") and _targets_accumulate_grad(site_target):
+            raise HelperMountError(
+                f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
+            )
+        return
     if mount_shape == "tuple" and selector_direction != "backward":
         raise HelperMountError(
             f"{helper_spec.name} is a grad_fn_handle helper and must be mounted on a backward selector."
@@ -839,6 +986,27 @@ def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> 
         raise HelperMountError(
             f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
         )
+
+
+def _targets_accumulate_grad(site_target: Any) -> bool:
+    """Return whether a selector target explicitly names ``AccumulateGrad``.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    bool
+        Whether the target is an AccumulateGrad selector.
+    """
+
+    value = getattr(site_target, "selector_value", None)
+    if isinstance(value, Mapping):
+        type_value = value.get("type")
+        return type_value is not None and "accumulategrad" in str(type_value).lower()
+    return "accumulategrad" in repr(site_target).lower()
 
 
 def _facet_selector_from_target(site_target: Any) -> FacetSelector | None:

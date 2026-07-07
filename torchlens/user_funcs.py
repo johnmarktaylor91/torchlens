@@ -81,8 +81,10 @@ from .visualization.code_panel import (
 from .intervention.errors import InterventionReadyConflictError
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
+from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
+from .intervention.resolver import _selector_resolution_direction
 from .intervention.resolver import resolve_sites
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .capture.stop import StopDirective
@@ -409,6 +411,63 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     )
 
 
+def _backward_intervention_spec_from_predicate(
+    intervene_predicate: InterventionPredicate | None,
+) -> InterventionSpec | None:
+    """Build a sticky intervention spec for backward-only ``tl.when`` predicates.
+
+    Parameters
+    ----------
+    intervene_predicate:
+        Predicate supplied to ``trace(intervene=...)``.
+
+    Returns
+    -------
+    InterventionSpec | None
+        Spec containing one backward hook for a backward selector, or ``None``.
+    """
+
+    if intervene_predicate is None:
+        return None
+    selector = getattr(intervene_predicate, "selector", None)
+    decision = getattr(intervene_predicate, "decision", None)
+    if selector is None or not isinstance(decision, InterventionDecision):
+        return None
+    try:
+        selector_direction = _selector_resolution_direction(selector)
+    except Exception:
+        return None
+    if selector_direction != "backward" or decision.direction not in {"backward", "both"}:
+        return None
+    if decision.hook is None:
+        return None
+    target = (
+        selector.to_target_spec()
+        if hasattr(selector, "to_target_spec")
+        else TargetSpec("label", selector)
+    )
+    spec = InterventionSpec()
+    spec.targets.append(target)
+    entries = normalize_hook_plan(
+        target,
+        decision.hook,
+        direction="backward",
+    )
+    for entry in entries:
+        metadata = {
+            **dict(entry.metadata),
+            "created_by": "intervene_backward_selector",
+            "direction": "backward",
+        }
+        spec.add_hook(
+            target,
+            entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
+            helper=entry.helper_spec,
+            metadata=metadata,
+        )
+    return spec
+
+
 def record_kpi_in_graph(name: str, value: Any) -> None:
     """Record a user KPI on the active capture graph.
 
@@ -674,6 +733,8 @@ def _run_model_and_save_specified_outs(
     weight_fingerprint = _fingerprint_model_weights(model)
     input_object_id = _input_id_for_relationship_evidence(input_args)
     input_signature_hash = _hash_input_signatures(input_args, input_kwargs)
+    if intervention_spec is None:
+        intervention_spec = _backward_intervention_spec_from_predicate(intervene_predicate)
     hook_plan = normalized_hook_plan if normalized_hook_plan is not None else []
     if hook_plan == [] and hooks:
         hook_plan = normalize_hook_plan(hooks)
@@ -733,6 +794,8 @@ def _run_model_and_save_specified_outs(
         output_style=output_style,
         output_head=output_head,
     )
+    if intervention_spec is not None:
+        trace._intervention_spec = intervention_spec
     trace.trace_label = name
     trace.code_context = _get_code_context(
         num_context_lines,

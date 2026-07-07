@@ -759,6 +759,7 @@ def _serialize_helper(
         "portability": "builtin",
         "name": helper.name,
         "kind": helper.kind,
+        "direction": helper.direction,
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),

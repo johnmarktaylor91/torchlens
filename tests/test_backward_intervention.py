@@ -51,6 +51,23 @@ class _PowModel(nn.Module):
         return (x.pow(3)).sum()
 
 
+class _IdentityReluModel(nn.Module):
+    """Model with one deterministic gradient path through a ReLU."""
+
+    def __init__(self) -> None:
+        """Initialize an identity linear layer."""
+
+        super().__init__()
+        self.linear = nn.Linear(3, 3, bias=False)
+        with torch.no_grad():
+            self.linear.weight.copy_(torch.eye(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a scalar loss with unit baseline input gradient."""
+
+        return torch.relu(self.linear(x)).sum()
+
+
 @dataclass
 class _TraceStub:
     """Weakref-able trace stub for direct hook-factory tests."""
@@ -635,11 +652,13 @@ def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:
         loss.backward()
 
 
-def test_grad_clip_on_forward_selector_raises_helpermounterror() -> None:
-    """Tuple-shaped grad_fn_handle helpers cannot mount on forward selectors."""
+def test_grad_clip_on_forward_selector_routes_to_backward_signal() -> None:
+    """Tuple-shaped grad_fn helpers can route through a paired forward selector."""
 
-    with pytest.raises(HelperMountError):
-        normalize_hook_plan(tl.label("relu_1"), tl.grad_clip(0.5))
+    entries = normalize_hook_plan(tl.func("relu"), tl.grad_clip(0.5))
+
+    assert len(entries) == 1
+    assert entries[0].metadata["direction"] == "backward"
 
 
 def test_selector_compose_grad_fn_and_in_module_legal_at_construction() -> None:
@@ -760,6 +779,90 @@ def test_selector_resolution_direction_grad_fn_and_label() -> None:
     assert (
         _selector_resolution_direction(tl.grad_fn(type="relu") & tl.label("relu_1")) == "backward"
     )
+
+
+def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.Tensor, list[Any]]:
+    """Run the deterministic ReLU model with one backward intervention.
+
+    Parameters
+    ----------
+    selector:
+        Forward or backward selector used in ``tl.when``.
+    helper:
+        Intervention helper to apply.
+
+    Returns
+    -------
+    tuple[torch.Tensor, list[Any]]
+        Input-layer gradient and backward fire records.
+    """
+
+    x = torch.tensor([[1.0, 2.0, 3.0]], requires_grad=True)
+    trace = tl.trace(
+        _IdentityReluModel(),
+        x,
+        backward_ready=True,
+        save_grads=True,
+        intervene=tl.when(selector, helper),
+    )
+    trace.backward(trace[trace.output_layers[0]].out, retain_graph=True)
+    records = [
+        record for record in trace._intervention_spec.records if record.direction == "backward"
+    ]
+    return trace[trace.input_layers[0]].grad, records
+
+
+@pytest.mark.parametrize("selector", [tl.func("relu"), tl.grad_fn(type="relu")])
+def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> None:
+    """Legacy grad helpers have observable effects through both selector universes."""
+
+    zero_grad, zero_records = _run_identity_relu_intervention(selector, tl.grad_zero())
+    scaled_grad, scaled_records = _run_identity_relu_intervention(selector, tl.grad_scale(2.0))
+    clamped_grad, clamped_records = _run_identity_relu_intervention(selector, tl.grad_clamp(0, 0))
+    clipped_grad, clipped_records = _run_identity_relu_intervention(selector, tl.grad_clip(0.1))
+    noisy_grad, noisy_records = _run_identity_relu_intervention(
+        selector, tl.grad_noise(0.5, seed=7)
+    )
+
+    assert torch.equal(zero_grad, torch.zeros_like(zero_grad))
+    assert torch.equal(scaled_grad, torch.full_like(scaled_grad, 2.0))
+    assert torch.equal(clamped_grad, torch.zeros_like(clamped_grad))
+    assert (
+        0
+        < torch.linalg.vector_norm(clipped_grad)
+        < torch.linalg.vector_norm(torch.ones_like(clipped_grad))
+    )
+    assert not torch.equal(noisy_grad, torch.ones_like(noisy_grad))
+    assert all(
+        records
+        for records in (
+            zero_records,
+            scaled_records,
+            clamped_records,
+            clipped_records,
+            noisy_records,
+        )
+    )
+
+
+@pytest.mark.parametrize("selector", [tl.func("relu"), tl.grad_fn(type="relu")])
+def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
+    """bwd_hook calls user code and mutates the gradient through both selectors."""
+
+    calls: list[torch.Tensor] = []
+
+    def _zero_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        """Record and zero a tensor gradient."""
+
+        del hook
+        calls.append(grad.detach().clone())
+        return torch.zeros_like(grad)
+
+    grad, records = _run_identity_relu_intervention(selector, tl.bwd_hook(_zero_hook))
+
+    assert calls
+    assert torch.equal(grad, torch.zeros_like(grad))
+    assert records
 
 
 @pytest.mark.parametrize(
