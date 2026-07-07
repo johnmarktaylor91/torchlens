@@ -1804,3 +1804,141 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
     assert _functionless_replacement_ops(log) == []
     assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
     check_metadata_invariants(log)
+
+
+class _RawAtenReluModule(nn.Module):
+    """Its ``forward`` returns a tensor built via a raw aten dispatch call that
+    bypasses TorchLens's python-level function wrapping, so the module output is
+    untraceable at module exit (a plain-capture gap, like a vmap-built tensor)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return an untraceable raw-ATen relu of the input."""
+
+        return torch.ops.aten.relu.default(x)
+
+
+class _RawAtenReluNet(nn.Module):
+    """Wrap the untraceable module behind a traceable linear layer."""
+
+    def __init__(self) -> None:
+        """Build the fc -> raw-aten pipeline."""
+
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.raw = _RawAtenReluModule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run fc then the untraceable raw-aten module."""
+
+        return self.raw(self.fc(x))
+
+
+def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
+    """A GENUINE raw ``register_forward_hook`` that replaces a module's output
+    with an untraceable (raw-ATen) tensor must validate CLEANLY.
+
+    The wrapper synthesizes a legitimately functionless
+    ``intervention_replacement`` op (``func_call_id=None``); the func_call_id
+    invariant must exempt it -- previously it crashed with MetadataInvariantError
+    on this documented, supported feature (cert round 3 MAJOR).
+    """
+
+    class _Mlp(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(4, 4)
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.relu(self.fc1(x))
+
+    def _untraceable_replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
+        # Bypasses TorchLens python-level wrapping -- a real opaque replacement.
+        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+
+    model = _Mlp().eval()
+    model.relu.register_forward_hook(_untraceable_replacement_hook)
+    x = torch.randn(3, 4)
+    log = trace_fn(model, [x], {})
+    try:
+        # A genuine functionless replacement placeholder IS present here...
+        placeholders = _functionless_replacement_ops(log)
+        assert placeholders, "expected a genuine intervention_replacement placeholder"
+        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        # ...and validation must PASS (exemption scoped to genuine replacements).
+        check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+    assert validate_forward_pass(model, [x], input_kwargs={})
+
+
+def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
+    """TRIPWIRE: a plain-capture gap under a NO-OP observer hook stays honest.
+
+    An untraceable raw-ATen module output combined with a purely observational
+    forward hook (returns ``None``, never substitutes) must be logged as a clean
+    ``internal_source`` -- NEVER a functionless ``intervention_replacement``
+    placeholder, and must NOT be marked ``intervention_replaced``. The old
+    ``has _forward_hooks`` proxy mislabeled exactly this case (cert round 3
+    coupled hazard); reintroducing it makes this fail loudly.
+    """
+
+    model = _RawAtenReluNet().eval()
+    x = torch.randn(3, 4)
+    log = trace_fn(model, [x], {})
+    try:
+        # No genuine intervention happened -> zero functionless placeholders and
+        # zero intervention_replaced ops during plain capture.
+        assert _functionless_replacement_ops(log) == []
+        assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+        # The untraceable output is an honest internal source (func_name "none").
+        internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
+        assert internal_sources, "untraceable raw-ATen output must be an internal source"
+        assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
+        # Validation passes legitimately (as a graph source, not via a hidden gap).
+        check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+    assert validate_forward_pass(model, [x], input_kwargs={})
+
+
+def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
+    """The func_call_id exemption for ``intervention_replacement`` is NARROW.
+
+    It must exempt ONLY the genuine functionless-replacement shape
+    (``func_name == "intervention_replacement"`` AND ``intervention_replaced``
+    AND NOT ``is_internal_source`` -- mirroring the ``op_log_fields`` invariant),
+    and must NOT blanket-exempt any op merely named ``intervention_replacement``.
+    A placeholder lacking that shape must stay non-exempt so the invariant stays
+    armed against future capture-gap synthesis.
+    """
+
+    from torchlens.validation.invariants import _is_func_call_id_exempt
+
+    base = dict(is_input=False, is_output=False, is_buffer=False, func=None)
+    genuine = SimpleNamespace(
+        func_name="intervention_replacement",
+        intervention_replaced=True,
+        is_internal_source=False,
+        **base,
+    )
+    assert _is_func_call_id_exempt(genuine) is True
+
+    # Same func_name but NOT flagged as replaced -> not a genuine replacement.
+    not_replaced = SimpleNamespace(
+        func_name="intervention_replacement",
+        intervention_replaced=False,
+        is_internal_source=False,
+        **base,
+    )
+    assert _is_func_call_id_exempt(not_replaced) is False
+
+    # Same func_name + replaced but IS an internal source -> not a genuine
+    # user replacement (internal sources carry func_name "none" in practice).
+    internal = SimpleNamespace(
+        func_name="intervention_replacement",
+        intervention_replaced=True,
+        is_internal_source=True,
+        **base,
+    )
+    assert _is_func_call_id_exempt(internal) is False

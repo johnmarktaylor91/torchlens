@@ -1368,8 +1368,17 @@ def _module_output_fields(
         for output_index, label_raw in enumerate(event.output_tensor_labels_raw):
             fields = by_label.setdefault(label_raw, _empty_module_output_fields())
             fields["is_module_output"] = True
-            if event.has_user_forward_hooks:
-                fields["intervention_replaced"] = True
+            # NOTE: do NOT mark ``intervention_replaced`` here from
+            # ``has_user_forward_hooks``. That is a PROXY, not proof: a module can
+            # carry a purely observational forward hook (returns ``None``, never
+            # substitutes) and this overlay runs during plain postprocess with no
+            # evidence a substitution happened. Forcing it True would (a) mislabel
+            # a plain-capture module output as a user intervention (disarming the
+            # tripwire, see project CLAUDE.md "Validation Integrity") and (b) even
+            # for a genuine replacement mark the PRE-replacement tensor. Genuine
+            # replacements are marked with proof on the actual replacement op by
+            # ``_make_user_forward_hook_wrapper`` and flow in via the authoritative
+            # ``event.intervention_replaced`` base field above.
             cast(list[Any], fields["output_of_modules"]).append(event.address)
             cast(list[Any], fields["output_of_module_calls"]).append(call_tuple)
             if output_index < len(event.output_names):

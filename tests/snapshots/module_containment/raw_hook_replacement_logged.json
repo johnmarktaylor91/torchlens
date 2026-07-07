@@ -313,7 +313,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "relu.relu",
       "input_to_modules": [],
-      "intervention_replaced": true,
+      "intervention_replaced": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,

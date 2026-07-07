@@ -1489,6 +1489,23 @@ def _is_func_call_id_exempt(layer: "Op") -> bool:
 
     if layer.is_input or layer.is_output or layer.is_buffer:
         return True
+    # A GENUINE raw-forward-hook output replacement is legitimately functionless
+    # (the user substituted an opaque tensor for a module's output, so there is
+    # no torch function -- hence no ``func_call_id`` -- to validate). Mirror the
+    # deliberately NARROW predicate the ``op_log_fields`` invariant already uses
+    # (func_name + intervention_replaced + NOT internal_source): it is scoped to
+    # ONLY genuine user interventions. This is safe to exempt here ONLY because
+    # ``_record_module_exit_metadata`` no longer mislabels plain-capture gaps as
+    # ``intervention_replacement`` (it logs them as ``internal_source``), so an
+    # auto-synthesized functionless placeholder can never carry this shape during
+    # plain capture. Widening this to a blanket ``func_name`` check would disarm
+    # the plain-capture tripwire (see project CLAUDE.md "Validation Integrity").
+    if (
+        getattr(layer, "func_name", "") == "intervention_replacement"
+        and getattr(layer, "intervention_replaced", False)
+        and not getattr(layer, "is_internal_source", False)
+    ):
+        return True
     func = getattr(layer, "func", None)
     func_name = str(getattr(layer, "func_name", "")).lower()
     return func in {"input", "output", "buffer"} or func_name in {

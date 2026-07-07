@@ -1706,25 +1706,29 @@ def _record_module_exit_metadata(
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
             tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         if tensor_label is None:
-            # An untagged module output is a genuine intervention replacement
-            # only when the module has a raw forward hook that could have
-            # substituted it; otherwise it is an internally generated tensor
-            # (e.g. built inside torch.vmap) that should be a clean graph
-            # source, not a functionless intervention placeholder.
-            if getattr(module, "_forward_hooks", None):
-                parent_labels = list(dict.fromkeys(input_tensor_labels_at_entry))
-                _ensure_module_output_tensor_logged(
-                    trace, t, module, parent_labels, kind="intervention_replacement"
-                )
-            else:
-                _ensure_module_output_tensor_logged(
-                    trace, t, module, parent_labels=[], kind="internal_source"
-                )
+            # An untagged tensor is the module's own raw ``forward()`` return
+            # value. This code runs INSIDE the decorated ``forward()``, i.e.
+            # BEFORE PyTorch's ``Module._call_impl`` invokes any registered
+            # ``_forward_hooks`` (hooks fire one frame up, after ``forward``
+            # returns). So no hook has substituted anything yet at this point:
+            # the presence of ``_forward_hooks`` is NOT proof of a replacement,
+            # only a proxy, and a purely observational hook (returns ``None``)
+            # never substitutes at all. An untagged tensor here therefore has
+            # exactly one honest explanation -- an internally generated tensor
+            # whose construction TorchLens could not trace (e.g. built inside
+            # ``torch.vmap``) -- identical to the module-ENTRY path above. Log it
+            # as a clean graph source, NEVER a functionless intervention
+            # placeholder, so a genuine plain-capture gap still trips the
+            # tripwire (see project CLAUDE.md "Validation Integrity"). Genuine
+            # raw-forward-hook replacements are tagged AFTER the fact by
+            # ``_make_user_forward_hook_wrapper`` (which alone has proof that the
+            # user's callable returned a substitute), not here.
+            _ensure_module_output_tensor_logged(
+                trace, t, module, parent_labels=[], kind="internal_source"
+            )
             tensor_label = get_tensor_label(t)
         if tensor_label is None:
             continue
-        if getattr(module, "_forward_hooks", None):
-            replace_op_event(trace, tensor_label, intervention_replaced=True)
         is_atomic_module = _is_bottom_level_submodule_exit(trace, t, module)
         atomic_module_call = (address, module_call_index) if is_atomic_module else None
         output_tensor_labels_raw.append(tensor_label)

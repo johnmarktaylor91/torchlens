@@ -31,7 +31,7 @@ casting, special-value args like all-zeros making perturbation irrelevant).
 
 from dataclasses import dataclass
 from numbers import Number
-from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING, Union
+from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING
 
 import torch
 
@@ -1752,24 +1752,3 @@ def _is_all_nan_value(value: Any) -> bool:
     if value.numel() == 0:
         return False
     return tensor_all_nan(value)
-
-
-def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]) -> bool:
-    """Check if a value is all-zeros, all-ones, or empty (numel==0).
-
-    These "special" values can make perturbation of OTHER args irrelevant:
-    - All-zeros: multiplication by zero annihilates the other operand.
-    - All-ones: identity element for multiplication, no-op for many ops.
-    - Empty: no elements to be affected.
-
-    Non-tensor values (scalars, etc.) are converted to tensors for the check.
-    Returns False for values that can't be converted (strings, None, etc.).
-    """
-    if not isinstance(val, torch.Tensor):
-        try:
-            val = torch.tensor(val)
-        except (TypeError, ValueError, RuntimeError):
-            return False
-    if torch.all(torch.eq(val, 0)) or torch.all(torch.eq(val, 1)) or (val.numel() == 0):
-        return True
-    return False
