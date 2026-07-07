@@ -858,10 +858,10 @@ def _module_structural_signature(module: "Module") -> tuple[int, int, int, int]:
     """
 
     return (
-        int(getattr(module, "num_layers", 0) or 0),
-        int(getattr(module, "num_params", 0) or 0),
-        int(getattr(module, "num_params_trainable", 0) or 0),
-        int(getattr(module, "num_params_frozen", 0) or 0),
+        int(module.num_layers),
+        int(module.num_params),
+        int(module.num_params_trainable),
+        int(module.num_params_frozen),
     )
 
 
@@ -901,6 +901,60 @@ def _run_fold_hidden_members_uniform(trace: "Trace", addresses: Sequence[str]) -
     return len(signatures) == 1
 
 
+def _split_run_by_hidden_uniformity(
+    trace: "Trace",
+    run: tuple[str, ...],
+) -> Iterator[tuple[str, ...]]:
+    """Split one grouped run into its maximal hidden-uniform sub-runs.
+
+    :func:`_iter_collapsible_runs` groups addresses into a run purely by
+    class, stem, and flow/shape adjacency -- that grouping says nothing
+    about whether the *hidden* fold members (everything but the visible
+    representative) are structurally uniform. Without this retry, a single
+    structurally-odd module anywhere inside an otherwise-eligible run would
+    cause the caller to reject the *entire* run wholesale the moment
+    :func:`_run_fold_hidden_members_uniform` failed on it, even though the
+    legal sub-runs on either side of the odd member are still independently
+    foldable.
+
+    This mirrors :func:`collapse_optimizer._maximal_legal_runs`'s
+    retry-shorter-subrun approach: grow a candidate window from each
+    unconsumed starting position, keep the longest hidden-uniform prefix,
+    emit it, and resume scanning from the next unconsumed address. A
+    structurally-odd module becomes the new *representative* of its own
+    retried sub-run (representatives are exempt from the uniformity check)
+    instead of silently sinking every run it happens to sit inside.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    run:
+        One flow-consecutive, same-class/stem/shape run as assembled by
+        :func:`_iter_collapsible_runs`.
+
+    Yields
+    ------
+    tuple[str, ...]
+        Maximal sub-runs of at least :data:`RUN_FOLD_MIN_LENGTH` addresses,
+        each with uniform hidden members.
+    """
+
+    total = len(run)
+    index = 0
+    while index < total:
+        best: tuple[str, ...] = ()
+        for end in range(index + RUN_FOLD_MIN_LENGTH, total + 1):
+            candidate = run[index:end]
+            if _run_fold_hidden_members_uniform(trace, candidate):
+                best = candidate
+        if best:
+            yield best
+            index += len(best)
+        else:
+            index += 1
+
+
 def _iter_collapsible_runs(
     trace: "Trace",
     child_addresses: list[str],
@@ -909,6 +963,15 @@ def _iter_collapsible_runs(
     allow_selected_descendant: bool = False,
 ) -> Iterator[tuple[str, ...]]:
     """Yield flow-consecutive same-class runs with equal adjacent output shapes.
+
+    Each assembled group is further split by
+    :func:`_split_run_by_hidden_uniformity` into its maximal hidden-uniform
+    sub-runs before being yielded, so a single structurally-odd module
+    anywhere inside an otherwise-eligible run only knocks out the sub-run(s)
+    that would have hidden it -- the legal sub-runs on either side still
+    fold, matching the "folds every eligible repeated run" contract that the
+    default v2 engine (:func:`collapse_optimizer._maximal_legal_runs`)
+    already honors.
 
     Parameters
     ----------
@@ -927,7 +990,8 @@ def _iter_collapsible_runs(
     Yields
     ------
     tuple[str, ...]
-        One run of at least :data:`RUN_FOLD_MIN_LENGTH` addresses.
+        One run of at least :data:`RUN_FOLD_MIN_LENGTH` addresses, with
+        uniform hidden members.
     """
 
     current_key: tuple[str, str] | None = None
@@ -944,8 +1008,7 @@ def _iter_collapsible_runs(
         if not selected:
             if allow_selected_descendant:
                 continue
-            if len(current_run) >= RUN_FOLD_MIN_LENGTH:
-                yield tuple(current_run)
+            yield from _split_run_by_hidden_uniformity(trace, tuple(current_run))
             current_key = None
             current_descendant_only_num_layers = None
             current_has_direct_selection = False
@@ -973,14 +1036,12 @@ def _iter_collapsible_runs(
             if not current_has_direct_selection:
                 current_descendant_only_num_layers = num_layers
             continue
-        if len(current_run) >= RUN_FOLD_MIN_LENGTH:
-            yield tuple(current_run)
+        yield from _split_run_by_hidden_uniformity(trace, tuple(current_run))
         current_key = key
         current_descendant_only_num_layers = None if directly_selected else num_layers
         current_has_direct_selection = directly_selected
         current_run = [address]
-    if len(current_run) >= RUN_FOLD_MIN_LENGTH:
-        yield tuple(current_run)
+    yield from _split_run_by_hidden_uniformity(trace, tuple(current_run))
 
 
 def _iter_collapsible_child_path_runs(

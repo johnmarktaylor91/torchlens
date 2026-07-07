@@ -82,6 +82,50 @@ class RepeatedResidual(torch.nn.Module):
         return self.out(x)
 
 
+class VariableResidualBlock(torch.nn.Module):
+    """Residual block whose internal depth is constructor-controlled."""
+
+    def __init__(self, width: int = 8, extra_layers: int = 0) -> None:
+        """Initialize a block with ``extra_layers`` additional Linear+ReLU pairs."""
+
+        super().__init__()
+        layers: list[torch.nn.Module] = [torch.nn.Linear(width, width), torch.nn.ReLU()]
+        for _ in range(extra_layers):
+            layers.extend([torch.nn.Linear(width, width), torch.nn.ReLU()])
+        self.net = torch.nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.net(x) + x
+
+
+class OddHiddenMemberStack(torch.nn.Module):
+    """Same-class residual run with one structurally-odd block at a hidden position.
+
+    All blocks share ``class_name`` and output shape (so they are eligible to
+    group into one run), but ``odd_index`` has extra internal layers/params
+    -- a genuinely different module that must never be silently folded into
+    a "+N more" box as a hidden member.
+    """
+
+    def __init__(self, total: int = 7, odd_index: int = 3, width: int = 8) -> None:
+        """Initialize ``total`` blocks, all uniform except ``odd_index``."""
+
+        super().__init__()
+        self.blocks = torch.nn.ModuleList(
+            VariableResidualBlock(width=width, extra_layers=(2 if i == odd_index else 0))
+            for i in range(total)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run all blocks in sequence."""
+
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
 class DimStepBlock(torch.nn.Module):
     """Convolutional block whose channel dimensions may change."""
 
@@ -1701,6 +1745,41 @@ def test_auto_collapse_run_fold_folds_residual_mix_without_digest_key() -> None:
             "features.6",
         )
         assert folds["features.3"].hidden_member_composition["hidden_with_residual_join"] == 3
+    finally:
+        trace.cleanup()
+
+
+def test_auto_collapse_fold_runs_true_splits_run_around_odd_hidden_member() -> None:
+    """``fold_runs=True`` folds the maximal legal sub-runs around an odd hidden member.
+
+    Regression for the round-3 honesty gate's own adjacent gap: pre-fix,
+    ``_iter_collapsible_runs`` (the "shared substrate" v1 grouper reachable
+    via ``fold_runs=True`` or a custom ``collapse_fn``, as opposed to the
+    default v2 optimizer's ``_maximal_legal_runs``) yielded exactly one
+    whole-run candidate per class/stem group with no backtracking, so
+    ``_run_fold_hidden_members_uniform`` rejecting that single candidate
+    (because ``blocks.3`` is structurally odd) meant *zero* folds for the
+    entire 7-block run -- even though ``(blocks.0, blocks.1, blocks.2)`` and
+    ``(blocks.3, blocks.4, blocks.5, blocks.6)`` are each independently
+    legal, hidden-uniform runs, exactly as the default v2 engine already
+    handles for the identical input.
+    """
+
+    trace = _trace(OddHiddenMemberStack(total=7, odd_index=3), torch.randn(2, 8))
+    try:
+        folds = resolve_run_folds(trace, _select_blocks_child, fold_runs=True)
+
+        assert folds["blocks.0"].addresses == ("blocks.0", "blocks.1", "blocks.2")
+        assert folds["blocks.3"].addresses == (
+            "blocks.3",
+            "blocks.4",
+            "blocks.5",
+            "blocks.6",
+        )
+        assert folds["blocks.3"].representative == "blocks.3"
+        # The odd block is only ever the visible representative of its own
+        # fold -- it must never appear as a *hidden* member of any fold.
+        assert all("blocks.3" not in fold.addresses[1:] for fold in folds.values())
     finally:
         trace.cleanup()
 
