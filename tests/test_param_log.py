@@ -738,10 +738,14 @@ class TestParamRefCleared:
     def test_param_ref_cleared_after_cleanup(self):
         model = _SimpleLinear()
         mh = trace_fn(model, torch.randn(2, 10))
-        for pl in mh.param_logs:
+        # Capture the ParamLog objects BEFORE cleanup: iterating ``mh.param_logs``
+        # rehydrates ``_param_ref`` on access, so we must assert against the same
+        # captured objects, not a fresh re-iteration (which would repopulate it).
+        param_logs = list(mh.param_logs)
+        for pl in param_logs:
             assert pl._param_ref is not None
         mh.cleanup()
         # GC-1 (discriminating): cleanup must actually release the cached param refs.
         # Without this post-cleanup assertion the test passes even if cleanup() is a no-op.
-        for pl in mh.param_logs:
+        for pl in param_logs:
             assert pl._param_ref is None
