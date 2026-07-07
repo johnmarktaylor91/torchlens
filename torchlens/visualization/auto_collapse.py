@@ -494,6 +494,8 @@ def resolve_run_folds(
         for run in _iter_collapsible_runs(trace, flow_addresses, eligibility_collapse_fn):
             if not _run_fold_is_legal(run, graph):
                 continue
+            if not _run_fold_hidden_members_uniform(trace, run):
+                continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
             candidate_addresses.update(run)
@@ -513,6 +515,8 @@ def resolve_run_folds(
             )
             if not _run_fold_is_legal(run, run_graph):
                 continue
+            if not _run_fold_hidden_members_uniform(trace, run):
+                continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
             candidate_addresses.update(run)
@@ -525,6 +529,8 @@ def resolve_run_folds(
             if any(address in candidate_addresses for address in run):
                 continue
             if not _run_fold_is_legal(run, graph):
+                continue
+            if not _run_fold_hidden_members_uniform(trace, run):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
@@ -827,6 +833,72 @@ def _normalized_internal_topology(
                 continue
             edges.add((parent_index, index_by_label[child_label]))
     return tuple(sorted(edges))
+
+
+def _module_structural_signature(module: "Module") -> tuple[int, int, int, int]:
+    """Return a per-module structural fingerprint for fold-honesty checks.
+
+    Two modules are only considered structurally interchangeable for the
+    "+N more" run-fold ellipsis when this fingerprint matches exactly. It is
+    used to require that the *hidden* members of a fold (every member except
+    the visible representative) share one structure, so a same-class,
+    same-output-shape sibling with genuinely different internals (extra
+    layers/params) can never be silently hidden inside a ``+N more`` box that
+    claims uniformity.
+
+    Parameters
+    ----------
+    module:
+        Module to fingerprint.
+
+    Returns
+    -------
+    tuple[int, int, int, int]
+        ``(num_layers, num_params, num_params_trainable, num_params_frozen)``.
+    """
+
+    return (
+        int(getattr(module, "num_layers", 0) or 0),
+        int(getattr(module, "num_params", 0) or 0),
+        int(getattr(module, "num_params_trainable", 0) or 0),
+        int(getattr(module, "num_params_frozen", 0) or 0),
+    )
+
+
+def _run_fold_hidden_members_uniform(trace: "Trace", addresses: Sequence[str]) -> bool:
+    """Return whether every hidden run member shares one structural signature.
+
+    A run fold renders the first member (``addresses[0]``) as a visible
+    representative box and elides the rest behind a ``... +N more <class>``
+    ellipsis. That ellipsis claims the hidden members are interchangeable, so
+    the fold is only honest when every hidden member
+    (``addresses[1:]``) has the same structural fingerprint
+    (:func:`_module_structural_signature`). The representative itself may
+    differ (its own stats stay visible) -- e.g. a MobileNetV2 stage whose
+    first block changes channel width before a plateau of identical residual
+    blocks. When a genuinely-different module (extra conv, different param
+    count) would be hidden, this returns ``False`` and the fold is rejected.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the modules.
+    addresses:
+        Folded run addresses, representative first.
+
+    Returns
+    -------
+    bool
+        Whether the hidden members are structurally uniform.
+    """
+
+    hidden = addresses[1:]
+    if len(hidden) <= 1:
+        return True
+    signatures = {
+        _module_structural_signature(cast("Module", trace.modules[address])) for address in hidden
+    }
+    return len(signatures) == 1
 
 
 def _iter_collapsible_runs(

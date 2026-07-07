@@ -23,6 +23,7 @@ from .auto_collapse import (
     _module_output_shapes_equal,
     _readable_band_high,
     _rendered_module_hidden_counts,
+    _run_fold_hidden_members_uniform,
     _run_fold_is_chain_interval,
     _run_fold_is_legal,
     _run_span_allows_fold,
@@ -2356,7 +2357,11 @@ def _maximal_legal_runs(
                 break
             candidate.append(address)
             run = tuple(candidate)
-            if len(run) >= RUN_FOLD_MIN_LENGTH and _run_fold_is_legal(run, graph):
+            if (
+                len(run) >= RUN_FOLD_MIN_LENGTH
+                and _run_fold_is_legal(run, graph)
+                and _run_fold_hidden_members_uniform(state.trace, run)
+            ):
                 best = run
         if best:
             runs.append(best)
