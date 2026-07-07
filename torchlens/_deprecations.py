@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Final, TypeVar, cast
-
-T = TypeVar("T")
+from typing import Final
 
 
 class MissingType:
@@ -51,47 +49,3 @@ def warn_deprecated_alias(old: str, new: str) -> None:
         DeprecationWarning,
         stacklevel=6,
     )
-
-
-def resolve_renamed_kwarg(
-    *,
-    old_name: str,
-    new_name: str,
-    old_value: T | MissingType,
-    new_value: T | MissingType,
-    default: T,
-) -> T:
-    """Resolve a deprecated kwarg alias to its canonical replacement.
-
-    Parameters
-    ----------
-    old_name:
-        Deprecated kwarg name.
-    new_name:
-        Canonical replacement kwarg name.
-    old_value:
-        Value supplied via the deprecated kwarg, or ``MISSING``.
-    new_value:
-        Value supplied via the canonical kwarg, or ``MISSING``.
-    default:
-        Public default used when neither spelling is supplied.
-
-    Returns
-    -------
-    T
-        Resolved kwarg value.
-
-    Raises
-    ------
-    TypeError
-        If both the deprecated and canonical spellings were supplied.
-    """
-
-    if old_value is not MISSING and new_value is not MISSING:
-        raise TypeError(f"kwarg {old_name} deprecated, use {new_name}; do not pass both")
-    if old_value is not MISSING:
-        warn_deprecated_alias(old_name, new_name)
-        return cast(T, old_value)
-    if new_value is not MISSING:
-        return cast(T, new_value)
-    return default

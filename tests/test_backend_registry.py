@@ -36,7 +36,7 @@ from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.backends.default_specs import (
-    _is_foreign_tensor_leaf,
+    _contains_other_backend_tensor,
     _jax_can_handle,
     _mlx_can_handle,
     _paddle_can_handle,
@@ -663,8 +663,8 @@ def test_tf_foreign_leaf_guard_covers_mlx_and_tinygrad_modules() -> None:
     MlxArray = type("array", (), {"__module__": "mlx.core"})
     TinygradTensor = type("Tensor", (), {"__module__": "tinygrad.tensor"})
 
-    assert _is_foreign_tensor_leaf(MlxArray())
-    assert _is_foreign_tensor_leaf(TinygradTensor())
+    assert _contains_other_backend_tensor("tf", MlxArray(), None)
+    assert _contains_other_backend_tensor("tf", TinygradTensor(), None)
 
 
 def test_tf_detector_foreign_leaf_guard_runs_before_tensorflow_import(

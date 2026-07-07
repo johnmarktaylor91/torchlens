@@ -151,6 +151,18 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module 'torchlens.errors' has no attribute {name!r}")
 
 
+def __dir__() -> list[str]:
+    """Return visible ``torchlens.errors`` attributes.
+
+    Returns
+    -------
+    list[str]
+        Sorted eager globals plus lazily-resolved legacy exception names.
+    """
+
+    return sorted([*globals(), *_LEGACY_EXCEPTION_PATHS])
+
+
 __all__ = [
     "CaptureError",
     "CompatibilityError",

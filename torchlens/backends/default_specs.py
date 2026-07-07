@@ -352,41 +352,6 @@ def _contains_tf_tensor(input_args: object, input_kwargs: object, tf: object) ->
     )
 
 
-def _contains_foreign_tensor(value: object) -> bool:
-    """Return whether nested public inputs contain non-TF tensor leaves.
-
-    Parameters
-    ----------
-    value:
-        Candidate public input tree.
-
-    Returns
-    -------
-    bool
-        True for torch, JAX, MLX, tinygrad, or Paddle tensor leaves.
-    """
-
-    return any(_is_foreign_tensor_leaf(leaf) for leaf in _simple_leaves(value))
-
-
-def _is_foreign_tensor_leaf(leaf: object) -> bool:
-    """Return whether a leaf belongs to a non-TensorFlow tensor runtime.
-
-    Parameters
-    ----------
-    leaf:
-        Candidate public input leaf.
-
-    Returns
-    -------
-    bool
-        True for torch, JAX, MLX, tinygrad, or Paddle tensor leaves.
-    """
-
-    family = _tensor_backend_family(leaf)
-    return family is not None and family != "tf"
-
-
 def _contains_other_backend_tensor(
     backend_name: str,
     input_args: object,

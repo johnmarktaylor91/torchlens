@@ -448,6 +448,13 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
         ``AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED`` alias, to boolean availability.
     """
 
+    # HAS_DYNAMO_OPTIMIZED_MODULE is lazily probed (see
+    # get_dynamo_optimized_module_type) to avoid an unconditional
+    # torch._dynamo import on the capture hot path. Diagnostic snapshot
+    # consumers (tl.compat.report(), tl.utils.doctor()) are not on that hot
+    # path, so force the probe here to report the real capability instead of
+    # the pre-probe placeholder.
+    get_dynamo_optimized_module_type()
     snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
     snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
     return snapshot

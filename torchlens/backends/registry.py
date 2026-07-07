@@ -282,6 +282,7 @@ _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES: tuple[str, ...] = (
     "seed_rng",
     "set_capture_producer_policy",
     "snapshot_rng",
+    "start_session",
     "supports_backward_capture",
     "tensor_ref",
     "unwrap",
