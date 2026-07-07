@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.experimental.dagua import NodeSpec
 from torchlens.data_classes.layer import Layer
+from torchlens.visualization import node_spec as node_spec_mod
+from torchlens.visualization.overlays import external_overlay_value
 
 
 def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
@@ -108,6 +112,39 @@ def test_node_spec_fn_returning_none_uses_default(tmp_path: Any) -> None:
     callback_dot = _render_dot(log, tmp_path / "callback", node_spec_fn=node_spec_fn)
 
     assert callback_dot == default_dot
+
+
+def test_intervention_node_spec_matches_short_label(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Intervention styling accepts short layer labels."""
+
+    def fake_labels(trace: Any, *, show_cone: bool) -> tuple[set[str], set[str]]:
+        """Return a short-label intervention site."""
+
+        return {"relu"}, set()
+
+    monkeypatch.setattr(node_spec_mod, "intervention_site_and_cone_labels", fake_labels)
+    node_spec_fn = node_spec_mod.make_intervention_node_spec_fn(
+        object(),
+        show_cone=False,
+        graph_overrides=None,
+        user_node_spec_fn=None,
+    )
+    layer = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
+
+    assert node_spec_fn is not None
+    styled = node_spec_fn(layer, default)
+
+    assert styled.color == node_spec_mod.INTERVENTION_SITE_COLOR
+    assert styled.penwidth == 3.0
+
+
+def test_external_overlay_value_matches_short_label() -> None:
+    """External overlay scores can be keyed by short label."""
+
+    node = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+
+    assert external_overlay_value(node, {"relu": 7}) == 7
 
 
 def test_html_special_chars_escaped(tmp_path: Any) -> None:

@@ -67,3 +67,15 @@ def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:
     assert "exception" in dot
     with pytest.raises(RecordContextFieldError):
         tl.fastlog.dry_run(model, x, keep_op=bad_predicate)
+
+
+def test_preview_nodes_include_short_label_keys() -> None:
+    """Preview node lookup includes pass-free short labels."""
+
+    model = StaticGraph()
+    x = torch.randn(1, 4)
+    trace = tl.trace(model, x)
+
+    preview_nodes = _build_preview_nodes(trace, None)
+
+    assert "relu_1" in preview_nodes

@@ -63,6 +63,53 @@ class _LinearModel(torch.nn.Module):
         return self.linear(x)
 
 
+class _TwoModuleModel(torch.nn.Module):
+    """Model with two module boundaries for selector specificity tests."""
+
+    def __init__(self) -> None:
+        """Initialize submodules."""
+
+        super().__init__()
+        self.a = torch.nn.ReLU()
+        self.b = torch.nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run two modules in sequence.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Sigmoid of the relu output.
+        """
+
+        return self.b(self.a(x))
+
+
+class _ChunkModel(torch.nn.Module):
+    """Model with a tuple-output operation."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """Return two chunks.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, ...]
+            Chunk outputs.
+        """
+
+        return torch.chunk(torch.relu(x), 2, dim=1)
+
+
 def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     """Return a zeroed out.
 
@@ -154,6 +201,45 @@ def test_module_selector_matches_capture_time_module_context() -> None:
     assert hooked_layers
     assert hooked_layers[0].out is not None
     assert torch.count_nonzero(hooked_layers[0].out) == 0
+
+
+def test_module_selector_does_not_overmatch_other_live_modules() -> None:
+    """Live module selectors only match the requested module boundary."""
+
+    log = tl.trace(
+        _TwoModuleModel(),
+        torch.tensor([-1.0, 2.0]),
+        intervention_ready=True,
+        hooks={tl.module("b"): _zero_hook},
+    )
+
+    hooked_labels = {layer.layer_label for layer in log.layer_list if layer.interventions}
+
+    assert "sigmoid_1_2" in hooked_labels
+    assert "relu_1_1" not in hooked_labels
+
+
+def test_live_regex_and_output_at_selectors_execute() -> None:
+    """Live regex and output-path selectors are executable hook selectors."""
+
+    regex_log = tl.trace(
+        _ReluReturnModel(),
+        torch.randn(2, 3),
+        intervention_ready=True,
+        hooks={tl.regex("relu"): _zero_hook},
+    )
+    chunk_log = tl.trace(
+        _ChunkModel(),
+        torch.randn(2, 4),
+        intervention_ready=True,
+        hooks={tl.output_at(1): _zero_hook},
+    )
+
+    assert any(layer.interventions for layer in regex_log.layer_list if layer.func_name == "relu")
+    hooked_chunk_paths = {
+        layer.container_path for layer in chunk_log.layer_list if layer.interventions
+    }
+    assert len(hooked_chunk_paths) == 1
 
 
 @pytest.mark.smoke

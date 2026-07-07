@@ -268,6 +268,13 @@ def _hook_directions(
         One or two concrete hook directions.
     """
 
+    if helper_spec is not None and requested_direction in {"forward", "backward"}:
+        intrinsic_direction = helper_spec.direction or helper_spec.kind
+        if intrinsic_direction != "both" and intrinsic_direction != requested_direction:
+            raise HelperMountError(
+                f"{helper_spec.name} is intrinsically {intrinsic_direction!r} and cannot be "
+                f"attached with direction={requested_direction!r}."
+            )
     if requested_direction == "both":
         return ("forward", "backward")
     if requested_direction in {"forward", "backward"}:
@@ -1350,10 +1357,29 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
         return _live_module_matches(site, str(value))
     if kind == "output":
         return _live_output_matches(site, value)
+    if kind == "output_at":
+        from .resolver import _output_path_matches
+
+        return _output_path_matches(
+            tuple(getattr(site, "container_path", ()) or ()),
+            tuple(value),
+        )
+    if kind == "input_at":
+        from .selectors import _input_path_matches
+
+        return _input_path_matches(site, tuple(value))
     if kind == "contains":
         if bool(getattr(site, "_tl_module_boundary", False)):
             return False
         return str(value).lower() in str(getattr(site, "_layer_label_raw", "")).lower()
+    if kind == "regex":
+        return re.search(str(value), str(getattr(site, "_layer_label_raw", ""))) is not None
+    if kind == "func_transform":
+        if value is None:
+            return bool(getattr(site, "is_transform", False))
+        return bool(getattr(site, "is_transform", False)) and str(
+            getattr(site, "transform_kind", "")
+        ) == str(value)
     if kind == "in_module":
         return _live_module_matches(site, str(value))
     if kind == "predicate":
@@ -1453,9 +1479,9 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
     """
 
     if module_pass.startswith("("):
-        return address in module_pass
-    address = module_pass.rsplit(":", 1)[0]
-    return module_pass == address or address == address
+        return f"'{address}'" in module_pass or f'"{address}"' in module_pass
+    module_address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or module_address == address
 
 
 def _looks_like_finalized_label(label_value: str) -> bool:

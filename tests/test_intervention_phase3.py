@@ -10,6 +10,7 @@ import torch
 
 import torchlens as tl
 from torchlens.intervention.errors import (
+    HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     HookValueError,
@@ -17,6 +18,7 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
 from torchlens.intervention.runtime import _execute_hook
+from torchlens.intervention.sites import sites
 from torchlens.intervention.types import HelperSpec
 
 
@@ -178,6 +180,42 @@ def test_normalizer_accepts_supported_shapes_in_order() -> None:
     assert [entry.metadata["attach_order"] for entry in mapping_entries] == [0, 1]
     assert [entry.metadata["attach_order"] for entry in list_entries] == [0, 1]
     assert pair_entries[0].site_target == tl.label("x")
+
+
+def test_helper_direction_override_contradiction_raises() -> None:
+    """Backward-only helpers cannot be mounted as forward hooks."""
+
+    with pytest.raises(HelperMountError, match="intrinsically 'backward'"):
+        normalize_hook_plan(tl.func("relu"), tl.grad_zero(), direction="forward")
+
+
+def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
+    """Callable site predicates remain part of composed ``sites(..., ops=...)`` selectors."""
+
+    class _Relu(torch.nn.Module):
+        """Small model with a relu op."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply a relu.
+
+            Parameters
+            ----------
+            x:
+                Input tensor.
+
+            Returns
+            -------
+            torch.Tensor
+                ReLU output.
+            """
+
+            return torch.relu(x)
+
+    log = tl.trace(_Relu(), torch.randn(1, 3), intervention_ready=True)
+
+    selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
+
+    assert selected.labels() == ()
 
 
 @pytest.mark.smoke

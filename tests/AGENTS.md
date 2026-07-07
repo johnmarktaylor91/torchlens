@@ -48,7 +48,7 @@ small inputs, vector/2D/complex inputs, and output directories. Model fixtures/c
 primarily in `tests/example_models.py`.
 
 ## Output Directories
-All generated outputs go under `tests/test_outputs/` (gitignored):
+All generated outputs go under `tests/generated_outputs/` (gitignored):
 - `reports/` for coverage, aesthetics, profiling.
 - `visualizations/` for rendered graph artifacts.
 

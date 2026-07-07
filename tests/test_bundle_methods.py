@@ -77,6 +77,24 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
     return tl.bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
 
 
+def test_bundle_call_accessors_resolve_listed_labels() -> None:
+    """Bundle module/grad-fn call accessors can index labels they advertise."""
+
+    torch.manual_seed(0)
+    model = _TinyRelu()
+    x = torch.randn(2, 3, requires_grad=True)
+    trace = tl.trace(model, x, intervention_ready=True)
+    loss = trace[trace.output_layers[0]].out.sum()
+    trace.log_backward(loss)
+    bundle = tl.bundle({"first": trace, "second": trace}, baseline="first")
+
+    module_label = next(iter(bundle.module_calls))
+    grad_fn_label = next(iter(bundle.grad_fn_calls))
+
+    assert type(bundle.module_calls[module_label]).__name__ == "SuperModuleCall"
+    assert type(bundle.grad_fn_calls[grad_fn_label]).__name__ == "SuperGradFnCall"
+
+
 def _three_model_pairs() -> Iterator[tl.Bundle]:
     """Yield the three model pairs required by Phase 8.
 

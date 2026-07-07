@@ -183,17 +183,20 @@ def test_layers_to_save_supports_intervention_ready_and_hooks() -> None:
         layers_to_save=["linear"],
         intervention_ready=True,
     )
+    observer = tl.tap(tl.func("relu"))
     hooked = tl.trace(
         TinyLinear(),
         x,
         layers_to_save=["linear"],
-        hooks=tl.tap(tl.func("relu")),
+        hooks=observer,
     )
     assert any(
         op.has_saved_activation and op.layer_type == "linear"
         for op in intervention_ready.layer_list
     )
     assert any(op.has_saved_activation and op.layer_type == "linear" for op in hooked.layer_list)
+    assert observer.records
+    assert all(record.site_label is not None for record in observer.records)
 
 
 def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:

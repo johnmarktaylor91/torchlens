@@ -515,9 +515,6 @@ def _collapsed_module_should_show_remainder(
         return False
     plan = getattr(collapse_fn, "_torchlens_v2_plan", None)
     if isinstance(plan, CollapsePlan):
-        result = getattr(collapse_fn, "_torchlens_v2_result", None)
-        if getattr(result, "level", None) is None:
-            return False
         visible_raw_ops = {_raw_op_label(node) for node in plan.nodes if isinstance(node, RawOp)}
         return any(op.layer_label in visible_raw_ops for op in surfaced)
     return getattr(collapse_fn, "_torchlens_v2_mode", None) == "max"

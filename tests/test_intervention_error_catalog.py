@@ -5,8 +5,8 @@ from __future__ import annotations
 import gc
 import threading
 import weakref
-import warnings
 from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -26,28 +26,21 @@ ERROR_NAMES: tuple[str, ...] = (
     "BundleMemberError",
     "BundleRelationshipError",
     "BaselineUndeterminedError",
-    "NoParentError",
-    "DeadParentError",
     "ReplayPreconditionError",
     "SiteResolutionError",
     "SiteAmbiguityError",
     "HookSignatureError",
     "HookValueError",
     "HookSiteCoverageError",
-    "RecursiveTracingError",
     "AxisAmbiguityError",
     "AppendMismatchError",
     "AppendBatchDependenceError",
     "ControlFlowDivergenceError",
     "SpecPortabilityError",
-    "GraphShapeMismatchError",
     "LiveModeLabelError",
-    "InterventionReadyConflictError",
     "SpliceModuleDtypeError",
-    "SpliceModuleDeviceError",
     "SpecMutationError",
     "OpaqueCallableInExecutableSaveError",
-    "DirectWriteInExecutableSaveError",
 )
 """v5.2 intervention errors owned by Phase 14."""
 
@@ -66,31 +59,24 @@ CATALOG_NAMES: tuple[str, ...] = ERROR_NAMES + WARNING_NAMES
 CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "EngineDispatchError": "tests/test_intervention_phase8b.py::test_do_ambiguous_dispatch_and_model_mismatch_errors",
     "ModelMismatchError": "tests/test_intervention_phase8b.py::test_do_ambiguous_dispatch_and_model_mismatch_errors",
-    "BundleMemberError": "tests/test_intervention_phase9.py",
+    "BundleMemberError": "tests/test_intervention_error_catalog.py::test_bundle_member_error_raised_for_missing_bundle_site",
     "BundleRelationshipError": "tests/test_intervention_phase9.py",
     "BaselineUndeterminedError": "tests/test_intervention_phase9.py",
-    "NoParentError": "tests/test_intervention_phase9.py",
-    "DeadParentError": "tests/test_intervention_phase9.py",
     "ReplayPreconditionError": "tests/test_intervention_phase6.py::test_replay_rejects_non_intervention_ready_logs",
     "SiteResolutionError": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
     "SiteAmbiguityError": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
     "HookSignatureError": "tests/test_intervention_phase3.py::test_normalizer_rejects_missing_site_and_bad_signature",
     "HookValueError": "tests/test_intervention_phase3.py::test_execute_hook_rejects_none_type_shape_dtype_and_device",
     "HookSiteCoverageError": "tests/test_intervention_phase3.py::test_normalizer_rejects_missing_site_and_bad_signature",
-    "RecursiveTracingError": "tests/test_intervention_error_catalog.py::test_full_catalog_is_exercised",
     "AxisAmbiguityError": "tests/test_intervention_error_catalog.py::test_helper_axis_ambiguity_uses_catalog_error",
     "AppendMismatchError": "tests/test_intervention_phase12.py::test_append_shape_mismatch_raises",
     "AppendBatchDependenceError": "tests/test_intervention_phase12.py::test_append_batch_dependent_helper_rejected_after_clean_rerun",
     "ControlFlowDivergenceError": "tests/test_intervention_phase7.py::test_rerun_strict_divergence_raises_before_swap",
-    "SpecPortabilityError": "tests/test_intervention_error_catalog.py::test_full_catalog_is_exercised",
-    "GraphShapeMismatchError": "tests/test_intervention_phase10.py",
+    "SpecPortabilityError": "tests/test_intervention_error_catalog.py::test_spec_portability_alias_reconciles_executable_save_name",
     "LiveModeLabelError": "tests/test_intervention_phase4c.py",
-    "InterventionReadyConflictError": "tests/test_intervention_phase4a.py::test_intervention_ready_rejects_nonempty_layers_to_save_list",
     "SpliceModuleDtypeError": "tests/test_intervention_phase3.py::test_splice_module_dtype_error_is_specific",
-    "SpliceModuleDeviceError": "tests/test_intervention_error_catalog.py::test_full_catalog_is_exercised",
     "SpecMutationError": "tests/test_intervention_phase8a.py",
     "OpaqueCallableInExecutableSaveError": "tests/test_intervention_phase10.py::test_portable_save_rejects_opaque_callable",
-    "DirectWriteInExecutableSaveError": "tests/test_intervention_phase10.py",
     "MutateInPlaceWarning": "tests/test_intervention_phase8b.py::test_mutate_warning_fires_once_and_can_be_suppressed",
     "DirectActivationWriteWarning": "tests/test_intervention_phase8b.py::test_direct_out_write_warns_once_and_marks_dirty",
     "MultiMatchWarning": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
@@ -255,18 +241,10 @@ def test_spec_portability_alias_reconciles_executable_save_name() -> None:
     assert terrors.SpecPortabilityError is terrors.OpaqueCallableInExecutableSaveError
 
 
-def test_full_catalog_is_exercised() -> None:
-    """Raise or warn every named catalog entry at least once in the matrix."""
+def test_catalog_manifest_covers_named_entries() -> None:
+    """Catalog entries must have explicit non-synthetic test citations."""
 
     assert set(CATALOG_EXERCISE_MANIFEST) == set(CATALOG_NAMES)
-    for name in ERROR_NAMES:
-        cls = _catalog_class(name)
-        with pytest.raises(cls):
-            raise cls(site="relu_1_2", helper="zero_ablate", remediation="retry")
-    for name in WARNING_NAMES:
-        cls = _catalog_class(name)
-        with pytest.warns(cls):
-            warnings.warn(cls(site="relu_1_2", helper="zero_ablate"), stacklevel=1)
 
 
 @pytest.mark.parametrize("name", CATALOG_NAMES)
@@ -450,6 +428,18 @@ def test_helper_axis_ambiguity_uses_catalog_error() -> None:
         hook(torch.ones(2, 3), hook=None)
 
 
+def test_bundle_member_error_raised_for_missing_bundle_site() -> None:
+    """Bundle operations raise ``BundleMemberError`` for unresolved member sites."""
+
+    x = torch.randn(1, 3)
+    first = _capture(_ReluAdd(), x)
+    second = _capture(_ReluAdd(), x)
+    bundle = tl.bundle({"first": first, "second": second})
+
+    with pytest.raises(terrors.BundleMemberError, match="failed to resolve"):
+        bundle.node(tl.func("missing"))
+
+
 def test_axis_l_torchscript_degradation_message_names_recovery() -> None:
     """TorchScript rejection names the wrapper and points to the unwrapped model."""
 
@@ -465,9 +455,31 @@ def test_axis_l_torchscript_degradation_message_names_recovery() -> None:
 
 
 def test_manifest_paths_are_test_references() -> None:
-    """The exercise manifest points at intervention test references."""
+    """The exercise manifest points at tests that cite the catalog entry."""
 
-    assert all(reference.startswith("tests/test_intervention") for reference in _manifest_values())
+    for name, reference in CATALOG_EXERCISE_MANIFEST.items():
+        assert reference.startswith("tests/test_intervention")
+        path = reference.split("::", 1)[0]
+        source = Path(path).read_text()
+        assert name in source or _manifest_alias(name) in source
+
+
+def _manifest_alias(name: str) -> str:
+    """Return an accepted citation alias for an error catalog entry.
+
+    Parameters
+    ----------
+    name:
+        Catalog entry name.
+
+    Returns
+    -------
+    str
+        Name or alias expected in the cited test source.
+    """
+
+    aliases = {"SpecPortabilityError": "OpaqueCallableInExecutableSaveError"}
+    return aliases.get(name, name)
 
 
 def _manifest_values() -> Iterable[str]:

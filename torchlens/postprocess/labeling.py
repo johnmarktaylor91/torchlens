@@ -476,6 +476,8 @@ def _rename_label_dataclass(value: Any, mapping: Dict[str, str]) -> Any:
         "site_label",
         "layer_label",
     }
+    if callable(value):
+        return value
     if isinstance(value, tuple):
         return tuple(_rename_label_dataclass(item, mapping) for item in value)
     if isinstance(value, list):

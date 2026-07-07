@@ -180,7 +180,9 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
         )
         preview_node = _evaluate_preview_node(op_log, ctx, predicate)
         preview_nodes[getattr(op_log, "layer_label", ctx.label)] = preview_node
-        preview_nodes[getattr(op_log, "layer_label", ctx.label)] = preview_node
+        short_label = getattr(op_log, "layer_label_short", None)
+        if isinstance(short_label, str):
+            preview_nodes[short_label] = preview_node
         history.append(ctx)
     return preview_nodes
 

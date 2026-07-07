@@ -380,7 +380,7 @@ class SuperModuleCallAccessor(SuperAccessor["ModuleCall", SuperModuleCall]):
         """
 
         try:
-            resolved = trace.modules[label]
+            resolved = trace.module_calls[label]
         except (KeyError, ValueError):
             return None
         return cast("ModuleCall", resolved) if type(resolved).__name__ == "ModuleCall" else None
@@ -437,7 +437,7 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
         """
 
         try:
-            resolved = trace.grad_fns[label]
+            resolved = trace.grad_fn_calls[label]
         except (KeyError, ValueError):
             return None
         return cast("GradFnCall", resolved) if type(resolved).__name__ == "GradFnCall" else None

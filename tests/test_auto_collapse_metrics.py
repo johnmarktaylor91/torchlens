@@ -30,7 +30,15 @@ from torchlens.visualization.auto_collapse import (
     resolve_run_folds,
 )
 from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import OpSegment, RenderContext, count, plan_from_v1
+from torchlens.visualization.collapse_plan import (
+    CollapsePlan,
+    OpSegment,
+    RawOp,
+    RenderContext,
+    count,
+    plan_from_v1,
+)
+from torchlens.visualization._render_edges import _collapsed_module_should_show_remainder
 
 
 SVG_NODE_RE = re.compile(r'class="node"')
@@ -1965,6 +1973,36 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         assert f"{remainder_params} params" in block_line
         assert remainder_layers + len(surfaced_ops) == module.num_layers
         assert remainder_params + surfaced_params == module.num_params
+    finally:
+        trace.cleanup()
+
+
+def test_auto_plan_remainder_honesty_does_not_require_max_level() -> None:
+    """Auto-mode v2 plans use plan structure even when OptimizerResult.level is unset."""
+
+    trace = _trace(OwnOutputResidualModel(), torch.randn(1, 3, 8, 8))
+    try:
+        surfaced_ops = _atomic_own_output_ops(trace, "block")
+        module_call = trace.module_calls["block:1"]
+
+        def collapse_block(module: Any) -> bool:
+            """Select the fixture block as a collapsed module."""
+
+            return getattr(module, "address", None) == "block"
+
+        setattr(
+            collapse_block,
+            "_torchlens_v2_plan",
+            CollapsePlan((RawOp(surfaced_ops[0]),), RenderContext()),
+        )
+        setattr(collapse_block, "_torchlens_v2_result", type("Result", (), {"level": None})())
+
+        assert _collapsed_module_should_show_remainder(
+            trace,
+            "block",
+            module_call.ops,
+            collapse_block,
+        )
     finally:
         trace.cleanup()
 

@@ -107,7 +107,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
 # Recognised file extensions that callers may include on ``vis_outpath``.
 # Mirrors the legacy list in ``rendering.draw`` (kept as a tuple
 # so it stays cheap and immutable).
-_KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff")
+_KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff", "dot")
 
 # Default subprocess timeout for Graphviz render calls. Mirrors the
 # legacy literal that lived inside ``rendering.draw``.

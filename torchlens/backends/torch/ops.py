@@ -1714,7 +1714,7 @@ def _apply_predicate_mode_interventions_to_outputs(
         from ...intervention.runtime import _apply_live_hooks
 
         with active_intervention_context(
-            intervention_spec=_st._active_intervention_spec,
+            intervention_spec=getattr(trace, "_intervention_spec", None),
             hook_plan=hook_entries,
         ):
             hooked, fire_results = _apply_live_hooks(
@@ -1855,7 +1855,7 @@ def _apply_predicate_intervention(
     from ...intervention.runtime import _apply_live_hooks
 
     with active_intervention_context(
-        intervention_spec=_st._active_intervention_spec,
+        intervention_spec=getattr(trace, "_intervention_spec", None),
         hook_plan=hook_entries,
     ):
         return _apply_live_hooks(

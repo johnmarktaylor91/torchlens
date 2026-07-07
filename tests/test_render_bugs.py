@@ -13,6 +13,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.trace import Trace
+from torchlens.visualization._render_dot import _strip_render_extension
+from torchlens.visualization.collapse_plan import RenderContext
+from torchlens.visualization.render_ir import build_render_ir
 from torchlens.visualization.rendering import GraphvizRenderError
 
 
@@ -134,6 +137,41 @@ def test_skip_fn_omits_unrolled_skipped_node(tmp_path: Path) -> None:
     )
 
     assert "relu_1_2" not in dot
+
+
+def test_render_ir_honors_skip_fn_without_run_folds() -> None:
+    """Render IR node/edge topology follows skip-spliced drawing topology."""
+
+    trace = tl.trace(_TinyRenderModel(), torch.randn(2, 3))
+
+    def skip_relu(layer: Any) -> bool:
+        """Skip relu layers."""
+
+        return getattr(layer, "layer_type", None) == "relu"
+
+    render_ir = build_render_ir(
+        trace,
+        collapse_fn=None,
+        run_folds=None,
+        context=RenderContext(skip_fn=skip_relu),
+    )
+
+    node_labels = {node.source_label for node in render_ir.nodes}
+    edge_originals = {
+        label for edge in render_ir.edges for label in edge.source_originals + edge.target_originals
+    }
+    assert "relu_1_2" not in node_labels
+    assert "relu_1_2" not in edge_originals
+    assert ("linear_1_1",) in {edge.source_originals for edge in render_ir.edges}
+    assert ("sum_1_3",) in {edge.target_originals for edge in render_ir.edges}
+
+
+def test_render_extension_stripping_is_case_insensitive_and_shared() -> None:
+    """Graphviz outpath normalization strips known extensions once."""
+
+    assert _strip_render_extension("/tmp/model.PDF") == "/tmp/model"
+    assert _strip_render_extension("/tmp/model.SVG") == "/tmp/model"
+    assert _strip_render_extension("/tmp/model.dot") == "/tmp/model"
 
 
 def test_hidden_buffer_update_node_is_not_rendered(tmp_path: Path) -> None:

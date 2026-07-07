@@ -13,10 +13,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.ir.container import TupleIndex
 from torchlens.intervention.errors import (
+    MultiMatchWarning,
     OpaqueCallableInExecutableSaveError,
     ReplayPreconditionError,
 )
+from torchlens.intervention.resolver import _selector_from_spec
 from torchlens.intervention.save import _write_tlspec_tensor_blob
 from torchlens.intervention.save import _sync_spec_records_from_log
 from torchlens.intervention.save import resolve_function_registry_key, save_intervention
@@ -61,6 +64,26 @@ class _TanhModel(nn.Module):
         """
 
         return torch.tanh(x) + 1
+
+
+class _ChunkModel(nn.Module):
+    """Small model with a tuple-output operation."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """Return two tensor chunks.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, ...]
+            Two chunks of the relu output.
+        """
+
+        return torch.chunk(torch.relu(x), 2, dim=1)
 
 
 def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Trace:
@@ -119,6 +142,8 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
     )
     path = tmp_path / "forward_records.tlspec"
 
+    assert log._intervention_spec.records
+
     log.save_intervention(path, level="portable")
     spec = tl.load_intervention_spec(path)
 
@@ -141,6 +166,8 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     )
     path = tmp_path / "predicate_intervention.tlspec"
 
+    assert log._intervention_spec.records
+
     log.save_intervention(path, level="portable")
     spec = tl.load_intervention_spec(path)
 
@@ -148,6 +175,61 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     assert spec.hook_specs
     assert spec.hook_specs[0].site_target.selector_kind == "label"
     assert spec.hook_specs[0].helper is not None
+
+
+def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> None:
+    """Tuple-output FireRecord container paths save and load at the default level."""
+
+    log = tl.trace(
+        _ChunkModel(),
+        torch.randn(2, 4),
+        intervention_ready=True,
+        hooks={tl.func("chunk"): tl.zero_ablate()},
+    )
+    path = tmp_path / "chunk_intervention.tlspec"
+
+    log.save_intervention(path)
+    spec = tl.load_intervention_spec(path)
+
+    assert {record.container_path for record in spec.records} == {
+        (TupleIndex(0),),
+        (TupleIndex(1),),
+    }
+
+
+def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path) -> None:
+    """Live ``tl.where`` hook specs save at every supported intervention level."""
+
+    for level in ("audit", "executable_with_callables", "portable"):
+        log = _log(_ReluModel(), torch.randn(2, 3))
+        log.attach_hooks(
+            tl.where(lambda ctx: ctx.func_name == "relu", name_hint="relu predicate"),
+            tl.zero_ablate(),
+            strict=False,
+            confirm_mutation=True,
+        )
+        path = tmp_path / f"where_{level}.tlspec"
+
+        log.save_intervention(path, level=level)
+
+        manifest = json.loads((path / "manifest.json").read_text())
+        assert manifest["spec_compat_info"]["target_manifest"][0]["resolved_status"] == (
+            "unresolved_nonportable"
+        )
+
+
+def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() -> None:
+    """TargetSpec rehydration supports output_at, input_at, and regex selectors."""
+
+    log = tl.trace(_ChunkModel(), torch.randn(2, 4), intervention_ready=True)
+
+    with pytest.warns(MultiMatchWarning):
+        output_labels = log.resolve_sites(tl.output_at(0).to_target_spec()).labels()
+    assert "chunk_1_2" in output_labels
+    with pytest.warns(MultiMatchWarning):
+        regex_labels = log.resolve_sites(tl.regex("chunk_[12]").to_target_spec()).labels()
+    assert regex_labels == ("chunk_1_2", "chunk_2_3")
+    assert repr(_selector_from_spec("input_at", (0,), {})) == "tl.input_at((0,))"
 
 
 def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> None:

@@ -41,21 +41,9 @@ def _strip_render_extension(vis_outpath: str) -> str:
         Path without a recognized render extension.
     """
 
-    split_outpath = vis_outpath.split(".")
-    if split_outpath[-1] in [
-        "pdf",
-        "png",
-        "jpg",
-        "svg",
-        "jpeg",
-        "bmp",
-        "pic",
-        "tif",
-        "tiff",
-        "dot",
-    ]:
-        return ".".join(split_outpath[:-1])
-    return vis_outpath
+    from ._render_utils import strip_known_extension
+
+    return strip_known_extension(vis_outpath)
 
 
 def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
@@ -397,20 +385,7 @@ def draw(
             "Must have all layers logged in order to render the graph; use show_model_graph."
         )
 
-    # Fix the filename if need be, to remove the extension:
-    split_outpath = vis_outpath.split(".")
-    if split_outpath[-1] in [
-        "pdf",
-        "png",
-        "jpg",
-        "svg",
-        "jpeg",
-        "bmp",
-        "pic",
-        "tif",
-        "tiff",
-    ]:
-        vis_outpath = ".".join(split_outpath[:-1])
+    vis_outpath = _strip_render_extension(vis_outpath)
 
     # Unrolled: iterate Op objects (one node per pass).
     # Rolled: iterate Layer objects (one node per logical layer, multi-pass
@@ -604,6 +579,7 @@ def draw(
             show_buffer_layers=show_buffer_layers,
             show_containers=show_containers,
             engine="dot",
+            skip_fn=skip_fn,
         ),
     )
     antiparallel_projected_edges = projected_antiparallel_endpoint_pairs(forward_render_ir)

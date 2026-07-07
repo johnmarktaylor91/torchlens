@@ -499,6 +499,69 @@ def _backward_intervention_spec_from_predicate(
     return spec
 
 
+def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None:
+    """Build an intervention spec for live hook-plan capture.
+
+    Parameters
+    ----------
+    hook_plan:
+        Normalized live hook entries.
+
+    Returns
+    -------
+    InterventionSpec | None
+        Spec carrying hook entries, or ``None`` when no hook plan exists.
+    """
+
+    if not hook_plan:
+        return None
+    spec = InterventionSpec()
+    for entry in hook_plan:
+        site_target = entry.site_target
+        target = (
+            site_target.to_target_spec()
+            if hasattr(site_target, "to_target_spec")
+            else TargetSpec("label", site_target)
+        )
+        if not any(existing.freeze() == target.freeze() for existing in spec.targets):
+            spec.targets.append(target)
+        spec.add_hook(
+            target,
+            entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
+            helper=entry.helper_spec,
+            metadata=dict(entry.metadata),
+        )
+    return spec
+
+
+def _merge_intervention_spec_hooks(
+    destination: InterventionSpec,
+    source: InterventionSpec | None,
+) -> InterventionSpec:
+    """Merge hook-plan spec entries into an existing intervention spec.
+
+    Parameters
+    ----------
+    destination:
+        Spec receiving entries.
+    source:
+        Spec created from normalized hook entries.
+
+    Returns
+    -------
+    InterventionSpec
+        The destination spec.
+    """
+
+    if source is None:
+        return destination
+    for target in source.targets:
+        if not any(existing.freeze() == target.freeze() for existing in destination.targets):
+            destination.targets.append(target)
+    destination.hook_specs.extend(source.hook_specs)
+    return destination
+
+
 def record_kpi_in_graph(name: str, value: Any) -> None:
     """Record a user KPI on the active capture graph.
 
@@ -769,6 +832,11 @@ def _run_model_and_save_specified_outs(
     hook_plan = normalized_hook_plan if normalized_hook_plan is not None else []
     if hook_plan == [] and hooks:
         hook_plan = normalize_hook_plan(hooks)
+    hook_plan_spec = _intervention_spec_from_hook_plan(hook_plan)
+    if intervention_spec is None:
+        intervention_spec = hook_plan_spec
+    elif hook_plan_spec is not None:
+        intervention_spec = _merge_intervention_spec_hooks(intervention_spec, hook_plan_spec)
     _state.reset_capture_runtime_context()
     _state.configure_capture_runtime_context(
         hook_plan=hook_plan,
@@ -839,7 +907,6 @@ def _run_model_and_save_specified_outs(
     trace._capture_container_structure = capture_container_structure
     if hook_plan:
         trace.state = TraceState.LIVE_CAPTURED
-        trace._initial_hook_plan = tuple(hook_plan)
     trace.model_object_id = model_object_id
     trace.model_class_qualname = model_class_qualname
     trace.param_hash_quick = weight_fingerprint

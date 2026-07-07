@@ -274,13 +274,13 @@ def _build_forward_edges(
     entries_to_plot = _entries_to_plot_for_context(trace, context.vis_mode)
     skipped_labels: set[str] = set()
     edge_map: dict[str, list[LegacyRenderEdge]] = {}
-    if run_folds:
+    if run_folds or context.skip_fn is not None:
         edge_map, skipped_labels = _build_skip_filtered_edge_map(
             trace,
             entries_to_plot,
             vis_mode=context.vis_mode,
             show_buffer_layers=show_buffer_layers,
-            skip_fn=None,
+            skip_fn=context.skip_fn,
         )
     collapsed_container_nodes = _collapsed_container_leaf_nodes(
         trace,
@@ -293,11 +293,12 @@ def _build_forward_edges(
     edges: list[RenderIREdge] = []
     seen: set[tuple[str, str, tuple[Any, ...]]] = set()
     for parent_node in entries_to_plot.values():
-        if parent_node.layer_label in skipped_labels:
+        parent_render_label = _render_node_label(parent_node, context.vis_mode)
+        if parent_render_label in skipped_labels:
             continue
         if parent_node.is_buffer and not _is_buffer_visible(parent_node, show_buffer_layers):
             continue
-        render_edges = edge_map.get(_render_node_label(parent_node, context.vis_mode))
+        render_edges = edge_map.get(parent_render_label)
         if render_edges is None:
             render_edges = [
                 LegacyRenderEdge(

@@ -294,10 +294,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             direction=direction,
         )
         self._last_hook_handle_ids = tuple(handle_ids)
-        scoped_handle = HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
-        if extra_hooks:
-            return scoped_handle
-        return self
+        return HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
 
     def remove(self: "Trace") -> None:
         """Remove the most recent legacy-returned hook attachment.

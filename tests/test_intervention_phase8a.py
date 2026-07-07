@@ -10,6 +10,7 @@ import torch
 import torchlens as tl
 from torchlens.io import TraceState
 from torchlens.intervention.errors import SpecMutationError
+from torchlens.intervention.handles import HookHandle
 
 
 class ReluAdd(torch.nn.Module):
@@ -117,12 +118,13 @@ def test_set_callable_tags_one_shot_metadata() -> None:
 
 
 def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
-    """Sticky hook mutators return self, increment revisions, and mark stale."""
+    """Sticky hook mutators return handles, increment revisions, and mark stale."""
 
     log = _capture()
     initial_revision = log._spec_revision
 
-    assert log.attach_hooks({tl.func("relu"): _identity_hook}) is log
+    handle = log.attach_hooks({tl.func("relu"): _identity_hook})
+    assert isinstance(handle, HookHandle)
     assert log._spec_revision == initial_revision + 1
     assert log.state is TraceState.SPEC_STALE
     assert len(log._intervention_spec.hook_specs) == 1
@@ -138,6 +140,26 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
     assert log.detach_hooks(tl.func("relu")) is log
     assert log._spec_revision == initial_revision + 4
     assert log._intervention_spec.hook_specs == []
+
+
+def test_attach_hooks_handle_removes_only_its_own_specs() -> None:
+    """Each attach handle removes only the hook specs it created."""
+
+    log = _capture()
+
+    first = log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    second = log.attach_hooks(tl.func("__add__"), _identity_hook, confirm_mutation=True)
+
+    assert isinstance(first, HookHandle)
+    assert isinstance(second, HookHandle)
+    assert first is not second
+    assert len(log._intervention_spec.hook_specs) == 2
+
+    first.remove()
+
+    assert len(log._intervention_spec.hook_specs) == 1
+    remaining = log._intervention_spec.hook_specs[0]
+    assert remaining.handle in second.handle_ids
 
 
 @pytest.mark.smoke

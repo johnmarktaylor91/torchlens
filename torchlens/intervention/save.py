@@ -20,10 +20,12 @@ from safetensors.torch import load_file, save_file
 from .._io.manifest import TensorEntry, sha256_of_file
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
+from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from .errors import (
     DirectActivationWriteWarning,
     DirectWriteInExecutableSaveError,
     GraphShapeMismatchError,
+    MultiMatchWarning,
     OpaqueCallableInExecutableSaveError,
     ReplayPreconditionError,
     SiteResolutionError,
@@ -735,6 +737,8 @@ def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState)
         return {"__tensor_ref__": tensor_id}
     if isinstance(value, HelperSpec):
         return {"__helper__": _serialize_helper(value, save_level, state)}
+    if isinstance(value, TupleIndex | DictKey | HFKey | NamedField | DataclassField):
+        return _serialize_output_path_component(value, save_level, state)
     if isinstance(value, tuple):
         return [_serialize_value(item, save_level, state) for item in value]
     if isinstance(value, list):
@@ -744,6 +748,45 @@ def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState)
     if callable(value):
         return {"__callable__": _serialize_callable(value, save_level)}
     return _serialize_opaque(value, save_level)
+
+
+def _serialize_output_path_component(
+    value: TupleIndex | DictKey | HFKey | NamedField | DataclassField,
+    save_level: SaveLevel,
+    state: _SerializedState,
+) -> dict[str, Any]:
+    """Serialize a portable output-container path component.
+
+    Parameters
+    ----------
+    value:
+        Output path component.
+    save_level:
+        Requested save level.
+    state:
+        Serialization tensor state.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-safe component payload.
+    """
+
+    if isinstance(value, TupleIndex):
+        return {"__output_path_component__": "tuple_index", "index": value.index}
+    if isinstance(value, DictKey):
+        return {
+            "__output_path_component__": "dict_key",
+            "key": _serialize_value(value.key, save_level, state),
+        }
+    if isinstance(value, HFKey):
+        return {
+            "__output_path_component__": "hf_key",
+            "key": _serialize_value(value.key, save_level, state),
+        }
+    if isinstance(value, NamedField):
+        return {"__output_path_component__": "named_field", "name": value.name}
+    return {"__output_path_component__": "dataclass_field", "name": value.name}
 
 
 def _serialize_helper(
@@ -984,11 +1027,45 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
             portability="opaque_audit",
             metadata=(("repr", payload.get("repr", "")), ("executable", False)),
         )
+    if isinstance(value, dict) and "__output_path_component__" in value:
+        return _deserialize_output_path_component(value, tensors)
     if isinstance(value, list):
         return [_deserialize_value(item, tensors) for item in value]
     if isinstance(value, dict):
         return {key: _deserialize_value(item, tensors) for key, item in value.items()}
     return value
+
+
+def _deserialize_output_path_component(
+    value: dict[str, Any], tensors: dict[str, torch.Tensor]
+) -> TupleIndex | DictKey | HFKey | NamedField | DataclassField:
+    """Deserialize a portable output-container path component.
+
+    Parameters
+    ----------
+    value:
+        JSON-safe component payload.
+    tensors:
+        Loaded tensor refs.
+
+    Returns
+    -------
+    TupleIndex | DictKey | HFKey | NamedField | DataclassField
+        Runtime path component.
+    """
+
+    kind = str(value.get("__output_path_component__"))
+    if kind == "tuple_index":
+        return TupleIndex(int(value["index"]))
+    if kind == "dict_key":
+        return DictKey(_deserialize_value(value.get("key"), tensors))
+    if kind == "hf_key":
+        return HFKey(_deserialize_value(value.get("key"), tensors))
+    if kind == "named_field":
+        return NamedField(str(value["name"]))
+    if kind == "dataclass_field":
+        return DataclassField(str(value["name"]))
+    raise SiteResolutionError(f"Unsupported output path component kind {kind!r}.")
 
 
 def _target_spec_to_json(target: TargetSpec | FrozenTargetSpec) -> dict[str, Any]:
@@ -1123,15 +1200,24 @@ def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, A
     manifest: list[dict[str, Any]] = []
     for target in targets:
         try:
-            resolved = resolve_sites(log, target, strict=True)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", MultiMatchWarning)
+                resolved = resolve_sites(log, target, strict=True)
         except SiteResolutionError as exc:
-            if "Backward selectors require log_backward()" not in str(exc):
+            if "Backward selectors require log_backward()" not in str(
+                exc
+            ) and "predicate selectors are non-portable in strict mode" not in str(exc):
                 raise
+            status = (
+                "unresolved_nonportable"
+                if "predicate selectors are non-portable in strict mode" in str(exc)
+                else "unresolved_backward"
+            )
             manifest.append(
                 {
                     "selector": _target_spec_to_json(target),
                     "resolved_labels": [],
-                    "resolved_status": "unresolved_backward",
+                    "resolved_status": status,
                     "resolution_error": str(exc),
                     "graph_shape_hash": getattr(log, "graph_shape_hash", None),
                     "_address_normalized": _normalized_address(target),

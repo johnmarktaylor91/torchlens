@@ -425,7 +425,7 @@ def _enumerate_base_rendered_node_emissions(
     emitted_names: set[str] = set()
     emissions: list[RenderedNodeEmission] = []
     for node in entries_to_plot.values():
-        if node.layer_label in skipped_labels:
+        if _render_node_label(node, vis_mode) in skipped_labels:
             continue
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
@@ -580,7 +580,7 @@ def _enumerate_run_fold_ellipsis_emissions(
     emitted: set[str] = set()
     emissions: list[RenderedNodeEmission] = []
     for parent_node in entries_to_plot.values():
-        if parent_node.layer_label in skipped_labels:
+        if _render_node_label(parent_node, vis_mode) in skipped_labels:
             continue
         if parent_node.is_buffer and not _is_buffer_visible(parent_node, show_buffer_layers):
             continue

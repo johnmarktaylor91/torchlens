@@ -82,19 +82,7 @@ def render_backward_graph(
 
     rankdir = direction_to_rankdir(direction)
 
-    split_outpath = vis_outpath.split(".")
-    if split_outpath[-1] in [
-        "pdf",
-        "png",
-        "jpg",
-        "svg",
-        "jpeg",
-        "bmp",
-        "pic",
-        "tif",
-        "tiff",
-    ]:
-        vis_outpath = ".".join(split_outpath[:-1])
+    vis_outpath = _strip_render_extension(vis_outpath)
 
     graph_caption = (
         f"<<B>{self.model_class_name} backward graph</B><br align='left'/>"
@@ -356,7 +344,7 @@ def render_combined_graph(
     edges_used: Set[tuple[str, str, tuple[Any, ...]]] = set()
     collapsed_modules: Set[str] = set()
     for node in entries_to_plot.values():
-        if node.layer_label in skipped_labels:
+        if _render_node_label(node, "unrolled") in skipped_labels:
             continue
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
@@ -448,13 +436,13 @@ def rendered_node_universe_from_v1(
     entries_to_plot = _entries_to_plot_for_context(trace, resolved_context.vis_mode)
     skipped_labels: set[str] = set()
     edge_map: dict[str, list[RenderEdge]] = {}
-    if run_folds:
+    if run_folds or resolved_context.skip_fn is not None:
         edge_map, skipped_labels = _build_skip_filtered_edge_map(
             trace,
             entries_to_plot,
             vis_mode=resolved_context.vis_mode,
             show_buffer_layers=show_buffer_layers,
-            skip_fn=None,
+            skip_fn=resolved_context.skip_fn,
         )
     collapsed_container_nodes = _collapsed_container_leaf_nodes(
         trace,

@@ -57,7 +57,7 @@ jobs:
 
       - name: Run preview backend tests
         run: |
-          pytest tests/backends/ -m "not slow" --tb=short
+          pytest tests/ -m "(tf_backend or backend_jax or backend_tinygrad or backend_paddle) and not slow" --tb=short
 
   wheel:
     name: Wheel package smoke

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import gc
-import os
 from pathlib import Path
-import pickle
 import time
 from typing import Any, Iterator
 import weakref
@@ -21,7 +19,7 @@ from torchlens import errors
 from torchlens._capture_state_helpers import _detach_nested_for_cache
 from torchlens.data_classes._state_adapter import state_items
 
-from _pickle_compare import _canonical_pickle_diff, _tensor_equal
+from _pickle_compare import _tensor_equal
 from _pickle_compare_allowlist import ALLOWED_PICKLE_DIFF_FIELDS
 
 _GZIP_MAGIC = b"\x1f\x8b"
@@ -404,54 +402,6 @@ def _write_golden_pickle_bytes(path: Path, data: bytes, model_class_name: str) -
 
     payload = gzip.compress(data, compresslevel=9) if model_class_name == "resnet50" else data
     path.write_bytes(payload)
-
-
-@pytest.mark.skip(
-    reason="feature-removed: M5 pre-M6 pickle byte-equality schema was superseded by 2.0 renames"
-)
-def test_pickle_byte_equal_pre_m6(
-    fixture_model_input: tuple[nn.Module, torch.Tensor, str],
-) -> None:
-    """Compare current trace pickle bytes against M5 pre-M6 goldens.
-
-    Parameters
-    ----------
-    fixture_model_input
-        Parametrized model/input/name fixture.
-    """
-
-    model, x, model_class_name = fixture_model_input
-    trace = tl.trace(
-        model,
-        x,
-        random_seed=123,
-        layers_to_save=None,
-        save_rng_states=False,
-        save_code_context=False,
-    )
-    _make_trace_pickleable(trace)
-    golden_path = Path("tests/golden/m5_pre_m6") / f"{model_class_name}.pkl"
-
-    actual = pickle.dumps(trace, protocol=4)
-    if os.environ.get("TL_REGEN_GOLDEN") == "1":
-        golden_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_golden_pickle_bytes(golden_path, actual, model_class_name)
-        pytest.skip(f"regenerated golden at {golden_path}")
-    if not golden_path.exists():
-        pytest.skip(f"golden fixture missing: {golden_path}; regenerate with TL_REGEN_GOLDEN=1")
-
-    expected_trace = pickle.loads(_read_golden_pickle_bytes(golden_path))
-    _drop_capture_scratch(expected_trace)
-    expected = pickle.dumps(expected_trace, protocol=4)
-    if actual != expected:
-        actual_trace = pickle.loads(actual)
-        expected_trace = pickle.loads(expected)
-        diffs = _canonical_pickle_diff(actual_trace, expected_trace)
-        if diffs:
-            diff = _first_state_difference(actual_trace, expected_trace)
-            if diff is not None:
-                diffs.insert(0, diff)
-            pytest.fail(f"Trace pickle differs for {model_class_name}: {diffs[:5]!r}")
 
 
 def test_pickle_compare_allowlist_stable() -> None:

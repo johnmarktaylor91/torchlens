@@ -89,7 +89,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Write a coverage text report to test_outputs/ if coverage data exists."""
+    """Write a coverage text report to generated_outputs/ if coverage data exists."""
     _state._collect_usage_stats = False
     try:
         from coverage import Coverage

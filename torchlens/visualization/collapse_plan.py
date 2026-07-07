@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from .._literals import BufferVisibilityLiteral, VisModeLiteral, VisNodePlacementLiteral
 
@@ -30,12 +30,15 @@ class RenderContext:
         Container overlay policy. R1a parity is scoped to ``False``.
     engine:
         Graph layout engine. R1a parity is scoped to Graphviz ``dot``.
+    skip_fn:
+        Optional public node-skip predicate threaded into render IR.
     """
 
     vis_mode: VisModeLiteral = "unrolled"
     show_buffer_layers: BufferVisibilityLiteral = "meaningful"
     show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False
     engine: VisNodePlacementLiteral = "dot"
+    skip_fn: Callable[[Any], bool] | None = None
 
 
 @dataclass(frozen=True)

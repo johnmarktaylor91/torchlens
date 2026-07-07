@@ -1008,9 +1008,12 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         grad_output,
         head,
         in_backward_pass,
+        input_at,
         label,
         module,
         output,
+        output_at,
+        regex,
         where,
         without_op,
     )
@@ -1027,8 +1030,16 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         return module(str(value))
     if kind == "output":
         return output(value)
+    if kind == "output_at":
+        return output_at(value)
+    if kind == "input_at":
+        if isinstance(value, Sequence) and not isinstance(value, str):
+            return input_at(*value)
+        return input_at(value)
     if kind == "contains":
         return contains(str(value))
+    if kind == "regex":
+        return regex(str(value))
     if kind == "in_module":
         from .selectors import in_module as make_in_module
 

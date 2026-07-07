@@ -81,7 +81,7 @@ class TapObserver:
         self.records.append(
             TapRecord(
                 value=value,
-                site_label=getattr(hook.layer_log, "layer_label", None),
+                site_label=_hook_layer_label(hook.layer_log),
                 span_names=span_names,
                 timestamp=time.monotonic(),
                 direction="forward",
@@ -188,6 +188,27 @@ def _first_tensor_grad(
         if isinstance(grad, torch.Tensor):
             return grad, grad_kind
     return None, None
+
+
+def _hook_layer_label(layer_log: Any) -> str | None:
+    """Return a hook layer label from mapping or attribute context.
+
+    Parameters
+    ----------
+    layer_log:
+        Hook layer context supplied by TorchLens.
+
+    Returns
+    -------
+    str | None
+        Site label when present.
+    """
+
+    if hasattr(layer_log, "get"):
+        label = layer_log.get("layer_label")
+        return str(label) if label is not None else None
+    label = getattr(layer_log, "layer_label", None)
+    return str(label) if label is not None else None
 
 
 def tap(
