@@ -303,10 +303,10 @@ def test_grad_edges_use_preserved_edge_cluster_key(
 ) -> None:
     """Forward render passes grad edges the same LCA cluster as dataflow edges."""
 
-    import torchlens.visualization.rendering as rendering
+    import torchlens.visualization._render_edges as _render_edges
 
     modules_by_edge: dict[tuple[str, str], str | int] = {}
-    original_add_grad_edge = rendering._add_grad_edge
+    original_add_grad_edge = _render_edges._add_grad_edge
 
     def capture_add_grad_edge(
         self: Trace,
@@ -337,7 +337,10 @@ def test_grad_edges_use_preserved_edge_cluster_key(
             overrides,  # type: ignore[arg-type]
         )
 
-    monkeypatch.setattr(rendering, "_add_grad_edge", capture_add_grad_edge)
+    # Patch in the CALLER's module namespace: _render_edges holds its own binding
+    # of _add_grad_edge (star-imported from _render_leaf), so patching the
+    # rendering facade re-export would not intercept the call.
+    monkeypatch.setattr(_render_edges, "_add_grad_edge", capture_add_grad_edge)
     trace = tl.trace(
         _NestedTorchOpModel(),
         torch.randn(2, 3, requires_grad=True),
