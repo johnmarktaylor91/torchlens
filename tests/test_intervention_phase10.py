@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -149,6 +150,60 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     assert spec.hook_specs[0].helper is not None
 
 
+def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> None:
+    """A loaded forward hook spec re-executes the intended hook."""
+
+    x = torch.ones(1, 3)
+    log = _log(_ReluModel(), x)
+    log.attach_hooks(tl.func("relu"), tl.scale(0.0), confirm_mutation=True)
+    path = tmp_path / "forward_execute.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec = tl.load_intervention_spec(path)
+    fresh = _log(_ReluModel(), x)
+    fresh._intervention_spec = spec
+    rerun = fresh.run(_ReluModel(), x)
+
+    assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones_like(x))
+
+
+def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Path) -> None:
+    """Executable import refs import lazily after load and only when executed."""
+
+    module_path = tmp_path / "side_effect_mod.py"
+    sentinel = tmp_path / "sentinel"
+    module_path.write_text(
+        "from pathlib import Path\n"
+        "SENTINEL = Path(__file__).with_name('sentinel')\n"
+        "SENTINEL.write_text('imported')\n"
+        "def hook(out, *, hook):\n"
+        "    return out * 0\n"
+    )
+    sys.path.insert(0, str(tmp_path))
+    try:
+        import side_effect_mod
+
+        log = _log(_ReluModel(), torch.ones(1, 3))
+        log.attach_hooks(tl.func("relu"), side_effect_mod.hook, confirm_mutation=True)
+        path = tmp_path / "lazy_import.tlspec"
+        log.save_intervention(path, level="executable_with_callables")
+        sentinel.unlink()
+        sys.modules.pop("side_effect_mod", None)
+
+        spec = tl.load_intervention_spec(path)
+
+        assert not sentinel.exists()
+        fresh = _log(_ReluModel(), torch.ones(1, 3))
+        fresh._intervention_spec = spec
+        rerun = fresh.run(_ReluModel(), torch.ones(1, 3))
+        assert sentinel.exists()
+        assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones(1, 3))
+    finally:
+        sys.modules.pop("side_effect_mod", None)
+        if str(tmp_path) in sys.path:
+            sys.path.remove(str(tmp_path))
+
+
 @pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live backward hook records survive intervention spec save/load."""
@@ -166,6 +221,49 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
     assert backward_records
     assert backward_records[0].backward_pass_index == 1
     assert backward_records[0].call_index == 1
+
+
+def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) -> None:
+    """Structured grad_fn selector payloads execute after save/load."""
+
+    x = torch.ones(1, 3, requires_grad=True)
+    log = tl.trace(_ReluModel(), x, save_grads="all", backward_ready=True)
+    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
+    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    path = tmp_path / "backward_execute.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec = tl.load_intervention_spec(path)
+
+    assert isinstance(spec.hook_specs[0].site_target.selector_value, dict)
+    x_fresh = torch.ones(1, 3, requires_grad=True)
+    fresh = tl.trace(_ReluModel(), x_fresh, save_grads="all", backward_ready=True)
+    fresh._intervention_spec = spec
+    fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
+
+    assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
+
+
+def test_backward_hook_spec_saves_before_first_backward_and_executes(
+    tmp_path: Path,
+) -> None:
+    """Sticky backward recipes save unresolved and resolve at execution time."""
+
+    x = torch.ones(1, 3, requires_grad=True)
+    log = tl.trace(_ReluModel(), x, save_grads="all", backward_ready=True)
+    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
+    path = tmp_path / "backward_before_pass.tlspec"
+
+    log.save_intervention(path, level="portable")
+    spec = tl.load_intervention_spec(path)
+
+    assert spec.metadata["target_manifest"][0]["resolved_status"] == "unresolved_backward"
+    x_fresh = torch.ones(1, 3, requires_grad=True)
+    fresh = tl.trace(_ReluModel(), x_fresh, save_grads="all", backward_ready=True)
+    fresh._intervention_spec = spec
+    fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
+
+    assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
 
 
 def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> None:

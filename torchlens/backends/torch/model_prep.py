@@ -1972,6 +1972,16 @@ def module_forward_decorator(
             )
             try:
                 out = orig_forward(*args, **kwargs)
+                from ...intervention.runtime import _apply_module_boundary_live_hooks
+
+                out = _apply_module_boundary_live_hooks(
+                    out,
+                    module_address=frame.address,
+                    module_call_index=frame.pass_index,
+                    module_type=_module_type(module),
+                    call_args=args,
+                    call_kwargs=dict(kwargs),
+                )
             except Exception:
                 # Exception safety: pop module pass label to keep the stack
                 # consistent, preventing corruption in subsequent forward calls (#122).

@@ -845,6 +845,19 @@ def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> Non
     )
 
 
+def test_forward_helper_on_backward_selector_warns() -> None:
+    """Forward-only helpers attached to backward-only selectors emit a warning."""
+
+    with pytest.warns(UserWarning, match="Forward intervention helper"):
+        tl.trace(
+            _IdentityReluModel(),
+            torch.ones(1, 3, requires_grad=True),
+            backward_ready=True,
+            save_grads=True,
+            intervene=tl.when(tl.grad_fn(type="relu"), tl.zero_ablate()),
+        )
+
+
 @pytest.mark.parametrize("selector", [tl.func("relu"), tl.grad_fn(type="relu")])
 def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
     """bwd_hook calls user code and mutates the gradient through both selectors."""

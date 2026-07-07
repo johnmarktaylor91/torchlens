@@ -617,12 +617,11 @@ def splice_module(
             """Call the spliced module and validate dtype/device."""
 
             if input == "in":
-                first_input = _first_tensor_input(hook.args, hook.kwargs)
-                if first_input is None:
+                if not hook.args and not hook.kwargs:
                     raise HookValueError(
                         "splice_module input routing requires captured call inputs"
                     )
-                result = module(first_input)
+                result = module(*hook.args, **dict(hook.kwargs))
             else:
                 result = module(out)
             if not isinstance(result, torch.Tensor):
@@ -644,6 +643,7 @@ def splice_module(
         args=(module,),
         kwargs={"input": input, "output": output, "force_shape_change": force_shape_change},
         factory=factory,
+        metadata={"input": input, "output": output},
         batch_independent=False,
         compatible_with_append=False,
     )

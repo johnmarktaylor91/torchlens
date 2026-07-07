@@ -965,15 +965,15 @@ def _validate_helper_mount(
         return
     helper_metadata = dict(helper_spec.metadata)
     mount_shape = helper_metadata.get("mount_shape", "tensor")
-    from .resolver import _selector_resolution_direction
-
-    selector_direction = _selector_resolution_direction(site_target)
     if direction == "backward":
         if helper_metadata.get("requires_grad_output") and _targets_accumulate_grad(site_target):
             raise HelperMountError(
                 f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
             )
         return
+    from .resolver import _selector_resolution_direction
+
+    selector_direction = _selector_resolution_direction(site_target)
     if mount_shape == "tuple" and selector_direction != "backward":
         raise HelperMountError(
             f"{helper_spec.name} is a grad_fn_handle helper and must be mounted on a backward selector."
@@ -1547,6 +1547,7 @@ def make_live_site_proxy(
         modules=fields.get("modules", []),
         output_of_module_calls=fields.get("output_of_module_calls", []),
         output_of_modules=fields.get("output_of_modules", []),
+        _tl_module_boundary=bool(fields.get("_tl_module_boundary", False)),
         call_index=1,
         lookup_keys=[],
     )

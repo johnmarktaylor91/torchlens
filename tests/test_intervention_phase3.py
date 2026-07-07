@@ -321,3 +321,218 @@ def test_splice_module_default_replaces_with_module_on_input() -> None:
 
     assert torch.equal(result, 100 * original_input)
     assert not torch.equal(result, 100 * original_output)
+
+
+def test_splice_module_forwards_full_input_signature() -> None:
+    """Input-splice helpers receive all positional and keyword inputs."""
+
+    class _SubtractModule(torch.nn.Module):
+        """Replacement that requires both captured inputs."""
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            """Return ``a - b``."""
+
+            return a - b
+
+    hook = tl.splice_module(_SubtractModule())()
+    a = torch.tensor([[5.0, 7.0]])
+    b = torch.tensor([[2.0, 3.0]])
+
+    result = hook(a + b, hook=_context_with_args(a, b))
+
+    assert torch.equal(result, a - b)
+
+
+def test_splice_module_input_splices_multi_input_module_end_to_end() -> None:
+    """Module-scoped input splice receives the module call's full input structure."""
+
+    class _AddBlock(torch.nn.Module):
+        """Two-input module used as the splice target."""
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            """Return a visible function of both inputs."""
+
+            return torch.add(a, b) * 3
+
+    class _SubtractReplacement(torch.nn.Module):
+        """Replacement requiring both original module inputs."""
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            """Return ``a - b``."""
+
+            return a - b
+
+    class _Model(torch.nn.Module):
+        """Model with one named multi-input block."""
+
+        def __init__(self) -> None:
+            """Initialize the model."""
+
+            super().__init__()
+            self.block = _AddBlock()
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            """Run the block."""
+
+            return self.block(a, b)
+
+    a = torch.tensor([[5.0, 7.0]])
+    b = torch.tensor([[2.0, 3.0]])
+
+    log = tl.trace(
+        _Model().eval(),
+        (a, b),
+        intervention_ready=True,
+        hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
+    )
+
+    assert torch.equal(log[log.output_layers[0]].out, a - b)
+
+
+def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
+    """Module-scoped input splice applies once at the module-call boundary."""
+
+    class _HundredModule(torch.nn.Module):
+        """Replacement that exposes repeated application."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return ``100 * x``."""
+
+            return 100 * x
+
+    class _Model(torch.nn.Module):
+        """Model with a two-op named block."""
+
+        def __init__(self) -> None:
+            """Initialize the model."""
+
+            super().__init__()
+            self.block = torch.nn.Sequential(torch.nn.Identity(), torch.nn.ReLU())
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the block."""
+
+            return self.block(x)
+
+    x = torch.tensor([[1.0, 2.0, 3.0]])
+
+    log = tl.trace(
+        _Model().eval(),
+        x,
+        intervention_ready=True,
+        hooks={tl.in_module("block"): tl.splice_module(_HundredModule())},
+    )
+
+    assert torch.equal(log[log.output_layers[0]].out, 100 * x)
+
+
+def test_splice_module_input_rejects_module_scoped_op_granularity() -> None:
+    """Input splice rejects ambiguous op-level selectors inside module scopes."""
+
+    class _IdentityReplacement(torch.nn.Module):
+        """Replacement that would be ambiguous over multiple ops."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return the input."""
+
+            return x
+
+    class _Model(torch.nn.Module):
+        """Model with a multi-op named block."""
+
+        def __init__(self) -> None:
+            """Initialize the model."""
+
+            super().__init__()
+            self.block = torch.nn.Sequential(torch.nn.Identity(), torch.nn.ReLU())
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the block."""
+
+            return self.block(x)
+
+    with pytest.raises(HookValueError, match="module-scoped op selector is ambiguous"):
+        tl.trace(
+            _Model().eval(),
+            torch.ones(1, 3),
+            intervention_ready=True,
+            hooks={
+                tl.in_module("block") & tl.func("relu"): tl.splice_module(_IdentityReplacement())
+            },
+        )
+
+
+def test_splice_module_input_preserves_common_op_arg_orders() -> None:
+    """Op-level input splice forwards captured args for nontrivial torch signatures."""
+
+    class _AddReplacement(torch.nn.Module):
+        """Replacement for ``torch.add``."""
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            """Return ``a - b``."""
+
+            return a - b
+
+    class _WhereReplacement(torch.nn.Module):
+        """Replacement for ``torch.where``."""
+
+        def forward(
+            self, condition: torch.Tensor, a: torch.Tensor, b: torch.Tensor
+        ) -> torch.Tensor:
+            """Return a shifted where result."""
+
+            return torch.where(condition, a, b) + 10
+
+    class _AddmmReplacement(torch.nn.Module):
+        """Replacement for ``torch.addmm``."""
+
+        def forward(
+            self, bias: torch.Tensor, mat1: torch.Tensor, mat2: torch.Tensor
+        ) -> torch.Tensor:
+            """Return a shifted addmm result."""
+
+            return torch.addmm(bias, mat1, mat2) + 10
+
+    class _CatReplacement(torch.nn.Module):
+        """Replacement for ``torch.cat``."""
+
+        def forward(self, tensors: list[torch.Tensor], dim: int = 0) -> torch.Tensor:
+            """Concatenate tensors in reverse order."""
+
+            return torch.cat(tuple(reversed(tensors)), dim=dim)
+
+    class _Ops(torch.nn.Module):
+        """Model containing representative argument orders."""
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> tuple[torch.Tensor, ...]:
+            """Run representative ops."""
+
+            condition = torch.tensor([[True, False]], device=a.device)
+            bias = torch.ones(1, 2, device=a.device)
+            mat2 = torch.eye(2, device=a.device)
+            return (
+                torch.add(a, b),
+                torch.where(condition, a, b),
+                torch.addmm(bias, a, mat2),
+                torch.cat([a, b], dim=1),
+            )
+
+    a = torch.tensor([[5.0, 7.0]])
+    b = torch.tensor([[2.0, 3.0]])
+    log = tl.trace(
+        _Ops().eval(),
+        (a, b),
+        intervention_ready=True,
+        hooks={
+            tl.func("add"): tl.splice_module(_AddReplacement()),
+            tl.func("where"): tl.splice_module(_WhereReplacement()),
+            tl.func("addmm"): tl.splice_module(_AddmmReplacement()),
+            tl.func("cat"): tl.splice_module(_CatReplacement()),
+        },
+    )
+    outputs = [log[label].out for label in log.output_layers]
+
+    assert any(torch.equal(out, a - b) for out in outputs)
+    assert any(torch.equal(out, torch.tensor([[15.0, 13.0]])) for out in outputs)
+    assert any(torch.equal(out, torch.tensor([[16.0, 18.0]])) for out in outputs)
+    assert any(torch.equal(out, torch.tensor([[2.0, 3.0, 5.0, 7.0]])) for out in outputs)

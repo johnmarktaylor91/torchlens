@@ -437,6 +437,14 @@ def _backward_intervention_spec_from_predicate(
         selector_direction = _selector_resolution_direction(selector)
     except Exception:
         return None
+    if selector_direction == "backward" and decision.direction not in {"backward", "both"}:
+        warnings.warn(
+            "Forward intervention helper attached to a backward-only selector will not fire. "
+            "Use a gradient helper such as tl.grad_zero(), tl.grad_scale(), or tl.bwd_hook().",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
     if selector_direction != "backward" or decision.direction not in {"backward", "both"}:
         return None
     if decision.hook is None:

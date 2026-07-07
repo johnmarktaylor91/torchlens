@@ -20,6 +20,7 @@ from .hooks import (
     live_backward_selector_matches,
     live_selector_matches_site,
     make_hook_context,
+    make_live_site_proxy,
 )
 from .types import FireRecord
 
@@ -291,17 +292,32 @@ def _apply_live_hooks(
             continue
         if normalized_entry.metadata.get("timing", "post") != "post":
             continue
+        module_scope = _input_splice_module_scope(normalized_entry.site_target, normalized_entry)
+        if module_scope is not None and not getattr(site, "_tl_module_boundary", False):
+            if _is_plain_module_selector(normalized_entry.site_target):
+                continue
+            raise HookValueError(
+                "splice_module(input='in') with a module-scoped op selector is ambiguous. "
+                "Use tl.module(...)/tl.in_module(...) alone for one module-call splice, or use "
+                "an op selector without tl.in_module(...) for op-level splicing."
+            )
         if not live_selector_matches_site(normalized_entry.site_target, site):
             continue
 
+        hook_args, hook_kwargs = _hook_call_inputs_for_site(
+            normalized_entry,
+            site=site,
+            call_args=call_args,
+            call_kwargs=call_kwargs,
+        )
         hook_context = make_hook_context(
             name=_hook_display_name(normalized_entry),
             timing="post",
             direction="forward",
             layer_log=site,
             run_ctx=_live_run_ctx(),
-            args=call_args or (current_out,),
-            kwargs=call_kwargs or {},
+            args=hook_args or (current_out,),
+            kwargs=hook_kwargs,
         )
         previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
         pre_hook_shape = tuple(current_out.shape)
@@ -342,6 +358,299 @@ def _apply_live_hooks(
         )
         current_out = result
     return current_out, tuple(fire_results)
+
+
+def _apply_module_boundary_live_hooks(
+    out_orig: Any,
+    *,
+    module_address: str,
+    module_call_index: int,
+    module_type: str,
+    call_args: tuple[Any, ...],
+    call_kwargs: dict[str, Any],
+) -> Any:
+    """Apply module-boundary live hooks to module forward outputs.
+
+    Parameters
+    ----------
+    out_orig:
+        Raw module forward output.
+    module_address:
+        TorchLens module address.
+    module_call_index:
+        One-based module call index.
+    module_type:
+        Module type name.
+    call_args:
+        Original module positional inputs.
+    call_kwargs:
+        Original module keyword inputs.
+
+    Returns
+    -------
+    Any
+        Module output with any tensor replacements applied.
+    """
+
+    if not _state._active_hook_plan:
+        return out_orig
+    module_call = (module_address, module_call_index)
+    replacements: dict[tuple[Any, ...], torch.Tensor] = {}
+    for out, container_path in _iter_tensor_outputs(out_orig):
+        site = make_live_site_proxy(
+            _layer_label_raw=f"{module_address}:{module_call_index}",
+            func_name=module_type,
+            layer_type=module_type.lower(),
+            tensor=out,
+            func_call_id=0,
+            container_path=container_path,
+            fields={
+                "raw_index": 0,
+                "module": module_call,
+                "modules": (module_call,),
+                "output_of_module_calls": (module_call,),
+                "_tl_module_boundary": True,
+            },
+        )
+        setattr(site, "_tl_module_boundary", True)
+        hooked, fire_results = _apply_live_hooks(
+            out,
+            site=site,
+            container_path=container_path,
+            call_args=call_args,
+            call_kwargs=call_kwargs,
+        )
+        if fire_results:
+            _set_tensor_live_fire_results_if_available(hooked, fire_results)
+        if hooked is not out:
+            replacements[container_path] = hooked
+    if not replacements:
+        return out_orig
+    return _replace_tensor_outputs(out_orig, replacements)
+
+
+def _set_tensor_live_fire_results_if_available(
+    tensor: torch.Tensor, fire_results: tuple[FireResult, ...]
+) -> None:
+    """Attach fire results to a tensor when dynamic attributes are available.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor that received a live module-boundary hook.
+    fire_results:
+        Fire results emitted by the live hook dispatcher.
+    """
+
+    try:
+        setattr(tensor, "_tl_live_fire_results", fire_results)
+    except Exception:
+        pass
+
+
+def _iter_tensor_outputs(
+    value: Any, path: tuple[Any, ...] = ()
+) -> Iterator[tuple[torch.Tensor, tuple[Any, ...]]]:
+    """Yield tensor leaves and their paths from a module output structure.
+
+    Parameters
+    ----------
+    value:
+        Module output value to traverse.
+    path:
+        Current container path prefix.
+
+    Yields
+    ------
+    tuple[torch.Tensor, tuple[Any, ...]]
+        Tensor leaf and stable path.
+    """
+
+    if isinstance(value, torch.Tensor):
+        yield value, path
+        return
+    if isinstance(value, tuple):
+        for index, item in enumerate(value):
+            yield from _iter_tensor_outputs(item, (*path, index))
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _iter_tensor_outputs(item, (*path, index))
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from _iter_tensor_outputs(item, (*path, key))
+
+
+def _replace_tensor_outputs(value: Any, replacements: dict[tuple[Any, ...], torch.Tensor]) -> Any:
+    """Return ``value`` with tensor leaves replaced by path.
+
+    Parameters
+    ----------
+    value:
+        Original module output structure.
+    replacements:
+        Mapping from tensor leaf path to replacement tensor.
+
+    Returns
+    -------
+    Any
+        Output structure with replacements applied.
+    """
+
+    if () in replacements:
+        return replacements[()]
+    if isinstance(value, tuple):
+        return type(value)(
+            _replace_tensor_outputs_by_child(item, replacements, (index,))
+            for index, item in enumerate(value)
+        )
+    if isinstance(value, list):
+        return [
+            _replace_tensor_outputs_by_child(item, replacements, (index,))
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _replace_tensor_outputs_by_child(item, replacements, (key,))
+            for key, item in value.items()
+        }
+    return value
+
+
+def _replace_tensor_outputs_by_child(
+    value: Any, replacements: dict[tuple[Any, ...], torch.Tensor], prefix: tuple[Any, ...]
+) -> Any:
+    """Return a child value with replacements beneath ``prefix`` applied.
+
+    Parameters
+    ----------
+    value:
+        Child value to rebuild.
+    replacements:
+        Full replacement mapping.
+    prefix:
+        Path prefix for ``value`` within its parent.
+
+    Returns
+    -------
+    Any
+        Child value with matching replacements applied.
+    """
+
+    child_replacements = {
+        path[len(prefix) :]: replacement
+        for path, replacement in replacements.items()
+        if path[: len(prefix)] == prefix
+    }
+    if not child_replacements:
+        return value
+    return _replace_tensor_outputs(value, child_replacements)
+
+
+def _hook_call_inputs_for_site(
+    entry: NormalizedHookEntry,
+    *,
+    site: Any,
+    call_args: tuple[Any, ...],
+    call_kwargs: dict[str, Any] | None,
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Return the positional and keyword inputs for one hook fire.
+
+    Parameters
+    ----------
+    entry:
+        Normalized hook entry being executed.
+    site:
+        Live site proxy.
+    call_args:
+        Captured positional inputs.
+    call_kwargs:
+        Captured keyword inputs.
+
+    Returns
+    -------
+    tuple[tuple[Any, ...], dict[str, Any]]
+        Hook positional and keyword inputs.
+    """
+
+    if _input_splice_module_scope(entry.site_target, entry) is None:
+        return call_args, dict(call_kwargs or {})
+    if not getattr(site, "_tl_module_boundary", False):
+        return call_args, dict(call_kwargs or {})
+    return call_args, dict(call_kwargs or {})
+
+
+def _input_splice_module_scope(site_target: Any, entry: NormalizedHookEntry) -> str | None:
+    """Return the module address for input-spliced module-scoped selectors.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like hook target.
+    entry:
+        Normalized hook entry.
+
+    Returns
+    -------
+    str | None
+        Module address when the entry is an input-spliced module scope.
+    """
+
+    helper = entry.helper_spec
+    if helper is None or helper.name != "splice_module":
+        return None
+    helper_metadata = dict(helper.metadata)
+    if helper_metadata.get("input") != "in":
+        return None
+    return _module_scope_address(site_target)
+
+
+def _module_scope_address(site_target: Any) -> str | None:
+    """Return a module address when a selector tree contains module scope.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like hook target.
+
+    Returns
+    -------
+    str | None
+        First module address found in the selector tree.
+    """
+
+    kind = getattr(site_target, "selector_kind", None)
+    if kind in {"module", "in_module"}:
+        value = getattr(site_target, "selector_value", None)
+        return None if value is None else str(value)
+    selectors = getattr(site_target, "selectors", None)
+    if selectors is not None:
+        for selector in selectors:
+            address = _module_scope_address(selector)
+            if address is not None:
+                return address
+    selector = getattr(site_target, "selector", None)
+    if selector is not None:
+        return _module_scope_address(selector)
+    return None
+
+
+def _is_plain_module_selector(site_target: Any) -> bool:
+    """Return whether a selector is exactly a module boundary or containment selector.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like hook target.
+
+    Returns
+    -------
+    bool
+        Whether the selector is exactly ``tl.module`` or ``tl.in_module``.
+    """
+
+    return getattr(site_target, "selector_kind", None) in {"module", "in_module"}
 
 
 def _apply_live_backward_hooks(

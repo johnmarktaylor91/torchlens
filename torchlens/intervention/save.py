@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum
 import importlib
@@ -88,6 +88,42 @@ class _SerializedState:
 
     tensor_entries: list[TensorEntry]
     tensor_refs: dict[str, torch.Tensor]
+
+
+@dataclass(frozen=True)
+class LazyImportRef:
+    """Callable import reference that resolves only at execution time."""
+
+    import_path: str
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Resolve and call the referenced object.
+
+        Parameters
+        ----------
+        *args:
+            Positional arguments forwarded to the imported callable.
+        **kwargs:
+            Keyword arguments forwarded to the imported callable.
+
+        Returns
+        -------
+        Any
+            Return value from the imported callable.
+        """
+
+        return _resolve_import_ref(self.import_path)(*args, **kwargs)
+
+    def __repr__(self) -> str:
+        """Return a stable representation without importing the target.
+
+        Returns
+        -------
+        str
+            Import-reference representation.
+        """
+
+        return f"LazyImportRef({self.import_path!r})"
 
 
 def save_intervention(
@@ -935,7 +971,7 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
     if isinstance(value, dict) and "__callable__" in value:
         callable_payload = value["__callable__"]
         if callable_payload["portability"] == "import_ref":
-            return _resolve_import_ref(callable_payload["import_path"])
+            return LazyImportRef(str(callable_payload["import_path"]))
         return HelperSpec(
             helper_name="opaque_audit",
             portability="opaque_audit",
@@ -1020,8 +1056,14 @@ def _selector_value_to_json(value: Any) -> Any:
 
     if isinstance(value, TargetSpec | FrozenTargetSpec):
         return {"__target_spec__": _target_spec_to_json(value)}
+    if isinstance(value, Mapping):
+        return {
+            "__dict__": {str(key): _selector_value_to_json(item) for key, item in value.items()}
+        }
     if isinstance(value, tuple):
-        return [_selector_value_to_json(item) for item in value]
+        return {"__tuple__": [_selector_value_to_json(item) for item in value]}
+    if isinstance(value, list):
+        return {"__list__": [_selector_value_to_json(item) for item in value]}
     if isinstance(value, str | int | float | bool) or value is None:
         return value
     return {"__repr__": repr(value), "__type__": type(value).__name__}
@@ -1043,6 +1085,14 @@ def _selector_value_from_json(value: Any) -> Any:
 
     if isinstance(value, dict) and "__target_spec__" in value:
         return _target_spec_from_json(value["__target_spec__"])
+    if isinstance(value, dict) and "__dict__" in value:
+        return {
+            str(key): _selector_value_from_json(item) for key, item in value["__dict__"].items()
+        }
+    if isinstance(value, dict) and "__tuple__" in value:
+        return tuple(_selector_value_from_json(item) for item in value["__tuple__"])
+    if isinstance(value, dict) and "__list__" in value:
+        return [_selector_value_from_json(item) for item in value["__list__"]]
     if isinstance(value, list):
         return tuple(_selector_value_from_json(item) for item in value)
     if isinstance(value, dict) and "__repr__" in value:
@@ -1070,13 +1120,29 @@ def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, A
     targets.extend(spec.targets)
     targets.extend(value_spec.site_target for value_spec in spec.target_value_specs)
     targets.extend(hook_spec.site_target for hook_spec in spec.hook_specs)
-    manifest = []
+    manifest: list[dict[str, Any]] = []
     for target in targets:
-        resolved = resolve_sites(log, target, strict=True)
+        try:
+            resolved = resolve_sites(log, target, strict=True)
+        except SiteResolutionError as exc:
+            if "Backward selectors require log_backward()" not in str(exc):
+                raise
+            manifest.append(
+                {
+                    "selector": _target_spec_to_json(target),
+                    "resolved_labels": [],
+                    "resolved_status": "unresolved_backward",
+                    "resolution_error": str(exc),
+                    "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                    "_address_normalized": _normalized_address(target),
+                }
+            )
+            continue
         manifest.append(
             {
                 "selector": _target_spec_to_json(target),
                 "resolved_labels": list(resolved.labels()),
+                "resolved_status": "resolved",
                 "graph_shape_hash": getattr(log, "graph_shape_hash", None),
                 "_address_normalized": _normalized_address(target),
             }
