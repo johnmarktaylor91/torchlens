@@ -129,7 +129,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         for_paper: bool = False,
         return_graph: bool = False,
         order_siblings: bool = True,
-        show_containers: Literal[False, "labels", "cluster", "collapsed", "auto"] = False,
+        show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False,
         container_max_inline: int = 12,
         show_input_transform_summary: bool = False,
     ) -> Any:

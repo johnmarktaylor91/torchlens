@@ -1144,6 +1144,34 @@ def _common_module_call_indices(layer_log: "Layer") -> dict[str, list[int]]:
     return {address: [parsed[address] for parsed in per_op] for address in sorted(common_addresses)}
 
 
+def _rolled_visual_num_passes(layer_log: GraphNode) -> int:
+    """Return the displayed rolled multiplier for a layer.
+
+    Parameters
+    ----------
+    layer_log:
+        Op or Layer to render.
+
+    Returns
+    -------
+    int
+        Visual call count. Multi-output module calls count distinct module
+        invocations instead of output tensors.
+    """
+
+    if not isinstance(layer_log, Layer):
+        return int(getattr(layer_log, "num_passes", 1) or 1)
+    common_call_indices = _common_module_call_indices(layer_log)
+    if not common_call_indices:
+        return int(layer_log.num_passes)
+    distinct_counts = {
+        len(set(call_indices)) for call_indices in common_call_indices.values() if call_indices
+    }
+    if len(distinct_counts) == 1:
+        return distinct_counts.pop()
+    return int(layer_log.num_passes)
+
+
 def _same_layer_dependency_components(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
     """Return weak components in the same-layer dependency graph.
 
@@ -1979,6 +2007,7 @@ __all__ = [
     "_node_spec_to_graphviz_args",
     "_param_module_for_accumulate_grad",
     "_rolled_labels_need_disambiguation",
+    "_rolled_visual_num_passes",
     "_run_fold_for_address",
     "_run_fold_graph_node_name",
     "_run_fold_representative_names",

@@ -16,6 +16,7 @@ from typing import Any
 
 from .._label_format import format_memory, format_shape
 from .._render_utils import _open_file_quietly
+from ..code_panel import _code_panel_label
 
 SPAN_LOCAL = 12
 # Calibrated 2026-06-11: local 5k-node chains cost about 5k and dot rendered
@@ -376,7 +377,7 @@ def render_rank_layout(
     entries_to_plot: dict[str, Any],
     vis_mode: str,
     vis_call_depth: int,
-    show_buffer_layers: bool,
+    show_buffer_layers: Any,
     overrides: Any,
     node_mode: Any,
     node_spec_fn: Any,
@@ -390,6 +391,7 @@ def render_rank_layout(
     vis_save_only: bool,
     graph_caption: str,
     rankdir: str,
+    code_panel_source: str | None = None,
 ) -> str:
     """Render a graph with the pure-Python rank layout.
 
@@ -416,6 +418,7 @@ def render_rank_layout(
         vis_save_only: If True, don't open viewer.
         graph_caption: HTML label for the graph title.
         rankdir: Graphviz rank direction (BT, TB, LR).
+        code_panel_source: Optional source code to embed as a graph cluster.
 
     Returns:
         The generated DOT source string.
@@ -438,6 +441,8 @@ def render_rank_layout(
         DEFAULT_BG_COLOR,
         COMMUTE_FUNCS,
         _render_node_label,
+        _is_buffer_visible,
+        _is_hidden_buffer_update_node,
     )
     from .._render_utils import compute_module_penwidth
     from ..modes import COLLAPSED_MODE_REGISTRY
@@ -486,9 +491,17 @@ def render_rank_layout(
             root_node_names.append(graph_node_label)
 
     for _barcode, node in entries_to_plot.items():
-        if node.layer_label in skipped_labels:
+        if _render_node_label(node, vis_mode) in skipped_labels:
             continue
-        if node.is_buffer and not show_buffer_layers:
+        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+            continue
+        if _is_hidden_buffer_update_node(
+            trace,
+            node,
+            entries_to_plot,
+            show_buffer_layers,
+            vis_mode,
+        ):
             continue
 
         collapse_address = _collapse_address_for_node(
@@ -618,7 +631,7 @@ def render_rank_layout(
         for render_edge in (edge_map or {}).get(_render_node_label(node, vis_mode), []):
             child_node = render_edge.target
             metadata_child = render_edge.metadata_child
-            if child_node.is_buffer and not show_buffer_layers:
+            if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
                 continue
 
             # Resolve tail name
@@ -816,6 +829,22 @@ def render_rank_layout(
     for nn in root_node_names:
         if nn in node_data:
             lines.append(_node_line(nn))
+
+    if code_panel_source is not None:
+        panel_x = 0.0
+        panel_y = max_y + 180.0
+        lines.append("  subgraph cluster_torchlens_code_panel {")
+        lines.append('    label=""')
+        lines.append('    style="filled,rounded"')
+        lines.append('    fillcolor="#FAFAFA"')
+        lines.append('    color="#A8A8A8"')
+        lines.append('    margin="12"')
+        lines.append(
+            "    __tl_code_panel_node "
+            f"[label={_code_panel_label(code_panel_source)} shape=plaintext "
+            f'fontname="Courier" margin="0" pos="{panel_x:.1f},{panel_y:.1f}!"]'
+        )
+        lines.append("  }")
 
     # Module cluster hierarchy
     for mod in top_modules:

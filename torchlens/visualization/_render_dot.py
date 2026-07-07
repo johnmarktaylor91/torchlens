@@ -379,6 +379,10 @@ def draw(
     theme = resolve_theme(vis_theme, for_paper=for_paper)
     if node_overlay is None:
         node_overlay = getattr(self, "_node_overlay_scores", None)
+    elif isinstance(node_overlay, str) and node_overlay == getattr(
+        self, "_node_overlay_name", None
+    ):
+        node_overlay = getattr(self, "_node_overlay_scores", None)
 
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(vis_graph_overrides),
@@ -489,9 +493,9 @@ def draw(
         )
 
     graph_caption = (
-        f"<<B>{self.model_class_name}</B><br align='left'/>{self.num_tensors} "
-        f"tensors total ({self.total_activation_memory})"
-        f"<br align='left'/>{params_detail}<br align='left'/>>"
+        f"<<FONT COLOR='{theme.default_font}'><B>{self.model_class_name}</B>"
+        f"<br align='left'/>{self.num_tensors} tensors total ({self.total_activation_memory})"
+        f"<br align='left'/>{params_detail}<br align='left'/></FONT>>"
     )
     if getattr(self, "_has_direct_writes", False):
         graph_caption = graph_caption[:-2] + (
@@ -509,7 +513,7 @@ def draw(
                 entries_to_plot,
                 vis_mode,
                 vis_call_depth,
-                show_buffer_layers == "always",
+                show_buffer_layers,
                 overrides,
                 node_mode,
                 intervention_node_spec_fn,
@@ -523,6 +527,7 @@ def draw(
                 vis_save_only,
                 graph_caption,
                 rankdir,
+                source_text,
             )
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
         return result
@@ -604,9 +609,17 @@ def draw(
     antiparallel_projected_edges = projected_antiparallel_endpoint_pairs(forward_render_ir)
 
     for node in entries_to_plot.values():
-        if node.layer_label in skipped_labels:
+        if _render_node_label(node, vis_mode) in skipped_labels:
             continue
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+            continue
+        if _is_hidden_buffer_update_node(
+            self,
+            node,
+            entries_to_plot,
+            show_buffer_layers,
+            vis_mode,
+        ):
             continue
         _add_node_to_graphviz(
             self,

@@ -52,6 +52,9 @@ Important examples:
   internal Q/K/V scores, attention probabilities, or value aggregation steps.
 - FlashAttention kernels have the same limitation: the kernel internals are not
   TorchLens leaf ops.
+- Multi-output fused calls, including `nn.LSTM`, expose one visible TorchLens
+  op per returned tensor such as sequence output, final hidden state, and final
+  cell state. The fused kernel is still opaque internally.
 - Compiler stacks such as `torch.compile`, TorchScript, and exported graphs can
   bypass the Python calls TorchLens decorates. Capture the original uncompiled
   `nn.Module` when you need intervention visibility.

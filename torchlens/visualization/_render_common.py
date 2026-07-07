@@ -71,6 +71,8 @@ from ._label_format import (
 from .node_spec import (
     INTERVENTION_HOOK_BORDER_COLOR,
     INTERVENTION_HOOK_FILL_COLOR,
+    INTERVENTION_CONE_COLOR,
+    INTERVENTION_SITE_COLOR,
     NodeSpec,
     graphviz_graph_overrides,
     intervention_graph_override,
@@ -660,6 +662,8 @@ __all__ = [
     "INPUT_COLOR",
     "INTERVENTION_HOOK_BORDER_COLOR",
     "INTERVENTION_HOOK_FILL_COLOR",
+    "INTERVENTION_CONE_COLOR",
+    "INTERVENTION_SITE_COLOR",
     "Image",
     "InterveningClusterMode",
     "Iterable",

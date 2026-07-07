@@ -903,17 +903,25 @@ def _render_raw_input_image_batch(
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
     try:
-        batch_summary.montage(images, max_items).save(image_path)
+        montage = batch_summary.montage(images, max_items)
+        montage.save(image_path)
     except OSError:
         return {
             "label": render_lines_to_html([*label_lines, "preview unavailable"]),
             "tooltip": f"{total} input images (preview unavailable)",
         }
+    width_px, height_px = montage.size
+    width_in = max(width_px / 96.0, 0.1)
+    height_in = max((height_px + 24 * len(label_lines)) / 96.0, 0.1)
     return {
         "image": str(image_path),
         "imagescale": "true",
+        "fixedsize": "true",
+        "width": f"{width_in:.3f}",
+        "height": f"{height_in:.3f}",
         "label": render_lines_to_html(label_lines),
         "labelloc": "b",
+        "margin": "0",
         "shape": "none",
         "tooltip": f"{total} input images",
     }
@@ -1751,7 +1759,7 @@ def compute_default_node_lines(
             if rolling_suffix:
                 call_label = rolling_suffix
             else:
-                call_label = f" (x{layer_log.num_passes})"
+                call_label = f" (x{_rolled_visual_num_passes(layer_log)})"
     else:
         call_label = ""
 

@@ -87,6 +87,19 @@ def test_external_node_overlay_mapping_renders(tmp_path: Path) -> None:
     assert "overlay: 0.75" in dot
 
 
+def test_registered_node_overlay_name_renders(tmp_path: Path) -> None:
+    """Registered overlay names should resolve to their stored score mapping."""
+
+    model = nn.Linear(4, 2)
+    log = tl.trace(model, torch.randn(1, 4))
+    target = next(label for label in log.layer_labels if label.startswith("linear"))
+    log.add_node_overlay({target: 0.5}, name="importance")
+
+    dot = _render_dot(log, tmp_path, node_overlay="importance")
+
+    assert "overlay: 0.5" in dot
+
+
 def test_node_label_field_picker_limits_label_rows(tmp_path: Path) -> None:
     """node_label_fields should replace default rows with selected fields."""
 

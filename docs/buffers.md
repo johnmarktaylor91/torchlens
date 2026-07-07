@@ -46,6 +46,10 @@ class Cell(nn.Module):
 for each reassignment that is read or returned. `num_overwrites == 2`, and
 `final_value` is the second written state.
 
+In graph rendering, `show_buffer_layers="meaningful"` hides BatchNorm running
+statistics (`running_mean`, `running_var`) and `num_batches_tracked`; use
+`show_buffer_layers="always"` when those bookkeeping buffers should be visible.
+
 For BatchNorm in training mode, `running_mean`, `running_var`, and
 `num_batches_tracked` are buffer entities. The running-stat versions are emitted
 when the fused native BatchNorm call updates them. `num_batches_tracked` is

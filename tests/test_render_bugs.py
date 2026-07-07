@@ -83,6 +83,27 @@ class _NestedTorchOpModel(nn.Module):
         return self.block(x).sum()
 
 
+class _LSTMCellSeq(nn.Module):
+    """Loop over an LSTMCell whose call returns two tensors."""
+
+    def __init__(self) -> None:
+        """Initialize the recurrent cell."""
+
+        super().__init__()
+        self.cell = nn.LSTMCell(6, 5)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run four recurrent cell calls."""
+
+        h = torch.zeros(x.shape[1], 5)
+        c = torch.zeros(x.shape[1], 5)
+        outputs = []
+        for step in range(x.shape[0]):
+            h, c = self.cell(x[step], (h, c))
+            outputs.append(h)
+        return torch.stack(outputs)
+
+
 @pytest.fixture
 def forward_trace() -> Trace:
     """Return a tiny forward Trace."""
@@ -97,6 +118,91 @@ def backward_trace() -> Trace:
     trace = tl.trace(_TinyRenderModel(), torch.randn(2, 3, requires_grad=True), save_grads="all")
     trace.log_backward(trace[trace.output_layers[0]].out)
     return trace
+
+
+def test_skip_fn_omits_unrolled_skipped_node(tmp_path: Path) -> None:
+    """Skipped unrolled nodes should not be emitted as detached DOT nodes."""
+
+    trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
+
+    dot = trace.draw(
+        skip_fn=lambda layer: layer.func_name == "relu",
+        vis_outpath=str(tmp_path / "skip_relu"),
+        vis_save_only=True,
+        vis_fileformat="dot",
+        order_siblings=False,
+    )
+
+    assert "relu_1_2" not in dot
+
+
+def test_hidden_buffer_update_node_is_not_rendered(tmp_path: Path) -> None:
+    """Buffer-only update ops hidden by buffer visibility should not render."""
+
+    model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8)).train()
+    trace = tl.trace(model, torch.randn(4, 8))
+
+    dot = trace.draw(
+        vis_outpath=str(tmp_path / "batchnorm_hidden_buffers"),
+        vis_save_only=True,
+        vis_fileformat="dot",
+        order_siblings=False,
+    )
+
+    assert "add_1_2" not in dot
+    assert "batchnorm_1_3" in dot
+
+
+def test_lstmcell_rolled_count_uses_calls_not_outputs(tmp_path: Path) -> None:
+    """Rolled multi-output module ops should count calls in the ``(xN)`` badge."""
+
+    trace = tl.trace(_LSTMCellSeq(), torch.randn(4, 1, 6))
+
+    dot = trace.draw(
+        vis_mode="rolled",
+        vis_outpath=str(tmp_path / "lstmcell_rolled"),
+        vis_save_only=True,
+        vis_fileformat="dot",
+        order_siblings=False,
+    )
+
+    assert "lstmcell_1_4 (x4)" in dot
+    assert "lstmcell_1_4 (x8)" not in dot
+
+
+def test_dark_theme_themes_caption_and_parameter_nodes(tmp_path: Path) -> None:
+    """Dark theme should not leave graph captions or parameter nodes dark-on-dark."""
+
+    trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
+
+    dot = trace.draw(
+        vis_theme="dark",
+        vis_outpath=str(tmp_path / "dark"),
+        vis_save_only=True,
+        vis_fileformat="dot",
+        order_siblings=False,
+    )
+
+    assert "FONT COLOR='#F9FAFB'" in dot
+    assert 'fillcolor="#374151"' in dot
+
+
+def test_rank_layout_embeds_code_panel(tmp_path: Path) -> None:
+    """Rank layout should keep code panel content instead of dropping it."""
+
+    trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
+
+    dot = trace.draw(
+        vis_node_placement="rank",
+        code_panel=lambda _model: "def forward(self, x):\n    return self[1](self[0](x))",
+        vis_outpath=str(tmp_path / "rank_code_panel"),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        order_siblings=False,
+    )
+
+    assert "cluster_torchlens_code_panel" in dot
+    assert "Source code" in dot
 
 
 def _raise_timeout(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[Any]:

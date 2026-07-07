@@ -130,3 +130,28 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
 
     similarity = _pixel_similarity(candidate_svg, GOLDEN_SVG)
     assert similarity >= 0.95
+
+
+def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
+    """Bundle diff captions should describe the actual rendered comparison."""
+
+    torch.manual_seed(0)
+    model = torch.nn.Linear(3, 2).eval()
+    left = tl.trace(model, torch.randn(1, 3))
+    right = left.fork("patched")
+    bundle = tl.bundle({"base": left, "patched": right}, baseline="base")
+
+    outpath = tmp_path / "member_caption"
+    dot_source = bundle.show_diff(
+        left="base",
+        right="patched",
+        vis_outpath=str(outpath),
+        vis_save_only=True,
+    )
+    svg_text = outpath.with_suffix(".svg").read_text(encoding="utf-8")
+
+    assert "base vs patched" in dot_source
+    assert "columns: base, patched" in dot_source
+    assert "layer1.0.relu" not in dot_source
+    assert "top: clean, bottom: ablated" not in dot_source
+    assert "base versus patched" in svg_text

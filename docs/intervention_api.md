@@ -158,6 +158,12 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 | `log.rerun(model, x, append=False)` | Re-execute the model under the active spec. |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
 
+`Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
+recipe stored on an intervention-ready trace, such as sites registered with
+`log.set(...)` or `log.do(...)`. Capture-time `intervene=...` calls record
+fire metadata on matched layers, but they are not replay plans and are not
+drawn as planned sites.
+
 ## Bundle
 
 Construct with `tl.bundle(...)` or `tl.Bundle(...)`:

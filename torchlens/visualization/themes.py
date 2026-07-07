@@ -152,7 +152,17 @@ def apply_theme_to_spec(spec: NodeSpec, theme: VisualizationTheme) -> NodeSpec:
         Themed copy of ``spec``.
     """
 
-    fillcolor = theme.default_fill if spec.fillcolor in {None, "white"} else spec.fillcolor
+    param_fills = {
+        "#E6E6E6",
+        "#D9D9D9",
+        "#B0B0B0",
+        "#D9D9D9:#B0B0B0",
+    }
+    fillcolor: str | None
+    if theme.name == "dark" and spec.fillcolor in param_fills:
+        fillcolor = "#374151" if ":" not in str(spec.fillcolor) else "#374151:#4B5563"
+    else:
+        fillcolor = theme.default_fill if spec.fillcolor in {None, "white"} else spec.fillcolor
     fontcolor = theme.default_font if spec.fontcolor in {None, "black"} else spec.fontcolor
     color = theme.default_border if spec.color in {None, "black"} else spec.color
     return spec.replace(fillcolor=fillcolor, fontcolor=fontcolor, color=color)

@@ -304,6 +304,54 @@ def _build_skip_filtered_edge_map(
     return edge_map, skipped_labels
 
 
+def _is_hidden_buffer_update_node(
+    trace: "Trace",
+    node: GraphNode,
+    entries_to_plot: Mapping[str, GraphNode],
+    show_buffer_layers: BufferVisibilityLiteral,
+    vis_mode: str,
+) -> bool:
+    """Return whether ``node`` only updates buffers hidden by the visibility mode.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing the rendered nodes.
+    node:
+        Candidate non-buffer update operation.
+    entries_to_plot:
+        Nodes visible before buffer filtering.
+    show_buffer_layers:
+        Active buffer visibility mode.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    bool
+        True when every parent and child endpoint is a hidden buffer.
+    """
+
+    if isinstance(node, BoundaryNode) or node.is_buffer or show_buffer_layers == "always":
+        return False
+    endpoint_labels = list(node.parents) + list(node.children)
+    if not endpoint_labels:
+        return False
+    entries_by_layer_label = {entry.layer_label: entry for entry in entries_to_plot.values()}
+    endpoints: list[GraphNode] = []
+    for label in endpoint_labels:
+        endpoint = entries_to_plot.get(label) or entries_by_layer_label.get(label)
+        if endpoint is None and vis_mode == "unrolled":
+            endpoint = trace.layer_dict_all_keys.get(label)
+        if endpoint is None:
+            return False
+        endpoints.append(endpoint)
+    return all(
+        endpoint.is_buffer and not _is_buffer_visible(endpoint, show_buffer_layers)
+        for endpoint in endpoints
+    )
+
+
 def _entries_to_plot_for_context(
     trace: "Trace",
     vis_mode: VisModeLiteral,
@@ -1954,6 +2002,7 @@ __all__ = [
     "_insert_before_final_brace",
     "_insert_into_cluster",
     "_is_non_file_svg_href",
+    "_is_hidden_buffer_update_node",
     "_node_is_inside_module",
     "_owner_module_key_for_node",
     "_rank_group_lines",

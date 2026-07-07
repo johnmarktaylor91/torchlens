@@ -96,16 +96,48 @@ def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) ->
             fontcolor=theme.default_font,
             style="rounded",
         )
-        for index, line in enumerate(legend_lines(theme)):
-            label, color = line.split(": ", 1)
-            legend.node(
-                f"tl_legend_{index}",
-                label=label,
-                shape="box",
-                style="filled,rounded",
-                fillcolor=color,
+        legend_specs = (
+            NodeSpec(
+                ["input"], shape="oval", fillcolor=INPUT_COLOR, fontcolor="black", color="black"
+            ),
+            NodeSpec(
+                ["output"], shape="oval", fillcolor=OUTPUT_COLOR, fontcolor="black", color="black"
+            ),
+            NodeSpec(
+                ["parameterized"],
+                shape="oval",
+                fillcolor=TRAINABLE_PARAMS_BG_COLOR,
                 fontcolor="black",
-                color=theme.default_border,
+                color="black",
+            ),
+            NodeSpec(
+                ["buffer"],
+                shape="cylinder",
+                fillcolor=DEFAULT_BG_COLOR,
+                fontcolor="black",
+                color="black",
+            ),
+            NodeSpec(
+                ["boolean"],
+                shape="oval",
+                fillcolor=BOOL_NODE_COLOR,
+                fontcolor="black",
+                color="black",
+            ),
+            NodeSpec(
+                ["intervention/cone"],
+                shape="oval",
+                fillcolor=INTERVENTION_CONE_COLOR,
+                fontcolor="black",
+                color=INTERVENTION_SITE_COLOR,
+                penwidth=2.0,
+            ),
+        )
+        for index, spec in enumerate(legend_specs):
+            node_args = _node_spec_to_graphviz_args(apply_theme_to_spec(spec, theme))
+            node_args["name"] = f"tl_legend_{index}"
+            legend.node(
+                **node_args,
             )
 
 
