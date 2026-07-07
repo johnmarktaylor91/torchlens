@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.options import CaptureOptions
 
 
 class ThreeOpModel(nn.Module):
@@ -51,11 +52,15 @@ def test_rerun_preserves_static_layers_to_save_subset() -> None:
     """Rerun does not save every Op after a static selective capture."""
 
     x = torch.randn(2, 3)
-    log = tl.trace(ThreeOpModel(), x, layers_to_save=["relu"], save_arg_values=True)
+    log = tl.trace(
+        ThreeOpModel(),
+        x,
+        capture=CaptureOptions(layers_to_save=["relu"], save_arg_values=True),
+    )
     saved_before = _saved_op_labels(log)
     num_ops_before = len(log.layer_list)
 
-    log.rerun(ThreeOpModel(), x + 1)
+    log.run(ThreeOpModel(), x + 1)
 
     assert saved_before
     assert _saved_op_labels(log) == saved_before
@@ -70,7 +75,7 @@ def test_rerun_preserves_predicate_save_subset() -> None:
     saved_before = _saved_op_labels(log)
     num_ops_before = len(log.layer_list)
 
-    log.rerun(ThreeOpModel(), x + 1)
+    log.run(ThreeOpModel(), x + 1)
 
     assert saved_before
     assert _saved_op_labels(log) == saved_before

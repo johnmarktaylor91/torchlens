@@ -11,7 +11,7 @@ import pytest
 from packaging.version import InvalidVersion, Version
 
 TESTS_DIR = str(Path(__file__).resolve().parents[1])
-TEST_OUTPUTS_DIR = opj(TESTS_DIR, "test_outputs")
+TEST_OUTPUTS_DIR = opj(TESTS_DIR, "generated_outputs")
 REPORTS_DIR = opj(TEST_OUTPUTS_DIR, "reports")
 VIS_OUTPUT_DIR = opj(TEST_OUTPUTS_DIR, "visualizations")
 

@@ -29,7 +29,7 @@ instead of partway through an 18-step pipeline.
 from __future__ import annotations
 
 import warnings
-from typing import Any, Iterable, Iterator, List, Tuple
+from typing import Any, Iterator, List, Tuple
 
 import torch
 from torch import nn

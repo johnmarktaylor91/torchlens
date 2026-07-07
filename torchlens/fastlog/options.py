@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Final, Literal, Mapping
 
-from .._deprecations import MISSING, MissingType, warn_deprecated_alias
+from .._deprecations import MISSING, MissingType
 from ..ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions

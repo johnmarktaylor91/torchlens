@@ -34,7 +34,6 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
 
-from .. import _state
 from ..backends import (
     BackendName,
     BackendUnsupportedError,
@@ -555,7 +554,7 @@ def _get_op_nums_from_user_labels(
             }
         )
 
-    if type(which_layers) != list:
+    if not isinstance(which_layers, list):
         which_layers = [which_layers]  # type: ignore[list-item]
     raw_layer_nums_to_save: set[int] = set()
     for layer_key in which_layers:

@@ -13,7 +13,6 @@ import torchlens as tl
 from conftest import tensorflow_backend_modules
 from torchlens.backends import (
     BackendMismatchError,
-    BackendUnsupportedError,
     get_backend_spec,
     resolve_backend_spec,
 )

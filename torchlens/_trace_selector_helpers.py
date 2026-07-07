@@ -7,7 +7,6 @@ from collections.abc import Iterable
 from typing import Any, cast
 
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
-from .fastlog.exceptions import PredicateError
 from .fastlog.options import PredicateFn
 from .fastlog.types import RecordContext
 from .intervention.selectors import BaseSelector

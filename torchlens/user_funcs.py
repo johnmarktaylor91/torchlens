@@ -20,42 +20,26 @@ two-pass path (save specific layers).
 
 import collections.abc
 import copy
-import dataclasses
-import hashlib
-import json
 import os
 import pickle
-import random
 import re
 import tempfile
 import time
-import types
 import warnings
-from collections import OrderedDict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Sequence, cast
+from typing import Any, Callable, Iterable, Literal, Sequence, cast
 
 import torch
 from torch import nn
-from tqdm import tqdm
 
-from ._deprecations import MISSING, MissingType, resolve_renamed_kwarg, warn_deprecated_alias
+from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._errors import TorchLensPostfuncError
 from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
 from ._input_coerce import _coerce_input_args
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
-    BufferVisibilityLiteral,
-    CollapseLiteral,
     OutputDeviceLiteral,
-    VisDirectionLiteral,
-    VisInterventionModeLiteral,
-    VisModeLiteral,
-    VisNodeModeLiteral,
-    VisNodePlacementLiteral,
-    VisRendererLiteral,
-    FoldRunsLiteral,
 )
 from .backends import (
     BackendName,
@@ -65,7 +49,6 @@ from .backends import (
     resolve_backend_spec,
 )
 from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
-from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
 from .fastlog.exceptions import PredicateError
@@ -86,29 +69,22 @@ from .options import (
     ReplayOptions,
     merge_save_options,
     merge_streaming_options,
-    merge_visualization_options,
-    visualization_to_render_kwargs,
 )
 from ._robustness import check_model_and_input_variants
-from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_kwargs
 from .utils.display import _vprint, warn_parallel
-from .utils._torch_compat import get_dynamo_optimized_module_type
-from .utils.introspection import _get_code_context, get_vars_of_type_from_obj
-from .utils.rng import set_random_seed
+from .utils.introspection import _get_code_context
 from .utils.tensor_utils import SaveMode
 from .visualization.code_panel import (
-    CodePanelOption,
     capture_model_source_code,
     make_weak_model_ref,
 )
-from .intervention.errors import AppendMismatchError, InterventionReadyConflictError
+from .intervention.errors import InterventionReadyConflictError
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
 from .intervention.resolver import resolve_sites
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
-from .fastlog.types import RecordContext
 from .capture.stop import StopDirective
 from ._trace_state import TraceState
 from ._capture_state_helpers import (
@@ -117,14 +93,10 @@ from ._capture_state_helpers import (
     _capture_output_metadata_from_model_config,
     _clone_state_dict_with_metadata as _clone_state_dict_with_metadata,  # noqa: F401
     decide_recording_of_batch as decide_recording_of_batch,  # noqa: F401
-    _detach_nested_for_cache,
     _facet_recipe_cache_key,
-    _fingerprint_model_content,
     _fingerprint_model_weights,
     _hash_input_signatures,
     _input_id_for_relationship_evidence,
-    _iter_tensor_inputs,
-    _model_for_ground_truth_validation,
     _move_tensors_to_device,
     _prepare_log_for_capture_cache,
     _qualname_for_model,
@@ -133,17 +105,12 @@ from ._capture_state_helpers import (
 )
 from ._chunked_capture_helpers import (
     _append_chunk_trace_state,
-    _contains_auto_coercible_raw_input,
-    _is_numpy_array_value,
-    _is_pil_image_value,
     _should_store_auto_coerced_raw_input,
-    _validate_chunk_append_candidate,
     _validate_chunked_forward_capture,
 )
 from ._trace_selector_helpers import (
     _combine_save_predicates,
     _is_selective_label_save,
-    _label_save_candidates,
     _layers_to_save_has_integer_selector,
     _layers_to_save_has_negative_index,
     _layers_to_save_mentions_identity,

@@ -15,11 +15,11 @@ from torchlens.capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_OUTPUTS_DIR = opj(TESTS_DIR, "test_outputs")
+TEST_OUTPUTS_DIR = opj(TESTS_DIR, "generated_outputs")
 REPORTS_DIR = opj(TEST_OUTPUTS_DIR, "reports")
 
 
-def test_lookup_table_coverage():
+def test_lookup_table_coverage() -> None:
     """Verify every function called during the test suite has an ArgSpec entry.
 
     Runs last (ordered by conftest.py). Reads accumulated

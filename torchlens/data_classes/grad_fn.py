@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import builtins
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator
 import weakref
 
 import torch

@@ -21,7 +21,9 @@ from .registry import (
     resolve_backend_spec,
     unregister_backend_spec,
 )
-from . import default_specs as _default_specs
+
+# Import for backend registration side effects.
+from . import default_specs as _default_specs  # noqa: F401
 
 __all__ = [
     "BackendAmbiguityError",

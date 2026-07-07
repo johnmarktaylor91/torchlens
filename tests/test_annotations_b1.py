@@ -163,7 +163,7 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     relu.annotations["dedup_reference_label"] = "stale"
     trace.layer_logs[relu.layer_label].annotations["dedup_reference_label"] = "stale"
 
-    result = trace.rerun(model, x + 0.125)
+    result = trace.run(model, x + 0.125)
     rerun_relu = result.resolve_sites(tl.func("relu"), max_fanout=10).first()
 
     assert result is trace

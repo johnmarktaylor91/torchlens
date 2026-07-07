@@ -90,7 +90,7 @@ def assign_to_sequence_or_dict(obj_: Any, ind: int, new_value: Any) -> Any:
         The modified sequence or dict (new object for tuples, same object
         for lists/dicts).
     """
-    if type(obj_) == tuple:
+    if isinstance(obj_, tuple):
         # Tuples are immutable — rebuild with the element swapped.
         list_ = list(obj_)
         list_[ind] = new_value

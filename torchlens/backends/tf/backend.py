@@ -9,7 +9,6 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 from ... import _state
-from ..._deprecations import MISSING
 from ...backends import BackendName
 from ...data_classes.param import ParamAccessor
 from ...data_classes.trace import Trace

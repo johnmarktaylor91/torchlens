@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 import json
-import os
 import platform
 import pickle
 import shutil
@@ -38,7 +37,7 @@ from .payload_codec import (
 from .paths import resolve_bundle_blob_path
 from .rehydrate import rehydrate_trace
 from .scrub import BlobSpec, scrub_for_save
-from .tensor_policy import FailReason, Ok, SkipReason
+from .tensor_policy import FailReason, Ok
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
 from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec

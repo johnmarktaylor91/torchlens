@@ -205,7 +205,7 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
     log.set(tl.func("relu"), torch.zeros(2, 3))
     assert log._out_recipe_revision == 0
 
-    result = log.rerun(ReluAdd(), x)
+    result = log.run(ReluAdd(), x)
 
     assert result is log
     assert log.state is TraceState.RERUN_PROPAGATED

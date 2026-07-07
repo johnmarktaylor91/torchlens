@@ -29,7 +29,6 @@ Key concepts:
     Deeper nesting is not tracked.
 """
 
-import itertools as it
 import time
 import warnings
 import weakref

@@ -100,7 +100,7 @@ from .buffer_writes import (
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    pass
 
 
 _DETACHED_REFERENCE_PATCH_POLICY = "default"

@@ -22,11 +22,9 @@ from typing import (
     Dict,
     List,
     Literal,
-    Mapping,
     Sequence,
     Set,
     TYPE_CHECKING,
-    Union,
     cast,
 )
 
@@ -1275,7 +1273,7 @@ def _validate_layer_against_arg(
             if validation_result_for_arg_and_layer.decision != "validated":
                 return validation_result_for_arg_and_layer
 
-    elif type(val) == dict:
+    elif isinstance(val, dict):
         for subkey, subval in val.items():
             argloc_key = (key, subkey)
             validation_result_for_arg_and_layer = _check_arglocs_correct_for_arg(
@@ -2712,7 +2710,7 @@ def _prepare_input_args_for_validating_layer(
             else:
                 parent_layer_func_values = parent_values
 
-            if type(key) != tuple:
+            if not isinstance(key, tuple):
                 input_args[arg_type][key] = parent_layer_func_values
             else:
                 input_args[arg_type][key[0]] = _write_nested_replay_arg_value(
@@ -3515,7 +3513,7 @@ def _buffer_parent_source_equal(
     if parent_out is None:
         return False
     try:
-        if type(key) != tuple:
+        if not isinstance(key, tuple):
             saved_arg_value = input_args[arg_type][key]
         else:
             saved_arg_value = input_args[arg_type][key[0]]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import os
 from pathlib import Path
 import time
 from types import ModuleType
@@ -12,7 +13,6 @@ import torch
 import torchvision.models as tvm
 
 import torchlens as tl
-from torchlens.visualization import auto_collapse
 from torchlens.visualization.auto_collapse import (
     analyze_collapse,
     resolve_collapse_fn,
@@ -915,15 +915,17 @@ def test_auto_plan_unaffected_by_max_salience_floor(
 
 
 @pytest.mark.heavy
+@pytest.mark.serial
 def test_v2_selection_latency_smoke() -> None:
-    """Report a heavy latency smoke bound for a larger synthetic stack."""
+    """Report a load-scaled heavy latency smoke bound for a larger synthetic stack."""
 
     trace = _trace(UniformStack(depth=80), torch.randn(2, 8))
     try:
         start = time.perf_counter()
         result = select_collapse_plan(trace, RenderContext())
         elapsed_ms = (time.perf_counter() - start) * 1000.0
+        budget_factor = float(os.environ.get("TORCHLENS_TIMING_BUDGET_FACTOR", "2.0"))
         assert result.visible_count > 0
-        assert elapsed_ms < 2000.0
+        assert elapsed_ms < 2000.0 * budget_factor
     finally:
         trace.cleanup()

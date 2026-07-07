@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 import traceback
 import weakref
 from collections import defaultdict, deque
@@ -15,7 +14,6 @@ from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast
 
 import torch
 
-from .._state import pause_logging
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import (
     ActivationRecord,

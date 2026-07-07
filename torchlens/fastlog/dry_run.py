@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from torch import nn
@@ -43,16 +44,29 @@ def dry_run(
     """
 
     input_args = _coerce_input_args(model, input_args)
-    with Recorder(
-        model,
-        keep_op=keep_op,
-        keep_module=keep_module,
-        history_size=history_size,
-        include_source_events=include_source_events,
-        on_predicate_error="fail-fast",
-        streaming=None,
-        random_seed=random_seed,
-    ) as recorder:
+    recorder_kwargs: dict[str, Any] = {
+        "save": keep_op,
+        "history_size": history_size,
+        "include_source_events": include_source_events,
+        "on_predicate_error": "fail-fast",
+        "streaming": None,
+        "random_seed": random_seed,
+    }
+    if keep_module is not None:
+        recorder_kwargs["keep_module"] = keep_module
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            r"Recorder\(keep_module=\.\.\.\) is deprecated; use Recorder\(save=\.\.\.\) instead\.",
+            DeprecationWarning,
+        )
+        recorder_cm = Recorder(
+            model,
+            **recorder_kwargs,
+        )
+
+    with recorder_cm as recorder:
         if recorder._state is None:  # noqa: SLF001
             raise RuntimeError("Recorder state was not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001

@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.ir.container import DictKey, TupleIndex
-from torchlens.ir.container_registry import FuncSite, Phase, Role
+from torchlens.ir.container_registry import Phase, Role
 
 
 class ScalarConfigModel(nn.Module):

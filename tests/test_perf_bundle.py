@@ -20,6 +20,7 @@ provided behind ``@pytest.mark.slow`` for local sanity checking.
 
 from __future__ import annotations
 
+import os
 import sys
 import types
 from unittest import mock
@@ -332,8 +333,9 @@ class TestCudaProbeGating:
 
 
 @pytest.mark.slow
+@pytest.mark.serial
 def test_perf_bundle_benchmark_probe() -> None:
-    """End-to-end smoke benchmark to sanity-check the bundle locally.
+    """End-to-end load-scaled smoke benchmark to sanity-check the bundle locally.
 
     Not a regression gate -- timings vary with system load. Simply confirm
     that the standard trace still completes for a small model
@@ -353,4 +355,5 @@ def test_perf_bundle_benchmark_probe() -> None:
         torchlens.trace(model, x)
     elapsed = time.perf_counter() - start
 
-    assert elapsed < 60.0, f"Bundle benchmark unexpectedly slow: {elapsed:.2f}s"
+    budget_factor = float(os.environ.get("TORCHLENS_TIMING_BUDGET_FACTOR", "2.0"))
+    assert elapsed < 60.0 * budget_factor, f"Bundle benchmark unexpectedly slow: {elapsed:.2f}s"

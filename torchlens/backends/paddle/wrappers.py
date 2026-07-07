@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any

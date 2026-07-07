@@ -26,7 +26,8 @@ from .captured_run import ActivationLookup, CapturedRun
 from .data_classes.layer import Layer
 from .data_classes.container import Container
 from .data_classes.op import Op
-from ._errors import AmbiguousOpLookupError, ReentrantTraceError
+from ._errors import AmbiguousOpLookupError
+from ._state import ReentrantTraceError
 from .data_classes.trace import Trace
 from .fastlog import Recording, record
 from .intervention import (  # type: ignore[no-redef]
@@ -1059,6 +1060,8 @@ __all__ = [
     "facets",
     "record",
     "Recording",
+    "ActivationLookup",
+    "CapturedRun",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "load",
@@ -1077,6 +1080,12 @@ __all__ = [
     "extract_dataset",
     "batched_extract",
     "validate",
+    "decide_recording_of_batch",
+    "record_kpi_in_graph",
+    "register_tensor_connection",
+    "show_bundle_graph",
+    "options",
+    "to_disk",
     "AmbiguousOpLookupError",
     "ReentrantTraceError",
     "Trace",
@@ -1095,6 +1104,9 @@ __all__ = [
     "func_transform",
     "followed_by",
     "grad_fn",
+    "grad_input",
+    "grad_output",
+    "in_backward_pass",
     "intervening",
     "without_op",
     "regex",

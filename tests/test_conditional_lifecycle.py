@@ -10,7 +10,6 @@ import torch.nn as nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens import trace as trace_fn  # noqa: E402
 from torchlens._deprecations import _WARNED_DEPRECATIONS  # noqa: E402
 from torchlens.data_classes.cleanup import _remove_log_entry_references  # noqa: E402
 from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402

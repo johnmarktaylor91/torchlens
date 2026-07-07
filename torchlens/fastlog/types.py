@@ -14,6 +14,17 @@ from ..captured_run import CapturedRun
 from ..ir.predicate import EventKind, ModuleStackFrame, RecordContext
 from ..utils.tensor_utils import SaveMode
 
+__all__ = [
+    "ActivationRecord",
+    "CaptureSpec",
+    "GradRecordContext",
+    "ModuleStackFrame",
+    "PredicateFailure",
+    "RecordContext",
+    "Recording",
+    "StorageIntent",
+]
+
 if TYPE_CHECKING:
     from ..capture.projections import RecordingState
     from ..data_classes.trace import Trace

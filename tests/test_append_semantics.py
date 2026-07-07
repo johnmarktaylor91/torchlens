@@ -9,7 +9,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import AppendBatchDependenceError
+from torchlens.io import load_intervention_spec
+from torchlens.intervention.errors import AppendBatchDependenceError, ControlFlowDivergenceWarning
+from torchlens.options import CaptureOptions, ReplayOptions
 
 
 class _AppendSemanticsModel(nn.Module):
@@ -62,13 +64,18 @@ def test_is_appended_resets_on_non_append_rerun() -> None:
     """A replacement rerun clears previous append state."""
 
     model = _AppendSemanticsModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3), intervention_ready=True)
-    trace.rerun(model, torch.randn(1, 3), append=True)
+    trace = tl.trace(
+        model,
+        torch.randn(2, 3),
+        capture=CaptureOptions(intervention_ready=True),
+    )
+    trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
     assert trace.is_appended is True
     assert trace._append_sequence_id == 1
 
-    trace.rerun(model, torch.randn(4, 3))
+    with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
+        trace.run(model, torch.randn(4, 3))
 
     assert trace.is_appended is False
     assert trace._append_sequence_id == 0
@@ -80,10 +87,14 @@ def test_repeated_appends_increment_sequence_id_and_history() -> None:
     """Repeated append reruns increment sequence ids and keep provenance."""
 
     model = _AppendSemanticsModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3), intervention_ready=True)
+    trace = tl.trace(
+        model,
+        torch.randn(2, 3),
+        capture=CaptureOptions(intervention_ready=True),
+    )
 
-    trace.rerun(model, torch.randn(1, 3), append=True)
-    trace.rerun(model, torch.randn(3, 3), append=True)
+    trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+    trace.run(model, torch.randn(3, 3), replay=ReplayOptions(append=True))
 
     assert trace.is_appended is True
     assert trace._append_sequence_id == 2
@@ -96,12 +107,16 @@ def test_intervention_save_append_state_consistency(tmp_path: Path) -> None:
     """Saved intervention metadata mirrors in-memory append state."""
 
     model = _AppendSemanticsModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3), intervention_ready=True)
-    trace.rerun(model, torch.randn(1, 3), append=True)
+    trace = tl.trace(
+        model,
+        torch.randn(2, 3),
+        capture=CaptureOptions(intervention_ready=True),
+    )
+    trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
     spec_path = tmp_path / "append_state.tlspec"
     trace.save_intervention(spec_path, level="audit")
-    spec = tl.load_intervention_spec(spec_path)
+    spec = load_intervention_spec(spec_path)
     append_state = spec.metadata["append_state"]
 
     assert append_state["is_appended"] is True
@@ -117,11 +132,13 @@ def test_append_train_mode_no_helper_grad_message() -> None:
     trace = tl.trace(
         model,
         torch.randn(2, 3),
-        intervention_ready=True,
-        save_grads=True,
-        backward_ready=True,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            save_grads=True,
+            backward_ready=True,
+        ),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     with pytest.raises(AppendBatchDependenceError, match="batch-independent helper"):
-        trace.rerun(model, torch.randn(1, 3), append=True)
+        trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))

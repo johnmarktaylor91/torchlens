@@ -1,6 +1,5 @@
 """Tests for Param, ParamAccessor, and param-related visualization."""
 
-import os
 from os.path import join as opj
 
 import pytest
@@ -12,7 +11,6 @@ from conftest import VIS_OUTPUT_DIR
 from torchlens import trace as trace_fn
 from torchlens.types import Param
 from torchlens.visualization import show_model_graph
-from torchlens.data_classes import ParamAccessor
 
 
 # ---------------------------------------------------------------------------

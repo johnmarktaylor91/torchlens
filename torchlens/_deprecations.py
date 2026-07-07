@@ -49,7 +49,7 @@ def warn_deprecated_alias(old: str, new: str) -> None:
         f"`{old}` is deprecated; use `{new}` instead. "
         "The old name continues to work but will be removed in a future release.",
         DeprecationWarning,
-        stacklevel=2,
+        stacklevel=6,
     )
 
 

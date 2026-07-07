@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import time
 import collections.abc
 from typing import Any
@@ -11,7 +10,6 @@ from ._deprecations import MISSING
 from .intervention.errors import AppendMismatchError, ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .options import StreamingOptions
-from ._chunking import normalize_chunk_paths
 from .data_classes.trace import Trace
 from ._trace_state import TraceState
 

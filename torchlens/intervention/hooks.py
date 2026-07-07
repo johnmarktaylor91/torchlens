@@ -26,9 +26,7 @@ from .selectors import (
     FacetSelector,
     GradKindSelector,
     NotSelector,
-    SelectorLike,
     _classify_selector_direction,
-    in_module,
 )
 from .types import HelperSpec, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec
 

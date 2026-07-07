@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -80,7 +80,7 @@ def _trace() -> tuple[_EncoderModel, torch.Tensor, tl.Trace]:
 
     model = _EncoderModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
     return model, x, trace
 
 
@@ -282,7 +282,11 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
         return helper
 
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(_EncoderModel(), x, save_grads="all", backward_ready=True)
+    trace = tl.trace(
+        _EncoderModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     trace.attach_hooks(
         tl.grad_output() & tl.grad_fn(type="relu"),
         _helper_spec(
@@ -324,7 +328,11 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
         return helper
 
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(_EncoderModel(), x, save_grads="all", backward_ready=True)
+    trace = tl.trace(
+        _EncoderModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     trace.attach_hooks(
         tl.grad_fn(type="relu") & tl.in_backward_pass(2),
         _helper_spec(
@@ -417,7 +425,11 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
 
     zero_in_place.direction = "backward"  # type: ignore[attr-defined]
     x = torch.ones(2, 3, requires_grad=True)
-    trace = tl.trace(_EncoderModel(), x, save_grads="all", backward_ready=True)
+    trace = tl.trace(
+        _EncoderModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     trace.attach_hooks(tl.grad_fn(type="relu"), zero_in_place, confirm_mutation=True)
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
@@ -655,7 +667,7 @@ def test_selector_resolve_intervening_grad_fn_filtered_with_in_module() -> None:
     """Intervening grad_fns are filtered by module predicates."""
 
     trace = _logged_backward_trace()
-    sites = trace.find_sites(tl.intervening() & tl.in_module("encoder"), max_fanout=100)
+    sites = trace.find_sites(tl.without_op() & tl.in_module("encoder"), max_fanout=100)
     assert len(sites) == 0
 
 
@@ -725,7 +737,11 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
 
     scale_grad.direction = "backward"  # type: ignore[attr-defined]
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(_PowModel(), x, save_grads="all", backward_ready=True)
+    trace = tl.trace(
+        _PowModel(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     trace.attach_hooks(tl.grad_fn(type="pow"), scale_grad, confirm_mutation=True)
     trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
     pow_sites = [site for site in trace.grad_fn_logs.values() if site.type == "pow"]
@@ -748,7 +764,7 @@ def test_selector_resolution_direction_grad_fn_and_label() -> None:
 
 @pytest.mark.parametrize(
     "selector",
-    [tl.grad_fn(type="ReluBackward0"), tl.intervening(), tl.label("relu_back_1_1")],
+    [tl.grad_fn(type="ReluBackward0"), tl.without_op(), tl.label("relu_back_1_1")],
 )
 def test_backward_selector_target_spec_round_trip(selector: Any) -> None:
     """Backward selectors round-trip through resolver and hook target specs."""

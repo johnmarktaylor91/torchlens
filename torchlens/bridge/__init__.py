@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib
 from types import ModuleType
-from typing import Any
 
 _BRIDGE_MODULES = {
     "brain_score",

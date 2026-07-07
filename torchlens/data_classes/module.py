@@ -31,10 +31,8 @@ from typing import (
     ClassVar,
     Dict,
     List,
-    Literal,
     Optional,
     TextIO,
-    Tuple,
     Union,
     cast,
 )
@@ -43,7 +41,7 @@ import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
-from ..quantities import Bytes, Duration, Flops, Macs, as_duration
+from ..quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from ._runtime_handles import runtime_handle_from_trace

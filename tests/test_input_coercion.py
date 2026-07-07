@@ -350,7 +350,7 @@ def test_trace_rerun_with_attached_tokenizer_string() -> None:
     model = TokenEmbeddingModel()
     trace = tl.trace(model, "hello world", intervention_ready=True)
     try:
-        trace.rerun("goodbye")
+        trace.run("goodbye")
         assert model.tokenizer_calls == [("hello world", "pt"), ("goodbye", "pt")]
     finally:
         trace.cleanup()

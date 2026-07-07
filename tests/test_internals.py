@@ -5,7 +5,6 @@ through the public API integration tests: field ordering, data structure
 invariants, algorithm correctness, etc.
 """
 
-import warnings
 from collections import defaultdict
 
 import pytest

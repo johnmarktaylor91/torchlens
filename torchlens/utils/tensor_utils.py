@@ -18,7 +18,6 @@ import copy
 from math import prod
 from typing import Any, Callable, Literal, Optional, cast
 
-import numpy as np
 import torch
 
 from ._torch_compat import get_functorch_wrapped_tensor_checker

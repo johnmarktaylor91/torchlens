@@ -307,7 +307,7 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]
     if (
         _perturbed_parent_is_arg_position(layer, layers_to_perturb, 1)
         and len(args) > 1
-        and type(args[1]) == tuple
+        and isinstance(args[1], tuple)
         and isinstance(args[1][0], torch.Tensor)
         and args[1][0].dtype == torch.bool
     ):

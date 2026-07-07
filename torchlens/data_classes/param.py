@@ -21,7 +21,7 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 
 from collections.abc import Iterator
 import weakref
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import torch
 

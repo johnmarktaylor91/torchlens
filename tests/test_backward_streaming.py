@@ -12,6 +12,7 @@ pytest.importorskip("safetensors")
 
 import torchlens as tl
 from torchlens._io.manifest import Manifest
+from torchlens.options import CaptureOptions
 
 
 class _TinyStreamingBackwardModel(nn.Module):
@@ -67,8 +68,7 @@ def _logged_backward_stream(
     trace = tl.trace(
         model,
         inputs,
-        layers_to_save="all",
-        save_grads=True,
+        capture=CaptureOptions(layers_to_save="all", save_grads=True),
         storage=tl.to_disk(bundle_path, retain_in_memory=retain_in_memory),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
@@ -119,7 +119,8 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     roundtrip_path = tmp_path / "roundtrip.tl"
 
     tl.save(trace, roundtrip_path)
-    restored = tl.load(roundtrip_path, lazy=True)
+    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=1 is older"):
+        restored = tl.load(roundtrip_path, lazy=True)
     label = next(iter(expected))
     grad_fn_handle = next(
         grad_fn_handle for grad_fn_handle in restored.grad_fns if grad_fn_handle.op
@@ -145,10 +146,12 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
         tl.trace(
             model,
             inputs,
-            layers_to_save="all",
-            save_grads=True,
+            capture=CaptureOptions(
+                layers_to_save="all",
+                save_grads=True,
+                backward_ready=True,
+            ),
             storage=tl.to_disk(tmp_path / "bad.tl"),
-            backward_ready=True,
         )
 
 

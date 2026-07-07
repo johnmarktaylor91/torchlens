@@ -14,7 +14,6 @@ from ._render_utils import html_escape, render_dot_to_file, strip_known_extensio
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from ..bundle import Bundle
 

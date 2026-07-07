@@ -430,7 +430,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     edited = clean.fork("zero_relu")
     relu_pass = next(layer for layer in edited.layer_list if layer.func_name == "relu")
     edited.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
-    edited.rerun(intervention, x_intervention)
+    edited.run(intervention, x_intervention)
 
     torch.manual_seed(15)
     empty_like = TinyEmptyLike().eval()

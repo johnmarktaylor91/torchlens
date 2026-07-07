@@ -354,7 +354,7 @@ class TorchBackend:
         """
         del session
         torch_model = cast(torch.nn.Module, model)
-        if type(torch_model) == torch.nn.DataParallel:
+        if isinstance(torch_model, torch.nn.DataParallel):
             torch_model = torch_model.module
 
         # Resolve ambiguity: is [tensor_a, tensor_b] two args or one list-arg?

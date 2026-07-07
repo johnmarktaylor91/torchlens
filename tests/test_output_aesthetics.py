@@ -1,6 +1,6 @@
 """Aesthetic testing infrastructure for torchlens.
 
-Generates human-inspectable outputs in tests/test_outputs/:
+Generates human-inspectable outputs in tests/generated_outputs/:
   - aesthetic_report.txt  — comprehensive text report of all user-facing reprs/accessors
   - aesthetic-models/     — visualization PDFs exercising depth, rolling, buffers, etc.
 
@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
+from conftest import REPORTS_DIR, VIS_OUTPUT_DIR
 
 import torch.nn as nn
 

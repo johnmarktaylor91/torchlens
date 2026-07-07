@@ -18,7 +18,6 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens
 from torchlens.backends.torch._tl import get_module_meta, get_tensor_label, is_decorated_function
 import torchlens.backends.torch.wrappers as torch_funcs_module
 from torchlens import _state, trace as trace_fn

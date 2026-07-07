@@ -8,7 +8,6 @@ import dataclasses
 import hashlib
 import json
 import os
-import tempfile
 import types
 import warnings
 from collections import OrderedDict
@@ -19,7 +18,6 @@ import torch
 from torch import nn
 
 from . import _state
-from .autoroute._builtin_output import semantic_output_cache_key
 from .data_classes.trace import Trace
 from .utils._torch_compat import get_dynamo_optimized_module_type
 
@@ -988,9 +986,7 @@ def _detach_nested_for_cache(value: Any) -> Any:
 
 
 if TYPE_CHECKING:
-    import pandas as pd
-
-    from .data_classes.module import Module
+    pass
 
 
 def _unwrap_data_parallel(model: nn.Module) -> nn.Module:

@@ -8,7 +8,6 @@ import gc
 import tracemalloc
 import weakref
 
-import pytest
 import torch
 import torchlens as tl
 from torch import nn

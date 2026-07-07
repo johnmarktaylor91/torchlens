@@ -29,7 +29,6 @@ import itertools
 import math
 import sys
 import time
-import warnings
 from collections.abc import Callable
 from collections import defaultdict, deque
 from functools import wraps
@@ -47,7 +46,6 @@ from ._tl import (
     get_label_list,
     get_live_tensor_label,
     get_module_meta,
-    get_param_meta,
     get_tensor_label,
     is_forward_call_decorated,
     is_tensor_replacement_wrapped,
@@ -81,7 +79,6 @@ from ...utils.tensor_utils import (
 from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
-    iter_accessible_attributes,
 )
 from ...utils.hashing import make_random_barcode
 from .tensor_tracking import _append_module_suffix_to_equivalence_class

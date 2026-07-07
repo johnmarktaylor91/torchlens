@@ -14,7 +14,7 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, trace as trace_fn, save
+from torchlens import load, save
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import sha256_of_file
 from torchlens.data_classes.trace import Trace

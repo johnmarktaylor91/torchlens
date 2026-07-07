@@ -999,7 +999,6 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         grad_output,
         head,
         in_backward_pass,
-        intervening,
         label,
         module,
         output,

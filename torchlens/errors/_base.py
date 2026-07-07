@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal, TypeAlias
+from typing import ClassVar, Literal, TypeAlias
 
 Severity: TypeAlias = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for TorchLens diagnostics."""

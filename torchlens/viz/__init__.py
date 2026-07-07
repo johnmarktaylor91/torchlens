@@ -380,8 +380,6 @@ def causal_trace_heatmap(
         Matplotlib axes containing the heatmap.
     """
 
-    from typing import Any
-
     import numpy as np
 
     from ._tensor_display import _clip_outliers, _prepare_signed_data

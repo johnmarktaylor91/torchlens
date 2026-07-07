@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
+
+if sys.platform != "darwin" and os.environ.get("TORCHLENS_RUN_UNSTABLE_MLX_TESTS") != "1":
+    pytest.skip(
+        "MLX exec-level tests are skipped on non-Darwin platforms by default; "
+        "set TORCHLENS_RUN_UNSTABLE_MLX_TESTS=1 to opt in.",
+        allow_module_level=True,
+    )
 
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402

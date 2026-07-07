@@ -23,7 +23,7 @@ Step 19 (_evict_streamed_outs): Optionally drops in-memory outs after streaming 
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING, Tuple, cast
+from typing import Any, Dict, List, Literal, NamedTuple, TYPE_CHECKING, Tuple, cast
 
 import torch
 

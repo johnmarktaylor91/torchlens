@@ -20,7 +20,6 @@ stability only; they do not alter what validation checks.
 from __future__ import annotations
 
 import gc
-import importlib.util
 import os
 import pickle
 import subprocess

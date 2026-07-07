@@ -358,7 +358,10 @@ class TestToPandasGuard:
         model = _SimpleLinear()
         log = tl.trace(model, torch.randn(2, 10))
         try:
-            import pandas
+            import importlib.util
+
+            if importlib.util.find_spec("pandas") is None:
+                raise ImportError
 
             df = log.to_pandas()
             assert df is not None

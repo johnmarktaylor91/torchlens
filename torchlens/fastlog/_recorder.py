@@ -38,10 +38,9 @@ from .options import (
     PredicateErrorMode,
     PredicateFn,
     ForwardErrorMode,
-    RecordingOptions,
     merge_recording_options,
 )
-from .types import CaptureSpec, GradRecordContext, Recording, _mark_recording_halted
+from .types import CaptureSpec, Recording, _mark_recording_halted
 
 
 def _rank_prefixed_streaming_options(

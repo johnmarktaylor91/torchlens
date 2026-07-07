@@ -8,6 +8,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import AppendStateValidationWarning
+from torchlens.options import CaptureOptions, ReplayOptions
+from torchlens.validation import validate_backward_pass
 
 
 class _ValidatorAppendModel(nn.Module):
@@ -40,11 +42,15 @@ def test_validate_backward_on_stacked_trace_warns() -> None:
     """Existing appended traces warn and are treated as authoritative."""
 
     model = _ValidatorAppendModel().eval()
-    trace = tl.trace(model, torch.randn(1, 3), intervention_ready=True)
-    trace.rerun(model, torch.randn(1, 3), append=True)
+    trace = tl.trace(
+        model,
+        torch.randn(1, 3),
+        capture=CaptureOptions(intervention_ready=True),
+    )
+    trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
     with pytest.warns(AppendStateValidationWarning, match="stacked appended trace"):
-        assert tl.validate_backward_pass(trace, torch.randn(1, 3)) is True
+        assert validate_backward_pass(trace, torch.randn(1, 3)) is True
 
 
 def test_validate_backward_pass_fresh_capture_only_still_works() -> None:
@@ -52,4 +58,4 @@ def test_validate_backward_pass_fresh_capture_only_still_works() -> None:
 
     model = _ValidatorAppendModel().eval()
 
-    assert tl.validate_backward_pass(model, torch.randn(2, 3), validate_metadata=False) is True
+    assert validate_backward_pass(model, torch.randn(2, 3), validate_metadata=False) is True

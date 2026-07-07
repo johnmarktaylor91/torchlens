@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 from torchlens import Trace, trace as trace_fn
-from torchlens.validation import validate_forward_pass, validate_saved_outs
+from torchlens.validation import validate_forward_pass
 import torchlens.user_funcs as user_funcs
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
@@ -29,7 +29,6 @@ from torchlens.validation.core import (
     _deep_clone_tensors,
     _copy_validation_args,
     _execute_func_with_restored_state,
-    MAX_PERTURB_ATTEMPTS,
 )
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,

@@ -56,7 +56,7 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
     )
 
     with pytest.raises(AppendStreamingNotSupportedError, match="bundle_path streaming"):
-        trace.rerun(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+        trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
 
 def test_append_rerun_on_callback_streaming_trace_raises() -> None:
@@ -87,7 +87,7 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
 
     assert received
     with pytest.raises(AppendStreamingNotSupportedError, match="out_callback streaming"):
-        trace.rerun(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+        trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
 
 def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
@@ -98,13 +98,12 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
     tl.trace(
         model,
         torch.randn(1, 3),
-        save_outs_to=bundle_path,
-        layers_to_save="all",
-        intervention_ready=True,
+        capture=CaptureOptions(layers_to_save="all", intervention_ready=True),
+        storage=tl.to_disk(bundle_path),
     )
     loaded = tl.load(bundle_path)
 
-    loaded.rerun(model, torch.randn(1, 3), append=True)
+    loaded.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
     assert loaded.is_appended is True
     assert loaded._append_sequence_id == 1

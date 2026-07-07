@@ -2,22 +2,12 @@
 
 from __future__ import annotations
 
-import math
-import re
-from collections.abc import Iterable
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-import torch
-from torch import nn
-
-from torchlens._errors import ShapeInferenceError
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.op import Op
     from torchlens.data_classes.trace import Trace
 
 from ._common import _ordered_ops, _require_pandas, _source_line

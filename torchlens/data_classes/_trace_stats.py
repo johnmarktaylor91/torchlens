@@ -5,7 +5,6 @@ from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, TextIO, Tuple, cast
 
-import torch
 
 if TYPE_CHECKING:
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
@@ -14,7 +13,7 @@ if TYPE_CHECKING:
     from .module import Module, ModuleCall
 
 from .._deprecations import warn_deprecated_alias
-from ..quantities import Bytes, Duration, Flops, Macs, as_duration
+from ..quantities import Duration, Flops, Macs, as_duration
 from ._accessor_base import Accessor
 from ._trace_profile import (
     ModelProfile,

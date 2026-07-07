@@ -17,10 +17,6 @@ import torchlens
 from torchlens import trace as trace_fn
 from torchlens.data_classes import FuncCallLocation
 from torchlens.capture.flops import (
-    BACKWARD_MULTIPLIERS,
-    ELEMENTWISE_FLOPS,
-    SPECIALTY_HANDLERS,
-    ZERO_FLOPS_OPS,
     compute_backward_flops,
     compute_forward_flops,
 )

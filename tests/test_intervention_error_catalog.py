@@ -324,9 +324,9 @@ def test_axis_a_public_verbs_success_paths() -> None:
     model = _LinearRelu()
     x = torch.randn(2, 3)
     rerun_log = _capture(model, x)
-    rerun_log.rerun(model, x)
+    rerun_log.run(model, x)
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
-    rerun_log.rerun(model, torch.randn(1, 3), append=True)
+    rerun_log.run(model, torch.randn(1, 3), append=True)
     assert rerun_log.state is TraceState.APPENDED
 
 
@@ -345,8 +345,8 @@ def test_axis_a_public_verbs_success_paths() -> None:
             ),
         ),
         ("replay", lambda log: log.replay()),
-        ("rerun", lambda log: log.rerun(_ReluAdd())),
-        ("append", lambda log: log.rerun(_ReluAdd(), torch.ones(1, 4), append=True)),
+        ("rerun", lambda log: log.run(_ReluAdd())),
+        ("append", lambda log: log.run(_ReluAdd(), torch.ones(1, 4), append=True)),
     ),
 )
 def test_axis_a_public_verbs_failure_paths(
@@ -372,7 +372,7 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     replay_log.replay()
-    rerun_log.rerun(_ReluAdd(), x)
+    rerun_log.run(_ReluAdd(), x)
 
     replay_output = replay_log[replay_log.output_layers[0]].out
     rerun_output = rerun_log[rerun_log.output_layers[0]].out
@@ -458,7 +458,7 @@ def test_axis_l_torchscript_degradation_message_names_recovery() -> None:
     scripted = torch.jit.trace(_ReluAdd(), x)
 
     with pytest.raises(RuntimeError) as excinfo:
-        log.rerun(scripted, x)
+        log.run(scripted, x)
     message = str(excinfo.value)
     assert "ScriptModule" in message
     assert "original" in message or "un-scripted" in message

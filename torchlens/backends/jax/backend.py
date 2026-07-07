@@ -38,10 +38,9 @@ from ...ir.events import (
     ParentEdge,
 )
 from ...ir.events import is_control_edge_use
-from ...ir.intervention import FunctionEventInput
 from ...ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
 from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
+from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_root_module_log
@@ -52,7 +51,7 @@ from ...postprocess.loop_grouping_adapter import (
     RecurrenceNode,
     group_recurrent_nodes,
 )
-from ...quantities import Bytes, Duration
+from ...quantities import Duration
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,

@@ -5,10 +5,8 @@ is empty for source/output nodes, survives the postprocessing pipeline, and
 is accessible on both Op and Layer.
 """
 
-import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens.capture.salient_args import extract_salient_args, _build_arg_name_map

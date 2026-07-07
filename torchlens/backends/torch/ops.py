@@ -149,10 +149,8 @@ from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...capture.arg_positions import (
     FUNC_ARG_SPECS,
-    ArgSpec,
     extract_tensors_and_params,
     _cache_dynamic_spec,
-    _normalize_func_name,
 )
 
 from .tensor_tracking import (
@@ -160,7 +158,6 @@ from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
     _get_ancestors_from_parents,
     _get_equivalence_class,
-    _get_hash_from_args,
     _locate_parent_tensors_in_args,
     _make_raw_param_group_barcode,
     _process_parent_param_ops,
@@ -1141,6 +1138,13 @@ def _walk_output_tensors_with_paths(
     if root_spec is None:
         if _literal_value_supported(out) or isinstance(out, torch.Size):
             return
+        fallback_tensors = list(
+            get_vars_of_type_from_obj(
+                out, which_type=torch.Tensor, subclass_exceptions=[torch.nn.Parameter]
+            )
+        )
+        if not fallback_tensors:
+            return
         container_name = type(out).__qualname__
         if container_name not in _UNSUPPORTED_OUTPUT_CONTAINER_WARNED:
             _UNSUPPORTED_OUTPUT_CONTAINER_WARNED.add(container_name)
@@ -1150,9 +1154,7 @@ def _walk_output_tensors_with_paths(
                 UserWarning,
                 stacklevel=2,
             )
-        for tensor in get_vars_of_type_from_obj(
-            out, which_type=torch.Tensor, subclass_exceptions=[torch.nn.Parameter]
-        ):
+        for tensor in fallback_tensors:
             yield tensor, (), None
         return
 
@@ -3310,7 +3312,7 @@ def _check_if_tensor_arg(arg: Any) -> bool:
             if issubclass(type(elt), torch.Tensor):
                 return True
         return False
-    elif type(arg) == dict:
+    elif type(arg) is dict:
         for val in arg.values():
             if issubclass(type(val), torch.Tensor):
                 return True

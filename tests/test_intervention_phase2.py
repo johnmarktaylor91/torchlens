@@ -106,7 +106,8 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
 def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> None:
     """Selectors resolve labels, functions, modules, containment, and predicates."""
 
-    relu_sites = phase2_log.resolve_sites(tl.func("relu"), max_fanout=4)
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        relu_sites = phase2_log.resolve_sites(tl.func("relu"), max_fanout=4)
     first_relu_label = relu_sites.labels()[0]
 
     assert isinstance(relu_sites, SiteTable)
@@ -118,10 +119,9 @@ def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> 
     assert phase2_log.resolve_sites(tl.contains("linear")).labels() == ("linear_1_1",)
     assert phase2_log.resolve_sites(tl.module("block.linear")).labels() == ("linear_1_1",)
     assert phase2_log.resolve_sites(tl.module("block")).labels() == ("relu_1_2",)
-    assert phase2_log.resolve_sites(tl.in_module("block"), max_fanout=4).labels() == (
-        "linear_1_1",
-        "relu_1_2",
-    )
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        block_sites = phase2_log.resolve_sites(tl.in_module("block"), max_fanout=4)
+    assert block_sites.labels() == ("linear_1_1", "relu_1_2")
     assert phase2_log.resolve_sites(
         tl.where(lambda site: site.func_name == "__add__", name_hint="adds")
     ).labels() == ("add_1_4",)
@@ -177,10 +177,9 @@ def test_selector_composition_intersection_and_union(phase2_log: tl.Trace) -> No
     union = tl.module("block.linear") | tl.module("block")
 
     assert phase2_log.resolve_sites(intersection, max_fanout=4).labels() == ("relu_1_2",)
-    assert phase2_log.resolve_sites(union, max_fanout=4).labels() == (
-        "linear_1_1",
-        "relu_1_2",
-    )
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        union_sites = phase2_log.resolve_sites(union, max_fanout=4)
+    assert union_sites.labels() == ("linear_1_1", "relu_1_2")
 
 
 @pytest.mark.smoke
@@ -199,14 +198,15 @@ def test_target_specs_and_empty_site_table_behave_clearly(phase2_log: tl.Trace) 
         frozen_spec.selector_kind = "label"  # type: ignore[misc]
 
     portable_target_spec = tl.func("relu").to_target_spec()
-    assert phase2_log.resolve_sites(portable_target_spec, max_fanout=4).labels() == (
-        "relu_1_2",
-        "relu_2_3",
-    )
-    assert phase2_log.resolve_sites(portable_target_spec.freeze(), max_fanout=4).labels() == (
-        "relu_1_2",
-        "relu_2_3",
-    )
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        target_spec_sites = phase2_log.resolve_sites(portable_target_spec, max_fanout=4)
+    assert target_spec_sites.labels() == ("relu_1_2", "relu_2_3")
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        frozen_target_spec_sites = phase2_log.resolve_sites(
+            portable_target_spec.freeze(),
+            max_fanout=4,
+        )
+    assert frozen_target_spec_sites.labels() == ("relu_1_2", "relu_2_3")
     assert empty_table.labels() == ()
     assert empty_table.to_dataframe().empty
     with pytest.raises(SiteResolutionError, match="empty"):

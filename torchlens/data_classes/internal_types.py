@@ -8,7 +8,7 @@ Both use ``@dataclass(slots=True)`` for memory efficiency and faster
 attribute access (no per-instance ``__dict__``).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 

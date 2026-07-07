@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import CaptureSpec, RecordingConfigError
+from torchlens.fastlog import RecordingConfigError
 
 
 def test_train_mode_save_outs_to_path_errors(tmp_path: Path) -> None:

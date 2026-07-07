@@ -9,6 +9,24 @@ from .internal_types import FuncExecutionContext, VisualizationOverrides
 from .module import ModuleAccessor, Module, ModuleCall
 from .param import ParamAccessor, Param
 
+__all__ = [
+    "BackwardPass",
+    "BackwardPassAccessor",
+    "Buffer",
+    "BufferAccessor",
+    "FuncCallLocation",
+    "FuncExecutionContext",
+    "GradFn",
+    "GradFnAccessor",
+    "GradFnCall",
+    "Module",
+    "ModuleAccessor",
+    "ModuleCall",
+    "Param",
+    "ParamAccessor",
+    "VisualizationOverrides",
+]
+
 # Trace, Layer, Op, and TensorLog are intentionally NOT
 # re-exported here to avoid circular imports. Import them directly:
 #   from .data_classes.trace import Trace

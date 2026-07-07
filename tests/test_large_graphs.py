@@ -28,7 +28,12 @@ from torchlens.visualization._rank_layout_internal.layout import (
 
 from example_models import RandomGraphModel
 
-VIS_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "test_outputs", "visualizations", "large")
+VIS_OUTPUT_DIR = os.path.join(
+    os.path.dirname(__file__),
+    "generated_outputs",
+    "visualizations",
+    "large",
+)
 
 
 @pytest.fixture(autouse=True)

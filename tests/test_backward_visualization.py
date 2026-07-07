@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import VisualizationOptions
+from torchlens.options import CaptureOptions, VisualizationOptions
 from torchlens.visualization import show_model_graph
 from torchlens.visualization.rendering import GRADIENT_ARROW_COLOR
 
@@ -77,7 +77,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Model log after backward capture.
     """
 
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
@@ -98,7 +98,7 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Trace with two backward passes.
     """
 
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss)
@@ -254,7 +254,7 @@ def test_draw_backward_errors_without_log_backward() -> None:
     trace = tl.trace(
         _LinearReluModel(),
         torch.randn(2, 3, requires_grad=True),
-        save_grads="all",
+        capture=CaptureOptions(save_grads="all"),
     )
 
     with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):

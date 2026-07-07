@@ -32,7 +32,7 @@ All other 78+ fields use the first pass's values only.
 
 import weakref
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, cast
 
 from .._deprecations import MISSING
 from .._errors import AmbiguousOpLookupError
@@ -1127,7 +1127,6 @@ class Layer:
         """
         if self.num_passes == 1:
             return cast(dict[str, dict[Any, str]], self.ops[0].parent_arg_positions)
-        from collections import defaultdict
 
         result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
         for pass_log in self.ops.values():

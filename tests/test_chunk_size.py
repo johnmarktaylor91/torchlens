@@ -75,7 +75,7 @@ def _manual_chunk_trace(model: nn.Module, x: torch.Tensor, chunk_size: int) -> t
     chunks = list(torch.split(x, chunk_size, dim=0))
     trace = tl.trace(model, chunks[0], layers_to_save="all")
     for chunk in chunks[1:]:
-        trace.rerun(model, chunk, append=True, transform=False)
+        trace.run(model, chunk, append=True, transform=False)
     return trace
 
 
@@ -199,8 +199,8 @@ def test_explicit_path_keeps_shared_matrix_unsplit() -> None:
 
     chunked = tl.trace(model, (x, mask), chunk_size=4, chunk_paths=["0"], layers_to_save="all")
     expected = tl.trace(model, (x[:4], mask), layers_to_save="all")
-    expected.rerun(model, (x[4:8], mask), append=True, transform=False)
-    expected.rerun(model, (x[8:], mask), append=True, transform=False)
+    expected.run(model, (x[4:8], mask), append=True, transform=False)
+    expected.run(model, (x[8:], mask), append=True, transform=False)
 
     _assert_equivalent_chunked_trace(chunked, expected)
     torch.testing.assert_close(chunked[chunked.output_layers[0]].out, x)
@@ -341,17 +341,17 @@ def test_log_backward_rejects_chunked_forward() -> None:
 
 
 def test_rerun_chunk_size_matches_manual_append_loop() -> None:
-    """Trace.rerun(chunk_size=N) should match per-chunk append reruns."""
+    """Trace.run(chunk_size=N) should match per-chunk append reruns."""
 
     model = DeterministicToy().eval()
     x = _toy_inputs()
     actual = tl.trace(model, x[:4], layers_to_save="all")
     expected = tl.trace(model, x[:4], layers_to_save="all")
 
-    actual.rerun(model, x, chunk_size=4, transform=False)
-    expected.rerun(model, x[:4], transform=False)
-    expected.rerun(model, x[4:8], append=True, transform=False)
-    expected.rerun(model, x[8:], append=True, transform=False)
+    actual.run(model, x, chunk_size=4, transform=False)
+    expected.run(model, x[:4], transform=False)
+    expected.run(model, x[4:8], append=True, transform=False)
+    expected.run(model, x[8:], append=True, transform=False)
 
     _assert_equivalent_chunked_trace(actual, expected)
     assert [row["chunk_size"] for row in actual.append_history] == [4, 4, 2]

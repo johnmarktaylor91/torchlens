@@ -25,14 +25,14 @@ def _give_user_feedback_about_lookup_key(
         Either ``"get_one_item"`` for single-item access or
         ``"query_multiple"`` for multi-layer queries.
     """
-    if (type(key) == int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
+    if isinstance(key, int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
         raise ValueError(
             f"You specified the layer with index {key}, but there are only {len(self.layer_list)} "
             f"layers; please specify an index in the range "
             f"-{len(self.layer_list)} - {len(self.layer_list) - 1}."
         )
 
-    if type(key) != str:
+    if not isinstance(key, str):
         raise ValueError(_get_lookup_help_str(self, key, mode))
 
     if hasattr(self, "_module_logs") and key.rsplit(":", 1)[0] in self._module_logs:

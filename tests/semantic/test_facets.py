@@ -728,7 +728,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
 
     zeroed = clean.fork("zero_q_head")
     zeroed.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
-    zeroed.rerun(model, x)
+    zeroed.run(model, x)
 
     assert not torch.allclose(_trace_output(zeroed), clean_out)
     assert torch.count_nonzero(zeroed.modules["attn"].facets.head(0).q) == 0
@@ -737,7 +737,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     patched = clean.fork("patch_q_head")
     replacement = torch.zeros_like(clean.modules["attn"].facets.head(1).q)
     patched.set(tl.facet("q").head(1), replacement)
-    patched.rerun(model, x)
+    patched.run(model, x)
 
     assert not torch.allclose(_trace_output(patched), clean_out)
     assert torch.count_nonzero(patched.modules["attn"].facets.head(1).q) == 0
@@ -760,7 +760,7 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
             (tl.head(1, "k"), tl.zero_ablate()),
         ]
     )
-    edited.rerun(model, x)
+    edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(0).q) == 0
@@ -855,7 +855,7 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
 
     edited = clean.fork("head_all")
     edited.attach_hooks(tl.head(1), tl.zero_ablate())
-    edited.rerun(model, x)
+    edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0

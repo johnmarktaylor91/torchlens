@@ -9,7 +9,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
 from dataclasses import replace
-from typing import Any, Callable, Literal, cast
+from typing import Any, Callable, cast
 
 import numpy as np
 

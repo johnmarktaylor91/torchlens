@@ -11,7 +11,6 @@ import torch
 import torchlens as tl
 import torch.nn as nn
 
-from torchlens import trace as trace_fn
 from torchlens.data_classes.trace import Trace
 
 

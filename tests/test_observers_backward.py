@@ -72,7 +72,11 @@ def _trace_with_tap(tap: TapObserver) -> object:
     torch.manual_seed(12)
     model = _TinyRelu()
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, intervention_ready=True, hooks=tap)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+    )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     return trace
@@ -113,7 +117,11 @@ def test_tap_backward_tensor_mount_input_alias_matches() -> None:
     base = torch.randn(2, 3, requires_grad=True)
     x = base * 2
     tap = tl.tap(tl.label("input_1"), direction="backward")
-    trace = tl.trace(_Identity(), x, intervention_ready=True, hooks=tap)
+    trace = tl.trace(
+        _Identity(),
+        x,
+        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+    )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
 
@@ -151,7 +159,7 @@ def test_tap_backward_both_directions_fire() -> None:
 def test_tap_backward_intervening_grad_fn_only_grad_fn_mount() -> None:
     """Intervening selectors fire on backward-only grad_fn_handle sites."""
 
-    tap = tl.tap(tl.intervening(), direction="backward")
+    tap = tl.tap(tl.without_op(), direction="backward")
     _trace_with_tap(tap)
 
     assert tap.records
@@ -165,7 +173,7 @@ def test_record_span_backward_direction() -> None:
     """Backward records include active span names."""
 
     tap = tl.tap(tl.grad_fn(type="relu"), direction="backward")
-    with tl.record_span("backward_phase", direction="backward"):
+    with tl.span("backward_phase", direction="backward"):
         _trace_with_tap(tap)
 
     assert tap.records[0].span_names == ("backward_phase",)
@@ -175,7 +183,7 @@ def test_record_span_both_direction_captures_both() -> None:
     """Both-direction spans annotate forward and backward tap records."""
 
     tap = tl.tap(tl.contains("linear"), direction="both")
-    with tl.record_span("both_phase", direction="both"):
+    with tl.span("both_phase", direction="both"):
         _trace_with_tap(tap)
 
     assert [record.span_names for record in tap.records] == [
@@ -191,10 +199,14 @@ def test_record_span_backward_event_inside_active_span() -> None:
     tap = tl.tap(tl.grad_fn(type="relu"), direction="backward")
     model = _TinyRelu()
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, intervention_ready=True, hooks=tap)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+    )
     loss = trace[trace.output_layers[0]].out.sum()
 
-    with tl.record_span("backward_only", direction="backward"):
+    with tl.span("backward_only", direction="backward"):
         trace.log_backward(loss)
 
     assert tap.records[0].span_names == ("backward_only",)
@@ -232,7 +244,11 @@ def test_tap_per_call_vs_per_event_count() -> None:
 
     torch.manual_seed(12)
     tap = tl.tap(tl.grad_fn(type="relu"), direction="backward")
-    trace = tl.trace(_TinyRelu(), torch.randn(2, 3), intervention_ready=True, hooks=tap)
+    trace = tl.trace(
+        _TinyRelu(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+    )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss, retain_graph=True)

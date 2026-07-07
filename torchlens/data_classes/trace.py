@@ -32,126 +32,68 @@ import copy
 import inspect
 import json
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 import difflib
-from functools import cached_property
 from pathlib import Path
-import time
-import uuid
 import weakref
-import warnings
 from typing import (
     Any,
     Callable,
     ClassVar,
     Dict,
-    Iterable,
     List,
     Literal,
     Optional,
-    Set,
     TYPE_CHECKING,
-    TextIO,
     Tuple,
-    Union,
-    cast,
 )
 
-import numpy as np
 import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from .._io.streaming import BundleStreamWriter
-    from ..experimental.dagua._bridge import TorchLensRenderAudit
-    from ..fastlog.types import ModuleStackFrame
-    from ..intervention.types import FireRecord
-    from ..validation.status import ValidationReplayStatus
-    from ..visualization.code_panel import CodePanelOption
-    from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
-    from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
-    from .layer import LayerAccessor
-    from .module import Module, ModuleCall
 
-from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
 from ..backends import BackendName
 from .._trace_state import TraceState
-from .._training_validation import reject_compiled_model
-from .._literals import (
-    BufferVisibilityLiteral,
-    CollapseLiteral,
-    FoldRunsLiteral,
-    VisDirectionLiteral,
-    VisInterventionModeLiteral,
-    VisModeLiteral,
-    VisNodeModeLiteral,
-    VisNodePlacementLiteral,
-    VisRendererLiteral,
-)
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from ..captured_run import CapturedRun
 from ..ir.trace_build_state import TraceBuildState
-from ..options import (
-    InterventionOptions,
-    ReplayOptions,
-    merge_intervention_options,
-    merge_replay_options,
-)
 from ..intervention.types import (
-    FrozenInterventionSpec,
-    ForkFieldPolicy,
     MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
     Relationship,
-    TargetSpec,
 )
 from ..types import ActivationPostfunc, GradientPostfunc
 from ..utils.tensor_utils import SaveMode
-from ..quantities import Bytes, Duration, Flops, Macs, as_duration
-from .._errors import AmbiguousOpLookupError
-from .cleanup import (
-    _LIST_FIELDS_TO_CLEAN,
-    _clear_entry_attributes,
-    _label_for_reference_removal,
-    _remove_log_entry_references,
-    _scrub_conditional_fields_after_removal,
-    _scrub_per_op_equivalence_lists,
-    cleanup,
-)
+from ..quantities import Bytes, Duration
 from .module import ModuleAccessor
 from .param import ParamAccessor
-from ._accessor_base import Accessor
 from .interface import (
-    _format_conditional_branch_stack,
     _getitem_after_pass,
     _getitem_during_pass,
     _str_after_pass,
     _str_during_pass,
 )
-from .backward_pass import BackwardPass, BackwardPassAccessor
-from .derived_grad import DerivedGradAccessor, IntermediateDerivedGradAccessor
+from .backward_pass import BackwardPass
+from .derived_grad import DerivedGradAccessor
 from .field_policy import (
     build_record_field_policy_table,
     default_fill_state_from_policy,
     fork_policy_from_policy,
     portable_state_spec_from_policy,
 )
-from .grad_fn import GradFnAccessor, GradFn
-from .layer import Layer, OpAccessor
-from .op import Op, TensorLog
-from ._state_adapter import state_items, state_new, state_restore
+from .grad_fn import GradFn
+from .layer import Layer
+from .op import Op
+from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
     _TRACE_LAYER_ACCESSOR_CACHE,
     _TRACE_OP_ACCESSOR_CACHE,
-)
-from ._trace_export import (
-    _TO_PANDAS_EXCLUDED_OP_FIELDS,  # moved; import from _trace_export
 )
 
 if TYPE_CHECKING:
@@ -200,7 +142,6 @@ else:
     from ._trace_stats import TraceStatsMixin
     from ._trace_validation import TraceValidationMixin
     from ._trace_viz import TraceVisualizationMixin
-from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {

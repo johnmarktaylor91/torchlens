@@ -13,7 +13,6 @@ import pytest
 from torchlens.data_classes.func_call_location import FuncCallLocation
 from torchlens.postprocess.ast_branches import (
     BoolClassification,
-    ConditionalKey,
     attribute_op,
     classify_bool,
     get_file_index,

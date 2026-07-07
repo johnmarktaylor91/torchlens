@@ -26,7 +26,6 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
-from torch import nn
 
 from ..._errors import TorchLensPostfuncError
 from ...fastlog.exceptions import PredicateError
@@ -35,8 +34,6 @@ from ...ir.predicate import RetroactiveCaptureDecision
 from ...quantities import Bytes
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
-from ...data_classes.buffer import Buffer
-from ...data_classes.op import Op
 from . import module_stack as _mstack
 from ...capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
 from ...capture.projections import (

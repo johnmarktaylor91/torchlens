@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 from .._input_coerce import _coerce_input_args
+from ..options import CaptureOptions
 from .._robustness import check_model_and_input_variants
 from ..intervention.errors import AppendStateValidationWarning
 from ..utils.arg_handling import normalize_input_args
@@ -351,9 +352,11 @@ def validate_backward_pass(
             model,
             logged_inputs,
             input_kwargs=logged_kwargs,
-            layers_to_save="all",
-            save_grads="all",
-            random_seed=random_seed,
+            capture=CaptureOptions(
+                layers_to_save="all",
+                save_grads="all",
+                random_seed=random_seed,
+            ),
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
         logged_loss = loss_fn(logged_output)
@@ -363,7 +366,7 @@ def validate_backward_pass(
         if perturb_saved_grads:
             for layer in trace.layer_list:
                 if layer.has_grad and isinstance(layer.grad, torch.Tensor):
-                    layer.grad = layer.grad + torch.randn_like(layer.grad)
+                    layer._internal_set("grad", layer.grad + torch.randn_like(layer.grad))
                     break
         observed_param_grads = _param_grads(model)
 
@@ -490,9 +493,11 @@ def _validate_layer_grads(
             model,
             candidate_inputs,
             input_kwargs=candidate_kwargs,
-            layers_to_save="all",
-            save_grads="all",
-            random_seed=random_seed,
+            capture=CaptureOptions(
+                layers_to_save="all",
+                save_grads="all",
+                random_seed=random_seed,
+            ),
         )
         candidate_output = _reconstruct_candidate_output_for_loss(candidate_trace)
         candidate_loss = loss_fn(candidate_output)

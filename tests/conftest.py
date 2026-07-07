@@ -16,9 +16,10 @@ torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 torch.use_deterministic_algorithms(True)
 
-# Output directories — anchored to tests/ so they don't pollute project root
+# Output directories. Routine test-generated artifacts go under tests/generated_outputs/,
+# which is gitignored. Human-inspectable aesthetic reports keep stable paths there.
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_OUTPUTS_DIR = opj(TESTS_DIR, "test_outputs")
+TEST_OUTPUTS_DIR = opj(TESTS_DIR, "generated_outputs")
 REPORTS_DIR = opj(TEST_OUTPUTS_DIR, "reports")
 VIS_OUTPUT_DIR = opj(TEST_OUTPUTS_DIR, "visualizations")
 

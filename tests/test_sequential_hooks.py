@@ -77,7 +77,7 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
     log = tl.trace(model, x, intervention_ready=True)
     log.attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
 
-    rerun_log = log.rerun(model, x)
+    rerun_log = log.run(model, x)
 
     assert order == ["add", "mul"]
     assert torch.equal(rerun_log[rerun_log.output_layers[0]].out, (torch.relu(x) + 1) * 2)

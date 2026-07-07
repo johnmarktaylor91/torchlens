@@ -90,7 +90,7 @@ from .selectors import (
     where,
     without_op,
 )
-from .sites import SiteCollection, SiteSpec, sites as _sites_private
+from .sites import SiteCollection, SiteSpec, sites
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -217,7 +217,9 @@ __all__ = [
     "SaveLevel",
     "ParentRef",
     "SiteAmbiguityError",
+    "SiteCollection",
     "SiteResolutionError",
+    "SiteSpec",
     "SelectorCompositionError",
     "SpecCompat",
     "SpecMutationError",
@@ -295,6 +297,7 @@ __all__ = [
     "save_intervention",
     "scale",
     "splice_module",
+    "sites",
     "steer",
     "swap_with",
     "where",

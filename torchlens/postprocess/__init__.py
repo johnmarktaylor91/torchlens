@@ -88,6 +88,15 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 from ..quantities import Bytes
+
+__all__ = [
+    "RecurrenceAssignment",
+    "RecurrenceGroupingGraph",
+    "RecurrenceNode",
+    "group_recurrent_nodes",
+    "postprocess",
+    "postprocess_fast",
+]
 from ..utils.display import _vprint, _vtimed
 from ..captured_run import remember_event_stream
 

@@ -16,9 +16,8 @@ from os.path import join as opj
 
 import pytest
 import torch
-import torch.nn as nn
 
-from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR
+from conftest import REPORTS_DIR
 
 import example_models
 from torchlens import trace as trace_fn
