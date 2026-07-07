@@ -100,7 +100,13 @@ class CapturedRun:
                 continue
             payload = self._activation_payload(activation)
             if payload is not None:
-                payloads[raw_label] = payload
+                existing_payload = payloads.get(raw_label)
+                if existing_payload is None:
+                    payloads[raw_label] = payload
+                elif isinstance(existing_payload, list):
+                    existing_payload.append(payload)
+                else:
+                    payloads[raw_label] = [existing_payload, payload]
         return payloads
 
     def activation_by_raw_label(self, raw_label: str, *, pass_index: int | None = None) -> Any:

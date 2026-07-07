@@ -343,6 +343,18 @@ class Recording(CapturedRun):
     _recording_trace: RecordingTrace | None = field(default=None, repr=False, compare=False)
     _recording_state: Any | None = field(default=None, repr=False, compare=False)
 
+    @property
+    def n_passes(self) -> int:
+        """Return the number of model-call passes captured by this recording.
+
+        Returns
+        -------
+        int
+            Number of explicit ``record()`` or ``Recorder.log()`` forward passes.
+        """
+
+        return self.n_ops
+
     def __getattribute__(self, name: str) -> Any:
         """Populate lazy record projections when ``records`` is read."""
 
@@ -596,7 +608,7 @@ class Recording(CapturedRun):
 
         if self.failed:
             return (
-                f"Recording(status={self.status!r}, n_ops={self.n_ops}, "
+                f"Recording(status={self.status!r}, n_passes={self.n_passes}, "
                 f"n_records={len(self)}, n_ops_completed={self.n_ops_completed}, "
                 "caveat='n_ops_completed counts op-kind events across completed "
                 "passes in this recorder; user-op failures exclude the failing "
@@ -604,7 +616,7 @@ class Recording(CapturedRun):
                 "current-call event.')"
             )
         return (
-            f"Recording(n_ops={self.n_ops}, n_records={len(self)}, "
+            f"Recording(n_passes={self.n_passes}, n_records={len(self)}, "
             f"n_grad_records={len(self.grad_records)})"
         )
 

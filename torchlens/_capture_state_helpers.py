@@ -940,7 +940,6 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
         layer.grad_fn_handle = None
-        layer.grad_fn_handle = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
         layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
     for layer_log in getattr(trace, "layer_logs", {}).values():
@@ -948,7 +947,6 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             value = getattr(layer_log, field_name, None)
             if isinstance(value, torch.Tensor):
                 setattr(layer_log, field_name, value.detach().cpu())
-        layer_log.grad_fn_handle = None
         layer_log.grad_fn_handle = None
     trace.__dict__.pop("_container_ordinals_by_output_op_label", None)
     trace.__dict__.pop("_container_ordinals_by_input_func_call_id", None)

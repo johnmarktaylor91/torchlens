@@ -76,7 +76,7 @@ chunked evaluation semantically different from one full batch.
 
 ## Tier-1 Backward Hook
 
-Backward helpers (`bwd_hook`, `gradient_zero`, `gradient_scale`) are
+Backward helpers (`bwd_hook`, `grad_zero`, `grad_scale`) are
 live/rerun-only in this release. They are not portable `.tlspec/` publication
 units and are not replayed post hoc over a saved forward DAG. Use them when the
 experiment explicitly re-executes the model and backward pass.

@@ -8,8 +8,8 @@
 
 ## Appliance Subfolders: next 6-12 months
 
-- Mature `torchlens.viewer` for richer local inspection.
-- Mature `torchlens.paper`, `torchlens.notebook`, `torchlens.llm`, and `torchlens.neuro` around
+- Explore a richer local inspection appliance.
+- Mature the shipped `torchlens.notebook` and `torchlens.neuro` package boundaries around
   concrete workflows.
 - Keep these as subfolder APIs rather than expanding the top-level namespace.
 

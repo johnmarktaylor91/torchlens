@@ -136,7 +136,7 @@ def test_successful_recording_failure_fields_default_complete() -> None:
     assert recording.n_ops_completed == 0
     assert recording.last_successful_op_label is None
     assert recording.summary() == (
-        f"Recording(n_ops={recording.n_ops}, n_records={len(recording)}, "
+        f"Recording(n_passes={recording.n_passes}, n_records={len(recording)}, "
         f"n_grad_records={len(recording.grad_records)})"
     )
     assert "status=" not in recording.summary()

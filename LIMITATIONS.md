@@ -19,7 +19,7 @@ branches that did not execute.
 ## Bundle Diff Rendering
 
 `Bundle.show_diff()` is static for v1. Interactive bundle comparison belongs in
-`torchlens.viewer` later.
+a future local inspection appliance.
 
 ## Compatibility Truth Table
 

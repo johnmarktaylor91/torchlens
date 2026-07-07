@@ -10,14 +10,15 @@ prepares the model and calls `wrap_torch()` from `backends/torch/`.
 
 ```
 import torchlens
-  |- exposes 89 top-level public names in __all__
-  |- imports submodule namespaces: fastlog, bridge, compat, export, options, report, stats, viz
+  |- exposes 90 top-level public names in __all__
+  |- eagerly imports the core capture/intervention surface plus fastlog/options;
+  |  bridge, compat, export, report, stats, validation, and viz stay lazy
   |
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend
   |- backends/torch/model_prep.py - ensure torch is wrapped, prepare modules/buffers/params
   |- capture/trace.py          - run forward pass with active logging
-  |- capture/output_tensors.py - build Op records
+  |- backends/torch/ops.py     - build raw torch op records during wrapper calls
   |- postprocess/              - current 20-step graph cleanup/finalization pipeline
   +- returns Trace
 
@@ -27,11 +28,14 @@ tl.record(model, input, save=...)
   +- returns Recording; Recording.to_trace() materializes full structure
 ```
 
-Selective `layers_to_save` uses the two-pass strategy: Pass 1 exhaustive metadata, Pass
-2 fast out save. Unqualified recurrent labels save all passes; pass-qualified labels such
-as `"attn:2"` save one 1-based pass. Prefer `save=tl.func(...)`, `save=tl.in_module(...)`,
-and composed predicates for single-pass selective capture. `keep_op=` and `keep_module=`
-remain deprecated `record()` aliases for `save=`.
+Selective `layers_to_save` uses a predicate-backed single pass when early labels are
+sufficient and falls back to the two-pass strategy for final-label-only selectors such as
+negative indexes, integer selectors, output labels, identity labels, and gradient
+selection. String selectors keep the legacy substring contract. Unqualified recurrent
+labels save all passes; pass-qualified labels such as `"attn:2"` save one 1-based pass.
+Prefer `save=tl.func(...)`, `save=tl.in_module(...)`, and composed predicates for new
+single-pass selective capture. `keep_op=` and `keep_module=` remain deprecated
+`record()` aliases for `save=`.
 
 Common unified capture examples:
 
@@ -108,7 +112,7 @@ exclusive with backward-related capture because it discards the autograd graph.
 
 | Path | Purpose |
 |------|---------|
-| `__init__.py` | Top-level API, 89-name `__all__`, deprecation shims, `peek`/`extract` helpers |
+| `__init__.py` | Top-level API, 90-name `__all__`, deprecation shims, `peek`/`extract` helpers |
 | `_state.py` | Global logging toggle, active log, decoration maps, prepared-model registry; no torchlens imports |
 | `_trace_state.py` | Small runtime state enum exposed through `torchlens.io` |
 | `_errors.py`, `errors/` | Public and legacy exception classes |

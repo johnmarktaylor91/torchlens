@@ -218,7 +218,7 @@ def _recording_from_records(
         by_address={},
         orphan_records=list(metadata.get("orphan_records", [])),
         bundle_path=bundle_path,
-        n_ops=int(metadata.get("n_ops", 1)),
+        n_ops=int(metadata.get("n_passes", metadata.get("n_ops", 1))),
         start_times=list(metadata.get("start_times", [])),
         end_times=list(metadata.get("end_times", [])),
         predicate_failures=[],

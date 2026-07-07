@@ -89,6 +89,22 @@ def test_recorder_context_records_multiple_forwards() -> None:
             recorder.log(torch.ones(1, 3))
 
     assert recorder.recording.n_ops == 5
+    assert recorder.recording.n_passes == 5
+
+
+def test_activation_payloads_by_raw_label_preserves_repeated_passes() -> None:
+    """Repeated raw labels retain every pass payload instead of overwriting."""
+
+    with tl.fastlog.Recorder(SimpleMlp(), save=_keep_all_ops) as recorder:
+        recorder.log(torch.ones(1, 3))
+        recorder.log(torch.ones(1, 3) * 2)
+
+    recording = recorder.recording
+    raw_label = recording.records[0].ctx.raw_label
+    assert raw_label is not None
+    payload = recording.activation_payloads_by_raw_label[raw_label]
+    assert isinstance(payload, list)
+    assert len(payload) == 2
 
 
 def test_direct_model_call_inside_recorder_block_does_not_capture() -> None:

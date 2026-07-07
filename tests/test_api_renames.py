@@ -199,11 +199,11 @@ def test_get_model_metadata_warns_once(monkeypatch: pytest.MonkeyPatch) -> None:
     assert second is sentinel
     assert _deprecation_messages(records) == [
         "torchlens.get_model_metadata is deprecated; use torchlens.io.get_model_metadata "
-        "instead. Removed in v2.NN.",
+        "instead. Removed in a future 2.x release.",
         "`get_model_metadata` is deprecated; use `log_model_metadata` instead. "
         "The old name continues to work but will be removed in a future release.",
         "torchlens.get_model_metadata is deprecated; use torchlens.io.get_model_metadata "
-        "instead. Removed in v2.NN.",
+        "instead. Removed in a future 2.x release.",
     ]
 
 

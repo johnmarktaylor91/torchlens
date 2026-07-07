@@ -54,8 +54,6 @@ if TYPE_CHECKING:
 trace = _user_funcs.trace
 _run_model_and_save_specified_outs = _user_funcs._run_model_and_save_specified_outs
 
-globals().update(vars(_user_funcs))
-
 
 def log_model_metadata(
     model: nn.Module,
@@ -67,12 +65,18 @@ def log_model_metadata(
     Equivalent to ``trace(model, input_args, input_kwargs, layers_to_save=None,
     compute_input_output_distances=True)``.
 
-    Args:
-        model: PyTorch model to inspect.
-        input_args: Positional args for ``model.forward()``.
-        input_kwargs: Keyword args for ``model.forward()``.
+    Parameters
+    ----------
+    model:
+        PyTorch model to inspect.
+    input_args:
+        Positional args for ``model.forward()``.
+    input_kwargs:
+        Keyword args for ``model.forward()``.
 
-    Returns:
+    Returns
+    -------
+    Trace
         Trace with full metadata but no saved outs.
     """
     model_trace = trace(
@@ -183,66 +187,89 @@ def show_model_graph(
     control, use ``trace`` with ``vis_mode`` set and access the Trace
     directly.
 
-    Args:
-        model: PyTorch model.
-        input_args: Positional args for ``model.forward()``.
-        input_kwargs: Keyword args for ``model.forward()``.
-        vis_mode: Deprecated alias for ``visualization.mode``.
-        vis_call_depth: Deprecated alias for ``visualization.max_module_depth``.
-        vis_outpath: Deprecated alias for ``visualization.container_path``.
-        vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
-        module: Optional module focus. Pass a Module or module address string
-            to render only layers that ran inside that module.
-        vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
-        vis_grad_edge_overrides: Deprecated alias for
-            ``visualization.grad_edge_overrides``.
-        vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
-        vis_save_only: Deprecated alias for ``visualization.save_only``.
-        vis_fileformat: Deprecated alias for ``visualization.file_format``.
-        vis_buffers: Deprecated alias for ``visualization.show_buffers``.
-            Accepts ``"never"``, ``"meaningful"``, or ``"always"``. Legacy
-            bools are deprecated but supported: ``True`` maps to ``"always"``
-            and ``False`` maps to ``"never"``.
-        vis_direction: Deprecated alias for ``visualization.direction``.
-        vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
-            Accepts ``"auto"``, ``"dot"``, or ``"rank"``.
-        vis_renderer: Deprecated alias for ``visualization.renderer``. The
-            ``"dagua"`` renderer is experimental and requires
-            ``from torchlens.experimental import dagua`` before use.
-        vis_theme: Deprecated alias for ``visualization.theme``.
-        vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
-            marks intervention sites and optionally their cones. ``"as_node"``
-            inserts a small hook node after each intervention site.
-        vis_show_cone: Whether ``"node_mark"`` mode also marks downstream
-            cone-of-effect members.
-        order_siblings: Whether Graphviz ``dot`` renders should verify and apply
-            execution-order placement for true parallel siblings.
-        code_panel: Optional source-code panel mode. ``True`` is equivalent to
-            ``"forward"``. Built-in modes use source captured at log time;
-            callable modes receive the live model object and are only available
-            while that object is still alive.
-        vis_node_mode: Deprecated alias for ``visualization.node_mode``.
-        collapse: Smart module-collapse mode: ``"none"``, ``"auto"``,
-            ``"max"``, or a float in ``[0.0, 1.0]``. Float levels follow the
-            public monotone schedule: ``0.0`` is equivalent to ``"none"``,
-            ``1.0`` is equivalent to ``"max"``, and larger values never
-            increase the visible node count or uncollapse a collapsed unit.
-        fold_runs: Run-fold policy. ``None`` preserves the default policy:
-            off for ``collapse="none"`` and band-pressure two-pass folding for
-            ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
-            including standalone folding with ``collapse="none"``. ``False``
-            disables run folding.
-        random_seed: Fixed RNG seed for stochastic models.
-        recurrence_detection: If True (default), run full isomorphic
-            subgraph expansion. Set this to False when the forward pass has more than
-            about 1M operations and postprocessing speed matters; the False path skips
-            the expensive expansion step and only groups operations that share the same
-            parameters.
-        visualization: Grouped visualization options. When omitted,
-            ``show_model_graph`` defaults to ``VisualizationOptions(mode="unrolled")``.
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Positional args for ``model.forward()``.
+    input_kwargs:
+        Keyword args for ``model.forward()``.
+    vis_mode:
+        Deprecated alias for ``visualization.mode``.
+    vis_call_depth:
+        Deprecated alias for ``visualization.max_module_depth``.
+    vis_outpath:
+        Deprecated alias for ``visualization.container_path``.
+    vis_graph_overrides:
+        Deprecated alias for ``visualization.graph_overrides``.
+    module:
+        Optional module focus. Pass a Module or module address string to render
+        only layers that ran inside that module.
+    vis_edge_overrides:
+        Deprecated alias for ``visualization.edge_overrides``.
+    vis_grad_edge_overrides:
+        Deprecated alias for ``visualization.grad_edge_overrides``.
+    vis_module_overrides:
+        Deprecated alias for ``visualization.module_overrides``.
+    vis_save_only:
+        Deprecated alias for ``visualization.save_only``.
+    vis_fileformat:
+        Deprecated alias for ``visualization.file_format``.
+    vis_buffers:
+        Deprecated alias for ``visualization.show_buffers``. Accepts
+        ``"never"``, ``"meaningful"``, or ``"always"``. Legacy bools are
+        deprecated but supported: ``True`` maps to ``"always"`` and ``False``
+        maps to ``"never"``.
+    vis_direction:
+        Deprecated alias for ``visualization.direction``.
+    vis_node_placement:
+        Deprecated alias for ``visualization.layout_engine``. Accepts
+        ``"auto"``, ``"dot"``, or ``"rank"``.
+    vis_renderer:
+        Deprecated alias for ``visualization.renderer``. The ``"dagua"``
+        renderer is experimental and requires ``from torchlens.experimental
+        import dagua`` before use.
+    vis_theme:
+        Deprecated alias for ``visualization.theme``.
+    vis_intervention_mode:
+        Intervention overlay mode. ``"node_mark"`` marks intervention sites
+        and optionally their cones. ``"as_node"`` inserts a small hook node
+        after each intervention site.
+    vis_show_cone:
+        Whether ``"node_mark"`` mode also marks downstream cone-of-effect
+        members.
+    order_siblings:
+        Whether Graphviz ``dot`` renders should verify and apply
+        execution-order placement for true parallel siblings.
+    code_panel:
+        Optional source-code panel mode. ``True`` is equivalent to
+        ``"forward"``. Built-in modes use source captured at log time; callable
+        modes receive the live model object and are only available while that
+        object is still alive.
+    vis_node_mode:
+        Deprecated alias for ``visualization.node_mode``.
+    collapse:
+        Smart module-collapse mode: ``"none"``, ``"auto"``, ``"max"``, or a
+        float in ``[0.0, 1.0]``. Float levels follow the public monotone
+        schedule.
+    fold_runs:
+        Run-fold policy. ``None`` preserves the default policy. ``True`` folds
+        every eligible repeated run. ``False`` disables run folding.
+    random_seed:
+        Fixed RNG seed for stochastic models.
+    recurrence_detection:
+        If True, run full isomorphic subgraph expansion. Set this to False when
+        the forward pass has more than about 1M operations and postprocessing
+        speed matters.
+    visualization:
+        Grouped visualization options. When omitted, ``show_model_graph``
+        defaults to ``VisualizationOptions(mode="unrolled")``.
 
-    Returns:
-        None.
+    Returns
+    -------
+    None
+        The graph is rendered for side effects.
     """
     _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)

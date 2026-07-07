@@ -108,7 +108,7 @@ from .quantities import Bytes, Duration, Flops, Macs, Quantity
 
 _sys.modules.setdefault(__name__ + ".facets", _importlib.import_module("torchlens.semantic.facets"))
 
-_REMOVED_IN = "v2.NN"
+_REMOVED_IN = "a future 2.x release"
 
 _LAZY_ATTRS = {
     "JaxPayloadLoadHint": ("torchlens._io", "JaxPayloadLoadHint"),
@@ -397,25 +397,6 @@ def __dir__() -> list[str]:
     """
 
     return sorted([*globals(), *_LAZY_ATTRS, *_MOVED_OBJECTS, *_LEGACY_API_SHIMS, "autoroute"])
-
-
-def _phase_stub(name: str, phase: str) -> Any:
-    """Raise a deferred-implementation error for a reserved public API slot.
-
-    Parameters
-    ----------
-    name:
-        Reserved TorchLens API name.
-    phase:
-        Feature-overhaul phase that will implement the API.
-
-    Raises
-    ------
-    NotImplementedError
-        Always raised until the target phase lands.
-    """
-
-    raise NotImplementedError(f"torchlens.{name} ships in {phase}; see IMPLEMENTATION_PLAN.md")
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:

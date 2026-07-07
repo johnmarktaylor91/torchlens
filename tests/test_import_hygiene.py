@@ -26,6 +26,23 @@ def test_import_torchlens_does_not_import_torchvision_when_installed() -> None:
     )
 
 
+def test_import_torchlens_does_not_import_heavy_torch_submodules() -> None:
+    """Bare TorchLens import should not force deferred torch internals."""
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import torchlens, sys; "
+                "assert 'torch._dynamo' not in sys.modules; "
+                "assert 'torch._dynamo.eval_frame' not in sys.modules"
+            ),
+        ],
+        check=True,
+    )
+
+
 @pytest.mark.heavy
 @pytest.mark.optional
 def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:

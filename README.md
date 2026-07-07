@@ -411,7 +411,7 @@ or `torch.export` -- the forward pass does not run as ordinary Python, so the
 wrappers cannot intercept ops. It also has specific behaviors around FSDP,
 sparse tensors, meta tensors, quantization, and `torch.func.vmap`.
 
-See [LIMITATIONS.md](LIMITATIONS.md) for the full matrix: what fails, what
+See [LIMITATIONS.md](docs/LIMITATIONS.md) for the full matrix: what fails, what
 works, and the recommended workaround for each context.
 
 

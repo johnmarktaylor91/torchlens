@@ -25,7 +25,7 @@ explicit opt-in.
 
 ## Entry Points
 - `Trace.draw()` and `show_model_graph()` call `rendering.draw()`.
-- `show_backward_graph()` calls `rendering.render_backward_graph()`.
+- `draw_backward()` calls `rendering.render_backward_graph()`.
 - `torchlens.viz.bundle_diff()` calls `visualization.bundle_diff.bundle_diff()`.
 - `torchlens.fastlog.preview()` uses `visualization.fastlog_preview.preview_fastlog()`.
 

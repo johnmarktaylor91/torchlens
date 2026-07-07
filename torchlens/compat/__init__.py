@@ -1,4 +1,4 @@
-"""Compatibility adapter namespace reserved for TorchLens 2.0."""
+"""Compatibility adapters and runtime support reports for TorchLens 2.x."""
 
 from __future__ import annotations
 

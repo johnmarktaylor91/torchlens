@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._trace_selector_helpers import _make_layers_to_save_predicate
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.errors import SelectorCompositionError
@@ -129,6 +130,32 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
     assert bundle_path.exists()
+
+
+def test_layers_to_save_absorbed_path_honors_substrings() -> None:
+    """Selective ``layers_to_save`` keeps genuine substrings on the absorbed path."""
+
+    log = tl.trace(
+        TinyLinear(),
+        torch.randn(2, 4),
+        layers_to_save=["lin"],
+    )
+    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    assert saved
+
+
+def test_layers_to_save_absorbed_path_honors_pass_qualified_substrings() -> None:
+    """Pass-qualified substrings save only the matching model-call pass."""
+
+    with tl.fastlog.Recorder(TinyLinear(), save=lambda ctx: ctx.kind == "op") as recorder:
+        recorder.log(torch.randn(2, 4))
+        recorder.log(torch.randn(2, 4))
+    contexts = [
+        record.ctx for record in recorder.recording.records if record.ctx.layer_type == "linear"
+    ]
+    assert contexts
+    predicate = _make_layers_to_save_predicate(["lin:2"])
+    assert [ctx.pass_index for ctx in contexts if predicate(ctx)] == [2]
 
 
 def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None:

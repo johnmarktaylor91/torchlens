@@ -384,8 +384,10 @@ HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
 HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
-HAS_DYNAMO_OPTIMIZED_MODULE: bool = _probe_dynamo_optimized_module()
+HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
+_DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
+_DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 
 _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_AUTOCAST_DEVICE_TYPE_ARG",
@@ -706,9 +708,16 @@ def get_dynamo_optimized_module_type() -> type[Any] | None:
         Dynamo OptimizedModule type, or ``None`` when unavailable.
     """
 
-    optimized_module_type = _import_module_attr_or_none(
-        "torch._dynamo.eval_frame", "OptimizedModule"
-    )
+    global HAS_DYNAMO_OPTIMIZED_MODULE, _DYNAMO_OPTIMIZED_MODULE_PROBED
+    global _DYNAMO_OPTIMIZED_MODULE_TYPE
+
+    if not _DYNAMO_OPTIMIZED_MODULE_PROBED:
+        _DYNAMO_OPTIMIZED_MODULE_TYPE = _import_module_attr_or_none(
+            "torch._dynamo.eval_frame", "OptimizedModule"
+        )
+        HAS_DYNAMO_OPTIMIZED_MODULE = _DYNAMO_OPTIMIZED_MODULE_TYPE is not None
+        _DYNAMO_OPTIMIZED_MODULE_PROBED = True
+    optimized_module_type = _DYNAMO_OPTIMIZED_MODULE_TYPE
     if optimized_module_type is None:
         mark_torch_capability_missing(
             "HAS_DYNAMO_OPTIMIZED_MODULE",

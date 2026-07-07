@@ -24,11 +24,8 @@ lightweight `RecordContext` values and stores only records selected by `keep_op`
 | `options.py` | Fastlog-specific recording options |
 | `_record_one_shot.py` | Public `record()` implementation |
 | `_recorder.py` | Public `Recorder` context manager and repeated rollout orchestration |
-| `_state.py` | Mutable active recording state and predicate failure accumulation |
-| `_orchestrator.py` | Predicate evaluation and retained-record append logic |
-| `_predicate.py` | Predicate/default normalization and error handling |
-| `_record_context.py` | Canonical `RecordContext` construction and recent-history views |
 | `_storage_resolver.py` | Tensor copy/detach/RAM/disk routing |
+| `_halt.py` | Halt outcome helpers shared by one-shot and repeated recording |
 | `_indexes.py` | Recording index helpers |
 | `_validation.py` | Option validation |
 | `storage_ram.py` | In-memory backend |

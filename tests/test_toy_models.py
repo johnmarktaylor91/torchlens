@@ -1829,7 +1829,7 @@ def test_stochastic_depth_layers_to_save():
     model = example_models.StochasticDepthModel(drop_prob=0.5)
     model.train()
     x = torch.rand(2, 5)
-    # layers_to_save triggers the two-pass path; use substring match
+    # layers_to_save accepts substring selectors on both absorbed and two-pass paths.
     mh = trace(model, x, layers_to_save=["linear"])
     assert mh is not None
     assert len(mh.layer_labels) > 0

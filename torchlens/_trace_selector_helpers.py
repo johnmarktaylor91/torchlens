@@ -128,7 +128,24 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
     )
     requested_ints = {int(item) for item in requested if isinstance(item, int)}
     requested_strings = {str(item) for item in requested if not isinstance(item, int)}
-    requested_string_bases = {item for item in requested_strings if ":" not in item}
+
+    def string_matches(requested_string: str, ctx: RecordContext, candidates: set[str]) -> bool:
+        """Return whether a legacy string selector matches candidate labels."""
+
+        requested_base = requested_string
+        if ":" in requested_string:
+            requested_base, pass_index_text = requested_string.rsplit(":", 1)
+            try:
+                requested_pass_index = int(pass_index_text)
+            except ValueError:
+                requested_base = requested_string
+            else:
+                if ctx.pass_index != requested_pass_index:
+                    return False
+
+        if requested_base == "":
+            return False
+        return any(requested_base in candidate for candidate in candidates)
 
     def predicate(ctx: RecordContext) -> bool:
         """Return whether this event matches the absorbed layer selection."""
@@ -138,9 +155,10 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
         if ctx.raw_index in requested_ints:
             return True
         candidates = _label_save_candidates(ctx)
-        if candidates & requested_strings:
-            return True
-        return bool(candidates & requested_string_bases)
+        return any(
+            string_matches(requested_string, ctx, candidates)
+            for requested_string in requested_strings
+        )
 
     return cast(PredicateFn, predicate)
 

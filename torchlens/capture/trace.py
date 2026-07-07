@@ -45,7 +45,7 @@ from ..fastlog._halt import HaltSignal
 from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
 from .config import InternalCaptureConfig
-from .stop import StopDirective, evaluate_halt_stop, stop_directive_for_trace
+from .stop import StopDirective, evaluate_halt_stop
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -1062,7 +1062,6 @@ def run_and_log_inputs_through_model(
         raise
 
     except Exception as e:
-        _ = stop_directive_for_trace(self).forward_disposition(e)
         backend.cleanup_failed_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )

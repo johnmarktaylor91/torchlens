@@ -104,7 +104,17 @@ def _reset_capability(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
     """
 
     monkeypatch.setattr(tc, name, True)
+    if name == "HAS_DYNAMO_OPTIMIZED_MODULE":
+        monkeypatch.setattr(tc, "_DYNAMO_OPTIMIZED_MODULE_TYPE", None)
+        monkeypatch.setattr(tc, "_DYNAMO_OPTIMIZED_MODULE_PROBED", False)
     tc._warned_missing_capabilities.discard(name)
+
+
+def test_capability_attrs_cover_all_has_flags() -> None:
+    """Doctor capability inventory must cover every torch ``HAS_*`` flag."""
+
+    has_flags = {name for name in vars(tc) if name.startswith("HAS_")}
+    assert set(tc._CAPABILITY_ATTRS) == has_flags  # noqa: SLF001
 
 
 def test_variable_functions_absence_falls_back_to_torch_all(

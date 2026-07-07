@@ -78,8 +78,8 @@ Backward helpers are Tier-1 live/rerun-only helpers.
 | Helper | Signature | Portability |
 | --- | --- | --- |
 | `tl.bwd_hook` | `bwd_hook(fn)` | Live/rerun-only; not portable. |
-| `tl.gradient_zero` | `gradient_zero(*, force_shape_change=False)` | Live/rerun-only; not portable. |
-| `tl.gradient_scale` | `gradient_scale(factor, *, force_shape_change=False)` | Live/rerun-only; not portable. |
+| `tl.grad_zero` | `grad_zero(*, force_shape_change=False)` | Live/rerun-only; not portable. |
+| `tl.grad_scale` | `grad_scale(factor, *, force_shape_change=False)` | Live/rerun-only; not portable. |
 
 Hook callables receive one positional tensor and a required keyword-only
 `hook` context. For forward hooks the positional tensor is the activation; for

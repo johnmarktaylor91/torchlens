@@ -24,30 +24,22 @@
 - `register_op_rule()` is the extension point.
 - MAC convention is 2 FLOPs.
 
-## output_tensors.py Gotchas
-- In-place ops rely on `safe_copy()` preserving the raw `_tl.label_raw` on clones so the
-  mutation is logged as a new operation.
-- Barcode nesting detection distinguishes bottom-level ops from wrapper-level composites.
-- `activation_transform` must run under `pause_logging()`.
-- Live intervention hooks run in this layer; hook output validation lives under
-  `intervention/runtime.py`.
-- Fast-path validation must check tensor existence, execution order, and parent alignment.
+## projections.py Gotchas
+- Sparse `Recording` projections must preserve pass indexes, raw labels, and payload refs.
+- Full `Trace` projections must preserve backend-neutral event metadata until postprocess finalizes
+  labels and graph structure.
 
-## source_tensors.py Gotchas
-- Input and buffer roots must increment counters consistently with exhaustive and fast paths.
-- Buffer duplicate guards prevent repeated buffer source nodes when many ops read one buffer.
-
-## backward.py Gotchas
-- Backward capture walks autograd `grad_fn_handle` links and installs hooks after forward capture.
-- Gradient streaming reuses `_io` bundle refs and must finalize/evict in postprocess finalization.
+## predicates.py / stop.py Gotchas
+- `followed_by` must stay correct-or-loud for unsupported predicate shapes.
+- Halt and nonfinite directives must return partials only through the explicit StopDirective policy.
 - Validation for backward lives in `validation/backward.py`.
 
 ## Known Risks
 - Dynamic `arg_positions` cache is process-local and is not automatically invalidated across
   torch version changes.
 - Keyword tensor coverage should be checked whenever adding static specs.
-- Fast capture assumes deterministic graph shape between ops; random/control-flow drift is
-  a hard error.
+- Predicate-backed selective capture assumes deterministic graph shape for validation-sensitive
+  paths; random/control-flow drift must fail clearly when alignment is required.
 - `torch.func` / functorch wrappers log transform boundary ops and run the inner callable
   under paused logging. Preserve the boundary parent edge and transform metadata.
 - Unlabeled tensor args are provenance markers, not graph parents. Inputs, params, buffers,
