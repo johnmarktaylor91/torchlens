@@ -741,3 +741,7 @@ class TestParamRefCleared:
         for pl in mh.param_logs:
             assert pl._param_ref is not None
         mh.cleanup()
+        # GC-1 (discriminating): cleanup must actually release the cached param refs.
+        # Without this post-cleanup assertion the test passes even if cleanup() is a no-op.
+        for pl in mh.param_logs:
+            assert pl._param_ref is None
