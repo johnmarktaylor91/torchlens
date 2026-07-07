@@ -524,11 +524,26 @@ def _decode_hf_text(logits: torch.Tensor, meta: dict[str, Any]) -> list[dict[str
     if tokenizer is None or not hasattr(tokenizer, "decode"):
         return None
     logits_copy = logits.detach().clone()
-    token_ids = torch.argmax(logits_copy, dim=-1).reshape(-1).tolist()
-    text = tokenizer.decode(token_ids)
-    return [
-        {"batch_item": 0, "rank": 1, "text": str(text), "token_ids": [int(i) for i in token_ids]}
-    ]
+    if logits_copy.ndim == 2:
+        # Unbatched `[seq_len, vocab]`: treat as a single batch item.
+        logits_copy = logits_copy.unsqueeze(0)
+    elif logits_copy.ndim != 3:
+        return None
+    # `[batch, seq_len, vocab]`: decode each batch item's own token sequence
+    # independently, never flattening across the batch dimension.
+    token_ids_per_item = torch.argmax(logits_copy, dim=-1).tolist()
+    rows: list[dict[str, Any]] = []
+    for batch_index, token_ids in enumerate(token_ids_per_item):
+        text = tokenizer.decode(token_ids)
+        rows.append(
+            {
+                "batch_item": int(batch_index),
+                "rank": 1,
+                "text": str(text),
+                "token_ids": [int(i) for i in token_ids],
+            }
+        )
+    return rows
 
 
 def _normalized_id2label(value: Any) -> dict[int, str] | None:

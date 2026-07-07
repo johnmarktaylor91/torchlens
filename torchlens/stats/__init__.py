@@ -481,6 +481,7 @@ def aggregate(
     """
 
     from .. import trace
+    from ..options import CaptureOptions
 
     if target not in {"out", "grad"}:
         raise ValueError("target must be 'out' or 'grad'")
@@ -495,8 +496,10 @@ def aggregate(
         log = trace(
             model,
             model_input,
-            layers_to_save=capture_layers,
-            save_grads=capture_layers if target == "grad" else None,
+            capture=CaptureOptions(
+                layers_to_save=capture_layers,
+                save_grads=capture_layers if target == "grad" else None,
+            ),
         )
         try:
             if target == "grad":

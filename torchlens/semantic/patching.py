@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from ..intervention.selectors import facet
+from ..options import CaptureOptions
 from ..user_funcs import trace
 from .facets import Facet, MissingGradient
 
@@ -303,10 +304,8 @@ def attribution_patch_attention_heads(
         Approximate metric effects shaped ``[layer, head]``.
     """
 
-    grad_trace_kwargs = dict(trace_kwargs or {})
-    grad_trace_kwargs.setdefault("save_grads", True)
     clean_log, corrupted_log = _baseline_traces(
-        model, clean_input, corrupted_input, trace_kwargs=grad_trace_kwargs
+        model, clean_input, corrupted_input, trace_kwargs=trace_kwargs, save_grads=True
     )
     clean_metric = _require_scalar_metric(metric(clean_log))
     corrupted_metric = _require_scalar_metric(metric(corrupted_log))
@@ -338,21 +337,41 @@ def _baseline_traces(
     corrupted_input: Any,
     *,
     trace_kwargs: Mapping[str, Any] | None,
+    save_grads: bool | None = None,
 ) -> tuple[Any, Any]:
     """Return clean and corrupted traces with all layer activations saved."""
 
-    kwargs = _trace_kwargs(trace_kwargs)
+    kwargs = _trace_kwargs(trace_kwargs, save_grads=save_grads)
     clean_log = trace(model, clean_input, **kwargs)
     corrupted_log = trace(model, corrupted_input, **kwargs)
     return clean_log, corrupted_log
 
 
-def _trace_kwargs(trace_kwargs: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return trace keyword arguments with P4-safe defaults."""
+def _trace_kwargs(
+    trace_kwargs: Mapping[str, Any] | None,
+    *,
+    save_grads: bool | None = None,
+) -> dict[str, Any]:
+    """Return trace keyword arguments with P4-safe defaults.
+
+    Defaults are supplied through the grouped ``capture=`` kwarg so this
+    helper never triggers torchlens' own flat-kwarg deprecation warnings
+    (``layers_to_save=``/``save_arg_values=``/``save_grads=`` are deprecated
+    aliases for ``capture.*`` fields). If the caller already supplied
+    ``capture=`` or any of the legacy flat names in ``trace_kwargs``, that
+    choice is left untouched -- the caller opted into the deprecated path
+    themselves.
+    """
 
     kwargs = dict(trace_kwargs or {})
-    kwargs.setdefault("layers_to_save", "all")
-    kwargs.setdefault("save_arg_values", True)
+    if "capture" in kwargs:
+        return kwargs
+    if any(name in kwargs for name in ("layers_to_save", "save_arg_values", "save_grads")):
+        return kwargs
+    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_arg_values": True}
+    if save_grads is not None:
+        capture_fields["save_grads"] = save_grads
+    kwargs["capture"] = CaptureOptions(**capture_fields)
     return kwargs
 
 

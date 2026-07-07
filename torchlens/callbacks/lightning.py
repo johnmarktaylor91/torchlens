@@ -207,13 +207,18 @@ class _LayerProfilerCallbackMixin:
             return
 
         from torchlens import trace
+        from torchlens.options import CaptureOptions
 
         model_input = self._model_input(batch)
         was_training = bool(getattr(pl_module, "training", False))
         pl_module.eval()
         try:
             with torch.no_grad():
-                log = trace(pl_module, model_input, layers_to_save=self.layers_to_save)
+                log = trace(
+                    pl_module,
+                    model_input,
+                    capture=CaptureOptions(layers_to_save=self.layers_to_save),
+                )
         finally:
             if was_training:
                 pl_module.train()

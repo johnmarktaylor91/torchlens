@@ -193,7 +193,7 @@ def save(
     >>> import torchlens as tl
     >>> model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     >>> x = torch.randn(2, 4)
-    >>> trace = tl.trace(model, x, layers_to_save="all")
+    >>> trace = tl.trace(model, x)
     >>> tl.save(trace, "demo_bundle", overwrite=True)
     >>> loaded = tl.load("demo_bundle")
     >>> loaded["linear_1_1"].out.shape

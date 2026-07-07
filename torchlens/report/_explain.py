@@ -360,7 +360,12 @@ def _operational_status_line(log: Any) -> str:
     """
 
     cache_hit = bool(getattr(log, "capture_cache_hit", False))
-    streamed = 1
+    streamed = sum(
+        1
+        for layer in getattr(log, "layer_list", []) or []
+        if getattr(layer, "out_ref", None) is not None
+        or getattr(layer, "grad_ref", None) is not None
+    )
     return f"- Operational status: cache_hit={cache_hit}, streamed_ops={streamed}."
 
 

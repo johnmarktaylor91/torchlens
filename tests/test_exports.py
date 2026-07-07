@@ -60,6 +60,7 @@ class _FakeHubApi:
 
         self.created: list[dict[str, Any]] = []
         self.uploaded: list[dict[str, Any]] = []
+        self.uploaded_bytes: list[bytes] = []
 
     def create_repo(self, **kwargs: Any) -> None:
         """Record repository creation.
@@ -87,6 +88,10 @@ class _FakeHubApi:
         """
 
         self.uploaded.append(kwargs)
+        # Read the file's bytes immediately: the caller's temp directory is
+        # cleaned up as soon as this call returns, so content must be
+        # captured now rather than by re-reading the path later.
+        self.uploaded_bytes.append(Path(kwargs["path_or_fileobj"]).read_bytes())
         return "https://huggingface.co/example/repo/blob/main/torchlens_artifact.pkl"
 
 
@@ -260,6 +265,44 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
     assert uploaded["upload_result"].startswith("https://huggingface.co/")
     assert api.created
     assert api.uploaded
+
+
+def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None:
+    """push_to_hub must upload the real scrubbed artifact, never a JSON stub.
+
+    ``export_log`` retains live ``grad_fn`` references (the default for any
+    backward-eligible capture), so a naive ``pickle.dumps`` on the raw Trace
+    fails and previously silently fell back to a ~240-byte JSON manifest
+    while still reporting ``dry_run: False`` success. This asserts the
+    uploaded payload is the real, larger, non-JSON portable-bundle archive.
+    """
+
+    import io
+    import pickle
+    import tarfile
+
+    with pytest.raises(Exception):
+        pickle.dumps(export_log)
+
+    api = _FakeHubApi()
+    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    assert uploaded["dry_run"] is False
+    assert api.uploaded, "expected an upload_file call"
+
+    payload = api.uploaded_bytes[-1]
+
+    # A 240-byte JSON manifest stub is the old broken behavior; the real
+    # scrubbed .tlspec bundle archive is much larger.
+    assert len(payload) > 1000
+    assert uploaded["size_bytes"] > 1000
+
+    # The real artifact is a gzip tar archive of a .tlspec bundle directory,
+    # not a bare JSON manifest.
+    assert payload[:2] == b"\x1f\x8b", "expected a gzip archive, not a JSON stub"
+    with tarfile.open(fileobj=io.BytesIO(payload)) as tar:
+        names = tar.getnames()
+    assert any("manifest.json" in name for name in names)
+    assert any("metadata.pkl" in name for name in names)
 
 
 def test_depyf_bridge_fails_soft_when_extra_missing() -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 from torch import nn
 
@@ -80,6 +82,39 @@ def test_explain_returns_sensible_string_for_each_audience() -> None:
         assert "Notable patterns" in text
         assert "TinyReportModel" in text
         assert "No backward passes are recorded" in text
+
+
+def test_operational_status_line_reports_real_streamed_ops_not_a_fake_constant(
+    tmp_path: Path,
+) -> None:
+    """``streamed_ops`` must reflect real streaming state, not a hardcoded ``1``.
+
+    Regression for a bug where ``_operational_status_line`` always printed
+    ``streamed_ops=1`` regardless of whether the trace used streaming at all.
+    """
+
+    from torchlens.report._explain import _operational_status_line
+
+    plain_log = _captured_log()
+    plain_line = _operational_status_line(plain_log)
+    assert "streamed_ops=0" in plain_line
+
+    plain_text = tl.report.explain(plain_log, audience="practitioner")
+    assert "streamed_ops=0" in plain_text
+
+    bundle_path = tmp_path / "streamed.tlspec"
+    streamed_log = tl.trace(
+        TinyReportModel(),
+        torch.tensor([[2.0, 3.0]]),
+        storage=tl.to_disk(bundle_path, retain_in_memory=False),
+    )
+    streamed_line = _operational_status_line(streamed_log)
+    assert "streamed_ops=0" not in streamed_line
+    num_layers = len(streamed_log.layer_list)
+    assert f"streamed_ops={num_layers}" in streamed_line
+
+    streamed_text = tl.report.explain(streamed_log, audience="practitioner")
+    assert f"streamed_ops={num_layers}" in streamed_text
 
 
 def test_explain_reports_backward_capture() -> None:
