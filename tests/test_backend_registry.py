@@ -8,7 +8,7 @@ import inspect
 from pathlib import Path
 import sys
 import types
-from typing import Any, cast
+from typing import Any, Iterator, cast
 
 import pytest
 import torch
@@ -35,8 +35,15 @@ from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
-from torchlens.backends.default_specs import _paddle_can_handle
-from torchlens.backends.default_specs import _is_foreign_tensor_leaf, _tf_can_handle
+from torchlens.backends.default_specs import (
+    _is_foreign_tensor_leaf,
+    _jax_can_handle,
+    _mlx_can_handle,
+    _paddle_can_handle,
+    _tf_can_handle,
+    _tinygrad_can_handle,
+)
+from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES
 from torchlens.backends.tf import TFBackend
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
@@ -556,6 +563,100 @@ def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
     assert not _paddle_can_handle(_TinyModel(), torch.ones(1), None)
 
 
+def test_mlx_detector_rejects_mixed_foreign_tensor_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MLX detector rejects inputs containing another backend tensor family."""
+
+    mlx_module = types.ModuleType("mlx")
+    mlx_core = types.ModuleType("mlx.core")
+    mlx_nn = types.ModuleType("mlx.nn")
+    MlxArray = type("array", (), {"__module__": "mlx.core"})
+    MlxModule = type("Module", (), {"__module__": "mlx.nn", "__call__": lambda self, x: x})
+    TFTensor = type("Tensor", (), {"__module__": "tensorflow.python.framework.ops"})
+    mlx_core.array = MlxArray
+    mlx_nn.Module = MlxModule
+    mlx_module.core = mlx_core
+    mlx_module.nn = mlx_nn
+    monkeypatch.setitem(sys.modules, "mlx", mlx_module)
+    monkeypatch.setitem(sys.modules, "mlx.core", mlx_core)
+    monkeypatch.setitem(sys.modules, "mlx.nn", mlx_nn)
+
+    assert _mlx_can_handle(MlxModule(), MlxArray(), None)
+    assert not _mlx_can_handle(MlxModule(), (MlxArray(), TFTensor()), None)
+    assert resolve_backend_spec(None, MlxModule(), (MlxArray(), TFTensor())).name == "torch"
+    with pytest.raises(ValueError, match="Unsupported model type"):
+        tl.trace(MlxModule(), (MlxArray(), TFTensor()))
+
+
+def test_jax_detector_rejects_mixed_foreign_tensor_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """JAX detector rejects inputs containing another backend tensor family."""
+
+    jax_module = types.ModuleType("jax")
+    JaxArray = type("Array", (), {"__module__": "jax"})
+    PaddleTensor = type("Tensor", (), {"__module__": "paddle.base.framework"})
+
+    def _flatten(value: object) -> tuple[list[object], None]:
+        """Flatten nested fake JAX inputs for detector coverage."""
+
+        return list(_test_leaves(value)), None
+
+    jax_module.Array = JaxArray
+    jax_module.tree = types.SimpleNamespace(flatten=_flatten)
+    monkeypatch.setitem(sys.modules, "jax", jax_module)
+
+    assert _jax_can_handle(lambda x: x, (JaxArray(),), None)
+    assert not _jax_can_handle(lambda x: x, (JaxArray(),), {"other": PaddleTensor()})
+
+
+def test_tinygrad_detector_rejects_mixed_foreign_tensor_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """tinygrad detector rejects inputs containing another backend tensor family."""
+
+    tinygrad_module = types.ModuleType("tinygrad")
+    TinyTensor = type("Tensor", (), {"__module__": "tinygrad.tensor"})
+    JaxArray = type("Array", (), {"__module__": "jaxlib.xla_extension"})
+    tinygrad_module.Tensor = TinyTensor
+    monkeypatch.setitem(sys.modules, "tinygrad", tinygrad_module)
+
+    assert _tinygrad_can_handle(lambda x: x, (TinyTensor(),), None)
+    assert not _tinygrad_can_handle(lambda x: x, (TinyTensor(), JaxArray()), None)
+
+
+def test_paddle_detector_rejects_mixed_foreign_tensor_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Paddle detector rejects inputs containing another backend tensor family."""
+
+    paddle_module = types.ModuleType("paddle")
+    PaddleTensor = type("Tensor", (), {"__module__": "paddle.base.framework"})
+    PaddleLayer = type("Layer", (), {"__module__": "paddle.nn.layer", "__call__": lambda s, x: x})
+    TFTensor = type("Tensor", (), {"__module__": "tensorflow.python.framework.ops"})
+    paddle_module.Tensor = PaddleTensor
+    paddle_module.nn = types.SimpleNamespace(Layer=PaddleLayer)
+    monkeypatch.setitem(sys.modules, "paddle", paddle_module)
+
+    assert _paddle_can_handle(PaddleLayer(), PaddleTensor(), None)
+    assert not _paddle_can_handle(PaddleLayer(), (PaddleTensor(), TFTensor()), None)
+
+
+def _test_leaves(value: object) -> Iterator[object]:
+    """Yield leaves from simple nested test containers."""
+
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _test_leaves(item)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _test_leaves(item)
+        return
+    yield value
+
+
 def test_tf_foreign_leaf_guard_covers_mlx_and_tinygrad_modules() -> None:
     """TensorFlow foreign-leaf detection rejects MLX/tinygrad-shaped leaves."""
 
@@ -700,6 +801,20 @@ def test_registered_capture_backends_conform_to_protocol() -> None:
         backend = spec.capture_backend()
         missing = [attr for attr in required_attrs if not hasattr(backend, attr)]
         assert missing == [], f"{spec.name} capture backend missing attrs: {missing}"
+
+
+def test_dead_correctness_protocol_methods_are_not_required() -> None:
+    """Dead isolation/autocast hooks stay out of the mandatory backend contract."""
+
+    dead_attrs = {
+        "detect_in_place_isolation_required",
+        "isolate_same_object_returns",
+        "mark_same_object_candidates",
+        "snapshot_autocast",
+    }
+
+    assert dead_attrs.isdisjoint(_CAPTURE_BACKEND_REQUIRED_ATTRIBUTES)
+    assert all(not hasattr(CaptureBackend, attr) for attr in dead_attrs)
 
 
 def test_public_trace_dispatches_through_backend_spec() -> None:

@@ -6,7 +6,7 @@ import dataclasses
 import contextlib
 import inspect
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Any, Mapping, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -30,7 +30,7 @@ from ...utils.arg_handling import (
     safe_copy_kwargs,
 )
 from ...utils.introspection import get_vars_of_type_from_obj, nested_assign
-from ...utils.rng import log_current_autocast_state, log_current_rng_states, set_random_seed
+from ...utils.rng import log_current_rng_states, set_random_seed
 from ...utils.rng import set_rng_from_saved_states
 from ...utils.tensor_utils import _is_cuda_available, safe_copy
 from . import _tl
@@ -550,10 +550,6 @@ class TorchBackend:
         del session
         set_rng_from_saved_states(cast(dict[str, Any], rng_state))
 
-    def snapshot_autocast(self, session: object) -> object:
-        """Capture the current torch autocast state."""
-        return log_current_autocast_state()
-
     def inference_context(self, session: object) -> AbstractContextManager[None]:
         """Return the torch inference-only context for this session.
 
@@ -799,15 +795,6 @@ class TorchBackend:
             else None,
         )
 
-    def detect_in_place_isolation_required(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-        output: object,
-    ) -> bool:
-        """Return whether the output is the first positional input object."""
-        return len(func_event_input.args) > 0 and id(output) == id(func_event_input.args[0])
-
     def detect_backend_semantics(
         self,
         session: object,
@@ -869,32 +856,6 @@ class TorchBackend:
     def is_parameter(self, value: object) -> bool:
         """Return whether ``value`` is a torch parameter."""
         return isinstance(value, torch.nn.Parameter)
-
-    def mark_same_object_candidates(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-    ) -> object:
-        """Mark the first labeled positional input as a same-object candidate."""
-        if not func_event_input.args:
-            return {}
-        first_arg = func_event_input.args[0]
-        if isinstance(first_arg, torch.Tensor) and _tl.get_tensor_label(first_arg) is not None:
-            return {id(first_arg): first_arg}
-        return {}
-
-    def isolate_same_object_returns(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-        raw_output: object,
-        premarked_inputs: object,
-    ) -> object:
-        """Clone a raw output that is the same object as the marked first input."""
-        marked = cast(Mapping[int, object], premarked_inputs)
-        if id(raw_output) in marked and isinstance(raw_output, torch.Tensor):
-            return safe_copy(raw_output)
-        return raw_output
 
     def apply_live_hooks(
         self,

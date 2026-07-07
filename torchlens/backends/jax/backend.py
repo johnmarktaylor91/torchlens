@@ -296,7 +296,8 @@ class JAXBackend:
         save_grads
             Unsupported for JAX in this preview.
         random_seed
-            Ignored; JAX stochasticity must be explicit through keys.
+            Unsupported for JAX in this preview; stochasticity must be explicit
+            through params/input PRNG key leaves.
         num_context_lines
             Stored on the returned trace.
         save_arg_values

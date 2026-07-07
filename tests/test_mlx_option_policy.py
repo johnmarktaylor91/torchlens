@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -73,10 +74,31 @@ def test_mlx_preview_policy_accepts_defaults() -> None:
 
 
 @pytest.mark.parametrize(
-    "option_name",
-    ["storage", "stop_after", "profile", "cache", "raise_on_nan"],
+    ("option_name", "value"),
+    [
+        ("storage", object()),
+        ("stop_after", object()),
+        ("profile", True),
+        ("cache", True),
+        ("raise_on_nan", True),
+        ("save_outs_to", Path("bundle.tl")),
+        ("keep_outs_in_memory", False),
+        ("out_sink", lambda label, tensor: None),
+        ("cache_dir", Path("cache")),
+        ("save_mode", "reference"),
+        ("capture_tensor_grad_hooks", False),
+        ("save_raw_gradients", False),
+        ("mark_layer_depths", True),
+        ("source_context_lines", 3),
+        ("compute_input_output_distances", True),
+        ("unwrap_when_done", True),
+        ("reconstruction_ready", True),
+    ],
 )
-def test_mlx_extra_kwarg_policy_rejects_inert_runtime_options(option_name: str) -> None:
+def test_mlx_extra_kwarg_policy_rejects_inert_runtime_options(
+    option_name: str,
+    value: Any,
+) -> None:
     """MLX extra-kwarg policy rejects accepted-but-inert public options."""
 
     kwargs: dict[str, Any] = {
@@ -85,8 +107,20 @@ def test_mlx_extra_kwarg_policy_rejects_inert_runtime_options(option_name: str) 
         "profile": False,
         "cache": False,
         "raise_on_nan": False,
+        "save_outs_to": None,
+        "keep_outs_in_memory": True,
+        "out_sink": None,
+        "cache_dir": None,
+        "save_mode": "copy",
+        "capture_tensor_grad_hooks": True,
+        "save_raw_gradients": True,
+        "mark_layer_depths": False,
+        "source_context_lines": 7,
+        "compute_input_output_distances": False,
+        "unwrap_when_done": False,
+        "reconstruction_ready": False,
     }
-    kwargs[option_name] = True if option_name != "storage" else object()
+    kwargs[option_name] = value
 
     with pytest.raises(BackendUnsupportedError, match=option_name):
         reject_extra_trace_kwargs(kwargs, MLX_EXTRA_KWARG_POLICY)

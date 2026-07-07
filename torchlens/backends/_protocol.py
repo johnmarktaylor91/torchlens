@@ -96,10 +96,6 @@ class CaptureBackend(Protocol):
         """Restore a backend RNG snapshot for the current session."""
         ...
 
-    def snapshot_autocast(self, session: object) -> object:
-        """Capture backend autocast state for the current session."""
-        ...
-
     def inference_context(self, session: object) -> AbstractContextManager[None]:
         """Return the backend inference-only context for this session."""
         ...
@@ -210,15 +206,6 @@ class CaptureBackend(Protocol):
         """Build the selector predicate context for one output."""
         ...
 
-    def detect_in_place_isolation_required(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-        output: object,
-    ) -> bool:
-        """Return whether the output requires in-place isolation."""
-        ...
-
     def detect_backend_semantics(
         self,
         session: object,
@@ -248,24 +235,6 @@ class CaptureBackend(Protocol):
 
     def is_parameter(self, value: object) -> bool:
         """Return whether a value is a backend parameter."""
-        ...
-
-    def mark_same_object_candidates(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-    ) -> object:
-        """Mark input objects that may be returned by identity."""
-        ...
-
-    def isolate_same_object_returns(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-        raw_output: object,
-        premarked_inputs: object,
-    ) -> object:
-        """Clone raw outputs that alias premarked inputs."""
         ...
 
     def apply_live_hooks(

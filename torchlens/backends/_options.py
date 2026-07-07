@@ -187,6 +187,18 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "save_preview": None,
         "chunk_size": None,
         "chunk_paths": None,
+        "save_outs_to": None,
+        "keep_outs_in_memory": True,
+        "out_sink": None,
+        "cache_dir": None,
+        "save_mode": "copy",
+        "capture_tensor_grad_hooks": True,
+        "save_raw_gradients": True,
+        "mark_layer_depths": False,
+        "source_context_lines": 7,
+        "compute_input_output_distances": False,
+        "unwrap_when_done": False,
+        "reconstruction_ready": False,
     },
 )
 """Extra public-kwarg rejection policy for the MLX preview backend."""

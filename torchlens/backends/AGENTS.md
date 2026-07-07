@@ -11,6 +11,8 @@ serialization policy, and public capability reporting.
 A standalone backend must provide:
 
 - `can_handle(model, input_args, input_kwargs)` for auto-resolution.
+  It must reject inputs containing native tensor leaves from any other backend
+  family, even when the model or another input leaf matches this backend.
 - `capture_trace(*args, **kwargs)` for its public trace entry.
 - `validate_entry(...)` and `validate_trace(...)`, or typed unsupported dispatchers.
 - `BackendCapabilities` in the registry. This is the only source of capability truth.

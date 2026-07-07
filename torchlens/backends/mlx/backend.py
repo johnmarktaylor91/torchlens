@@ -653,14 +653,6 @@ class MLXBackend:
 
         del session, rng_state
 
-    def snapshot_autocast(self, session: object) -> object:
-        """Return the MLX autocast snapshot.
-
-        MLX has no TorchLens autocast replay support in this milestone.
-        """
-
-        return None
-
     def inference_context(self, session: object) -> AbstractContextManager[None]:
         """Return the MLX inference-only context for this session.
 
@@ -732,16 +724,6 @@ class MLXBackend:
             bool_value=_DEFERRED_VALUE,
         )
 
-    def detect_in_place_isolation_required(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-        output: object,
-    ) -> bool:
-        """Return whether the MLX output needs in-place isolation."""
-
-        return False
-
     def detect_backend_semantics(
         self,
         session: object,
@@ -801,30 +783,6 @@ class MLXBackend:
         """Return whether ``value`` is an MLX parameter-like array."""
 
         return self.is_tensor(value)
-
-    def mark_same_object_candidates(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-    ) -> object:
-        """Return same-object candidates for MLX.
-
-        MLX arrays are immutable from the user API perspective, so no candidates
-        are needed for this milestone.
-        """
-
-        return {}
-
-    def isolate_same_object_returns(
-        self,
-        session: object,
-        func_event_input: FunctionEventInput,
-        raw_output: object,
-        premarked_inputs: object,
-    ) -> object:
-        """Return MLX outputs unchanged because in-place isolation is unnecessary."""
-
-        return raw_output
 
     def apply_live_hooks(
         self,

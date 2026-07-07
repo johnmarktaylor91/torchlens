@@ -77,6 +77,8 @@ def _mlx_can_handle(
 
     if not callable(model):
         return False
+    if _contains_other_backend_tensor("mlx", input_args, input_kwargs):
+        return False
     try:
         import mlx.core as mx
         import mlx.nn as mlx_nn
@@ -160,8 +162,9 @@ def _jax_can_handle(
         leaf is a JAX array.
     """
 
-    del input_kwargs
     if not callable(model):
+        return False
+    if _contains_other_backend_tensor("jax", input_args, input_kwargs):
         return False
     try:
         import jax
@@ -194,8 +197,9 @@ def _tinygrad_can_handle(
         input leaf is a tinygrad tensor.
     """
 
-    del input_kwargs
     if not callable(model):
+        return False
+    if _contains_other_backend_tensor("tinygrad", input_args, input_kwargs):
         return False
     try:
         from tinygrad import Tensor
@@ -228,6 +232,8 @@ def _paddle_can_handle(
     """
 
     if not callable(model) or isinstance(model, nn.Module):
+        return False
+    if _contains_other_backend_tensor("paddle", input_args, input_kwargs):
         return False
     try:
         import paddle
@@ -266,7 +272,7 @@ def _tf_can_handle(
 
     if isinstance(model, nn.Module):
         return False
-    if _contains_foreign_tensor(input_args) or _contains_foreign_tensor(input_kwargs):
+    if _contains_other_backend_tensor("tf", input_args, input_kwargs):
         return False
     try:
         import keras
@@ -377,11 +383,66 @@ def _is_foreign_tensor_leaf(leaf: object) -> bool:
         True for torch, JAX, MLX, tinygrad, or Paddle tensor leaves.
     """
 
+    family = _tensor_backend_family(leaf)
+    return family is not None and family != "tf"
+
+
+def _contains_other_backend_tensor(
+    backend_name: str,
+    input_args: object,
+    input_kwargs: object,
+) -> bool:
+    """Return whether public inputs mix in another backend's tensor family.
+
+    Parameters
+    ----------
+    backend_name:
+        Candidate backend family.
+    input_args:
+        Positional public inputs.
+    input_kwargs:
+        Keyword public inputs.
+
+    Returns
+    -------
+    bool
+        True when any tensor leaf belongs to a different backend family.
+    """
+
+    return any(
+        family is not None and family != backend_name
+        for family in (
+            _tensor_backend_family(leaf)
+            for leaf in (*_simple_leaves(input_args), *_simple_leaves(input_kwargs))
+        )
+    )
+
+
+def _tensor_backend_family(leaf: object) -> str | None:
+    """Return the backend family for a known tensor leaf.
+
+    Parameters
+    ----------
+    leaf:
+        Candidate public input leaf.
+
+    Returns
+    -------
+    str | None
+        Backend family name when the leaf is from a recognized tensor runtime,
+        otherwise ``None``.
+    """
+
     if isinstance(leaf, torch.Tensor):
-        return True
-    leaf_type = type(leaf)
-    module_name = leaf_type.__module__.split(".", maxsplit=1)[0]
-    return module_name in {"jax", "jaxlib", "mlx", "paddle", "tinygrad"}
+        return "torch"
+    module_name = type(leaf).__module__.split(".", maxsplit=1)[0]
+    if module_name in {"jax", "jaxlib"}:
+        return "jax"
+    if module_name == "tensorflow":
+        return "tf"
+    if module_name in {"mlx", "paddle", "tinygrad"}:
+        return module_name
+    return None
 
 
 def _tf_runtime_supported(tf: object, keras: object) -> bool:
