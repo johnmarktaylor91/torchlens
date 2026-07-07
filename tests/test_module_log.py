@@ -377,6 +377,58 @@ class TestModuleAccessorSummary:
         assert "call_depth" in df.columns
         assert "num_params" in df.columns
 
+    def test_recurrent_to_pandas_and_root_aggregates(self, input_2d):
+        """Recurrent models must not crash Module.to_pandas.
+
+        Regression: the root ``self:1`` call stores bare Layer labels (per the
+        function-root-module invariant), and a recurrent layer label resolves
+        to MULTIPLE Ops. Aggregate ModuleCall properties that iterate
+        ``trace.ops[label]`` used to raise ``AmbiguousOpLookupError`` on such a
+        label, crashing the field-order-driven module table. The root aggregate
+        must instead sum over every pass, and multi-call submodules must not
+        crash the per-pass columns.
+        """
+
+        from torchlens.validation.invariants import check_metadata_invariants
+
+        model = example_models.RecurrentParamsSimple()
+        log = trace_fn(model, input_2d)
+
+        # The whole table renders without raising.
+        df = log.modules.to_pandas()
+        assert len(df) == len(log.modules)
+
+        # Root aggregates sum over ALL ops (every recurrent pass), with no
+        # double-count and no miss versus a manual sum over log.ops.
+        root = log.root_module
+        all_ops = list(log.ops)
+        manual_func = sum(getattr(op, "func_duration", 0.0) or 0.0 for op in all_ops)
+        manual_autograd = sum(int(getattr(op, "autograd_memory", 0) or 0) for op in all_ops)
+        out_label_set = set(root.calls[0].output_ops)
+        manual_out_act = sum(
+            int(getattr(op, "activation_memory", 0) or 0)
+            for op in all_ops
+            if op.label in out_label_set or op.layer_label in out_label_set
+        )
+        assert manual_out_act > 0  # cross-check actually exercises some ops
+        assert float(root.func_calls_duration) == pytest.approx(manual_func)
+        assert int(root.total_autograd_memory) == manual_autograd
+        assert int(root.total_output_activation_memory) == manual_out_act
+
+        # A multi-call submodule reports per-pass columns as None (mirroring the
+        # output_structure precedent) rather than raising; total_* still carry
+        # the aggregate.
+        fc1 = log.modules["fc1"]
+        assert fc1.num_calls > 1
+        fc1_row = df[df["address"] == "fc1"].iloc[0]
+        assert (
+            fc1_row["func_calls_duration"] is None
+            or fc1_row["func_calls_duration"] != (fc1_row["func_calls_duration"])
+        )  # None or NaN
+        assert float(fc1_row["total_func_calls_duration"]) >= 0.0
+
+        assert check_metadata_invariants(log) is True
+
     def test_summary(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         s = log.modules.summary()

@@ -91,6 +91,23 @@ _TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+# Per-call fields that ``Module`` resolves via ``_single_pass_or_error``: they
+# describe ONE forward pass and deliberately raise ``AttributeError`` on a
+# multi-call Module (directing the user to a specific ``module.ops[i]`` pass).
+# The field-order-driven table cannot let that raise, so it reports them as None
+# for multi-call Modules -- mirroring ``Module.output_structure``, which already
+# returns None for multi-call Modules. The ``total_*`` sibling columns carry the
+# multi-call aggregate, so no information is lost.
+_MULTI_CALL_PER_PASS_MODULE_FIELDS: frozenset[str] = frozenset(
+    {
+        "forward_args_summary",
+        "forward_kwargs_summary",
+        "forward_duration",
+        "func_calls_duration",
+    }
+)
+
+
 def _module_log_to_row(module_log: "Module") -> Dict[str, Any]:
     """Convert a Module into one DataFrame row.
 
@@ -103,14 +120,21 @@ def _module_log_to_row(module_log: "Module") -> Dict[str, Any]:
     -------
     Dict[str, Any]
         Mapping from canonical field name to exported value, excluding the
-        fields in ``_TO_PANDAS_EXCLUDED_MODULE_FIELDS``.
+        fields in ``_TO_PANDAS_EXCLUDED_MODULE_FIELDS``. Per-pass fields
+        (``_MULTI_CALL_PER_PASS_MODULE_FIELDS``) are reported as ``None`` for
+        multi-call Modules so the table never drops a column nor raises.
     """
 
-    return {
-        field_name: getattr(module_log, field_name)
-        for field_name in MODULE_LOG_FIELD_ORDER
-        if field_name not in _TO_PANDAS_EXCLUDED_MODULE_FIELDS
-    }
+    multi_call = module_log.num_calls > 1
+    row: Dict[str, Any] = {}
+    for field_name in MODULE_LOG_FIELD_ORDER:
+        if field_name in _TO_PANDAS_EXCLUDED_MODULE_FIELDS:
+            continue
+        if multi_call and field_name in _MULTI_CALL_PER_PASS_MODULE_FIELDS:
+            row[field_name] = None
+            continue
+        row[field_name] = getattr(module_log, field_name)
+    return row
 
 
 class ModuleCallAccessor(Accessor["ModuleCall"]):
@@ -261,8 +285,25 @@ def _is_atomic_module_call(call: "ModuleCall") -> bool:
     if trace is None:
         return False
     return any(
-        getattr(trace.ops[op_label], "is_atomic_module", False) for op_label in call.output_ops
+        getattr(op, "is_atomic_module", False)
+        for op_label in call.output_ops
+        for op in _resolve_call_ops(trace, op_label)
     )
+
+
+def _resolve_call_ops(trace: "Trace", label: str) -> list["Op"]:
+    """Resolve a ModuleCall op-slot label to its Op object(s).
+
+    Submodule calls store pass-qualified Op labels, each resolving to exactly
+    one Op (unchanged behavior). The root ``self:1`` call stores bare Layer
+    labels (per the function-root-module invariant), and a recurrent
+    (multi-pass) Layer label resolves to EVERY one of its pass Ops. Aggregate
+    ModuleCall properties sum/iterate over the resolved Ops so the root
+    aggregate correctly spans all passes without a caller ever hitting the
+    ``AmbiguousOpLookupError`` that plain ``trace.ops[layer_label]`` raises.
+    """
+
+    return trace.ops.resolve_all(label)
 
 
 def _edge_counts_for_scope(trace: "Trace | None", op_labels: List[str]) -> tuple[int, int, int]:
@@ -285,7 +326,7 @@ def _edge_counts_for_scope(trace: "Trace | None", op_labels: List[str]) -> tuple
     if trace is None:
         return 0, 0, 0
 
-    scope = {trace.ops[label].label for label in op_labels}
+    scope = {op.label for label in op_labels for op in _resolve_call_ops(trace, label)}
     internal_edges: set[tuple[str, str]] = set()
     input_edges: set[tuple[str, str]] = set()
     output_edges: set[tuple[str, str]] = set()
@@ -701,7 +742,11 @@ class ModuleCall:
         if trace is None:
             return Duration(0)
         return Duration(
-            sum(getattr(trace.ops[label], "func_duration", 0.0) or 0.0 for label in self.ops)
+            sum(
+                getattr(op, "func_duration", 0.0) or 0.0
+                for label in self.ops
+                for op in _resolve_call_ops(trace, label)
+            )
         )
 
     @property
@@ -741,9 +786,12 @@ class ModuleCall:
         if trace is None:
             return []
         output_labels = set(self.output_ops)
-        return [
-            cast("Op", trace.ops[label]) for label in self.ops if (label in output_labels) is output
-        ]
+        result: list["Op"] = []
+        for label in self.ops:
+            if (label in output_labels) is not output:
+                continue
+            result.extend(_resolve_call_ops(trace, label))
+        return result
 
     def _sum_op_memory(self, field_name: str, *, output: bool) -> Bytes:
         """Sum an Op memory field for output or non-output Ops in this call."""
@@ -787,7 +835,11 @@ class ModuleCall:
         if trace is None:
             return Bytes(0)
         return Bytes(
-            sum(int(getattr(trace.ops[label], "autograd_memory", 0) or 0) for label in self.ops)
+            sum(
+                int(getattr(op, "autograd_memory", 0) or 0)
+                for label in self.ops
+                for op in _resolve_call_ops(trace, label)
+            )
         )
 
     @property

@@ -130,6 +130,25 @@ class TraceOpAccessor(Accessor[Op]):
             return self._dict[key]
         return None
 
+    def resolve_all(self, key: str) -> list[Op]:
+        """Resolve a label to every Op it denotes.
+
+        A pass-qualified Op label -- or a single-pass Layer label, where the two
+        coincide -- resolves to exactly one Op. A bare Layer label that spans
+        multiple passes (a recurrent layer, as stored on the ROOT ``self:1``
+        ModuleCall which aggregates by Layer) resolves to ALL of that layer's
+        pass Ops. Returns an empty list when the label matches nothing.
+
+        Unlike ``__getitem__``/``_resolve_substring``, this never raises
+        ``AmbiguousOpLookupError``: multi-pass layer labels are the intended,
+        fully-resolved case here.
+        """
+
+        direct = self._resolve_pass_qualified(key)
+        if direct is not None:
+            return [direct]
+        return [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
+
     def _resolve_substring(self, key: str) -> Op | None:
         """Resolve exact long/short Op labels or unique bare parent labels."""
 
