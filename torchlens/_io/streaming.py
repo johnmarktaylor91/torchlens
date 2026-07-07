@@ -244,7 +244,11 @@ class BundleStreamWriter:
                 pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
         except TorchLensIOError:
             raise
-        except (OSError, ValueError, pickle.PickleError) as exc:
+        except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
+            # See torchlens/_io/bundle.py's ``save()`` handler: ``TypeError``
+            # is included alongside ``pickle.PickleError`` because
+            # ``pickle.dump()`` raises a bare ``TypeError`` (not the
+            # ``PickleError`` subclass) for many live-resource objects.
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             raise TorchLensIOError(reason) from exc

@@ -587,6 +587,102 @@ def test_bundle_save_overwrite_true_replaces_existing_bundle(tmp_path: Path) -> 
     assert torch.equal(second_output, restored_output)
 
 
+def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare ``TypeError`` from ``pickle.dump`` must not destroy the original bundle.
+
+    Regression test for a data-loss BLOCKER: ``pickle.dump()`` raises a bare
+    ``TypeError`` (not the ``pickle.PickleError`` subclass) for many live
+    objects, e.g. ``TypeError: cannot pickle 'generator' object``. Before the
+    fix, ``save()``'s exception handler only caught
+    ``(ImportError, OSError, ValueError, pickle.PickleError)``, so a
+    ``TypeError`` propagated straight past every handler in the function --
+    skipping both the ``PARTIAL`` sentinel (leaving the ``.tmp`` dir
+    un-sweepable by ``cleanup_tmp()``) and the pre-overwrite backup restore
+    (permanently losing the original bundle under an undocumented
+    ``.bak.<uuid>`` directory name with a bare ``TypeError`` propagating to
+    the caller instead of a clean ``TorchLensIOError``).
+    """
+
+    bundle_path, first_log = _save_bundle(tmp_path, seed=0)
+    second_log = _build_conv_log(seed=1)
+
+    def _poisoned_pickle_dump(*_args: Any, **_kwargs: Any) -> None:
+        raise TypeError("simulated live-resource pickling failure")
+
+    monkeypatch.setattr("torchlens._io.bundle.pickle.dump", _poisoned_pickle_dump)
+
+    with pytest.raises(TorchLensIOError) as excinfo:
+        save(second_log, bundle_path, overwrite=True)
+
+    assert isinstance(excinfo.value.__cause__, TypeError)
+
+    # The original (pre-overwrite) bundle must survive the failed overwrite.
+    assert bundle_path.exists()
+    restored = load(bundle_path)
+    first_output = first_log.layer_list[-1].out
+    restored_output = restored.layer_list[-1].out
+    assert isinstance(first_output, torch.Tensor)
+    assert isinstance(restored_output, torch.Tensor)
+    assert torch.equal(first_output, restored_output)
+
+    # No undocumented "<name>.bak.<uuid>" sibling should be left behind --
+    # the failed-overwrite path must restore it back onto ``bundle_path``.
+    siblings = [p for p in tmp_path.iterdir() if p != bundle_path]
+    bak_dirs = [p for p in siblings if ".bak." in p.name]
+    assert bak_dirs == []
+
+    # Any leftover ``.tmp.<uuid>`` dir must carry the PARTIAL sentinel so
+    # ``cleanup_tmp()`` (without ``force=True``) can sweep it.
+    tmp_dirs = [p for p in siblings if ".tmp." in p.name]
+    for tmp_dir in tmp_dirs:
+        assert (tmp_dir / "PARTIAL").exists()
+    removed = cleanup_tmp(bundle_path)
+    assert set(removed) == set(tmp_dirs)
+    assert not any(p.exists() for p in tmp_dirs)
+
+
+def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
+    tmp_path: Path,
+) -> None:
+    """``save_raw_input=True`` must stringify un-picklable objects, not pickle them raw.
+
+    Unmocked, public-API-only repro of the root cause behind the BLOCKER
+    above: ``save_raw_input=True``/``save_raw_output=True`` (documented
+    top-level ``tl.trace()`` kwargs) previously routed raw values through
+    the unsafe ``_scrub_value()`` passthrough, so a generator (or any other
+    live, un-picklable object) nested inside a raw input reached
+    ``pickle.dump()`` unmodified. Now the raw-value scrub path stringifies
+    genuinely un-picklable leaves while still fully retaining picklable
+    ones (e.g. tensors), matching the documented "stores the full object"
+    behavior for the common case.
+    """
+
+    def make_generator() -> Any:
+        yield 1
+
+    model = nn.Linear(3, 3)
+    raw_input = {"tensor": torch.randn(3, 3), "meta": make_generator()}
+    trace = trace_fn(
+        model,
+        raw_input,
+        transform=lambda d: d["tensor"],
+        save_raw_input=True,
+        random_seed=0,
+    )
+    assert isinstance(trace.raw_input["meta"], type(make_generator()))
+
+    bundle_path = tmp_path / "raw_input_bundle.tl"
+    save(trace, bundle_path)
+
+    loaded = load(bundle_path)
+    assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.raw_input["tensor"], raw_input["tensor"])
+    assert loaded.raw_input["meta"] == "<scrubbed:generator>"
+
+
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
     """Bundle save should refuse symlinked target paths."""
 

@@ -346,7 +346,15 @@ def save(
         if backup_path is not None and not bundle_path.exists() and backup_path.exists():
             _restore_backup(backup_path, bundle_path)
         raise
-    except (ImportError, OSError, ValueError, pickle.PickleError) as exc:
+    except (ImportError, OSError, TypeError, ValueError, pickle.PickleError) as exc:
+        # ``TypeError`` is caught alongside the other serialization failure
+        # modes because ``pickle.dump()`` raises a bare ``TypeError`` (not
+        # the ``pickle.PickleError`` subclass) for many live-resource objects
+        # (generators, locks, open file handles, sockets, ...). Without this,
+        # the exception propagated past this handler entirely, skipping both
+        # the ``PARTIAL`` sentinel (leaving the ``.tmp`` dir un-sweepable by
+        # ``cleanup_tmp()``) and the backup restore (permanently losing the
+        # pre-overwrite bundle under an undocumented ``.bak.<uuid>`` name).
         _mark_partial(tmp_path, reason=str(exc))
         if backup_path is not None and not bundle_path.exists() and backup_path.exists():
             _restore_backup(backup_path, bundle_path)
@@ -624,7 +632,7 @@ def _load_trace_payload(
         raise TorchLensIOError(
             f"Failed to load bundle metadata from {metadata_path}.{hint}"
         ) from exc
-    except (OSError, AttributeError, EOFError, ImportError, ValueError) as exc:
+    except (OSError, AttributeError, EOFError, ImportError, TypeError, ValueError) as exc:
         raise TorchLensIOError(f"Failed to load bundle at {bundle_path}.") from exc
 
     trace = rehydrate_trace(

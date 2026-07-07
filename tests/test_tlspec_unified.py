@@ -568,6 +568,33 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
+def test_validate_tlspec_enforces_shipped_schema_properties_pattern(tmp_path: Path) -> None:
+    """The shipped JSON schema's ``properties`` block must be load-bearing, not decorative.
+
+    Regression test for a MAJOR finding: ``_validate_manifest_against_schema``
+    used to read only ``schema["required"]`` from the shipped
+    ``schemas/tlspec_manifest_v1.json`` file; ``schema["properties"]``
+    (types, enums, minimums, patterns) was never consulted, so editing only
+    the JSON schema could silently no-op. ``python_version`` is a clean
+    probe for this: the hand-written Python validator only checks it is a
+    non-empty string (``_require_str``), while the shipped schema also
+    declares ``"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"``. Before the fix,
+    a non-empty string that violates that pattern passed validation
+    entirely; after the fix, the schema's own ``properties`` entry is what
+    catches it.
+    """
+
+    path = tmp_path / "bad_python_version.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest["python_version"] = "not-a-version"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ValueError, match="python_version"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
 def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
     """Schema v2 accepts MLX materialized backend/runtime and body fields."""
 

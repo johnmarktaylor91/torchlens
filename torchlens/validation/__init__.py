@@ -129,6 +129,17 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     if missing:
         raise ValueError(f"Unified .tlspec manifest missing required fields: {missing}.")
 
+    # Walk the shipped JSON schema's own ``properties`` block so it is a real,
+    # load-bearing contract rather than documentation the hand-written checks
+    # below happen to agree with. Without this, an edit to only the JSON
+    # schema file (the obvious place to look, given its name and the fact
+    # that ``_load_tlspec_manifest_schema`` loads it) would silently no-op:
+    # the schema is a package-data artifact external tooling may read
+    # (``pyproject.toml``'s ``schemas/*.json`` package-data entry), so its
+    # declared ``properties`` constraints must match what TorchLens itself
+    # enforces.
+    _validate_schema_properties(manifest, schema, path="manifest")
+
     schema_version = _manifest_schema_version(manifest)
     # ``tlspec_version`` tracks the portable scrub/state format
     # (``torchlens._io.TLSPEC_VERSION``) and grows independently of
@@ -169,6 +180,133 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
             raise ValueError(
                 "Non-intervention .tlspec manifests require null intervention_compat_metadata."
             )
+
+
+# JSON Schema keywords enforced by ``_validate_schema_properties``. This is a
+# deliberately narrow subset -- only the keywords the shipped
+# ``schemas/tlspec_manifest_v*.json`` files actually use for scalar/array
+# constraints (``type``, ``enum``, ``const``, ``minimum``, ``minLength``,
+# ``pattern``, ``uniqueItems``, ``items``, ``properties``, ``required``).
+# ``format`` is intentionally NOT enforced: JSON Schema draft 2020-12
+# treats ``format`` as annotation-only unless the format-assertion
+# vocabulary is explicitly enabled, and enforcing it here would exceed what
+# the schema's own ``$schema`` declaration promises. ``additionalProperties``
+# and ``allOf``/``if``/``then`` are also intentionally out of scope: the
+# hand-written field validators above already enforce the conditional
+# ``kind``-dependent rules the one ``allOf`` block encodes, and adding a
+# generic ``additionalProperties: false`` check risks rejecting
+# forward-compatible manifests the hand-written checks currently accept.
+_JSON_SCHEMA_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "boolean": bool,
+    "null": type(None),
+}
+
+
+def _validate_schema_properties(value: Any, schema: Any, *, path: str) -> None:
+    """Recursively enforce a JSON Schema ``properties``/``items`` subtree.
+
+    Parameters
+    ----------
+    value:
+        Decoded manifest value (or nested value) under validation.
+    schema:
+        Decoded JSON schema fragment describing ``value``.
+    path:
+        Dotted/bracketed path used in raised error messages.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` violates a ``type``, ``enum``, ``const``, ``minimum``,
+        ``minLength``, ``pattern``, ``uniqueItems``, nested ``properties``,
+        nested ``required``, or ``items`` constraint declared in ``schema``.
+    """
+
+    if not isinstance(schema, dict):
+        return
+
+    schema_type = schema.get("type")
+    if schema_type is not None:
+        _check_json_schema_type(value, schema_type, path=path)
+
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"{path} must be one of {schema['enum']!r}; got {value!r}.")
+    if "const" in schema and value != schema["const"]:
+        raise ValueError(f"{path} must equal {schema['const']!r}; got {value!r}.")
+    if (
+        "minimum" in schema
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and value < schema["minimum"]
+    ):
+        raise ValueError(f"{path} must be >= {schema['minimum']}; got {value}.")
+    if "minLength" in schema and isinstance(value, str) and len(value) < schema["minLength"]:
+        raise ValueError(f"{path} must have length >= {schema['minLength']}; got {len(value)}.")
+    if (
+        "pattern" in schema
+        and isinstance(value, str)
+        and re.search(schema["pattern"], value) is None
+    ):
+        raise ValueError(f"{path} does not match pattern {schema['pattern']!r}.")
+    if schema.get("uniqueItems") and isinstance(value, list):
+        seen: list[Any] = []
+        for item in value:
+            if item in seen:
+                raise ValueError(f"{path} must have unique items; duplicate {item!r}.")
+            seen.append(item)
+
+    if isinstance(value, dict):
+        properties = schema.get("properties")
+        if isinstance(properties, dict):
+            for key, sub_schema in properties.items():
+                if key in value:
+                    _validate_schema_properties(value[key], sub_schema, path=f"{path}.{key}")
+        nested_required = schema.get("required")
+        if isinstance(nested_required, list):
+            nested_missing = [field for field in nested_required if field not in value]
+            if nested_missing:
+                raise ValueError(f"{path} missing required fields: {nested_missing}.")
+    elif isinstance(value, list):
+        items_schema = schema.get("items")
+        if isinstance(items_schema, dict):
+            for index, item in enumerate(value):
+                _validate_schema_properties(item, items_schema, path=f"{path}[{index}]")
+
+
+def _check_json_schema_type(value: Any, schema_type: Any, *, path: str) -> None:
+    """Enforce a JSON Schema ``type`` keyword against a decoded value.
+
+    Parameters
+    ----------
+    value:
+        Decoded manifest value under validation.
+    schema_type:
+        Either a single JSON Schema type name or a list of allowed names.
+    path:
+        Dotted/bracketed path used in the raised error message.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` does not match any of the allowed type names.
+    """
+
+    allowed_types = schema_type if isinstance(schema_type, list) else [schema_type]
+    for allowed_type in allowed_types:
+        if allowed_type == "integer":
+            if isinstance(value, int) and not isinstance(value, bool):
+                return
+        elif allowed_type == "number":
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return
+        else:
+            python_type = _JSON_SCHEMA_TYPE_MAP.get(allowed_type)
+            if python_type is not None and isinstance(value, python_type):
+                return
+    raise ValueError(f"{path} must be of type {schema_type!r}; got {type(value).__name__}.")
 
 
 def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
