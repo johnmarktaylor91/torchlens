@@ -85,10 +85,15 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     ``max_memory_allocated`` after ``reset_peak_memory_stats``. CPU/MPS use the
     larger of (a) a process resident-set-size delta -- which captures torch's
     C++-allocated tensor buffers for sizeable models -- and (b) the stdlib
-    ``tracemalloc`` Python-allocation peak, which stays reliably positive for
-    small models where RSS granularity rounds the delta to zero. ``tracemalloc``
-    yields a genuine high-water mark within the bracket, not just an endpoint
-    reading.
+    ``tracemalloc`` Python-allocation peak, measured as a delta against a
+    baseline snapshot taken at bracket entry (after ``reset_peak()`` when
+    tracemalloc was already tracing). This keeps the value scoped to this
+    bracket even when tracemalloc was started earlier by external tooling: the
+    reset discards any unrelated historical high-water mark, and subtracting
+    the entry-time baseline discards memory that is legitimately still live
+    but unrelated to this forward pass (e.g. process-wide Python state already
+    resident when the bracket was entered). tracemalloc stays reliably
+    positive for small models where RSS granularity rounds the delta to zero.
 
     Only the exhaustive and predicate primary passes record memory; the fast
     second pass re-runs the model and must not clobber the measured forward peak.
@@ -147,6 +152,27 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     if tracemalloc_started_here:
         with contextlib.suppress(Exception):
             tracemalloc.start()
+    else:
+        # tracemalloc was already tracing when this bracket was entered (external
+        # tooling, a pytest memory-leak plugin, or a leftover start elsewhere in the
+        # process). Reset its high-water mark before yielding so the peak reported
+        # below is scoped to this forward pass instead of an arbitrary earlier,
+        # unrelated high-water mark from before this bracket ran.
+        with contextlib.suppress(Exception):
+            tracemalloc.reset_peak()
+    # Snapshot the currently-live traced size as a baseline. When tracemalloc was
+    # already running, this "current" size can itself be sizeable (e.g. process-wide
+    # Python-level state that happens to already be resident, such as this same
+    # trace() call's own one-time model-preparation work that ran moments earlier,
+    # just before this bracket). reset_peak() alone only discards *historical* peaks
+    # reached before the bracket; it cannot lower "current". Subtracting this
+    # baseline from the post-yield peak below isolates the delta genuinely
+    # introduced by the forward pass, mirroring the RSS-delta measurement used for
+    # the CPU/MPS path just below.
+    traced_baseline = 0
+    if tracemalloc.is_tracing():
+        with contextlib.suppress(Exception):
+            traced_baseline, _peak_at_entry = tracemalloc.get_traced_memory()
     try:
         yield
     finally:
@@ -154,6 +180,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
         if tracemalloc.is_tracing():
             with contextlib.suppress(Exception):
                 _current, traced_peak = tracemalloc.get_traced_memory()
+                traced_peak = max(0, traced_peak - traced_baseline)
             if tracemalloc_started_here:
                 with contextlib.suppress(Exception):
                     tracemalloc.stop()

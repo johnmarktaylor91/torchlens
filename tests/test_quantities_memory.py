@@ -1,6 +1,8 @@
 """Conformance tests for v7 memory quantity fields."""
 
+import gc
 import re
+import tracemalloc
 
 import pytest
 import torch
@@ -280,3 +282,42 @@ def test_no_str_suffixed_quantity_fields_remain_public() -> None:
             "capture_duration_str",
         }:
             assert not hasattr(record, field)
+
+
+@pytest.mark.smoke
+def test_forward_peak_memory_ignores_pre_existing_external_tracemalloc_peak() -> None:
+    """``forward_peak_memory`` stays scoped to the traced pass under external tracemalloc.
+
+    Regression test: if tracemalloc was already tracing when ``tl.trace()`` ran
+    (external tooling, a pytest memory-leak plugin, a leftover
+    ``tracemalloc.start()`` elsewhere in the process), ``get_traced_memory()``
+    used to return the high-water mark since tracemalloc's *original* start --
+    an unrelated historical peak with nothing to do with this forward pass. Two
+    unrelated small-model traces would both silently report that same stale,
+    foreign peak.
+    """
+
+    started_here = not tracemalloc.is_tracing()
+    if started_here:
+        tracemalloc.start()
+    try:
+        # Simulate unrelated prior activity in the same process building up a
+        # large historical tracemalloc peak that has nothing to do with the
+        # model traced below.
+        phantom = [b"x" * 1_000_000 for _ in range(20)]
+        del phantom
+        gc.collect()
+
+        model = nn.Linear(10, 10)
+        x = torch.randn(1, 10)
+        log1 = tl.trace(model, x)
+        log2 = tl.trace(model, x)
+    finally:
+        if started_here:
+            tracemalloc.stop()
+
+    # A tiny nn.Linear(10, 10) forward pass should report a small, proportionate
+    # peak -- not the ~20MB phantom footprint from the unrelated prior activity,
+    # and the two calls should not be pinned to an identical foreign value.
+    assert int(log1.forward_peak_memory) < 5_000_000
+    assert int(log2.forward_peak_memory) < 5_000_000

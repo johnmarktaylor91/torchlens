@@ -76,6 +76,38 @@ def test_finalized_bundle_loads_and_recover_returns_identical_not_recovered(
     assert list(recovered.records)
 
 
+def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> None:
+    """``load()``/``recover()`` rehydrate real tensor payloads, not just metadata.
+
+    Regression test: reloaded fastlog records used to come back with every
+    payload field (``ram_payload``, ``disk_payload``, ``transformed_*``) set to
+    ``None`` even though the underlying blobs were written and hash-verified as
+    ``.safetensors`` -- only structural metadata (``blob_id``, ``relative_path``,
+    ``sha256``, ...) survived a reload. This asserts a persisted blob's actual
+    tensor contents round-trip through both public reload entry points.
+    """
+
+    bundle_path = tmp_path / "payload_roundtrip.tlfast"
+    original = _write_bundle(bundle_path)
+
+    original_values = {
+        record.ctx.label: record.disk_payload.clone()
+        for record in original.records
+        if record.disk_payload is not None
+    }
+    assert original_values, "sanity: at least one record should have captured a raw payload"
+
+    for reload_fn in (tl.fastlog.load, tl.fastlog.recover):
+        reloaded = reload_fn(bundle_path)
+        rehydrated = [record for record in reloaded.records if record.disk_payload is not None]
+        assert rehydrated, f"{reload_fn.__name__} dropped every disk_payload on reload"
+        for record in rehydrated:
+            expected = original_values[record.ctx.label]
+            assert torch.equal(record.disk_payload, expected), (
+                f"{reload_fn.__name__} rehydrated {record.ctx.label} with the wrong values"
+            )
+
+
 def test_recover_with_missing_manifest_walks_jsonl(tmp_path: Path) -> None:
     """Recovery ignores a missing manifest and scans JSONL."""
 

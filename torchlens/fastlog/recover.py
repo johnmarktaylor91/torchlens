@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any, Literal
+
+from safetensors import SafetensorError
+from safetensors.torch import load_file
 
 from .._io import TorchLensIOError
 from .._io.manifest import Manifest, enforce_version_policy, sha256_of_file
@@ -116,7 +120,10 @@ def _load_from_index(
         record = record_from_json(data)
         if not _blob_is_recoverable(bundle_path, record, warnings_out):
             continue
-        records.append(record)
+        rehydrated_record = _rehydrate_record_payloads(bundle_path, record, warnings_out)
+        if rehydrated_record is None:
+            continue
+        records.append(rehydrated_record)
     recording = _recording_from_records(
         records,
         bundle_path=bundle_path,
@@ -195,6 +202,91 @@ def _validate_blob_metadata(
         recovery_warnings.append(f"hash mismatch {blob_id}")
         return False
     return True
+
+
+def _load_blob_tensor(blob_path: Path) -> Any:
+    """Load the single tensor stored in one fastlog safetensors blob.
+
+    Fastlog blobs are always written with exactly one tensor per file (see
+    ``BundleStreamWriter._write_tensor_blob``), so the blob's sole value is the
+    materialized payload; the storage key itself is not part of the public
+    contract.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the blob is missing, unreadable, or does not contain exactly one
+        tensor.
+    """
+
+    try:
+        tensor_map = load_file(str(blob_path))
+    except ImportError as exc:
+        raise TorchLensIOError(
+            "Fastlog bundle payload materialization requires the safetensors "
+            "backend. Install safetensors>=0.4."
+        ) from exc
+    except (OSError, SafetensorError, ValueError) as exc:
+        raise TorchLensIOError(f"Failed to materialize fastlog blob at {blob_path}.") from exc
+    if len(tensor_map) != 1:
+        raise TorchLensIOError(f"Expected a single tensor in fastlog blob file {blob_path}.")
+    return next(iter(tensor_map.values()))
+
+
+def _rehydrate_record_payloads(
+    bundle_path: Path,
+    record: ActivationRecord,
+    recovery_warnings: list[str],
+) -> ActivationRecord | None:
+    """Rehydrate a reloaded record's disk-persisted tensor payloads.
+
+    ``_blob_is_recoverable`` already confirmed both the raw and transformed
+    blobs (when present) exist and are hash-valid, so a subsequent failure to
+    read them back here reflects a genuine I/O problem (e.g. a race with
+    concurrent bundle mutation) rather than a corruption this function should
+    silently mask. Such a record is skipped with a recovery warning, matching
+    the existing missing-blob/hash-mismatch skip-and-warn behavior in this
+    module, instead of raising out of ``load()``/``recover()``.
+
+    Returns
+    -------
+    ActivationRecord | None
+        A record with ``disk_payload``/``transformed_disk_payload`` populated
+        from their persisted blobs, or ``None`` if materialization failed for
+        a blob that ``_blob_is_recoverable`` had already validated.
+    """
+
+    disk_payload = None
+    relative_path = record.metadata.get("relative_path")
+    blob_id = record.metadata.get("blob_id")
+    if relative_path is not None:
+        try:
+            disk_payload = _load_blob_tensor(
+                resolve_bundle_blob_path(bundle_path, str(relative_path))
+            )
+        except TorchLensIOError:
+            recovery_warnings.append(f"failed to materialize blob {blob_id}")
+            return None
+
+    transformed_disk_payload = None
+    transformed_relative_path = record.metadata.get("transformed_out_relative_path")
+    transformed_blob_id = record.metadata.get("transformed_out_blob_id")
+    if transformed_relative_path is not None:
+        try:
+            transformed_disk_payload = _load_blob_tensor(
+                resolve_bundle_blob_path(bundle_path, str(transformed_relative_path))
+            )
+        except TorchLensIOError:
+            recovery_warnings.append(f"failed to materialize blob {transformed_blob_id}")
+            return None
+
+    if disk_payload is None and transformed_disk_payload is None:
+        return record
+    return dataclasses.replace(
+        record,
+        disk_payload=disk_payload,
+        transformed_disk_payload=transformed_disk_payload,
+    )
 
 
 def _recording_from_records(
