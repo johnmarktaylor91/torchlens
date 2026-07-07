@@ -26,10 +26,57 @@ if TYPE_CHECKING:
 
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
+from .._errors import AmbiguousOpLookupError
 from ..capture.projections import LiveOpView
 from ..intervention.errors import SiteAmbiguityError
 from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
+
+
+def _ambiguous_lookup_match_labels(self: "Trace", key: str) -> list[str]:
+    """Return final Op labels that share an ambiguous lookup key.
+
+    Parameters
+    ----------
+    self:
+        Trace containing the ambiguity registry.
+    key:
+        Ambiguous lookup key.
+
+    Returns
+    -------
+    list[str]
+        Final pass-qualified Op labels for matching entries.
+    """
+
+    ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
+    raw_indices = ambiguous_lookup_keys.get(key, [])
+    matches: list[str] = []
+    for op in self.layer_list:
+        if op.raw_index in raw_indices:
+            matches.append(op.label)
+    return matches
+
+
+def _raise_ambiguous_lookup_key(self: "Trace", requested_key: str, stored_key: str) -> None:
+    """Raise the strict ambiguous lookup error for a colliding alias key.
+
+    Parameters
+    ----------
+    self:
+        Trace containing the ambiguity registry.
+    requested_key:
+        User-supplied lookup key.
+    stored_key:
+        Canonical key stored in the ambiguity registry.
+    """
+
+    matches = _ambiguous_lookup_match_labels(self, stored_key)
+    raise AmbiguousOpLookupError(
+        f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops: "
+        f"{', '.join(matches[:10])}{'...' if len(matches) > 10 else ''}. "
+        "Use an exact raw/op label or a more specific key."
+    )
 
 
 def _getitem_during_pass(self: "Trace", ix: Any) -> Op | LiveOpView:
@@ -115,9 +162,31 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
 
+        ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
+        if ix in ambiguous_lookup_keys:
+            _raise_ambiguous_lookup_key(self, ix, ix)
+
         lower_ix = ix.lower()
+        for accessor in (
+            self.ops,
+            self.module_calls,
+            self.layers,
+            self.modules,
+            self.params,
+            self.buffers,
+            self.grad_fns,
+        ):
+            try:
+                for key in accessor.keys():
+                    if str(key).lower() == lower_ix:
+                        return accessor[key]
+            except (AttributeError, KeyError, ValueError, TypeError):
+                pass
+
         for key in self.layer_dict_all_keys:
             if str(key).lower() == lower_ix:
+                if key in ambiguous_lookup_keys:
+                    _raise_ambiguous_lookup_key(self, ix, key)
                 return self.layer_dict_all_keys[key]
 
         keys_with_substr = [

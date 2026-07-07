@@ -24,6 +24,7 @@ from collections import defaultdict
 from dataclasses import fields, is_dataclass, replace
 from typing import Any, Dict, List, TYPE_CHECKING
 
+from .._errors import AmbiguousOpLookupError
 from ..data_classes.op import Op
 from ..intervention.types import ParentRef
 
@@ -714,6 +715,11 @@ def _add_lookup_keys_for_layer_entry(
         layer_entry.label,
         layer_entry.label_short,
     }
+    exact_op_keys = {
+        layer_entry._label_raw,
+        layer_entry.raw_label,
+        layer_entry.label,
+    }
 
     # Relabel the module ops if this pass built module metadata:
     if self.capture_mode in {"exhaustive", "predicate"}:
@@ -757,9 +763,22 @@ def _add_lookup_keys_for_layer_entry(
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
             self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
             self.layer_dict_all_keys[lookup_key] = layer_entry
-        elif lookup_key in primary_label_keys:
-            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
-            self.layer_dict_all_keys[lookup_key] = layer_entry
+        elif self._lookup_keys_to_layer_num_dict[lookup_key] != layer_entry.raw_index:
+            if lookup_key in exact_op_keys:
+                existing = self.layer_dict_all_keys[lookup_key]
+                raise AmbiguousOpLookupError(
+                    f"Exact Op lookup key {lookup_key!r} collides between "
+                    f"{existing.label!r} and {layer_entry.label!r}."
+                )
+            raw_indices = self._ambiguous_lookup_keys.setdefault(
+                lookup_key,
+                [self._lookup_keys_to_layer_num_dict[lookup_key]],
+            )
+            if layer_entry.raw_index not in raw_indices:
+                raw_indices.append(layer_entry.raw_index)
+            if lookup_key in primary_label_keys:
+                self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
+                self.layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
 
 
