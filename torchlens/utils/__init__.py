@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal, get_args, get_origin, get_type_hints
 import torch
 from torch import nn
 
+from .. import _state
 from ._torch_compat import get_torch_capability_snapshot
 from .rng import (
     set_random_seed,
@@ -87,13 +88,13 @@ class DoctorCheck:
     name:
         Human-readable check name.
     status:
-        ``"PASS"``, ``"FAIL"``, or ``"SKIP"``.
+        ``"PASS"``, ``"FAIL"``, ``"SKIP"``, or ``"WARN"``.
     detail:
         Short diagnostic detail.
     """
 
     name: str
-    status: Literal["PASS", "FAIL", "SKIP"]
+    status: Literal["PASS", "FAIL", "SKIP", "WARN"]
     detail: str
 
 
@@ -272,6 +273,57 @@ def _probe_torch_capabilities() -> DoctorCheck:
     return DoctorCheck("runtime capabilities", "PASS", detail)
 
 
+def _probe_torch_wrapper_bindings() -> DoctorCheck:
+    """Check torch namespace attributes against the installed wrapper registry.
+
+    Returns
+    -------
+    DoctorCheck
+        Warning-only detector for stale torch module attributes. This cannot
+        inspect arbitrary local aliases such as closure-bound ``from torch
+        import relu`` references, but it catches the cheap process-global case
+        where torch itself is no longer pointing at registered wrappers.
+    """
+
+    if not _state._orig_to_decorated:
+        return DoctorCheck("torch wrapper bindings", "SKIP", "wrappers not installed yet")
+    if not _state._is_decorated:
+        return DoctorCheck("torch wrapper bindings", "SKIP", "torch is currently unwrapped")
+
+    from ..constants import get_orig_torch_funcs
+
+    stale: list[str] = []
+    checked = 0
+    for namespace_name, func_name in get_orig_torch_funcs():
+        namespace_key = namespace_name.replace("torch.", "")
+        try:
+            namespace = nested_getattr(torch, namespace_key)
+        except (AttributeError, TypeError):
+            continue
+        if not hasattr(namespace, func_name):
+            continue
+        current = getattr(namespace, func_name)
+        checked += 1
+        if id(current) in _state._decorated_to_orig:
+            continue
+        if id(current) in _state._orig_to_decorated:
+            stale.append(f"{namespace_name}.{func_name}")
+
+    if stale:
+        examples = ", ".join(stale[:5])
+        return DoctorCheck(
+            "torch wrapper bindings",
+            "WARN",
+            f"{len(stale)}/{checked} torch attrs still point at original callables; "
+            f"examples={examples}",
+        )
+    return DoctorCheck(
+        "torch wrapper bindings",
+        "PASS",
+        f"checked={checked}; no stale torch namespace bindings detected",
+    )
+
+
 def _runtime_capability_snapshot() -> dict[str, bool]:
     """Return all runtime compatibility capability flags.
 
@@ -320,6 +372,7 @@ def doctor() -> DoctorReport:
     checks: list[DoctorCheck] = [
         DoctorCheck("pytorch", "PASS", torch.__version__),
         _probe_torch_capabilities(),
+        _probe_torch_wrapper_bindings(),
         DoctorCheck(
             "cuda",
             "PASS" if torch.cuda.is_available() else "SKIP",

@@ -6,9 +6,12 @@ import types
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
+from torch import nn
 
 from torchlens import _state
+import torchlens as tl
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import (
     _safe_module_file,
@@ -67,6 +70,44 @@ def uses_default(x: Any, op: Any = tanh) -> Any:
         assert is_decorated_function(mod.uses_default.__defaults__[0])
     finally:
         sys.modules.pop(mod_name, None)
+        clear_patch_detached_references_cache()
+        wrap_torch()
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Known limitation: closure-bound `from torch import ...` aliases created before "
+        "wrap_torch() are not rewritten without a profiling detector."
+    ),
+    strict=True,
+)
+def test_from_import_closure_binding_before_wrap_escapes_capture() -> None:
+    """Document the conservative pre-wrap from-import binding escape."""
+
+    unwrap_torch()
+    clear_patch_detached_references_cache()
+
+    def build_model() -> nn.Module:
+        """Build a model whose forward closes over a raw torch binding."""
+
+        from torch import relu
+
+        class FromImportClosureModel(nn.Module):
+            """Use a closure-bound torch function inside ``forward``."""
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                """Return a traced add fed by an untraced pre-bound relu."""
+
+                return x + relu(x)
+
+        return FromImportClosureModel()
+
+    model = build_model()
+    wrap_torch()
+    try:
+        log = tl.trace(model, torch.randn(3))
+        assert any(op.func_name == "relu" for op in log.ops)
+    finally:
         clear_patch_detached_references_cache()
         wrap_torch()
 

@@ -51,7 +51,7 @@ on the measured fixtures.
 
 ## Public surface map
 
-`torchlens.__all__` currently exposes 89 names. Group them by job:
+`torchlens.__all__` currently exposes 90 names. Group them by job:
 
 | Job | Names |
 | --- | --- |
@@ -59,7 +59,7 @@ on the measured fixtures.
 | Persistence and bundles | `load`, `save`, `bundle`, `Bundle`; schema-v2 manifests add `backend`, `backend_runtime`, and `payload_policy` |
 | Replay and edits | `do`, `replay`, `replay_from`, `rerun` |
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
-| Site discovery | `sites`, `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
+| Site discovery | `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
 | Predicate composition | `followed_by`, `preceded_by`, `intervening`, `when` |
 | Activation helpers | `zero_ablate`, `mean_ablate`, `resample_ablate`, `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `noise`, `project_onto`, `project_off`, `splice_module` |
 | Backward helpers | `bwd_hook`, `grad_zero`, `grad_scale`, `grad_clamp`, `grad_noise`, `grad_clip` |

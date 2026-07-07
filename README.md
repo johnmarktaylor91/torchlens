@@ -58,7 +58,7 @@ sudo apt install graphviz   # Debian/Ubuntu; see graphviz.org for other platform
 pip install torchlens
 ```
 
-Compatible with PyTorch 1.8.0+.
+Compatible with PyTorch 2.1+.
 
 
 ## Quickstart

@@ -227,6 +227,15 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   at model-prep time. Ordering with user hooks depends on registration
   order; in particular, user pre-hooks that mutate inputs are seen by
   TorchLens as the new mutated input, not the pre-hook input.
+- **Pre-bound local `from torch import ...` aliases**: TorchLens patches
+  many module-level torch aliases when wrappers are installed, but it cannot
+  rewrite arbitrary closure or local variables that captured raw torch
+  callables before `wrap_torch()` / `trace()` ran. Those calls may execute
+  outside capture. Prefer `import torch` or `import torch.nn.functional as F`
+  in model code and call through the module attribute inside `forward`, or
+  create local aliases only after TorchLens has installed wrappers. Run
+  `tl.utils.doctor()` to check the process-global torch namespace wrapper
+  state; it cannot inspect private closure locals.
 - **bfloat16 / fp16 + non-deterministic GPU reductions**: validation
   replay compares activations to within ``3e-6`` absolute tolerance; on
   bf16/fp16 GPU atomics, small reordering differences can cross that
