@@ -960,6 +960,11 @@ class MLXBackend:
             },
             MLX_PREVIEW_TRACE_OPTION_POLICY,
         )
+        if random_seed is not None:
+            raise BackendUnsupportedError(
+                "MLX backend preview does not support random_seed; pass explicit MLX RNG "
+                "state through the model/input surface instead."
+            )
         module_tree = discover_mlx_module_tree(model)
         use_object_module = _resolve_mlx_module_identity_mode(module_identity_mode, module_tree)
         trace = Trace(

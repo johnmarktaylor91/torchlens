@@ -146,6 +146,11 @@ class TFBackend:
         module_identity_mode = default_if_missing(module_identity_mode, None)
         save_predicate = _pop_tf_save_predicate(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
+        if random_seed is not None:
+            raise BackendUnsupportedError(
+                "tf backend preview does not support random_seed; use tf.random.set_seed(...) "
+                "outside tl.trace or pass explicit RNG state through the model/input surface."
+            )
         _reject_unsupported_options(
             layers_to_save=layers_to_save,
             input_kwargs=input_kwargs,

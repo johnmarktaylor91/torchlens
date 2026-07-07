@@ -51,7 +51,14 @@ PUBLIC_OPTION_SPINE_TRACE_OPTIONS: tuple[str, ...] = tuple(
 """Trace options declared by the public-option API spine."""
 
 TORCH_TRACE_OPTIONS: tuple[str, ...] = PUBLIC_OPTION_SPINE_TRACE_OPTIONS
-"""Trace options accepted by the torch backend and currently treated as inert metadata."""
+"""Public trace-option names accepted by torch.
+
+Torch implements container-structure capture, inference-only capture,
+semantic output decode, and forward chunking. Backend-preview-only controls
+such as JAX control-flow selection, non-default module identity modes,
+payload-policy overrides, and save-preview mode are value-validated by the
+torch entrypoint rather than silently treated as operational options.
+"""
 
 JAX_TRACE_OPTIONS: tuple[str, ...] = (
     "jax_static_argnums",
@@ -306,7 +313,7 @@ def _validate_capture_backend_factory(spec: BackendSpec) -> None:
     try:
         backend = spec.capture_backend()
     except ImportError as exc:
-        if "partially initialized module" in str(exc):
+        if str(spec.name) == "torch" and "partially initialized module" in str(exc):
             return
         raise
     missing = [name for name in _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES if not hasattr(backend, name)]
@@ -339,6 +346,14 @@ def register_backend_spec(spec: BackendSpec, *, replace: bool = False) -> None:
         if not replace and name in _REGISTRY:
             raise ValueError(f"Backend {name!r} is already registered.")
     _validate_capture_backend_factory(spec)
+    if replace:
+        replaced_specs = {
+            existing_spec for name in names if (existing_spec := _REGISTRY.get(name)) is not None
+        }
+        for existing_spec in replaced_specs:
+            for registered_name, registered_spec in list(_REGISTRY.items()):
+                if registered_spec is existing_spec:
+                    del _REGISTRY[registered_name]
     for name in names:
         _REGISTRY[name] = spec
 

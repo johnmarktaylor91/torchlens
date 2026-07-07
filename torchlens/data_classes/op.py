@@ -834,15 +834,17 @@ def _dedup_saved_activation_out(
         setattr(trace, "_out_identity_cache", identity_cache)
 
     source_key = id(source_tensor)
+    source_version = getattr(source_tensor, "_version", None)
     cached = identity_cache.get(source_key)
     if cached is not None:
-        cached_source, cached_label, cached_out = cached
-        if cached_source is source_tensor:
+        cached_source, cached_label, cached_out, cached_version = cached
+        if cached_source is source_tensor and cached_version == source_version:
             annotations["dedup_source_id"] = source_key
+            annotations["dedup_source_version"] = source_version
             annotations["dedup_reference_label"] = cached_label
             return cached_out
 
-    identity_cache[source_key] = (source_tensor, label, raw_out)
+    identity_cache[source_key] = (source_tensor, label, raw_out, source_version)
     return raw_out
 
 

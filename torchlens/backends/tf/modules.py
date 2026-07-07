@@ -223,6 +223,8 @@ def _patch_class_call(
     originals[module_class] = original_call
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        """Record module-call context around one TensorFlow module call."""
+
         address = tree.address_by_id.get(id(self))
         if address is None:
             return original_call(self, *args, **kwargs)

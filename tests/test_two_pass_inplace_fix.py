@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.backends.torch.aliasing import detect_torch_alias_contract
+from torchlens.ir.intervention import FunctionEventInput
 
 
 def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:
@@ -146,6 +148,84 @@ def test_two_pass_succeeds_with_function_level_inplace_relu() -> None:
 
     _assert_layer_present(trace, "linear_1_1")
     trace.cleanup()
+
+
+class _ForeachAddBlock(nn.Module):
+    """Module that mutates list-held tensors with a foreach in-place op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a foreach in-place add over derived tensors."""
+
+        left = x + 1
+        right = x + 3
+        torch._foreach_add_([left, right], 1.0)
+        return left.sum() + right.sum()
+
+
+class _OutBufferWriteBlock(nn.Module):
+    """Module that writes an op result into a registered buffer via ``out=``."""
+
+    def __init__(self) -> None:
+        """Initialize the destination buffer."""
+
+        super().__init__()
+        self.register_buffer("acc", torch.zeros(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Write ``x + x`` into ``self.acc`` and consume the result."""
+
+        torch.add(x, x, out=self.acc)
+        return self.acc.sum()
+
+
+def test_identity_dedup_snapshots_foreach_inplace_outputs_after_mutation() -> None:
+    """Saved foreach in-place outputs should reflect post-mutation values."""
+
+    trace = tl.trace(_ForeachAddBlock(), torch.tensor([1.0, 2.0, 3.0]))
+    foreach_outputs = [trace[label].out for label in trace.layer_labels if "foreachadd" in label]
+
+    assert len(foreach_outputs) == 2
+    assert torch.equal(foreach_outputs[0], torch.tensor([3.0, 4.0, 5.0]))
+    assert torch.equal(foreach_outputs[1], torch.tensor([5.0, 6.0, 7.0]))
+
+
+def test_identity_dedup_snapshots_out_kwarg_buffer_write_after_mutation() -> None:
+    """Saved ``out=`` op payload should not reuse the pre-write buffer read."""
+
+    trace = tl.trace(_OutBufferWriteBlock(), torch.tensor([1.0, 2.0, 3.0]))
+
+    assert torch.equal(trace["add_1_1"].out, torch.tensor([2.0, 4.0, 6.0]))
+    assert torch.equal(trace["buffer_2"].out, torch.tensor([2.0, 4.0, 6.0]))
+
+
+def test_alias_contract_detects_list_tensor_mutation_positions() -> None:
+    """Alias detection should report mutations inside list tensor arguments."""
+
+    before_left = torch.tensor([1.0])
+    before_right = torch.tensor([2.0])
+    left = before_left.clone()
+    right = before_right.clone()
+    torch._foreach_add_([left, right], 1.0)
+    event_input = FunctionEventInput(
+        func=torch._foreach_add_,
+        func_name="_foreach_add_",
+        func_qualname=None,
+        args=([left, right], 1.0),
+        kwargs={},
+        raw_output=[left, right],
+        arg_copies=([before_left, before_right], 1.0),
+        kwarg_copies={},
+        module_stack=(),
+        is_bottom_level_func=True,
+        func_call_id=1,
+        expected_output_count=2,
+    )
+
+    semantics = detect_torch_alias_contract(event_input)
+
+    assert semantics.mutated_input_positions == ((0, 0), (0, 1))
+    assert semantics.aliased_output_inputs == ((0, 0), (0, 1))
+    assert semantics.unknown_aliasing is False
 
 
 def test_two_pass_succeeds_with_multiple_inplace_relu_modules() -> None:

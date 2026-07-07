@@ -8,7 +8,9 @@ import pytest
 
 from torchlens.backends import BackendUnsupportedError
 from torchlens.backends._options import (
+    MLX_EXTRA_KWARG_POLICY,
     MLX_PREVIEW_TRACE_OPTION_POLICY,
+    reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
 
@@ -68,3 +70,23 @@ def test_mlx_preview_policy_accepts_defaults() -> None:
     """MLX preview policy accepts default capture options."""
 
     reject_unsupported_trace_options(_valid_mlx_options(), MLX_PREVIEW_TRACE_OPTION_POLICY)
+
+
+@pytest.mark.parametrize(
+    "option_name",
+    ["storage", "stop_after", "profile", "cache", "raise_on_nan"],
+)
+def test_mlx_extra_kwarg_policy_rejects_inert_runtime_options(option_name: str) -> None:
+    """MLX extra-kwarg policy rejects accepted-but-inert public options."""
+
+    kwargs: dict[str, Any] = {
+        "storage": None,
+        "stop_after": None,
+        "profile": False,
+        "cache": False,
+        "raise_on_nan": False,
+    }
+    kwargs[option_name] = True if option_name != "storage" else object()
+
+    with pytest.raises(BackendUnsupportedError, match=option_name):
+        reject_extra_trace_kwargs(kwargs, MLX_EXTRA_KWARG_POLICY)

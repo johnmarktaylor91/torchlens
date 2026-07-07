@@ -139,9 +139,11 @@ def test_tf_detector_reports_non_tf_keras_backend_mismatch(
     """Non-TF Keras objects raise a typed mismatch naming the active backend."""
 
     keras_module = types.ModuleType("keras")
+    keras_module.__version__ = "3.0.0"
     keras_module.backend = types.SimpleNamespace(backend=lambda: "jax")
 
     tf_module = types.ModuleType("tensorflow")
+    tf_module.__version__ = "2.16.0"
     tf_module.Module = object
     tf_module.Tensor = object
     tf_module.Variable = object

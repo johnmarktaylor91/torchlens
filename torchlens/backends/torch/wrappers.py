@@ -900,7 +900,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             arg_copies = args
             kwarg_copies = kwargs
 
-        buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike)
+        buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike, kwargs)
 
         # ---- Execute the original function ----
         # Write a unique barcode BEFORE the call. If any inner wrapped functions

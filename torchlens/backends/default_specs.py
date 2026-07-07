@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from typing import Any, cast
 
+from packaging.version import InvalidVersion, Version
 import torch
 from torch import nn
 
@@ -265,10 +266,15 @@ def _tf_can_handle(
 
     if isinstance(model, nn.Module):
         return False
+    if _contains_foreign_tensor(input_args) or _contains_foreign_tensor(input_kwargs):
+        return False
     try:
         import keras
         import tensorflow as tf
     except ImportError:
+        return False
+
+    if not _tf_runtime_supported(tf, keras):
         return False
 
     active_keras_backend = str(keras.backend.backend())
@@ -278,8 +284,6 @@ def _tf_can_handle(
                 "backend='tf' requires keras.backend.backend() == 'tensorflow'; "
                 f"active keras backend is {active_keras_backend!r}."
             )
-        return False
-    if _contains_foreign_tensor(input_args) or _contains_foreign_tensor(input_kwargs):
         return False
     if isinstance(model, tf.Module):
         return True
@@ -353,7 +357,7 @@ def _contains_foreign_tensor(value: object) -> bool:
     Returns
     -------
     bool
-        True for torch, JAX, or Paddle tensor leaves.
+        True for torch, JAX, MLX, tinygrad, or Paddle tensor leaves.
     """
 
     return any(_is_foreign_tensor_leaf(leaf) for leaf in _simple_leaves(value))
@@ -370,14 +374,38 @@ def _is_foreign_tensor_leaf(leaf: object) -> bool:
     Returns
     -------
     bool
-        True for torch, JAX, or Paddle tensor leaves.
+        True for torch, JAX, MLX, tinygrad, or Paddle tensor leaves.
     """
 
     if isinstance(leaf, torch.Tensor):
         return True
     leaf_type = type(leaf)
     module_name = leaf_type.__module__.split(".", maxsplit=1)[0]
-    return module_name in {"jax", "jaxlib", "paddle"}
+    return module_name in {"jax", "jaxlib", "mlx", "paddle", "tinygrad"}
+
+
+def _tf_runtime_supported(tf: object, keras: object) -> bool:
+    """Return whether installed TensorFlow/Keras versions are supported.
+
+    Parameters
+    ----------
+    tf:
+        Imported TensorFlow module.
+    keras:
+        Imported Keras module.
+
+    Returns
+    -------
+    bool
+        True for Keras 3 on TensorFlow >= 2.16.
+    """
+
+    try:
+        tf_version = Version(str(getattr(tf, "__version__", "0")))
+        keras_version = Version(str(getattr(keras, "__version__", "0")))
+    except InvalidVersion:
+        return False
+    return tf_version >= Version("2.16") and keras_version >= Version("3")
 
 
 def _is_keras_object(value: object) -> bool:
@@ -812,7 +840,7 @@ def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
 
 
 def register_default_backend_specs() -> None:
-    """Register built-in torch and MLX backend specs.
+    """Register built-in backend specs.
 
     Returns
     -------

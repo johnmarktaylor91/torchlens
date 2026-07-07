@@ -243,6 +243,8 @@ class TFEagerCaptureSession:
             op_name: str | None = None,
             graph: Any | None = None,
         ) -> None:
+            """Forward one TensorFlow op-callback event to the capture recorder."""
+
             self._callback(
                 op_type=op_type,
                 inputs=inputs,

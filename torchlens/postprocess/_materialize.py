@@ -925,6 +925,7 @@ def _event_tensor_payload(
         event.kind == "source"
         and event.layer_type == "buffer"
         and resolved_address in buffer_alias_snapshots
+        and payload is None
     ):
         return buffer_alias_snapshots[resolved_address]
     return payload

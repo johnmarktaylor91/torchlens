@@ -48,6 +48,7 @@ from .backends import (
     get_backend_spec,
     resolve_backend_spec,
 )
+from .backends._options import MLX_EXTRA_KWARG_POLICY, reject_extra_trace_kwargs
 from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
@@ -348,6 +349,28 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         Captured MLX trace.
     """
 
+    reject_extra_trace_kwargs(
+        {
+            "lookback": kwargs["lookback"],
+            "lookback_payload_policy": kwargs["lookback_payload_policy"],
+            "capture": kwargs["capture"],
+            "intervene": kwargs["intervene"],
+            "halt": kwargs["halt"],
+            "storage": kwargs["storage"],
+            "streaming": kwargs["streaming"],
+            "inference_only": kwargs.get("inference_only", MISSING),
+            "cache": kwargs.get("cache", MISSING),
+            "stop_after": kwargs.get("stop_after", MISSING),
+            "raise_on_nan": kwargs.get("raise_on_nan", MISSING),
+            "profile": kwargs.get("profile", MISSING),
+            "recipes": kwargs.get("recipes", MISSING),
+            "payload_policy": kwargs.get("payload_policy", MISSING),
+            "save_preview": kwargs.get("save_preview", MISSING),
+            "chunk_size": kwargs.get("chunk_size", MISSING),
+            "chunk_paths": kwargs.get("chunk_paths", MISSING),
+        },
+        MLX_EXTRA_KWARG_POLICY,
+    )
     save_options, save_predicate = _split_save_options_and_predicate(kwargs["save"])
     if save_predicate is not None:
         reject_selector_outside_kinds(
@@ -1126,6 +1149,42 @@ def _filter_trace_kwargs_for_backend(
         public_trace_kwargs.pop(option_name, None)
 
 
+def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOptions) -> None:
+    """Reject explicit torch trace-option values that torch does not implement.
+
+    Parameters
+    ----------
+    capture_options:
+        Normalized capture options for a torch trace call.
+
+    Returns
+    -------
+    None
+        Returns when all explicit values are supported or default-equivalent.
+    """
+
+    if capture_options.is_field_explicit("module_identity_mode") and (
+        capture_options.module_identity_mode not in {None, "torch_module"}
+    ):
+        raise BackendUnsupportedError(
+            "backend='torch' supports module_identity_mode=None or 'torch_module' only."
+        )
+    if capture_options.is_field_explicit("payload_policy") and (
+        capture_options.payload_policy not in {None, "full"}
+    ):
+        raise BackendUnsupportedError(
+            "backend='torch' supports payload_policy=None or 'full' only."
+        )
+    if capture_options.is_field_explicit("save_preview") and capture_options.save_preview:
+        raise BackendUnsupportedError("backend='torch' does not support save_preview=True.")
+    for option_name in ("jax_control_flow", "jax_max_control_flow_unroll"):
+        if capture_options.is_field_explicit(option_name):
+            raise BackendUnsupportedError(
+                f"backend='torch' does not support explicit {option_name}; "
+                "JAX control-flow options are only meaningful with backend='jax'."
+            )
+
+
 def trace(
     model: nn.Module,
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1650,6 +1709,7 @@ def _trace_torch_model(
         save_preview=save_preview,
         raise_on_nan=raise_on_nan,
     )
+    _reject_unsupported_torch_trace_option_values(capture_options)
     profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
     raw_input = None
     input_transform = capture_options.transform

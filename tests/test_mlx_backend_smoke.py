@@ -9,6 +9,7 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens.backends import BackendUnsupportedError  # noqa: E402
 
 
 @pytest.mark.optional
@@ -44,3 +45,11 @@ def test_mlx_linear_mlp_smoke() -> None:
         op = log[op_label]
         assert op.shape is not None
         assert op.dtype is not None
+
+
+@pytest.mark.optional
+def test_mlx_preview_rejects_random_seed() -> None:
+    """MLX preview rejects random_seed instead of storing inert metadata."""
+
+    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+        tl.trace(lambda x: x + 1, mx.array([1.0]), backend="mlx", random_seed=123)

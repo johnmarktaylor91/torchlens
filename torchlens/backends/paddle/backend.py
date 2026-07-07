@@ -314,6 +314,11 @@ class PaddleBackend:
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = _default_if_missing(grad_options, None)
         _reject_extra_kwargs(extra_kwargs)
+        if random_seed is not None:
+            raise BackendUnsupportedError(
+                "paddle backend preview does not support random_seed; use paddle.seed(...) "
+                "outside tl.trace or pass explicit RNG state through the model/input surface."
+            )
         reject_unsupported_trace_options(
             {
                 "layers_to_save": layers_to_save,

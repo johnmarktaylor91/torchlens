@@ -214,6 +214,37 @@ class AliasWrite(nn.Module):
         return self.b.sum()
 
 
+class AliasReadThenWholeWrite(nn.Module):
+    """Read a buffer view, mutate the whole buffer, then read the view again."""
+
+    def __init__(self) -> None:
+        """Initialize overlapping registered buffers."""
+
+        super().__init__()
+        base = torch.zeros(4)
+        self.register_buffer("whole", base)
+        self.register_buffer("halfview", base[:2])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Read the view before and after mutating the full buffer."""
+
+        first = self.halfview.sum()
+        self.whole.add_(x)
+        second = self.halfview.sum()
+        return first + second
+
+
+def test_storage_aliased_buffer_first_read_keeps_pre_mutation_snapshot() -> None:
+    """A buffer-view read before an overlapping write keeps its original payload."""
+
+    trace = tl.trace(AliasReadThenWholeWrite(), torch.ones(4))
+
+    assert torch.equal(trace["buffer_1"].out, torch.zeros(2))
+    assert torch.equal(trace["sum_1_1"].out, torch.tensor(0.0))
+    assert torch.equal(trace["buffer_4"].out, torch.ones(2))
+    assert torch.equal(trace["sum_2_3"].out, torch.tensor(2.0))
+
+
 @pytest.mark.parametrize(
     ("model_factory", "input_factory", "expected_overwrites"),
     [

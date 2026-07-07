@@ -118,6 +118,13 @@ def test_paddle_dygraph_guard_rejects_static_or_pir(monkeypatch: pytest.MonkeyPa
         tl.trace(lambda x: x + 1, _input(), backend="paddle")
 
 
+def test_paddle_preview_rejects_random_seed() -> None:
+    """Paddle preview rejects random_seed instead of storing inert metadata."""
+
+    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+        tl.trace(lambda x: x + 1, _input(), backend="paddle", random_seed=123)
+
+
 @pytest.mark.parametrize(
     ("name", "func", "message"),
     [

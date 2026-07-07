@@ -12,7 +12,13 @@ from torch import nn
 from ... import _state
 from ...ir import BufferWriteEvent
 from ...utils.tensor_utils import safe_copy
-from ._tl import get_buffer_address, get_module_meta, get_tensor_label, set_buffer_address
+from ._tl import (
+    clear_tensor_label,
+    get_buffer_address,
+    get_module_meta,
+    get_tensor_label,
+    set_buffer_address,
+)
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
@@ -337,14 +343,16 @@ class BufferWriteTracker:
         if written_key is None:
             return
         written_range = self.storage_range(written_tensor)
-        for address in self.addresses_for_storage_key(written_key):
+        for address, tensor in tuple(self.address_to_tensor.items()):
             if address == written_address:
                 continue
-            tensor = self.address_to_tensor.get(address)
             if tensor is None:
+                continue
+            if self.storage_key(tensor) != written_key:
                 continue
             if not _ranges_overlap(written_range, self.storage_range(tensor)):
                 continue
+            clear_tensor_label(tensor)
             self.address_to_snapshot[address] = _copy_tensor_value(tensor)
             self.address_to_version[address] = _tensor_version(tensor)
 
@@ -475,6 +483,7 @@ def snapshot_buffer_args(
     trace: "Trace",
     func_name: str,
     tensors: list[torch.Tensor],
+    kwargs: dict[str, Any],
 ) -> list[BufferSnapshot]:
     """Snapshot buffer-backed arguments for one wrapped torch call."""
 
@@ -483,7 +492,7 @@ def snapshot_buffer_args(
     tracker = getattr(trace, "_buffer_write_tracker", None)
     if not isinstance(tracker, BufferWriteTracker):
         return []
-    if not _is_fused_mutator(func_name) and not _could_mutate(func_name):
+    if not _is_fused_mutator(func_name) and not _could_mutate(func_name, kwargs):
         return []
     return tracker.snapshot_buffer_args(tensors)
 
@@ -655,12 +664,13 @@ def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
     return left[0] < right[1] and right[0] < left[1]
 
 
-def _could_mutate(func_name: str) -> bool:
+def _could_mutate(func_name: str, kwargs: dict[str, Any] | None = None) -> bool:
     """Return whether a torch wrapper name can mutate tensor storage."""
 
     return (
         func_name.endswith("_")
         or func_name.startswith("__i")
+        or (kwargs is not None and kwargs.get("out") is not None)
         or func_name
         in {
             "__setitem__",

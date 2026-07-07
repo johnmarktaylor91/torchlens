@@ -467,6 +467,13 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     assert trace.output_layers
 
 
+def test_tinygrad_preview_rejects_random_seed() -> None:
+    """tinygrad preview rejects random_seed instead of storing inert metadata."""
+
+    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+        tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", random_seed=123)
+
+
 def test_tinygrad_multi_output_marks_outputs() -> None:
     """Capture a multi-output tinygrad function and mark both output parents."""
 

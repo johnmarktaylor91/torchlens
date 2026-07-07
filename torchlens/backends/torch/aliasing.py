@@ -134,7 +134,7 @@ def _flatten_input_tensors(
     args: tuple[Any, ...],
     kwargs: Mapping[str, Any],
 ) -> tuple[tuple[object, torch.Tensor], ...]:
-    """Return top-level tensor input positions.
+    """Return tensor input positions.
 
     Parameters
     ----------
@@ -146,16 +146,14 @@ def _flatten_input_tensors(
     Returns
     -------
     tuple[tuple[object, torch.Tensor], ...]
-        Top-level integer or keyword positions paired with tensor values.
+        Integer, keyword, or nested positions paired with tensor values.
     """
 
     positions: list[tuple[object, torch.Tensor]] = []
     for index, value in enumerate(args):
-        if isinstance(value, torch.Tensor):
-            positions.append((index, value))
+        positions.extend(_iter_tensor_positions(index, value))
     for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor):
-            positions.append((key, value))
+        positions.extend(_iter_tensor_positions(key, value))
     return tuple(positions)
 
 
@@ -163,7 +161,7 @@ def _flatten_copied_input_tensors(
     arg_copies: tuple[Any, ...] | None,
     kwarg_copies: Mapping[str, Any] | None,
 ) -> dict[object, torch.Tensor]:
-    """Return copied top-level tensor inputs keyed by position.
+    """Return copied tensor inputs keyed by position.
 
     Parameters
     ----------
@@ -175,19 +173,72 @@ def _flatten_copied_input_tensors(
     Returns
     -------
     dict[object, torch.Tensor]
-        Tensor copies keyed by integer or keyword position.
+        Tensor copies keyed by integer, keyword, or nested position.
     """
 
     copied: dict[object, torch.Tensor] = {}
     if arg_copies is not None:
         for index, value in enumerate(arg_copies):
-            if isinstance(value, torch.Tensor):
-                copied[index] = value
+            copied.update(_iter_tensor_positions(index, value))
     if kwarg_copies is not None:
         for key, value in kwarg_copies.items():
-            if isinstance(value, torch.Tensor):
-                copied[key] = value
+            copied.update(_iter_tensor_positions(key, value))
     return copied
+
+
+def _iter_tensor_positions(
+    position: object,
+    value: object,
+) -> tuple[tuple[object, torch.Tensor], ...]:
+    """Return tensor leaves under an argument position.
+
+    Parameters
+    ----------
+    position
+        Top-level or nested argument position.
+    value
+        Argument value at ``position``.
+
+    Returns
+    -------
+    tuple[tuple[object, torch.Tensor], ...]
+        Tensor leaves keyed by scalar top-level positions or tuple nested paths.
+    """
+
+    if isinstance(value, torch.Tensor):
+        return ((position, value),)
+    if isinstance(value, Mapping):
+        entries: list[tuple[object, torch.Tensor]] = []
+        for key, item in value.items():
+            entries.extend(_iter_tensor_positions(_extend_position(position, key), item))
+        return tuple(entries)
+    if isinstance(value, (list, tuple)):
+        entries = []
+        for index, item in enumerate(value):
+            entries.extend(_iter_tensor_positions(_extend_position(position, index), item))
+        return tuple(entries)
+    return ()
+
+
+def _extend_position(position: object, key: object) -> object:
+    """Append one nested component to an argument position.
+
+    Parameters
+    ----------
+    position
+        Existing top-level or nested position.
+    key
+        Nested container key.
+
+    Returns
+    -------
+    object
+        Nested tuple position compatible with ``index_nested``.
+    """
+
+    if isinstance(position, tuple):
+        return (*position, key)
+    return (position, key)
 
 
 def _position_was_mutated(

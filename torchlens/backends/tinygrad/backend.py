@@ -335,6 +335,7 @@ class TinygradBackend:
         save_arg_values = _default_if_missing(save_arg_values, False)
         save_code_context = _default_if_missing(save_code_context, False)
         save_rng_states = _default_if_missing(save_rng_states, False)
+        random_seed = _default_if_missing(random_seed, None)
         recurrence_detection = _default_if_missing(recurrence_detection, True)
         verbose = _default_if_missing(verbose, False)
         backward_ready = _default_if_missing(backward_ready, False)
@@ -351,6 +352,11 @@ class TinygradBackend:
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = None if _is_missing(grad_options) else grad_options
+        if random_seed is not None:
+            raise BackendUnsupportedError(
+                "tinygrad backend preview does not support random_seed; pass explicit RNG "
+                "state through the model/input surface instead."
+            )
         args = self._normalize_input_args(input_args)
         module_tree = discover_tinygrad_module_tree(model)
         use_object_module = _resolve_tinygrad_module_identity_mode(

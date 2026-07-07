@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from .._deprecations import MISSING
@@ -136,7 +136,6 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "lookback": 0,
         "lookback_payload_policy": "metadata_only",
         "capture": None,
-        "save": None,
         "intervene": None,
         "halt": None,
         "storage": None,
@@ -154,6 +153,43 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     },
 )
 """Extra public-kwarg rejection policy for the Paddle preview backend."""
+
+
+MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
+    runtime_option_names=frozenset(),
+    runtime_message=(
+        "MLX backend preview does not support runtime-mutation or stop-early "
+        "options: {names}. Static-label save= selectors are supported as "
+        "post-finalization payload filters, but trace(intervene=...) and "
+        "trace(halt=...) need predicate-time concrete values and mutation/partial "
+        "replay semantics that MLX lazy evaluation does not expose through a stable "
+        "TorchLens surface. Use an unfiltered tl.trace(..., backend='mlx') call, "
+        "static-label save= selectors, or the PyTorch backend for intervention, "
+        "halt, streaming, and value-dependent predicates."
+    ),
+    fallback_message="",
+    always_runtime=True,
+    inert_values={
+        "lookback": 0,
+        "lookback_payload_policy": "metadata_only",
+        "capture": None,
+        "intervene": None,
+        "halt": None,
+        "storage": None,
+        "streaming": None,
+        "inference_only": False,
+        "cache": False,
+        "stop_after": None,
+        "raise_on_nan": False,
+        "profile": False,
+        "recipes": None,
+        "payload_policy": None,
+        "save_preview": None,
+        "chunk_size": None,
+        "chunk_paths": None,
+    },
+)
+"""Extra public-kwarg rejection policy for the MLX preview backend."""
 
 
 TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
