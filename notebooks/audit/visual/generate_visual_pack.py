@@ -29,8 +29,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import torch
 
 import torchlens as tl
 from _models import ZOO
