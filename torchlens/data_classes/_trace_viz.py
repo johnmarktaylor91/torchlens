@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Trace visualization mixin."""
 
 from collections.abc import Iterable, Mapping
@@ -12,6 +11,10 @@ if TYPE_CHECKING:
     from ..intervention.types import FireRecord
     from ..visualization.code_panel import CodePanelOption
     from .trace import Trace
+
+    _TraceMixinBase = Trace
+else:
+    _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
 from .._literals import (
     BufferVisibilityLiteral,
@@ -50,8 +53,8 @@ def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
     return ()
 
 
-class TraceVisualizationMixin:
-    def show(self, method: str = "graph", **kwargs: Any) -> str | None:
+class TraceVisualizationMixin(_TraceMixinBase):
+    def show(self: "Trace", method: str = "graph", **kwargs: Any) -> str | None:
         """Render this trace using a lightweight notebook-friendly dispatcher.
 
         Parameters
@@ -83,7 +86,7 @@ class TraceVisualizationMixin:
         return cast("str | None", self.draw(**kwargs))
 
     def draw(
-        self,
+        self: "Trace",
         vis_opt: VisModeLiteral | MissingType = MISSING,
         view: VisModeLiteral | MissingType = MISSING,
         depth: int | MissingType = MISSING,
@@ -229,7 +232,7 @@ class TraceVisualizationMixin:
         )
 
     def add_node_overlay(
-        self,
+        self: "Trace",
         scores: Mapping[str, Any],
         *,
         name: str = "overlay",
@@ -253,7 +256,7 @@ class TraceVisualizationMixin:
         self._node_overlay_name = name
         return self
 
-    def animate_ops(self, site: Any) -> str:
+    def animate_ops(self: "Trace", site: Any) -> str:
         """Return a minimal HTML animation for repeated ops at ``site``.
 
         Parameters
@@ -315,7 +318,9 @@ class TraceVisualizationMixin:
             + "})();</script></div>"
         )
 
-    def first_nonfinite(self, link_format: Literal["terminal", "html", "text"] = "terminal") -> str:
+    def first_nonfinite(
+        self: "Trace", link_format: Literal["terminal", "html", "text"] = "terminal"
+    ) -> str:
         """Return a text answer describing the first saved non-finite out.
 
         Parameters
@@ -368,7 +373,7 @@ class TraceVisualizationMixin:
         return "No non-finite tensor values found in saved outs."
 
     def draw_backward(
-        self,
+        self: "Trace",
         vis_outpath: str = "backward_modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,
         node_spec_fn: Optional[Callable[..., Any]] = None,
@@ -419,7 +424,7 @@ class TraceVisualizationMixin:
         )
 
     def draw_combined(
-        self,
+        self: "Trace",
         vis_outpath: str = "combined_modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,
         node_spec_fn: Optional[Callable[..., Any]] = None,
@@ -467,7 +472,7 @@ class TraceVisualizationMixin:
         )
 
     def preview_fastlog(
-        self,
+        self: "Trace",
         predicate: Optional[Callable[..., Any]] = None,
         keep_op: Optional[Callable[..., Any]] = None,
         keep_module: Optional[Callable[..., Any]] = None,
@@ -499,7 +504,7 @@ class TraceVisualizationMixin:
             **kwargs,
         )
 
-    def last_run_records(self) -> tuple["FireRecord", ...]:
+    def last_run_records(self: "Trace") -> tuple["FireRecord", ...]:
         """Return fire records from the most recent replay, rerun, or live capture.
 
         Returns
@@ -532,7 +537,7 @@ class TraceVisualizationMixin:
         return tuple(records)
 
     def summary(
-        self,
+        self: "Trace",
         level: Literal[
             "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall", "output"
         ] = "overview",
@@ -613,7 +618,7 @@ class TraceVisualizationMixin:
         )
 
     def render_dagua_graph(
-        self,
+        self: "Trace",
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,
         vis_outpath: str = "graph.gv",
@@ -655,7 +660,7 @@ class TraceVisualizationMixin:
         )
 
     def to_dagua_graph(
-        self,
+        self: "Trace",
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,
         show_buffer_layers: bool = False,
@@ -686,7 +691,7 @@ class TraceVisualizationMixin:
             include_grad_edges=include_grad_edges,
         )
 
-    def visualization_field_audit(self) -> "TorchLensRenderAudit":
+    def visualization_field_audit(self: "Trace") -> "TorchLensRenderAudit":
         """Return the visualization field-usage audit for this model log.
 
         Returns

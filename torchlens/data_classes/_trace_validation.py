@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Trace validation and replay mixin."""
 
 from collections.abc import Iterable
@@ -10,6 +9,10 @@ from torch import nn
 if TYPE_CHECKING:
     from ..validation.status import ValidationReplayStatus
     from .trace import Trace
+
+    _TraceMixinBase = Trace
+else:
+    _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import reject_compiled_model
 from ..options import ReplayOptions, merge_replay_options
@@ -58,9 +61,9 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
     return False
 
 
-class TraceValidationMixin:
+class TraceValidationMixin(_TraceMixinBase):
     def save_new_outs(
-        self,
+        self: "Trace",
         model: torch.nn.Module,
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
@@ -94,7 +97,7 @@ class TraceValidationMixin:
         )
 
     def validate_saved_outs(
-        self,
+        self: "Trace",
         ground_truth_output_tensors: List[torch.Tensor],
         verbose: bool = False,
         validate_metadata: bool = True,
@@ -124,7 +127,7 @@ class TraceValidationMixin:
         )
 
     def validate_forward_pass(
-        self,
+        self: "Trace",
         ground_truth_output_tensors: List[torch.Tensor],
         verbose: bool = False,
         validate_metadata: bool = True,
@@ -167,7 +170,7 @@ class TraceValidationMixin:
         return validation_result
 
     @property
-    def validation_replay_status(self) -> "ValidationReplayStatus":
+    def validation_replay_status(self: "Trace") -> "ValidationReplayStatus":
         """Return replay-validation availability or last completed result.
 
         Returns
@@ -195,7 +198,7 @@ class TraceValidationMixin:
         return ValidationReplayStatus.available_live(backend=backend)
 
     def push(
-        self,
+        self: "Trace",
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
         differentiable: bool | MissingType = MISSING,
@@ -231,7 +234,7 @@ class TraceValidationMixin:
         return _impl(self, replay=replay_options)
 
     def replay(
-        self,
+        self: "Trace",
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
         differentiable: bool | MissingType = MISSING,
@@ -256,7 +259,7 @@ class TraceValidationMixin:
         return self.push(strict=strict, hooks=hooks, differentiable=differentiable, replay=replay)
 
     def push_from(
-        self,
+        self: "Trace",
         site: Any,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
@@ -284,7 +287,7 @@ class TraceValidationMixin:
         return _impl(self, site, replay=replay_options)
 
     def replay_from(
-        self,
+        self: "Trace",
         site: Any,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
@@ -308,7 +311,7 @@ class TraceValidationMixin:
         return self.push_from(site, strict=strict, replay=replay)
 
     def run(
-        self,
+        self: "Trace",
         model: Any = None,
         x: Any = None,
         *,
@@ -395,7 +398,7 @@ class TraceValidationMixin:
         return result
 
     def rerun(
-        self,
+        self: "Trace",
         model: Any = None,
         x: Any = None,
         *,
@@ -436,7 +439,7 @@ class TraceValidationMixin:
         )
 
     def _apply_rerun_transform(
-        self,
+        self: "Trace",
         user_input: Any,
         *,
         transform: Callable[[Any], Any] | bool | object,
@@ -467,7 +470,7 @@ class TraceValidationMixin:
         return user_input
 
     def _resolve_rerun_output_transform(
-        self,
+        self: "Trace",
         output_transform: Callable[[Any], Any] | bool | object,
     ) -> Callable[[Any], Any] | None:
         """Resolve the output transform callable for ``rerun``.
@@ -493,7 +496,7 @@ class TraceValidationMixin:
             return output_transform
         return None
 
-    def check_metadata_invariants(self) -> bool:
+    def check_metadata_invariants(self: "Trace") -> bool:
         """Run metadata invariant checks on this completed model log.
 
         Returns
@@ -505,7 +508,7 @@ class TraceValidationMixin:
 
         return _impl(self)
 
-    def cleanup(self) -> None:
+    def cleanup(self: "Trace") -> None:
         """Delete log data, break cycles, and free cached GPU memory.
 
         Returns
@@ -515,7 +518,7 @@ class TraceValidationMixin:
         """
         return cleanup(self)
 
-    def release_param_refs(self, *, allow_iter_rehydrate: bool = False) -> None:
+    def release_param_refs(self: "Trace", *, allow_iter_rehydrate: bool = False) -> None:
         """Release live ``nn.Parameter`` references held by ParamLogs.
 
         Parameters
@@ -538,7 +541,7 @@ class TraceValidationMixin:
             self.param_logs._rehydrate_on_iter = allow_iter_rehydrate
 
     def _postprocess(
-        self,
+        self: "Trace",
         output_tensors: List[torch.Tensor],
         output_tensor_addresses: List[str],
     ) -> None:
@@ -564,7 +567,7 @@ class TraceValidationMixin:
             self._postprocessing_active = False
 
     def _run_and_log_inputs_through_model(
-        self,
+        self: "Trace",
         model: torch.nn.Module,
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
@@ -594,7 +597,7 @@ class TraceValidationMixin:
             postprocess=postprocess,
         )
 
-    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
+    def log_backward(self: "Trace", loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` while capturing first-class backward metadata.
 
         Parameters
@@ -622,7 +625,7 @@ class TraceValidationMixin:
 
         return cast("Trace", _impl(self, loss, **backward_kwargs))
 
-    def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
+    def backward(self: "Trace", loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata.
 
         Parameters
@@ -640,7 +643,7 @@ class TraceValidationMixin:
 
         return self.log_backward(loss, **backward_kwargs)
 
-    def recording_backward(self) -> Any:
+    def recording_backward(self: "Trace") -> Any:
         """Return a context manager that captures user-managed backward calls.
 
         Returns
@@ -661,7 +664,7 @@ class TraceValidationMixin:
 
         return _impl(self)
 
-    def disarm_triggers(self) -> None:
+    def disarm_triggers(self: "Trace") -> None:
         """Detach this Trace from global autograd backward interception.
 
         Returns
@@ -675,7 +678,7 @@ class TraceValidationMixin:
         _impl(self)
 
     def _remove_log_entry(
-        self,
+        self: "Trace",
         log_entry: Op,
         remove_references: bool = True,
     ) -> None:
@@ -694,7 +697,7 @@ class TraceValidationMixin:
         _clear_entry_attributes(log_entry)
 
     def _batch_remove_log_entries(
-        self,
+        self: "Trace",
         entries_to_remove: Iterable[Op],
         remove_references: bool = True,
     ) -> None:

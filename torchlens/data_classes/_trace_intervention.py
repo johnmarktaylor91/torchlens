@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Trace intervention mixin."""
 
 import copy
@@ -16,6 +15,10 @@ from torch import nn
 
 if TYPE_CHECKING:
     from .trace import Trace
+
+    _TraceMixinBase = Trace
+else:
+    _TraceMixinBase = object
 from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._trace_state import TraceState
@@ -32,9 +35,9 @@ from .op import Op
 from ._state_adapter import state_items, state_new, state_restore
 
 
-class TraceInterventionMixin:
+class TraceInterventionMixin(_TraceMixinBase):
     def save_intervention(
-        self,
+        self: "Trace",
         path: str | Path,
         *,
         level: str = "executable_with_callables",
@@ -67,7 +70,7 @@ class TraceInterventionMixin:
         )
 
     @cached_property
-    def intervention_spec(self) -> FrozenInterventionSpec:
+    def intervention_spec(self: "Trace") -> FrozenInterventionSpec:
         """Return an immutable snapshot of this log's intervention recipe.
 
         Returns
@@ -79,7 +82,7 @@ class TraceInterventionMixin:
         return self._ensure_intervention_spec().freeze()
 
     def set(
-        self,
+        self: "Trace",
         site: Any,
         value: Any,
         *,
@@ -166,7 +169,7 @@ class TraceInterventionMixin:
         return self
 
     def attach_hooks(
-        self,
+        self: "Trace",
         hooks_or_site: Any,
         hook: Any = None,
         *extra_hooks: Any,
@@ -250,7 +253,7 @@ class TraceInterventionMixin:
             return scoped_handle
         return self
 
-    def remove(self) -> None:
+    def remove(self: "Trace") -> None:
         """Remove the most recent legacy-returned hook attachment.
 
         Returns
@@ -264,7 +267,7 @@ class TraceInterventionMixin:
             self.detach_hooks(handle=handle_id, confirm_mutation=True)
         self._last_hook_handle_ids = ()
 
-    def __enter__(self) -> "Trace":
+    def __enter__(self: "Trace") -> "Trace":
         """Enter a legacy scoped hook attachment.
 
         Returns
@@ -275,7 +278,7 @@ class TraceInterventionMixin:
 
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(self: "Trace", exc_type: Any, exc: Any, traceback: Any) -> None:
         """Clean up a legacy scoped hook attachment.
 
         Parameters
@@ -291,7 +294,7 @@ class TraceInterventionMixin:
         self.remove()
 
     def detach_hooks(
-        self,
+        self: "Trace",
         site: Any = None,
         handle: Any = None,
         *,
@@ -354,7 +357,7 @@ class TraceInterventionMixin:
         )
         return self
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
+    def clear_hooks(self: "Trace", *, confirm_mutation: bool = False) -> "Trace":
         """Clear all sticky hooks from the current intervention spec.
 
         Parameters
@@ -376,7 +379,7 @@ class TraceInterventionMixin:
         return self
 
     def do(
-        self,
+        self: "Trace",
         hooks_or_site: Any,
         value_or_hook: Any = None,
         *,
@@ -459,7 +462,7 @@ class TraceInterventionMixin:
         assert model is not None
         return self.run(model, x, strict=strict_value)
 
-    def fork(self, name: str | None = None) -> "Trace":
+    def fork(self: "Trace", name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.
 
         Parameters
@@ -477,7 +480,7 @@ class TraceInterventionMixin:
         self._record_operation("fork", source_id=id(self), name=fork.trace_label)
         return fork
 
-    def _record_operation(self, op: str, **payload: Any) -> None:
+    def _record_operation(self: "Trace", op: str, **payload: Any) -> None:
         """Append a structured operation record to ``state_history``.
 
         Parameters
@@ -502,7 +505,7 @@ class TraceInterventionMixin:
             }
         )
 
-    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
+    def _warn_if_root_mutation(self: "Trace", *, confirm_mutation: bool) -> None:
         """Emit the once-per-root mutate-in-place warning when appropriate.
 
         Parameters
@@ -526,7 +529,7 @@ class TraceInterventionMixin:
         )
         self._warned_mutate_in_place = True
 
-    def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
+    def _select_do_engine(self: "Trace", engine: str, *, model: nn.Module | None, x: Any) -> str:
         """Resolve the concrete ``do`` engine from caller arguments.
 
         Parameters
@@ -566,7 +569,7 @@ class TraceInterventionMixin:
         return "rerun" if model is not None else "replay"
 
     def _apply_do_mutation(
-        self,
+        self: "Trace",
         hooks_or_site: Any,
         value_or_hook: Any,
         *,
@@ -619,7 +622,7 @@ class TraceInterventionMixin:
         )
         return "attach_hooks"
 
-    def _validate_supplied_model_matches_capture(self, model: nn.Module) -> None:
+    def _validate_supplied_model_matches_capture(self: "Trace", model: nn.Module) -> None:
         """Validate rerun model evidence against the captured source model.
 
         Parameters
@@ -654,7 +657,7 @@ class TraceInterventionMixin:
             )
 
     def _fork_trace(
-        self,
+        self: "Trace",
         *,
         name: str | None,
         deep_copy_layer_labels: Set[str] | None = None,
@@ -703,7 +706,7 @@ class TraceInterventionMixin:
         _state._register_log(fork)
         return fork
 
-    def _next_fork_name(self) -> str:
+    def _next_fork_name(self: "Trace") -> str:
         """Return a deterministic default fork name for this parent log."""
 
         base_name = self.trace_label or "trace"
@@ -714,7 +717,7 @@ class TraceInterventionMixin:
         )
         return f"{base_name}_fork_{fork_count + 1}"
 
-    def _fork_model_field(self, field_name: str, value: Any) -> Any:
+    def _fork_model_field(self: "Trace", field_name: str, value: Any) -> Any:
         """Apply the Trace fork policy to a single field.
 
         Parameters
@@ -738,7 +741,7 @@ class TraceInterventionMixin:
         return self._copy_fork_value(value)
 
     def _fork_layer_ops_from(
-        self,
+        self: "Trace",
         parent: "Trace",
         *,
         deep_copy_layer_labels: Set[str] | None = None,
@@ -785,7 +788,9 @@ class TraceInterventionMixin:
             layer_map[id(parent_pass)] = fork_pass
         return layer_map
 
-    def _fork_layer_pass_field(self, field_name: str, value: Any, *, deep_copy: bool = True) -> Any:
+    def _fork_layer_pass_field(
+        self: "Trace", field_name: str, value: Any, *, deep_copy: bool = True
+    ) -> Any:
         """Apply the Op fork policy to a single field.
 
         Parameters
@@ -816,7 +821,9 @@ class TraceInterventionMixin:
             return None
         return self._copy_fork_value(value)
 
-    def _rebuild_fork_layer_collections(self, parent: "Trace", layer_map: dict[int, Op]) -> None:
+    def _rebuild_fork_layer_collections(
+        self: "Trace", parent: "Trace", layer_map: dict[int, Op]
+    ) -> None:
         """Rebuild layer lookup containers so they point at forked ops.
 
         Parameters
@@ -870,7 +877,7 @@ class TraceInterventionMixin:
             fork_layer_logs[label] = fork_layer_log
         self.layer_logs = fork_layer_logs
 
-    def _rebind_fork_owner_refs(self) -> None:
+    def _rebind_fork_owner_refs(self: "Trace") -> None:
         """Rebind weak owner references on forked child objects to this fork."""
 
         for layer_pass in self.layer_list:
@@ -951,7 +958,7 @@ class TraceInterventionMixin:
             return ForkFieldPolicy.FORK_SHARE
         return ForkFieldPolicy.FORK_COPY
 
-    def _recipe_is_clean(self) -> bool:
+    def _recipe_is_clean(self: "Trace") -> bool:
         """Return whether propagated outs match the current spec revision.
 
         Returns
@@ -963,7 +970,7 @@ class TraceInterventionMixin:
 
         return self._spec_revision == self._out_recipe_revision
 
-    def _ensure_intervention_spec(self) -> InterventionSpec:
+    def _ensure_intervention_spec(self: "Trace") -> InterventionSpec:
         """Return the mutable intervention spec, creating one if needed.
 
         Returns
@@ -976,7 +983,7 @@ class TraceInterventionMixin:
             self._intervention_spec = InterventionSpec()
         return self._intervention_spec
 
-    def _mark_intervention_spec_mutated(self) -> None:
+    def _mark_intervention_spec_mutated(self: "Trace") -> None:
         """Invalidate cached frozen views and mark the spec stale.
 
         Returns
@@ -991,7 +998,7 @@ class TraceInterventionMixin:
         self.__dict__.pop("_cached_frozen_intervention_spec", None)
         self.state = TraceState.SPEC_STALE
 
-    def _validate_intervention_site(self, site: Any, *, strict: bool) -> None:
+    def _validate_intervention_site(self: "Trace", site: Any, *, strict: bool) -> None:
         """Validate that a mutator site resolves on this log.
 
         Parameters
@@ -1017,7 +1024,7 @@ class TraceInterventionMixin:
         max_fanout = max(1, len(self.layer_list))
         self.resolve_sites(site, strict=strict, max_fanout=max_fanout)
 
-    def _target_spec_from_site(self, site: Any, *, strict: bool) -> TargetSpec:
+    def _target_spec_from_site(self: "Trace", site: Any, *, strict: bool) -> TargetSpec:
         """Convert a selector-like site to a mutable target spec.
 
         Parameters

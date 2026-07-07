@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Trace computed stats mixin."""
 
 from collections import OrderedDict
@@ -11,6 +10,11 @@ if TYPE_CHECKING:
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
     from .module import Module, ModuleCall
+    from .trace import Trace
+
+    _TraceMixinBase = Trace
+else:
+    _TraceMixinBase = object
 
 from .._deprecations import warn_deprecated_alias
 from ..quantities import Duration, Flops, Macs, as_duration
@@ -129,13 +133,13 @@ def _legacy_conditional_else_entry_edges(
     ]
 
 
-class TraceStatsMixin:
+class TraceStatsMixin(_TraceMixinBase):
     # ********************************************
     # ********** Computed Properties *************
     # ********************************************
 
     @property
-    def conditional_then_entry_edges(self) -> List[Tuple[str, str]]:
+    def conditional_then_entry_edges(self: "Trace") -> List[Tuple[str, str]]:
         """Deprecated THEN-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
@@ -148,7 +152,7 @@ class TraceStatsMixin:
         return _legacy_conditional_then_entry_edges(self.conditional_arm_entry_edges)
 
     @conditional_then_entry_edges.setter
-    def conditional_then_entry_edges(self, value: List[Tuple[str, str]]) -> None:
+    def conditional_then_entry_edges(self: "Trace", value: List[Tuple[str, str]]) -> None:
         """Set the deprecated THEN-edge view by updating canonical arm edges.
 
         Parameters
@@ -168,7 +172,7 @@ class TraceStatsMixin:
             self.conditional_arm_entry_edges[(0, "then")] = list(value)
 
     @property
-    def conditional_elif_entry_edges(self) -> List[Tuple[int, int, str, str]]:
+    def conditional_elif_entry_edges(self: "Trace") -> List[Tuple[int, int, str, str]]:
         """Deprecated ELIF-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
@@ -181,7 +185,7 @@ class TraceStatsMixin:
         return _legacy_conditional_elif_entry_edges(self.conditional_arm_entry_edges)
 
     @conditional_elif_entry_edges.setter
-    def conditional_elif_entry_edges(self, value: List[Tuple[int, int, str, str]]) -> None:
+    def conditional_elif_entry_edges(self: "Trace", value: List[Tuple[int, int, str, str]]) -> None:
         """Set the deprecated ELIF-edge view by updating canonical arm edges.
 
         Parameters
@@ -202,7 +206,7 @@ class TraceStatsMixin:
             ).append((parent, child))
 
     @property
-    def conditional_else_entry_edges(self) -> List[Tuple[int, str, str]]:
+    def conditional_else_entry_edges(self: "Trace") -> List[Tuple[int, str, str]]:
         """Deprecated ELSE-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
@@ -215,7 +219,7 @@ class TraceStatsMixin:
         return _legacy_conditional_else_entry_edges(self.conditional_arm_entry_edges)
 
     @conditional_else_entry_edges.setter
-    def conditional_else_entry_edges(self, value: List[Tuple[int, str, str]]) -> None:
+    def conditional_else_entry_edges(self: "Trace", value: List[Tuple[int, str, str]]) -> None:
         """Set the deprecated ELSE-edge view by updating canonical arm edges.
 
         Parameters
@@ -236,12 +240,12 @@ class TraceStatsMixin:
             )
 
     @property
-    def is_recurrent(self) -> bool:
+    def is_recurrent(self: "Trace") -> bool:
         """Whether any layer has more than one pass."""
         return any(v > 1 for v in self.layer_num_calls.values())
 
     @property
-    def recurrent_layers(self) -> "LayerAccessor":
+    def recurrent_layers(self: "Trace") -> "LayerAccessor":
         """Access Layers with more than one captured pass.
 
         Returns
@@ -260,40 +264,40 @@ class TraceStatsMixin:
         )
 
     @property
-    def max_layer_op_count(self) -> int:
+    def max_layer_op_count(self: "Trace") -> int:
         """Maximum number of ops for any layer."""
         return max(self.layer_num_calls.values(), default=1)
 
     @property
-    def is_branching(self) -> bool:
+    def is_branching(self: "Trace") -> bool:
         """Whether any layer has more than one child."""
         return any(len(entry.children) > 1 for entry in self.layer_list)
 
     @property
-    def has_conditional_branching(self) -> bool:
+    def has_conditional_branching(self: "Trace") -> bool:
         """Whether any layer is in a conditional branch."""
         return any(entry.is_in_conditional_body for entry in self.layer_list)
 
     @property
-    def has_conditionals(self) -> bool:
+    def has_conditionals(self: "Trace") -> bool:
         """Whether this Trace contains conditional-flow records."""
 
         return len(self.conditionals) > 0
 
     @property
-    def num_conditionals(self) -> int:
+    def num_conditionals(self: "Trace") -> int:
         """Number of conditional-flow records."""
 
         return len(self.conditionals)
 
     @property
-    def is_dynamic_graph(self) -> bool:
+    def is_dynamic_graph(self: "Trace") -> bool:
         """Whether execution depends on runtime tensor values."""
 
         return self.has_conditionals
 
     @property
-    def forward_source_location(self) -> str | None:
+    def forward_source_location(self: "Trace") -> str | None:
         """Combined forward source location."""
 
         if self.forward_source_file is None or self.forward_source_line is None:
@@ -301,7 +305,7 @@ class TraceStatsMixin:
         return f"{self.forward_source_file}:{self.forward_source_line}"
 
     @property
-    def class_source_location(self) -> str | None:
+    def class_source_location(self: "Trace") -> str | None:
         """Combined model class source location."""
 
         if self.class_source_file is None or self.class_source_line is None:
@@ -309,7 +313,7 @@ class TraceStatsMixin:
         return f"{self.class_source_file}:{self.class_source_line}"
 
     @property
-    def init_source_location(self) -> str | None:
+    def init_source_location(self: "Trace") -> str | None:
         """Combined model ``__init__`` source location."""
 
         if self.init_source_file is None or self.init_source_line is None:
@@ -317,12 +321,12 @@ class TraceStatsMixin:
         return f"{self.init_source_file}:{self.init_source_line}"
 
     @property
-    def num_tensors(self) -> int:
+    def num_tensors(self: "Trace") -> int:
         """Total number of tensor operations."""
         return len(self)
 
     @property
-    def last_backward_duration(self) -> Duration | None:
+    def last_backward_duration(self: "Trace") -> Duration | None:
         """Most recent backward-pass duration, if any."""
 
         if not self.backward_durations:
@@ -330,13 +334,13 @@ class TraceStatsMixin:
         return as_duration(self.backward_durations[-1])
 
     @property
-    def total_backward_duration(self) -> Duration:
+    def total_backward_duration(self: "Trace") -> Duration:
         """Sum of all captured backward-pass durations."""
 
         return Duration(sum(self.backward_durations))
 
     @property
-    def last_backward_root_grad_fn_object_id(self) -> int | None:
+    def last_backward_root_grad_fn_object_id(self: "Trace") -> int | None:
         """Most recent backward root grad_fn_handle object id, if any."""
 
         if not self.backward_root_grad_fn_object_ids:
@@ -344,12 +348,12 @@ class TraceStatsMixin:
         return self.backward_root_grad_fn_object_ids[-1]
 
     @property
-    def overhead_duration(self) -> Duration:
+    def overhead_duration(self: "Trace") -> Duration:
         """Time spent on TorchLens overhead (total minus function calls)."""
         return self.capture_duration - self.func_calls_duration
 
     @property
-    def capture_duration(self) -> Duration:
+    def capture_duration(self: "Trace") -> Duration:
         """Total capture-phase duration in seconds."""
 
         if not self.capture_start_time or not self.capture_end_time:
@@ -365,14 +369,14 @@ class TraceStatsMixin:
     # skipped, so the totals may undercount.
 
     @property
-    def total_flops_forward(self) -> Flops:
+    def total_flops_forward(self: "Trace") -> Flops:
         """Total forward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(entry.flops_forward for entry in self.layer_list if entry.flops_forward is not None)
         )
 
     @property
-    def total_flops_backward(self) -> Flops:
+    def total_flops_backward(self: "Trace") -> Flops:
         """Total backward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(
@@ -383,12 +387,12 @@ class TraceStatsMixin:
         )
 
     @property
-    def total_flops(self) -> Flops:
+    def total_flops(self: "Trace") -> Flops:
         """Total FLOPs (forward + backward)."""
         return Flops(self.total_flops_forward + self.total_flops_backward)
 
     @property
-    def flops_by_op_type(self) -> _CallableDict:
+    def flops_by_op_type(self: "Trace") -> _CallableDict:
         """Group FLOPs by layer type.
 
         Returns:
@@ -412,22 +416,22 @@ class TraceStatsMixin:
     # MACs (multiply-accumulate operations) = FLOPs / 2.
 
     @property
-    def total_macs_forward(self) -> Macs:
+    def total_macs_forward(self: "Trace") -> Macs:
         """Total forward MACs across all layers (skipping None/unknown)."""
         return Macs(self.total_flops_forward // 2)
 
     @property
-    def total_macs_backward(self) -> Macs:
+    def total_macs_backward(self: "Trace") -> Macs:
         """Total backward MACs across all layers (skipping None/unknown)."""
         return Macs(self.total_flops_backward // 2)
 
     @property
-    def total_macs(self) -> Macs:
+    def total_macs(self: "Trace") -> Macs:
         """Total MACs (forward + backward)."""
         return Macs(self.total_flops // 2)
 
     @property
-    def macs_by_op_type(self) -> _CallableDict:
+    def macs_by_op_type(self: "Trace") -> _CallableDict:
         """Group MACs by layer type.
 
         Returns:
@@ -450,12 +454,12 @@ class TraceStatsMixin:
     # ********************************************
 
     @property
-    def params(self) -> ParamAccessor:
+    def params(self: "Trace") -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
         return self.param_logs
 
     @property
-    def ops(self) -> TraceOpAccessor:
+    def ops(self: "Trace") -> TraceOpAccessor:
         """Access per-invocation Op records by label or index."""
 
         cache_key = len(self.layer_list)
@@ -467,7 +471,7 @@ class TraceStatsMixin:
         return cache_entry[1]
 
     @property
-    def transforms(self) -> tuple[Op, ...]:
+    def transforms(self: "Trace") -> tuple[Op, ...]:
         """Return transform-boundary operation records.
 
         Returns
@@ -479,7 +483,7 @@ class TraceStatsMixin:
         return tuple(op for op in self.ops if getattr(op, "is_transform", False))
 
     @property
-    def model_profile(self) -> ModelProfile:
+    def model_profile(self: "Trace") -> ModelProfile:
         """Return a computed semantic I/O profile descriptor.
 
         Returns
@@ -518,7 +522,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def layers(self) -> "LayerAccessor":
+    def layers(self: "Trace") -> "LayerAccessor":
         """Access aggregate per-layer metadata by label, index, or pass notation."""
         from .layer import LayerAccessor
 
@@ -531,12 +535,12 @@ class TraceStatsMixin:
         return cast("LayerAccessor", cache_entry[1])
 
     @property
-    def modules(self) -> "ModuleAccessor":
+    def modules(self: "Trace") -> "ModuleAccessor":
         """Access structured per-module metadata by address, index, or pass notation."""
         return self._module_logs
 
     @property
-    def module_collapse_order(self) -> list[tuple[str, float]]:
+    def module_collapse_order(self: "Trace") -> list[tuple[str, float]]:
         """Canonical smart-collapse module ranking.
 
         Returns
@@ -550,7 +554,7 @@ class TraceStatsMixin:
         return collapse_order(self)
 
     def collapse_order(
-        self,
+        self: "Trace",
         weights: Any | None = None,
         mode: Literal["auto", "max"] = "auto",
     ) -> list[tuple[str, float]]:
@@ -574,7 +578,7 @@ class TraceStatsMixin:
         return collapse_order(self, weights=weights, mode=mode)
 
     def collapse_plan(
-        self,
+        self: "Trace",
         mode: Literal["auto", "max"] | float = "auto",
         context: "RenderContext | None" = None,
     ) -> "CollapsePlan":
@@ -629,7 +633,7 @@ class TraceStatsMixin:
         return result.plan
 
     def collapse_schedule(
-        self,
+        self: "Trace",
         context: "RenderContext | None" = None,
     ) -> "CollapseSchedule":
         """Return the public monotone float collapse schedule.
@@ -654,7 +658,7 @@ class TraceStatsMixin:
         resolved_context = RenderContext() if context is None else context
         return collapse_schedule(self, resolved_context)
 
-    def modules_with_facet(self, name: str) -> Iterator[Any]:
+    def modules_with_facet(self: "Trace", name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now.
 
         Parameters
@@ -665,13 +669,13 @@ class TraceStatsMixin:
 
         return (module for module in self.modules if module.facets.has(name))
 
-    def attention_blocks(self) -> Iterator[Any]:
+    def attention_blocks(self: "Trace") -> Iterator[Any]:
         """Yield Modules with an available query-projection facet."""
 
         return self.modules_with_facet("q")
 
     @property
-    def module_calls(self) -> TraceModuleCallAccessor:
+    def module_calls(self: "Trace") -> TraceModuleCallAccessor:
         """Access per-invocation ModuleCall records by call label or index."""
 
         calls: OrderedDict[str, Any] = OrderedDict()
@@ -681,12 +685,12 @@ class TraceStatsMixin:
         return TraceModuleCallAccessor(calls)
 
     @property
-    def num_module_calls(self) -> int:
+    def num_module_calls(self: "Trace") -> int:
         """Total number of module invocations recorded in this Trace."""
 
         return len(self.module_calls)
 
-    def _root_call(self) -> "ModuleCall":
+    def _root_call(self: "Trace") -> "ModuleCall":
         """Return the top-level ModuleCall for internal call-tree traversal.
 
         When multiple top-level calls exist, the first one in trace insertion
@@ -699,7 +703,7 @@ class TraceStatsMixin:
         raise RuntimeError("Trace has no root ModuleCall")
 
     @property
-    def call_tree(self) -> "ModuleCall":
+    def call_tree(self: "Trace") -> "ModuleCall":
         """Return the root ModuleCall for the nested dynamic call tree.
 
         Returns
@@ -711,7 +715,7 @@ class TraceStatsMixin:
 
         return self._root_call()
 
-    def walk_calls(self) -> Iterator["ModuleCall"]:
+    def walk_calls(self: "Trace") -> Iterator["ModuleCall"]:
         """Yield every ModuleCall in call-tree depth-first order.
 
         Yields
@@ -725,7 +729,7 @@ class TraceStatsMixin:
         yield from self._root_call().walk_descendants(include_self=True)
 
     def show_call_tree(
-        self,
+        self: "Trace",
         max_depth: int | None = None,
         include_atomic: bool = True,
         show_call_index: bool = True,
@@ -755,30 +759,30 @@ class TraceStatsMixin:
         )
 
     @property
-    def root_module(self) -> "Module":
+    def root_module(self: "Trace") -> "Module":
         """The root module (the model itself)."""
         return cast("Module", self._module_logs["self"])
 
     @property
-    def num_layers(self) -> int:
+    def num_layers(self: "Trace") -> int:
         """Number of distinct Layer records in this Trace."""
 
         return len(self.layers)
 
     @property
-    def num_compute_layers(self) -> int:
+    def num_compute_layers(self: "Trace") -> int:
         """Number of compute Layers in this Trace."""
 
         return len(self.compute_layers)
 
     @property
-    def num_compute_ops(self) -> int:
+    def num_compute_ops(self: "Trace") -> int:
         """Number of compute Ops in this Trace."""
 
         return len(self.compute_ops)
 
     @property
-    def num_edges(self) -> int:
+    def num_edges(self: "Trace") -> int:
         """Distinct edges in the per-pass Op graph, including boundary edges."""
 
         return len(
@@ -790,7 +794,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_compute_edges(self) -> int:
+    def num_compute_edges(self: "Trace") -> int:
         """Distinct Op graph edges whose endpoints are both compute Ops."""
 
         compute_labels = {op.label for op in self.compute_ops}
@@ -804,7 +808,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_buffer_edges(self) -> int:
+    def num_buffer_edges(self: "Trace") -> int:
         """Distinct Op graph edges with at least one buffer endpoint."""
 
         return len(
@@ -817,7 +821,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_layer_edges(self) -> int:
+    def num_layer_edges(self: "Trace") -> int:
         """Distinct edges in the aggregate Layer graph."""
 
         return len(
@@ -829,7 +833,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_backward_edges(self) -> int | None:
+    def num_backward_edges(self: "Trace") -> int | None:
         """Distinct edges in the backward GradFn graph, or ``None`` if ungated."""
 
         if not self.has_backward_pass:
@@ -843,7 +847,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def branching_factor(self) -> float:
+    def branching_factor(self: "Trace") -> float:
         """Mean fan-out: children (consumers) per compute Op.
 
         Computed over a single, consistent node set (compute Ops) so the ratio is
@@ -858,25 +862,25 @@ class TraceStatsMixin:
         return sum(op.num_children for op in compute_ops) / len(compute_ops)
 
     @property
-    def max_in_degree(self) -> int:
+    def max_in_degree(self: "Trace") -> int:
         """Maximum number of parents over compute Ops."""
 
         return max((op.num_parents for op in self.compute_ops), default=0)
 
     @property
-    def max_out_degree(self) -> int:
+    def max_out_degree(self: "Trace") -> int:
         """Maximum number of children over compute Ops."""
 
         return max((op.num_children for op in self.compute_ops), default=0)
 
     @property
-    def num_saved_grad_ops(self) -> int:
+    def num_saved_grad_ops(self: "Trace") -> int:
         """Number of Ops with saved gradients."""
 
         return len(self.saved_grad_ops)
 
     @property
-    def intermediate_derived_grads(self) -> IntermediateDerivedGradAccessor:
+    def intermediate_derived_grads(self: "Trace") -> IntermediateDerivedGradAccessor:
         """Access exact op-level derived gradient records, when a backend provides them.
 
         Returns
@@ -892,7 +896,7 @@ class TraceStatsMixin:
         return IntermediateDerivedGradAccessor()
 
     @intermediate_derived_grads.setter
-    def intermediate_derived_grads(self, value: IntermediateDerivedGradAccessor) -> None:
+    def intermediate_derived_grads(self: "Trace", value: IntermediateDerivedGradAccessor) -> None:
         """Store exact op-level derived gradient records.
 
         Parameters
@@ -904,52 +908,52 @@ class TraceStatsMixin:
         self.__dict__["_intermediate_derived_grads"] = value
 
     @property
-    def num_saved_grad_layers(self) -> int:
+    def num_saved_grad_layers(self: "Trace") -> int:
         """Number of Layers containing at least one saved-gradient Op."""
 
         return len(self.saved_grad_layers)
 
     @property
-    def num_param_tensors_trainable(self) -> int:
+    def num_param_tensors_trainable(self: "Trace") -> int:
         """Number of trainable parameter tensors in this Trace."""
 
         return sum(1 for param in self.params if param.is_trainable)
 
     @property
-    def num_param_tensors_frozen(self) -> int:
+    def num_param_tensors_frozen(self: "Trace") -> int:
         """Number of frozen parameter tensors in this Trace."""
 
         return sum(1 for param in self.params if not param.is_trainable)
 
     @property
-    def has_trainable_params(self) -> bool:
+    def has_trainable_params(self: "Trace") -> bool:
         """Whether this Trace contains at least one trainable parameter."""
 
         return self.num_params_trainable > 0
 
     @property
-    def has_frozen_params(self) -> bool:
+    def has_frozen_params(self: "Trace") -> bool:
         """Whether this Trace contains at least one frozen parameter."""
 
         return self.num_params_frozen > 0
 
     @property
-    def buffers(self) -> "BufferAccessor":
+    def buffers(self: "Trace") -> "BufferAccessor":
         """Access buffer metadata by address, short name, or index."""
         return self._buffer_accessor  # type: ignore[return-value]
 
     @property
-    def num_modules(self) -> int:
+    def num_modules(self: "Trace") -> int:
         """Total number of registered source-model submodules."""
 
         return len(self._module_logs)
 
     @num_modules.deleter
-    def num_modules(self) -> None:
+    def num_modules(self: "Trace") -> None:
         """Ignore cleanup deletion for derived module count."""
 
     @property
-    def orphans(self) -> OrphanAccessor:
+    def orphans(self: "Trace") -> OrphanAccessor:
         """Access retained orphan island operations by raw or final label."""
 
         orphan_dict = OrderedDict(
@@ -958,13 +962,13 @@ class TraceStatsMixin:
         return OrphanAccessor(orphan_dict)
 
     @property
-    def grad_fns(self) -> GradFnAccessor:
+    def grad_fns(self: "Trace") -> GradFnAccessor:
         """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
         self._sync_backward_projection_if_needed()
         return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
 
     @property
-    def grad_fn_calls(self) -> TraceGradFnCallAccessor:
+    def grad_fn_calls(self: "Trace") -> TraceGradFnCallAccessor:
         """Access per-invocation GradFnCall records by qualified label or index."""
 
         self._sync_backward_projection_if_needed()
@@ -976,7 +980,7 @@ class TraceStatsMixin:
         return TraceGradFnCallAccessor(calls)
 
     @property
-    def backward_passes(self) -> BackwardPassAccessor:
+    def backward_passes(self: "Trace") -> BackwardPassAccessor:
         """Access backward pass records by 0-based position or named pass number."""
 
         if getattr(self, "backend", "torch") in {"jax", "mlx", "tinygrad"}:
@@ -989,7 +993,7 @@ class TraceStatsMixin:
         return BackwardPassAccessor(self.backward_pass_logs)
 
     @property
-    def last_backward_pass(self) -> BackwardPass | None:
+    def last_backward_pass(self: "Trace") -> BackwardPass | None:
         """Return the most recent backward pass record, if any."""
 
         backward_passes = self.backward_passes
@@ -997,7 +1001,7 @@ class TraceStatsMixin:
             return None
         return backward_passes[-1]
 
-    def _sync_backward_projection_if_needed(self) -> None:
+    def _sync_backward_projection_if_needed(self: "Trace") -> None:
         """Synchronize lazy backward projections from runtime sidecar events."""
 
         if getattr(self, "_tl_active_backward_bracket", False):
@@ -1013,13 +1017,13 @@ class TraceStatsMixin:
         _materialize_backward_projections(self)
 
     @property
-    def num_grad_fn_calls(self) -> int:
+    def num_grad_fn_calls(self: "Trace") -> int:
         """Total number of GradFnCall records in this Trace."""
 
         return len(self.grad_fn_calls)
 
     @property
-    def saved_ops(self) -> Accessor[Op]:
+    def saved_ops(self: "Trace") -> Accessor[Op]:
         """Access Ops with saved activations."""
 
         return TraceOpAccessor(
@@ -1028,7 +1032,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def saved_grad_ops(self) -> Accessor[Op]:
+    def saved_grad_ops(self: "Trace") -> Accessor[Op]:
         """Access Ops with saved gradients."""
 
         if getattr(self, "backend", "torch") in {"jax", "mlx", "tinygrad"}:
@@ -1043,7 +1047,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def saved_layers(self) -> Accessor[Layer]:
+    def saved_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved activation."""
 
         from .layer import LayerAccessor
@@ -1058,7 +1062,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def saved_grad_layers(self) -> Accessor[Layer]:
+    def saved_grad_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved gradient."""
 
         from .layer import LayerAccessor
@@ -1073,7 +1077,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def saved_module_calls(self) -> Accessor[Any]:
+    def saved_module_calls(self: "Trace") -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved activations."""
 
         saved_labels = set(self.saved_ops.keys())
@@ -1084,7 +1088,7 @@ class TraceStatsMixin:
         return TraceModuleCallAccessor(calls)
 
     @property
-    def saved_modules(self) -> Accessor[Any]:
+    def saved_modules(self: "Trace") -> Accessor[Any]:
         """Access Modules with at least one saved-activation ModuleCall."""
 
         saved_addresses = {call.address for call in self.saved_module_calls}
@@ -1097,13 +1101,13 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_saved_modules(self) -> int:
+    def num_saved_modules(self: "Trace") -> int:
         """Number of Modules with at least one saved-activation ModuleCall."""
 
         return len(self.saved_modules)
 
     @property
-    def saved_grad_module_calls(self) -> Accessor[Any]:
+    def saved_grad_module_calls(self: "Trace") -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved gradients."""
 
         saved_labels = set(self.saved_grad_ops.keys())
@@ -1114,7 +1118,7 @@ class TraceStatsMixin:
         return TraceModuleCallAccessor(calls)
 
     @property
-    def saved_grad_modules(self) -> Accessor[Any]:
+    def saved_grad_modules(self: "Trace") -> Accessor[Any]:
         """Access Modules with at least one saved-gradient ModuleCall."""
 
         saved_addresses = {call.address for call in self.saved_grad_module_calls}
@@ -1127,19 +1131,19 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_saved_grad_module_calls(self) -> int:
+    def num_saved_grad_module_calls(self: "Trace") -> int:
         """Number of ModuleCalls whose outputs include saved gradients."""
 
         return len(self.saved_grad_module_calls)
 
     @property
-    def num_saved_grad_modules(self) -> int:
+    def num_saved_grad_modules(self: "Trace") -> int:
         """Number of Modules with at least one saved-gradient ModuleCall."""
 
         return len(self.saved_grad_modules)
 
     @property
-    def saved_grad_fn_calls(self) -> Accessor[Any]:
+    def saved_grad_fn_calls(self: "Trace") -> Accessor[Any]:
         """Access GradFnCall records with saved gradient inputs or outputs."""
 
         calls: OrderedDict[str, Any] = OrderedDict()
@@ -1152,7 +1156,7 @@ class TraceStatsMixin:
         return TraceGradFnCallAccessor(calls)
 
     @property
-    def saved_grad_fns(self) -> GradFnAccessor:
+    def saved_grad_fns(self: "Trace") -> GradFnAccessor:
         """Access GradFns containing at least one saved GradFnCall."""
 
         items = OrderedDict(
@@ -1167,7 +1171,7 @@ class TraceStatsMixin:
         return GradFnAccessor(items, list(items))
 
     @property
-    def compute_ops(self) -> Accessor[Op]:
+    def compute_ops(self: "Trace") -> Accessor[Op]:
         """Access Ops that are not graph-boundary sentinels."""
 
         return TraceOpAccessor(
@@ -1176,7 +1180,7 @@ class TraceStatsMixin:
         )
 
     @property
-    def compute_layers(self) -> Accessor[Layer]:
+    def compute_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers whose representative Op is not a boundary sentinel."""
 
         from .layer import LayerAccessor
@@ -1191,55 +1195,55 @@ class TraceStatsMixin:
         )
 
     @property
-    def input_ops(self) -> Accessor[Op]:
+    def input_ops(self: "Trace") -> Accessor[Op]:
         """Access flat input-boundary Ops."""
 
         return TraceOpAccessor([self[label] for label in self.input_layers], self.layer_num_calls)
 
     @property
-    def num_input_layers(self) -> int:
+    def num_input_layers(self: "Trace") -> int:
         """Number of input-boundary Layers."""
 
         return len(self.input_layers)
 
     @property
-    def num_input_ops(self) -> int:
+    def num_input_ops(self: "Trace") -> int:
         """Number of flat input-boundary Ops."""
 
         return len(self.input_ops)
 
     @property
-    def output_ops(self) -> Accessor[Op]:
+    def output_ops(self: "Trace") -> Accessor[Op]:
         """Access flat output-boundary Ops."""
 
         return TraceOpAccessor([self[label] for label in self.output_layers], self.layer_num_calls)
 
     @property
-    def num_output_layers(self) -> int:
+    def num_output_layers(self: "Trace") -> int:
         """Number of output-boundary Layers."""
 
         return len(self.output_layers)
 
     @property
-    def num_output_ops(self) -> int:
+    def num_output_ops(self: "Trace") -> int:
         """Number of flat output-boundary Ops."""
 
         return len(self.output_ops)
 
     @property
-    def num_buffer_layers(self) -> int:
+    def num_buffer_layers(self: "Trace") -> int:
         """Number of buffer-boundary Layers."""
 
         return len(self.buffer_layers)
 
     @property
-    def buffer_read_ops(self) -> list[str]:
+    def buffer_read_ops(self: "Trace") -> list[str]:
         """Labels for buffer Ops that read registered-buffer values into the graph."""
 
         return [op.label for op in self.layer_list if op.is_buffer and op.buffer_write_kind is None]
 
     @property
-    def buffer_write_ops(self) -> list[str]:
+    def buffer_write_ops(self: "Trace") -> list[str]:
         """Labels for buffer Ops that record registered-buffer write events."""
 
         return [
@@ -1247,31 +1251,31 @@ class TraceStatsMixin:
         ]
 
     @property
-    def num_buffer_read_ops(self) -> int:
+    def num_buffer_read_ops(self: "Trace") -> int:
         """Number of buffer Ops that read registered-buffer values into the graph."""
 
         return len(self.buffer_read_ops)
 
     @property
-    def num_buffer_write_ops(self) -> int:
+    def num_buffer_write_ops(self: "Trace") -> int:
         """Number of buffer Ops that record registered-buffer write events."""
 
         return len(self.buffer_write_ops)
 
     @property
-    def num_buffer_source_ops(self) -> int:
+    def num_buffer_source_ops(self: "Trace") -> int:
         """Number of buffer source Ops that read registered buffers."""
 
         return len(self.buffer_read_ops)
 
     @property
-    def num_buffer_sink_ops(self) -> int:
+    def num_buffer_sink_ops(self: "Trace") -> int:
         """Number of buffer sink Ops that record registered-buffer writes."""
 
         return len(self.buffer_write_ops)
 
     @property
-    def internal_source_layers(self) -> Accessor[Layer]:
+    def internal_source_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
         from .layer import LayerAccessor
@@ -1285,19 +1289,19 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_internal_source_layers(self) -> int:
+    def num_internal_source_layers(self: "Trace") -> int:
         """Number of internal-source Layers."""
 
         return len(self.internal_source_layers)
 
     @property
-    def num_internal_source_ops(self) -> int:
+    def num_internal_source_ops(self: "Trace") -> int:
         """Number of internal-source Ops."""
 
         return len(self.internal_source_ops)
 
     @property
-    def internal_sink_layers(self) -> Accessor[Layer]:
+    def internal_sink_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
         from .layer import LayerAccessor
@@ -1311,25 +1315,25 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_internal_sink_layers(self) -> int:
+    def num_internal_sink_layers(self: "Trace") -> int:
         """Number of internal-sink Layers."""
 
         return len(self.internal_sink_layers)
 
     @property
-    def num_internal_sink_ops(self) -> int:
+    def num_internal_sink_ops(self: "Trace") -> int:
         """Number of internal-sink Ops."""
 
         return len(self.internal_sink_ops)
 
     @property
-    def num_uncalled_modules(self) -> int:
+    def num_uncalled_modules(self: "Trace") -> int:
         """Number of registered source-model modules not called in this Trace."""
 
         return len(self.uncalled_modules)
 
     @property
-    def ops_with_params(self) -> Accessor[Op]:
+    def ops_with_params(self: "Trace") -> Accessor[Op]:
         """Access Ops that use at least one parameter tensor."""
 
         return TraceOpAccessor(
@@ -1338,23 +1342,23 @@ class TraceStatsMixin:
         )
 
     @property
-    def num_ops_with_params(self) -> int:
+    def num_ops_with_params(self: "Trace") -> int:
         """Number of Ops that use at least one parameter tensor."""
 
         return len(self.ops_with_params)
 
     @property
-    def num_grad_fns(self) -> int:
+    def num_grad_fns(self: "Trace") -> int:
         """Number of unique autograd grad_fn_handle nodes discovered."""
         return len(self.grad_fn_logs)
 
     @property
-    def num_grad_fns_with_op(self) -> int:
+    def num_grad_fns_with_op(self: "Trace") -> int:
         """Number of GradFn records paired with a forward Op."""
 
         return sum(1 for grad_fn_handle in self.grad_fn_logs.values() if grad_fn_handle.has_op)
 
     @property
-    def num_grad_fns_without_op(self) -> int:
+    def num_grad_fns_without_op(self: "Trace") -> int:
         """Number of grad_fn_handle nodes without a corresponding forward Layer."""
         return sum(1 for grad_fn_handle in self.grad_fn_logs.values() if not grad_fn_handle.has_op)

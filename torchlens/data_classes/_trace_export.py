@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Trace export mixin."""
 
 from collections.abc import Mapping, Sequence
@@ -10,6 +9,10 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from .trace import Trace
+
+    _TraceMixinBase = Trace
+else:
+    _TraceMixinBase = object
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .interface import _format_conditional_branch_stack
 
@@ -197,8 +200,8 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
 )
 
 
-class TraceExportMixin:
-    def to_pandas(self, include_decoded_output_summary: bool = False) -> "pd.DataFrame":
+class TraceExportMixin(_TraceMixinBase):
+    def to_pandas(self: "Trace", include_decoded_output_summary: bool = False) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass.
 
         Parameters
@@ -327,7 +330,7 @@ class TraceExportMixin:
 
         return model_df
 
-    def decode_output(self, top_n: int | None = None) -> Any:
+    def decode_output(self: "Trace", top_n: int | None = None) -> Any:
         """Return captured decoded output rows when available.
 
         Parameters
@@ -383,7 +386,7 @@ class TraceExportMixin:
         ]
 
     def output_table(
-        self, top_n: int = 5, batch_items: int | Sequence[int] | None = None
+        self: "Trace", top_n: int = 5, batch_items: int | Sequence[int] | None = None
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe.
 
@@ -434,7 +437,7 @@ class TraceExportMixin:
         ]
         return pd.DataFrame(filtered_rows, columns=["batch_item", "rank", "label", "prob"])
 
-    def _recompute_decoded_output(self, top_n: int | None) -> Any | None:
+    def _recompute_decoded_output(self: "Trace", top_n: int | None) -> Any | None:
         """Best-effort decoded-output recompute from retained output logits.
 
         Parameters
@@ -465,7 +468,7 @@ class TraceExportMixin:
             return None
         return {"kind": "batch_topk", "rows": rows}
 
-    def _decoded_output_summary(self) -> str | None:
+    def _decoded_output_summary(self: "Trace") -> str | None:
         """Return a compact decoded-output summary for gated dataframe export.
 
         Returns

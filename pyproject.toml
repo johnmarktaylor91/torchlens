@@ -190,8 +190,8 @@ python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
-# Lenient for now - tighten as annotations improve
-check_untyped_defs = false
+# Check bodies of unannotated functions so the package ratchet catches local drift.
+check_untyped_defs = true
 disallow_untyped_defs = false
 
 [tool.ruff]
