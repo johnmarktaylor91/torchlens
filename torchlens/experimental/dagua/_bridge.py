@@ -121,6 +121,19 @@ class TorchLensRenderAudit:
 
 
 def _list_public_fields(obj: Any) -> list[str]:
+    """Return non-callable public attribute names available on an object.
+
+    Parameters
+    ----------
+    obj:
+        Object to inspect.
+
+    Returns
+    -------
+    list[str]
+        Sorted public attribute names that can be read without raising.
+    """
+
     names: list[str] = []
     for name in dir(obj):
         if name.startswith("_"):
@@ -136,6 +149,19 @@ def _list_public_fields(obj: Any) -> list[str]:
 
 
 def _unused_justification(name: str) -> str:
+    """Return the audit explanation for an unused TorchLens field.
+
+    Parameters
+    ----------
+    name:
+        Public field name not consumed by the Dagua bridge.
+
+    Returns
+    -------
+    str
+        Human-readable reason the field is excluded from the default graph.
+    """
+
     if "out" in name or "grad" in name:
         return "Raw tensor contents are not rendered directly; visualization uses summaries, not full tensor values."
     if "time" in name or "flops" in name or "macs" in name:
@@ -204,6 +230,19 @@ def build_torchlens_caption(trace: Any) -> str:
 
 
 def _to_dagua_direction(direction: str) -> str:
+    """Translate TorchLens graph direction spelling to Dagua spelling.
+
+    Parameters
+    ----------
+    direction:
+        TorchLens visualization direction.
+
+    Returns
+    -------
+    str
+        Dagua direction code, or the original value if already Dagua-like.
+    """
+
     mapping = {"bottomup": "BT", "topdown": "TB", "leftright": "LR"}
     return mapping.get(direction, direction)
 
@@ -240,6 +279,21 @@ def _container_semantic_attrs(entry: Any) -> dict[str, str | None]:
 
 
 def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
+    """Return trace entries rendered for the selected visualization mode.
+
+    Parameters
+    ----------
+    trace:
+        Trace-like object with layer collections.
+    vis_mode:
+        ``"unrolled"`` for pass entries or ``"rolled"`` for layer aggregates.
+
+    Returns
+    -------
+    list[Any]
+        Entries to render as Dagua nodes.
+    """
+
     if vis_mode == "unrolled":
         return list(trace.layer_dict_main_keys.values())
     if vis_mode == "rolled":
@@ -248,6 +302,21 @@ def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
 
 
 def _display_label(entry: Any, vis_mode: str) -> str:
+    """Return the primary node label for a Dagua-rendered entry.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+    vis_mode:
+        Active visualization mode.
+
+    Returns
+    -------
+    str
+        Human-readable node label.
+    """
+
     if vis_mode == "rolled":
         base = getattr(entry, "layer_label", None) or getattr(entry, "layer_label", "")
         ops = int(getattr(entry, "num_calls", 1) or 1)
@@ -257,6 +326,19 @@ def _display_label(entry: Any, vis_mode: str) -> str:
 
 
 def _shape_memory_line(entry: Any) -> str | None:
+    """Return a compact shape and activation-memory label line.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+
+    Returns
+    -------
+    str | None
+        Shape text, optionally with memory, or ``None`` when no shape exists.
+    """
+
     shape = getattr(entry, "shape", None)
     if not shape:
         return None
@@ -268,6 +350,19 @@ def _shape_memory_line(entry: Any) -> str | None:
 
 
 def _param_summary_line(entry: Any) -> str | None:
+    """Return a compact parameter-count and shape label line.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+
+    Returns
+    -------
+    str | None
+        Parameter summary text, or ``None`` when the entry has no parameters.
+    """
+
     total = int(getattr(entry, "num_params", 0) or 0)
     if total <= 0:
         return None
@@ -287,6 +382,19 @@ def _param_summary_line(entry: Any) -> str | None:
 
 
 def _module_line(entry: Any) -> str | None:
+    """Return the module or buffer address line for a node label.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+
+    Returns
+    -------
+    str | None
+        Address text, or ``None`` when there is no module/buffer address.
+    """
+
     if getattr(entry, "is_buffer", False):
         addr = getattr(entry, "address", None)
         return f"@{addr}" if addr else "@buffer"
@@ -297,6 +405,21 @@ def _module_line(entry: Any) -> str | None:
 
 
 def _build_node_label(entry: Any, vis_mode: str) -> str:
+    """Build the multi-line Dagua node label for a trace entry.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+    vis_mode:
+        Active visualization mode.
+
+    Returns
+    -------
+    str
+        Newline-separated node label.
+    """
+
     lines: list[str] = []
     if getattr(entry, "is_terminal_bool", False):
         val = getattr(entry, "bool_value", None)
@@ -332,6 +455,19 @@ def _interventions_summary(entry: Any) -> str:
 
 
 def _base_node_type(entry: Any) -> str:
+    """Classify the Dagua semantic node type for a trace entry.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+
+    Returns
+    -------
+    str
+        Node type used by the Dagua theme.
+    """
+
     if getattr(entry, "is_input", False):
         return "input"
     if getattr(entry, "is_output", False):
@@ -352,6 +488,23 @@ def _base_node_type(entry: Any) -> str:
 
 
 def _module_chain(entry: Any, vis_mode: str, vis_call_depth: int) -> list[str]:
+    """Return module cluster addresses retained for a rendered entry.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer aggregate entry.
+    vis_mode:
+        Active visualization mode.
+    vis_call_depth:
+        Maximum number of nested modules to include.
+
+    Returns
+    -------
+    list[str]
+        Module addresses ordered from outer to inner.
+    """
+
     modules = list(getattr(entry, "modules", None) or [])
     if vis_mode == "rolled":
         modules = [str(m).split(":")[0] for m in modules]
@@ -361,10 +514,40 @@ def _module_chain(entry: Any, vis_mode: str, vis_call_depth: int) -> list[str]:
 
 
 def _labels_match(label: str, candidate: str) -> bool:
+    """Return whether two labels match exactly or by layer-level prefix.
+
+    Parameters
+    ----------
+    label:
+        Label from an argument-position source.
+    candidate:
+        Candidate parent label.
+
+    Returns
+    -------
+    bool
+        Whether the labels identify the same rendered layer.
+    """
+
     return label == candidate or str(label).split(":")[0] == str(candidate).split(":")[0]
 
 
 def _argument_edge_label(child: Any, parent_label: str) -> str | None:
+    """Return argument-position text for a non-commutative parent edge.
+
+    Parameters
+    ----------
+    child:
+        Child trace entry whose parent positions are inspected.
+    parent_label:
+        Rendered parent layer label.
+
+    Returns
+    -------
+    str | None
+        Comma-separated argument labels, or ``None`` when not applicable.
+    """
+
     arg_locs = getattr(child, "parent_arg_positions", None) or {}
     func_name = (
         getattr(child, "func_name", None) or getattr(child, "layer_type", "") or ""
@@ -386,6 +569,21 @@ def _argument_edge_label(child: Any, parent_label: str) -> str | None:
 
 
 def _is_skip_edge(parent: Any, child: Any) -> bool:
+    """Return whether an edge appears to span skipped intermediate nodes.
+
+    Parameters
+    ----------
+    parent:
+        Parent trace entry.
+    child:
+        Child trace entry.
+
+    Returns
+    -------
+    bool
+        Whether the child is more than one input-distance step after parent.
+    """
+
     p = getattr(parent, "min_distance_from_input", None)
     c = getattr(child, "min_distance_from_input", None)
     if p is None or c is None:
@@ -397,6 +595,21 @@ def _is_skip_edge(parent: Any, child: Any) -> bool:
 
 
 def _is_recurrent_edge(parent: Any, child: Any) -> bool:
+    """Return whether an edge belongs to a recurrent/repeated group.
+
+    Parameters
+    ----------
+    parent:
+        Parent trace entry.
+    child:
+        Child trace entry.
+
+    Returns
+    -------
+    bool
+        Whether either endpoint indicates recurrence.
+    """
+
     p_group = getattr(parent, "recurrent_ops", None)
     c_group = getattr(child, "recurrent_ops", None)
     if p_group and c_group and p_group == c_group:
@@ -408,6 +621,21 @@ def _is_recurrent_edge(parent: Any, child: Any) -> bool:
 
 
 def _classify_forward_edge(parent: Any, child: Any) -> str:
+    """Classify a forward edge for Dagua styling.
+
+    Parameters
+    ----------
+    parent:
+        Parent trace entry.
+    child:
+        Child trace entry.
+
+    Returns
+    -------
+    str
+        Edge type such as ``"then"``, ``"if"``, ``"buffer"``, or ``"default"``.
+    """
+
     child_label = getattr(child, "layer_label", "")
     if child_label in (getattr(parent, "conditional_then_children", None) or []):
         return "then"
@@ -423,6 +651,21 @@ def _classify_forward_edge(parent: Any, child: Any) -> str:
 
 
 def _resolve_container_path(vis_outpath: str, vis_fileformat: str) -> str:
+    """Resolve the Dagua output artifact path from TorchLens render options.
+
+    Parameters
+    ----------
+    vis_outpath:
+        Requested output path or stem.
+    vis_fileformat:
+        Requested render file extension.
+
+    Returns
+    -------
+    str
+        Output path with an artifact suffix.
+    """
+
     p = Path(vis_outpath)
     if p.suffix.lower() in {
         ".pdf",
@@ -442,6 +685,21 @@ def _resolve_container_path(vis_outpath: str, vis_fileformat: str) -> str:
 
 
 def _torchlens_layout_config(num_nodes: int, direction: str) -> Any:
+    """Return a Dagua layout configuration scaled to graph size.
+
+    Parameters
+    ----------
+    num_nodes:
+        Number of graph nodes to lay out.
+    direction:
+        Dagua direction code.
+
+    Returns
+    -------
+    Any
+        ``dagua.LayoutConfig`` instance.
+    """
+
     import dagua
 
     if torch.cuda.is_available() and num_nodes <= 25_000:

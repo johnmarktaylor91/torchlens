@@ -673,6 +673,19 @@ def _get_code_context(
     _TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     def _is_torchlens_internal(filename: str) -> bool:
+        """Return whether ``filename`` is inside the TorchLens package.
+
+        Parameters
+        ----------
+        filename:
+            Frame filename to test.
+
+        Returns
+        -------
+        bool
+            Whether the frame should be filtered as TorchLens internals.
+        """
+
         return filename.startswith(_TORCHLENS_PKG_DIR)
 
     # Phase 1: Collect lightweight frame data — only co_filename, co_name, f_lineno.

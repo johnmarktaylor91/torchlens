@@ -196,10 +196,26 @@ class AutocastRestore:
     __slots__ = ("_autocast_state", "_contexts")
 
     def __init__(self, autocast_state: dict[str, dict[str, Any]]) -> None:
+        """Store serialized autocast state for later context restoration.
+
+        Parameters
+        ----------
+        autocast_state:
+            Mapping from device type to captured autocast enabled/dtype state.
+        """
+
         self._autocast_state = autocast_state
         self._contexts: List[Any] = []
 
     def __enter__(self) -> "AutocastRestore":
+        """Enter captured autocast contexts.
+
+        Returns
+        -------
+        AutocastRestore
+            This context manager instance.
+        """
+
         for device, state in self._autocast_state.items():
             if state["enabled"]:
                 autocast = cast(Any, getattr(torch.amp, "autocast"))
@@ -214,6 +230,18 @@ class AutocastRestore:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Exit restored autocast contexts in reverse nesting order.
+
+        Parameters
+        ----------
+        exc_type:
+            Exception type propagated by the managed block, if any.
+        exc_value:
+            Exception instance propagated by the managed block, if any.
+        traceback:
+            Traceback propagated by the managed block, if any.
+        """
+
         # Exit in reverse order to mirror the nesting order of __enter__.
         for ctx in reversed(self._contexts):
             ctx.__exit__(exc_type, exc_value, traceback)

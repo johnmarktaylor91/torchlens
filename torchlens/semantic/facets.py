@@ -1259,7 +1259,9 @@ def register(
     class_name: str | tuple[str, ...] | None = None,
     class_qualname: str | tuple[str, ...] | None = None,
     predicate: PredicateFunc | None = None,
-) -> Callable[[RecipeFunc], RecipeFunc]: ...
+) -> Callable[[RecipeFunc], RecipeFunc]:
+    """Return a decorator that registers a recipe with default scope."""
+    ...
 
 
 @overload
@@ -1270,7 +1272,9 @@ def register(
     predicate: PredicateFunc | None = None,
     target_scope: RecordScope = "any",
     facets: tuple[str, ...] = (),
-) -> Callable[[RecipeFunc], RecipeFunc]: ...
+) -> Callable[[RecipeFunc], RecipeFunc]:
+    """Return a decorator that registers a recipe with explicit metadata."""
+    ...
 
 
 def register(

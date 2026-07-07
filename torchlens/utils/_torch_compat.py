@@ -768,6 +768,19 @@ def fix_tensor_sequence_slot() -> bool:
 
 
 def _legacy_is_autocast_enabled(device_type: str) -> bool:
+    """Return legacy autocast enabled state for a supported device type.
+
+    Parameters
+    ----------
+    device_type:
+        Device type accepted by legacy torch autocast helpers.
+
+    Returns
+    -------
+    bool
+        Whether autocast is enabled for ``device_type``.
+    """
+
     if device_type == "cpu":
         return bool(torch.is_autocast_cpu_enabled())  # type: ignore[attr-defined]
     if device_type == "cuda":
@@ -780,6 +793,19 @@ def _legacy_is_autocast_enabled(device_type: str) -> bool:
 
 
 def _legacy_get_autocast_dtype(device_type: str) -> torch.dtype:
+    """Return legacy autocast dtype for a supported device type.
+
+    Parameters
+    ----------
+    device_type:
+        Device type accepted by legacy torch autocast helpers.
+
+    Returns
+    -------
+    torch.dtype
+        Autocast dtype for ``device_type``.
+    """
+
     if device_type == "cpu":
         return torch.get_autocast_cpu_dtype()  # type: ignore[attr-defined]
     if device_type == "cuda":
