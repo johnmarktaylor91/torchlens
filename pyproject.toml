@@ -151,14 +151,17 @@ markers = [
 addopts = "-m 'not rare'"
 xfail_strict = true
 filterwarnings = [
-    # Public compatibility aliases are intentionally exercised across legacy tests;
-    # deprecation-specific tests assert these warnings locally.
-    "default:`.*` is deprecated; use `.*` instead\\..*:DeprecationWarning",
-    # Legacy bundle compatibility tests intentionally load older manifest versions.
-    "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:DeprecationWarning",
     # TorchLens-originated warnings should be deliberate and locally asserted.
+    # NOTE: pytest applies filterwarnings bottom-to-top priority (later entries win),
+    # so the broad error rules go FIRST and the message-specific "default" exceptions
+    # below them take precedence for their exact messages. Public compatibility aliases
+    # (layers_to_save=, etc.) and older-bundle-version loads are intentionally exercised
+    # across legacy tests and stay visible-not-fatal; deprecation-specific tests assert
+    # them locally.
     "error::DeprecationWarning:torchlens(\\.|$)",
     "error::UserWarning:torchlens(\\.|$)",
+    "default:`.*` is deprecated; use `.*` instead\\..*:DeprecationWarning",
+    "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:DeprecationWarning",
     # External: torchvision model init deprecations
     "ignore:The default weight initialization of.*:FutureWarning",
     # External: torch.meshgrid indexing argument
