@@ -16,6 +16,22 @@ if TYPE_CHECKING:
     import pandas as pd
 
 
+# BackwardPass fields deliberately omitted from ``BackwardPass.to_pandas()``
+# columns. Every field in ``BACKWARD_PASS_FIELD_ORDER`` must either appear as
+# a dataframe column or be listed here -- ``tests/test_to_pandas_field_coverage.py``
+# enforces this so new BackwardPass fields can never silently fail to reach
+# the table again (same regression class as TO-PANDAS-NEW-FIELDS).
+_TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS: frozenset[str] = frozenset(
+    {
+        # List of live GradFnCall child records, not a scalar table cell --
+        # summarized instead as the derived "num_grad_fn_calls" column (same
+        # "list of child records" exclusion category as Buffer.versions /
+        # GradFn.calls / Module.ops).
+        "grad_fn_calls",
+    }
+)
+
+
 @dataclass
 class BackwardPass:
     """Projected metadata for one backward engine invocation.
@@ -143,7 +159,17 @@ class BackwardPass:
         return self.pass_index - 1
 
     def to_pandas(self) -> "pd.DataFrame":
-        """Export this backward pass as a one-row DataFrame."""
+        """Export this backward pass as a one-row DataFrame.
+
+        Driven by ``BACKWARD_PASS_FIELD_ORDER``: every field is exported
+        except ``grad_fn_calls`` (a list of live ``GradFnCall`` child records,
+        not a scalar table cell -- summarized instead as ``num_grad_fn_calls``,
+        the same "list of child records" exclusion category as
+        ``Buffer.versions``/``GradFn.calls``/``Module.ops``). This used to
+        hand-roll a 12-field subset that silently dropped
+        ``root_grad_fn_ids``/``root_meta``/``root_grad_arguments``/
+        ``inputs_subset``/``engine_flags``/``save_grads_policy``.
+        """
 
         try:
             import pandas as pd
@@ -153,19 +179,11 @@ class BackwardPass:
             ) from e
 
         row = {
-            "pass_index": self.pass_index,
-            "trigger": self.trigger,
-            "implicit": self.implicit,
-            "outer_context": self.outer_context,
-            "backward_call_context": self.backward_call_context,
-            "order": self.order,
-            "origin_backward_pass": self.origin_backward_pass,
-            "duration": self.duration,
-            "peak_memory": self.peak_memory,
-            "status": self.status,
-            "order_attribution_coverage": self.order_attribution_coverage,
-            "num_grad_fn_calls": len(self.grad_fn_calls),
+            field_name: getattr(self, field_name)
+            for field_name in BACKWARD_PASS_FIELD_ORDER
+            if field_name not in _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS
         }
+        row["num_grad_fn_calls"] = len(self.grad_fn_calls)
         return pd.DataFrame([row], columns=list(row))
 
 

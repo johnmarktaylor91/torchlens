@@ -536,6 +536,7 @@ LAYER_LOG_FIELD_ORDER = [
     "bool_value",
     "in_conditionals",
     "terminal_bool_for",
+    "is_in_conditional_body",
     "conditional_role_stacks",
     "conditional_branch_stack_ops",
     "conditional_arm_children",
@@ -612,6 +613,7 @@ PARAM_LOG_FIELD_ORDER = [
 # Per-buffer metadata exported by BufferAccessor (one row per buffer address).
 BUFFER_LOG_FIELD_ORDER = [
     "address",
+    "module_address",
     "name",
     "buffer_overwrite_index",
     "buffer_pass",

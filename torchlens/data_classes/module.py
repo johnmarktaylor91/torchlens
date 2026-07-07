@@ -41,7 +41,7 @@ import torch
 
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from ..constants import MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
+from ..constants import LAYER_LOG_FIELD_ORDER, MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -57,6 +57,60 @@ if TYPE_CHECKING:
     from .param import ParamAccessor
     from .trace import Trace
     from ..ir.container import ContainerSpec
+
+
+# Module fields deliberately omitted from ``ModuleAccessor.to_pandas()`` columns.
+# Every field in ``MODULE_LOG_FIELD_ORDER`` must either appear as a dataframe
+# column or be listed here -- ``tests/test_to_pandas_field_coverage.py``
+# enforces this so new Module fields can never silently fail to reach the
+# module table again (same regression class as TO-PANDAS-NEW-FIELDS).
+_TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
+    {
+        # Non-instantiable / live class object (not a scalar table cell):
+        "cls",
+        # Live rich accessors and object references, not scalar table cells:
+        "ops",  # ModuleCallAccessor -- use trace.module_calls for per-pass rows
+        "layers",  # list[Layer] -- use trace.layers.to_pandas() for per-layer rows
+        "params",  # ParamAccessor -- use trace.params.to_pandas()
+        "recursive_params",  # ParamAccessor -- same as params
+        "call_parent_module",  # Module reference -- call_parent already carries the label
+        "call_children_modules",  # list[Module] -- call_children already carries the labels
+        "output_structure",  # ContainerSpec -- structural, not a flat scalar
+        "forward_args_template",  # arbitrary structural template, not a flat scalar
+        "forward_kwargs_template",  # arbitrary structural template, not a flat scalar
+        # Hook lists (callables/handles, not scalar table cells):
+        "forward_pre_hooks",
+        "forward_hooks",
+        "backward_pre_hooks",
+        "backward_hooks",
+        "full_backward_pre_hooks",
+        "full_backward_hooks",
+        # Arbitrary user-selected payload (parallel to Op.annotations exclusion):
+        "custom_attributes",
+    }
+)
+
+
+def _module_log_to_row(module_log: "Module") -> Dict[str, Any]:
+    """Convert a Module into one DataFrame row.
+
+    Parameters
+    ----------
+    module_log:
+        Module metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value, excluding the
+        fields in ``_TO_PANDAS_EXCLUDED_MODULE_FIELDS``.
+    """
+
+    return {
+        field_name: getattr(module_log, field_name)
+        for field_name in MODULE_LOG_FIELD_ORDER
+        if field_name not in _TO_PANDAS_EXCLUDED_MODULE_FIELDS
+    }
 
 
 class ModuleCallAccessor(Accessor["ModuleCall"]):
@@ -2259,10 +2313,17 @@ class Module:
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.
 
+        Delegates to each ``Layer.to_pandas()`` (``LAYER_LOG_FIELD_ORDER``) so
+        every populated Layer field is exported -- this used to hand-roll a
+        6-field subset that silently dropped the rest. ``num_ops`` is kept as
+        a trailing convenience column (a derived ``len(layer.ops)`` count, not
+        a stored field, so it isn't part of ``LAYER_LOG_FIELD_ORDER`` itself).
+
         Returns
         -------
         pd.DataFrame
-            One row per layer belonging to this module.
+            One row per layer belonging to this module, ordered by
+            ``LAYER_LOG_FIELD_ORDER`` plus a trailing ``num_ops`` column.
         """
         if self._source_trace is None:
             raise RuntimeError("No source Trace reference; cannot build DataFrame.")
@@ -2273,20 +2334,16 @@ class Module:
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
+        columns = [*LAYER_LOG_FIELD_ORDER, "num_ops"]
+        if not self.layer_labels:
+            return pd.DataFrame(columns=columns)
         rows = []
         for label in self.layer_labels:
             entry = self._source_trace[label]
-            rows.append(
-                {
-                    "layer_label": entry.layer_label,
-                    "layer_type": entry.layer_type,
-                    "shape": entry.shape,
-                    "dtype": entry.dtype,
-                    "num_ops": getattr(entry, "num_ops", 1),
-                    "func_name": entry.func_name,
-                }
-            )
-        return pd.DataFrame(rows)
+            row = {field_name: getattr(entry, field_name) for field_name in LAYER_LOG_FIELD_ORDER}
+            row["num_ops"] = getattr(entry, "num_ops", 1)
+            rows.append(row)
+        return pd.DataFrame(rows, columns=columns)
 
 
 class ModuleAccessor(Accessor["Module"]):
@@ -2397,6 +2454,11 @@ class ModuleAccessor(Accessor["Module"]):
     def to_pandas(self) -> "pd.DataFrame":
         """Export module metadata as a pandas DataFrame.
 
+        Driven by ``MODULE_LOG_FIELD_ORDER`` minus the documented, genuinely
+        non-tabular exclusions in ``_TO_PANDAS_EXCLUDED_MODULE_FIELDS`` --
+        this used to hand-roll a 7-field subset that silently dropped the
+        rest of ``MODULE_LOG_FIELD_ORDER``.
+
         Returns
         -------
         pd.DataFrame
@@ -2409,20 +2471,13 @@ class ModuleAccessor(Accessor["Module"]):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        rows = []
-        for ml in self._list:
-            rows.append(
-                {
-                    "address": ml.address,
-                    "class_name": ml.class_name,
-                    "call_depth": ml.call_depth,
-                    "address_depth": ml.address_depth,
-                    "num_params": ml.num_params,
-                    "num_layers": ml.num_layers,
-                    "num_calls": ml.num_calls,
-                }
-            )
-        return pd.DataFrame(rows)
+        columns = [
+            field_name
+            for field_name in MODULE_LOG_FIELD_ORDER
+            if field_name not in _TO_PANDAS_EXCLUDED_MODULE_FIELDS
+        ]
+        rows = [_module_log_to_row(ml) for ml in self._list]
+        return pd.DataFrame(rows, columns=columns)
 
     def summary(self) -> str:
         """Return a compact text table of all modules.

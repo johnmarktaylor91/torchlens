@@ -1608,7 +1608,12 @@ class LayerAccessor(Accessor["Layer"]):
         return f"LayerAccessor({len(self)} layers):\n{inner}"
 
     def to_pandas(self) -> "pd.DataFrame":
-        """One row per unique layer (aggregate view)."""
+        """One row per unique layer (aggregate view), ordered by ``LAYER_LOG_FIELD_ORDER``.
+
+        Delegates to each ``Layer.to_pandas()`` so every field in
+        ``LAYER_LOG_FIELD_ORDER`` is exported -- this used to hand-roll a
+        12-field subset that silently dropped most populated Layer fields.
+        """
         try:
             import pandas as pd
         except ImportError as e:
@@ -1616,22 +1621,10 @@ class LayerAccessor(Accessor["Layer"]):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        rows = []
-        for ll in self._list:
-            rows.append(
-                {
-                    "layer_label": ll.layer_label,
-                    "layer_type": ll.layer_type,
-                    "func_name": ll.func_name,
-                    "shape": ll.shape,
-                    "dtype": ll.dtype,
-                    "activation_memory": ll.activation_memory,
-                    "num_passes": ll.num_passes,
-                    "num_params": ll.num_params,
-                    "module": ll.module,
-                    "is_input": ll.is_input,
-                    "is_output": ll.is_output,
-                    "is_buffer": ll.is_buffer,
-                }
-            )
-        return pd.DataFrame(rows)
+        if not self._list:
+            return pd.DataFrame(columns=LAYER_LOG_FIELD_ORDER)
+        rows = [
+            {field_name: getattr(ll, field_name) for field_name in LAYER_LOG_FIELD_ORDER}
+            for ll in self._list
+        ]
+        return pd.DataFrame(rows, columns=LAYER_LOG_FIELD_ORDER)
