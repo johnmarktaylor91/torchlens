@@ -803,8 +803,8 @@ def _preflight(log: "Trace", model: nn.Module, x: Any) -> None:
 
     if x is None:
         raise ValueError(
-            "rerun(..., x=None) cannot recover the original input. "
-            "Pass the forward input explicitly as log.rerun(model, x)."
+            "run(..., x=None) cannot recover the original input. "
+            "Pass the forward input explicitly as log.run(model, x)."
         )
     from ..user_funcs import _reject_opaque_wrappers
 

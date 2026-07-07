@@ -9,7 +9,7 @@ from typing import Any
 from ._report import CompatReport, CompatRow, report
 from .torchextractor import Extractor
 
-_COMPAT_MODULES = {"lovely", "torchshow", "torchextractor"}
+_COMPAT_MODULES = {"lovely", "torchshow"}
 
 
 def __getattr__(name: str) -> ModuleType:

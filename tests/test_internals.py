@@ -411,11 +411,29 @@ class TestBufferDuplicate:
         assert log is not None
 
     def test_shared_buffer_fast_path(self):
-        """save_new_outs with shared buffer should not crash."""
+        """save_new_outs with a shared buffer must refresh saved outs in place.
+
+        The litmus: if ``save_new_outs`` were a no-op, ``out`` would still hold
+        the first pass's values and would not match a fresh forward pass on
+        the second input.
+        """
         model = _SharedBufferModel()
-        x = torch.randn(2, 10)
-        log = trace_fn(model, x)
-        log.save_new_outs(model, torch.randn(2, 10))
+        x1 = torch.randn(2, 10)
+        log = trace_fn(model, x1)
+
+        original_out = log["output_1"].out.clone()
+
+        x2 = torch.randn(2, 10)
+        with torch.no_grad():
+            expected_out = model(x2)
+        log.save_new_outs(model, x2)
+
+        refreshed_out = log["output_1"].out
+        assert refreshed_out is not None
+        # Must have actually changed -- a no-op would leave the stale x1 out.
+        assert not torch.allclose(refreshed_out, original_out)
+        # Must match a genuine fresh forward pass on x2, not arbitrary drift.
+        assert torch.allclose(refreshed_out, expected_out, atol=1e-6)
 
 
 class TestBufferMerge:
@@ -477,11 +495,43 @@ class TestIPythonNotRequired:
 
 class TestCleanupReleasesReferences:
     def test_cleanup_no_crash(self):
-        """GC-12: cleanup() should not crash."""
+        """GC-1/GC-5/GC-12: cleanup() must actually release references.
+
+        The litmus: a no-op ``cleanup()`` would pass a bare "doesn't crash"
+        check trivially, so assert the concrete reference-release effects the
+        docstring on ``torchlens.data_classes.cleanup.cleanup`` claims --
+        per-Op state cleared (breaking the Op<->Trace cycle) and cached
+        ``Param`` references dropped to allow model GC -- rather than only
+        that the call completes.
+        """
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = trace_fn(model, x)
+
+        entries = list(log)
+        assert entries, "expected at least one captured Op entry"
+        first_entry = entries[0]
+        assert hasattr(first_entry, "out"), "sanity check: Op should carry live state pre-cleanup"
+
+        # Force each Param's live reference to rehydrate (iteration triggers
+        # rehydrate-on-iter after a normal capture) so we have a genuine
+        # non-None reference to prove cleanup() releases.
+        param_logs = list(log.param_logs)
+        assert param_logs, "expected at least one captured Param"
+        for param_log in param_logs:
+            assert param_log._param_ref is not None
+
         log.cleanup()
+
+        # GC-1: cached live Parameter references must be released.
+        for param_log in param_logs:
+            assert param_log._param_ref is None
+
+        # GC-5/GC-12: per-Op instance state must be cleared (breaks the
+        # Op -> Trace circular reference via source_trace), and internal
+        # containers not in MODEL_LOG_FIELD_ORDER must be gone.
+        assert not hasattr(first_entry, "out")
+        assert not hasattr(log, "layer_logs")
 
 
 # ---------------------------------------------------------------------------

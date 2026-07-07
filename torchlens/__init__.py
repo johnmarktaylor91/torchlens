@@ -115,7 +115,6 @@ _LAZY_ATTRS = {
     "PayloadLoadHints": ("torchlens._io", "PayloadLoadHints"),
     "aggregate": ("torchlens.stats", "aggregate"),
     "attribution": ("torchlens.attribution", None),
-    "bridge": ("torchlens.bridge", None),
     "compat": ("torchlens.compat", None),
     "debug": ("torchlens.debug", None),
     "examples": ("torchlens.examples", None),
@@ -128,7 +127,6 @@ _LAZY_ATTRS = {
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
     "save": ("torchlens._io.bundle", "save"),
-    "semantic": ("torchlens.semantic", None),
     "stats": ("torchlens.stats", None),
     "validate": ("torchlens.validation.consolidated", "validate"),
     "validation": ("torchlens.validation", None),
@@ -369,10 +367,6 @@ def __getattr__(name: str) -> Any:
         value = module_obj if attr_name is None else getattr(module_obj, attr_name)
         globals()[name] = value
         return value
-    if name == "autoroute":
-        module_obj = _importlib.import_module("torchlens.autoroute")
-        globals()[name] = module_obj
-        return module_obj
     if name in _LEGACY_API_SHIMS:
         replacement, shim_kind = _LEGACY_API_SHIMS[name]
         _warn_legacy_api_name(name, replacement)
@@ -396,7 +390,7 @@ def __dir__() -> list[str]:
         Sorted eager globals plus lazy facade, moved-name, and legacy shim names.
     """
 
-    return sorted([*globals(), *_LAZY_ATTRS, *_MOVED_OBJECTS, *_LEGACY_API_SHIMS, "autoroute"])
+    return sorted([*globals(), *_LAZY_ATTRS, *_MOVED_OBJECTS, *_LEGACY_API_SHIMS])
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
