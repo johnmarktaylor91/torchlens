@@ -27,17 +27,21 @@ setup cell pins `sys.path` to the repo root and asserts on `torchlens.__file__`)
   flags any `__all__` entry that fails `getattr`.)
 - **Submodule families:** `tl.debug` 8/8 · `tl.export` 17/17 (12 dep-free formats
   executed, tracker formats enumerated) · `tl.attribution` 10/10 · `tl.viz` 11/11
-  (incl. `feature_map_node_spec`) · `tl.report` 2/2 · `torchlens.io` 8 of 13 public
-  names exercised (`inspect_tlspec`, `detect_tlspec_format`, `log_model_metadata`,
-  `list_logs`, `save_intervention`, `load_intervention_spec`, `save`, `load`; the
-  remainder — `cleanup_tmp`, `rehydrate_nested`, `TraceState`, naming/warning toggles
-  — is judged plumbing) · `tl.compat` 9/9 (all `from_*` shims invoked, guarded) ·
+  (incl. `feature_map_node_spec`) · `tl.report` 2/2 · `torchlens.io` 12 of 16 `__all__`
+  names exercised (`inspect_tlspec`, `detect_tlspec_format`, `log_model_metadata` +
+  its deprecated alias, `list_logs`, `save_intervention`, `load_intervention_spec`,
+  `save`, `load`, `PayloadLoadHints`, `JaxPayloadLoadHint`; the remainder —
+  `cleanup_tmp`, `rehydrate_nested`, `TraceState`, `suppress_mutate_warnings` — is
+  judged plumbing) · `torchlens.errors` hierarchy enumerated + typed-catch
+  demonstrated with the payload contract (nb 12) · `torchlens.backends` registry
+  enumerated + `UnknownBackendError` surface (nb 16) · `tl.compat` 9/9 (all `from_*` shims invoked, guarded) ·
   `tl.bridge` all 16 adapters enumerated + import-exercised at runtime (captum, hf,
   profiler in depth) · collapse-v2 (`collapse=` float slider, `fold_runs=`,
   `collapse_plan`, `collapse_schedule`) 3/3 · `tl.validate` all 4 scopes ·
   capture-time kwargs (`storage=tl.to_disk`, `streaming`, `hooks`, `layers_to_save`,
-  `activation_transform`/`grad_transform`, `module_filter`, `random_seed`,
-  `recipes`) demonstrated.
+  `chunk_size`, `activation_transform`/`grad_transform` (both verified INERT),
+  `module_filter`, `random_seed`, `recipes`) demonstrated · vanilla dunder protocol
+  (`len`/iteration/membership) on `Trace` (nb 01) and `Bundle` (nb 08).
 
 Notable fixes verified since the June 2026 pass (dropped from GAP cells, kept in the
 matrix notes): `Quantity` reprs now carry units; `Recording.n_records` counting;
@@ -71,11 +75,15 @@ All 17 notebooks run green. Per-notebook surfaces and the verified rough edges:
 
 ## Adversarial review status
 
-Round 1 (2026-07-06): an independent coverage critic and a fresh-eyes UX critic
-reviewed the executed suite; every substantive finding was verified against live code
-and folded back — including three HIGH findings the June pass missed (the inert
-gradient-action family, the `summary(level='compute'/'cost')` crash on multi-pass
-models, and the pass-count-dependent `trace[label]` return type).
+Two rounds of independent coverage + fresh-eyes UX critique (2026-07-06), every
+substantive finding verified against live code and folded back. Round 1 surfaced three
+HIGH findings the June pass missed (the inert gradient-action family, the
+`summary(level='compute'/'cost')` crash on multi-pass models, the pass-count-dependent
+`trace[label]` return type). Round 2 verified the fixes, added the `torchlens.errors`
+and `torchlens.backends` surfaces, and drove an assert-not-print pass over every
+"this kwarg does X" demo — which exposed two more inert capture kwargs
+(`activation_transform`, `grad_transform`) and an intervention-spec round-trip that
+silently loses its intervention.
 
 ## Workflow slicing (locked design)
 
