@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
 from ..quantities import Duration
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 
 @dataclass
@@ -31,6 +32,14 @@ class GradFnCall:
         "_time_finished": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
+    FIELD_POLICY = build_record_field_policy_table(
+        GRAD_FN_PASS_LOG_FIELD_ORDER,
+        {
+            **PORTABLE_STATE_SPEC,
+            "call_label": PORTABLE_STATE_SPEC["label"],
+        },
+    )
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     call_index: int
     ordinal: int | None = None

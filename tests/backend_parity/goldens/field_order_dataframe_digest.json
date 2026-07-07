@@ -287,6 +287,7 @@
       "_final_to_raw_layer_labels",
       "_lookup_keys_to_layer_num_dict",
       "_layer_num_to_lookup_keys_dict",
+      "_ambiguous_lookup_keys",
       "input_layers",
       "output_layers",
       "input_structure",
@@ -836,6 +837,7 @@
     "trace_portable_fields": [
       "_activation_transform_repr",
       "_active_backward_pass_index",
+      "_ambiguous_lookup_keys",
       "_annotation_blobs",
       "_append_sequence_id",
       "_backward_gradfn_refs",
@@ -1101,13 +1103,13 @@
     ]
   },
   "sha256_chunks": [
-    "a2e1c42c",
-    "ea6a0e70",
-    "d3c5afb2",
-    "e5785fc5",
-    "b303478a",
-    "bff4be59",
-    "62a671ab",
-    "ae9a7d15"
+    "518dd5d2",
+    "1d018ff0",
+    "2d324aa7",
+    "2991a9c3",
+    "b7bac683",
+    "ae9d7c0b",
+    "ce48a86a",
+    "df569b7f"
   ]
 }

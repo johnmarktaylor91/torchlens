@@ -174,6 +174,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_final_to_raw_layer_labels",
     "_lookup_keys_to_layer_num_dict",
     "_layer_num_to_lookup_keys_dict",
+    "_ambiguous_lookup_keys",
     # Special layers
     "input_layers",
     "output_layers",

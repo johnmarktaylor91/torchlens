@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Any, Dict, cast
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from ._runtime_handles import runtime_handle_from_trace
+from ._repr import format_summary_lines
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -44,6 +47,8 @@ class Buffer:
         "_initial_value": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
     }
+    FIELD_POLICY = build_record_field_policy_table(BUFFER_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,
@@ -95,17 +100,10 @@ class Buffer:
             this computed runtime handle is unavailable or non-portable.
         """
 
-        trace = self.source_trace
-        source_ref = getattr(trace, "_source_model_ref", None) if trace is not None else None
-        if source_ref is None:
-            return None
-        model = source_ref()
-        if model is None:
-            return None
-        try:
-            return dict(model.named_buffers()).get(self.address)
-        except Exception:
-            return None
+        return runtime_handle_from_trace(
+            self.source_trace,
+            lambda model: dict(model.named_buffers()).get(self.address),
+        )
 
     @property
     def name(self) -> str:
@@ -276,14 +274,14 @@ class Buffer:
     def __repr__(self) -> str:
         """Return a concise multi-line buffer summary."""
 
-        lines = [f"Buffer: {self.address}"]
+        lines = []
         if self.shape is not None:
             lines.append(f"  shape: {list(self.shape)}")
         if self.dtype is not None:
             lines.append(f"  dtype: {self.dtype}")
         lines.append(f"  versions: {len(self.versions)}")
         lines.append(f"  num_overwrites: {self.num_overwrites}")
-        return "\n".join(lines)
+        return format_summary_lines(f"Buffer: {self.address}", lines)
 
 
 class BufferAccessor(Accessor["Buffer"]):

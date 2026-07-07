@@ -13,7 +13,9 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ..quantities import Duration
 from ._accessor_base import Accessor
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .grad_fn_call import GradFnCall
+from ._runtime_handles import runtime_handle_from_owner
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -210,6 +212,8 @@ class GradFn:
         "backward_signature": FieldPolicy.KEEP,
         "backward_docstring": FieldPolicy.KEEP,
     }
+    FIELD_POLICY = build_record_field_policy_table(GRAD_FN_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     grad_fn_object_id: int
     class_name: str
@@ -389,10 +393,19 @@ class GradFn:
         """
 
         trace = self.source_trace
-        if trace is not None:
-            for grad_fn_handle in getattr(trace, "_backward_gradfn_refs", None) or ():
-                if id(grad_fn_handle) == self.grad_fn_object_id:
-                    return grad_fn_handle
+        handle = runtime_handle_from_owner(
+            trace,
+            lambda owner: next(
+                (
+                    grad_fn_handle
+                    for grad_fn_handle in getattr(owner, "_backward_gradfn_refs", None) or ()
+                    if id(grad_fn_handle) == self.grad_fn_object_id
+                ),
+                None,
+            ),
+        )
+        if handle is not None:
+            return handle
 
         try:
             op = self.op

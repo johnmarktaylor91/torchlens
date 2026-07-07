@@ -73,6 +73,13 @@ from ..intervention.errors import DirectActivationWriteWarning
 from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
 from .._state import pause_logging
 from ._accessor_base import Accessor
+from .field_policy import (
+    build_record_field_policy_table,
+    default_fill_state_from_policy,
+    fork_policy_from_policy,
+    portable_state_spec_from_policy,
+)
+from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items, state_restore
 from ..utils.tensor_utils import (
     SaveMode,
@@ -1045,8 +1052,15 @@ class Op:
         "_pending_grad_blob_id": FieldPolicy.DROP,
         "_pending_transformed_grad_blob_id": FieldPolicy.DROP,
     }
-    FIELD_FORK_POLICY = LAYER_PASS_LOG_FIELD_FORK_POLICY
-    DEFAULT_FILL_STATE = _LAYER_PASS_LOG_DEFAULT_FILL
+    FIELD_POLICY = build_record_field_policy_table(
+        LAYER_PASS_LOG_FIELD_ORDER,
+        PORTABLE_STATE_SPEC,
+        fork_policy=LAYER_PASS_LOG_FIELD_FORK_POLICY,
+        default_fill_state=_LAYER_PASS_LOG_DEFAULT_FILL,
+    )
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    FIELD_FORK_POLICY = fork_policy_from_policy(FIELD_POLICY)
+    DEFAULT_FILL_STATE = default_fill_state_from_policy(FIELD_POLICY)
 
     def _slot(self, name: str, default: Any = None) -> Any:
         """Return one physical slot value, or ``default`` when it is unset."""
@@ -3277,7 +3291,7 @@ class Op:
         s += self._tensor_contents_str_helper()
         s += self._tensor_family_str_helper()
         if len(self.param_shapes) > 0:
-            params_shapes_str = ", ".join(str(param_shape) for param_shape in self.param_shapes)
+            params_shapes_str = format_shape_list(self.param_shapes)
             s += (
                 f"\n\tParams: Computed from params with shape {params_shapes_str}; "
                 f"{self.num_params} params total ({self.param_memory})"
@@ -3291,7 +3305,7 @@ class Op:
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name}) {module_str}"
             if self.func_config:
-                config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
+                config_str = format_config_items(self.func_config)
                 s += f"\n\tConfig: {config_str}"
             s += f"\n\tTime elapsed: {self.func_duration: .3E}s"
         if len(self.output_of_modules) > 0:

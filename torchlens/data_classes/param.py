@@ -31,6 +31,9 @@ from ..constants import PARAM_LOG_FIELD_ORDER
 from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes
 from ._accessor_base import Accessor
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from ._runtime_handles import source_model_from_trace
+from ._repr import format_summary_lines
 from .op import GradientRecord, GradientRecordAccessor
 
 if TYPE_CHECKING:
@@ -93,6 +96,8 @@ class Param:
         "_derived_grad_payload": FieldPolicy.KEEP,
         "_derived_grad_record_path": FieldPolicy.KEEP,
     }
+    FIELD_POLICY = build_record_field_policy_table(PARAM_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,
@@ -408,11 +413,10 @@ class Param:
             return self._param_ref
 
         trace = self.source_trace
-        source_ref = getattr(trace, "_source_model_ref", None) if trace is not None else None
-        if source_ref is None:
+        if getattr(trace, "_source_model_ref", None) is None:
             return None
 
-        model = source_ref()
+        model = source_model_from_trace(trace)
         if model is None:
             if self._param_ref_released:
                 raise PostTraceParamUnavailable(
@@ -551,7 +555,6 @@ class Param:
         """Multi-line summary showing address, shape, dtype, trainability, and usage."""
         status = "trainable" if self.is_trainable else "frozen"
         lines = [
-            f"Param: {self.address}",
             f"  shape: {self.shape}",
             f"  dtype: {self.dtype}",
             f"  size: {self.param_memory}",
@@ -567,7 +570,7 @@ class Param:
             lines.append(f"  has_optimizer: {self.has_optimizer}")
         if self.num_calls > 1:
             lines.append(f"  num_calls: {self.num_calls}")
-        return "\n".join(lines)
+        return format_summary_lines(f"Param: {self.address}", lines)
 
     def release_param_ref(self) -> None:
         """Cache grad info, then null _param_ref to allow param GC."""

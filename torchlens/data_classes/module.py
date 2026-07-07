@@ -42,9 +42,12 @@ from typing import (
 import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from ..constants import MODULE_PASS_LOG_FIELD_ORDER
+from ..constants import MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs, as_duration
 from ._accessor_base import Accessor
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from ._runtime_handles import runtime_handle_from_trace
+from ._repr import format_summary_lines
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -392,6 +395,8 @@ class ModuleCall:
         "_source_trace_strong": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
+    FIELD_POLICY = build_record_field_policy_table(MODULE_PASS_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     address: str
     all_addresses: List[str]
@@ -1068,6 +1073,8 @@ class Module:
         "custom_methods": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
+    FIELD_POLICY = build_record_field_policy_table(MODULE_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     address: str
     all_addresses: List[str]
@@ -1544,19 +1551,25 @@ class Module:
             unavailable. This computed runtime handle is not portable.
         """
 
-        trace = self._source_trace
-        source_ref = getattr(trace, "_source_model_ref", None) if trace is not None else None
-        if source_ref is None:
-            return None
-        model = source_ref()
-        if model is None:
-            return None
-        if self.address in {"", "self"}:
-            return model
-        try:
+        def resolve_module(model: torch.nn.Module) -> torch.nn.Module | None:
+            """Resolve this module address against a live model.
+
+            Parameters
+            ----------
+            model:
+                Live source model.
+
+            Returns
+            -------
+            torch.nn.Module | None
+                Resolved module object.
+            """
+
+            if self.address in {"", "self"}:
+                return model
             return model.get_submodule(self.address)
-        except (AttributeError, KeyError):
-            return None
+
+        return runtime_handle_from_trace(self._source_trace, resolve_module)
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
@@ -2024,7 +2037,6 @@ class Module:
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""
         lines = [
-            f"Module: {self.address} ({self.class_name})",
             f"  call_depth: {self.call_depth}, address_depth: {self.address_depth}",
             f"  num_params: {self.num_params}",
             f"  num_layers: {self.num_layers}",
@@ -2034,7 +2046,7 @@ class Module:
             lines.append(f"  aliases: {self.all_addresses}")
         if self.address_children:
             lines.append(f"  children: {self.address_children}")
-        return "\n".join(lines)
+        return format_summary_lines(f"Module: {self.address} ({self.class_name})", lines)
 
     def __len__(self) -> int:
         """Return the total number of layers across all ops of this module."""

@@ -37,9 +37,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Uni
 from .._deprecations import MISSING
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from ..constants import LAYER_LOG_FIELD_ORDER
 from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
 from ._accessor_base import Accessor
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from ._repr import format_config_items, format_shape_list
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -264,6 +267,8 @@ class Layer:
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
     }
+    FIELD_POLICY = build_record_field_policy_table(LAYER_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(self, first_pass: "Op") -> None:
         """Initialize from the first pass of this layer.
@@ -1386,12 +1391,12 @@ class Layer:
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
             if self.func_config:
-                config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
+                config_str = format_config_items(self.func_config)
                 s += f"\n\tConfig: {config_str}"
         if self.module is not None:
             s += f"\n\tComputed inside module: {self.module}"
         if len(self.param_shapes) > 0:
-            params_shapes_str = ", ".join(str(ps) for ps in self.param_shapes)
+            params_shapes_str = format_shape_list(self.param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
                 f"{self.num_params} total ({self.total_param_memory})"

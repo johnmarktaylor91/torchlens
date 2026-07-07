@@ -136,6 +136,12 @@ from .interface import (
 )
 from .backward_pass import BackwardPass, BackwardPassAccessor
 from .derived_grad import DerivedGradAccessor, IntermediateDerivedGradAccessor
+from .field_policy import (
+    build_record_field_policy_table,
+    default_fill_state_from_policy,
+    fork_policy_from_policy,
+    portable_state_spec_from_policy,
+)
 from .grad_fn import GradFnAccessor, GradFn
 from .layer import Layer, OpAccessor
 from .op import Op, TensorLog
@@ -272,6 +278,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "is_appended": False,
     "relationship_evidence": {},
     "replay_frontier": {},
+    "_ambiguous_lookup_keys": {},
     "total_gradient_memory": 0,
     "total_backward_memory": 0,
     "saved_gradient_memory": 0,
@@ -1014,6 +1021,7 @@ class Trace(
         "_final_to_raw_layer_labels": FieldPolicy.KEEP,
         "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
         "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
+        "_ambiguous_lookup_keys": FieldPolicy.KEEP,
         "input_layers": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
         "input_structure": FieldPolicy.BLOB_RECURSIVE,
@@ -1118,6 +1126,13 @@ class Trace(
         "backward_memory_backend": FieldPolicy.KEEP,
         "_backward_gradfn_refs": FieldPolicy.DROP,
     }
+    FIELD_POLICY = build_record_field_policy_table(
+        MODEL_LOG_FIELD_ORDER,
+        PORTABLE_STATE_SPEC,
+        fork_policy=MODEL_LOG_FIELD_FORK_POLICY,
+        default_fill_state=_MODEL_LOG_DEFAULT_FILL,
+    )
+    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,
@@ -1369,6 +1384,7 @@ class Trace(
         self._final_to_raw_layer_labels: Dict[str, str] = {}
         self._lookup_keys_to_layer_num_dict: Dict[str, int] = {}
         self._layer_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
+        self._ambiguous_lookup_keys: Dict[str, List[int]] = {}
 
         # Special Layers:
         self.input_layers: List[str] = []
@@ -2872,5 +2888,5 @@ class Trace(
     # ********************************************
 
 
-Trace.FIELD_FORK_POLICY = MODEL_LOG_FIELD_FORK_POLICY  # type: ignore[attr-defined]
-Trace.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]
+Trace.FIELD_FORK_POLICY = fork_policy_from_policy(Trace.FIELD_POLICY)  # type: ignore[attr-defined]
+Trace.DEFAULT_FILL_STATE = default_fill_state_from_policy(Trace.FIELD_POLICY)  # type: ignore[attr-defined]
