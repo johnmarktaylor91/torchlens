@@ -108,6 +108,24 @@ def pytest_sessionfinish(session, exitstatus):
 # Fixtures
 
 
+@pytest.fixture(autouse=True)
+def _reset_deprecation_dedup():
+    """Give every test a fresh deprecation-warning dedup set.
+
+    ``warn_deprecated_alias`` correctly warns only once per process (so real user
+    sessions are not spammed), but that process-global dedup makes any test that asserts
+    ``pytest.warns(DeprecationWarning)`` order-dependent: if an earlier test already
+    tripped the same alias, the warning is suppressed here and the assertion fails with
+    "DID NOT WARN". Clearing the set before each test restores per-test isolation without
+    changing the shipped once-per-process behavior.
+    """
+
+    from torchlens import _deprecations
+
+    _deprecations._WARNED_DEPRECATIONS.clear()
+    yield
+
+
 @pytest.fixture
 def default_input1():
     return torch.rand(6, 3, 224, 224)
