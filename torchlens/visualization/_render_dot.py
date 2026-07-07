@@ -22,7 +22,6 @@ def _view_rendered_file(filepath: str) -> None:
 
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
     from .auto_collapse import ModuleRunFold

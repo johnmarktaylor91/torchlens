@@ -26,8 +26,6 @@ def _buffer_name_segment(address: str | None) -> str:
 
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.module import Module
     from ..data_classes.trace import Trace
     from .auto_collapse import ModuleRunFold
 
