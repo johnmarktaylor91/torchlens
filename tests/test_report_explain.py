@@ -108,8 +108,8 @@ def test_explain_reports_nonfinite_out() -> None:
     assert "vscode://file/" in log.first_nonfinite(link_format="html")
 
 
-def test_source_locations_render_clickable_terminal_and_html_links() -> None:
-    """Source locations should expose OSC 8 terminal links and VS Code HTML links."""
+def test_source_locations_keep_repr_plain_and_expose_html_links() -> None:
+    """Source locations should keep repr plain and expose VS Code HTML links."""
 
     location = FuncCallLocation(
         file="/tmp/demo.py",
@@ -117,5 +117,5 @@ def test_source_locations_render_clickable_terminal_and_html_links() -> None:
         func_name="forward",
         source_loading_enabled=False,
     )
-    assert "\033]8;;file://" in repr(location)
+    assert "\033]8;;file://" not in repr(location)
     assert "vscode://file/" in location.to_html_link()

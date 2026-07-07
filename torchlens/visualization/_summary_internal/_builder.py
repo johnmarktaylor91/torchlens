@@ -1297,7 +1297,7 @@ def _build_compute_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]
         f"Params: {_int_with_commas(trace.num_params)} unique",
         f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}",
         f"MACs: {_human_flops(trace.total_macs_forward)}",
-        f"Forward time: {trace.forward_duration * 1000:.2f} ms",
+        f"Forward time: {float(trace.forward_duration) * 1000:.2f} ms",
     ]
     return rows, footer_lines
 
@@ -1580,7 +1580,10 @@ def _module_time_ms(trace: "Trace", module: "Module") -> float:
             layer = trace[layer_label]
         except KeyError:
             continue
-        total += float(getattr(layer, "func_duration", 0.0) or 0.0)
+        duration = getattr(layer, "total_func_duration", None)
+        if duration is None:
+            duration = getattr(layer, "func_duration", 0.0)
+        total += float(duration or 0.0)
     return total * 1000.0
 
 

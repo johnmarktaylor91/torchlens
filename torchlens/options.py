@@ -591,8 +591,16 @@ def _merge_grouped_options(
         If a field is supplied by both grouped and flat styles.
     """
 
+    default_option = option_factory()
+    option_type = type(default_option)
+    if option is not None and not isinstance(option, option_type):
+        raise TypeError(
+            f"{group_name} must be a {option_type.__name__} instance or None; "
+            f"got {type(option).__name__}."
+        )
+
     if option is None:
-        values = option_factory().as_dict()
+        values = default_option.as_dict()
         specified_fields: frozenset[str] = frozenset()
     else:
         values = option.as_dict()

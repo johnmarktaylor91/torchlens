@@ -876,9 +876,9 @@ def run_and_log_inputs_through_model(
     if layer_nums_to_save != "all" and self._tracing_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
-            output_entry = self[output_label]
+            output_entry = self.layer_dict_all_keys[output_label]
             for parent_label in output_entry.parents:
-                parent_entry = self[parent_label]
+                parent_entry = self.layer_dict_all_keys[parent_label]
                 output_parent_nums.add(parent_entry.raw_index)
         if output_parent_nums:
             combined = set(layer_nums_to_save) | output_parent_nums

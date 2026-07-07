@@ -9,13 +9,13 @@ from typing import Any
 import torch
 from PIL import Image, ImageDraw
 
-from . import batch_summary
+from . import batch_summary as _batch_summary
+from .batch_summary import montage, text_table
 from .feature_maps import feature_map_evolution, feature_map_node_spec
 from .node_plots import render_heatmap, render_image_scatter, render_lineplot
 from ..visualization.bundle_diff import bundle_diff
 
 __all__ = [
-    "batch_summary",
     "bundle_diff",
     "causal_trace_heatmap",
     "channel_grid",
@@ -23,10 +23,14 @@ __all__ = [
     "feature_map_node_spec",
     "heatmap",
     "histogram",
+    "montage",
     "render_heatmap",
     "render_image_scatter",
     "render_lineplot",
+    "text_table",
 ]
+
+batch_summary = _batch_summary
 
 _HEATMAP_COLORS = (
     (68, 1, 84),

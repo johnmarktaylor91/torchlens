@@ -120,10 +120,13 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
 
     assert dot_source.startswith("// TorchLens bundle diff")
     assert candidate_svg.exists()
-    assert "aria-label=" in candidate_svg.read_text(encoding="utf-8")
+    svg_text = candidate_svg.read_text(encoding="utf-8")
+    assert "aria-label=" in svg_text
+    assert "clean vs ablated" in svg_text
+    assert "zero_ablate(layer1.0.relu)" not in svg_text
     assert len(bundle.aligned_pairs("clean", "ablated")) > 0
 
-    candidate_normalized = _normalize_svg(candidate_svg.read_text(encoding="utf-8"))
+    candidate_normalized = _normalize_svg(svg_text)
     reference_normalized = _normalize_svg(GOLDEN_SVG.read_text(encoding="utf-8"))
     if candidate_normalized == reference_normalized:
         return

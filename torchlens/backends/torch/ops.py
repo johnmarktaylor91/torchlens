@@ -3101,7 +3101,7 @@ def _emit_fast_operation_events(
                 "trace with the desired inputs."
             )
         orig_tensor_label = self._raw_to_final_layer_labels[_label_raw]
-        orig_layer_entry = self[orig_tensor_label]
+        orig_layer_entry = cast(Any, self.layer_dict_all_keys[orig_tensor_label])
         previous_shape = orig_layer_entry.shape
 
         _add_tensor_backward_hook(self, out, _label_raw)  # Must pass RAW label (#86)
@@ -3165,7 +3165,7 @@ def _emit_fast_operation_events(
             # any child that is an output layer so postprocess_fast can find it.
             for child_layer in orig_layer_entry.children:
                 if child_layer in self.output_layers:
-                    child_output = self[child_layer]
+                    child_output = cast(Op, self.layer_dict_all_keys[child_layer])
                     if (
                         orig_layer_entry.has_out_variations
                         and child_layer in orig_layer_entry.out_versions_by_child

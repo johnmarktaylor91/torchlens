@@ -1842,3 +1842,31 @@ def _clear_registry_for_tests() -> None:
     """Clear all registered recipes for isolated tests."""
 
     _REGISTRY.clear()
+
+
+__all__ = [
+    "AbsenceReason",
+    "AttentionHeadView",
+    "Facet",
+    "FacetCapabilityFlags",
+    "FacetKey",
+    "FacetMenuItem",
+    "FacetRecipe",
+    "FacetRegistrySnapshot",
+    "FacetSpec",
+    "FacetView",
+    "MissingFacet",
+    "MissingFacetError",
+    "MissingGradient",
+    "RecordScope",
+    "TransformPrimitive",
+    "enable_transformerlens_aliases",
+    "info",
+    "list",
+    "mark_current_registry_as_builtins",
+    "register",
+    "reset",
+    "snapshot",
+    "transformer_lens_aliases_enabled",
+    "using",
+]

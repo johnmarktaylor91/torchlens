@@ -63,6 +63,18 @@ def test_ops_accessor_returns_op_for_pass_label() -> None:
     assert trace.ops["linear_1_1:1"].label == "linear_1_1:1"
 
 
+def test_trace_getitem_layer_label_always_returns_layer() -> None:
+    """Convenience layer-label lookup is deterministic across pass counts."""
+
+    trace = _strict_trace()
+
+    assert isinstance(trace["mul_1_2"], Layer)
+    assert trace["mul_1_2"] is trace.layers["mul_1_2"]
+    assert isinstance(trace["linear_1_1"], Layer)
+    assert trace["linear_1_1"] is trace.layers["linear_1_1"]
+    assert isinstance(trace["linear_1_1:1"], Op)
+
+
 def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
     """A bare multi-pass Layer label is rejected by trace.ops."""
 

@@ -45,6 +45,37 @@ class AttributionResult:
     target_repr: str
     extra: dict[str, Any]
 
+    def __repr__(self) -> str:
+        """Return a compact representation without dumping attribution tensors."""
+
+        return (
+            "AttributionResult("
+            f"method={self.method!r}, "
+            f"values={_summarize_attribution_tree(self.values)}, "
+            f"target_repr={self.target_repr!r}, "
+            f"extra_keys={sorted(self.extra.keys())!r})"
+        )
+
+
+def _summarize_attribution_tree(value: Any) -> str:
+    """Return shape/dtype summaries for attribution values."""
+
+    if isinstance(value, Tensor):
+        return (
+            f"Tensor(shape={tuple(value.shape)!r}, "
+            f"dtype={value.dtype}, device={value.device.type!r})"
+        )
+    if isinstance(value, tuple):
+        return "(" + ", ".join(_summarize_attribution_tree(item) for item in value) + ")"
+    if isinstance(value, list):
+        return "[" + ", ".join(_summarize_attribution_tree(item) for item in value) + "]"
+    if isinstance(value, dict):
+        items = ", ".join(
+            f"{key!r}: {_summarize_attribution_tree(item)}" for key, item in value.items()
+        )
+        return "{" + items + "}"
+    return repr(value)
+
 
 @dataclass(frozen=True)
 class _PreparedInputs:

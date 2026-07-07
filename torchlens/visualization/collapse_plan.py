@@ -187,6 +187,17 @@ class CollapsePlan:
     nodes: tuple[PlanNode, ...]
     context: RenderContext
 
+    @property
+    def total(self) -> int:
+        """Return the rendered node count represented by this plan."""
+
+        return count(self)
+
+    def __len__(self) -> int:
+        """Return the rendered node count represented by this plan."""
+
+        return self.total
+
     def __repr__(self) -> str:
         """Return a compact diagnostic summary by rendered node kind.
 
@@ -209,7 +220,7 @@ class CollapsePlan:
             )
             if counts[kind]
         )
-        return f"CollapsePlan(total={count(self)}, {kind_summary})"
+        return f"CollapsePlan(total={self.total}, {kind_summary})"
 
 
 @dataclass(frozen=True)

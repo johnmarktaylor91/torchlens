@@ -515,7 +515,7 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
             f"This usually means the computational graph changed between the exhaustive pass "
             f"and this fast pass (e.g., dynamic control flow). Use trace() instead."
         )
-    orig_layer_entry = self[orig_tensor_label]
+    orig_layer_entry = cast(Any, self.layer_dict_all_keys[orig_tensor_label])
     previous_shape = orig_layer_entry.shape
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     if (layer_nums_to_save == "all") or (orig_layer_entry.raw_index in layer_nums_to_save):

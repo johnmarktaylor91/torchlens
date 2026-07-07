@@ -605,7 +605,7 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
         return True
     if selection in [None, "none", []]:
         return False
-    return trace[layer_label].raw_index in selection
+    return trace.layer_dict_all_keys[layer_label].raw_index in selection
 
 
 def _sync_grad_fn_graph_relations(trace: Any) -> None:
@@ -698,7 +698,7 @@ def _op_module_address(trace: Any, op_label: str | None) -> str | None:
 
     if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
         return None
-    op = trace[op_label]
+    op = trace.layer_dict_all_keys[op_label]
     module_address = getattr(op, "module_address", None)
     if module_address is not None:
         return cast(str, module_address)
@@ -759,7 +759,7 @@ def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
     op_label = grad_fn_record.op_label
     if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
         return None
-    return int(getattr(trace[op_label], "raw_index"))
+    return int(getattr(trace.layer_dict_all_keys[op_label], "raw_index"))
 
 
 def _post_forward_grad_fn_ids(grad_fn_logs: dict[int, GradFn]) -> set[int]:
@@ -1253,7 +1253,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         event_label = _resolve_op_grad_event_label(trace, event.op_label)
         if event_label not in getattr(trace, "layer_dict_all_keys", {}):
             continue
-        op = trace[event_label]
+        op = trace.layer_dict_all_keys[event_label]
         payload = event.payload_ref if isinstance(event.payload_ref, torch.Tensor) else None
         transformed_payload = event.transformed_payload_ref
         op._record_gradient(
@@ -1996,7 +1996,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             )
         )
         if layer_label is not None:
-            layer = trace[layer_label]
+            layer = trace.layer_dict_all_keys[layer_label]
             layer.grad_fn = grad_fn_record
             parent_layer = trace.layer_logs.get(layer.layer_label)
             if parent_layer is not None:

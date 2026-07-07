@@ -29,7 +29,7 @@ import linecache
 from typing import Any, Dict, List, Optional, Union
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from .._source_links import terminal_file_line_link, vscode_file_line_link
+from .._source_links import vscode_file_line_link
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
 # Used as the default for lazy-loading placeholders so we can tell the
@@ -439,7 +439,7 @@ class FuncCallLocation:
         """Show file, line number, function name, and source context with arrow."""
         lines = [
             "FuncCallLocation:",
-            f"  file: {terminal_file_line_link(self.file, self.line_number)}",
+            f"  file: {self.file}",
             f"  line: {self.line_number}",
             f"  function: {self.func_name}",
         ]

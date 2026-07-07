@@ -1160,7 +1160,7 @@ def _grad_record_context_from_op_grad_event(
             dtype=_torch_dtype_from_string(event.dtype),
             tensor_device=None,
         )
-    op = trace[event.op_label]
+    op = trace.layer_dict_all_keys[event.op_label]
     return GradRecordContext(
         label=event.op_label,
         grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",

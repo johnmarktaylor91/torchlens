@@ -860,7 +860,7 @@ def _commit_replay_updates(
     snapshots: dict[str, dict[str, Any]] = {}
     try:
         for label, tensor in pending_updates.items():
-            site = log[label]
+            site = log.layer_dict_all_keys[label]
             snapshots[label] = {
                 "out": site.out,
                 "transformed_out": site.transformed_out,
@@ -877,7 +877,7 @@ def _commit_replay_updates(
                 site.interventions.extend(pending_records[label])
     except Exception:
         for label, state in snapshots.items():
-            site = log[label]
+            site = log.layer_dict_all_keys[label]
             for field_name, value in state.items():
                 site._internal_set(field_name, value)
         raise

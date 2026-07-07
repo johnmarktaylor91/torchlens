@@ -14,6 +14,7 @@ from torchlens.options import (
     SaveOptions,
     StreamingOptions,
     VisualizationOptions,
+    merge_streaming_options,
 )
 
 
@@ -52,3 +53,10 @@ def test_option_class_is_frozen(option_cls: type[Any]) -> None:
     first_field = fields(option_cls)[0].name
     with pytest.raises(FrozenInstanceError):
         setattr(instance, first_field, getattr(instance, first_field))
+
+
+def test_streaming_option_rejects_bool_with_clear_type_error() -> None:
+    """The grouped streaming option should not leak raw bool attribute errors."""
+
+    with pytest.raises(TypeError, match="streaming must be a StreamingOptions instance"):
+        merge_streaming_options(streaming=True)  # type: ignore[arg-type]

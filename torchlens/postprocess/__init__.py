@@ -34,7 +34,7 @@ LayerLogs, and marks the pass as finished. See postprocess_fast() below.
 
 from dataclasses import dataclass
 import os
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, cast
 
 import time
 import torch
@@ -86,6 +86,7 @@ from ._materialize import materialize_from_events
 from .ast_branches import resolve_var_names
 
 if TYPE_CHECKING:
+    from ..data_classes.op import Op
     from ..data_classes.trace import Trace
 
 from ..quantities import Bytes
@@ -650,10 +651,10 @@ def postprocess_fast(self: "Trace") -> None:
     _vprint(self, "Fast-pass postprocessing...")
     # Use layer_dict_main_keys to get Op directly (not Layer)
     for output_layer_label in self.output_layers:
-        output_layer = self[output_layer_label]
+        output_layer = cast("Op", self.layer_dict_all_keys[output_layer_label])
         if not output_layer.parents:
             continue  # Guard for parentless output layers (#152)
-        parent_layer = self[output_layer.parents[0]]
+        parent_layer = cast("Op", self.layer_dict_all_keys[output_layer.parents[0]])
         parent_contents = parent_layer.out
         parent_transformed = parent_layer.transformed_out
         output_layer._internal_set(

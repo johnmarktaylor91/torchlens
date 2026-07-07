@@ -234,6 +234,19 @@ def test_saliency_matches_linear_weight_oracle() -> None:
     torch.testing.assert_close(result.values, expected)
 
 
+def test_attribution_result_repr_summarizes_values() -> None:
+    """AttributionResult repr should not inline tensor values."""
+
+    weight = torch.tensor([[1.0, -2.0, 0.5], [-0.25, 3.0, -4.0]])
+    model = TinyLinear(weight)
+    inputs = torch.randn(4, 3)
+
+    rendered = repr(attribution.saliency(model, inputs, target=1))
+
+    assert "Tensor(shape=(4, 3)" in rendered
+    assert "tensor([" not in rendered
+
+
 def test_input_x_grad_shape_sign_and_finiteness() -> None:
     """Input-times-gradient preserves shape and expected signs on a linear model."""
 

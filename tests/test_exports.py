@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -137,6 +138,20 @@ def test_xarray_export_has_neuroidassembly_shape(export_log: Any) -> None:
     assert assembly.sizes["neuroid"] > 0
 
 
+def test_xarray_export_names_mismatched_presentation_layer() -> None:
+    """Mismatched presentation counts should identify the offending layer."""
+
+    fake_log = SimpleNamespace(
+        layer_list=[
+            SimpleNamespace(layer_label="first", out=torch.randn(2, 3)),
+            SimpleNamespace(layer_label="bad_layer", out=torch.randn(1, 3)),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="bad_layer.*1.*expected 2"):
+        tl.export.xarray(fake_log)
+
+
 def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path) -> None:
     """Tracker helpers should work with caller-owned writer/run objects."""
 
@@ -164,6 +179,19 @@ def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path
     pytest.importorskip("wandb")
     wandb_result = tl.export.wandb(export_log)
     assert "table" in wandb_result
+
+
+def test_tracker_exports_reject_paths_with_clear_type_errors(
+    export_log: Any, tmp_path: Path
+) -> None:
+    """Tracker helpers need live tracker objects, not filesystem paths."""
+
+    with pytest.raises(TypeError, match="tensorboard expects an existing tracker object"):
+        tl.export.tensorboard(export_log, str(tmp_path / "tb"))
+    with pytest.raises(TypeError, match="mlflow expects an existing tracker object"):
+        tl.export.mlflow(export_log, client=tmp_path / "mlruns")
+    with pytest.raises(TypeError, match="aim expects an existing tracker object"):
+        tl.export.aim(export_log, run=tmp_path / "aim")
 
 
 def test_emit_nvtx_capture_option_does_not_change_capture() -> None:

@@ -162,6 +162,9 @@ def test_phase_b_exports_are_top_level_importable() -> None:
 
     assert torchlens.export is importlib.import_module("torchlens.export")
     assert torchlens.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
+    assert importlib.import_module("torchlens.facets") is importlib.import_module(
+        "torchlens.semantic.facets"
+    )
 
 
 def test_all_target_names_importable() -> None:

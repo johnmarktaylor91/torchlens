@@ -862,3 +862,12 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).k) == 0
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).v) == 0
     assert edited.validate_forward_pass([_trace_output(edited)])
+
+
+def test_facets_public_module_all_is_curated() -> None:
+    """The public facets module should advertise only intentional names."""
+
+    assert "register" in facets_mod.__all__
+    assert "FacetView" in facets_mod.__all__
+    assert "Any" not in facets_mod.__all__
+    assert "dataclass" not in facets_mod.__all__

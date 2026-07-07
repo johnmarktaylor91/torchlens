@@ -4,9 +4,9 @@
 
 The lookup cascade for string keys after the pass is finished:
 
-1. Exact match in ``layer_dict_all_keys`` (all lookup keys for every
+1. Exact match in ``layer_logs`` (no-pass labels -> Layer aggregate).
+2. Exact match in ``layer_dict_all_keys`` (all lookup keys for every
    Op, including pass-qualified labels like ``"conv2d_1_1:1"``).
-2. Exact match in ``layer_logs`` (no-pass labels -> Layer aggregate).
 3. Exact match in ``_module_logs`` (module address or pass label ->
    Module or ModuleCall).
 4. Case-insensitive exact match against all of the above.
@@ -143,9 +143,14 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             raise
 
     if isinstance(ix, str):
-        if ix in self.layer_dict_all_keys and not (
-            ix in self.layer_logs and self.layer_num_calls.get(ix, 1) > 1
-        ):
+        if ix in self.layer_logs:
+            return self.layer_logs[ix]
+
+        ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
+        if ix in ambiguous_lookup_keys:
+            _raise_ambiguous_lookup_key(self, ix, ix)
+
+        if ix in self.layer_dict_all_keys:
             return self.layer_dict_all_keys[ix]
 
         for accessor in (
@@ -161,10 +166,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
                 return accessor[ix]
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
-
-        ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
-        if ix in ambiguous_lookup_keys:
-            _raise_ambiguous_lookup_key(self, ix, ix)
 
         lower_ix = ix.lower()
         for accessor in (

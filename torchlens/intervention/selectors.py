@@ -602,6 +602,11 @@ class InterveningSelector(BaseSelector):
         object.__setattr__(self, "selector_value", None)
         object.__setattr__(self, "direction", "backward")
 
+    def __repr__(self) -> str:
+        """Return the canonical non-deprecated selector constructor."""
+
+        return "tl.without_op()"
+
 
 @dataclass(frozen=True, repr=False)
 class FacetSelector(BaseSelector):
@@ -987,7 +992,7 @@ def output(target: int | str) -> OutputSelector:
     return OutputSelector(target)
 
 
-def output_at(path: tuple[Any, ...] | list[Any]) -> OutputPathSelector:
+def output_at(path: Any) -> OutputPathSelector:
     """Create a nested output-path selector.
 
     Parameters
@@ -1001,7 +1006,8 @@ def output_at(path: tuple[Any, ...] | list[Any]) -> OutputPathSelector:
         Immutable selector.
     """
 
-    return OutputPathSelector(path)
+    normalized = tuple(path) if isinstance(path, (tuple, list)) else (path,)
+    return OutputPathSelector(normalized)
 
 
 def input_at(*path: Any) -> InputPathSelector:

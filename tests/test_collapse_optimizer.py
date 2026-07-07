@@ -718,6 +718,8 @@ def test_trace_collapse_plan_public_diagnostic(monkeypatch: pytest.MonkeyPatch) 
 
         assert isinstance(plan, CollapsePlan)
         assert count(plan) > 0
+        assert len(plan) == count(plan)
+        assert plan.total == count(plan)
         assert summary.startswith("CollapsePlan(total=")
         assert "module_box=" in summary or "raw_op=" in summary
 

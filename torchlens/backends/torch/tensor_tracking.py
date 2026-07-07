@@ -231,7 +231,7 @@ def _build_grad_payloads(
         return None, None
     if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
         return _build_fastlog_grad_payloads(trace, grad)
-    op = trace[layer_label]
+    op = trace.layer_dict_all_keys[layer_label]
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
     save_mode = _trace_grad_save_mode(trace)
@@ -280,7 +280,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
             )
             return _grad_payload_decision_saves_out(decision)
         return False
-    op = trace[layer_label]
+    op = trace.layer_dict_all_keys[layer_label]
     if isinstance(policy, BaseSelector):
         decision = policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace)))
         return _grad_payload_decision_saves_out(decision)
@@ -453,16 +453,16 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
     if _label_raw not in self._raw_to_final_layer_labels:
         return
     tensor_label = self._raw_to_final_layer_labels[_label_raw]
-    layer_log_entry = self[tensor_label]
+    layer_log_entry = self.layer_dict_all_keys[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
     if layer_log_entry.is_output_parent:
         for child_layer in layer_log_entry.children:
-            if self[child_layer].is_output:
+            if self.layer_dict_all_keys[child_layer].is_output:
                 layers_to_update.append(child_layer)
 
     for layer_label in layers_to_update:
-        layer = self[layer_label]
+        layer = self.layer_dict_all_keys[layer_label]
         selection = getattr(self, "_grad_op_nums_to_save", "all")
         if selection != "all":
             if selection in [None, "none", []] or layer.raw_index not in selection:

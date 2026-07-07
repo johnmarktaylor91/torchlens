@@ -30,6 +30,23 @@ class TinySummaryModel(nn.Module):
         return self.fc(x)
 
 
+class RecurrentSummaryModel(nn.Module):
+    """Small model with a repeated module for multi-pass summaries."""
+
+    def __init__(self) -> None:
+        """Initialize the repeated layer."""
+
+        super().__init__()
+        self.linear = nn.Linear(3, 3, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the same layer more than once."""
+
+        for _ in range(3):
+            x = self.linear(x)
+        return x
+
+
 @pytest.fixture()
 def tiny_summary_log() -> Generator[tl.Trace, None, None]:
     """Return a metadata-only log for the tiny summary model."""
@@ -88,6 +105,21 @@ def test_all_level_options(
     """Every supported level should render without error."""
     summary_text = tiny_summary_log.summary(level=level)  # type: ignore[arg-type]
     assert expected_fragment in summary_text
+
+
+@pytest.mark.parametrize("level", ["compute", "cost"])
+def test_compute_summary_handles_multi_pass_layers(level: str) -> None:
+    """Compute and cost summaries should aggregate repeated-layer timing."""
+
+    log = tl.trace(RecurrentSummaryModel(), torch.randn(1, 3), layers_to_save=None)
+    try:
+        summary_text = log.summary(level=level)  # type: ignore[arg-type]
+    finally:
+        log.cleanup()
+
+    assert "Compute Summary: RecurrentSummaryModel" in summary_text
+    assert "| linear " in summary_text
+    assert " s ms" not in summary_text
 
 
 def test_custom_fields_selection(tiny_summary_log: tl.Trace) -> None:
