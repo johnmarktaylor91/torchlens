@@ -1351,6 +1351,8 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
     if kind == "output":
         return _live_output_matches(site, value)
     if kind == "contains":
+        if bool(getattr(site, "_tl_module_boundary", False)):
+            return False
         return str(value).lower() in str(getattr(site, "_layer_label_raw", "")).lower()
     if kind == "in_module":
         return _live_module_matches(site, str(value))
