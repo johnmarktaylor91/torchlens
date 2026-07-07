@@ -175,7 +175,10 @@ class _GroupingWorkspace:
     eligible_labels: set[str]
 
     @classmethod
-    def from_graph(cls, graph: RecurrenceGroupingGraph) -> "_GroupingWorkspace":
+    def from_graph(
+        cls: type["_GroupingWorkspace"],
+        graph: RecurrenceGroupingGraph,
+    ) -> "_GroupingWorkspace":
         """Build a mutable workspace from a neutral recurrence graph.
 
         Parameters

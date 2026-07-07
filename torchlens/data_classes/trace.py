@@ -1491,7 +1491,7 @@ class Trace(
         data:
             JSON-serializable metadata or a portable tensor payload. Tensor
             payloads are persisted under ``_annotation_blobs`` and are supported
-            only for torch traces in this sprint.
+            only for torch traces.
         image:
             Optional local image path used by the existing ``NodeSpec.image``
             render hook.

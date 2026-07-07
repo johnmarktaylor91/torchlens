@@ -352,7 +352,7 @@ class Recording(CapturedRun):
         return object.__getattribute__(self, name)
 
     @classmethod
-    def from_capture_events(cls, session: Any) -> "Recording":
+    def from_capture_events(cls: type["Recording"], session: Any) -> "Recording":
         """Build a lazy Recording projection from a predicate capture session.
 
         Parameters

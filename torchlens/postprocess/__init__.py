@@ -1,8 +1,8 @@
 """Postprocessing pipeline for cleaning up the model log after the forward pass.
 
 After the forward pass captures raw tensor metadata into a Trace, this pipeline
-transforms the raw graph into its user-facing form. The full pipeline has 19 steps,
-split into thematic submodules:
+transforms the raw graph into its user-facing form. The full pipeline runs
+stable contract steps 0-20, split into thematic submodules:
 
 - graph_traversal (Steps 1-4): Add output nodes, trace ancestry, remove orphans,
   compute input/output distances.
@@ -11,9 +11,10 @@ split into thematic submodules:
   same-layer groupings via BFS isomorphic subgraph expansion.
 - labeling (Steps 8-11): Generate final human-readable labels, rename all internal
   references, trim/reorder fields, build lookup keys, and finalize retained layer lists.
-- finalization (Steps 12-19): Undecorate saved tensors, log timing, finalize
+- finalization (Steps 12-20): Undecorate saved tensors, log timing, finalize
   ParamLogs, build Layer/Module aggregates, mark pass as finished, then
-  finalize any streamed bundle and optionally evict in-memory outs.
+  finalize any streamed bundle, optionally evict in-memory outs, and release
+  live parameter references.
 
 Step ordering invariants:
 - Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
@@ -424,17 +425,20 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
 def postprocess(
     self: "Trace", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
 ) -> None:
-    """Run the full 18-step postprocessing pipeline (exhaustive mode).
+    """Run the full postprocessing pipeline in exhaustive mode.
 
     Transforms the raw Trace captured during the forward pass into its
     final user-facing form. In fast mode, delegates to ``postprocess_fast``
     which skips most steps (graph traversal, loop detection, module annotation)
     and only copies outs, trims fields, and builds LayerLogs.
 
-    Args:
-        output_tensors: The actual output tensors returned by the model's forward().
-        output_tensor_addresses: Hierarchical address strings for each output
-            (e.g., "0.1" for nested tuple outputs).
+    Parameters
+    ----------
+    output_tensors:
+        Actual output tensors returned by the model's forward call.
+    output_tensor_addresses:
+        Hierarchical address strings for each output, for example ``"0.1"``
+        for nested tuple outputs.
     """
     if self.capture_mode == "fast":
         postprocess_fast(self)

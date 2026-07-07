@@ -1013,6 +1013,8 @@ class Layer:
 
     @property
     def _tracing_finished(self) -> bool:
+        """Return whether the owning trace has finished capture/postprocess."""
+
         sml = self.source_trace
         if sml is None:
             return True
@@ -1381,6 +1383,8 @@ class Layer:
     # ********************************************
 
     def __str__(self) -> str:
+        """Return a human-readable layer summary."""
+
         if not self._tracing_finished:
             return f"Layer({self.layer_label}) (pass not finished)"
         s = f"Layer {self.layer_label}:"
@@ -1408,9 +1412,13 @@ class Layer:
         return s
 
     def __repr__(self) -> str:
+        """Return the developer representation for this layer."""
+
         return self.__str__()
 
     def __len__(self) -> int:
+        """Return the number of operation passes aggregated into this layer."""
+
         return cast(int, self.num_passes)
 
 
@@ -1437,6 +1445,16 @@ class LayerAccessor(Accessor["Layer"]):
         layer_logs: Dict[str, "Layer"],
         source_trace: Optional["Trace"] = None,
     ) -> None:
+        """Initialize an accessor over aggregate layer logs.
+
+        Parameters
+        ----------
+        layer_logs:
+            Mapping from layer labels to aggregate ``Layer`` objects.
+        source_trace:
+            Trace that owns the layer logs, if still reachable.
+        """
+
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(layer_logs, source_ref=source_ref)
 
@@ -1572,6 +1590,8 @@ class LayerAccessor(Accessor["Layer"]):
         return len(self)
 
     def __repr__(self) -> str:
+        """Return a compact multi-line accessor summary."""
+
         if len(self) == 0:
             return "LayerAccessor({})"
         items = []

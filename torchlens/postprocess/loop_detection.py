@@ -92,6 +92,8 @@ class SubgraphInfo:
     node_set: Set[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
+        """Initialize mutable node sets and include the starting node."""
+
         if self.param_nodes is None:
             self.param_nodes = set()
         if self.node_set is None:
@@ -809,6 +811,8 @@ def _merge_iso_groups_to_layers(
     uf_parent: Dict[str, str] = {}
 
     def _find(x: str) -> str:
+        """Return the canonical union-find root for a node label."""
+
         if x not in uf_parent:
             uf_parent[x] = x
         while uf_parent[x] != x:
@@ -817,6 +821,8 @@ def _merge_iso_groups_to_layers(
         return x
 
     def _union(x: str, y: str) -> None:
+        """Merge the union-find sets containing two node labels."""
+
         rx, ry = _find(x), _find(y)
         if rx != ry:
             if rx > ry:

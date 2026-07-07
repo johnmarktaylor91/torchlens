@@ -305,6 +305,30 @@ class GradientRecord:
         memory: int | None,
         timestamp: float,
     ) -> None:
+        """Initialize one backward-gradient payload record for an operation.
+
+        Parameters
+        ----------
+        owner:
+            Object that owns the gradient record.
+        ordinal:
+            Position of this record within the owner.
+        backward_pass_index:
+            Backward pass index that produced the gradient.
+        grad:
+            Raw gradient tensor, if retained.
+        transformed_grad:
+            Post-processed gradient payload, if retained.
+        shape:
+            Gradient shape.
+        dtype:
+            Gradient dtype string.
+        memory:
+            Gradient memory in bytes.
+        timestamp:
+            Capture timestamp.
+        """
+
         self.owner = owner
         self.ordinal = ordinal
         self.backward_pass_index = backward_pass_index
@@ -3240,6 +3264,8 @@ class Op:
     # ********************************************
 
     def __str__(self) -> str:
+        """Return a human-readable operation summary."""
+
         if self._tracing_finished:
             return self._str_after_pass()
         else:
@@ -3387,6 +3413,8 @@ class Op:
         return s
 
     def __repr__(self) -> str:
+        """Return the developer representation for this operation."""
+
         return self.__str__()
 
 

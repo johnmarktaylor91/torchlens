@@ -17,7 +17,7 @@ def format_call_arg(value: Any) -> str:
     Returns
     -------
     str
-        Recursive string summary following the IO sprint Fork C rules.
+        Recursive string summary using TorchLens' compact call-argument format.
     """
     if isinstance(value, torch.Tensor):
         dtype_name = str(value.dtype).removeprefix("torch.")

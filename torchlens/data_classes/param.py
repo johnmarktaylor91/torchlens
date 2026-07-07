@@ -112,6 +112,32 @@ class Param:
         barcode: str,
         has_optimizer: Optional[bool] = None,
     ) -> None:
+        """Initialize persistent metadata for one model parameter.
+
+        Parameters
+        ----------
+        module_address:
+            Address of the module that owns the parameter.
+        name:
+            Parameter name relative to the owning module.
+        shape:
+            Parameter tensor shape.
+        dtype:
+            Parameter tensor dtype.
+        num_params:
+            Number of scalar elements in the parameter.
+        param_memory:
+            Parameter memory in bytes.
+        trainable:
+            Whether the parameter requires gradients.
+        address:
+            Fully-qualified parameter address.
+        barcode:
+            Stable identity token used during graph attribution.
+        has_optimizer:
+            Whether optimizer state was detected for the parameter.
+        """
+
         self.address = address  # e.g. "features.0.weight"
         self.name = name  # short name, e.g. "weight"
         self.shape = shape
@@ -663,6 +689,14 @@ class ParamAccessor(Accessor["Param"]):
     }
 
     def __init__(self, param_logs: Dict[str, "Param"]) -> None:
+        """Initialize an accessor over parameter logs.
+
+        Parameters
+        ----------
+        param_logs:
+            Mapping from parameter addresses to ``Param`` logs.
+        """
+
         super().__init__(param_logs)
         self._rehydrate_on_iter = False
 

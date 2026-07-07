@@ -200,7 +200,7 @@ class RecordingOptions:
 
     @classmethod
     def from_values(
-        cls,
+        cls: type["RecordingOptions"],
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
     ) -> "RecordingOptions":

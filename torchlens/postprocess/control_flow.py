@@ -1,12 +1,12 @@
 """Steps 5-6: Conditional branches and buffer layer fixes.
 
-Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
+Step 5 (_mark_conditional_branches) runs a six-phase conditional pipeline:
     5a. Build AST file indexes for files referenced by terminal scalar bools.
     5b. Classify terminal bools into branch/non-branch contexts.
     5c. Materialize dense conditional events from structural AST keys.
     5d. Backward-flood IF edges from branch-participating bools only.
     5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
-    5f. Materialize derived compatibility views from the new primary structures.
+    5f. Materialize derived compatibility views from primary structures.
 Step 6 (_fix_buffer_layers): Connects buffer sources, deduplicates identical
     buffers (same module, same value, same parent), and assigns buffer pass numbers.
 """
@@ -36,15 +36,14 @@ _BRANCH_CONTEXT_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
 def _mark_conditional_branches(self: "Trace") -> None:
     """Step 5: Classify bools, materialize events, and attribute conditional edges.
 
-    The public Step 5 entry point is preserved for the postprocess orchestrator,
-    but the implementation now delegates to six internal phases:
+    The public Step 5 entry point delegates to six internal phases:
 
     1. Build AST file indexes for all files touched by terminal scalar bools.
     2. Classify terminal bools and collect observed structural conditional keys.
     3. Materialize dense ``ConditionalEvent`` records from those keys.
     4. Backward-flood IF edges from branch-participating bools only.
     5. Attribute executed ops and forward edges to conditional branch arms.
-    6. Rebuild compatibility views derived from the new primary structures.
+    6. Rebuild compatibility views derived from primary structures.
 
     Performance fast-path: when no terminal scalar bools were captured, the
     model has no conditional branches the pipeline can attribute, so we skip
@@ -63,8 +62,8 @@ def _mark_conditional_branches(self: "Trace") -> None:
     conditional_keys, bool_classifications = _classify_bool_layers(self)
     # Defensive guard: if no terminal bool produced a structural conditional
     # key, attribution will produce zero edges, matching the fast-skip output.
-    # This invariant lets future refactors of the bool detector trip an
-    # explicit assertion rather than silently make the fast-path miss work.
+    # This invariant makes bool-detector drift fail explicitly instead of
+    # silently making the fast-path miss work.
     if not bool_classifications:
         assert not conditional_keys, (
             "Internally-terminated bool layers were absent but conditional "

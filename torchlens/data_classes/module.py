@@ -453,6 +453,62 @@ class ModuleCall:
         ordinal_index: int = 0,
         _source_trace: "Trace | None" = None,
     ) -> None:
+        """Initialize metadata for one module forward call.
+
+        Parameters
+        ----------
+        address:
+            Module address in the owning model.
+        call_index:
+            Zero-based invocation index for this module address.
+        call_label:
+            Pass-qualified module call label.
+        ops:
+            Operation labels executed inside this module call.
+        input_layers:
+            Input layer labels for this call.
+        output_layers:
+            Output layer labels for this call.
+        output_ops:
+            Output operation labels for this call.
+        output_structure:
+            Container structure describing module outputs.
+        output_paths:
+            Container paths for tensor outputs.
+        forward_args:
+            Positional arguments observed at module entry.
+        forward_kwargs:
+            Keyword arguments observed at module entry.
+        forward_args_template:
+            Serializable template for positional arguments.
+        forward_kwargs_template:
+            Serializable template for keyword arguments.
+        forward_arg_names:
+            Argument names resolved for the module forward signature.
+        forward_duration:
+            Runtime duration of the module call in seconds.
+        code_context:
+            Source locations associated with the module call.
+        module_call_stack:
+            Module call stack active for this call.
+        call_parent:
+            Parent module call label, if any.
+        call_children:
+            Child module call labels.
+        all_addresses:
+            All model addresses that reference this same module object.
+        cls:
+            Live module class when available.
+        class_name:
+            Module class name.
+        class_qualname:
+            Qualified module class name.
+        ordinal_index:
+            Position of this module call in execution order.
+        _source_trace:
+            Owning trace used for live accessors.
+        """
+
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
         self.cls = cls
@@ -595,7 +651,7 @@ class ModuleCall:
 
     @property
     def backward_duration(self) -> Duration | None:
-        """Backward duration placeholder populated in the backward-pass sprint."""
+        """Backward duration for this module call, if backward timing is available."""
 
         return None
 
@@ -811,6 +867,8 @@ class ModuleCall:
 
     @_source_trace.setter
     def _source_trace(self, value: "Trace | None") -> None:
+        """Store the owning Trace for live module-call lookups."""
+
         self.__dict__["_source_trace_strong"] = value
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
@@ -1175,6 +1233,98 @@ class Module:
         # Back-reference
         _source_trace: "Trace | None" = None,
     ) -> None:
+        """Initialize persistent metadata for a model module address.
+
+        Parameters
+        ----------
+        address:
+            Canonical module address.
+        all_addresses:
+            All model addresses that reference the same module object.
+        name:
+            Local module name.
+        cls:
+            Live module class when available.
+        class_name:
+            Module class name.
+        class_qualname:
+            Qualified module class name.
+        class_source_file:
+            Source file containing the module class.
+        class_source_line:
+            Source line for the module class.
+        init_source_file:
+            Source file containing ``__init__``.
+        init_source_line:
+            Source line for ``__init__``.
+        forward_source_file:
+            Source file containing ``forward``.
+        forward_source_line:
+            Source line for ``forward``.
+        class_docstring:
+            Module class docstring.
+        init_signature:
+            Signature for ``__init__`` when available.
+        init_docstring:
+            Docstring for ``__init__`` when available.
+        forward_signature:
+            Signature for ``forward`` when available.
+        forward_docstring:
+            Docstring for ``forward`` when available.
+        address_parent:
+            Static parent module address.
+        address_children:
+            Static child module addresses.
+        address_depth:
+            Static nesting depth in the module tree.
+        call_parent:
+            Dynamic parent module-call label.
+        call_children:
+            Dynamic child module-call labels.
+        call_depth:
+            Dynamic call-stack depth.
+        num_calls:
+            Number of observed forward calls.
+        ops:
+            Per-call module call logs.
+        call_labels:
+            Pass-qualified module call labels.
+        layer_labels:
+            Aggregate layer labels owned by this module.
+        params:
+            Parameters owned by this module.
+        num_params:
+            Total parameter count.
+        num_params_trainable:
+            Trainable parameter count.
+        num_params_frozen:
+            Frozen parameter count.
+        param_memory:
+            Parameter memory in bytes.
+        buffer_layers:
+            Buffer layer labels owned by this module.
+        training:
+            Training/eval mode captured from the live module.
+        forward_pre_hooks:
+            Registered forward pre-hooks.
+        forward_hooks:
+            Registered forward hooks.
+        backward_pre_hooks:
+            Registered backward pre-hooks.
+        backward_hooks:
+            Registered backward hooks.
+        full_backward_pre_hooks:
+            Registered full backward pre-hooks.
+        full_backward_hooks:
+            Registered full backward hooks.
+        custom_attributes:
+            User attributes selected for module metadata.
+        custom_methods:
+            User method names selected for module metadata.
+        _source_trace:
+            Owning trace used for live accessors.
+        """
+
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
         self.cls = cls
@@ -1530,6 +1680,8 @@ class Module:
 
     @_source_trace.setter
     def _source_trace(self, value: "Trace | None") -> None:
+        """Store the owning Trace weak reference for live module lookups."""
+
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     @property
@@ -1731,13 +1883,13 @@ class Module:
 
     @property
     def backward_duration(self) -> Duration | None:
-        """Backward duration placeholder populated in the backward-pass sprint."""
+        """Backward duration for this module, if backward timing is available."""
 
         return None
 
     @property
     def total_backward_duration(self) -> Duration | None:
-        """Cross-call backward duration placeholder for the backward-pass sprint."""
+        """Total backward duration across calls, if backward timing is available."""
 
         return None
 
@@ -2162,6 +2314,18 @@ class ModuleAccessor(Accessor["Module"]):
         module_list: Optional[List["Module"]] = None,
         pass_dict: Optional[Dict[str, "ModuleCall"]] = None,
     ) -> None:
+        """Initialize a module accessor with address, alias, and pass indexes.
+
+        Parameters
+        ----------
+        module_dict:
+            Mapping from canonical module addresses to ``Module`` logs.
+        module_list:
+            Ordered module logs; defaults to the mapping values.
+        pass_dict:
+            Mapping from pass-qualified call labels to ``ModuleCall`` logs.
+        """
+
         super().__init__(module_dict, item_list=module_list)
         self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModuleCall
         # Alias map: for shared modules (same nn.Module at multiple addresses),
