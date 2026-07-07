@@ -115,6 +115,43 @@ def test_magnitude_ratio_shortcut_removed_from_posthoc_exemptions() -> None:
     assert "perturbed_mag" not in source
 
 
+def test_reduction_depth_reads_conv_keyword_weight() -> None:
+    """Band-C eligibility must read convolution weights passed by keyword."""
+
+    layer = _fake_layer(
+        func_name="conv2d",
+        saved_args=(torch.randn(1, 3, 8, 8),),
+        saved_kwargs={"weight": torch.randn(16, 3, 5, 5)},
+    )
+
+    assert core._op_reduction_depth(layer) == 75  # noqa: SLF001
+
+
+def test_reduction_depth_reads_matmul_keyword_operands() -> None:
+    """Band-C eligibility must read contraction operands passed by keyword."""
+
+    layer = _fake_layer(
+        func_name="mm",
+        saved_args=(),
+        saved_kwargs={"input": torch.randn(4, 128), "mat2": torch.randn(128, 5)},
+    )
+
+    assert core._op_reduction_depth(layer) == 128  # noqa: SLF001
+
+
+def test_reduction_depth_withholds_shallow_late_lenience() -> None:
+    """Elementwise or shallow ops stay ineligible regardless of graph position."""
+
+    layer = _fake_layer(
+        func_name="__add__",
+        saved_args=(torch.randn(4), torch.randn(4)),
+        saved_kwargs={},
+        step_index=250,
+    )
+
+    assert core._op_reduction_depth(layer) == 1  # noqa: SLF001
+
+
 class DetachedParamModel(nn.Module):
     """Model whose parameter is deliberately disconnected from the loss."""
 

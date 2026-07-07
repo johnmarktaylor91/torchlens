@@ -58,9 +58,9 @@ def _resolve_output_parent_labels(
     Returns
     -------
     list[str | None]
-        One raw parent label per output tensor; ``None`` for output tensors
-        TorchLens cannot attribute (e.g. user-injected tensors), which Step 1
-        skips exactly as before.
+        One raw parent label per output tensor. ``None`` is retained only for
+        legacy callers; the normal torch backend fails loud on non-buffer
+        unattributable outputs before Step 1.
     """
     from collections import deque
 
@@ -98,9 +98,12 @@ def _resolve_output_parent_labels(
             )
         buffer_address = buffer_addresses_by_id.get(id(output_tensor))
         if buffer_address is None:
-            # Untraceable user-injected output: skip, exactly as before.
-            parent_labels.append(None)
-            continue
+            raise RuntimeError(
+                "TorchLens could not attribute a model output tensor to any traced op "
+                f"(shape={tuple(output_tensor.shape)}, dtype={output_tensor.dtype}). "
+                "This may indicate an opaque execution boundary or a pre-bound torch "
+                "function that escaped wrapping."
+            )
 
         # The tensor IS a registered buffer with no live label. Session
         # cleanup strips capture labels from model state, so a capture-time

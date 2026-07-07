@@ -1689,6 +1689,15 @@ class _VmapMaskModel(nn.Module):
         return self.consumer(x, mask)
 
 
+class _ArangeInternalSourceOutputModel(nn.Module):
+    """Return a parentless internal-source tensor as the final output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return an arange source that has no tensor parents."""
+
+        return torch.arange(x.shape[-1], device=x.device)
+
+
 def _functionless_replacement_ops(log: "Trace") -> list:
     """Return ops that are auto-synthesized functionless intervention placeholders.
 
@@ -1736,6 +1745,22 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     # Validation passes legitimately (not via an exemption hiding the gap).
     check_metadata_invariants(log)
     assert validate_forward_pass(model, [x], input_kwargs={})
+
+
+def test_plain_trace_internal_source_final_output_is_exempted() -> None:
+    """A structurally proven internal source may be the final output."""
+
+    model = _ArangeInternalSourceOutputModel().eval()
+    x = torch.randn(4, 4)
+    log = trace_fn(model, [x], {})
+    try:
+        assert log.output_layers == ["output_1"]
+        output_parent = log[log["output_1"].parents[0]]
+        assert output_parent.is_internal_source
+        check_metadata_invariants(log)
+        assert validate_forward_pass(model, [x], input_kwargs={})
+    finally:
+        log.cleanup()
 
 
 def test_plain_trace_mistral_has_no_functionless_replacement():

@@ -279,32 +279,15 @@ def test_duplicate_direct_buffer_outputs_share_one_buffer_parent() -> None:
     assert tl.validate(DuplicateBufferOutputModel(), torch.rand(3), scope="forward") is True
 
 
-def test_foreign_tensor_between_attributed_outputs_does_not_shift_alignment() -> None:
-    """Unattributed middle outputs must not shift later output bindings."""
+def test_foreign_tensor_between_attributed_outputs_fails_loudly() -> None:
+    """Unattributed final outputs must fail instead of being silently skipped."""
 
     foreign_tensor = torch.full((3,), 7.0)
     model = ForeignTensorBetweenOutputsModel(foreign_tensor)
     x = torch.rand(3)
-    log = trace_fn(model, x, layers_to_save="all")
-    try:
-        assert log.output_layers == ["output_1", "output_2"]
 
-        first_output = log["output_1"]
-        assert first_output.io_role == "output.0"
-        assert torch.equal(first_output.out, x + 1)
-        assert torch.equal(log[first_output.parents[0]].out, x + 1)
-
-        second_output = log["output_2"]
-        assert second_output.io_role == "output.2"
-        assert torch.equal(second_output.out, x * 2)
-        assert torch.equal(log[second_output.parents[0]].out, x * 2)
-
-        assert not any(
-            torch.equal(log[output_label].out, foreign_tensor) for output_label in log.output_layers
-        )
-        assert check_metadata_invariants(log) is True
-    finally:
-        log.cleanup()
+    with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
+        trace_fn(model, x, layers_to_save="all")
 
 
 class UnloggedPlusReassignedBufferModel(nn.Module):

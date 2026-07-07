@@ -702,15 +702,22 @@ class TorchBackend:
         output_tensors = [t for t, _, _ in output_tensors_w_addresses]
         output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
 
-        for t in output_tensors:
+        for t, output_address in zip(output_tensors, output_tensor_addresses):
             # Only record output_layers during exhaustive pass; fast pass reuses the list.
-            # Defensive: user-injected output tensors (raw register_forward_hook
-            # returning a fresh tensor, intervention API replacements that don't
-            # propagate metadata, etc.) lack _tl labels. Skip them rather than
-            # crashing - they aren't in our graph but the experiment can continue.
             _label_raw = _tl.get_tensor_label(t)
             if _label_raw is None:
-                continue
+                if _is_direct_registered_buffer_output(self_trace, t):
+                    # Late-logged in postprocess so untouched buffer outputs get
+                    # real source nodes without leaking labels onto model state.
+                    continue
+                raise RuntimeError(
+                    "TorchLens could not attribute a model output tensor to any traced op "
+                    f"(output address {output_address!r}, "
+                    f"shape={tuple(t.shape)}, dtype={t.dtype}). This may indicate an opaque "
+                    "execution boundary or a pre-bound torch function that escaped wrapping. "
+                    "Use ordinary torch module attributes during forward, or bind/import torch "
+                    "functions after TorchLens has wrapped torch."
+                )
             if self_trace.capture_mode in {"exhaustive", "predicate"}:
                 self_trace.output_layers.append(_label_raw)
                 event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
@@ -1057,6 +1064,31 @@ def _register_model_output_container_snapshot(
         leaf_occurrences=tuple(occurrences),
         reconstructable=True,
     )
+
+
+def _is_direct_registered_buffer_output(trace: "Trace", tensor: torch.Tensor) -> bool:
+    """Return whether an unlabeled output is a registered source-model buffer.
+
+    Parameters
+    ----------
+    trace:
+        Active trace that may hold a weak reference to the source model.
+    tensor:
+        Unlabeled output tensor returned by ``forward``.
+
+    Returns
+    -------
+    bool
+        True when ``tensor`` is exactly one of the source model's registered
+        buffers. Such tensors are late-logged during postprocess; other
+        unlabeled outputs fail loud at the output boundary.
+    """
+
+    model_ref = getattr(trace, "_source_model_ref", None)
+    model = model_ref() if model_ref is not None else None
+    if model is None:
+        return False
+    return any(tensor is buffer for _address, buffer in model.named_buffers())
 
 
 def _assign_nested_input_value(
