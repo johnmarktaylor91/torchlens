@@ -593,8 +593,8 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     ``container_spec=None``; those fields are not required for this invariant.
     When a ``func_call_id`` group is populated, members must agree only on the
     plain-capture-stable function name and container spec, and populated
-    container paths must be unique within the group. The old intervention
-    signature fields (argument templates and ``code_context`` reprs) are
+    container paths must be unique within the group. Intervention signature
+    fields (argument templates and ``code_context`` reprs) are
     intentionally outside this plain-capture contract.
 
     Parameters
@@ -2415,7 +2415,7 @@ def _fail_conditional_invariant(check_name: str, number: int, message: str) -> N
     check_name:
         ``MetadataInvariantError.check_name`` value for this check family.
     number:
-        Conditional invariant number from the Phase 6 plan.
+        Conditional invariant number within this check family.
     message:
         Human-readable failure details.
     """
@@ -2623,7 +2623,7 @@ def _valid_conditional_child_labels(ml: "Trace") -> set[str]:
 
 
 def _check_conditional_invariants(ml: "Trace") -> None:
-    """Check F2: conditional metadata invariants added in Phase 6.
+    """Check F2 conditional metadata invariants.
 
     Parameters
     ----------

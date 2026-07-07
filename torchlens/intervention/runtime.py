@@ -57,12 +57,7 @@ def active_intervention_context(
 
 
 class _HookReentrancyGuard:
-    """Prevent recursive TorchLens tracing while hook code is active.
-
-    Phase 3 defines the guard object only. Phase 4a will connect it to
-    ``active_logging()`` so ``trace`` can fail before entering a
-    nested logging context.
-    """
+    """Track recursive TorchLens hook execution depth in global state."""
 
     def __init__(self) -> None:
         """Initialise an inactive re-entrancy guard."""
@@ -200,7 +195,7 @@ def validate_hook_output(
 
     if result is None:
         raise HookValueError(
-            f"hook returned None at {_site_name(hook_context)}; Phase 3 requires a tensor return"
+            f"hook returned None at {_site_name(hook_context)}; expected torch.Tensor"
         )
     if not isinstance(result, torch.Tensor):
         raise HookValueError(

@@ -486,8 +486,8 @@ class InterventionSpec:
             Optional target spec. When provided without a handle, all sticky
             hooks for that target are removed.
         handle:
-            Optional hook handle. Phase 8a does not issue handles, but this
-            path removes a matching stored handle if future code populated one.
+            Optional hook handle. Matching stored handles are removed when
+            present.
 
         Returns
         -------
@@ -504,7 +504,7 @@ class InterventionSpec:
         return original_len - len(self.hook_specs)
 
     def clear(self) -> None:
-        """Clear all Phase 8a sticky hook entries.
+        """Clear all sticky hook entries.
 
         Returns
         -------
@@ -680,7 +680,6 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
             "grad",
             "transformed_grad",
             "func",
-            "grad_fn_handle",
             "grad_fn_handle",
             "source_trace",
         },

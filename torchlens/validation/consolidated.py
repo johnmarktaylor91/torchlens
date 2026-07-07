@@ -194,7 +194,7 @@ def _intervention_report(
             if forward_ok
             else "forward validation failed",
             "specificity": "no ambiguous intervention selectors supplied",
-            "completeness": "all five Phase 5a axes evaluated",
+            "completeness": "all five intervention validation axes evaluated",
             "consistency": "single-run consistency mirrors invariance",
             "locality": "validation stayed within supplied model/input",
         },

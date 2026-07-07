@@ -285,7 +285,7 @@ class Bundle:
         )
 
     def __getattr__(self, name: str) -> Any:
-        """Return budget-preserving Phase 8 helper custom_methods.
+        """Return budget-preserving dynamic bundle helper methods.
 
         Parameters
         ----------

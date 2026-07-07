@@ -496,8 +496,8 @@ def load(
     Returns
     -------
     Trace | Bundle | InterventionSpec
-        Rehydrated object selected by ``manifest.kind`` for unified Phase 11
-        files, or by legacy format detection for older files.
+        Rehydrated object selected by ``manifest.kind`` for unified files, or
+        by legacy format detection for older files.
 
     Raises
     ------

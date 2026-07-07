@@ -73,10 +73,10 @@ def mean_ablate(
         Optional tensor source. When omitted or ``over="self"``, the mean is
         computed from the current out at hook fire time.
     over:
-        Source policy label retained for audit. Phase 3 implements ``"self"``
-        and tensor sources only.
+        Source policy label retained for audit. ``"self"`` and tensor sources
+        are supported.
     force_shape_change:
-        Stored escape-hatch metadata for later execution phases.
+        Stored escape-hatch metadata for execution.
 
     Returns
     -------
@@ -559,9 +559,7 @@ def swap_with(
 
             replacement = _resolve_swap_value(other_label, hook)
             if not isinstance(replacement, torch.Tensor):
-                raise HookValueError(
-                    "swap_with string labels require Phase 4 fire-time resolution context"
-                )
+                raise HookValueError("swap_with string labels require fire-time resolution context")
             return replacement.to(device=out.device, dtype=out.dtype)
 
         return _hook
@@ -590,9 +588,9 @@ def splice_module(
     module:
         Module to call under ``pause_logging()`` in the execution helper.
     input:
-        Input routing policy. Phase 3 implements ``"out"``.
+        Input routing policy. Only ``"out"`` is supported.
     output:
-        Output routing policy. Phase 3 implements ``"out"``.
+        Output routing policy. Only ``"out"`` is supported.
     force_shape_change:
         Stored escape hatch allowing output metadata changes.
 
@@ -603,7 +601,7 @@ def splice_module(
     """
 
     if input != "out" or output != "out":
-        raise HookValueError("splice_module Phase 3 only supports out input/output routing")
+        raise HookValueError("splice_module only supports out input/output routing")
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for module splicing.
@@ -1197,7 +1195,7 @@ def _align_direction(
 
 
 def _resolve_swap_value(other_label: Any, hook: HookContext) -> Any:
-    """Resolve a swap source for Phase 3 helper execution.
+    """Resolve a swap source for helper execution.
 
     Parameters
     ----------

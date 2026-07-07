@@ -57,7 +57,7 @@ class HookContext:
     name:
         Display name of the hook.
     timing:
-        Hook timing. Phase 3 stores both pre and post; MVP execution uses post.
+        Hook timing, either ``"pre"`` or ``"post"``.
     direction:
         ``"forward"`` for outs or ``"backward"`` for grads.
     layer_log:
@@ -197,9 +197,9 @@ def normalize_hook_plan(
         Optional hook for the ``(site, hook)`` shape.
     default_site_target:
         Site target for bare callable/helper input. Without this, bare hooks
-        fail closed because Phase 3 does not resolve model logs.
+        fail closed because they do not imply a model-log site.
     force_shape_change:
-        Escape hatch metadata consumed by the later execution layer.
+        Escape hatch metadata consumed by execution.
 
     Returns
     -------

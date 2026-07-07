@@ -1,9 +1,10 @@
-# torchlens/intervention/ - Intervention and Bundle Tools
+# torchlens/intervention/ - Intervention Tools and Bundle Facade
 
 ## What This Is
 Intervention owns selector resolution, hook/site helpers, replay/rerun/save workflows, and
-Bundle-level comparison tools. Bundle members are ordinary `Trace` objects; Bundle projects
-sub-Trace objects across members through internal Super* views.
+the compatibility facade for Bundle-level comparison tools. Bundle members are ordinary
+`Trace` objects; `torchlens.bundle.Bundle` projects sub-Trace objects across members through
+internal Super* views.
 
 ## Internal Layout
 - `_super/` - generic `Super[T]`, tensor-bearing Super mixins, SuperOp/SuperLayer, the
@@ -11,8 +12,8 @@ sub-Trace objects across members through internal Super* views.
 - `_topology/` - Supergraph, SupergraphNode, TopologyDiff, `build_supergraph()`, and
   `compare_topology()`.
 - `_metrics.py` - tensor distance metrics shared by Super* diff helpers.
-- `bundle.py` - Bundle container, structural-agreement predicates, and `bundle.at()`
-  label dispatcher.
+- `bundle.py` - compatibility shim that re-exports `torchlens.bundle.Bundle` and
+  `AmbiguousLabelError`.
 
 ## Bundle Super Rules
 Every sub-Trace accessor has a Bundle counterpart. `bundle.ops`, `bundle.layers`,

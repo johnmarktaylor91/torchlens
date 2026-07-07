@@ -384,7 +384,7 @@ def _enforce_direct_write_policy(
     *,
     allow_direct_writes: bool,
 ) -> None:
-    """Apply Phase 10 direct-write save policy.
+    """Apply the direct-write save policy.
 
     Parameters
     ----------

@@ -340,12 +340,9 @@ MAX_PERTURB_ATTEMPTS = 100
 # drift is driven by the contraction length, not by where the op sits in the
 # graph (a wide channel-expansion conv accumulates hundreds of products per
 # output whether it is op #41 or op #870) nor by a hand-picked conv/matmul list
-# (a high-degree scatter/segment aggregation drifts by the same physics). This
-# replaces BOTH the earlier DEEP_NUMERIC_REPLAY_FUNCS allowlist and the
-# step_index >= 100 position proxy, which together mis-gated physically-deep
-# early ops AND lent band C to shallow late ops (a bug-masking hole). The
-# acceptance tolerances below are UNCHANGED, so a genuinely wrong replay still
-# fails; only the qualification predicate is now the faithful depth measure.
+# (a high-degree scatter/segment aggregation drifts by the same physics). The
+# acceptance tolerances below stay strict enough that genuinely wrong replay
+# still fails; only physically deep reductions receive this local allowance.
 #
 # Depth 0 means the depth could not be determined; such ops are INELIGIBLE
 # (fail-toward-strict) so band C is withheld and global tolerance stays strict.
@@ -538,7 +535,7 @@ def validate_saved_outs(
     reset_validation_failure(self)
     decision_recorder = ValidationDecisionRecorder()
 
-    # Phase 0: verify logged outputs match a fresh forward pass. Halted traces
+    # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
     if not getattr(self, "halted", False):
         output_label_counts: dict[str, int] = defaultdict(int)
@@ -1793,6 +1790,8 @@ def _scatter_fan_in_depth(
     """
 
     def _arg(index: int, *kwarg_names: str) -> Any:
+        """Return a positional or keyword argument captured for replay."""
+
         if index < len(saved_args):
             return saved_args[index]
         for name in kwarg_names:

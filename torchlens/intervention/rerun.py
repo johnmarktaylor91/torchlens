@@ -58,8 +58,8 @@ def run(
     model:
         Model to execute through the run engine.
     x:
-        Forward input. Phase 7 does not retain strong references to original
-        inputs, so ``None`` raises and callers must pass the input explicitly.
+        Forward input. Rerun does not retain strong references to original
+        inputs, so callers must pass the input explicitly.
     append:
         If true, capture ``x`` as a compatible chunk and append saved tensors
         along batch dimension 0 instead of replacing the run state.
@@ -803,7 +803,7 @@ def _preflight(log: "Trace", model: nn.Module, x: Any) -> None:
 
     if x is None:
         raise ValueError(
-            "rerun(..., x=None) cannot recover the original input in Phase 7. "
+            "rerun(..., x=None) cannot recover the original input. "
             "Pass the forward input explicitly as log.rerun(model, x)."
         )
     from ..user_funcs import _reject_opaque_wrappers
@@ -912,7 +912,7 @@ def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) 
     Returns
     -------
     int
-        Number of graph-shape divergence events detected by the Phase 7 MVP.
+        Number of graph-shape divergence events detected by rerun validation.
     """
 
     old_hash = getattr(old_log, "_raw_event_shape_hash", None) or getattr(

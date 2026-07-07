@@ -1,8 +1,4 @@
-"""Import surface for the planned TorchLens intervention API.
-
-The subpackage exists in Phase 0 only to reserve ownership boundaries and
-public import paths. Runtime behavior remains unimplemented and fails closed.
-"""
+"""Import surface for TorchLens intervention selectors, hooks, reruns, and bundles."""
 
 from ._metrics import (
     METRIC_REGISTRY,

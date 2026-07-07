@@ -781,7 +781,7 @@ class CompositeSelector(BaseSelector):
 
     def __init__(
         self, operator: Literal["and", "or"], selectors: tuple[SelectorLike, SelectorLike]
-    ):
+    ) -> None:
         """Create a composite selector.
 
         Parameters
