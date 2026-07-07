@@ -137,6 +137,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "heavy: marks mid-cost tests excluded from the fast per-step gate (select/deselect with '-m heavy' / '-m \"not heavy\"')",
     "smoke: marks tests as smoke tests for quick critical-path validation (select with '-m smoke')",
+    "serial: marks load-sensitive tests that should run away from parallel worker load",
     "rare: marks tests that are always excluded unless explicitly requested (select with '-m rare')",
     "optional: marks tests that require optional dependencies",
     "backend_parity: marks active backend substrate parity gates",
@@ -146,7 +147,16 @@ markers = [
     "tf_backend: marks tests that require the optional TensorFlow backend runtime",
 ]
 addopts = "-m 'not rare'"
+xfail_strict = true
 filterwarnings = [
+    # TorchLens-originated warnings should be deliberate and locally asserted.
+    "error::DeprecationWarning:torchlens(\\.|$)",
+    "error::UserWarning:torchlens(\\.|$)",
+    # Public compatibility aliases are intentionally exercised across legacy tests;
+    # deprecation-specific tests assert these warnings locally.
+    "default:`.*` is deprecated; use `.*` instead\\..*:DeprecationWarning",
+    # Legacy bundle compatibility tests intentionally load older manifest versions.
+    "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:DeprecationWarning",
     # External: torchvision model init deprecations
     "ignore:The default weight initialization of.*:FutureWarning",
     # External: torch.meshgrid indexing argument
@@ -188,13 +198,18 @@ disallow_untyped_defs = false
 line-length = 100
 
 [tool.ruff.lint]
-ignore = ["E721", "F401"]
+ignore = []
 
 [tool.ruff.lint.per-file-ignores]
+# Example/tutorial notebooks intentionally keep broad setup imports in shared
+# starter cells even when a given cell path does not consume every symbol.
+"examples/**/*.ipynb" = ["F401"]
+"notebooks/**/*.ipynb" = ["F401"]
+
 # Audit notebooks (notebooks/audit/) use a sys.path shim + matplotlib.use() before
 # importing the model zoo / torchlens, so module-level imports legitimately follow
 # code (E402). This shim is mandated by notebooks/audit/CLAUDE.md.
-"notebooks/audit/*.ipynb" = ["E402"]
+"notebooks/audit/*.ipynb" = ["E402", "F401"]
 
 # menagerie/classics/ holds ~1000 faithful random-init architecture reconstructions
 # (the model atlas). They are compact reimpl *recipes*, not library code: dense one-line
@@ -203,7 +218,7 @@ ignore = ["E721", "F401"]
 # the reconstructed forward (F841). Enforcing these would mean editing generated forwards
 # and perturbing already-rendered architecture graphs. Real-bug lints (F821/F811/etc.)
 # stay enforced.
-"menagerie/classics/*.py" = ["E702", "E741", "F841"]
+"menagerie/classics/*.py" = ["E702", "E741", "F401", "F841"]
 
 # =============================================================================
 # RELEASE POLICY (locked): TorchLens stays on the 2.x family on PyPI.
