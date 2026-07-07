@@ -1,4 +1,4 @@
-"""Steps 12-19: Tensor undecoration, timing, param logs, layer/module logs, streaming.
+"""Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming.
 
 Step 12 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
     all saved tensors and their creation args/kwargs.
@@ -18,6 +18,7 @@ Step 17 (_set_tracing_finished): Marks Trace and all OpLogs as finished, switchi
     to user-facing mode for display and access custom_methods.
 Step 18 (_finalize_streamed_bundle): Finalizes any streamed out bundle.
 Step 19 (_evict_streamed_outs): Optionally drops in-memory outs after streaming refs attach.
+Step 20 (release_param_refs): Drops live parameter references after finalization.
 """
 
 import time

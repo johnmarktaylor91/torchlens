@@ -28,8 +28,8 @@ from .utils._torch_compat import get_torch_vf_namespace, get_variable_function_n
 # ---------------------------------------------------------------------------
 # Field-order definitions
 # ---------------------------------------------------------------------------
-# Each list defines the complete, ordered set of fields for its data class.
-# The order here controls display order in __repr__ and similar outputs.
+# Each list defines the ordered user-facing/export fields for its data class.
+# Runtime-only state belongs in per-class FIELD_POLICY / PORTABLE_STATE_SPEC.
 
 RAW_LABEL_SUFFIX = "_raw"
 RAW_LABEL_FIELD = "raw_label"

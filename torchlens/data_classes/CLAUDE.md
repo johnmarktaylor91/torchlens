@@ -58,7 +58,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 ## Design Decisions
 
 ### Layer Delegation
-Single-pass layers delegate unknown attrs to `ops[1]`. Multi-pass per-pass fields raise
+Single-pass layers delegate unknown attrs to `ops[0]`. Multi-pass per-pass fields raise
 `ValueError`, not `AttributeError`, to avoid Python falling through to `__getattr__`.
 
 ### Trace Surface

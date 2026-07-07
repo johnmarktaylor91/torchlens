@@ -52,6 +52,9 @@ if TYPE_CHECKING:
     from .param import Param
 
 
+_LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref", "grad_ref"))
+
+
 class OpAccessor(Accessor["Op"]):
     """Scoped dict-like accessor for the Op entries owned by one Layer."""
 
@@ -97,7 +100,7 @@ class OpAccessor(Accessor["Op"]):
         if isinstance(key, str):
             try:
                 self[key]
-            except KeyError:
+            except (KeyError, ValueError):
                 return False
             return True
         return False
@@ -1165,14 +1168,7 @@ class Layer:
                 return getattr(ops[0], name)
             except AttributeError:
                 pass
-        if (
-            ops
-            and len(ops) > 1
-            and (
-                name in LAYER_PASS_LOG_FIELD_ORDER
-                or any(name in getattr(op, "__dict__", {}) for op in ops.values())
-            )
-        ):
+        if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

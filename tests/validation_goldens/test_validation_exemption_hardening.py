@@ -23,6 +23,8 @@ from torchlens.validation.invariants import (
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
+    _check_getitem_exempt,
+    _check_scatter_exempt,
     _check_setitem_exempt,
     perturbed_layer_at_structural_position,
 )
@@ -66,6 +68,18 @@ def test_structural_arg_exemption_uses_parent_position_not_equal_value() -> None
         ["index_parent"],
         {1},
     )
+
+
+def test_getitem_exemption_uses_parent_position_not_equal_value() -> None:
+    """Equal data/index values do not make the data parent structural."""
+
+    layer = _fake_layer(
+        saved_args=(torch.tensor([0, 1, 2]), torch.tensor([0, 1, 2])),
+        parent_arg_positions={"args": {0: "data_parent", 1: "index_parent"}, "kwargs": {}},
+    )
+
+    assert not _check_getitem_exempt(None, layer, ["data_parent"])  # type: ignore[arg-type]
+    assert _check_getitem_exempt(None, layer, ["index_parent"])  # type: ignore[arg-type]
 
 
 def test_full_is_not_inplace_rng_arg_logging_exemption() -> None:
@@ -177,6 +191,55 @@ def test_setitem_blank_destination_partial_overwrite_is_not_exempt() -> None:
     destination_label = setitem_op.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
+
+
+class DuplicateIndexSetitemDestinationModel(nn.Module):
+    """Model whose duplicate advanced indices leave destination values live."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Overwrite one destination element twice and leave another untouched."""
+
+        buffer = torch.zeros(2)
+        buffer[[0, 0]] = x[:2]
+        return buffer
+
+
+def test_setitem_duplicate_advanced_index_destination_is_not_exempt() -> None:
+    """Duplicate advanced indices do not prove full destination overwrite."""
+
+    trace = tl.trace(
+        DuplicateIndexSetitemDestinationModel(),
+        torch.tensor([3.0, 4.0]),
+        layers_to_save="all",
+        save_arg_values=True,
+    )
+    setitem_op = next(op for op in trace.layer_list if op.func_name == "__setitem__")
+    destination_label = setitem_op.parent_arg_positions["args"][0]
+
+    assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
+
+
+def test_scatter_exemption_uses_destination_position_not_equal_value() -> None:
+    """Equal source/destination values do not make the source parent structural."""
+
+    class EqualValuedParentTrace:
+        """Minimal trace resolving parent outputs by label."""
+
+        def __getitem__(self, label: str) -> Any:
+            """Return a fake parent with an equal-valued output."""
+
+            del label
+            return _fake_layer(out=torch.zeros(3))
+
+    layer = _fake_layer(
+        saved_args=(torch.zeros(3), 0, torch.arange(3), torch.zeros(3)),
+        saved_kwargs={},
+        parent_arg_positions={"args": {0: "dest_parent", 3: "src_parent"}, "kwargs": {}},
+    )
+    trace = EqualValuedParentTrace()
+
+    assert not _check_scatter_exempt(trace, layer, ["src_parent"])  # type: ignore[arg-type]
+    assert _check_scatter_exempt(trace, layer, ["dest_parent"])  # type: ignore[arg-type]
 
 
 class DetachedParamModel(nn.Module):

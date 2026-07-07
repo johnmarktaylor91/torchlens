@@ -9,6 +9,7 @@
 - Step 15.5 must precede Step 16 because `Module.layers` points to `Layer` keys.
 - Step 16.5 computes `graph_shape_hash` before `_set_tracing_finished` changes access behavior.
 - Steps 18-19 are only for streamed out bundles.
+- Step 20 releases live parameter references after all logs and optional streams are finalized.
 
 ## Step 5 Conditional Branch Detection
 - Implementation is in `control_flow.py` with AST support from `ast_branches.py`.
@@ -27,10 +28,10 @@ detection still rebuilds assignments after expansion to clear stale group refere
 `_build_lookup_keys_and_finalize_retained_layers()` applies lookup-key construction while
 preserving dependencies needed for replay/intervention when those modes request them.
 
-## Steps 18-19 Streaming
+## Steps 18-20 Streaming and Release
 Streaming bundle finalization and eviction live in `finalization.py`. These steps coordinate
 with `_io.streaming.BundleStreamWriter` and lazy out refs. Never evict graph-connected
-training outs.
+training outs. Step 20 then releases live parameter references.
 
 ## Fast-Mode Postprocess
 `postprocess_fast()` only copies output outs from parents, trims/renames as needed,

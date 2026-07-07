@@ -2,9 +2,9 @@
 
 ## What This Does
 Transforms raw capture records into user-facing `Trace` state. The current full pipeline
-has 19 ordered steps: graph traversal, conditional attribution, buffer fixes, loop
+has stable contract steps 0-20: graph traversal, conditional attribution, buffer fixes, loop
 detection, labeling, finalization, streaming bundle finalization, and optional out
-eviction. Step order is load-bearing.
+eviction plus parameter-reference release. Step order is load-bearing.
 
 ## Files
 
@@ -16,7 +16,7 @@ eviction. Step order is load-bearing.
 | `control_flow.py` | 5-6 | Conditional attribution and buffer dedup |
 | `loop_detection.py` | 7 | Recurrent/loop grouping and shared-param grouping |
 | `labeling.py` | 8-11 | Final labels, renaming, lookup keys, retained layer lists, field ordering |
-| `finalization.py` | 12-19 | Undecorate, params, layers, modules, hash, streaming finalization/eviction |
+| `finalization.py` | 12-20 | Undecorate, params, layers, modules, hash, streaming finalization/eviction, ref release |
 | `incremental.py` | fastlog enrichment | Adds module paths and param addresses to sparse recordings |
 
 ## The Ordered Steps
@@ -45,6 +45,7 @@ eviction. Step order is load-bearing.
 | 17 | `_set_tracing_finished` | Switch Trace to user-facing behavior |
 | 18 | `_finalize_streamed_bundle` | Finalize streamed out bundle |
 | 19 | `_evict_streamed_outs` | Optional in-memory out eviction |
+| 20 | `release_param_refs` | Drop live parameter references after finalization |
 
 ## Step 5: Conditional Attribution
 Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense

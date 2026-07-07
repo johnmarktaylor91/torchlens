@@ -499,10 +499,9 @@ def validate_saved_outs(
     - **output layers** -- whose values are verified against ``ground_truth_output_tensors``.
     - **internally terminated layers** -- dead-end tensors with no children outside the model.
 
-    From each seed the BFS walks *backward* through parent edges.  A parent
-    layer is enqueued once ALL of its child edges have been individually
-    validated (edge-counting completion), ensuring diamond-shaped subgraphs
-    are handled correctly.
+    From each seed the BFS walks *backward* through parent edges. A parent is
+    enqueued once at least one validated child path proves a live route to a
+    checked seed; diagnostics retain per-edge decisions for unverified paths.
 
     After out validation ops, optional metadata invariant checks
     (checks A-R in ``invariants.py``) run to verify structural/semantic

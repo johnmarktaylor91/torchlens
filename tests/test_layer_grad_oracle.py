@@ -23,6 +23,7 @@ from torchlens.validation._stock_layer_grads import (
     _candidate_root_module,
     _first_leaf_tensor,
     _pass_index_from_layer_modules,
+    _tensor_leaves,
 )
 
 
@@ -114,6 +115,40 @@ class IdentityWrapper(nn.Module):
         """Run a forward pass with identity output."""
 
         return self.identity(self.linear(x))
+
+
+class NearIdentityWrapper(nn.Module):
+    """Module with a numerically close but non-identity output."""
+
+    def __init__(self) -> None:
+        """Initialize layers."""
+
+        super().__init__()
+        self.near = NearIdentity()
+        self.linear = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a forward pass through a near-identity module."""
+
+        return self.linear(self.near(x))
+
+
+class NearIdentity(nn.Module):
+    """Return values close to input without returning the same tensor."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a numerically close but distinct tensor."""
+
+        return x + 1e-6
+
+
+class Pair(nn.Module):
+    """Return two differentiable output tensors."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return two scaled outputs."""
+
+        return x * 2, x * 3
 
 
 @dataclasses.dataclass
@@ -213,8 +248,8 @@ def test_stock_module_grad_collector_captures_module_output_grad() -> None:
         collector.collect_grads_after_backward()
     finally:
         collector.cleanup()
-    assert ("l1", 1) in collector.stock_module_output_grads
-    assert ("l2", 1) in collector.stock_module_output_grads
+    assert ("l1", 1, 0) in collector.stock_module_output_grads
+    assert ("l2", 1, 0) in collector.stock_module_output_grads
 
 
 def test_stock_module_grad_collector_does_not_retain_grad(
@@ -237,16 +272,35 @@ def test_stock_module_grad_collector_does_not_retain_grad(
         collector.collect_grads_after_backward()
     finally:
         collector.cleanup()
-    assert ("l1", 1) in collector.stock_module_output_grads
+    assert ("l1", 1, 0) in collector.stock_module_output_grads
 
 
-def test_first_leaf_tensor_traverses_supported_containers() -> None:
-    """First-leaf discovery handles lists, dicts, and dataclasses."""
+def test_stock_module_grad_collector_captures_all_output_slots() -> None:
+    """The stock collector captures non-first module outputs."""
+
+    model = Pair()
+    collector = _StockModuleGradCollector()
+    collector.install(model)
+    try:
+        first, second = model(torch.randn(2, 3, requires_grad=True))
+        loss = first.sum() + second.sum()
+        loss.backward()
+        collector.collect_grads_after_backward()
+    finally:
+        collector.cleanup()
+
+    assert ("", 1, 0) in collector.stock_module_output_grads
+    assert ("", 1, 1) in collector.stock_module_output_grads
+
+
+def test_tensor_leaf_helpers_traverse_supported_containers() -> None:
+    """Tensor leaf discovery handles lists, dicts, and dataclasses."""
 
     first = torch.randn(1)
     second = torch.randn(1)
     assert _first_leaf_tensor({"a": None, "b": [first, second]}) is first
     assert _first_leaf_tensor(TensorBox(ignored=1, tensor=second)) is second
+    assert _tensor_leaves({"a": None, "b": [first, second]}) == [first, second]
 
 
 def test_pass_index_from_layer_modules_parses_string_and_tuple() -> None:
@@ -274,7 +328,7 @@ def test_compare_module_output_grads_reports_mismatched_bucket() -> None:
         [_synthetic_call("linear", 1, ["linear_out"])],
         {"linear_out": _synthetic_layer("linear_out", grad)},
     )
-    report = _compare_module_output_grads(trace, {("linear", 1): grad + 1}, set())
+    report = _compare_module_output_grads(trace, {("linear", 1, 0): grad + 1}, set())
     assert report.coverage["linear:1"] == "mismatched"
     assert report.mismatched_count == 1
     assert not report.overall_passed
@@ -294,7 +348,7 @@ def test_overall_passed_requires_skipped_no_grad_zero() -> None:
             calls.append(_synthetic_call(address, 1, [label]))
             layers[label] = _synthetic_layer(label, grad)
             if grad is not None:
-                stock[(address, 1)] = grad.clone()
+                stock[(address, 1, 0)] = grad.clone()
         report = _compare_module_output_grads(SyntheticTrace(calls, layers), stock, set())
         assert report.covered_count == covered
         assert report.skipped_no_grad_count == skipped
@@ -319,8 +373,8 @@ def test_compare_excludes_root_and_identity_from_denominator() -> None:
     )
     report = _compare_module_output_grads(
         trace,
-        {("linear", 1): grad},
-        {("id", 1)},
+        {("linear", 1, 0): grad},
+        {("id", 1, 0)},
     )
     assert report.coverage["self:1"] == "skipped_root_module"
     assert report.coverage["id:1"] == "skipped_identity_output"
@@ -350,7 +404,7 @@ def test_compare_counts_module_less_layers_diagnostically() -> None:
             "top": _synthetic_layer("top", grad, []),
         },
     )
-    report = _compare_module_output_grads(trace, {("linear", 1): grad}, set())
+    report = _compare_module_output_grads(trace, {("linear", 1, 0): grad}, set())
     assert report.skipped_module_less_count == 1
     assert report.overall_passed
 
@@ -429,6 +483,46 @@ def test_identity_output_modules_are_skipped() -> None:
     assert report.coverage["identity:1"] == "skipped_identity_output"
     assert report.skipped_identity_output_count == 1
     assert report.overall_passed
+
+
+def test_near_identity_output_modules_are_covered() -> None:
+    """Numerically close outputs are audited unless they are true identity."""
+
+    report = backward_validation._validate_layer_grads(
+        NearIdentityWrapper(),
+        torch.randn(2, 3),
+        {},
+        _loss,
+        atol=1e-5,
+        rtol=1e-4,
+        random_seed=42,
+    )
+
+    assert report.coverage["near:1"] == "covered"
+    _assert_acceptance(report)
+
+
+def test_multi_output_module_grad_comparison_checks_all_outputs() -> None:
+    """A mismatch on a non-first module output is reported."""
+
+    grad = torch.ones(2, 3)
+    trace = SyntheticTrace(
+        [_synthetic_call("pair", 1, ["pair_a", "pair_b"])],
+        {
+            "pair_a": _synthetic_layer("pair_a", grad),
+            "pair_b": _synthetic_layer("pair_b", grad * 999),
+        },
+    )
+    report = _compare_module_output_grads(
+        trace,
+        {("pair", 1, 0): grad, ("pair", 1, 1): grad},
+        set(),
+    )
+
+    assert report.coverage["pair:1[0]"] == "covered"
+    assert report.coverage["pair:1[1]"] == "mismatched"
+    assert report.mismatched_labels == ("pair:1[1]",)
+    assert not report.overall_passed
 
 
 def test_weight_tied_module_call_indices_are_separate() -> None:

@@ -155,21 +155,11 @@ class PosthocPerturbDecision:
 
 
 def _check_getitem_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
-    """Exempt __getitem__ when the perturbed layer is a structural arg (index tensor,
-    or any non-data arg)."""
-    perturbed_tensor = self[layers_to_perturb[0]].out
-    args = layer.saved_args
+    """Exempt ``__getitem__`` only when the perturbed parent is an index arg."""
 
-    # Case 1: perturbed layer IS the tensor index — tensor indexing is structural
-    if isinstance(args[1], torch.Tensor) and torch.equal(perturbed_tensor, args[1]):
-        return True
-
-    # Case 2: perturbed layer is NOT the data tensor — must be a structural arg
-    # (slice, int index logged as tensor, etc.)
-    if not torch.equal(perturbed_tensor, args[0]):
-        return True
-
-    return False
+    del self
+    positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
+    return bool(positions) and positions.isdisjoint({0})
 
 
 # In-place ops whose FIRST positional arg (``args[0]``) is the destination
@@ -295,7 +285,7 @@ def _perturbed_parent_is_uninitialized_setitem_dest(
 
 
 def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
-    """Exempt __setitem__ when the perturbed layer is a bool mask arg."""
+    """Exempt ``__setitem__`` for structural masks or proven full overwrites."""
     perturbed_tensor = self[layers_to_perturb[0]].out
     args = layer.saved_args
 
@@ -362,10 +352,67 @@ def _setitem_destination_slice_is_fully_overwritten(
         selected = destination[index]
     except (IndexError, TypeError, RuntimeError):
         return False
+    if not _setitem_index_targets_are_unique(index):
+        return False
     return (
         tuple(selected.shape) == tuple(replacement.shape)
         and selected.numel() == destination.numel()
     )
+
+
+def _setitem_index_targets_are_unique(index: Any) -> bool:
+    """Return whether a ``__setitem__`` index cannot duplicate write targets.
+
+    Parameters
+    ----------
+    index:
+        Index argument supplied to ``Tensor.__setitem__``.
+
+    Returns
+    -------
+    bool
+        True for basic indexing and for verified unique tensor/list advanced
+        indices. Duplicate advanced indices can make ``selected.numel()`` equal
+        the destination size while leaving some destination elements live.
+    """
+
+    components = index if isinstance(index, tuple) else (index,)
+    for component in components:
+        if isinstance(component, list):
+            try:
+                component = torch.as_tensor(component)
+            except (TypeError, ValueError):
+                return False
+        if isinstance(component, torch.Tensor):
+            if component.dtype == torch.bool:
+                continue
+            if not _tensor_is_integer_index(component):
+                return False
+            flattened = component.reshape(-1)
+            if int(flattened.numel()) != int(torch.unique(flattened).numel()):
+                return False
+            continue
+        if component is None or component is Ellipsis or isinstance(component, (slice, int)):
+            continue
+        return False
+    return True
+
+
+def _tensor_is_integer_index(tensor: torch.Tensor) -> bool:
+    """Return whether ``tensor`` has an integer dtype accepted for indexing.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor index component.
+
+    Returns
+    -------
+    bool
+        True when the tensor dtype is an integer indexing dtype.
+    """
+
+    return not tensor.dtype.is_floating_point and not tensor.dtype.is_complex
 
 
 def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
@@ -652,6 +699,8 @@ def _scatter_index_fully_overwrites_dim(dest: torch.Tensor, dim: int, index: tor
 def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: List[str]) -> bool:
     """Exempt scatter destination perturbation when scatter fully overwrites it."""
 
+    if not _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0):
+        return False
     perturbed_tensor = self[layers_to_perturb[0]].out
     scatter_components = _get_scatter_destination_dim_index(layer)
     if scatter_components is None:

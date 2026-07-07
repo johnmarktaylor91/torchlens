@@ -331,7 +331,7 @@ class BufferAccessor(Accessor["Buffer"]):
 
         try:
             self[key]  # type: ignore[index]
-        except (KeyError, TypeError, IndexError):
+        except (KeyError, TypeError, IndexError, ValueError):
             return False
         return True
 

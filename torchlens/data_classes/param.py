@@ -167,7 +167,7 @@ class Param:
         self.num_calls: int = 1  # how many forward ops used this param
         self.used_by_ops: List[str] = []  # op labels that used this param
         self.used_by_layers: List[str] = []  # layer labels that used this param
-        self.co_parent_params: List[str] = []  # other param addresses sharing the same tensor
+        self.co_parent_params: List[str] = []  # other param addresses used by the same op
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
@@ -198,7 +198,7 @@ class Param:
             Whether multiple parameter addresses share this tensor.
         """
 
-        return len(self.all_addresses) > 1 or bool(self.co_parent_params)
+        return len(self.all_addresses) > 1
 
     @property
     def num_uses_by_ops(self) -> int:

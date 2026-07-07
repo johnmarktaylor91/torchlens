@@ -219,6 +219,9 @@ class TraceExportMixin(_TraceMixinBase):
         ------
         RuntimeError
             If called before the forward pass has completed.
+        ValueError
+            If an exported field such as ``grad`` is ambiguous across multiple
+            backward passes and must be accessed through a pass-specific record.
         """
         if not self._tracing_finished:
             raise RuntimeError(

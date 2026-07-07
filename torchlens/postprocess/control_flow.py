@@ -645,8 +645,7 @@ def _fix_buffer_layers(self: "Trace") -> None:
        The dedup hash is (modules + buffer_source + address).
     3. Assigns sequential buffer_pass numbers per address.
 
-    Note: Buffer siblings are always empty — the sibling iteration in
-    _merge_buffer_entries is effectively dead code for buffers (#2).
+    Note: Buffer deduplication is scoped by containing module, source, address, and value.
     """
     buffer_counter: Dict[str, int] = defaultdict(lambda: 1)
     buffer_hash_groups: Dict[str, List[str]] = defaultdict(list)

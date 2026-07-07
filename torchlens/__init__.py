@@ -859,15 +859,17 @@ def validate_forward_pass(
     _warn_moved_name("validate_forward_pass", "torchlens.validation", "validate_forward_pass")
     from .validation.consolidated import validate
 
-    return validate(
-        model,
-        input_args,
-        input_kwargs,
-        scope="forward",
-        random_seed=random_seed,
-        verbose=verbose,
-        validate_metadata=validate_metadata,
-        backend=backend,
+    return bool(
+        validate(
+            model,
+            input_args,
+            input_kwargs,
+            scope="forward",
+            random_seed=random_seed,
+            verbose=verbose,
+            validate_metadata=validate_metadata,
+            backend=backend,
+        )
     )
 
 
@@ -899,20 +901,22 @@ def validate_backward_pass(
     _warn_moved_name("validate_backward_pass", "torchlens.validation", "validate_backward_pass")
     from .validation.consolidated import validate
 
-    return validate(
-        model,
-        input_args,
-        input_kwargs,
-        scope="backward",
-        random_seed=random_seed,
-        validate_metadata=validate_metadata,
-        loss_fn=loss_fn,
-        perturb_saved_grads=perturb_saved_grads,
-        atol=atol,
-        rtol=rtol,
-        validate_layer_grads=validate_layer_grads,
-        layer_grad_atol=layer_grad_atol,
-        layer_grad_rtol=layer_grad_rtol,
+    return bool(
+        validate(
+            model,
+            input_args,
+            input_kwargs,
+            scope="backward",
+            random_seed=random_seed,
+            validate_metadata=validate_metadata,
+            loss_fn=loss_fn,
+            perturb_saved_grads=perturb_saved_grads,
+            atol=atol,
+            rtol=rtol,
+            validate_layer_grads=validate_layer_grads,
+            layer_grad_atol=layer_grad_atol,
+            layer_grad_rtol=layer_grad_rtol,
+        )
     )
 
 
@@ -936,14 +940,16 @@ def validate_saved_outs(
     _warn_moved_name("validate_saved_outs", "torchlens.validation", "validate_saved_outs")
     from .validation.consolidated import validate
 
-    return validate(
-        model,
-        input_args,
-        input_kwargs,
-        scope="saved",
-        random_seed=random_seed,
-        verbose=verbose,
-        validate_metadata=validate_metadata,
+    return bool(
+        validate(
+            model,
+            input_args,
+            input_kwargs,
+            scope="saved",
+            random_seed=random_seed,
+            verbose=verbose,
+            validate_metadata=validate_metadata,
+        )
     )
 
 

@@ -174,6 +174,18 @@ class TestSinglePassDelegation:
         with pytest.raises(ValueError, match=r"ops\[0\]\.var_names"):
             _ = layer_log.var_names
 
+    def test_multi_pass_slotted_ref_fields_raise_guided_value_error(
+        self: "TestSinglePassDelegation",
+        recurrent_log: Trace,
+    ) -> None:
+        """Slotted per-pass ref fields use the same multi-pass guidance."""
+
+        layer_log = next(layer for layer in recurrent_log.layers if layer.num_passes > 1)
+
+        for field_name in ("out_ref", "grad_ref"):
+            with pytest.raises(ValueError, match=rf"ops\[0\]\.{field_name}"):
+                getattr(layer_log, field_name)
+
     def test_tracing_finished_reads_from_trace(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
             assert layer_log._tracing_finished is True

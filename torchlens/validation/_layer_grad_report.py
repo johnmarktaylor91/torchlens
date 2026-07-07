@@ -10,6 +10,9 @@ import torch
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
+    from ._stock_layer_grads import ModuleOutputGradKey
+else:
+    ModuleOutputGradKey = tuple[str, int, int]
 
 MIN_MODULE_OUTPUT_COVERAGE: float = 0.80
 
@@ -18,8 +21,9 @@ MIN_MODULE_OUTPUT_COVERAGE: float = 0.80
 class LayerGradReport:
     """PATH E module-output gradient comparison report.
 
-    Coverage is keyed by module-call label, not by operation label. The
-    classifier buckets are ``covered``, ``mismatched``,
+    Coverage is keyed by module-call label for single-output calls and by
+    ``module:call[index]`` for multi-output calls. The classifier buckets are ``covered``,
+    ``mismatched``,
     ``skipped_no_first_leaf``, ``skipped_module_less`` (counter only),
     ``skipped_no_grad``, ``skipped_identity_output``, and
     ``skipped_root_module``.
@@ -57,8 +61,8 @@ class LayerGradReport:
 
 def _compare_module_output_grads(
     trace: "Trace",
-    stock_module_grads: Mapping[tuple[str, int], torch.Tensor],
-    stock_identity_addresses: set[tuple[str, int]],
+    stock_module_grads: Mapping[ModuleOutputGradKey, torch.Tensor],
+    stock_identity_addresses: set[ModuleOutputGradKey],
     *,
     atol: float = 1e-6,
     rtol: float = 1e-5,
@@ -71,9 +75,9 @@ def _compare_module_output_grads(
     trace:
         Candidate TorchLens trace with logged backward grads.
     stock_module_grads:
-        Stock gradients keyed by ``(module_address, call_index)``.
+        Stock gradients keyed by ``(module_address, call_index, output_index)``.
     stock_identity_addresses:
-        Module-call keys whose stock output is identical to input.
+        Module-output keys whose stock output is identical to input.
     atol:
         Absolute allclose tolerance.
     rtol:
@@ -111,35 +115,40 @@ def _compare_module_output_grads(
         if not output_ops:
             coverage[call_label] = "skipped_no_first_leaf"
             continue
-        try:
-            cand_layer = trace[output_ops[0]]
-        except (KeyError, IndexError):
-            coverage[call_label] = "skipped_no_first_leaf"
-            continue
-        key = (addr, call_index)
-        if key in stock_identity_addresses:
-            coverage[call_label] = "skipped_identity_output"
-            continue
-        cand_grad = getattr(cand_layer, "grad", None)
-        if cand_grad is None:
-            coverage[call_label] = "skipped_no_grad"
-            continue
-        stock_grad = stock_module_grads.get(key)
-        if stock_grad is None:
-            coverage[call_label] = "skipped_no_grad"
-            continue
-        if cand_grad.shape != stock_grad.shape:
-            coverage[call_label] = "mismatched"
-            mismatched.append(call_label)
-            continue
-        abs_diff = (cand_grad - stock_grad).abs()
-        max_abs_diffs[call_label] = abs_diff.max().item()
-        max_rel_diffs[call_label] = (abs_diff / stock_grad.abs().clamp(min=1e-30)).max().item()
-        if torch.allclose(cand_grad, stock_grad, atol=atol, rtol=rtol):
-            coverage[call_label] = "covered"
-        else:
-            coverage[call_label] = "mismatched"
-            mismatched.append(call_label)
+        multi_output = len(output_ops) > 1
+        for output_index, output_label in enumerate(output_ops):
+            coverage_label = f"{call_label}[{output_index}]" if multi_output else call_label
+            try:
+                cand_layer = trace[output_label]
+            except (KeyError, IndexError):
+                coverage[coverage_label] = "skipped_no_first_leaf"
+                continue
+            key = (addr, call_index, output_index)
+            if key in stock_identity_addresses:
+                coverage[coverage_label] = "skipped_identity_output"
+                continue
+            cand_grad = getattr(cand_layer, "grad", None)
+            if cand_grad is None:
+                coverage[coverage_label] = "skipped_no_grad"
+                continue
+            stock_grad = stock_module_grads.get(key)
+            if stock_grad is None:
+                coverage[coverage_label] = "skipped_no_grad"
+                continue
+            if cand_grad.shape != stock_grad.shape:
+                coverage[coverage_label] = "mismatched"
+                mismatched.append(coverage_label)
+                continue
+            abs_diff = (cand_grad - stock_grad).abs()
+            max_abs_diffs[coverage_label] = abs_diff.max().item()
+            max_rel_diffs[coverage_label] = (
+                (abs_diff / stock_grad.abs().clamp(min=1e-30)).max().item()
+            )
+            if torch.allclose(cand_grad, stock_grad, atol=atol, rtol=rtol):
+                coverage[coverage_label] = "covered"
+            else:
+                coverage[coverage_label] = "mismatched"
+                mismatched.append(coverage_label)
 
     for layer in trace.layer_list:
         if not getattr(layer, "has_grad", False):

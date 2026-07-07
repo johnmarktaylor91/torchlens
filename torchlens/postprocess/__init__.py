@@ -196,6 +196,11 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         "Undecorate tensors",
         "Consumes saved tensors; mutates payload wrappers in place.",
     ),
+    "13": PostprocessStepContract(
+        "13",
+        "Clear CUDA cache",
+        "Runs optional CUDA allocator cleanup; leaves Trace metadata unchanged.",
+    ),
     "14": PostprocessStepContract(
         "14",
         "Log timing",
@@ -557,6 +562,7 @@ def postprocess(
     # CUDA driver / NVML probe cost (per profiling audit 2026-04-27 finding #4).
     if _is_cuda_available():
         torch.cuda.empty_cache()
+    _assert_postprocess_contract(self, "13")
 
     # Step 14: Log time elapsed.
     with _vtimed(self, "  Step 14: Log timing"):

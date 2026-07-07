@@ -49,6 +49,22 @@ class DuplicateShortNameParamModel(torch.nn.Module):
         return self.left(x) + self.right(x)
 
 
+class DuplicateShortNameBufferModel(torch.nn.Module):
+    """Model with two buffers sharing the short name ``running_mean``."""
+
+    def __init__(self) -> None:
+        """Initialize duplicate short-name buffer modules."""
+
+        super().__init__()
+        self.left = torch.nn.BatchNorm1d(3)
+        self.right = torch.nn.BatchNorm1d(3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Read both duplicate buffers."""
+
+        return x + self.left.running_mean + self.right.running_mean
+
+
 def _strict_trace() -> tl.Trace:
     """Return a trace with a multi-pass Linear layer."""
 
@@ -110,6 +126,15 @@ def test_layer_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
         layer.ops["linear_1_1"]
 
 
+def test_layer_ops_contains_is_false_for_ambiguous_label() -> None:
+    """Scoped Op membership returns bool when lookup is ambiguous."""
+
+    trace = _strict_trace()
+    layer = trace.layers["linear_1_1"]
+
+    assert "linear_1_1" not in layer.ops
+
+
 def test_param_accessor_contains_is_false_for_ambiguous_short_name() -> None:
     """Param membership is false when indexing would raise ambiguity."""
 
@@ -118,6 +143,16 @@ def test_param_accessor_contains_is_false_for_ambiguous_short_name() -> None:
     assert "weight" not in trace.params
     with pytest.raises(AmbiguousOpLookupError):
         trace.params["weight"]
+
+
+def test_buffer_accessor_contains_is_false_for_ambiguous_short_name() -> None:
+    """Buffer membership returns bool when short-name lookup is ambiguous."""
+
+    trace = tl.trace(DuplicateShortNameBufferModel(), torch.randn(2, 3))
+
+    assert "running_mean" not in trace.buffers
+    with pytest.raises(AmbiguousOpLookupError):
+        trace.buffers["running_mean"]
 
 
 def _legacy_param_state(address: str) -> dict[str, object]:

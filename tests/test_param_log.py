@@ -28,6 +28,23 @@ class _SimpleLinear(nn.Module):
         return self.fc(x)
 
 
+class _TiedParameterModel(nn.Module):
+    """Model with one parameter registered at two addresses."""
+
+    def __init__(self) -> None:
+        """Initialize tied parameter aliases."""
+
+        super().__init__()
+        self.left = nn.Linear(3, 3, bias=False)
+        self.right = nn.Linear(3, 3, bias=False)
+        self.right.weight = self.left.weight
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Use both tied parameter addresses."""
+
+        return self.left(x) + self.right(x)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -299,6 +316,17 @@ class TestLinkedParams:
         b = mh.params["0.bias"]
         assert b.address in w.co_parent_params
         assert w.address in b.co_parent_params
+        assert not w.has_multiple_addresses
+        assert not b.has_multiple_addresses
+
+    def test_tied_parameter_reports_multiple_addresses(self) -> None:
+        """Actual tied parameter aliases still report multiple addresses."""
+
+        mh = trace_fn(_TiedParameterModel(), torch.randn(1, 3))
+        param = mh.params["left.weight"]
+
+        assert param.has_multiple_addresses
+        assert param.all_addresses == ["left.weight", "right.weight"]
 
     def test_linked_symmetric(self):
         mh = trace_fn(_make_simple_model(), _simple_input())

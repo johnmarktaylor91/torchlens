@@ -12,25 +12,26 @@ from torch import nn
 from torch.utils.hooks import RemovableHandle
 
 _PASS_INDEX_PARSE_WARNED = False
+ModuleOutputGradKey = tuple[str, int, int]
 
 
 class _StockModuleGradCollector:
     """Capture stock per-module-output gradients with forward hooks.
 
     The collector installs one ``register_forward_hook`` on each module returned
-    by ``named_modules()``. Each hook retains the first tensor leaf in the module
-    output, keyed by ``(module_address, call_index)``. After backward,
+    by ``named_modules()``. Each hook records every tensor leaf in the module
+    output, keyed by ``(module_address, call_index, output_index)``. After backward,
     ``collect_grads_after_backward`` snapshots retained output gradients.
     """
 
     def __init__(self) -> None:
         """Initialize empty hook, call-count, and gradient state."""
 
-        self.stock_module_output_grads: dict[tuple[str, int], torch.Tensor] = {}
+        self.stock_module_output_grads: dict[ModuleOutputGradKey, torch.Tensor] = {}
         self._call_counts: dict[str, int] = {}
         self._hook_handles: list[RemovableHandle] = []
         self._tensor_hook_handles: list[RemovableHandle] = []
-        self.identity_output_addresses: set[tuple[str, int]] = set()
+        self.identity_output_addresses: set[ModuleOutputGradKey] = set()
 
     def install(self, model: nn.Module) -> None:
         """Install one forward hook per named module.
@@ -79,37 +80,31 @@ def _make_post_hook(
     """
 
     def _post_hook(module: nn.Module, args: tuple[Any, ...], output: Any) -> None:
-        """Retain the first tensor leaf emitted by one module call."""
+        """Register gradient hooks for tensor leaves emitted by one module call."""
 
         collector._call_counts[address] = collector._call_counts.get(address, 0) + 1
         call_index = collector._call_counts[address]
         key = (address, call_index)
 
-        leaf_out = _first_leaf_tensor(output)
-        if leaf_out is None:
+        output_leaves = _tensor_leaves(output)
+        if not output_leaves:
             return
-        leaf_in = _first_leaf_tensor(args) if args else None
-        identity_output = leaf_out is leaf_in
-        if (
-            not identity_output
-            and leaf_in is not None
-            and leaf_out.shape == leaf_in.shape
-            and torch.allclose(leaf_out.detach(), leaf_in.detach(), atol=1e-5, rtol=1e-5)
-        ):
-            identity_output = True
-        if isinstance(module, nn.Identity) or identity_output:
-            collector.identity_output_addresses.add(key)
-            return
-        if leaf_out.requires_grad or leaf_out.grad_fn is not None:
-            handle = leaf_out.register_hook(_make_tensor_grad_hook(collector, key))
-            collector._tensor_hook_handles.append(handle)
+        input_ids = {id(leaf) for leaf in _tensor_leaves(args)}
+        for output_index, leaf_out in enumerate(output_leaves):
+            output_key = (*key, output_index)
+            if isinstance(module, nn.Identity) or id(leaf_out) in input_ids:
+                collector.identity_output_addresses.add(output_key)
+                continue
+            if leaf_out.requires_grad or leaf_out.grad_fn is not None:
+                handle = leaf_out.register_hook(_make_tensor_grad_hook(collector, output_key))
+                collector._tensor_hook_handles.append(handle)
 
     return _post_hook
 
 
 def _make_tensor_grad_hook(
     collector: _StockModuleGradCollector,
-    key: tuple[str, int],
+    key: ModuleOutputGradKey,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a tensor hook that snapshots one module-output gradient.
 
@@ -188,6 +183,57 @@ def _first_leaf_tensor(obj: Any) -> torch.Tensor | None:
             if leaf is not None:
                 return leaf
     return None
+
+
+def _tensor_leaves(obj: Any) -> list[torch.Tensor]:
+    """Return non-parameter tensor leaves in DFS order.
+
+    Parameters
+    ----------
+    obj:
+        Arbitrary tensor container.
+
+    Returns
+    -------
+    list[torch.Tensor]
+        Tensor leaves, excluding ``nn.Parameter`` instances.
+    """
+
+    if isinstance(obj, torch.Tensor):
+        if isinstance(obj, nn.Parameter):
+            return []
+        return [obj]
+    if (
+        hasattr(obj, "to_tuple")
+        and callable(getattr(obj, "to_tuple", None))
+        and isinstance(obj, dict)
+    ):
+        to_tuple = getattr(obj, "to_tuple")
+        try:
+            return _tensor_leaves(to_tuple())
+        except Exception:
+            return []
+    if isinstance(obj, (tuple, list)):
+        leaves: list[torch.Tensor] = []
+        for item in obj:
+            leaves.extend(_tensor_leaves(item))
+        return leaves
+    if isinstance(obj, dict):
+        leaves = []
+        for value in obj.values():
+            leaves.extend(_tensor_leaves(value))
+        return leaves
+    if hasattr(obj, "to_tuple") and callable(getattr(obj, "to_tuple", None)):
+        try:
+            return _tensor_leaves(obj.to_tuple())
+        except Exception:
+            return []
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        leaves = []
+        for field in dataclasses.fields(obj):
+            leaves.extend(_tensor_leaves(getattr(obj, field.name)))
+        return leaves
+    return []
 
 
 def _innermost_module_address(layer: Any) -> str | None:
@@ -317,7 +363,7 @@ def _stock_layer_grads(
     loss_fn: Callable[[Any], torch.Tensor],
     random_seed: int,
     state_dict_snapshot: Mapping[str, torch.Tensor],
-) -> tuple[dict[tuple[str, int], torch.Tensor], set[tuple[str, int]]]:
+) -> tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]:
     """Run a stock forward/backward pass and collect module-output grads.
 
     Parameters
@@ -337,7 +383,7 @@ def _stock_layer_grads(
 
     Returns
     -------
-    tuple[dict[tuple[str, int], torch.Tensor], set[tuple[str, int]]]
+    tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]
         Captured stock module-output grads and identity-output addresses.
     """
 
