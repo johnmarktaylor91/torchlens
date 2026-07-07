@@ -11,6 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._trace_selector_helpers import _make_layers_to_save_predicate
+from torchlens.backends.default_specs import _tf_runtime_supported
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.errors import SelectorCompositionError
@@ -298,8 +299,18 @@ def test_tf_trace_exercises_backend_neutral_topology_invariant() -> None:
     keras = pytest.importorskip("keras")
     if keras.backend.backend() != "tensorflow":
         pytest.skip(f"active keras backend is {keras.backend.backend()!r}")
+    if not _tf_runtime_supported(tf, keras):
+        pytest.skip("TensorFlow backend requires TensorFlow >= 2.16 and Keras >= 3")
 
-    trace = tl.trace(tf.identity, tf.constant([1.0, 2.0]), backend="tf")
+    class IdentityModule(tf.Module):
+        """Small TensorFlow module for backend-neutral topology coverage."""
+
+        def __call__(self, x: object) -> object:
+            """Return an identity tensor."""
+
+            return tf.identity(x)
+
+    trace = tl.trace(IdentityModule(), tf.constant([1.0, 2.0]), backend="tf")
 
     assert trace.backend == "tf"
     _check_backend_neutral_graph_topology(trace)

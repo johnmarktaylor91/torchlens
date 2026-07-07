@@ -3064,11 +3064,14 @@ def _check_conditional_bool_event_backrefs(
                 bool_layer = ml.ops[bool_label]
             except (KeyError, ValueError, TypeError):
                 bool_layer = ml[bool_label]
-            bool_ops = (
-                list(cast("Layer", bool_layer).ops.values())
-                if hasattr(bool_layer, "ops") and not hasattr(bool_layer, "terminal_conditional_id")
-                else [bool_layer]
-            )
+            bool_layer_ops = getattr(bool_layer, "ops", None)
+            bool_layer_values = getattr(bool_layer_ops, "values", None)
+            if isinstance(bool_layer_ops, Mapping):
+                bool_ops = list(bool_layer_ops.values())
+            elif callable(bool_layer_values):
+                bool_ops = list(bool_layer_values())
+            else:
+                bool_ops = [bool_layer]
             mismatched_bool_ops = [
                 op for op in bool_ops if getattr(op, "terminal_conditional_id", None) != event.id
             ]

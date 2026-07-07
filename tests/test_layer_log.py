@@ -231,7 +231,7 @@ class TestMultiPassLayerLog:
         """__getattr__ fallback raises for multi-pass layers."""
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_passes > 1:
-                with pytest.raises(AttributeError):
+                with pytest.raises(ValueError, match=r"\.ops\[0\]"):
                     _ = layer_log.func_autocast_state
                 break
 

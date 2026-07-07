@@ -125,7 +125,7 @@ def test_public_option_spine_changes_capture_cache_key(tmp_path: Path) -> None:
         capture=CaptureOptions(
             cache=True,
             cache_dir=tmp_path,
-            jax_max_control_flow_unroll=8,
+            module_identity_mode="torch_module",
         ),
     )
     second = tl.trace(
@@ -134,7 +134,7 @@ def test_public_option_spine_changes_capture_cache_key(tmp_path: Path) -> None:
         capture=CaptureOptions(
             cache=True,
             cache_dir=tmp_path,
-            jax_max_control_flow_unroll=16,
+            payload_policy="full",
         ),
     )
 
@@ -190,7 +190,12 @@ def test_saved_activation_identity_dedup_rejects_key_collision() -> None:
     old_source = torch.zeros(2, 2)
     new_source = torch.ones(2, 2)
     stale_out = torch.full((2, 2), 9.0)
-    trace._out_identity_cache[id(new_source)] = (old_source, "old", stale_out)
+    trace._out_identity_cache[id(new_source)] = (
+        old_source,
+        "old",
+        stale_out,
+        old_source._version,
+    )
     fields = _minimal_activation_fields("manual_new")
 
     _save_activation_fields(trace, fields, new_source, (), {}, None)

@@ -145,6 +145,15 @@ def test_chunk_size_default_matches_plain_trace() -> None:
     assert default.append_history == plain.append_history
 
 
+def test_chunk_size_rejects_explicit_jax_control_flow() -> None:
+    """Chunk recursion must not hide explicitly unsupported JAX-only options."""
+
+    model = DeterministicToy().eval()
+
+    with pytest.raises(BackendUnsupportedError, match="jax_control_flow"):
+        tl.trace(model, _toy_inputs(), chunk_size=4, jax_control_flow="unroll")
+
+
 def test_chunk_size_shape_and_remainder() -> None:
     """A 10-item batch with chunk_size 4 should produce 4, 4, and 2 chunks."""
 

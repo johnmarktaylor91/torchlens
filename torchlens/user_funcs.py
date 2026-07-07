@@ -518,11 +518,12 @@ def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None
     spec = InterventionSpec()
     for entry in hook_plan:
         site_target = entry.site_target
-        target = (
-            site_target.to_target_spec()
-            if hasattr(site_target, "to_target_spec")
-            else TargetSpec("label", site_target)
-        )
+        if isinstance(site_target, TargetSpec):
+            target = site_target
+        elif hasattr(site_target, "to_target_spec"):
+            target = site_target.to_target_spec()
+        else:
+            target = TargetSpec("label", site_target)
         if not any(existing.freeze() == target.freeze() for existing in spec.targets):
             spec.targets.append(target)
         spec.add_hook(
@@ -2093,6 +2094,16 @@ def _trace_torch_model(
         and normalized_chunk_size < chunk_plan.total_size
     ):
         chunks = iter_chunked_inputs(input_args, chunk_plan)
+        recursive_jax_control_flow = (
+            capture_options.jax_control_flow
+            if capture_options.is_field_explicit("jax_control_flow")
+            else MISSING
+        )
+        recursive_jax_max_control_flow_unroll = (
+            capture_options.jax_max_control_flow_unroll
+            if capture_options.is_field_explicit("jax_max_control_flow_unroll")
+            else MISSING
+        )
         trace = _trace_torch_model(
             model=model,
             input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
@@ -2151,8 +2162,8 @@ def _trace_torch_model(
             stop_after=MISSING,
             raise_on_nan=raise_on_nan_value,
             profile=profile_enabled,
-            jax_control_flow=capture_options.jax_control_flow,
-            jax_max_control_flow_unroll=capture_options.jax_max_control_flow_unroll,
+            jax_control_flow=recursive_jax_control_flow,
+            jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
             module_identity_mode=capture_options.module_identity_mode,
             payload_policy=capture_options.payload_policy,
             save_preview=capture_options.save_preview,
@@ -2233,8 +2244,8 @@ def _trace_torch_model(
                 stop_after=MISSING,
                 raise_on_nan=raise_on_nan_value,
                 profile=profile_enabled,
-                jax_control_flow=capture_options.jax_control_flow,
-                jax_max_control_flow_unroll=capture_options.jax_max_control_flow_unroll,
+                jax_control_flow=recursive_jax_control_flow,
+                jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
                 module_identity_mode=capture_options.module_identity_mode,
                 payload_policy=capture_options.payload_policy,
                 save_preview=capture_options.save_preview,

@@ -8,6 +8,7 @@ import torch.nn as nn
 
 import example_models
 from conftest import VIS_OUTPUT_DIR
+from torchlens._errors import AmbiguousOpLookupError
 from torchlens import trace as trace_fn
 from torchlens.types import Param
 from torchlens.visualization import show_model_graph
@@ -138,7 +139,7 @@ class TestParamAccessorMH:
 
     def test_short_name_ambiguous_raises(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        with pytest.raises(KeyError, match="Ambiguous"):
+        with pytest.raises(AmbiguousOpLookupError, match="Ambiguous"):
             mh.params["weight"]  # Both 0.weight and 2.weight
 
     def test_repr_dict_like(self):

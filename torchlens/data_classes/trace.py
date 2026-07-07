@@ -1270,7 +1270,7 @@ class Trace(
         self.capture_cache_path: str | None = None
         self.recording_kept: bool = True
         self._out_dedup_mode: Literal["identity", "content", "none"] = "identity"
-        self._out_identity_cache: Dict[int, Tuple[torch.Tensor, str, torch.Tensor]] = {}
+        self._out_identity_cache: Dict[int, Tuple[torch.Tensor, str, torch.Tensor, int | None]] = {}
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
         self._halt_returns_partial_trace = False
