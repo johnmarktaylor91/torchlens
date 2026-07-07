@@ -16,7 +16,7 @@ from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_no
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
-    from ..intervention.bundle import Bundle
+    from ..bundle import Bundle
 
 
 DiffLayout = Literal["paired"]

@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
-from .bundle import Bundle
+from ..bundle import Bundle
 from .hooks import HookContext
 from .predicates import when
 from .selectors import BaseSelector, func, label

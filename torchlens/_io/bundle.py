@@ -46,7 +46,7 @@ from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 
 if TYPE_CHECKING:
-    from ..intervention.bundle import Bundle
+    from ..bundle import Bundle
     from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
@@ -913,7 +913,7 @@ def _load_unified_bundle(bundle_path: Path) -> "Bundle":
             f"Failed to load bundle metadata from {legacy_pickle_path}."
         ) from exc
 
-    from ..intervention.bundle import Bundle
+    from ..bundle import Bundle
 
     if not isinstance(bundle, Bundle):
         raise TorchLensIOError(f"Unified bundle payload at {legacy_pickle_path} is not a Bundle.")
@@ -966,7 +966,7 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
             raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
         members[name] = loaded
 
-    from ..intervention.bundle import Bundle
+    from ..bundle import Bundle
 
     baseline_name = metadata.get("baseline_name")
     if baseline_name is not None and not isinstance(baseline_name, str):
