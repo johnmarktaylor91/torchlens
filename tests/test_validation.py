@@ -1872,6 +1872,119 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
     assert validate_forward_pass(model, [x], input_kwargs={})
 
 
+class _NestedBlock(nn.Module):
+    """A submodule nested two address levels deep (``net.block.norm``)."""
+
+    def __init__(self) -> None:
+        """Build a single LayerNorm submodule."""
+
+        super().__init__()
+        self.norm = nn.LayerNorm(8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the norm."""
+
+        return self.norm(x)
+
+
+class _NestedNet(nn.Module):
+    """Wraps ``_NestedBlock`` so the hook target sits at address depth 2."""
+
+    def __init__(self) -> None:
+        """Build the block -> fc pipeline."""
+
+        super().__init__()
+        self.block = _NestedBlock()
+        self.fc = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run block then fc."""
+
+        return self.fc(self.block(x))
+
+
+def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> None:
+    """The depth-1 case above must ALSO hold at nesting depth >= 2.
+
+    Cert round 4 found this crashing with ``MetadataInvariantError`` because
+    ``_ensure_module_output_tensor_logged``'s ``intervention_replacement``
+    branch built a single-frame module stack instead of the full ancestor
+    chain: by the time the raw hook fires, the hooked module's own frame has
+    already been popped off ``trace._exhaustive_module_stack``, so a
+    truncated single-frame stack wires the synthetic replacement op as a
+    DIRECT CHILD OF ROOT while the module's real ops (which carry the correct
+    full stack) simultaneously wire the same call label under its true
+    parent -- a ``[module_hierarchy]`` bidirectionality conflict.
+    """
+
+    def _substituting_hook(module, inputs, output):  # type: ignore[no-untyped-def]
+        # Bypasses TorchLens's python-level wrapping -- a real opaque replacement.
+        fresh = torch.ops.aten.zeros.default([*output.shape], dtype=output.dtype)
+        return torch.ops.aten.add.Tensor(fresh, output)
+
+    model = _NestedNet().eval()
+    model.block.norm.register_forward_hook(_substituting_hook)  # nested 2 levels deep
+    x = torch.randn(2, 8)
+    log = trace_fn(model, [x], {})
+    try:
+        placeholders = _functionless_replacement_ops(log)
+        assert placeholders, "expected a genuine intervention_replacement placeholder"
+        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+    assert validate_forward_pass(model, [x], input_kwargs={})
+
+
+def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth() -> None:
+    """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
+    observer hook, on a module nested 2+ address levels deep, must stay
+    honest -- zero functionless ``intervention_replacement`` placeholders,
+    zero ``intervention_replaced`` ops -- even after the depth-2 fix above.
+    The fix must not make the tripwire pass silently on a genuine capture gap.
+    """
+
+    class _RawAtenGeluBlock(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return torch.ops.aten.gelu.default(x)
+
+    class _RawAtenGeluOuter(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.inner = _RawAtenGeluBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.inner(x)
+
+    class _RawAtenGeluNet(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc = nn.Linear(8, 8)
+            self.mid = _RawAtenGeluOuter()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.mid(self.fc(x))
+
+    def _noop_observer_hook(module, inputs, output):  # type: ignore[no-untyped-def]
+        output.sum()  # read-only side effect, never substitutes
+        return None
+
+    model = _RawAtenGeluNet().eval()
+    model.mid.inner.register_forward_hook(_noop_observer_hook)  # nested 2 levels deep
+    x = torch.randn(3, 8)
+    log = trace_fn(model, [x], {})
+    try:
+        assert _functionless_replacement_ops(log) == []
+        assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+        internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
+        assert internal_sources, "untraceable raw-ATen output must be an internal source"
+        assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
+        check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+    assert validate_forward_pass(model, [x], input_kwargs={})
+
+
 def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
     """TRIPWIRE: a plain-capture gap under a NO-OP observer hook stays honest.
 

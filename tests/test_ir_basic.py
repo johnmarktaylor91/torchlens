@@ -225,7 +225,6 @@ def _build_ir_instances() -> dict[str, object]:
         forward_duration=0.1,
         output_structure=container_spec,
         output_tensor_labels_raw=("linear_1_1_raw",),
-        has_user_forward_hooks=False,
         per_output_atomic=(("linear_1_1_raw", (module_frame,), True, ("layer", 1)),),
     )
     backend_semantics = BackendSemantics(

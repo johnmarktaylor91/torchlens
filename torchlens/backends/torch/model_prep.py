@@ -1346,20 +1346,34 @@ def _ensure_module_output_tensor_logged(
     }
     address = _module_address(module)
     module_call_index = trace._mod_call_index[id(module)]
-    if is_internal_source:
-        # A synthesized internal-source op must carry the FULL exhaustive module
-        # stack -- exactly like every real op (see sources.py / ops.py) -- not just
-        # its innermost frame. Truncating to [(address, idx)] mis-parented a
-        # deeply-nested internal source (e.g. esmfold's trunk.structure_module.ipa,
-        # synthesized when a vmap/state-leaked tensor enters a module untagged 2+
-        # levels deep) to the ROOT, breaking the [module_hierarchy] bidirectionality
-        # invariant. The intervention-replacement path keeps its explicit innermost
-        # frame (a forward-hook replacement fires with its own module context).
-        from .sources import _snapshot_exhaustive_module_stack
+    # Both kinds must carry the FULL exhaustive module stack -- exactly like every
+    # real op (see sources.py / ops.py) -- not just the innermost frame. Truncating
+    # to [(address, idx)] mis-parents any synthesized op whose module is nested 2+
+    # address levels deep, because downstream call-tree construction
+    # (_finalize.py / finalization.py) treats stack index 0 as "top-level" and wires
+    # the op as a direct child of the root, while the module's real ops (which do
+    # carry the correct full stack) simultaneously wire the same call label under
+    # its true parent -- a bidirectionality conflict that trips the
+    # [module_hierarchy] MetadataInvariantError.
+    #
+    # * internal_source: the untagged tensor enters the CURRENTLY-EXECUTING module
+    #   (e.g. esmfold's trunk.structure_module.ipa, synthesized when a vmap/state-
+    #   leaked tensor enters a module untagged 2+ levels deep), whose frame is still
+    #   on `trace._exhaustive_module_stack` -- the plain snapshot already includes it.
+    # * intervention_replacement: a raw `register_forward_hook` fires AFTER the
+    #   hooked module's own `decorated_forward` has returned and popped its frame
+    #   (model_prep.py's module_forward_decorator `finally`), so the live snapshot
+    #   only holds the PARENT chain -- append the hooked module's own
+    #   (address, module_call_index), which is already known, to reconstruct the
+    #   full ancestor stack the same way the internal_source branch gets it for free.
+    from .sources import _snapshot_exhaustive_module_stack
 
+    if is_internal_source:
         modules = _snapshot_exhaustive_module_stack(trace)
     else:
-        modules = [(address, module_call_index)] if address else []
+        ancestor_modules = _snapshot_exhaustive_module_stack(trace)
+        own_frame = [(address, module_call_index)] if address else []
+        modules = ancestor_modules + own_frame
     equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
     module_args, module_kwargs = trace._module_forward_args.get(
         (address, module_call_index), ((), {})
@@ -1760,7 +1774,6 @@ def _record_module_exit_metadata(
             output_structure=output_structure,
             output_tensor_labels_raw=tuple(output_tensor_labels_raw),
             output_paths=tuple(output_paths),
-            has_user_forward_hooks=bool(getattr(module, "_forward_hooks", None)),
             per_output_atomic=tuple(per_output_atomic),
             output_names=tuple(output_names),
         )
