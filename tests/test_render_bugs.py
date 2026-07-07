@@ -9,11 +9,14 @@ from typing import Any
 
 import pytest
 import torch
+import graphviz
 from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.trace import Trace
+from torchlens.visualization._rank_layout_internal import layout as rank_layout
 from torchlens.visualization._render_dot import _strip_render_extension
+from torchlens.visualization._render_utils import render_dot_to_file
 from torchlens.visualization.collapse_plan import RenderContext
 from torchlens.visualization.render_ir import build_render_ir
 from torchlens.visualization.rendering import GraphvizRenderError
@@ -241,6 +244,57 @@ def test_rank_layout_embeds_code_panel(tmp_path: Path) -> None:
 
     assert "cluster_torchlens_code_panel" in dot
     assert "Source code" in dot
+
+
+def test_shared_render_timeout_preserves_reported_dot_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shared bundle render helper keeps DOT source after a timeout warning."""
+
+    monkeypatch.setattr(subprocess, "run", _raise_timeout)
+    outpath = tmp_path / "timeout_graph"
+    dot = graphviz.Digraph()
+    dot.node("a")
+
+    with pytest.warns(UserWarning, match="DOT source saved"):
+        source = render_dot_to_file(dot, str(outpath), "svg", True, timeout_seconds=0)
+
+    assert source.startswith("digraph")
+    assert outpath.exists()
+    assert "a" in outpath.read_text(encoding="utf-8")
+
+
+def test_rank_layout_failure_preserves_dot_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rank layout keeps its generated DOT source when neato fails."""
+
+    def fail_neato(*args: Any, **kwargs: Any) -> None:
+        """Simulate a rank-layout render failure after DOT is written."""
+
+        del args, kwargs
+        raise RuntimeError("forced neato failure")
+
+    monkeypatch.setattr(rank_layout, "_run_neato_with_fallbacks", fail_neato)
+    trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
+    outpath = tmp_path / "rank_failed"
+    try:
+        with pytest.raises(RuntimeError, match="forced neato failure"):
+            trace.draw(
+                vis_node_placement="rank",
+                vis_outpath=str(outpath),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                order_siblings=False,
+            )
+    finally:
+        trace.cleanup()
+
+    dot_path = outpath.with_suffix(".dot")
+    assert dot_path.exists()
+    assert "digraph" in dot_path.read_text(encoding="utf-8")
 
 
 def _raise_timeout(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[Any]:

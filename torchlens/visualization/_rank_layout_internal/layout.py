@@ -880,6 +880,7 @@ def render_rank_layout(
     # heuristic keys off BOTH size and edge density (see _choose_spline_mode).
     spline_mode = _choose_spline_mode(num_nodes, num_edges)
     render_timeout = max(_NEATO_TIMEOUT, int(num_nodes * 0.01))
+    render_succeeded = False
     try:
         _run_neato_with_fallbacks(
             rendered_path=rendered_path,
@@ -888,10 +889,11 @@ def render_rank_layout(
             spline_mode=spline_mode,
             render_timeout=render_timeout,
         )
+        render_succeeded = True
         if not vis_save_only:
             _open_file_quietly(rendered_path)
     finally:
-        if os.path.exists(source_path):
+        if render_succeeded and os.path.exists(source_path):
             os.remove(source_path)
 
     return dot_source

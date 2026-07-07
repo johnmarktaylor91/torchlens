@@ -18,6 +18,7 @@ from torchlens.viz.node_plots import (
     _select_heatmap_axis_indices,
 )
 from torchlens.viz.node_plots import _spread_close_centers
+from torchlens.viz._tensor_display import show_tensor
 
 
 def _png_bytes(image: Image.Image) -> bytes:
@@ -169,6 +170,28 @@ def test_render_lineplot_single_and_multi_series() -> None:
     assert single.size == (180, 110)
     assert multi.mode == "RGB"
     assert multi.size == (190, 120)
+
+
+def test_render_lineplot_swaps_inverted_y_bounds() -> None:
+    """Accidentally swapped y bounds should render like their sorted equivalent."""
+
+    values = np.linspace(0.0, 10.0, 12)
+    sorted_bounds = render_lineplot(values, width=180, height=110, y_min=0.0, y_max=10.0)
+    inverted_bounds = render_lineplot(values, width=180, height=110, y_min=10.0, y_max=0.0)
+
+    assert _png_bytes(inverted_bounds) == _png_bytes(sorted_bounds)
+
+
+def test_show_tensor_handles_zero_channel_3d_tensor() -> None:
+    """Default tensor display should not crash on a zero-channel 3D tensor."""
+
+    plt = pytest.importorskip("matplotlib.pyplot")
+    fig = show_tensor(torch.zeros(0, 4, 4))
+    try:
+        assert fig is not None
+        assert not isinstance(fig, str)
+    finally:
+        plt.close(fig)
 
 
 def test_render_image_scatter_points_and_thumbnails() -> None:

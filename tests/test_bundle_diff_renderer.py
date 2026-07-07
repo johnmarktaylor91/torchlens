@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from xml.etree import ElementTree
 
 import numpy as np
 import pytest
@@ -13,6 +15,7 @@ import torch
 
 import torchlens as tl
 from torchlens.intervention import MultiMatchWarning
+from torchlens.visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 GOLDEN_SVG = SNAPSHOT_DIR / "bundle_diff_clean_vs_zero_relu.svg"
@@ -158,3 +161,73 @@ def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
     assert "layer1.0.relu" not in dot_source
     assert "top: clean, bottom: ablated" not in dot_source
     assert "base versus patched" in svg_text
+
+
+def test_bundle_diff_uses_each_members_own_delta() -> None:
+    """Left and right clusters show their own deltas from a custom baseline."""
+
+    left_layer = SimpleNamespace(layer_label="left_1", func_name="op", parents=[], shape=None)
+    right_layer = SimpleNamespace(layer_label="right_1", func_name="op", parents=[], shape=None)
+    bundle = {
+        "baseline": SimpleNamespace(layer_list=[]),
+        "left": SimpleNamespace(layer_list=[left_layer]),
+        "right": SimpleNamespace(layer_list=[right_layer]),
+    }
+
+    dot = _build_dot(
+        pairs=[(left_layer, right_layer)],
+        bundle=bundle,
+        left_name="left",
+        right_name="right",
+        metric_name="relative_l2",
+        tensor_field="out",
+        delta_map={"node_1": {"baseline": 0.0, "left": 1.25, "right": 5.5}},
+        layer_to_node={"left_1": "node_1", "right_1": "node_1"},
+        theme_name="paper",
+        include_unmatched=False,
+    )
+    source = dot.source
+
+    assert re.search('clean_left_1 \\[.*label="left_1\nop\ndelta=1.25"', source, re.S)
+    assert re.search('intervention_right_1 \\[.*label="right_1\nop\ndelta=5.5"', source, re.S)
+
+
+def test_bundle_diff_pair_selection_considers_left_delta() -> None:
+    """Top-pair selection uses both members' own baseline deltas."""
+
+    left_high = SimpleNamespace(layer_label="left_high")
+    right_low = SimpleNamespace(layer_label="right_low")
+    left_low = SimpleNamespace(layer_label="left_low")
+    right_mid = SimpleNamespace(layer_label="right_mid")
+
+    selected = _select_pairs(
+        [(left_high, right_low), (left_low, right_mid)],
+        left_name="left",
+        right_name="right",
+        delta_map={
+            "node_high": {"left": 9.0, "right": 0.0},
+            "node_mid": {"left": 0.0, "right": 5.0},
+        },
+        layer_to_node={
+            "left_high": "node_high",
+            "right_low": "node_high",
+            "left_low": "node_mid",
+            "right_mid": "node_mid",
+        },
+        max_pairs=1,
+    )
+
+    assert selected == [(left_high, right_low)]
+
+
+def test_bundle_diff_svg_accessibility_escapes_quotes(tmp_path: Path) -> None:
+    """SVG aria labels remain valid XML when member names contain quotes."""
+
+    svg_path = tmp_path / "quoted.svg"
+    svg_path.write_text('<svg width="1" height="1"></svg>', encoding="utf-8")
+
+    _add_svg_accessibility(str(svg_path), 'left "quoted" versus right')
+
+    svg_text = svg_path.read_text(encoding="utf-8")
+    assert 'aria-label="left &quot;quoted&quot; versus right"' in svg_text
+    ElementTree.fromstring(svg_text)

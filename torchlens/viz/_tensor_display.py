@@ -233,6 +233,11 @@ def show_tensor(
     if resolved_method == "channels":
         channel_data = data if data.ndim == 3 else data.reshape(1, *tuple(_to_2d(data).shape))
         channels = min(int(channel_data.shape[0]), 8)
+        if channels == 0:
+            fig, ax = plt.subplots()
+            ax.set_title(getattr(log_entry, "layer_label", "Tensor"))
+            ax.axis("off")
+            return fig
         fig, axes = plt.subplots(1, channels, squeeze=False)
         for index in range(channels):
             ax = axes[0][index]

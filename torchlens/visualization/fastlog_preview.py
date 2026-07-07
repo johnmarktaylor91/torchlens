@@ -228,7 +228,18 @@ def _make_node_spec_fn(
     def node_spec_fn(layer_log: Any, default_spec: NodeSpec) -> NodeSpec:
         """Paint one node from cached preview state."""
 
-        preview_node = preview_nodes.get(getattr(layer_log, "layer_label", ""))
+        preview_node = next(
+            (
+                preview_nodes[label]
+                for label in (
+                    getattr(layer_log, "layer_label", None),
+                    getattr(layer_log, "layer_label_short", None),
+                    getattr(layer_log, "label", None),
+                )
+                if isinstance(label, str) and label in preview_nodes
+            ),
+            None,
+        )
         lines = list(default_spec.lines)
         if preview_node is None:
             return default_spec

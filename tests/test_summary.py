@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.visualization._summary_internal._builder import _entry_name
 
 
 class TinySummaryModel(nn.Module):
@@ -120,6 +121,30 @@ def test_compute_summary_handles_multi_pass_layers(level: str) -> None:
     assert "Compute Summary: RecurrentSummaryModel" in summary_text
     assert "| linear " in summary_text
     assert " s ms" not in summary_text
+
+
+def test_memory_summary_names_recurrent_layers_with_pass_count() -> None:
+    """Memory summary row names should show recurrent layer multiplicity."""
+
+    log = tl.trace(RecurrentSummaryModel(), torch.randn(1, 3), layers_to_save=None)
+    try:
+        summary_text = log.summary(level="memory")
+    finally:
+        log.cleanup()
+
+    assert "linear_1_1 x3" in summary_text
+
+
+def test_summary_entry_name_uses_layer_num_passes() -> None:
+    """Recurrent layer names use ``num_passes`` rather than nonexistent call counts."""
+
+    entry = type(
+        "FakeLayer",
+        (),
+        {"layer_label": "linear_1_1", "num_passes": 3, "ops": {1: object()}},
+    )()
+
+    assert _entry_name(entry) == "linear_1_1 x3"
 
 
 def test_custom_fields_selection(tiny_summary_log: tl.Trace) -> None:

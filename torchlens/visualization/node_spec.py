@@ -300,15 +300,7 @@ def make_intervention_node_spec_fn(
             str(getattr(layer_log, "layer_label_short", "")),
             str(getattr(layer_log, "label", "")),
         }
-        call_labels = getattr(layer_log, "call_indices", None)
-        if call_labels is None:
-            call_index = getattr(layer_log, "call_index", None)
-            call_labels = (call_index,) if call_index is not None else ()
-        if call_labels is None:
-            call_labels = ()
-        for call_index in call_labels:
-            base = str(getattr(layer_log, "layer_label", ""))
-            matching_labels.add(f"{base}:{call_index}")
+        matching_labels.update(str(label) for label in getattr(layer_log, "call_labels", ()) or ())
 
         spec = default_spec
         if matching_labels & site_labels:

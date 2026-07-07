@@ -237,7 +237,9 @@ def render_lineplot(
     high_y = float(np.max(finite_y)) if y_max is None else float(y_max)
     if not np.isfinite(low_y) or not np.isfinite(high_y):
         raise ValueError("y_min and y_max must be finite when provided.")
-    if high_y <= low_y:
+    if high_y < low_y:
+        low_y, high_y = high_y, low_y
+    if high_y == low_y:
         pad = 1.0 if high_y == 0.0 else abs(high_y) * 0.05
         low_y -= pad
         high_y += pad

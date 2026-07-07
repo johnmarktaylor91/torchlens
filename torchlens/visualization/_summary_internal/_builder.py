@@ -1645,15 +1645,12 @@ def _entry_name(entry: Any) -> str:
     str
         Display name.
     """
-    base_name = getattr(entry, "layer_label", None) or getattr(entry, "layer_label", None)
+    base_name = getattr(entry, "layer_label", None) or getattr(entry, "layer_label_short", None)
     if base_name is None:
         base_name = getattr(entry, "label", None) or getattr(entry, "layer_label", "?")
-    if (
-        getattr(entry, "num_calls", 1)
-        and getattr(entry, "num_calls", 1) > 1
-        and hasattr(entry, "ops")
-    ):
-        return f"{base_name} x{getattr(entry, 'num_calls', 1)}"
+    num_passes = int(getattr(entry, "num_passes", 1) or 1)
+    if num_passes > 1 and hasattr(entry, "ops"):
+        return f"{base_name} x{num_passes}"
     if getattr(entry, "call_index", 1) > 1:
         return str(getattr(entry, "layer_label", base_name))
     return str(base_name)

@@ -139,6 +139,35 @@ def test_intervention_node_spec_matches_short_label(monkeypatch: pytest.MonkeyPa
     assert styled.penwidth == 3.0
 
 
+def test_intervention_node_spec_matches_call_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Intervention styling accepts real per-pass call labels on rolled layers."""
+
+    def fake_labels(trace: Any, *, show_cone: bool) -> tuple[set[str], set[str]]:
+        """Return a per-pass intervention site label."""
+
+        return {"relu_1_2"}, set()
+
+    monkeypatch.setattr(node_spec_mod, "intervention_site_and_cone_labels", fake_labels)
+    node_spec_fn = node_spec_mod.make_intervention_node_spec_fn(
+        object(),
+        show_cone=False,
+        graph_overrides=None,
+        user_node_spec_fn=None,
+    )
+    layer = SimpleNamespace(
+        layer_label="relu_1",
+        layer_label_short="relu",
+        call_labels=["relu_1_1", "relu_1_2"],
+    )
+    default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
+
+    assert node_spec_fn is not None
+    styled = node_spec_fn(layer, default)
+
+    assert styled.color == node_spec_mod.INTERVENTION_SITE_COLOR
+    assert styled.penwidth == 3.0
+
+
 def test_external_overlay_value_matches_short_label() -> None:
     """External overlay scores can be keyed by short label."""
 

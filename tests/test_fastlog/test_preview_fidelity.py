@@ -10,7 +10,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.fastlog import RecordContext, RecordContextFieldError
-from torchlens.visualization.fastlog_preview import _build_preview_nodes
+from torchlens.visualization.fastlog_preview import _build_preview_nodes, _make_node_spec_fn
+from torchlens.visualization.node_spec import NodeSpec
 
 
 class StaticGraph(nn.Module):
@@ -79,3 +80,33 @@ def test_preview_nodes_include_short_label_keys() -> None:
     preview_nodes = _build_preview_nodes(trace, None)
 
     assert "relu_1" in preview_nodes
+
+
+def test_preview_node_spec_consumes_short_label_keys() -> None:
+    """Preview rendering reads the same short-label keys it writes."""
+
+    model = StaticGraph()
+    x = torch.randn(1, 4)
+    trace = tl.trace(model, x)
+    preview_nodes = _build_preview_nodes(trace, lambda ctx: True)
+    node_spec_fn = _make_node_spec_fn(
+        preview_nodes,
+        color_kept="#00FF00",
+        color_rejected="#FF0000",
+        color_unreachable="#0000FF",
+        color_predicate_error="#FFFF00",
+        show_predicate_inputs=False,
+        show_module_events=False,
+    )
+
+    styled = node_spec_fn(
+        type(
+            "ShortLabelOnlyLayer",
+            (),
+            {"layer_label": "missing_label", "layer_label_short": "relu_1"},
+        )(),
+        NodeSpec(lines=["relu"]),
+    )
+
+    assert styled.fillcolor == "#00FF00"
+    assert "fastlog: kept" in styled.lines

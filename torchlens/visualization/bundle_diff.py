@@ -86,6 +86,7 @@ def bundle_diff(
     layer_to_node = _layer_to_supergraph_node(bundle)
     pairs = _select_pairs(
         bundle.aligned_pairs(left_name, right_name),
+        left_name=left_name,
         right_name=right_name,
         delta_map=delta_map,
         layer_to_node=layer_to_node,
@@ -298,8 +299,9 @@ def _build_dot(
     )
     left_layers = [left_layer for left_layer, _right_layer in pairs] + left_unmatched
     right_layers = [right_layer for _left_layer, right_layer in pairs] + right_unmatched
-    values = _right_delta_values(
+    values = _pair_delta_values(
         pairs=pairs,
+        left_name=left_name,
         right_name=right_name,
         delta_map=delta_map,
         layer_to_node=layer_to_node,
@@ -310,7 +312,7 @@ def _build_dot(
         layers=left_layers,
         side="clean",
         member_name=left_name,
-        compared_member_name=right_name,
+        compared_member_name=left_name,
         delta_map=delta_map,
         layer_to_node=layer_to_node,
         max_delta=max_delta,
@@ -417,19 +419,22 @@ def _aria_label(
     )
 
 
-def _right_delta_values(
+def _pair_delta_values(
     *,
     pairs: list[tuple[Any, Any]],
+    left_name: str,
     right_name: str,
     delta_map: dict[str, dict[str, float]],
     layer_to_node: dict[str, str],
 ) -> list[float]:
-    """Return right-side delta values for color normalization.
+    """Return member-specific delta values for color normalization.
 
     Parameters
     ----------
     pairs:
         Aligned layer pairs.
+    left_name:
+        Left member name.
     right_name:
         Right member name.
     delta_map:
@@ -440,7 +445,7 @@ def _right_delta_values(
     Returns
     -------
     list[float]
-        Non-negative finite delta values.
+        Non-negative finite delta values for both rendered members.
     """
 
     values: list[float] = []
@@ -450,15 +455,18 @@ def _right_delta_values(
         graph_node_label = layer_to_node.get(left_label) or layer_to_node.get(right_label)
         if graph_node_label is None:
             continue
-        value = float(delta_map.get(graph_node_label, {}).get(right_name, 0.0))
-        if value >= 0.0:
-            values.append(value)
+        node_values = delta_map.get(graph_node_label, {})
+        for member_name in (left_name, right_name):
+            value = float(node_values.get(member_name, 0.0))
+            if value >= 0.0:
+                values.append(value)
     return values
 
 
 def _select_pairs(
     pairs: list[tuple[Any, Any]],
     *,
+    left_name: str,
     right_name: str,
     delta_map: dict[str, dict[str, float]],
     layer_to_node: dict[str, str],
@@ -470,6 +478,8 @@ def _select_pairs(
     ----------
     pairs:
         Candidate aligned pairs.
+    left_name:
+        Left member name.
     right_name:
         Right member name.
     delta_map:
@@ -494,7 +504,11 @@ def _select_pairs(
         left_label = str(getattr(left_layer, "layer_label", ""))
         right_label = str(getattr(right_layer, "layer_label", ""))
         graph_node_label = layer_to_node.get(left_label) or layer_to_node.get(right_label)
-        value = float(delta_map.get(str(graph_node_label), {}).get(right_name, 0.0))
+        node_values = delta_map.get(str(graph_node_label), {})
+        value = max(
+            float(node_values.get(left_name, 0.0)),
+            float(node_values.get(right_name, 0.0)),
+        )
         scored.append((value, index, (left_layer, right_layer)))
     chosen_indexes = {
         index
@@ -866,9 +880,10 @@ def _add_svg_accessibility(path: str, aria_label: str) -> None:
     with open(path, encoding="utf-8") as handle:
         svg = handle.read()
     if "aria-label=" not in svg:
+        escaped_label = html_escape(aria_label).replace('"', "&quot;")
         svg = re.sub(
             r"<svg\b",
-            f'<svg role="img" aria-label="{html_escape(aria_label)}"',
+            f'<svg role="img" aria-label="{escaped_label}"',
             svg,
             count=1,
         )
