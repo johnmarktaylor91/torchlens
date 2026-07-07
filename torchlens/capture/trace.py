@@ -913,6 +913,7 @@ def run_and_log_inputs_through_model(
             _ACTIVE_CAPTURE_BACKEND = previous_capture_backend
         input_tensors = list(input_tensors_any)
         self._input_tensor_addresses = list(input_tensor_addresses)
+        self._output_attribution_input_tensors = input_tensors
 
         # RNG state snapshot/restore for two-pass consistency (#58).
         # Exhaustive pass: snapshot state BEFORE forward so fast pass can replay.
@@ -1029,6 +1030,7 @@ def run_and_log_inputs_through_model(
             self, outputs
         )
         output_tensors = list(output_tensors_any)
+        self.__dict__.pop("_output_attribution_input_tensors", None)
 
         backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")

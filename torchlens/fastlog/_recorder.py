@@ -447,6 +447,7 @@ class Recorder:
         finally:
             self._state.recording.end_times.append(time.time())
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(trace, output)
+        trace.__dict__.pop("_output_attribution_input_tensors", None)
         self._capture_events.extend(trace.capture_events.op_events)
         trace.capture_events = self._capture_events
         trace._capture_events = self._capture_events

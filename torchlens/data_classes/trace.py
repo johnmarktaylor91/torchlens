@@ -938,6 +938,7 @@ class Trace(
         "_predicate_current_contexts": FieldPolicy.DROP,
         "_predicate_lookback_candidates": FieldPolicy.DROP,
         "_postprocessing_active": FieldPolicy.DROP,
+        "_raw_transform_escape_detected": FieldPolicy.DROP,
         "_raw_event_shape_hash": FieldPolicy.DROP,
         "_replay_arg_version_data_complete": FieldPolicy.KEEP,
         "state": FieldPolicy.KEEP,
@@ -1283,6 +1284,7 @@ class Trace(
         self._has_direct_writes = False
         self._warned_direct_write = False
         self._warned_mutate_in_place = False
+        self._raw_transform_escape_detected = False
         self._spec_revision = 0
         self._out_recipe_revision = 0
         self._append_sequence_id = 0

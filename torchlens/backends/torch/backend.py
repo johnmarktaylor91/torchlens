@@ -702,6 +702,8 @@ class TorchBackend:
         output_tensors = [t for t, _, _ in output_tensors_w_addresses]
         output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
 
+        attributable_output_tensors: list[torch.Tensor] = []
+        attributable_output_tensor_addresses: list[str] = []
         for t, output_address in zip(output_tensors, output_tensor_addresses):
             # Only record output_layers during exhaustive pass; fast pass reuses the list.
             _label_raw = _tl.get_tensor_label(t)
@@ -709,6 +711,12 @@ class TorchBackend:
                 if _is_direct_registered_buffer_output(self_trace, t):
                     # Late-logged in postprocess so untouched buffer outputs get
                     # real source nodes without leaking labels onto model state.
+                    attributable_output_tensors.append(t)
+                    attributable_output_tensor_addresses.append(output_address)
+                    continue
+                _label_raw = _model_input_output_label(self_trace, t)
+            if _label_raw is None:
+                if getattr(self_trace, "_raw_transform_escape_detected", False):
                     continue
                 raise RuntimeError(
                     "TorchLens could not attribute a model output tensor to any traced op "
@@ -718,6 +726,8 @@ class TorchBackend:
                     "Use ordinary torch module attributes during forward, or bind/import torch "
                     "functions after TorchLens has wrapped torch."
                 )
+            attributable_output_tensors.append(t)
+            attributable_output_tensor_addresses.append(output_address)
             if self_trace.capture_mode in {"exhaustive", "predicate"}:
                 self_trace.output_layers.append(_label_raw)
                 event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
@@ -737,7 +747,7 @@ class TorchBackend:
                         capture_spec=updated_event.capture_spec,
                     )
 
-        return output_tensors, output_tensor_addresses
+        return attributable_output_tensors, attributable_output_tensor_addresses
 
     def build_record_context(
         self,
@@ -1089,6 +1099,70 @@ def _is_direct_registered_buffer_output(trace: "Trace", tensor: torch.Tensor) ->
     if model is None:
         return False
     return any(tensor is buffer for _address, buffer in model.named_buffers())
+
+
+def _model_input_output_label(trace: "Trace", tensor: torch.Tensor) -> str | None:
+    """Return the input-source label when an unlabeled output is a model input.
+
+    Parameters
+    ----------
+    trace:
+        Active trace carrying the tensors that were explicitly marked as model
+        inputs for this capture.
+    tensor:
+        Unlabeled model output tensor.
+
+    Returns
+    -------
+    str | None
+        Raw input label for ``tensor`` when structural tensor identity/storage
+        proves it is one of the marked model inputs; otherwise ``None``.
+    """
+
+    input_tensors = getattr(trace, "_output_attribution_input_tensors", ())
+    input_labels = tuple(getattr(trace, "input_layers", ()))
+    for index, input_tensor in enumerate(input_tensors):
+        if not isinstance(input_tensor, torch.Tensor):
+            continue
+        if not _same_tensor_storage_identity(tensor, input_tensor):
+            continue
+        live_label = _tl.get_tensor_label(input_tensor)
+        if live_label is not None:
+            return live_label
+        if index < len(input_labels):
+            return str(input_labels[index])
+    return None
+
+
+def _same_tensor_storage_identity(left: torch.Tensor, right: torch.Tensor) -> bool:
+    """Return whether two tensors are the same object or identical storage view.
+
+    Parameters
+    ----------
+    left:
+        Candidate output tensor.
+    right:
+        Marked input tensor.
+
+    Returns
+    -------
+    bool
+        True when the tensors are the same Python object, or when their storage
+        pointer, offset, shape, stride, dtype, and device all match.
+    """
+
+    if left is right:
+        return True
+    if left.dtype != right.dtype or left.device != right.device:
+        return False
+    if tuple(left.shape) != tuple(right.shape) or tuple(left.stride()) != tuple(right.stride()):
+        return False
+    if left.storage_offset() != right.storage_offset():
+        return False
+    try:
+        return left.untyped_storage().data_ptr() == right.untyped_storage().data_ptr()
+    except RuntimeError:
+        return False
 
 
 def _assign_nested_input_value(

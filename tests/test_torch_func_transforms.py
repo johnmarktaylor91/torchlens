@@ -316,6 +316,39 @@ class ModuleAttrTensorModel(nn.Module):
         return x + self.offset
 
 
+class ForeignOutputTensorModel(nn.Module):
+    """Return a tensor held outside the model and current capture."""
+
+    def __init__(self, foreign: torch.Tensor) -> None:
+        """Store the foreign tensor supplied by the test.
+
+        Parameters
+        ----------
+        foreign:
+            Tensor that has no provenance in the capture session.
+        """
+
+        super().__init__()
+        self._foreign = foreign
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the foreign tensor as the only model output.
+
+        Parameters
+        ----------
+        x:
+            Input tensor, intentionally unused.
+
+        Returns
+        -------
+        torch.Tensor
+            Foreign tensor not attributable to traced operations or inputs.
+        """
+
+        del x
+        return self._foreign
+
+
 class PreBuiltTransformModel(nn.Module):
     """Use a transform callable built before ``forward`` runs."""
 
@@ -660,6 +693,21 @@ def test_prebuilt_transform_wrap_order_and_raw_warning_contract() -> None:
 
     assert raw_log.transforms == ()
     assert torch.allclose(RawPreBuiltTransformModel().eval()(x), x * 2.0)
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_raw_transform_escape_flag_does_not_leak_across_captures() -> None:
+    """A raw-transform escape exemption applies only to its capture session."""
+
+    x = torch.randn(3, 4)
+    with pytest.warns(UserWarning, match="functorch"):
+        raw_log = tl.trace(RawPreBuiltTransformModel().eval(), x, layers_to_save="all")
+
+    assert raw_log.transforms == ()
+
+    foreign_model = ForeignOutputTensorModel(torch.ones(3, 4)).eval()
+    with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
+        tl.trace(foreign_model, x, layers_to_save="all")
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")

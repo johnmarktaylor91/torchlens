@@ -163,6 +163,33 @@ class ForeignTensorBetweenOutputsModel(nn.Module):
         return y1, self.foreign_tensor, y2
 
 
+class ForeignTensorOnlyOutputModel(nn.Module):
+    """Model returning an untracked foreign tensor as its sole output."""
+
+    def __init__(self, foreign_tensor: torch.Tensor) -> None:
+        """Store a tensor created outside the traced model call."""
+
+        super().__init__()
+        self.foreign_tensor = foreign_tensor
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the foreign tensor directly.
+
+        Parameters
+        ----------
+        x:
+            Model input tensor, intentionally unused.
+
+        Returns
+        -------
+        torch.Tensor
+            Foreign tensor with no TorchLens producer or input-source proof.
+        """
+
+        del x
+        return self.foreign_tensor
+
+
 @pytest.mark.smoke
 def test_buffer_sole_output_traces_with_output_layer() -> None:
     """A buffer-only return must produce ``output_1`` bound to the buffer value."""
@@ -284,6 +311,17 @@ def test_foreign_tensor_between_attributed_outputs_fails_loudly() -> None:
 
     foreign_tensor = torch.full((3,), 7.0)
     model = ForeignTensorBetweenOutputsModel(foreign_tensor)
+    x = torch.rand(3)
+
+    with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
+        trace_fn(model, x, layers_to_save="all")
+
+
+def test_foreign_tensor_only_output_fails_loudly() -> None:
+    """A foreign passthrough output must not be mistaken for a model input."""
+
+    foreign_tensor = torch.full((3,), 7.0)
+    model = ForeignTensorOnlyOutputModel(foreign_tensor)
     x = torch.rand(3)
 
     with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):

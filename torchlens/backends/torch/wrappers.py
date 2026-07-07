@@ -823,6 +823,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         if _is_inside_functorch_transform():
             if not _state._functorch_warning_emitted:
                 _state._functorch_warning_emitted = True
+                trace._raw_transform_escape_detected = True
                 import warnings
 
                 warnings.warn(
