@@ -258,10 +258,11 @@ class TestRandomGraphModel:
         model = RandomGraphModel(target_nodes=100000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
-    @pytest.mark.skip(
+    @pytest.mark.skipif(
+        os.environ.get("TORCHLENS_RUN_250K") != "1",
         reason="250k-node validation OOMs / hangs for hours on most machines. "
-        "Run manually with: pytest tests/test_large_graphs.py::"
-        "TestRandomGraphModel::test_validation_250k --no-skip"
+        "Opt in explicitly with: TORCHLENS_RUN_250K=1 pytest tests/test_large_graphs.py::"
+        "TestRandomGraphModel::test_validation_250k -m rare",
     )
     @pytest.mark.slow
     @pytest.mark.rare

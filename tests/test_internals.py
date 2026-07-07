@@ -384,10 +384,8 @@ class TestEmptyModelGraph:
         """Model returning input unchanged should not crash."""
         model = _ConstantOutputModel()
         x = torch.randn(2, 10)
-        try:
-            trace_fn(model, x)
-        except Exception:
-            pass  # Acceptable — just shouldn't be an unguarded crash
+        log = trace_fn(model, x)
+        assert log is not None
 
 
 class TestIdentityModel:
@@ -491,30 +489,129 @@ class TestCleanupReleasesReferences:
 # ---------------------------------------------------------------------------
 
 
+class _NestedListArgModel(nn.Module):
+    """Two independent linear branches stacked via a list argument.
+
+    ``torch.stack`` receives a Python ``list`` of tensors as its sole
+    positional argument, so its captured ``saved_args[0]`` is a genuine
+    nested container (unlike a plain ``nn.Linear`` call, whose args are
+    top-level tensors). The forward pass stashes the exact live tensors it
+    passed to ``torch.stack`` on ``self._last_pair`` so the test can grab
+    the very objects TorchLens copied and mutate them afterward.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(10, 10)
+        self.fc2 = nn.Linear(10, 10)
+
+    def forward(self, x):
+        a = self.fc1(x)
+        b = self.fc2(x)
+        self._last_pair = [a, b]
+        stacked = torch.stack(self._last_pair)
+        return stacked.sum(0)
+
+
 class TestNestedTupleArgs:
     def test_nested_tuple_independence(self):
-        """Nested tuples/lists in saved_args should be independent copies."""
-        model = _SimpleLinear()
+        """Nested tuples/lists in saved_args must be independent copies.
+
+        Mutating the live source tensors after capture must NOT change the
+        saved snapshot, and the saved container/tensors must not be the
+        same objects as the live ones (copy, not reference).
+        """
+        model = _NestedListArgModel()
         x = torch.randn(2, 10)
         log = trace_fn(model, x, save_arg_values=True)
-        found_args = False
+
+        stack_entry = None
         for label in log.layer_labels:
             entry = log[label]
-            if entry.saved_args is not None and len(entry.saved_args) > 0:
-                found_args = True
+            saved_args = entry.saved_args
+            if saved_args is not None and len(saved_args) > 0 and isinstance(saved_args[0], list):
+                stack_entry = entry
                 break
-        assert found_args or True  # OK if no args (model-dependent)
+        assert stack_entry is not None, (
+            "expected to find the torch.stack layer with a nested-list saved_args[0]"
+        )
+
+        saved_list = stack_entry.saved_args[0]
+        assert isinstance(saved_list, list)
+        assert len(saved_list) == 2
+        live_pair = model._last_pair
+
+        # Identity: the saved container and its tensors must be copies, not references.
+        assert saved_list is not live_pair
+        assert all(saved is not live for saved, live in zip(saved_list, live_pair))
+
+        before = [t.clone() for t in saved_list]
+
+        # Mutate the live source tensors captured during forward. If saved_args held
+        # references instead of independent copies, this mutation would leak through.
+        for t in live_pair:
+            t.add_(1000.0)
+
+        for pre_mutation, post_mutation in zip(before, saved_list):
+            assert torch.equal(pre_mutation, post_mutation), (
+                "saved_args nested-list tensors changed after mutating the live source "
+                "tensors -- saved_args is not holding independent copies"
+            )
+
+        # And the reverse: mutating the saved copy must not affect the (already-mutated) live tensors.
+        live_before_second_mutation = [t.clone() for t in live_pair]
+        for t in saved_list:
+            t.add_(-5000.0)
+        for pre_mutation, post_mutation in zip(live_before_second_mutation, live_pair):
+            assert torch.equal(pre_mutation, post_mutation), (
+                "live tensors changed after mutating the saved_args copy -- saved_args is "
+                "not holding independent copies"
+            )
 
 
 class TestDisplayLargeTensor:
     def test_display_no_oom(self):
-        """Displaying a large tensor should not clone the whole thing."""
-        model = nn.Linear(100, 100)
-        x = torch.randn(10, 100)
+        """Displaying a large captured tensor must not clone the whole tensor (#73).
+
+        ``Op._tensor_contents_str_helper`` is documented ("Slice first, then
+        clone only the small slice (#73)") to slice down to at most an 8x8
+        preview *before* calling ``.clone()``. This test tracks every
+        ``torch.Tensor.clone()`` call made while formatting a real captured
+        entry with ``str(op)`` and asserts none of them ever clones more than
+        the 8x8=64-element preview -- i.e. it can never clone the full
+        (50, 2000) = 100,000-element activation. A regression that clones
+        the whole tensor before slicing would make this fail.
+        """
+        model = nn.Linear(100, 2000)
+        x = torch.randn(50, 100)
         log = trace_fn(model, x, layers_to_save="all")
-        for label in log.layer_labels:
-            entry = log[label]
-            str(entry)
+
+        clone_call_sizes: list[int] = []
+        orig_clone = torch.Tensor.clone
+
+        def _tracking_clone(self, *args, **kwargs):
+            clone_call_sizes.append(self.numel())
+            return orig_clone(self, *args, **kwargs)
+
+        torch.Tensor.clone = _tracking_clone
+        try:
+            for label in log.layer_labels:
+                entry = log[label]
+                op = entry.ops[0]
+                if op.out is None:
+                    continue
+                str(op)
+        finally:
+            torch.Tensor.clone = orig_clone
+
+        assert clone_call_sizes, "expected str(op) to clone at least one tensor slice"
+        max_cloned_elements = max(clone_call_sizes)
+        full_tensor_elements = 50 * 2000
+        assert max_cloned_elements <= 64, (
+            f"str(op) cloned a tensor with {max_cloned_elements} elements "
+            f"(full activation has {full_tensor_elements}); expected the display path to "
+            f"slice down to <= 8x8=64 elements before cloning"
+        )
 
 
 class TestDisplayUsesLoggedShape:
