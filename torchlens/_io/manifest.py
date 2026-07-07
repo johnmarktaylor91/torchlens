@@ -42,7 +42,7 @@ class TensorEntry:
     relative_path:
         Bundle-relative path to the blob file.
     backend:
-        Storage backend name. S4 supports ``"safetensors"`` only.
+        Storage backend name. Only ``"safetensors"`` is currently supported.
     shape:
         Tensor shape recorded at save time.
     dtype:
@@ -229,7 +229,10 @@ class Manifest:
     created_at:
         UTC timestamp string for bundle creation.
     bundle_format:
-        Bundle container format. S4 supports ``"directory"`` only.
+        Bundle container format: ``"directory"`` for standard portable
+        bundles written by ``Trace.save()``/``tl.save()``, or
+        ``"fastlog-directory"`` for fastlog ring-buffer disk storage
+        (see ``torchlens/fastlog/storage_disk.py``).
     n_layers:
         Total number of ``Op`` entries in the saved log.
     n_out_blobs:
@@ -443,7 +446,7 @@ def sha256_of_file(path: str | Path) -> str:
 
 
 def enforce_version_policy(manifest: Manifest) -> None:
-    """Apply the Fork F compatibility policy for a loaded bundle manifest.
+    """Apply the bundle version and integrity compatibility policy for a loaded manifest.
 
     Parameters
     ----------

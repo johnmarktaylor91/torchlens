@@ -15,7 +15,8 @@ pytest.importorskip("safetensors")
 
 from torchlens import trace as trace_fn
 from torchlens.errors import TorchLensPostfuncError
-from torchlens.io import cleanup_tmp
+from torchlens.io import cleanup_tmp, detect_tlspec_format
+from torchlens.validation import validate_tlspec
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.trace import Trace
@@ -355,3 +356,25 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
     assert first_saved_layer.out_ref is not None
     assert first_saved_layer.out_ref.source_bundle_path == bundle_path
     assert ".tmp." not in str(first_saved_layer.out_ref.source_bundle_path)
+
+
+def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -> None:
+    """Streaming bundles must write the same unified manifest as ``tl.save()``.
+
+    Regression test: ``BundleStreamWriter.finalize()`` used to write a bare
+    legacy ``Manifest`` with no ``"kind"`` key, so ``detect_tlspec_format()``
+    misclassified every streaming bundle as the old ``"v2.16_modellog_portable"``
+    format and ``validate_tlspec()`` silently skipped schema validation for
+    the entire ``save_outs_to=`` save path.
+    """
+
+    bundle_path = tmp_path / "stream_bundle.tl"
+    model, inputs = _make_streaming_model()
+    trace = trace_fn(model, inputs, save_outs_to=bundle_path, layers_to_save="all")
+
+    assert detect_tlspec_format(bundle_path) == "v2.0_unified"
+    validate_tlspec(bundle_path)
+
+    loaded = tl.load(bundle_path)
+    assert isinstance(loaded, Trace)
+    assert loaded.num_ops == trace.num_ops

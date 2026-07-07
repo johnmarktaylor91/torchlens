@@ -651,7 +651,7 @@ def _load_unified_tlspec(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | None,
 ) -> "Trace | Bundle | InterventionSpec":
-    """Load a Phase-11 unified ``.tlspec`` bundle by manifest kind.
+    """Load a unified ``.tlspec`` bundle by manifest kind.
 
     Parameters
     ----------

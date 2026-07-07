@@ -25,6 +25,7 @@ from . import TLSPEC_VERSION, TorchLensIOError
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .scrub import BlobSpec
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
+from .tlspec import _TlSpecWriter
 from .._state import pause_logging
 from .. import __version__ as TORCHLENS_VERSION
 
@@ -192,6 +193,8 @@ class BundleStreamWriter:
         scrubbed_state: dict[str, Any],
         blob_specs: list[BlobSpec],
         unsupported: list[dict[str, str]],
+        *,
+        trace: Any,
     ) -> Path:
         """Finish the bundle by writing remaining blobs, manifest, and metadata.
 
@@ -203,6 +206,12 @@ class BundleStreamWriter:
             Remaining blob specs that were not already streamed during the pass.
         unsupported:
             Unsupported tensor records for the manifest.
+        trace:
+            Source ``Trace`` being streamed to disk. Used to write the same
+            unified ``.tlspec`` manifest fields (``kind``, ``model_signature``,
+            ``sites``, ``body_index``, ...) that ``Trace.save()``/``tl.save()``
+            write, so streaming bundles are detected as ``"v2.0_unified"`` and
+            go through the same ``validate_tlspec()`` schema validation.
 
         Returns
         -------
@@ -222,8 +231,15 @@ class BundleStreamWriter:
                     continue
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
 
-            manifest = self._build_manifest(scrubbed_state=scrubbed_state, unsupported=unsupported)
-            manifest.write(self.tmp_path / "manifest.json")
+            legacy_manifest = self._build_manifest(
+                scrubbed_state=scrubbed_state, unsupported=unsupported
+            )
+            _TlSpecWriter.write_trace_manifest(
+                path=self.tmp_path / "manifest.json",
+                trace=trace,
+                legacy_manifest=legacy_manifest,
+                save_level="portable",
+            )
             with (self.tmp_path / "metadata.pkl").open("wb") as handle:
                 pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
         except TorchLensIOError:

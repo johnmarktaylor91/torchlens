@@ -16,12 +16,16 @@ from typing import Any, Literal
 import torch
 from safetensors.torch import save_file
 
-from . import TorchLensIOError
+from . import TLSPEC_VERSION, TorchLensIOError
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .. import __version__ as TORCHLENS_VERSION
 from ..backends import get_backend_spec
 
-TLSPEC_VERSION = 1
+# NOTE: ``TLSPEC_VERSION`` is imported (not redefined) from ``torchlens._io``
+# so there is a single source of truth for the on-disk ``tlspec_version``
+# manifest field. It previously had a second, independent definition here
+# (pinned at 1) that collided with the same JSON key and was silently
+# clobbering the correct value in ``write_trace_manifest`` below.
 TLSPEC_SCHEMA_VERSION = 1
 TLSPEC_MANIFEST_FILENAME = "manifest.json"
 TLSPEC_VALID_SAVE_LEVELS = ("audit", "executable_with_callables", "portable")
@@ -52,7 +56,7 @@ def _safe_len(value: Any) -> int:
 
 
 class _TlSpecWriter:
-    """Write Phase 11 unified ``.tlspec`` manifests and bundle payloads."""
+    """Write unified ``.tlspec`` manifests and bundle payloads."""
 
     @classmethod
     def write_trace_manifest(
@@ -78,16 +82,21 @@ class _TlSpecWriter:
         """
 
         manifest = legacy_manifest.to_dict()
-        manifest.update(
-            cls.build_manifest(
-                kind="trace",
-                source=trace,
-                tensor_entries=legacy_manifest.tensors,
-                save_level=save_level,
-                spec_compat_info=None,
-                intervention_compat_metadata=None,
-            )
+        unified_fields = cls.build_manifest(
+            kind="trace",
+            source=trace,
+            tensor_entries=legacy_manifest.tensors,
+            save_level=save_level,
+            spec_compat_info=None,
+            intervention_compat_metadata=None,
         )
+        # ``legacy_manifest.to_dict()`` already carries the authoritative
+        # ``tlspec_version`` (sourced from the same ``TLSPEC_VERSION`` single
+        # source of truth). Drop the duplicate key from the unified fields
+        # before merging instead of silently letting ``dict.update`` decide
+        # which of two same-named keys wins.
+        unified_fields.pop("tlspec_version", None)
+        manifest.update(unified_fields)
         backend_name = str(getattr(trace, "backend", "torch"))
         if backend_name != "torch":
             spec = get_backend_spec(backend_name)

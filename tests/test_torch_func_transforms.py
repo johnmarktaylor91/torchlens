@@ -693,8 +693,7 @@ def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None
     path = tmp_path / "vmap.tlspec"
 
     tl.save(log, path)
-    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
-        loaded = cast(Trace, tl.load(path))
+    loaded = cast(Trace, tl.load(path))
 
     assert bool(dataframe.loc[dataframe["type"] == "vmap", "is_transform"].iloc[0])
     assert dataframe.loc[dataframe["type"] == "vmap", "transform_kind"].iloc[0] == "vmap"
@@ -881,8 +880,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
 
     path = tmp_path / "matrix-vmap.tlspec"
     tl.save(predicate_log, path)
-    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
-        loaded = cast(Trace, tl.load(path))
+    loaded = cast(Trace, tl.load(path))
     assert loaded.transforms[0].transform_kind == "vmap"
 
     intervened = tl.trace(

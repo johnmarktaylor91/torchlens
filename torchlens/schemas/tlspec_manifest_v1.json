@@ -26,7 +26,7 @@
   "properties": {
     "tlspec_version": {
       "type": "integer",
-      "const": 1
+      "minimum": 1
     },
     "kind": {
       "type": "string",

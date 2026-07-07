@@ -139,8 +139,7 @@ def test_edge_uses_survives_tlspec_roundtrip(tmp_path: Path) -> None:
     path = tmp_path / "edge_uses.tlspec"
     trace.save(path)
 
-    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
-        loaded = tl.load(path)
+    loaded = tl.load(path)
     assert isinstance(loaded, Trace)
 
     add_op = _first_op_by_func_name(loaded, "__add__")

@@ -1227,6 +1227,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         scrubbed_state=scrubbed_state,
         blob_specs=blob_specs,
         unsupported=unsupported_tensor_records,
+        trace=self,
     )
     setattr(self, "_source_bundle_path", Path(final_path))
     setattr(

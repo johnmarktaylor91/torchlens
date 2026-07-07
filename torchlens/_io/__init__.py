@@ -4,11 +4,10 @@ The ``torchlens._io`` package implements TorchLens' portable save/load path:
 it scrubs a ``Trace`` into metadata plus tensor blobs, writes directory
 bundles backed by ``safetensors``, and rehydrates those bundles into eager or
 lazy model logs. Portable bundles are for archival and analysis, not replay:
-``validate_forward_pass()`` is unsupported after ``torchlens.load()`` (Fork L),
+``validate_forward_pass()`` is unsupported after ``torchlens.load()``,
 expert ``lazy=True, materialize_nested=False`` loads must call
-``torchlens.rehydrate_nested()`` before re-save (Fork M), and lazy refs open,
-verify, and close blob files per materialization instead of sharing handles
-(Fork K).
+``torchlens.rehydrate_nested()`` before re-save, and lazy refs open,
+verify, and close blob files per materialization instead of sharing handles.
 """
 
 from __future__ import annotations

@@ -52,17 +52,17 @@
         "storage_backend": null
       }
     ],
-    "tlspec_version": 1,
+    "tlspec_version": 5,
     "torch_version_present": true
   },
   "sha256_chunks": [
-    "a9356137",
-    "87df9619",
-    "f7e9ffd0",
-    "d5910c69",
-    "5fa48423",
-    "02272b05",
-    "a6d8d481",
-    "5c7eaca0"
+    "8438af24",
+    "518b45bc",
+    "472a0d8a",
+    "0673bd5c",
+    "ab77f6c3",
+    "95449ab4",
+    "e821df1a",
+    "91706a2a"
   ]
 }

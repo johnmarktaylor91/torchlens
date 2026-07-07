@@ -119,8 +119,7 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     roundtrip_path = tmp_path / "roundtrip.tl"
 
     tl.save(trace, roundtrip_path)
-    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=1 is older"):
-        restored = tl.load(roundtrip_path, lazy=True)
+    restored = tl.load(roundtrip_path, lazy=True)
     label = next(iter(expected))
     grad_fn_handle = next(
         grad_fn_handle for grad_fn_handle in restored.grad_fns if grad_fn_handle.op

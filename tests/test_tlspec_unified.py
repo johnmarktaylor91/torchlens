@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Callable
 
@@ -11,6 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens.backends import BackendPayloadUnsupportedError
 from torchlens.intervention.types import FireRecord, HelperSpec, InterventionSpec
 from torchlens.options import CaptureOptions
@@ -124,24 +126,6 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
         json.dumps(manifest, indent=2) + "\n",
         encoding="utf-8",
     )
-
-
-def _load_older_tlspec(path: Path) -> Any:
-    """Load an intentionally old fixture while asserting its version warning.
-
-    Parameters
-    ----------
-    path:
-        ``.tlspec`` path.
-
-    Returns
-    -------
-    Any
-        Loaded TorchLens object.
-    """
-
-    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
-        return tl.load(path)
 
 
 def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
@@ -299,16 +283,61 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
 
     log.save(path, level=level)
     validate_tlspec(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
     assert manifest["kind"] == "trace"
-    assert manifest["tlspec_version"] == 1
+    assert manifest["tlspec_version"] == TLSPEC_VERSION
     assert manifest["save_level"] == level
     assert [layer.layer_label for layer in loaded.layer_list] == [
         layer.layer_label for layer in log.layer_list
     ]
+
+
+@pytest.mark.smoke
+def test_fresh_unified_save_reports_current_version_with_no_deprecation_warning(
+    tmp_path: Path,
+) -> None:
+    """A same-runtime save/load round trip must not report a false "older" version.
+
+    Regression test for a bug where ``torchlens._io.tlspec.TLSPEC_VERSION`` (a
+    second, independently-defined constant pinned at 1) collided with the
+    unrelated ``torchlens._io.TLSPEC_VERSION`` (the real portable-format
+    version) under the same ``"tlspec_version"`` manifest key. A ``dict.update``
+    merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
+    so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
+    every same-runtime load raised a false "Bundle tlspec_version=1 is older
+    than runtime tlspec_version=5" ``DeprecationWarning``.
+    """
+
+    log = _captured_log()
+    path = tmp_path / "fresh_version.tlspec"
+
+    log.save(path)
+    manifest = _read_manifest(path)
+    assert manifest["tlspec_version"] == TLSPEC_VERSION
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        loaded = tl.load(path)
+    assert isinstance(loaded, tl.Trace)
+
+
+@pytest.mark.smoke
+def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Path) -> None:
+    """A genuinely newer on-disk ``tlspec_version`` must still hard-fail at load."""
+
+    log = _captured_log()
+    path = tmp_path / "newer_version.tlspec"
+    log.save(path)
+
+    manifest = _read_manifest(path)
+    manifest["tlspec_version"] = TLSPEC_VERSION + 1
+    _write_manifest(path, manifest)
+
+    with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
+        tl.load(path)
 
 
 @pytest.mark.smoke
@@ -326,7 +355,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     path = tmp_path / "trace_forward_intervention.tlspec"
 
     log.save(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
     records = [
@@ -354,7 +383,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     path = tmp_path / "trace_backward_intervention.tlspec"
 
     log.save(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
     refs = [
@@ -385,7 +414,7 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
 
     log.save(path, level="portable")
     validate_tlspec(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -408,7 +437,7 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
 
     log.save(path, level="portable")
     validate_tlspec(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -428,7 +457,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
 
     bundle.save(path, level=level)
     validate_tlspec(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Bundle)
@@ -454,7 +483,7 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
 
     assert isinstance(loaded, InterventionSpec)
     assert manifest["kind"] == "intervention"
-    assert manifest["tlspec_version"] == 1
+    assert manifest["tlspec_version"] == TLSPEC_VERSION
     assert manifest["format_version"] == "2"
     assert manifest["save_level"] == level
     assert loaded.metadata["save_level"] == level
@@ -501,7 +530,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
 
     log.save(path)
     validate_tlspec(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
@@ -561,7 +590,7 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     _captured_log().save(path)
     _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
 
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.backend == "mlx"
@@ -590,7 +619,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
     _write_manifest(path, manifest)
 
     validate_tlspec(path)
-    loaded = _load_older_tlspec(path)
+    loaded = tl.load(path)
     saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
 
     assert isinstance(loaded, tl.Trace)

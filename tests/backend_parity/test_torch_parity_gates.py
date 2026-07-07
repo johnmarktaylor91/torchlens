@@ -554,8 +554,7 @@ def test_tlspec_roundtrip_and_manifest_goldens(tmp_path: Path) -> None:
     trace = _default_trace()
     bundle_path = tmp_path / "default_trace.tlspec"
     tl.save(trace, bundle_path)
-    with pytest.warns(DeprecationWarning, match="Bundle tlspec_version=.*older"):
-        loaded = cast(Trace, tl.load(bundle_path))
+    loaded = cast(Trace, tl.load(bundle_path))
 
     _assert_projection_matches_golden(
         "tlspec_roundtrip_digest",

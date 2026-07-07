@@ -130,7 +130,11 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
         raise ValueError(f"Unified .tlspec manifest missing required fields: {missing}.")
 
     schema_version = _manifest_schema_version(manifest)
-    _require_int(manifest, "tlspec_version", expected=1)
+    # ``tlspec_version`` tracks the portable scrub/state format
+    # (``torchlens._io.TLSPEC_VERSION``) and grows independently of
+    # ``schema_version`` (which selects which of this file's schema variants
+    # applies), so only a floor is enforced here, not an exact value.
+    _require_int(manifest, "tlspec_version", minimum=1)
     _require_str_enum(manifest, "kind", {"intervention", "trace", "bundle"})
     _require_str(manifest, "created_at")
     _require_str(manifest, "torchlens_version")
