@@ -37,13 +37,23 @@ def test_normalize_capture_decision_bool_and_none_rules() -> None:
     """Boolean and None returns normalize according to the slot default."""
 
     ctx = _ctx()
-    default = CaptureSpec(save_out=True, save_metadata=False, keep_grad=True)
+    default = CaptureSpec(
+        save_out=True,
+        save_metadata=False,
+        keep_grad=True,
+        save_mode="reference",
+    )
 
     keep = _normalize_capture_decision(True, ctx, default)
     skip = _normalize_capture_decision(False, ctx, default)
     inherited = _normalize_capture_decision(None, ctx, default)
 
-    assert keep == CaptureSpec(save_out=True, save_metadata=True, keep_grad=True)
+    assert keep == CaptureSpec(
+        save_out=True,
+        save_metadata=True,
+        keep_grad=True,
+        save_mode="reference",
+    )
     assert skip == CaptureSpec(save_out=False, save_metadata=False)
     assert inherited is default
 

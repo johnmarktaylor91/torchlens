@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import time
 import collections.abc
+import time
 from typing import Any
 
 from ._deprecations import MISSING
+from .fastlog.options import HaltPredicateFn
 from .intervention.errors import AppendMismatchError, ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .options import StreamingOptions
@@ -41,6 +42,7 @@ def _validate_chunked_forward_capture(
     save_grads: bool,
     hooks: Any | None,
     intervene: InterventionPredicate | None,
+    halt: HaltPredicateFn | None,
     streaming: StreamingOptions,
 ) -> None:
     """Reject unsupported ``trace(chunk_size=...)`` option combinations.
@@ -57,6 +59,8 @@ def _validate_chunked_forward_capture(
         Public live hook plan supplied to this capture.
     intervene:
         Public predicate intervention supplied to this capture.
+    halt:
+        Public halt predicate supplied to this capture.
     streaming:
         Resolved streaming options.
 
@@ -78,6 +82,8 @@ def _validate_chunked_forward_capture(
         raise ChunkedForwardConfigError("chunk_size cannot be combined with hooks=.")
     if intervene is not None:
         raise ChunkedForwardConfigError("chunk_size cannot be combined with intervene=.")
+    if halt is not None:
+        raise ChunkedForwardConfigError("chunk_size cannot be combined with halt=.")
     if streaming.bundle_path is not None or streaming.out_callback is not None:
         raise ChunkedForwardConfigError(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."

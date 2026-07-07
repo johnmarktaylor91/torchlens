@@ -128,6 +128,11 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
     )
     requested_ints = {int(item) for item in requested if isinstance(item, int)}
     requested_strings = {str(item) for item in requested if not isinstance(item, int)}
+    cache_key = (
+        "layers_to_save",
+        tuple(sorted(requested_ints)),
+        tuple(sorted(requested_strings)),
+    )
 
     def string_matches(requested_string: str, ctx: RecordContext, candidates: set[str]) -> bool:
         """Return whether a legacy string selector matches candidate labels."""
@@ -160,7 +165,91 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
             for requested_string in requested_strings
         )
 
+    setattr(predicate, "__torchlens_cache_key__", cache_key)
     return cast(PredicateFn, predicate)
+
+
+def _predicate_cache_key(predicate: object) -> object:
+    """Return a stable cache-key fragment for predicate-like objects.
+
+    Parameters
+    ----------
+    predicate:
+        Predicate, selector, or ``None``.
+
+    Returns
+    -------
+    object
+        JSON-serializable identity fragment that avoids memory-address reprs.
+    """
+
+    if predicate is None:
+        return None
+    explicit_key = getattr(predicate, "__torchlens_cache_key__", None)
+    if explicit_key is not None:
+        return explicit_key
+    if isinstance(predicate, BaseSelector):
+        return (
+            "selector",
+            predicate.selector_kind,
+            _stable_cache_fragment(predicate.selector_value),
+        )
+    module = getattr(predicate, "__module__", None)
+    qualname = getattr(predicate, "__qualname__", None)
+    if callable(predicate) and module is not None and qualname is not None:
+        defaults = getattr(predicate, "__defaults__", None)
+        closure = getattr(predicate, "__closure__", None)
+        closure_values: tuple[object, ...] = ()
+        if closure:
+            closure_values = tuple(_stable_cache_fragment(cell.cell_contents) for cell in closure)
+        return (
+            "callable",
+            str(module),
+            str(qualname),
+            _stable_cache_fragment(defaults),
+            closure_values,
+        )
+    return ("object", type(predicate).__module__, type(predicate).__qualname__)
+
+
+def _stable_cache_fragment(value: object) -> object:
+    """Return a stable primitive fragment for nested predicate state.
+
+    Parameters
+    ----------
+    value:
+        Candidate value captured by a predicate or selector.
+
+    Returns
+    -------
+    object
+        JSON-friendly primitive, list, tuple, or type identity.
+    """
+
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, BaseSelector):
+        return ("selector", value.selector_kind, _stable_cache_fragment(value.selector_value))
+    if isinstance(value, dict):
+        return tuple(
+            sorted(
+                (
+                    _stable_cache_fragment(key),
+                    _stable_cache_fragment(item_value),
+                )
+                for key, item_value in value.items()
+            )
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_stable_cache_fragment(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((_stable_cache_fragment(item) for item in value), key=repr))
+    if callable(value):
+        module = getattr(value, "__module__", None)
+        qualname = getattr(value, "__qualname__", None)
+        if module is not None and qualname is not None:
+            return ("callable", str(module), str(qualname))
+    return ("object", type(value).__module__, type(value).__qualname__)
 
 
 def _layers_to_save_mentions_output(layers_to_save: object) -> bool:
@@ -293,6 +382,11 @@ def _combine_save_predicates(
 
         return bool(first(ctx) or second(ctx))
 
+    setattr(
+        predicate,
+        "__torchlens_cache_key__",
+        ("or", _predicate_cache_key(first), _predicate_cache_key(second)),
+    )
     return cast(PredicateFn, predicate)
 
 

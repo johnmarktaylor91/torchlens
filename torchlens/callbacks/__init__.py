@@ -1,4 +1,4 @@
-"""Callback integration namespace reserved for TorchLens 2.0."""
+"""Callback integration namespace with lazy Lightning support."""
 
 from __future__ import annotations
 

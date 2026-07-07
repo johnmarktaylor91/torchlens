@@ -1213,7 +1213,9 @@ def validate_batch_of_models_and_inputs(
     result to a running CSV at *out_path*.  If the CSV already exists, previously
     validated models can be skipped (controlled by *redo_model_if_already_run*).
 
-    Args:
+    Parameters
+
+    ----------
         models_and_inputs_dict: Mapping of model_class_name to a dict with keys:
             - ``model_category`` (str): grouping label (e.g. 'torchvision').
             - ``model_loading_func`` (callable): zero-arg function returning an nn.Module.
@@ -1221,7 +1223,9 @@ def validate_batch_of_models_and_inputs(
         out_path: File path for the results CSV (created if absent, appended otherwise).
         redo_model_if_already_run: Re-validate models already present in the CSV.
 
-    Returns:
+    Returns
+
+    -------
         DataFrame with columns: model_category, model_class_name, input_name, validation_success.
     """
     try:

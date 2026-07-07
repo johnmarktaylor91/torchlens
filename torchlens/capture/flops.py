@@ -704,7 +704,9 @@ def _linear_flops(
 ) -> int | None:
     """nn.Linear: 2 * batch * in_features * out_features (+ bias).
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -754,7 +756,9 @@ def _batchnorm_flops(
 ) -> int:
     """BatchNorm: ~5 FLOPs per element (mean, var, normalize, scale, shift).
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -769,7 +773,9 @@ def _layernorm_flops(
 ) -> int:
     """LayerNorm: ~5 FLOPs per element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -784,7 +790,9 @@ def _groupnorm_flops(
 ) -> int:
     """GroupNorm: ~5 FLOPs per element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -799,7 +807,9 @@ def _instancenorm_flops(
 ) -> int:
     """InstanceNorm: ~5 FLOPs per element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -814,7 +824,9 @@ def _reduction_flops(
 ) -> int | None:
     """Reductions (sum, mean, max, min, prod, etc.): ~input_numel FLOPs.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -833,7 +845,9 @@ def _var_std_flops(
 ) -> int | None:
     """Variance/std: ~3 * input_numel (mean, squared diff, sum).
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -852,7 +866,9 @@ def _norm_flops(
 ) -> int | None:
     """Vector/matrix norm: ~2 * input_numel (square + sum, then sqrt).
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -871,7 +887,9 @@ def _softmax_flops(
 ) -> int:
     """Softmax: ~5 FLOPs per element (max, sub, exp, sum, div).
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -886,7 +904,9 @@ def _log_softmax_flops(
 ) -> int:
     """LogSoftmax: ~6 FLOPs per element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -901,7 +921,9 @@ def _pool_flops(
 ) -> int:
     """Pooling: ~kernel_size comparisons/additions per output element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function (input, kernel_size, ...).
@@ -924,7 +946,9 @@ def _adaptive_pool_flops(
 ) -> int:
     """Adaptive pooling: each output element averages over a region of input.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -943,7 +967,9 @@ def _embedding_flops(
 ) -> int:
     """Embedding: lookup, no arithmetic.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -958,7 +984,9 @@ def _dropout_flops(
 ) -> int:
     """Dropout: 1 comparison + 1 multiply per element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -973,7 +1001,9 @@ def _interpolate_flops(
 ) -> int:
     """Interpolation/upsample: ~4 FLOPs per output element (bilinear).
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -988,7 +1018,9 @@ def _sort_flops(
 ) -> int:
     """Sort: O(n log n) comparisons.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -1006,7 +1038,9 @@ def _cumulative_flops(
 ) -> int:
     """Cumulative ops (cumsum, cumprod): input_numel.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -1021,7 +1055,9 @@ def _cross_entropy_flops(
 ) -> int | None:
     """Cross-entropy: softmax + nll_loss ≈ 6 * input_numel.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -1040,7 +1076,9 @@ def _mse_loss_flops(
 ) -> int | None:
     """MSE loss: sub + square + mean ≈ 3 * input_numel.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -1059,7 +1097,9 @@ def _binary_cross_entropy_flops(
 ) -> int | None:
     """Binary cross entropy: ~10 FLOPs per element.
 
-    Args:
+    Parameters
+
+    ----------
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved.
         saved_args: Positional args to the function.
@@ -1465,14 +1505,18 @@ def compute_forward_flops(
       3. SPECIALTY_HANDLERS → delegate to shape-specific handler
       4. Unknown → return None (not counted)
 
-    Args:
+    Parameters
+
+    ----------
         func_name: Name of the function that was applied.
         output_shape: Shape of the output tensor.
         param_shapes: Shapes of parameter tensors involved (from log entry).
         saved_args: Positional args to the function (live tensors for shape extraction).
         saved_kwargs: Keyword args (currently unused but available for future handlers).
 
-    Returns:
+    Returns
+
+    -------
         FLOPs count (int), 0 for zero-cost ops, or None if the operation is unknown.
     """
     if func_name is None:
@@ -1510,11 +1554,15 @@ def compute_backward_flops(
     otherwise falls back to _DEFAULT_BACKWARD_MULTIPLIER (1.0).  Returns None if
     forward FLOPs are unknown (propagating the "don't guess" principle).
 
-    Args:
+    Parameters
+
+    ----------
         func_name: Name of the function.
         forward_flops: Forward FLOPs count (from compute_forward_flops).
 
-    Returns:
+    Returns
+
+    -------
         Estimated backward FLOPs (int), or None if forward_flops is None.
     """
     if forward_flops is None or func_name is None:

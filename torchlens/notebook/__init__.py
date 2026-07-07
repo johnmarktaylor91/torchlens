@@ -1,6 +1,4 @@
-"""Notebook appliance for Treescope-style HTML reprs and IPython integration.
-Gated by `pip install torchlens[notebook]`.
-"""
+"""Extras-gated notebook namespace with no public objects yet."""
 
 import importlib
 

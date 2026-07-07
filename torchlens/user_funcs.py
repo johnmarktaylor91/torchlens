@@ -9,13 +9,11 @@ This module contains every user-facing function:
   - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
-**Two-pass strategy** (``trace`` with selective layers):
-When the user requests specific layers (not "all" or "none"), TorchLens must
-first run an exhaustive pass to discover the full graph structure - only then can
-it resolve user-friendly layer names/indices to internal layer numbers.  A second
-fast pass replays the model, saving only the requested outs.  This is why
-``trace`` has two branches: the simple path (save all/none) and the
-two-pass path (save specific layers).
+**Selective save strategy**:
+Predicate ``save=`` and most string/substring ``layers_to_save`` requests are
+resolved during the primary forward pass. TorchLens falls back to the two-pass
+discovery/replay path only for selectors that require finalized labels or
+gradient-specific resolution.
 """
 
 import collections.abc
@@ -119,6 +117,7 @@ from ._trace_selector_helpers import (
     _layers_to_save_mentions_identity,
     _layers_to_save_mentions_output,
     _make_layers_to_save_predicate,
+    _predicate_cache_key,
     _split_save_options_and_predicate,
     _TRACE_OPTION_FILTERED_NAMES,
 )
@@ -723,15 +722,23 @@ def _run_model_and_save_specified_outs(
     model preparation, the exhaustive (and optionally fast) forward pass, and all
     postprocessing.
 
-    Args:
-        model: PyTorch model.
-        input_args: Positional arguments to model.forward(); a single tensor or list.
-        input_kwargs: Keyword arguments to model.forward().
-        layers_to_save: Which layers to save outs for ('all', 'none'/None, or a list).
-        keep_orphans: If True, island ops are retained in raw metadata and exposed via
-            ``trace.orphans`` while remaining hidden from the main graph.
-        output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
-        activation_transform: Optional transform applied to each out before storage
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Positional arguments to model.forward(); a single tensor or list.
+    input_kwargs:
+        Keyword arguments to model.forward().
+    layers_to_save:
+        Which layers to save outs for ('all', 'none'/None, or a list).
+    keep_orphans:
+        If True, island ops are retained in raw metadata and exposed via
+        ``trace.orphans`` while remaining hidden from the main graph.
+    output_device:
+        Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
+    activation_transform:
+        Optional transform applied to each out before storage.
             (e.g., channel-wise averaging to reduce memory).
         grad_transform: Optional transform applied to each grad before storage.
         save_raw_activations: Whether raw outs are retained when ``activation_transform``
@@ -810,7 +817,9 @@ def _run_model_and_save_specified_outs(
             originated from selective ``layers_to_save`` and must preserve the
             legacy output-parent payload rule.
 
-    Returns:
+    Returns
+
+    -------
         Fully-populated Trace.
     """
     # Auto-detect model device from its first parameter and move inputs to match.
@@ -1352,23 +1361,29 @@ def trace(
       4. Integer index (ordinal position; negative indices work).
       5. Substring filter, e.g. ``'conv2d'`` (all matching layers).
 
-    When specific layers are requested, a **two-pass strategy** is used: first an
-    exhaustive pass discovers the full graph structure (needed to resolve names),
-    then ``save_new_outs`` replays the model in fast mode to save only the
-    requested layers.  For ``'all'`` or ``'none'``, a single pass suffices.
+    Most string and substring layer selections are absorbed into a single-pass
+    predicate save. TorchLens falls back to the two-pass discovery/replay path
+    only for selectors that require finalized labels, such as negative indexes,
+    identity/output labels, or gradient-specific selection.
 
-    Args:
-        model: PyTorch model.
-        input_args: Positional args for ``model.forward()``; a single tensor or list.
-        input_kwargs: Keyword args for ``model.forward()``.
-        transform: Optional callable applied once to ``input_args`` before
-            ``model.forward``. If it returns a mapping, TorchLens calls the
-            model with ``**transformed``.
-        save_raw_input: Raw user-input save policy for portable bundles:
-            ``"small"`` (default), ``True``, or ``False``.
-        batch_render: Raw-input batch rendering policy for visualization:
-            ``"auto"`` (default), ``"all"``, ``"first"``, ``"first_n:<N>"``,
-            or ``"shape_only"``.
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Positional args for ``model.forward()``; a single tensor or list.
+    input_kwargs:
+        Keyword args for ``model.forward()``.
+    transform:
+        Optional callable applied once to ``input_args`` before ``model.forward``.
+        If it returns a mapping, TorchLens calls the model with ``**transformed``.
+    save_raw_input:
+        Raw user-input save policy for portable bundles:
+        ``"small"`` (default), ``True``, or ``False``.
+    batch_render:
+        Raw-input batch rendering policy for visualization:
+        ``"auto"`` (default), ``"all"``, ``"first"``, ``"first_n:<N>"``, or
+        ``"shape_only"``.
         output_transform: Optional callable applied once to the model output
             after ``model.forward``. The returned value is stored as
             ``Trace.raw_output`` and does not affect the computational graph.
@@ -1518,7 +1533,9 @@ def trace(
         shorter lifetime rather than forward out retention. When the raw grad itself
         requires grads in ``backward_ready=True``, the same differentiability checks apply.
 
-    Returns:
+    Returns
+
+    -------
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
     if capture_output_structure is not MISSING:
@@ -1943,6 +1960,7 @@ def _trace_torch_model(
             save_grads=should_save_grads,
             hooks=hooks,
             intervene=intervene,
+            halt=halt,
             streaming=streaming_options,
         )
         chunk_plan = plan_chunks(
@@ -2053,9 +2071,9 @@ def _trace_torch_model(
                 output_head=output_head_value,
             ),
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
-            "save_predicate": repr(save_predicate),
-            "intervene": repr(intervene),
-            "halt": repr(halt),
+            "save_predicate": _predicate_cache_key(save_predicate),
+            "intervene": _predicate_cache_key(intervene),
+            "halt": _predicate_cache_key(halt),
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
             "jax_control_flow": capture_options.jax_control_flow,
@@ -2104,10 +2122,7 @@ def _trace_torch_model(
             if capture_options.is_field_explicit("jax_max_control_flow_unroll")
             else MISSING
         )
-        trace = _trace_torch_model(
-            model=model,
-            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
-            input_kwargs=None,
+        recursive_capture_options = CaptureOptions(
             layers_to_save=layers_to_save,
             transform=None,
             save_raw_input=save_raw_input_policy,
@@ -2116,43 +2131,26 @@ def _trace_torch_model(
             output_style=output_style_value,
             output_head=output_head_value,
             save_raw_output=save_raw_output_policy,
+            layer_visualizers=layer_visualizers_value,
+            save_visualizations=save_visualizations_value,
             keep_orphans=keep_orphans,
             output_device=output_device,
-            activation_transform=activation_transform,
-            grad_transform=grad_transform,
-            save_raw_activations=save_raw_activations,
-            save_raw_gradients=save_raw_gradients,
-            save_mode=cast(SaveMode, save_mode_value),
-            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            mark_layer_depths=MISSING,
-            detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
             save_grads=save_grads_policy,
+            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             save_code_context=save_code_context,
             save_rng_states=save_rng_states,
-            reconstruction_ready=MISSING,
             random_seed=random_seed,
-            num_context_lines=MISSING,
+            source_context_lines=source_context_lines,
             optimizer=optimizer,
-            save_outs_to=MISSING,
-            keep_outs_in_memory=MISSING,
-            out_sink=MISSING,
+            compute_input_output_distances=compute_input_output_distances,
+            detach_saved_activations=detach_saved_activations,
+            recurrence_detection=recurrence_detection,
             intervention_ready=intervention_ready,
             capture_container_structure=capture_container_structure,
-            hooks=None,
+            hooks=MISSING,
             unwrap_when_done=False,
             verbose=verbose,
-            source_context_lines=source_context_lines,
-            compute_input_output_distances=compute_input_output_distances,
-            recurrence_detection=recurrence_detection,
-            capture=None,
-            save=save_predicate,
-            intervene=None,
-            halt=halt,
-            lookback=lookback,
-            lookback_payload_policy=lookback_payload_policy,
-            storage=None,
-            streaming=None,
             backward_ready=train_mode_value,
             inference_only=inference_only_value,
             name=log_name,
@@ -2160,13 +2158,104 @@ def _trace_torch_model(
             cache_dir=cache_dir_value,
             module_filter=module_filter_value,
             stop_after=MISSING,
-            raise_on_nan=raise_on_nan_value,
-            profile=profile_enabled,
             jax_control_flow=recursive_jax_control_flow,
             jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
             module_identity_mode=capture_options.module_identity_mode,
             payload_policy=capture_options.payload_policy,
             save_preview=capture_options.save_preview,
+            raise_on_nan=raise_on_nan_value,
+            _module_containment_engine=module_containment_engine,
+        )
+        recursive_save_options = SaveOptions(
+            activation_transform=activation_transform,
+            grad_transform=grad_transform,
+            save_raw_activations=save_raw_activations,
+            save_raw_gradients=save_raw_gradients,
+        )
+        recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
+            save_predicate if save_predicate is not None else recursive_save_options
+        )
+        recursive_activation_transform: ActivationPostfunc | None | MissingType = (
+            activation_transform
+            if save_predicate is not None and activation_transform is not None
+            else MISSING
+        )
+        recursive_grad_transform: GradientPostfunc | None | MissingType = (
+            grad_transform if save_predicate is not None and grad_transform is not None else MISSING
+        )
+        recursive_save_raw_activations: bool | MissingType = (
+            save_raw_activations
+            if save_predicate is not None and save_raw_activations is not True
+            else MISSING
+        )
+        recursive_save_raw_gradients: bool | MissingType = (
+            save_raw_gradients
+            if save_predicate is not None and save_raw_gradients is not True
+            else MISSING
+        )
+        trace = _trace_torch_model(
+            model=model,
+            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
+            input_kwargs=None,
+            layers_to_save=MISSING,
+            transform=MISSING,
+            save_raw_input=MISSING,
+            batch_render=MISSING,
+            output_transform=MISSING,
+            output_style=MISSING,
+            output_head=MISSING,
+            save_raw_output=MISSING,
+            keep_orphans=MISSING,
+            output_device=MISSING,
+            activation_transform=recursive_activation_transform,
+            grad_transform=recursive_grad_transform,
+            save_raw_activations=recursive_save_raw_activations,
+            save_raw_gradients=recursive_save_raw_gradients,
+            save_mode=cast(SaveMode, save_mode_value),
+            capture_tensor_grad_hooks=MISSING,
+            mark_layer_depths=MISSING,
+            detach_saved_activations=MISSING,
+            save_arg_values=MISSING,
+            save_grads=MISSING,
+            save_code_context=MISSING,
+            save_rng_states=MISSING,
+            reconstruction_ready=MISSING,
+            random_seed=MISSING,
+            num_context_lines=MISSING,
+            optimizer=MISSING,
+            save_outs_to=MISSING,
+            keep_outs_in_memory=MISSING,
+            out_sink=MISSING,
+            intervention_ready=MISSING,
+            capture_container_structure=MISSING,
+            hooks=MISSING,
+            unwrap_when_done=MISSING,
+            verbose=MISSING,
+            source_context_lines=MISSING,
+            compute_input_output_distances=MISSING,
+            recurrence_detection=MISSING,
+            capture=recursive_capture_options,
+            save=recursive_save_value,
+            intervene=None,
+            halt=halt,
+            lookback=lookback,
+            lookback_payload_policy=lookback_payload_policy,
+            storage=None,
+            streaming=None,
+            backward_ready=MISSING,
+            inference_only=MISSING,
+            name=MISSING,
+            cache=MISSING,
+            cache_dir=MISSING,
+            module_filter=MISSING,
+            stop_after=MISSING,
+            raise_on_nan=MISSING,
+            profile=profile_enabled,
+            jax_control_flow=MISSING,
+            jax_max_control_flow_unroll=MISSING,
+            module_identity_mode=MISSING,
+            payload_policy=MISSING,
+            save_preview=MISSING,
             recipes=facet_recipes,
             capture_output_structure=MISSING,
             chunk_size=None,
@@ -2184,71 +2273,71 @@ def _trace_torch_model(
         }
         for chunk_index, chunk in enumerate(chunks[1:], start=1):
             if save_predicate is None:
-                trace.rerun(model, chunk, replay=ReplayOptions(append=True), transform=False)
+                trace.run(model, chunk, replay=ReplayOptions(append=True), transform=False)
                 continue
             new_trace = _trace_torch_model(
                 model=model,
                 input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
                 input_kwargs=None,
-                layers_to_save=layers_to_save,
-                transform=None,
-                save_raw_input=save_raw_input_policy,
-                batch_render=batch_render_policy,
-                output_transform=output_transform_value,
-                output_style=output_style_value,
-                output_head=output_head_value,
-                save_raw_output=save_raw_output_policy,
-                keep_orphans=keep_orphans,
-                output_device=output_device,
-                activation_transform=activation_transform,
-                grad_transform=grad_transform,
-                save_raw_activations=save_raw_activations,
-                save_raw_gradients=save_raw_gradients,
+                layers_to_save=MISSING,
+                transform=MISSING,
+                save_raw_input=MISSING,
+                batch_render=MISSING,
+                output_transform=MISSING,
+                output_style=MISSING,
+                output_head=MISSING,
+                save_raw_output=MISSING,
+                keep_orphans=MISSING,
+                output_device=MISSING,
+                activation_transform=recursive_activation_transform,
+                grad_transform=recursive_grad_transform,
+                save_raw_activations=recursive_save_raw_activations,
+                save_raw_gradients=recursive_save_raw_gradients,
                 save_mode=cast(SaveMode, save_mode_value),
-                capture_tensor_grad_hooks=capture_tensor_grad_hooks,
+                capture_tensor_grad_hooks=MISSING,
                 mark_layer_depths=MISSING,
-                detach_saved_activations=detach_saved_activations,
-                save_arg_values=save_arg_values,
-                save_grads=save_grads_policy,
-                save_code_context=save_code_context,
-                save_rng_states=save_rng_states,
+                detach_saved_activations=MISSING,
+                save_arg_values=MISSING,
+                save_grads=MISSING,
+                save_code_context=MISSING,
+                save_rng_states=MISSING,
                 reconstruction_ready=MISSING,
-                random_seed=random_seed,
+                random_seed=MISSING,
                 num_context_lines=MISSING,
-                optimizer=optimizer,
+                optimizer=MISSING,
                 save_outs_to=MISSING,
                 keep_outs_in_memory=MISSING,
                 out_sink=MISSING,
-                intervention_ready=intervention_ready,
-                capture_container_structure=capture_container_structure,
-                hooks=None,
-                unwrap_when_done=False,
-                verbose=verbose,
-                source_context_lines=source_context_lines,
-                compute_input_output_distances=compute_input_output_distances,
-                recurrence_detection=recurrence_detection,
-                capture=None,
-                save=save_predicate,
+                intervention_ready=MISSING,
+                capture_container_structure=MISSING,
+                hooks=MISSING,
+                unwrap_when_done=MISSING,
+                verbose=MISSING,
+                source_context_lines=MISSING,
+                compute_input_output_distances=MISSING,
+                recurrence_detection=MISSING,
+                capture=recursive_capture_options,
+                save=recursive_save_value,
                 intervene=None,
                 halt=halt,
                 lookback=lookback,
                 lookback_payload_policy=lookback_payload_policy,
                 storage=None,
                 streaming=None,
-                backward_ready=train_mode_value,
-                inference_only=inference_only_value,
-                name=log_name,
-                cache=False,
-                cache_dir=cache_dir_value,
-                module_filter=module_filter_value,
+                backward_ready=MISSING,
+                inference_only=MISSING,
+                name=MISSING,
+                cache=MISSING,
+                cache_dir=MISSING,
+                module_filter=MISSING,
                 stop_after=MISSING,
-                raise_on_nan=raise_on_nan_value,
+                raise_on_nan=MISSING,
                 profile=profile_enabled,
-                jax_control_flow=recursive_jax_control_flow,
-                jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
-                module_identity_mode=capture_options.module_identity_mode,
-                payload_policy=capture_options.payload_policy,
-                save_preview=capture_options.save_preview,
+                jax_control_flow=MISSING,
+                jax_max_control_flow_unroll=MISSING,
+                module_identity_mode=MISSING,
+                payload_policy=MISSING,
+                save_preview=MISSING,
                 recipes=facet_recipes,
                 capture_output_structure=MISSING,
                 chunk_size=None,

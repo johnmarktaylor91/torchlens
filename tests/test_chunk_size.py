@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +180,24 @@ def test_chunk_size_with_save_predicate_appends_saved_payloads_only() -> None:
         _ = trace["input_1"].out
 
 
+def test_chunk_size_with_save_predicate_emits_no_internal_deprecations() -> None:
+    """Chunked predicate capture should not self-warn about absent flat kwargs."""
+
+    model = DeterministicToy().eval()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tl.trace(model, _toy_inputs(), chunk_size=4, save=tl.func("relu"))
+
+    torchlens_deprecations = [
+        warning
+        for warning in caught
+        if issubclass(warning.category, DeprecationWarning)
+        and "`" in str(warning.message)
+        and "deprecated; use" in str(warning.message)
+    ]
+    assert torchlens_deprecations == []
+
+
 def test_chunk_size_with_layers_to_save_keeps_selective_scope() -> None:
     """Chunked absorbed layers_to_save passes the combined predicate to chunks."""
 
@@ -268,6 +287,8 @@ def test_chunk_size_guarded_combinations(tmp_path: Path) -> None:
         tl.trace(model, x, chunk_size=4, hooks={"relu_1_1": lambda op: None})
     with pytest.raises(ChunkedForwardConfigError, match="intervene"):
         tl.trace(model, x, chunk_size=4, intervene=lambda ctx: None)
+    with pytest.raises(ChunkedForwardConfigError, match="halt"):
+        tl.trace(model, x, chunk_size=4, halt=lambda ctx: ctx.kind == "op")
     with pytest.raises(ChunkedForwardConfigError, match="streaming"):
         tl.trace(model, x, chunk_size=4, storage=tl.to_disk(tmp_path / "chunked.tlspec"))
     with pytest.raises(ChunkedForwardConfigError, match="keyword"):

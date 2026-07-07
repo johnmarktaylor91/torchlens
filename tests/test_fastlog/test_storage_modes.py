@@ -100,6 +100,22 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
         _ = op.out
 
 
+def test_true_predicate_inherits_default_save_mode() -> None:
+    """Predicate ``True`` decisions inherit the default storage policy."""
+
+    recording = tl.fastlog.record(
+        StorageModel(),
+        torch.ones(1, 3),
+        save=lambda ctx: ctx.kind == "op",
+        default_op=CaptureSpec(save_mode="reference"),
+    )
+
+    saved_modes = {
+        event.capture_spec.save_mode for event in recording.op_events if event.capture_spec.save_out
+    }
+    assert saved_modes == {"reference"}
+
+
 def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
     tmp_path: Path,
 ) -> None:

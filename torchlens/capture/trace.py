@@ -1,6 +1,6 @@
 """Forward-pass orchestration: runs the model, manages logging state, and saves outs.
 
-This module implements the two-pass architecture that TorchLens uses to extract
+This module implements the forward-pass architecture that TorchLens uses to extract
 model outs:
 
 1. **Exhaustive pass** (``capture_mode="exhaustive"``): Runs the model once,
@@ -12,7 +12,9 @@ model outs:
    structure from the exhaustive pass, only saving new out values.
    Much faster because it skips all metadata collection.  Used by
    ``save_new_outs()`` to refresh outs for new inputs without
-   rebuilding the entire graph.
+   rebuilding the entire graph. Public selective saves usually use predicate-time
+   filtering in the primary pass and only reach this path when finalized labels or
+   gradient-specific selections require replay.
 
 Key ordering constraint:
     RNG state must be captured/restored BEFORE ``active_logging()`` is entered,
@@ -421,7 +423,9 @@ def save_new_outs(
     the counter-alignment checks in ``log_function_output_tensors_fast`` will
     detect the mismatch and raise ``ValueError``.
 
-    Args:
+    Parameters
+
+    ----------
         model: Model for which to save outs.
         input_args: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
@@ -432,7 +436,9 @@ def save_new_outs(
             model log settings; explicit values temporarily override saved
             tensor detachment for the whole replay.
 
-    Returns:
+    Returns
+
+    -------
         Nothing; mutates ``self`` in place with new out values.
     """
     if backward_ready is not None:

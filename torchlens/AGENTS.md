@@ -125,7 +125,8 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 - `_io/` and `io/`: portable save/load, `.tlspec` manifests, lazy out refs, rehydration.
 - `intervention/`: Bundle, sites/selectors, hooks, helpers, replay/rerun/fork/save.
 - `fastlog/`: sparse `Recording` path, predicate normalization, RAM/disk storage.
-- `bridge/`: lazy optional adapters for external tools.
+- `bridge/`: optional adapters for external tools; HuggingFace autoroute currently imports
+  its bridge at package import, while the remaining bridge surfaces should stay lazy.
 - `compat/`: migration helpers and `compat.report(model, x)`.
 - `callbacks/`: Lightning callback integration.
 - `partial/`: partial log wrapper for failed captures.

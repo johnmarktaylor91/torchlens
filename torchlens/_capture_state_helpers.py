@@ -936,7 +936,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             "grad",
             "transformed_grad",
         ):
-            value = getattr(layer, field_name, None)
+            value = _raw_cache_payload_field(layer, field_name)
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
         layer.grad_fn_handle = None
@@ -950,12 +950,38 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         layer_log.grad_fn_handle = None
     trace.__dict__.pop("_container_ordinals_by_output_op_label", None)
     trace.__dict__.pop("_container_ordinals_by_input_func_call_id", None)
+    if trace.__dict__.get("_predicate_save_options") is not None:
+        trace.__dict__["_predicate_save_options"] = "cache_predicate_capture"
+    trace.__dict__.pop("_capture_config", None)
+    trace.__dict__.pop("_stop_directive", None)
     build_state = trace.__dict__.get("_build_state")
     if build_state is not None:
         registry = getattr(build_state, "container_registry", None)
         if registry is not None:
             registry.clear_live_state()
         trace.__dict__.pop("_build_state", None)
+
+
+def _raw_cache_payload_field(layer: Any, field_name: str) -> Any:
+    """Return a cache payload field without invoking strict public accessors.
+
+    Parameters
+    ----------
+    layer:
+        Op-like object being prepared for pickle serialization.
+    field_name:
+        Payload field to read.
+
+    Returns
+    -------
+    Any
+        Raw slot value when present, otherwise ``None``.
+    """
+
+    try:
+        return object.__getattribute__(layer, field_name)
+    except AttributeError:
+        return None
 
 
 def _detach_nested_for_cache(value: Any) -> Any:

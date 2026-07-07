@@ -68,6 +68,7 @@ def _normalize_capture_decision(
             keep_grad=default_spec.keep_grad,
             device=default_spec.device,
             dtype=default_spec.dtype,
+            save_mode=default_spec.save_mode,
         )
     if result is False:
         return CaptureSpec(save_out=False, save_metadata=False)

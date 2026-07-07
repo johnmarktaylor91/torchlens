@@ -1,6 +1,4 @@
-"""Neuroscience appliance for RDM, CKA, Brain-Score, and representation helpers.
-Gated by `pip install torchlens[neuro]`.
-"""
+"""Extras-gated neuroscience namespace with no public objects yet."""
 
 import importlib
 

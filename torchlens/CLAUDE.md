@@ -11,8 +11,9 @@ prepares the model and calls `wrap_torch()` from `backends/torch/`.
 ```
 import torchlens
   |- exposes 90 top-level public names in __all__
-  |- eagerly imports the core capture/intervention surface plus fastlog/options;
-  |  bridge, compat, export, report, stats, validation, and viz stay lazy
+  |- eagerly imports the core capture/intervention surface, fastlog/options, and
+  |  the HuggingFace autoroute bridge; compat, export, report, stats,
+  |  validation, and viz stay lazy
   |
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend

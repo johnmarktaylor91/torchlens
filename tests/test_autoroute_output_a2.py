@@ -316,10 +316,8 @@ def test_imagenet_label_bank_package_data_loads() -> None:
 def test_import_torchlens_does_not_import_optional_output_detector_deps() -> None:
     """Importing TorchLens does not import the optional output-detector deps.
 
-    transformers/timm imports live INSIDE the detector functions and must stay
-    lazy. torchvision is intentionally excluded here: TorchLens imports it at
-    import time to register and wrap torchvision custom ops (nms/roi_align/...),
-    which is pre-existing, load-bearing behavior.
+    transformers/timm/torchvision imports live INSIDE detector or wrapping paths
+    and must stay lazy during bare TorchLens import.
     """
 
     code = """
