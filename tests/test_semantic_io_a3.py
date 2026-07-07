@@ -190,8 +190,9 @@ def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) 
     bundle_path = tmp_path / "decoded.tlspec"
     tl.save(trace, bundle_path)
     restored = tl.load(bundle_path)
-    for output_op in restored.output_ops:
-        output_op.out = None
+    for output_label in restored.output_layers:
+        for output_op in restored.layers[output_label].ops.values():
+            output_op.out = None
 
     with pytest.raises(ValueError, match="re-decode unavailable"):
         restored.output_table(top_n=6)

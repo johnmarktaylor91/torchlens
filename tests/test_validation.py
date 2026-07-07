@@ -389,7 +389,7 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
         """Corrupt the captured output to simulate a real capture break."""
 
         trace = original_run(*args, **kwargs)
-        output_layer = trace[trace.output_layers[0]]
+        output_layer = trace.layers[trace.output_layers[0]].ops[0]
         output_layer.out = cast(torch.Tensor, output_layer.out) + 1.0
         return trace
 
@@ -1084,7 +1084,7 @@ def test_corruption_parent_child_link():
     for lpl in log.layer_list:
         if lpl.children:
             child_label = lpl.children[0]
-            child = log[child_label]
+            child = log.layer_dict_all_keys[child_label]
             # Remove the parent from the child's parents
             child.parents = [p for p in child.parents if p != lpl.layer_label]
             break
@@ -1351,7 +1351,7 @@ def test_corruption_distance_input_nonzero():
         log.cleanup()
         return
     for label in log.input_layers:
-        lpl = log[label]
+        lpl = log.layer_dict_all_keys[label]
         lpl.min_distance_from_input = 5
         lpl.max_distance_from_input = 5
         break
@@ -1391,7 +1391,7 @@ def test_corruption_connectivity_parentless_layer():
         ):
             # Also fix the parent's child list to avoid graph_topology catching it first
             for p_label in lpl.parents:
-                parent = log[p_label]
+                parent = log.layer_dict_all_keys[p_label]
                 parent.children = [c for c in parent.children if c != lpl.layer_label]
                 parent.has_children = len(parent.children) > 0
             lpl.parents = []

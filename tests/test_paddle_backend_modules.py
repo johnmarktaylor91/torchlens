@@ -76,7 +76,7 @@ def test_paddle_nested_layer_addresses_and_kwargs() -> None:
     assert trace.module_calls["scale:1"].forward_kwargs == {"scale": 2.0}
     scale_labels = trace.resolve_sites(tl.in_module("scale"), max_fanout=16).labels()
     assert scale_labels
-    assert all("scale:1" in trace[label].modules for label in scale_labels)
+    assert all(("scale", 1) in trace.layers[label].modules for label in scale_labels)
 
 
 def test_paddle_param_logs_from_named_parameters() -> None:

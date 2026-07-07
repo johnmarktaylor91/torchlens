@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 import torchlens as tl
+from torchlens._errors import AmbiguousOpLookupError
 
 
 class TupleExit(torch.nn.Module):
@@ -84,13 +86,15 @@ def test_raw_lookup_keys_exist_for_all_multi_exit_ops() -> None:
         assert op._label_raw in trace.layer_dict_all_keys
 
 
-def test_colliding_module_alias_keeps_first_registered_op_rule() -> None:
-    """A colliding bare module alias keeps the historic first-registered Op rule."""
+def test_colliding_module_alias_requires_explicit_op_lookup() -> None:
+    """A colliding bare module alias is explicit-only at the public lookup surface."""
 
     trace = _multi_exit_trace()
 
     assert "split" in trace._ambiguous_lookup_keys
-    assert trace["split"] is trace.layer_dict_all_keys["split"]
+    assert trace.layer_dict_all_keys["split"] in _split_exit_ops(trace)
+    with pytest.raises(AmbiguousOpLookupError):
+        trace["split"]
 
 
 def test_non_colliding_lookup_keys_keep_main_parity() -> None:
@@ -100,4 +104,5 @@ def test_non_colliding_lookup_keys_keep_main_parity() -> None:
     first_op = _split_exit_ops(trace)[0]
 
     assert trace[first_op.label] is first_op
-    assert trace[first_op.layer_label] is first_op
+    assert trace.layers[first_op.layer_label].ops[0] is first_op
+    assert trace.ops[first_op.layer_label] is first_op

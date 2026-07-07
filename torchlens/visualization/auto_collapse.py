@@ -1448,12 +1448,8 @@ def _module_output_shape_tuple(trace: "Trace", address: str) -> tuple[int, ...] 
         Output shape as integers, or ``None`` when unavailable.
     """
 
-    pass_address = f"{address}:1"
-    if pass_address not in trace.modules:
-        return None
-    try:
-        module_output_layer = trace[pass_address]
-    except (KeyError, IndexError):
+    module_output_layer = _module_call_output_op(trace, f"{address}:1")
+    if module_output_layer is None:
         return None
     shape = getattr(module_output_layer, "shape", None)
     if shape is None:
@@ -1463,6 +1459,34 @@ def _module_output_shape_tuple(trace: "Trace", address: str) -> tuple[int, ...] 
     try:
         return tuple(int(dim) for dim in shape)
     except (TypeError, ValueError):
+        return None
+
+
+def _module_call_output_op(trace: "Trace", call_label: str) -> "Op | None":
+    """Return the primary output Op for a module-call label.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module call.
+    call_label:
+        Pass-qualified module-call label such as ``"encoder:1"``.
+
+    Returns
+    -------
+    Op | None
+        Last output op for the module call, or ``None`` when unavailable.
+    """
+
+    try:
+        module_call = trace.module_calls[call_label]
+    except (KeyError, IndexError):
+        return None
+    if not module_call.output_ops:
+        return None
+    try:
+        return cast("Op", trace.ops[module_call.output_ops[-1]])
+    except (KeyError, IndexError):
         return None
 
 

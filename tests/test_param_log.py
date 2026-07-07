@@ -327,7 +327,10 @@ class TestTensorLogEntries:
                 assert any(p.address == pl.address for p in entry._param_logs)
             for label in pl.used_by_layers:
                 entry = mh[label]
-                assert any(any(p.address == pl.address for p in op._param_logs) for op in entry.ops)
+                assert any(
+                    any(p.address == pl.address for p in op._param_logs)
+                    for op in entry.ops.values()
+                )
 
 
 # ---------------------------------------------------------------------------

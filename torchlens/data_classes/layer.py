@@ -987,8 +987,6 @@ class Layer:
     def is_in_conditional_body(self) -> bool:
         """Whether this layer is in a conditional arm body."""
 
-        if getattr(self, "has_output_descendant", False) and not self.conditional_entry_children:
-            return False
         return bool(self.__dict__.get("_is_in_conditional_body", False)) or any(
             role.role == "body" for role in self.in_conditionals or []
         )

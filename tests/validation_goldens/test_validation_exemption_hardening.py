@@ -1163,7 +1163,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
         save_arg_values=True,
     )
     add_op = _first_op_with_func(trace, "__add__")
-    trace[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
+    trace.layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1182,7 +1182,7 @@ def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
         save_arg_values=True,
     )
     add_op = _first_op_with_func(trace, "__add__")
-    trace[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
+    trace.layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
 
     def wrong_add(input_tensor: torch.Tensor, *_args: Any, **_kwargs: Any) -> torch.Tensor:
         """Return an intentionally wrong add result for replay testing.

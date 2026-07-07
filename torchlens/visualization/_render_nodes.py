@@ -1211,7 +1211,11 @@ def _build_collapsed_module_node(
     )
     # rsplit with maxsplit=1 handles module names containing colons (#104).
     module_tuple = address_w_pass.rsplit(":", 1)
-    module_output_layer = self[address_w_pass]
+    try:
+        module_call = self.module_calls[address_w_pass]
+        module_output_layer = self.ops[module_call.output_ops[-1]]
+    except (KeyError, IndexError):
+        module_output_layer = node
     module_output_shape = getattr(module_output_layer, "shape", None)
     if module_output_shape is None:
         module_output_shape = getattr(module_output_layer, "out_shape", None)

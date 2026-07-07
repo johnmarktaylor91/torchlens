@@ -602,13 +602,22 @@ def validate_saved_outs(
     # Edge-counting approach: a parent is enqueued only after ALL its child
     # edges are validated (validated_child_edges == set(children)).
     validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
-    seed_layers = list(
-        dict.fromkeys(
-            self[label].layer_label for label in self.output_layers + self.internal_sink_ops
+    seed_ops: dict[str, Op] = {}
+    seed_output_label_counts: dict[str, int] = defaultdict(int)
+    for output_layer_label in self.output_layers:
+        output_op = _resolve_output_entry_for_index(
+            self,
+            output_layer_label,
+            seed_output_label_counts,
         )
-    )
-    validated_layers = set(seed_layers)
-    layers_to_validate_parents_for = deque(seed_layers)
+        seed_ops.setdefault(output_op.label, output_op)
+    for internal_sink_label in self.internal_sink_ops:
+        internal_sink_op = _op_for_validation_label(self, internal_sink_label)
+        seed_ops.setdefault(internal_sink_op.label, internal_sink_op)
+
+    validated_layers = {op.layer_label for op in seed_ops.values()}
+    validated_op_labels = set(seed_ops)
+    layers_to_validate_parents_for = deque(seed_ops)
 
     while len(layers_to_validate_parents_for) > 0:
         layer_to_validate_parents_for = layers_to_validate_parents_for.popleft()
@@ -616,8 +625,9 @@ def validate_saved_outs(
             self,
             layer_to_validate_parents_for,
             validated_layers,
+            validated_op_labels,
             validated_child_edges_for_each_layer,
-            layers_to_validate_parents_for,  # type: ignore[arg-type]
+            layers_to_validate_parents_for,
             verbose,
             decision_recorder,
         )
@@ -697,8 +707,9 @@ def validate_parents_of_saved_layer(
     self: "Trace",
     layer_to_validate_parents_for_label: str,
     validated_layers: Set[str],
+    validated_op_labels: Set[str],
     validated_child_edges_for_each_layer: Dict[str, Set[str]],
-    layers_to_validate_parents_for: List[str],
+    layers_to_validate_parents_for: deque[str],
     verbose: bool = False,
     decision_recorder: ValidationDecisionRecorder | None = None,
 ) -> ValidationCheckResult:
@@ -723,6 +734,7 @@ def validate_parents_of_saved_layer(
     Args:
         layer_to_validate_parents_for_label: Label of the layer whose parent edges are being validated.
         validated_layers: Set of layer labels already validated; mutated in-place to add newly validated layers.
+        validated_op_labels: Set of exact op labels already queued or validated; mutated in-place.
         validated_child_edges_for_each_layer: Dict mapping each layer label to the set of its child edges
             that have been validated so far; mutated in-place as child edges are confirmed.
         layers_to_validate_parents_for: Work queue of layer labels still needing parent validation;
@@ -732,7 +744,10 @@ def validate_parents_of_saved_layer(
     Returns:
         Structured result for the parent-edge validation step.
     """
-    layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
+    layer_to_validate_parents_for = _op_for_validation_label(
+        self,
+        layer_to_validate_parents_for_label,
+    )
     ops_to_validate = _validation_ops_for_entry(layer_to_validate_parents_for)
 
     # Check that the arguments are logged correctly when the evidence is
@@ -869,8 +884,16 @@ def validate_parents_of_saved_layer(
                 return perturb_result
 
     # Record validated edges and enqueue parents whose ALL child edges are now validated.
-    for parent_layer_label in layer_to_validate_parents_for.parents:
-        parent_layer = self[parent_layer_label]
+    parent_op_labels = list(
+        dict.fromkeys(
+            parent_label
+            for target_op in ops_to_validate
+            for parent_label in sorted(_data_parent_labels(target_op))
+        )
+    )
+    for parent_op_label in parent_op_labels:
+        parent_op = _op_for_validation_label(self, parent_op_label)
+        parent_layer_label = parent_op.layer_label
         validated_child_edges_for_each_layer[parent_layer_label].add(
             layer_to_validate_parents_for_label
         )
@@ -878,14 +901,15 @@ def validate_parents_of_saved_layer(
         # checked output or internal sink. Recurrent multi-pass layers can have
         # self/side child edges that are valid but not part of the current
         # representative validation frontier.
-        if parent_layer_label not in validated_layers:
+        if parent_op_label not in validated_op_labels:
+            validated_op_labels.add(parent_op_label)
             validated_layers.add(parent_layer_label)
             # Don't enqueue terminal seeds (inputs, parentless buffers) --
             # they have no parents to validate further.
-            if (not parent_layer.is_input) and not (
-                parent_layer.is_buffer and (parent_layer.buffer_source is None)
+            if (not parent_op.is_input) and not (
+                parent_op.is_buffer and (parent_op.buffer_source is None)
             ):
-                layers_to_validate_parents_for.append(parent_layer_label)
+                layers_to_validate_parents_for.append(parent_op_label)
 
     return ValidationCheckResult.validated("parent_edges_validated")
 
@@ -1037,7 +1061,9 @@ def _resolve_output_entry_for_index(
         Concrete output op for this output occurrence.
     """
 
-    output_entry = self[output_layer_label]
+    output_entry = self.layer_logs.get(output_layer_label)
+    if output_entry is None:
+        return _op_for_validation_label(self, output_layer_label)
     ops = getattr(output_entry, "ops", None)
     if not hasattr(ops, "_list"):
         return cast(Op, output_entry)
@@ -1045,6 +1071,31 @@ def _resolve_output_entry_for_index(
     occurrence_index = output_label_counts[output_layer_label]
     output_label_counts[output_layer_label] += 1
     return op_list[occurrence_index]
+
+
+def _op_for_validation_label(self: "Trace", label: str) -> Op:
+    """Resolve a graph label to the exact ``Op`` validation must replay.
+
+    Parameters
+    ----------
+    self:
+        Trace whose explicit op lookup dictionary should be used.
+    label:
+        Pass-qualified op label, raw lookup key, or no-pass layer label.
+
+    Returns
+    -------
+    Op
+        Concrete operation resolved without using ``Trace.__getitem__``.
+    """
+
+    if label in self.layer_dict_all_keys:
+        return cast(Op, self.layer_dict_all_keys[label])
+    layer_log = self.layer_logs[label]
+    op_list = cast(list[Op], cast(Any, layer_log.ops)._list)
+    if len(op_list) != 1:
+        raise KeyError(f"Validation label {label!r} does not resolve to one concrete op.")
+    return op_list[0]
 
 
 def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> List[Op]:
@@ -1071,7 +1122,7 @@ def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> 
         if not data_parents:
             representative_ops.setdefault(target_op.label, target_op)
         for parent_label in sorted(data_parents):
-            parent_layer_label = self[parent_label].layer_label
+            parent_layer_label = _op_for_validation_label(self, parent_label).layer_label
             representative_ops.setdefault(parent_layer_label, target_op)
     if not representative_ops:
         return [fallback_op]
@@ -1095,7 +1146,7 @@ def _representative_parent_edges(self: "Trace", ops_to_validate: List[Op]) -> Li
     representative_edges: dict[str, tuple[Op, str]] = {}
     for target_op in ops_to_validate:
         for parent_label in sorted(_data_parent_labels(target_op)):
-            parent_layer_label = self[parent_label].layer_label
+            parent_layer_label = _op_for_validation_label(self, parent_label).layer_label
             representative_edges.setdefault(parent_layer_label, (target_op, parent_label))
     return list(representative_edges.values())
 
@@ -1159,7 +1210,7 @@ def _check_layer_arguments_logged_correctly(
     Returns:
         Structured validation result for argument logging evidence.
     """
-    target_entry = self[target_layer_label]
+    target_entry = _op_for_validation_label(self, target_layer_label)
     target_ops = _representative_ops_for_replay(self, _validation_ops_for_entry(target_entry))
 
     for target_layer in target_ops:
@@ -1194,7 +1245,7 @@ def _check_layer_arguments_logged_correctly(
         # and is not logged when it does not match a saved argument.
 
         for parent_layer_label in data_parents:
-            parent_layer = self[parent_layer_label]
+            parent_layer = _op_for_validation_label(self, parent_layer_label)
             for arg_type in ["args", "kwargs"]:
                 iterfunc, argtype_field = argtype_dict[arg_type]
                 saved_values = getattr(target_layer, argtype_field)
@@ -1388,7 +1439,7 @@ def _check_arglocs_correct_for_arg(
         and (not torch.all(torch.abs(parent_outs) == 1))
         and not any(
             [
-                torch.equal(parent_outs, self[other_parent].out)
+                torch.equal(parent_outs, _op_for_validation_label(self, other_parent).out)
                 for other_parent in target_layer.parents
                 if other_parent != parent_layer_label
             ]
@@ -1441,7 +1492,7 @@ def _check_perturbation_exemptions(
     """
     # Empty tensors cannot be meaningfully perturbed.
     for perturbed_label in layers_to_perturb:
-        p_entry = self[perturbed_label]
+        p_entry = _op_for_validation_label(self, perturbed_label)
         if p_entry.out is not None and p_entry.out.numel() == 0:
             return True
 
@@ -1975,7 +2026,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if layers_to_perturb is None:
         layers_to_perturb = []
 
-    layer = self[layer_to_validate_parents_for_label]
+    layer = _op_for_validation_label(self, layer_to_validate_parents_for_label)
     _raise_if_replay_arg_version_data_incomplete(self, layer)
 
     # Early exits for layers that cannot or should not be replayed.
@@ -2044,7 +2095,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if not matches_saved and not perturb:
         # Exemption: parent is an in-place RNG op that may have mutated its
         # tensor after the child logged it as an arg.
-        parent_has_inplace_rng = any(self[p].func_name == "bernoulli_" for p in layer.parents)
+        parent_has_inplace_rng = any(
+            _op_for_validation_label(self, p).func_name == "bernoulli_" for p in layer.parents
+        )
         if parent_has_inplace_rng:
             return ValidationCheckResult.exempted("parent_inplace_rng_bernoulli")
         # Surface the computed reduction depth so a band-C miss is diagnosable:
@@ -2418,7 +2471,7 @@ def _generic_effect_probe_values(
     first: dict[str, torch.Tensor] = {}
     second: dict[str, torch.Tensor] = {}
     for parent_label in layers_to_perturb:
-        parent = self[parent_label]
+        parent = _op_for_validation_label(self, parent_label)
         parent_out = getattr(parent, "out", None)
         if not isinstance(parent_out, torch.Tensor) or parent_out.numel() == 0:
             return None
@@ -2673,7 +2726,7 @@ def _prepare_input_args_for_validating_layer(
             key,
             parent_layer_arg,
         ) in layer_to_validate_parents_for.parent_arg_positions[arg_type].items():
-            parent_layer = self[parent_layer_arg]
+            parent_layer = _op_for_validation_label(self, parent_layer_arg)
             target_op_label = getattr(layer_to_validate_parents_for, "label", None)
             if target_op_label in parent_layer.out_versions_by_child:
                 parent_values = parent_layer.out_versions_by_child[target_op_label]

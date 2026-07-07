@@ -283,14 +283,16 @@ def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
     model = nn.BatchNorm1d(3).train()
     trace = tl.trace(model, torch.randn(4, 3), save_arg_values=True)
     raw_indices = [op.raw_index for op in trace.layer_list]
+    add_op = trace.layer_dict_all_keys["add_1_1"]
+    buffer_2_op = trace.layer_dict_all_keys["buffer_2"]
+    batchnorm_op = trace.layer_dict_all_keys["batchnorm_1_2"]
+    buffer_5_op = trace.layer_dict_all_keys["buffer_5"]
 
     assert raw_indices == sorted(raw_indices)
-    assert trace["add_1_1"].raw_index < trace["buffer_2"].raw_index
-    assert trace.layer_list.index(trace["add_1_1"]) < trace.layer_list.index(trace["buffer_2"])
-    assert trace["batchnorm_1_2"].raw_index < trace["buffer_5"].raw_index
-    assert trace.layer_list.index(trace["batchnorm_1_2"]) < trace.layer_list.index(
-        trace["buffer_5"]
-    )
+    assert add_op.raw_index < buffer_2_op.raw_index
+    assert trace.layer_list.index(add_op) < trace.layer_list.index(buffer_2_op)
+    assert batchnorm_op.raw_index < buffer_5_op.raw_index
+    assert trace.layer_list.index(batchnorm_op) < trace.layer_list.index(buffer_5_op)
 
 
 def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
