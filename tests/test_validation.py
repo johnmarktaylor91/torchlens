@@ -605,8 +605,13 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
     try:
         model = GlobalPayloadForwardModel()
 
-        assert validate_forward_pass(model, x, validate_metadata=True) is True
-        second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+        # The global-container tensor genuinely has no graph/source provenance,
+        # so each capture correctly emits the unattributed-tensor-args warning
+        # (cert10 diagnostic); the concern under test is stale-label clearing.
+        with pytest.warns(UserWarning, match="no graph/source provenance"):
+            assert validate_forward_pass(model, x, validate_metadata=True) is True
+        with pytest.warns(UserWarning, match="no graph/source provenance"):
+            second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
 
         assert second_trace.num_ops > 0
     finally:
@@ -793,7 +798,15 @@ def test_detached_reference_patcher_ignores_opaque_defaults() -> None:
 
 
 def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
-    """Posthoc perturbation checks do not call unsupported ``unique`` on complex tensors."""
+    """Posthoc perturbation checks run on complex outputs without crashing.
+
+    Historically the blanket constant-output excuse called ``unique`` on the
+    output, which is unsupported for complex tensors. cert10 (74318b5d)
+    replaced the blanket constant-output/all-special-value excuses with narrow
+    structured value proofs, so a constant complex output is now honestly
+    NON-exempt -- the concern preserved here is that the check handles complex
+    dtypes without raising and returns a structured decision.
+    """
 
     layer = SimpleNamespace(
         func_name="fft",
@@ -804,7 +817,9 @@ def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
         layer_label="fft_1_1",
     )
 
-    assert posthoc_perturb_check(SimpleNamespace(), layer, ["input_1"], verbose=False) is True
+    decision = posthoc_perturb_check(SimpleNamespace(), layer, ["input_1"], verbose=False)
+    assert decision.exempt is False
+    assert decision.reason == "no_posthoc_exemption"
 
 
 def test_validation_recompute_selects_dict_output_by_container_path() -> None:
@@ -2809,7 +2824,10 @@ def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None
         where_layer = _only_layer_with_func_name(trace, "where")
         condition_parent = where_layer.parent_arg_positions["args"][0]
         true_parent = where_layer.parent_arg_positions["args"][1]
-        trace[condition_parent].out = torch.ones_like(trace[condition_parent].out)
+        # Layer.out is read-only under cert10 strict accessors; simulate the
+        # mutated parent out through the per-pass Op record instead.
+        condition_op = trace[condition_parent].ops[0]
+        condition_op.out = torch.ones_like(condition_op.out)
 
         assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [true_parent]) is True
         assert _check_perturbation_exemptions(trace, where_layer, [true_parent]) is True
@@ -2830,15 +2848,34 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
 
         assert _check_perturbation_exemptions(trace, where_layer, [unselected_parent]) is True
 
-        placeholder = trace[unselected_parent]
+        # Mutate the per-pass Op record: assigning on the Layer aggregate only
+        # shadows the delegated attribute and never reaches the op the
+        # invariant inspects.
+        placeholder = trace[unselected_parent].ops[0]
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
         placeholder.intervention_replaced = False
         placeholder.is_internal_source = False
 
-        ground_truth = [model(x).detach().clone()]
+        # Layer 1 of the tripwire: the metadata invariant itself still rejects
+        # a functionless computational op in plain capture.
         with pytest.raises(MetadataInvariantError, match="func is not callable"):
-            trace.validate_forward_pass(ground_truth, validate_metadata=True)
+            check_metadata_invariants(trace)
+
+        # Layer 2: end-to-end validation also FAILS. cert10 catches the
+        # placeholder in the replay phase first (dedicated
+        # 'functionless_computational_op' decision), before the metadata step
+        # gets its turn, so the run fails without the invariant raising here.
+        ground_truth = [model(x).detach().clone()]
+        result = trace.validate_forward_pass(ground_truth, validate_metadata=True)
+        assert bool(result) is False
+        status = trace.validation_replay_status
+        assert status.state == "failed"
+        assert any(
+            decision.get("reason") == "functionless_computational_op"
+            and decision.get("decision") == "failed"
+            for decision in status.decisions
+        )
     finally:
         trace.cleanup()
 
@@ -2857,14 +2894,22 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
         divisor_parent = remainder_layer.parent_arg_positions["args"][1]
         ground_truth = [model(x).detach().clone()]
 
-        assert posthoc_perturb_check(trace, remainder_layer, [divisor_parent]) is False
+        # PosthocPerturbDecision API (74318b5d): the divisor perturbation must
+        # NOT be exempt when the saved dividend differs from the output.
+        assert posthoc_perturb_check(trace, remainder_layer, [divisor_parent]).exempt is False
 
-        remainder_layer.out = remainder_layer.out + 100.0
-        assert trace.validate_forward_pass(ground_truth, validate_metadata=False) is False
+        remainder_op = remainder_layer.ops[0]
+        remainder_op.out = remainder_op.out + 100.0
+        result = trace.validate_forward_pass(ground_truth, validate_metadata=False)
+        assert bool(result) is False
     finally:
         trace.cleanup()
 
 
+# External torch copy-construct advisory: emitted by tensor.new_tensor(tensor)
+# itself, but surfaced through the torchlens wrapper frame, so the suite's
+# error::UserWarning:torchlens filter would escalate it. Not a torchlens warning.
+@pytest.mark.filterwarnings("ignore:To copy construct from a tensor.*:UserWarning")
 def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
     """Only the ``new_tensor`` template arg is structural; data is value input."""
 
