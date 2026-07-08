@@ -1018,19 +1018,26 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     ``save(overwrite=True)`` fails and the best-effort ``_restore_backup()``
     step that normally renames the backup back onto ``bundle_path`` itself
     fails too (e.g. a second, independent I/O failure). If ``bundle_path``
-    already exists, a sibling ``.bak.*`` dir is provably redundant (the save
-    or a prior restore already completed) and is always removed. If
-    ``bundle_path`` is missing, the ``.bak.*`` dir holds the only surviving
-    copy of the pre-overwrite bundle, so it is restored back onto
-    ``bundle_path`` (recovering the data) instead of deleted, unless
-    ``bundle_path`` reappears mid-sweep from another candidate.
+    is missing, the ``.bak.*`` dir holds the only surviving copy of the
+    pre-overwrite bundle, so it is restored back onto ``bundle_path``
+    (recovering the data) instead of deleted. If ``bundle_path`` already
+    exists and a candidate ``.bak.*`` is byte-for-byte identical to it
+    (e.g. it was just restored there by an earlier candidate in this same
+    sweep, or ``save()``'s post-success backup cleanup failed after a fully
+    successful overwrite), the duplicate is provably redundant and is
+    always removed. Otherwise the candidate's contents are NOT provably
+    redundant -- it may be a genuinely distinct backup from an unrelated
+    incident -- so it is only removed when ``force=True`` is passed
+    (mirroring the ``.tmp.*`` sweep's non-``PARTIAL`` gating below); by
+    default it is left in place with a warning to avoid silent data loss.
 
     Parameters
     ----------
     path:
         Final bundle path whose ``.tmp.*``/``.bak.*`` siblings should be inspected.
     force:
-        Whether temp dirs without a ``PARTIAL`` sentinel should also be removed.
+        Whether temp dirs without a ``PARTIAL`` sentinel, and backup dirs
+        that are not provably redundant, should also be removed.
 
     Returns
     -------
@@ -1079,21 +1086,78 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
             raise TorchLensIOError(f"Refusing to clean symlink backup directory {candidate}.")
         if not candidate.is_dir():
             continue
-        if bundle_path.exists():
+        if not bundle_path.exists():
+            _restore_backup(candidate, bundle_path)
+            if not candidate.exists():
+                removed.append(bundle_path)
+            else:
+                warnings.warn(
+                    f"Leaving orphaned backup directory {candidate} in place; "
+                    "restoring it onto the missing bundle path failed.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            continue
+        if _directories_content_equal(candidate, bundle_path):
             shutil.rmtree(candidate)
             removed.append(candidate)
             continue
-        _restore_backup(candidate, bundle_path)
-        if not candidate.exists():
-            removed.append(bundle_path)
-        else:
+        if force:
+            shutil.rmtree(candidate)
+            removed.append(candidate)
             warnings.warn(
-                f"Leaving orphaned backup directory {candidate} in place; "
-                "restoring it onto the missing bundle path failed.",
+                f"Force-removed backup directory {candidate} whose contents differ "
+                f"from the live bundle at {bundle_path}; it was not provably redundant.",
                 UserWarning,
                 stacklevel=2,
             )
+            continue
+        warnings.warn(
+            f"Leaving backup directory {candidate} in place; its contents differ from "
+            f"the live bundle at {bundle_path} and it is not provably redundant. "
+            "Pass force=True to remove it anyway.",
+            UserWarning,
+            stacklevel=2,
+        )
     return removed
+
+
+def _directories_content_equal(left: Path, right: Path) -> bool:
+    """Return whether two directory trees hold byte-identical file contents.
+
+    Used by :func:`cleanup_tmp` to decide whether an orphaned ``.bak.*``
+    bundle directory is a provable duplicate of the live bundle (safe to
+    delete) versus genuinely distinct data that must not be silently
+    destroyed. Compares the set of relative file paths and, for each,
+    the file's SHA-256 digest via :func:`sha256_of_file`.
+
+    Parameters
+    ----------
+    left:
+        First directory to compare.
+    right:
+        Second directory to compare.
+
+    Returns
+    -------
+    bool
+        ``True`` if both directories contain the same relative file paths
+        with byte-identical contents, ``False`` otherwise (including on
+        any I/O error while comparing, to fail closed toward "not proven
+        redundant").
+    """
+
+    try:
+        left_files = sorted(p.relative_to(left) for p in left.rglob("*") if p.is_file())
+        right_files = sorted(p.relative_to(right) for p in right.rglob("*") if p.is_file())
+    except OSError:
+        return False
+    if left_files != right_files:
+        return False
+    try:
+        return all(sha256_of_file(left / rel) == sha256_of_file(right / rel) for rel in left_files)
+    except OSError:
+        return False
 
 
 def _scrub_trace_for_bundle(

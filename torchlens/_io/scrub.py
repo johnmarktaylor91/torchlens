@@ -854,7 +854,7 @@ def _stringify_value(value: Any) -> str:
     return f"<scrubbed:{type(value).__name__}>"
 
 
-_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor, np.ndarray)
+_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor,)
 
 
 def _is_safely_picklable(value: Any) -> bool:
@@ -873,14 +873,20 @@ def _is_safely_picklable(value: Any) -> bool:
     otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
     atomic-write/backup-restore contract).
 
-    ``torch.Tensor`` and ``numpy.ndarray`` are exempted from the probe:
-    they always support the standard pickle protocol via their own
-    ``__reduce_ex__`` (unlike generators/locks/file handles/sockets, they
-    hold no live OS resources that could make pickling fail), so probing
-    them would only pay a full extra ``pickle.dumps()`` pass -- doubling
-    CPU and transiently doubling peak memory -- for a result that is
-    always ``True``. Skipping the probe for these two types keeps the
-    live-resource detection intact for every value it actually protects.
+    ``torch.Tensor`` and non-object-dtype ``numpy.ndarray`` (numeric, bool,
+    string dtypes) are exempted from the probe: they always support the
+    standard pickle protocol via their own ``__reduce_ex__`` and hold no
+    live OS resources that could make pickling fail, so probing them would
+    only pay a full extra ``pickle.dumps()`` pass -- doubling CPU and
+    transiently doubling peak memory -- for a result that is always
+    ``True``. An ``object``-dtype ``numpy.ndarray``, however, is NOT
+    exempted: its elements are arbitrary live Python objects (an
+    object-dtype array can hold generators, locks, or other unpicklable
+    values just like a plain ``list`` or ``dict`` can), so exempting it
+    would reintroduce exactly the hard ``save()`` failure this probe
+    exists to prevent. Skipping the probe only for provably-safe types
+    keeps the live-resource detection intact for every value it actually
+    protects.
 
     Parameters
     ----------
@@ -894,6 +900,8 @@ def _is_safely_picklable(value: Any) -> bool:
     """
 
     if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
+        return True
+    if isinstance(value, np.ndarray) and value.dtype != np.dtype("object"):
         return True
 
     try:

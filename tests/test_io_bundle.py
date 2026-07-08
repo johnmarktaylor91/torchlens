@@ -8,6 +8,7 @@ import pickle
 from pathlib import Path
 from typing import Any, Callable
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
@@ -778,6 +779,83 @@ def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
     assert torch.equal(loaded.raw_input["tensor"], large_tensor)
 
 
+def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A numeric-dtype ``numpy.ndarray`` in ``save_raw_input=True`` must not be
+    pickle-probed twice (the H4 perf win preserved for the numeric-array case).
+    """
+
+    ndarray_dumps_calls = 0
+    real_dumps = pickle.dumps
+
+    def _counting_dumps(value: Any, *args: Any, **kwargs: Any) -> bytes:
+        nonlocal ndarray_dumps_calls
+        if isinstance(value, np.ndarray):
+            ndarray_dumps_calls += 1
+        return real_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr("torchlens._io.scrub.pickle.dumps", _counting_dumps)
+
+    model = nn.Linear(3, 3)
+    numeric_array = np.arange(100, dtype=np.float64).reshape(10, 10)
+    raw_input = {"array": numeric_array, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        transform=lambda d: d["x"],
+        save_raw_input=True,
+        random_seed=0,
+    )
+
+    bundle_path = tmp_path / "raw_input_numeric_ndarray_bundle.tl"
+    save(trace, bundle_path)
+
+    assert ndarray_dumps_calls == 0
+
+    loaded = load(bundle_path)
+    assert isinstance(loaded.raw_input["array"], np.ndarray)
+    np.testing.assert_array_equal(loaded.raw_input["array"], numeric_array)
+
+
+def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_element(
+    tmp_path: Path,
+) -> None:
+    """An object-dtype ``numpy.ndarray`` holding a live unpicklable element must
+    still be probed and gracefully degraded, not blindly exempted.
+
+    Regression test for the round-7 MAJOR: the round-6 H4 fix exempted ALL
+    ``numpy.ndarray`` instances from the picklability probe, which is correct
+    for numeric/bool/string dtypes but wrong for ``dtype=object`` arrays --
+    those can hold arbitrary live Python objects (generators, locks, ...)
+    just like a plain list/dict, so exempting them reintroduces the hard
+    ``save()`` failure the probe exists to prevent.
+    """
+
+    def make_generator() -> Any:
+        yield 1
+
+    model = nn.Linear(3, 3)
+    object_array = np.array([make_generator(), 1, "text"], dtype=object)
+    raw_input = {"array": object_array, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        transform=lambda d: d["x"],
+        save_raw_input=True,
+        random_seed=0,
+    )
+
+    bundle_path = tmp_path / "raw_input_object_ndarray_bundle.tl"
+    # Must NOT raise -- the unpicklable element degrades gracefully instead
+    # of reaching the real pickle.dump() over the full scrubbed state.
+    save(trace, bundle_path)
+
+    loaded = load(bundle_path)
+    assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
+
+
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
     """Bundle save should refuse symlinked target paths."""
 
@@ -829,14 +907,14 @@ def test_cleanup_tmp_removes_partial_temp_directories(tmp_path: Path) -> None:
 
 
 def test_cleanup_tmp_removes_redundant_backup_when_bundle_exists(tmp_path: Path) -> None:
-    """A ``.bak.*`` sibling next to an existing bundle is provably redundant."""
+    """A ``.bak.*`` sibling that is byte-identical to the live bundle is provably redundant."""
 
     target_path = tmp_path / "bundle.tl"
     target_path.mkdir()
     (target_path / "marker").write_text("current", encoding="utf-8")
     bak_path = tmp_path / f"{target_path.name}.bak.deadbeef"
     bak_path.mkdir()
-    (bak_path / "marker").write_text("stale", encoding="utf-8")
+    (bak_path / "marker").write_text("current", encoding="utf-8")
 
     removed = cleanup_tmp(target_path)
 
@@ -844,6 +922,86 @@ def test_cleanup_tmp_removes_redundant_backup_when_bundle_exists(tmp_path: Path)
     assert not bak_path.exists()
     assert target_path.exists()
     assert (target_path / "marker").read_text(encoding="utf-8") == "current"
+
+
+def test_cleanup_tmp_leaves_distinct_backup_when_bundle_exists(tmp_path: Path) -> None:
+    """A ``.bak.*`` sibling whose contents differ from the live bundle must NOT be
+    silently destroyed by default -- it is not provably redundant.
+
+    Regression test for the round-6 H4 over-reach: the previous implementation
+    inferred "redundant" purely from ``bundle_path.exists()`` with no content
+    check, so a genuinely distinct backup was silently ``shutil.rmtree()``'d.
+    """
+
+    target_path = tmp_path / "bundle.tl"
+    target_path.mkdir()
+    (target_path / "marker").write_text("current", encoding="utf-8")
+    bak_path = tmp_path / f"{target_path.name}.bak.deadbeef"
+    bak_path.mkdir()
+    (bak_path / "marker").write_text("stale-but-distinct", encoding="utf-8")
+
+    with pytest.warns(UserWarning, match="not provably redundant"):
+        removed = cleanup_tmp(target_path)
+
+    assert removed == []
+    assert bak_path.exists()
+    assert (bak_path / "marker").read_text(encoding="utf-8") == "stale-but-distinct"
+    assert (target_path / "marker").read_text(encoding="utf-8") == "current"
+
+
+def test_cleanup_tmp_force_removes_distinct_backup_when_bundle_exists(tmp_path: Path) -> None:
+    """``force=True`` still allows removing a non-provably-redundant backup."""
+
+    target_path = tmp_path / "bundle.tl"
+    target_path.mkdir()
+    (target_path / "marker").write_text("current", encoding="utf-8")
+    bak_path = tmp_path / f"{target_path.name}.bak.deadbeef"
+    bak_path.mkdir()
+    (bak_path / "marker").write_text("stale-but-distinct", encoding="utf-8")
+
+    with pytest.warns(UserWarning, match="Force-removed"):
+        removed = cleanup_tmp(target_path, force=True)
+
+    assert removed == [bak_path]
+    assert not bak_path.exists()
+
+
+def test_cleanup_tmp_does_not_destroy_second_distinct_orphaned_backup(tmp_path: Path) -> None:
+    """Two DISTINCT orphaned ``.bak.*`` dirs for the same target: restoring the
+    first must not cause the second, unrelated backup to be silently deleted.
+
+    Regression test for the round-7 BLOCKER: the round-6 H4 orphan-.bak sweep
+    inferred "redundant" purely from ``bundle_path.exists()`` becoming true
+    mid-loop (after an earlier iteration restored a sibling), with no content
+    check -- so a second, independently-orphaned backup holding genuinely
+    different data was silently destroyed.
+    """
+
+    target_path = tmp_path / "bundle.tl"
+    bak_path_1 = tmp_path / f"{target_path.name}.bak.aaaaaaaa"
+    bak_path_1.mkdir()
+    (bak_path_1 / "marker").write_text("first-orphan", encoding="utf-8")
+    bak_path_2 = tmp_path / f"{target_path.name}.bak.bbbbbbbb"
+    bak_path_2.mkdir()
+    (bak_path_2 / "marker").write_text("second-orphan-distinct", encoding="utf-8")
+
+    with pytest.warns(UserWarning, match="not provably redundant"):
+        removed = cleanup_tmp(target_path)
+
+    # Exactly one orphan was restored onto the missing bundle path; the other,
+    # content-distinct orphan must survive untouched.
+    assert removed == [target_path]
+    assert target_path.exists()
+    restored_marker = (target_path / "marker").read_text(encoding="utf-8")
+    assert restored_marker in {"first-orphan", "second-orphan-distinct"}
+
+    surviving = [p for p in (bak_path_1, bak_path_2) if p.exists()]
+    assert len(surviving) == 1
+    surviving_marker = (surviving[0] / "marker").read_text(encoding="utf-8")
+    # The surviving backup must be the one that was NOT restored, and its
+    # data must be intact (not silently destroyed).
+    assert surviving_marker != restored_marker
+    assert surviving_marker in {"first-orphan", "second-orphan-distinct"}
 
 
 def test_cleanup_tmp_restores_orphaned_backup_when_bundle_missing(tmp_path: Path) -> None:
