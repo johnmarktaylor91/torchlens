@@ -614,7 +614,12 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
             # numpy() doesn't support bfloat16 — upcast first.
             if cpu_data.dtype == torch.bfloat16:
                 cpu_data = cpu_data.to(torch.float32)
-        n = cpu_data.detach().numpy()
+            # ``.detach()`` is a decorated torch method like any other; calling
+            # it outside pause_logging (while a trace is actively logging)
+            # would log a real "detach" op and consume a raw-op-counter slot,
+            # leaving a graph orphan and staling any raw labels recorded just
+            # before this repr fired. Keep it inside the paused block.
+            n = cpu_data.detach().numpy()
         np_str = getattr(n, func_name)()
         # Cosmetic: replace "array" with "tensor" to match PyTorch style.
         np_str = np_str.replace("array", "tensor")

@@ -1772,7 +1772,17 @@ def _record_predicate_intervention_spec(
     if not target_label:
         return
     seen = trace.__dict__.setdefault("_tl_predicate_intervention_spec_keys", set())
-    key = (target_label, repr(decision.hook), decision.direction)
+    # ``decision.hook`` may be a HelperSpec carrying live torch.Tensor args
+    # (tl.steer/mean_ablate/resample_ablate/project_onto/project_off/swap_with).
+    # repr()'ing it invokes TorchLens's own intercepted tensor __repr__, which
+    # calls .detach() -- an untraced raw op that, outside pause_logging, still
+    # consumes a live raw-op-counter slot and becomes a graph orphan, staling
+    # the target label just recorded above relative to the op's real final
+    # raw label. Compute the dedup key under pause_logging so this bookkeeping
+    # repr never perturbs the capture in progress.
+    with pause_logging():
+        hook_repr = repr(decision.hook)
+    key = (target_label, hook_repr, decision.direction)
     if key in seen:
         return
     seen.add(key)
