@@ -36,6 +36,11 @@ SAMPLE_MODEL_IDS = (
     312,
     315,
 )
+# Optional heavy zoo dependencies required by specific sample rows; skipped when
+# the dependency is not installed, following the repo's importorskip pattern.
+OPTIONAL_DEPS_BY_MODEL_ID = {
+    298: ("mmcv", "mmdet"),  # mmdet_autoassign (mmdetection-configs zoo)
+}
 LEGACY_GENERATE_IMPORTS = (
     "CACHE_ROOTS",
     "DependencyPlan",
@@ -129,6 +134,8 @@ def test_generate_menagerie_legacy_import_surface_is_preserved() -> None:
 def test_recipe_build_model_and_input_trace_signature_is_stable(model_id: int) -> None:
     """Recipe-built model/input pairs have stable trace signatures across repeated calls."""
 
+    for optional_dep in OPTIONAL_DEPS_BY_MODEL_ID.get(model_id, ()):
+        pytest.importorskip(optional_dep)
     rows = _rows_by_id()
     row = rows[model_id]
     first = _trace_signature(row)

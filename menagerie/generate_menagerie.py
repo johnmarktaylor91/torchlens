@@ -30,6 +30,7 @@ from menagerie.runtime import (
     DependencyPlan,
     assert_min_free,
     cleanup_runtime,
+    combine_notes,  # noqa: F401  # legacy re-export (module-split import surface)
     cuda_is_available,
     default_jobs,
     dependency_plan,
