@@ -597,9 +597,19 @@ def test_opaque_in_list_module_output_structure_matches_output_paths() -> None:
 
     structure_paths = set(_container_tensor_leaf_paths(call.output_structure))
     output_paths = {tuple(path) for path in (call.output_paths or ()) if tuple(path)}
-    assert structure_paths == output_paths
     # The opaque holder lives at list slot 0 inside tuple slot 0.
-    assert output_paths == {(TupleIndex(index=0), TupleIndex(index=0))}
+    holder_prefix = (TupleIndex(index=0), TupleIndex(index=0))
+    assert structure_paths == {holder_prefix}
+    # cert10 (b68b6de5) extends each BFS-fallback leaf path with typed
+    # components inside the opaque object so distinct tensors keep DISTINCT
+    # replay-meaningful paths (identical paths formerly caused all but the
+    # first leaf to be dedup-dropped). Every output path must still extend the
+    # real outer structure leaf -- same container depth agreement as before,
+    # now checked as a prefix relation.
+    assert output_paths, "expected retained output paths for the opaque holder"
+    assert all(path[: len(holder_prefix)] == holder_prefix for path in output_paths)
+    # Both tensors held by the opaque object survive with distinct paths.
+    assert len(output_paths) == 2
 
     # The tripwire must hold -- not be exempted.
     check_metadata_invariants(trace)
