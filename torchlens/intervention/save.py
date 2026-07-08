@@ -712,6 +712,53 @@ def _serialize_hook_spec(
     }
 
 
+# Reserved wrapper-dict keys used by ``_serialize_value`` / ``_deserialize_value`` to
+# tag non-plain payloads. On load, ``_deserialize_value`` decides how to interpret a
+# JSON object purely by testing for the *presence* of one of these keys, so a plain
+# user dict whose key literally equals one of them would be misread (e.g. silently
+# reconstructed as a ``HelperSpec`` for ``__opaque_audit__``). To make that impossible,
+# ANY dict with a key in this reserved namespace is escaped through the fully-general
+# ``__dict_items__`` item-list encoding instead of the plain-object encoding, so a
+# genuine user key can never be mistaken for a wrapper tag. The reserved namespace is
+# every ``__dunder__`` string, which also future-proofs any wrapper tag added later.
+_RESERVED_WRAPPER_KEYS = frozenset(
+    {
+        "__tensor_ref__",
+        "__helper__",
+        "__callable__",
+        "__output_path_component__",
+        "__opaque_audit__",
+        "__dict_items__",
+        "__tuple_key__",
+    }
+)
+
+
+def _is_reserved_wrapper_key(key: Any) -> bool:
+    """Return ``True`` if ``key`` lives in the reserved wrapper-dict namespace.
+
+    Any string that both starts and ends with ``"__"`` (a classic dunder) is reserved
+    so it can never collide with a serializer sentinel. This covers every current
+    wrapper tag (see :data:`_RESERVED_WRAPPER_KEYS`) and any future one.
+
+    Parameters
+    ----------
+    key:
+        Candidate dict key.
+
+    Returns
+    -------
+    bool
+        Whether the key must be escaped rather than emitted as a plain JSON key.
+    """
+
+    if not isinstance(key, str):
+        return False
+    if key in _RESERVED_WRAPPER_KEYS:
+        return True
+    return len(key) >= 4 and key.startswith("__") and key.endswith("__")
+
+
 def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState) -> Any:
     """Serialize tensors, helpers, callables, and JSON-safe literals.
 
@@ -746,12 +793,18 @@ def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState)
         return [_serialize_value(item, save_level, state) for item in value]
     if isinstance(value, dict):
         # All-``str`` keys round-trip losslessly as a plain JSON object (the common
-        # case, on-disk format unchanged). Any non-``str`` key (int/float/tuple/...)
-        # would be silently corrupted by ``str(key)`` -- JSON objects only allow
-        # string keys -- so those dicts are encoded as an explicit item list that
-        # preserves each key's type through load. TorchLens never silently
-        # stringifies keys (mirrors ``annotate``'s reject-don't-coerce rule).
-        if all(type(key) is str for key in value):
+        # case, on-disk format unchanged) -- UNLESS a key collides with a reserved
+        # wrapper tag (``_is_reserved_wrapper_key``), in which case emitting a plain
+        # object would let ``_deserialize_value`` misread the user dict as a wrapper
+        # (silent corruption for ``__opaque_audit__``, loud crashes for the rest).
+        # Any non-``str`` key (int/float/tuple/...) would also be silently corrupted
+        # by ``str(key)`` -- JSON objects only allow string keys. Both cases are
+        # encoded as an explicit item list that preserves each key's type and value
+        # through load. TorchLens never silently stringifies or mis-tags keys
+        # (mirrors ``annotate``'s reject-don't-coerce rule).
+        if all(type(key) is str for key in value) and not any(
+            _is_reserved_wrapper_key(key) for key in value
+        ):
             return {key: _serialize_value(item, save_level, state) for key, item in value.items()}
         return {
             "__dict_items__": [

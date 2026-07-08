@@ -695,7 +695,6 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
             "transformed_grad",
             "func",
             "grad_fn_handle",
-            "source_trace",
         },
         reconstruct={"source_trace", "_construction_done"},
     )

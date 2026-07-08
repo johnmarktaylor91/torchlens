@@ -1288,7 +1288,9 @@ class Bundle:
                 if name == baseline_name or not isinstance(out, torch.Tensor):
                     continue
                 val = (
-                    relative_l1_scalar(base, out) if is_scalar_like(base) else metric_fn(base, out)
+                    relative_l1_scalar(base, out)
+                    if is_scalar_like(base) and is_scalar_like(out)
+                    else metric_fn(base, out)
                 )
                 distances.append(float(val.detach().item()))
             if distances:
@@ -2025,7 +2027,7 @@ def _distance_value(
     metric_fn = resolve_metric(metric)
     value = (
         relative_l1_scalar(reference, candidate)
-        if is_scalar_like(reference)
+        if is_scalar_like(reference) and is_scalar_like(candidate)
         else metric_fn(reference, candidate)
     )
     return float(value.detach().item())
