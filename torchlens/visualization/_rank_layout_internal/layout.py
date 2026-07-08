@@ -357,19 +357,30 @@ def _estimate_node_size(label: str) -> tuple[float, float]:
     return width, height
 
 
+def _dot_escape(value: str) -> str:
+    """Backslash-escape a raw string for embedding inside a quoted DOT string.
+
+    Mirrors ``graphviz.quoting.quote()``'s escaping semantics: escape a
+    literal backslash ``\\`` FIRST, then a literal double-quote ``"``.  Order
+    matters -- escaping the backslash first means the backslash newly
+    introduced to escape a ``"`` is never itself re-escaped by a later pass.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _dot_quote(value: str) -> str:
     """Quote a DOT attribute value, preserving HTML labels."""
     if value.startswith("<") and value.endswith(">"):
         return value
-    return f'"{value}"'
+    return f'"{_dot_escape(value)}"'
 
 
 def _dot_id(name: str) -> str:
     """Format a node name for DOT, quoting if needed."""
     _KW = {"graph", "digraph", "subgraph", "node", "edge", "strict"}
-    if re.match(r"^[a-zA-Z_]\w*$", name) and name not in _KW:
+    if re.match(r"^[a-zA-Z_]\w*$", name) and name.lower() not in _KW:
         return name
-    return f'"{name}"'
+    return f'"{_dot_escape(name)}"'
 
 
 def render_rank_layout(
