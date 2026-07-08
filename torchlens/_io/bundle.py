@@ -359,6 +359,31 @@ def save(
         if backup_path is not None and not bundle_path.exists() and backup_path.exists():
             _restore_backup(backup_path, bundle_path)
         raise TorchLensIOError(f"Failed to save bundle at {bundle_path}.") from exc
+    except BaseException as exc:
+        # Safety-net catch-all that closes the whole *class* of bug the
+        # branches above were built to fix one exception type at a time
+        # (``ddd9440f`` added ``TypeError``; this is the third recurrence --
+        # most recently a raw ``KeyError`` from ``safetensors.torch.save_file``
+        # for an allow-listed-but-actually-unwritable ``complex128`` tensor,
+        # cert round 8 BLOCKER). A hand-enumerated except tuple can always be
+        # missing the *next* third-party exception shape; this branch instead
+        # guarantees the recovery contract -- mark the ``.tmp`` dir PARTIAL so
+        # ``cleanup_tmp()`` can sweep it, and restore the pre-overwrite backup
+        # onto ``bundle_path`` if the write left it missing -- for literally
+        # any exception, known or not yet discovered, so the live bundle can
+        # never again be stranded under an unrestored ``.bak.<uuid>`` name.
+        #
+        # ``BaseException`` (not ``Exception``) is used deliberately so this
+        # also covers ``KeyboardInterrupt``/``SystemExit``/``GeneratorExit``
+        # unwinding mid-write; those are re-raised unwrapped below so control
+        # flow semantics are preserved, while ordinary exceptions are wrapped
+        # in ``TorchLensIOError`` to match the sibling branch above.
+        _mark_partial(tmp_path, reason=str(exc))
+        if backup_path is not None and not bundle_path.exists() and backup_path.exists():
+            _restore_backup(backup_path, bundle_path)
+        if isinstance(exc, Exception):
+            raise TorchLensIOError(f"Failed to save bundle at {bundle_path}.") from exc
+        raise
 
 
 def _reject_audit_only_materialized_payload_save(
@@ -1034,7 +1059,14 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     Parameters
     ----------
     path:
-        Final bundle path whose ``.tmp.*``/``.bak.*`` siblings should be inspected.
+        The **target bundle path itself** (e.g. ``"demo_bundle"``, the same
+        path you pass to ``save(path, ...)``/``load(path)``) -- NOT its
+        containing directory. Sibling ``.tmp.*``/``.bak.*`` candidates are
+        found by globbing ``f"{Path(path).name}.tmp.*"`` /
+        ``f"{Path(path).name}.bak.*"`` inside ``Path(path).parent``, so
+        passing the parent directory instead (expecting "clean up everything
+        inside this directory" semantics) silently matches nothing -- no
+        error, no warning, zero directories removed.
     force:
         Whether temp dirs without a ``PARTIAL`` sentinel, and backup dirs
         that are not provably redundant, should also be removed.

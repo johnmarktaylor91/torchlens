@@ -54,7 +54,17 @@ _SUPPORTED_DTYPES = {
     torch.uint8,
     torch.bool,
     torch.complex64,
-    torch.complex128,
+    # ``torch.complex128`` is deliberately EXCLUDED even though torch itself
+    # fully supports it end-to-end. The physical writer for portable bundles
+    # is ``safetensors.torch.save_file()``, whose dtype-size table (installed
+    # ``safetensors`` 0.8.0) has an entry for ``torch.complex64`` but no entry
+    # for ``torch.complex128`` -- listing it here as "supported" let a
+    # complex128 tensor sail past this allow-list gate and crash `save_file()`
+    # with a raw, unwrapped ``KeyError`` deep inside a third-party library
+    # (cert round 8 BLOCKER). If genuine complex128 support is ever wanted,
+    # bitcast/view it to a representation ``safetensors`` actually supports
+    # (e.g. paired float64 channels, mirroring the existing bfloat16
+    # transport-bitcast pattern) rather than re-adding the raw dtype here.
 }
 
 

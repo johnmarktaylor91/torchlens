@@ -19,6 +19,10 @@ from torchlens import Trace, load, trace as trace_fn, save
 from torchlens.io import cleanup_tmp
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.manifest import Manifest
+from torchlens._io.payload_codec import (
+    _raise_for_unsupported_array_dtype,
+    _unsupported_array_dtype_reason,
+)
 from torchlens.data_classes.trace import ResolvedPostprocessing
 
 
@@ -148,6 +152,28 @@ def _build_non_tensor_out_log() -> Trace:
     first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
     first_saved_layer.transformed_out = 1.0
     trace.activation_transform = lambda tensor: float(tensor.mean().item())
+    return trace
+
+
+def _build_complex_out_log(*, dtype: torch.dtype) -> Trace:
+    """Create a live log whose first saved out is converted to a complex dtype post-hoc.
+
+    Parameters
+    ----------
+    dtype:
+        Target complex dtype (e.g. ``torch.complex64``/``torch.complex128``).
+
+    Returns
+    -------
+    Trace
+        Model log containing a complex-dtype out tensor.
+    """
+
+    trace = _build_conv_log()
+    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    assert isinstance(first_saved_layer.out, torch.Tensor)
+    real = first_saved_layer.out
+    first_saved_layer.out = torch.complex(real, real).to(dtype)
     return trace
 
 
@@ -374,6 +400,78 @@ def test_bundle_save_strict_false_records_unsupported_tensors(tmp_path: Path) ->
     assert manifest.unsupported_tensors
     assert all(entry["kind"] == "out" for entry in manifest.unsupported_tensors)
     assert all("sparse" in entry["reason"] for entry in manifest.unsupported_tensors)
+
+
+def test_bundle_save_strict_default_raises_on_complex128_tensor(tmp_path: Path) -> None:
+    """Strict bundle save must reject ``complex128`` with a clean error, not a raw ``KeyError``.
+
+    Regression test for a data-loss BLOCKER (cert round 8): ``torch.complex128`` was
+    listed in ``tensor_policy._SUPPORTED_DTYPES`` even though the actual writer,
+    ``safetensors.torch.save_file()``, has no dtype-size-table entry for it. A
+    ``complex128`` tensor therefore sailed straight past the allow-list tripwire that
+    exists precisely to keep unsupported tensors out of ``save_file()`` and crashed with
+    a raw, unwrapped ``KeyError`` from deep inside the third-party library -- bypassing
+    every save-path hardening fix from cert rounds 3-7 entirely, since ``KeyError`` was
+    never in any of their except tuples. The fix drops ``complex128`` from the allow-list
+    so this now fails cleanly, before ``save_file()`` is ever reached.
+    """
+
+    trace = _build_complex_out_log(dtype=torch.complex128)
+    bundle_path = tmp_path / "complex128_bundle.tl"
+
+    with pytest.raises(TorchLensIOError, match="complex128"):
+        save(trace, bundle_path)
+
+    # The strict allow-list check fires before ``safetensors.torch.save_file()``
+    # is ever reached, so no raw ``KeyError`` escapes and ``bundle_path`` itself
+    # is never created. A leftover ``.tmp.*`` dir is expected (standard
+    # fresh-save failure contract) and must carry the PARTIAL sentinel so
+    # ``cleanup_tmp()`` can sweep it.
+    assert not bundle_path.exists()
+    tmp_dirs = [p for p in tmp_path.iterdir() if ".tmp." in p.name]
+    assert tmp_dirs
+    for tmp_dir in tmp_dirs:
+        assert (tmp_dir / "PARTIAL").exists()
+    removed = cleanup_tmp(bundle_path)
+    assert set(removed) == set(tmp_dirs)
+    assert not any(p.exists() for p in tmp_dirs)
+
+
+def test_bundle_save_strict_false_records_complex128_as_unsupported(tmp_path: Path) -> None:
+    """Best-effort save should skip ``complex128`` tensors and record them, not crash."""
+
+    trace = _build_complex_out_log(dtype=torch.complex128)
+    bundle_path = tmp_path / "complex128_bundle.tl"
+
+    save(trace, bundle_path, strict=False)
+
+    manifest = Manifest.read(bundle_path / "manifest.json")
+    assert manifest.unsupported_tensors
+    assert all(entry["kind"] == "out" for entry in manifest.unsupported_tensors)
+    assert all("complex128" in entry["reason"] for entry in manifest.unsupported_tensors)
+
+
+def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
+    """``complex64`` remains genuinely supported -- ``complex128`` was the only gap.
+
+    Confirms the ``tensor_policy``/payload-codec fix is scoped narrowly: it must not
+    regress the dtype that ``safetensors`` 0.8.0 genuinely round-trips.
+    """
+
+    trace = _build_complex_out_log(dtype=torch.complex64)
+    bundle_path = tmp_path / "complex64_bundle.tl"
+    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    original_out = first_saved_layer.out
+    assert isinstance(original_out, torch.Tensor)
+    assert original_out.dtype == torch.complex64
+
+    save(trace, bundle_path)
+    restored = load(bundle_path)
+    restored_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
+
+    assert isinstance(restored_layer.out, torch.Tensor)
+    assert restored_layer.out.dtype == torch.complex64
+    assert torch.equal(original_out, restored_layer.out)
 
 
 @pytest.mark.parametrize(
@@ -632,6 +730,80 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
 
     # No undocumented "<name>.bak.<uuid>" sibling should be left behind --
     # the failed-overwrite path must restore it back onto ``bundle_path``.
+    siblings = [p for p in tmp_path.iterdir() if p != bundle_path]
+    bak_dirs = [p for p in siblings if ".bak." in p.name]
+    assert bak_dirs == []
+
+    # Any leftover ``.tmp.<uuid>`` dir must carry the PARTIAL sentinel so
+    # ``cleanup_tmp()`` (without ``force=True``) can sweep it.
+    tmp_dirs = [p for p in siblings if ".tmp." in p.name]
+    for tmp_dir in tmp_dirs:
+        assert (tmp_dir / "PARTIAL").exists()
+    removed = cleanup_tmp(bundle_path)
+    assert set(removed) == set(tmp_dirs)
+    assert not any(p.exists() for p in tmp_dirs)
+
+
+class _NeverEnumeratedError(Exception):
+    """Stand-in for a hypothetical future third-party writer failure mode.
+
+    Deliberately NOT a subclass of ``TorchLensIOError``, ``BackendPayloadUnsupportedError``,
+    or any member of ``save()``'s historical ``(ImportError, OSError, TypeError, ValueError,
+    pickle.PickleError)`` tuple, so a test injecting it proves the catch-all safety net
+    closes the *class* of "unenumerated exception strands the backup" bug rather than
+    merely covering the one exception type (``KeyError``) that happened to surface it.
+    """
+
+
+@pytest.mark.parametrize(
+    "injected_exception",
+    [KeyError("torch.complex128"), _NeverEnumeratedError("simulated brand-new writer failure")],
+    ids=["keyerror", "unenumerated-exception-type"],
+)
+def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    injected_exception: Exception,
+) -> None:
+    """ANY exception mid-write during ``save(overwrite=True)`` must not strand the backup.
+
+    Regression test closing the recurring bug *class*, not just one dtype. Rounds 3-7
+    hardened specific exception types one at a time (most recently ``TypeError`` in
+    ``ddd9440f``); cert round 8 found a raw ``KeyError`` from
+    ``safetensors.torch.save_file()`` (triggered by a ``complex128`` tensor wrongly
+    allow-listed in ``tensor_policy``) sailing straight past that hand-enumerated except
+    tuple, leaving the live bundle path *missing* after a failed overwrite with only an
+    unrestored ``.bak.<uuid>`` copy surviving -- and no automatic recovery. ``save()`` now
+    has a ``BaseException`` catch-all after the specific branches, so the same
+    backup-restore + ``PARTIAL``-sentinel recovery fires for literally any exception type,
+    known or not yet discovered (the parametrized ``_NeverEnumeratedError`` stands in for
+    "not yet discovered").
+    """
+
+    bundle_path, first_log = _save_bundle(tmp_path, seed=0)
+    second_log = _build_conv_log(seed=1)
+
+    def _poisoned_pickle_dump(*_args: Any, **_kwargs: Any) -> None:
+        raise injected_exception
+
+    monkeypatch.setattr("torchlens._io.bundle.pickle.dump", _poisoned_pickle_dump)
+
+    with pytest.raises(TorchLensIOError) as excinfo:
+        save(second_log, bundle_path, overwrite=True)
+
+    assert excinfo.value.__cause__ is injected_exception
+
+    # The original (pre-overwrite) bundle must survive the failed overwrite,
+    # regardless of which exception type the write raised.
+    assert bundle_path.exists()
+    restored = load(bundle_path)
+    first_output = first_log.layer_list[-1].out
+    restored_output = restored.layer_list[-1].out
+    assert isinstance(first_output, torch.Tensor)
+    assert isinstance(restored_output, torch.Tensor)
+    assert torch.equal(first_output, restored_output)
+
+    # No undocumented "<name>.bak.<uuid>" sibling should be left behind.
     siblings = [p for p in tmp_path.iterdir() if p != bundle_path]
     bak_dirs = [p for p in siblings if ".bak." in p.name]
     assert bak_dirs == []
@@ -1088,3 +1260,31 @@ def _torch_minor_mismatch_version() -> str:
     minor = int(version_parts[1]) if len(version_parts) > 1 else 0
     patch = int(version_parts[2]) if len(version_parts) > 2 and version_parts[2].isdigit() else 0
     return f"{major}.{minor + 1}.{patch}"
+
+
+def test_unsupported_array_dtype_reason_rejects_complex128_but_allows_complex64() -> None:
+    """Non-torch backends must reject ``complex128`` arrays before the shared transport.
+
+    Regression test for the non-torch half of the cert round 8 BLOCKER:
+    ``_raise_for_unsupported_array_dtype()``/``_unsupported_array_dtype_reason()`` gate
+    every JAX/TF/Paddle/tinygrad/MLX payload before it reaches
+    ``numpy_to_transport_tensor()`` -> ``torch.from_numpy()`` -> the same unguarded
+    ``safetensors.torch.save_file()`` call the torch-native path hits. Before this fix,
+    the guard only rejected numpy dtype *kinds* ``{"O", "S", "U", "V"}`` -- ``complex128``
+    has kind ``"c"`` (shared with the genuinely-supported ``complex64``), so it sailed
+    through unblocked. The fix distinguishes by itemsize (complex128 is 16 bytes,
+    complex64 is 8) so only the unsupported width is rejected.
+    """
+
+    complex128_array = np.array([1 + 2j], dtype=np.complex128)
+    complex64_array = np.array([1 + 2j], dtype=np.complex64)
+
+    reason = _unsupported_array_dtype_reason(complex128_array)
+    assert reason is not None
+    assert "complex128" in reason
+    assert _unsupported_array_dtype_reason(complex64_array) is None
+
+    with pytest.raises(TypeError, match="complex128"):
+        _raise_for_unsupported_array_dtype(complex128_array, backend_name="jax")
+
+    _raise_for_unsupported_array_dtype(complex64_array, backend_name="jax")
