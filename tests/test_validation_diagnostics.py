@@ -183,7 +183,9 @@ def test_clean_validation_passes_and_records_no_failure() -> None:
     trace = _capture_full_trace(model, x)
     try:
         result = validate_saved_outs(trace, [gt], validate_metadata=True)
-        assert result is True
+        # validate_saved_outs returns a ValidationReplayStatus (da60a76e); a
+        # clean capture must be an explicit "passed", not merely truthy.
+        assert result.state == "passed"
         assert get_validation_failure(trace) is None
     finally:
         trace.cleanup()
@@ -221,7 +223,7 @@ def test_regression_replay_diagnostic_carries_real_mismatch() -> None:
         result = validate_saved_outs(trace, [gt], validate_metadata=False)
 
         # (1) tripwire still fires -- a wrong replay is still a FAILURE.
-        assert result is False
+        assert result.state == "failed"
 
         # (2) the failure carries the real mismatch, not repr(False).
         failure = get_validation_failure(trace)
@@ -253,7 +255,7 @@ def test_regression_ground_truth_diagnostic_carries_real_mismatch() -> None:
     trace = _capture_full_trace(model, x)
     try:
         result = validate_saved_outs(trace, [wrong_gt], validate_metadata=False)
-        assert result is False
+        assert result.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
         assert failure.check == CHECK_GROUND_TRUTH

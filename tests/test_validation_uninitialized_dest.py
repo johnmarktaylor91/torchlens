@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -248,8 +249,15 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
                 break
         assert patched, "expected a __setitem__ op to corrupt"
 
-        result = validate_saved_outs(trace, [gt], validate_metadata=False)
-        assert result is False  # tripwire still fires on a real value mismatch
+        # Under cert10 replay the in-place corruption raises inside the replayed
+        # func; torchlens treats a raising replay as FAILED and warns. Both
+        # routes (value mismatch or raising replay) must end in a failed replay
+        # check -- the tripwire concern is unchanged.
+        with pytest.warns(UserWarning, match="treating as failed validation"):
+            result = validate_saved_outs(trace, [gt], validate_metadata=False)
+        # ValidationReplayStatus API (da60a76e): tripwire still fires on a real
+        # value mismatch.
+        assert result.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
         assert failure.check == CHECK_REPLAY
@@ -326,7 +334,7 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
         second.func = fake_index_copy
 
         result = validate_saved_outs(trace, [gt], validate_metadata=False)
-        assert result is False, "dropped chained-dest dependency must FAIL validation"
+        assert result.state == "failed", "dropped chained-dest dependency must FAIL validation"
         failure = get_validation_failure(trace)
         assert failure is not None
         assert failure.check == CHECK_PERTURBATION
