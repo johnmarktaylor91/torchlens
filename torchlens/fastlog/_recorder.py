@@ -447,7 +447,16 @@ class Recorder:
             return None
         finally:
             self._state.recording.end_times.append(time.time())
-        output_tensors, output_tensor_addresses = _extract_and_mark_outputs(trace, output)
+        # Output tensors are extracted+marked inside _run_and_log_inputs_through_model
+        # (postprocess=False branch) BEFORE it cleans up model session metadata, so
+        # buffer-output attribution isn't racing the label wipe. Read the stashed
+        # scratch results back rather than re-extracting from the now-cleaned-up model.
+        output_tensors = trace.__dict__.pop("_fastlog_output_tensors", None)
+        output_tensor_addresses = trace.__dict__.pop("_fastlog_output_tensor_addresses", None)
+        if output_tensors is None or output_tensor_addresses is None:
+            # Defensive fallback only; the postprocess=False branch above always
+            # populates these on a normal return.
+            output_tensors, output_tensor_addresses = _extract_and_mark_outputs(trace, output)
         trace.__dict__.pop("_output_attribution_input_tensors", None)
         self._carry_module_structure_events(trace)
         self._capture_events.extend(trace.capture_events.op_events)

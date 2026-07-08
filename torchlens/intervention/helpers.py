@@ -530,13 +530,15 @@ def swap_with(
     *,
     force_shape_change: bool = False,
 ) -> HelperSpec:
-    """Create a helper that swaps with another site or tensor.
+    """Create a helper that swaps with another site's tensor.
 
     Parameters
     ----------
     other_label:
-        Label string resolved at fire time by later phases, a Op-like
-        object with ``out``, or a tensor value.
+        A tensor value, or an Op-like object exposing an already-resolved
+        ``out`` tensor (e.g. ``other_log['layer_x']`` from a separate,
+        already-completed capture). A bare string label is **not**
+        supported: see the Raises section.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -544,7 +546,28 @@ def swap_with(
     -------
     HelperSpec
         Built-in forward helper spec.
+
+    Raises
+    ------
+    HookValueError
+        Immediately, if ``other_label`` is a plain string. No execution
+        path (live capture, replay, or rerun) populates a fire-time
+        label -> tensor lookup table, so a string label can never resolve
+        to another site's captured activation today. Pass a
+        ``torch.Tensor`` or an Op-like object with a resolved ``out``
+        tensor instead (e.g. ``tl.swap_with(other_log['layer_x'].out)``).
     """
+
+    if isinstance(other_label, str):
+        raise HookValueError(
+            "swap_with(<string label>) is not implemented: no live, replay, "
+            "or rerun execution path populates the fire-time site lookup "
+            "that would resolve a string label to another site's captured "
+            "tensor. Pass a torch.Tensor or an Op-like object with an "
+            "already-resolved `out` tensor instead, e.g. "
+            "tl.swap_with(other_log['layer_x'].out) or "
+            "tl.swap_with(other_log['layer_x'])."
+        )
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for swapping outs.
@@ -558,9 +581,14 @@ def swap_with(
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return the resolved replacement tensor."""
 
-            replacement = _resolve_swap_value(other_label, hook)
+            del hook
+            replacement = _resolve_swap_value(other_label)
             if not isinstance(replacement, torch.Tensor):
-                raise HookValueError("swap_with string labels require fire-time resolution context")
+                raise HookValueError(
+                    "swap_with requires a torch.Tensor or an Op-like object "
+                    "with a resolved `out` tensor; got "
+                    f"{type(replacement).__name__!r}"
+                )
             return replacement.to(device=out.device, dtype=out.dtype)
 
         return _hook
@@ -1411,15 +1439,15 @@ def _align_direction(
     return direction
 
 
-def _resolve_swap_value(other_label: Any, hook: HookContext) -> Any:
+def _resolve_swap_value(other_label: Any) -> Any:
     """Resolve a swap source for helper execution.
 
     Parameters
     ----------
     other_label:
-        String label, Op-like object, or tensor.
-    hook:
-        Hook context carrying optional fire-time lookup dictionaries.
+        Tensor or Op-like object with a resolved ``out`` attribute. String
+        labels are rejected earlier, in ``swap_with``, before a ``HelperSpec``
+        is ever built -- there is no fire-time lookup table for them.
 
     Returns
     -------
@@ -1428,11 +1456,6 @@ def _resolve_swap_value(other_label: Any, hook: HookContext) -> Any:
     """
 
     if isinstance(other_label, torch.Tensor):
-        return other_label
-    if isinstance(other_label, str):
-        swap_sources = hook.run_ctx.get("swap_sources", {})
-        if isinstance(swap_sources, dict):
-            return swap_sources.get(other_label, other_label)
         return other_label
     return getattr(other_label, "out", other_label)
 

@@ -302,11 +302,47 @@ def _traverse_model_modules(
 # ---------------------------------------------------------------------------
 
 
-def _prepare_model_once(model: nn.Module) -> None:
-    """Phase 1: Permanent one-time model preparation.
+def _restore_undecorated_forward(module: nn.Module) -> None:
+    """Undo a stale non-root ``forward`` decoration so ``module`` can be root.
 
-    Runs once per model instance (idempotent via ``_state._prepared_models``
-    WeakSet). Performs three tasks for each submodule:
+    A module that was prepared as a NON-root submodule in an earlier trace has a
+    toggle-gated ``module_forward_decorator`` wrapper installed on its
+    ``forward``. If that same module is later traced as its OWN top-level root,
+    the wrapper must be removed: ``trace`` invokes and frames the root itself, so
+    the root's ``forward`` must be UNDECORATED (the wrapper would otherwise call
+    ``push_frame`` for a module that is never registered in the per-session
+    module-call dicts, raising ``KeyError``). The original ``forward`` is
+    recovered from ``functools.wraps``' ``__wrapped__`` reference; if it is
+    absent, the instance-level override is dropped so lookup falls back to the
+    (undecorated) class ``forward``.
+
+    Parameters
+    ----------
+    module:
+        Module about to be prepared as a root.
+
+    Returns
+    -------
+    None
+        The module's ``forward`` is restored in place when it was decorated;
+        otherwise this is a no-op.
+    """
+    current_forward = module.__dict__.get("forward", None)
+    if current_forward is None or not is_forward_call_decorated(current_forward):
+        return
+    original_forward = getattr(current_forward, "__wrapped__", None)
+    if original_forward is not None:
+        module.forward = original_forward
+    else:
+        module.__dict__.pop("forward", None)
+
+
+def _prepare_model_once(model: nn.Module) -> None:
+    """Phase 1: One-time (per role) model preparation.
+
+    Fast-path cached via ``_state._prepared_models`` (WeakSet) for the common
+    case: a model traced repeatedly in a fixed role, or independent models
+    traced in any interleaving. Performs three tasks for each submodule:
 
     1. **Patches instance-level torch function refs** — If the user stored
        ``self.act = torch.relu`` in ``__init__``, that reference predates
@@ -323,13 +359,31 @@ def _prepare_model_once(model: nn.Module) -> None:
        The ``_tl.forward_call_is_decorated`` sentinel prevents double-wrapping.
 
     The root module is skipped for type annotation and forward wrapping because
-    its forward is called directly by ``trace`` with its own
-    entry/exit handling.
+    its forward is called directly by ``trace`` with its own entry/exit handling
+    — the root's ``forward`` is deliberately left UNDECORATED.
+
+    **Role swaps.** The address (root-relative) and forward decoration are
+    role-DEPENDENT: they differ depending on whether a module is *this* trace's
+    root or a non-root submodule. The same module can legitimately be traced in
+    both roles across separate traces (e.g. ``trace(outer, ...)`` then
+    ``trace(outer.inner, ...)``). When that happens the metadata cached for the
+    old role is stale for the new one, so this function re-establishes it:
+
+    * A root that carried a stale non-root ``forward`` decoration is undecorated
+      (see :func:`_restore_undecorated_forward`).
+    * Re-rooting a descendant under a new model marks the old ancestor root
+      stale (via :func:`_state.record_module_root_prep`); the stale root is then
+      treated as un-prepared here so its addresses and decorations are refreshed
+      for the current root on its next trace.
     """
-    if model in _state._prepared_models:
+    if model in _state._prepared_models and not _state.root_prep_is_stale(model):
         return
+    _state.clear_root_prep_stale(model)
 
     set_module_meta(model, address="", module_type=str(type(model).__name__))
+    # The root's forward must run undecorated. Restore it if this module carries
+    # a stale non-root decoration from an earlier trace where it was a submodule.
+    _restore_undecorated_forward(model)
 
     def _visit_once(
         module: nn.Module,
@@ -338,15 +392,20 @@ def _prepare_model_once(model: nn.Module) -> None:
         is_root: bool,
     ) -> None:
         """Prepare one module and recursively visit its children once."""
+        # Stamp this module's current root and flag any prior root it was
+        # re-rooted away from as stale (role-swap bookkeeping).
+        _state.record_module_root_prep(model, module)
+
         # Replace any original torch functions stored as instance attributes
-        # (e.g. self.act = torch.relu assigned before decoration).
+        # (e.g. self.act = torch.relu assigned before decoration). Idempotent:
+        # already-decorated refs are absent from _orig_to_decorated.
         for func_name, func in list(module.__dict__.items()):
             if func_name.startswith("__") or not callable(func):
                 continue
             if id(func) in _state._orig_to_decorated:
                 module.__dict__[func_name] = _state._orig_to_decorated[id(func)]
 
-        # Annotate children with their full dotted address path.
+        # Annotate children with their full dotted address path (root-relative).
         for _, child_module, child_address in child_entries:
             set_module_meta(
                 child_module,
@@ -361,6 +420,8 @@ def _prepare_model_once(model: nn.Module) -> None:
         set_module_meta(module, address=address, module_type=str(type(module).__name__))
 
         # Wrap forward with toggle-gated decorator (idempotent via sentinel).
+        # A module re-prepared as non-root after having been a root simply gets
+        # (re)decorated here, since a root's forward is left undecorated.
         if hasattr(module, "forward") and not is_forward_call_decorated(module.forward):
             module.forward = module_forward_decorator(module.forward, module)
             mark_forward_call_decorated(module.forward)
