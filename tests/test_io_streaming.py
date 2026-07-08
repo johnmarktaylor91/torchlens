@@ -17,7 +17,7 @@ from torchlens import trace as trace_fn
 from torchlens.errors import TorchLensPostfuncError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
-from torchlens._io import TorchLensIOError
+from torchlens._io import TorchLensIOError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.trace import Trace
 
@@ -249,6 +249,113 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
     tmp_dirs = _tmp_dirs_for(bundle_path)
     assert len(tmp_dirs) == 1
     assert (tmp_dirs[0] / "PARTIAL").exists()
+
+
+def test_streaming_finalize_baseexception_marks_partial_and_is_sweepable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A BaseException-only failure mid-``finalize()`` still leaves a sweepable ``.tmp`` dir.
+
+    Regression test for a gap left by round-8 F3: ``bundle.py``'s ``save()``
+    got an ``except BaseException`` safety net (closing a bug class where a
+    not-yet-enumerated exception shape mid-write left the ``.tmp`` bundle
+    dir un-marked and un-sweepable), but the sibling streaming writer,
+    ``BundleStreamWriter.finalize()``, never received the same net -- it
+    only caught ``(OSError, TypeError, ValueError, pickle.PickleError)``.
+    A ``KeyboardInterrupt``/``SystemExit``/``GeneratorExit`` raised mid-
+    ``pickle.dump()`` inside ``finalize()`` is not an ``Exception`` subclass,
+    so it is not caught by that narrow tuple, and (before this fix) it also
+    was not caught by ``user_funcs.py``'s outer ``except Exception`` guard --
+    it propagated all the way out of ``tl.trace()`` uncaught, correctly, but
+    without ever calling ``self.abort()``, leaving the ``.tmp.*`` directory
+    without a ``PARTIAL`` sentinel: an orphan invisible to default
+    ``cleanup_tmp()`` (``force=False``) forever.
+
+    Uses ``storage=tl.to_disk(...)`` (the public streaming-save entry point)
+    rather than the legacy ``save_outs_to=`` kwarg used by sibling tests, per
+    the fix spec.
+    """
+
+    bundle_path = tmp_path / "stream_bundle.tl"
+    model, inputs = _make_streaming_model()
+
+    def _raise_keyboard_interrupt(*args: Any, **kwargs: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(streaming_module.pickle, "dump", _raise_keyboard_interrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        tl.trace(
+            model,
+            inputs,
+            storage=tl.to_disk(bundle_path),
+            layers_to_save="all",
+        )
+
+    # The KeyboardInterrupt must propagate unwrapped (not swallowed, not
+    # rewrapped into a TorchLensIOError) -- verified by pytest.raises above --
+    # while STILL marking the .tmp dir PARTIAL so it becomes sweepable.
+    assert not bundle_path.exists()
+    tmp_dirs = _tmp_dirs_for(bundle_path)
+    assert len(tmp_dirs) == 1
+    assert (tmp_dirs[0] / "PARTIAL").exists()
+    assert (tmp_dirs[0] / "REASON.txt").exists()
+    assert "finalize streaming bundle" in (tmp_dirs[0] / "REASON.txt").read_text(encoding="utf-8")
+
+    # Default cleanup_tmp() (force=False) only sweeps PARTIAL-marked dirs --
+    # confirms the orphan is no longer invisible to it.
+    removed = cleanup_tmp(bundle_path)
+    assert removed == tmp_dirs
+    assert not _tmp_dirs_for(bundle_path)
+
+
+def test_streaming_write_blob_baseexception_marks_partial_and_is_sweepable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A BaseException-only failure mid-``write_blob()`` also leaves a sweepable ``.tmp`` dir.
+
+    Sibling to the ``finalize()`` regression test above:
+    ``BundleStreamWriter.write_blob()`` only wrapped ``_write_tensor_blob()``
+    (which calls ``safetensors.torch.save_file()`` directly -- the same call
+    site whose raw ``KeyError`` for ``complex128`` was the round-8 BLOCKER in
+    the non-streaming path) in a narrow ``except OSError``. A
+    ``SystemExit`` raised mid-write previously propagated out of
+    ``tl.trace()`` without ever marking the ``.tmp`` dir ``PARTIAL``.
+    """
+
+    bundle_path = tmp_path / "stream_bundle.tl"
+    model, inputs = _make_streaming_model()
+
+    original_write_tensor_blob = streaming_module.BundleStreamWriter._write_tensor_blob
+    call_count = {"n": 0}
+
+    def _raise_system_exit_once(self: Any, **kwargs: Any) -> Any:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise SystemExit("simulated abrupt shutdown mid-write")
+        return original_write_tensor_blob(self, **kwargs)
+
+    monkeypatch.setattr(
+        streaming_module.BundleStreamWriter, "_write_tensor_blob", _raise_system_exit_once
+    )
+
+    with pytest.raises(SystemExit):
+        tl.trace(
+            model,
+            inputs,
+            storage=tl.to_disk(bundle_path),
+            layers_to_save="all",
+        )
+
+    assert not bundle_path.exists()
+    tmp_dirs = _tmp_dirs_for(bundle_path)
+    assert len(tmp_dirs) == 1
+    assert (tmp_dirs[0] / "PARTIAL").exists()
+    assert (tmp_dirs[0] / "REASON.txt").exists()
+
+    removed = cleanup_tmp(bundle_path)
+    assert removed == tmp_dirs
+    assert not _tmp_dirs_for(bundle_path)
 
 
 def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(

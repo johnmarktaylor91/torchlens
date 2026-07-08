@@ -183,6 +183,23 @@ class BundleStreamWriter:
             reason = f"Failed to write streaming blob_id={blob_id} for {label}: {exc}"
             self.abort(reason)
             raise TorchLensIOError(reason) from exc
+        except BaseException as exc:
+            # Safety-net catch-all mirroring bundle.py's ``save()`` handler
+            # (round-8 F3): a hand-enumerated except clause can always miss
+            # the next not-yet-seen failure shape (e.g. a bare ``KeyError``
+            # from ``safetensors.torch.save_file()`` for an allow-listed-but-
+            # actually-unwritable dtype, cert round 8 BLOCKER) or a
+            # KeyboardInterrupt/SystemExit/GeneratorExit unwinding mid-write.
+            # This guarantees the ``.tmp`` dir is always marked PARTIAL --
+            # and thus sweepable by ``cleanup_tmp()`` -- for any failure,
+            # known or not, while re-raising non-``Exception``
+            # ``BaseException``s unwrapped so control-flow semantics are
+            # preserved.
+            reason = f"Failed to write streaming blob_id={blob_id} for {label}: {exc}"
+            self.abort(reason)
+            if isinstance(exc, Exception):
+                raise TorchLensIOError(reason) from exc
+            raise
 
         self._tensor_entries.append(entry)
         self._entries_by_blob_id[blob_id] = entry
@@ -252,6 +269,22 @@ class BundleStreamWriter:
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             raise TorchLensIOError(reason) from exc
+        except BaseException as exc:
+            # Safety-net catch-all closing the same bug class as
+            # bundle.py's ``save()`` (round-8 F3): a hand-enumerated except
+            # tuple can always miss the next not-yet-discovered exception
+            # shape, or a KeyboardInterrupt/SystemExit/GeneratorExit
+            # unwinding mid-finalize (e.g. during ``pickle.dump()``).
+            # Guarantees the ``.tmp`` dir is always marked PARTIAL -- and
+            # thus sweepable by ``cleanup_tmp()`` -- for any failure, while
+            # re-raising non-``Exception`` ``BaseException``s unwrapped so
+            # KeyboardInterrupt/SystemExit/GeneratorExit control flow is
+            # preserved.
+            reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
+            self.abort(reason)
+            if isinstance(exc, Exception):
+                raise TorchLensIOError(reason) from exc
+            raise
 
         try:
             self.tmp_path.rename(self.final_path)
