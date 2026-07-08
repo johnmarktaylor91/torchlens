@@ -230,6 +230,9 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "total_param_gradient_memory": 0,
     "forward_peak_memory": 0,
     "forward_memory_backend": "unknown",
+    "_phase_timings": {},
+    "_replay_arg_version_data_complete": True,
+    "_grad_fn_param_refs": {},
 }
 _MODEL_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in MODEL_LOG_FIELD_ORDER},

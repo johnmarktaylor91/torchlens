@@ -107,6 +107,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_out_identity_cache",
     "_out_hash_cache",
     "_code_context_cache",
+    "_replay_arg_version_data_complete",
     "save_arg_values",
     "num_context_lines",
     "save_grads",
@@ -221,6 +222,7 @@ MODEL_LOG_FIELD_ORDER = [
     # Time elapsed
     "capture_start_time",
     "capture_end_time",
+    "_phase_timings",
     "setup_duration",
     "forward_duration",
     "cleanup_duration",
@@ -230,6 +232,7 @@ MODEL_LOG_FIELD_ORDER = [
     "grad_fn_logs",
     "grad_fn_order",
     "backward_pass_logs",
+    "_grad_fn_param_refs",
     "backward_root_grad_fn_object_ids",
     "backward_durations",
     "num_backward_passes",

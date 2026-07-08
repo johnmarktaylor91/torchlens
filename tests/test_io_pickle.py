@@ -134,6 +134,56 @@ def test_trace_setstate_default_fills_pre_sprint_state() -> None:
     assert restored._activation_transform_repr is None
 
 
+def test_trace_setstate_default_fills_grad_fn_param_refs() -> None:
+    """A state dict predating ``_grad_fn_param_refs`` must not crash ``log_backward()``.
+
+    Regression gate for cert8 BLOCKER-1: ``_grad_fn_param_refs`` is a real,
+    populated ``FieldPolicy.KEEP`` field written unconditionally (no
+    ``getattr``/``setdefault`` guard) by
+    ``backends/torch/backward.py::_walk_and_hook_backward_graph``, but it was
+    absent from ``MODEL_LOG_FIELD_ORDER`` and therefore from
+    ``_MODEL_LOG_DEFAULT_FILL``. Loading a state dict that predates the field
+    (an explicitly supported path -- ``read_tlspec_version`` only rejects
+    *newer* versions, so pre-versioning/legacy states are accepted with a
+    ``DeprecationWarning``) left the restored ``Trace`` without the attribute
+    at all, so the first backward pass crashed with
+    ``AttributeError: 'Trace' object has no attribute '_grad_fn_param_refs'``
+    mid-way through backward-graph hook installation.
+
+    ``_backward_gradfn_refs`` (a separate, pre-existing, out-of-scope
+    ``__getstate__``/``__setstate__`` type-mismatch bug -- confirmed present
+    on main independent of this fix) is also stripped here so this repro
+    isolates the one field this fix addresses.
+    """
+
+    live_log = _build_live_log()
+    old_state = live_log.__getstate__()
+    assert "_grad_fn_param_refs" in old_state
+    old_state.pop("_grad_fn_param_refs")
+    old_state.pop("_backward_gradfn_refs", None)
+    old_state.pop("_phase_timings", None)
+    old_state.pop("_replay_arg_version_data_complete", None)
+
+    restored = Trace.__new__(Trace)
+    restored.__setstate__(old_state)
+
+    assert restored._grad_fn_param_refs == {}
+    assert restored._phase_timings == {}
+    assert restored._replay_arg_version_data_complete is True
+
+    out = restored[restored.output_layers[0]].out
+    restored.log_backward(out.sum())
+
+    # The field is genuinely populated by the backward walk, not just
+    # present-but-empty -- confirms the fill value is functionally correct,
+    # not merely attribute-error-silencing.
+    assert restored._grad_fn_param_refs != {}
+    assert all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in restored._grad_fn_param_refs.items()
+    )
+
+
 def test_trace_setstate_rejects_newer_io_versions() -> None:
     """Future portable versions must fail fast."""
 

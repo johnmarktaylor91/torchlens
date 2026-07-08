@@ -225,6 +225,7 @@
       "_out_identity_cache",
       "_out_hash_cache",
       "_code_context_cache",
+      "_replay_arg_version_data_complete",
       "save_arg_values",
       "num_context_lines",
       "save_grads",
@@ -331,6 +332,7 @@
       "forward_memory_backend",
       "capture_start_time",
       "capture_end_time",
+      "_phase_timings",
       "setup_duration",
       "forward_duration",
       "cleanup_duration",
@@ -339,6 +341,7 @@
       "grad_fn_logs",
       "grad_fn_order",
       "backward_pass_logs",
+      "_grad_fn_param_refs",
       "backward_root_grad_fn_object_ids",
       "backward_durations",
       "num_backward_passes",
@@ -1104,13 +1107,13 @@
     ]
   },
   "sha256_chunks": [
-    "8d41b8f8",
-    "bcfd5146",
-    "823d45a0",
-    "36ce89a3",
-    "cbe5e832",
-    "11070a46",
-    "300c8057",
-    "27cfeeee"
+    "7dfd7092",
+    "9f40970d",
+    "e8b1b6f8",
+    "bed6da31",
+    "b4e77b8d",
+    "f6521a6c",
+    "a4a94be9",
+    "c478ca12"
   ]
 }

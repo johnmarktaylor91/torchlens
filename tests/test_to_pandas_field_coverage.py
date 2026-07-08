@@ -36,6 +36,45 @@ the same blind spot. ``Buffer`` had also never been added to
 one check in this file that DOES compare against the ground-truth
 ``PORTABLE_STATE_SPEC``), so the class was never actually exercised despite the
 docstring here previously claiming it already had "equivalent coverage".
+
+``Trace`` is ALSO covered here (cert8 BLOCKER-1): ``Trace._grad_fn_param_refs``
+-- a real, populated dict written directly (no ``getattr``/``setdefault``
+guard) by ``backends/torch/backward.py`` -- was silently absent from both
+``MODEL_LOG_FIELD_ORDER`` and (as a direct consequence) ``_MODEL_LOG_DEFAULT_FILL``,
+so any ``Trace`` reconstructed from a state dict that predates the field (a
+supported backward-compat path per ``read_tlspec_version``'s pre-versioning
+mode) crashed with ``AttributeError`` mid-way through ``log_backward()``.
+``Trace`` was never added to ``test_field_order_has_no_keep_field_desync``'s
+parametrize list either, even though ``Trace.to_pandas()`` genuinely has no
+per-record projection built from ``MODEL_LOG_FIELD_ORDER`` (so the to_pandas()
+bypass variant of this bug class does not apply to it) -- the FIELD_ORDER
+constant still drives the separate, more consequential default-fill/state-
+restore surface, and that surface has the exact same "field missing from the
+FIELD_ORDER constant" blind spot as to_pandas() does for the other classes
+here. ``_TRACE_KEEP_FIELD_DESYNC_EXCLUSIONS`` documents the one legitimate,
+non-bug exception: ``ops_with_params`` is a computed ``@property`` that is
+never stored in ``self.__dict__`` (cert7/cert8 MINOR-2), so it has no state to
+desync in the first place.
+
+The underlying ``_field_policy_desync`` false-positive filter only recognized
+one alias shape -- an underscore-prefixed private field backing a same-named
+public property (e.g. ``_is_in_conditional_body`` / ``is_in_conditional_body``).
+That is narrower than the docstring here previously claimed: it does not
+recognize a KEEP field that is a real, populated value but whose FIELD_ORDER
+counterpart lives at a *different* name (e.g. ``Param._grad_memory`` backs the
+differently-named public ``gradient_memory`` property) or is deliberately
+excluded from FIELD_ORDER by design (e.g. ``Param._derived_grad_payload``
+backs the live-handle ``.grad`` property, which the metadata-only
+``to_pandas()`` contract excludes everywhere). Both shapes are real,
+documented exceptions, not FIELD_ORDER gaps -- but the narrow heuristic would
+have reported them as gaps regardless. ``test_field_order_has_no_keep_field_desync``
+is scoped to the five surfaces above plus ``Trace``; ``Param`` and
+``GradFnCall`` have their own real, currently-unresolved desync findings
+(cert7/cert8 MINOR-1, and the ``label``/``call_label`` policy-alias shape)
+that need a dedicated alias-exclusion design before they can be added here
+without either masking a genuine gap or failing on one out of scope for this
+change -- tracked separately, not silently swept into this file's exclusion
+set.
 """
 
 from __future__ import annotations
@@ -68,7 +107,27 @@ from torchlens.data_classes.buffer import (  # noqa: E402
 from torchlens.data_classes.layer import Layer  # noqa: E402
 from torchlens.data_classes.module import Module, _TO_PANDAS_EXCLUDED_MODULE_FIELDS  # noqa: E402
 from torchlens.data_classes.op import Op  # noqa: E402
+from torchlens.data_classes.trace import Trace  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
+
+
+# Per-class documented exclusions for `test_field_order_has_no_keep_field_desync`.
+#
+# Every entry here MUST be a verified, non-bug exception -- never a mask for a
+# real FIELD_ORDER gap. See the ``Trace`` paragraph in this module's docstring
+# for the full audit trail (cert7/cert8 MINOR-2).
+_KEEP_FIELD_DESYNC_EXCLUSIONS: dict[type[Any], frozenset[str]] = {
+    Trace: frozenset(
+        {
+            # Computed @property (data_classes/_trace_stats.py); never stored
+            # in self.__dict__, so there is no state for FIELD_ORDER to lose.
+            # Its sibling `num_ops_with_params` (also computed) correctly has
+            # no PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is
+            # confirmed-vestigial, not a live desync (cert7/cert8 MINOR-2).
+            "ops_with_params",
+        }
+    ),
+}
 
 
 class _FieldCoverageModel(nn.Module):
@@ -151,6 +210,11 @@ def _field_policy_desync(cls: type[Any]) -> list[str]:
         ``_is_in_conditional_body`` backing the public
         ``is_in_conditional_body`` property) -- a known false-positive
         category, not a real desync, since the public name already covers it.
+        Does NOT apply ``_KEEP_FIELD_DESYNC_EXCLUSIONS`` -- callers that need
+        those documented, per-class exceptions filtered out must do so
+        themselves (see ``test_field_order_has_no_keep_field_desync``), so
+        this raw scan stays a faithful, un-narrowed ground-truth signal that
+        can be inspected on its own for auditing.
     """
 
     table = cls.FIELD_POLICY
@@ -165,12 +229,12 @@ def _field_policy_desync(cls: type[Any]) -> list[str]:
     return desynced
 
 
-@pytest.mark.parametrize("cls", [Layer, Module, BackwardPass, Op, Buffer])
+@pytest.mark.parametrize("cls", [Layer, Module, BackwardPass, Op, Buffer, Trace])
 def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
     """No record class should have a KEEP-policy field missing from FIELD_ORDER.
 
-    Regression gate for the cert3/cert4/cert6 desync class: a field is set at
-    construction and marked ``FieldPolicy.KEEP`` in the class's
+    Regression gate for the cert3/cert4/cert6/cert8 desync class: a field is
+    set at construction and marked ``FieldPolicy.KEEP`` in the class's
     PORTABLE_STATE_SPEC, yet the FIELD_ORDER constant in ``constants.py``
     never picked it up, so it silently vanished from every ``to_pandas()``
     export built on that constant (e.g. ``Layer.is_in_conditional_body``,
@@ -179,9 +243,27 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
     the cert6/cert7 MAJOR-1 gap: the class was never added to this
     parametrize list even though its own ``PORTABLE_STATE_SPEC`` had a real
     KEEP-and-missing field (``_initial_value``) the whole time.
+
+    ``Trace`` is included here for the cert8 BLOCKER-1 gap: unlike the other
+    classes, ``Trace`` has no per-record ``to_pandas()`` built from
+    ``MODEL_LOG_FIELD_ORDER`` -- but that constant also drives
+    ``_MODEL_LOG_DEFAULT_FILL`` (the backward-compat default-fill table used
+    by ``Trace.__setstate__``), a strictly more consequential surface than
+    to_pandas(): a field missing there does not just drop a column, it leaves
+    the restored ``Trace`` instance without the attribute entirely, crashing
+    any code that writes to it unconditionally (``_grad_fn_param_refs`` did,
+    in ``backends/torch/backward.py``). ``_KEEP_FIELD_DESYNC_EXCLUSIONS``
+    filters out the one verified non-bug exception for ``Trace``
+    (``ops_with_params`` -- a computed property with no stored state, see the
+    module docstring); every other class defaults to an empty exclusion set,
+    so this test is not weakened for them.
     """
 
-    desynced = _field_policy_desync(cls)
+    desynced = [
+        name
+        for name in _field_policy_desync(cls)
+        if name not in _KEEP_FIELD_DESYNC_EXCLUSIONS.get(cls, frozenset())
+    ]
     assert desynced == [], (
         f"{cls.__name__}.FIELD_POLICY marks {desynced} as FieldPolicy.KEEP but "
         f"they are absent from {cls.__name__}'s FIELD_ORDER constant in "
