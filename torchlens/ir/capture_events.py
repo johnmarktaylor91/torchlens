@@ -64,6 +64,70 @@ class CaptureEvents:
     grad_fn_handles_by_label_raw: dict[str, Any] = field(default_factory=dict)
     backward_event_seq: int = 0
 
+    def copy_for_replay(self) -> "CaptureEvents":
+        """Return a structural copy safe to drain during materialization.
+
+        ``_postprocess`` (``postprocess/_materialize.py``) destructively drains
+        the event containers it is handed -- ``op_events.clear()``,
+        ``module_events.clear()``, ``live_index.clear()``, and so on -- and
+        ``postprocess/graph_traversal.py`` replaces entries in ``op_events`` /
+        ``op_event_by_label_raw`` in place. When a long-lived, frozen
+        ``Recording`` cooks itself into a ``Trace`` via ``Recording.to_trace()``
+        it must NOT alias its own ``_capture_events`` into the new ``Trace``, or
+        that single materialization pass silently empties the Recording's own
+        read-only event stream: a second ``to_trace()`` then crashes and the
+        lazy ``recording_trace`` / ``records`` accessors memoize empty/wrong
+        answers. Hand ``_postprocess`` a copy instead.
+
+        Every mutable container is duplicated into a fresh object (nested list
+        values included where they are rebuilt in place); the frozen ``OpEvent``
+        objects and any tensor payloads are shared by reference, so the copy is
+        cheap and does not clone activations. Scalars and the opaque
+        ``backend_session`` are copied by value / reference.
+
+        Returns
+        -------
+        CaptureEvents
+            Independent event buffer over the same underlying events.
+        """
+
+        return CaptureEvents(
+            op_events=list(self.op_events),
+            module_events=list(self.module_events),
+            module_prep_events=list(self.module_prep_events),
+            module_enter_events=list(self.module_enter_events),
+            module_exit_events=list(self.module_exit_events),
+            conditional_events=list(self.conditional_events),
+            output_version_events=list(self.output_version_events),
+            backward_events=list(self.backward_events),
+            param_refs=dict(self.param_refs),
+            raw_layer_counter=self.raw_layer_counter,
+            raw_layer_type_counter=dict(self.raw_layer_type_counter),
+            func_call_id_counter=self.func_call_id_counter,
+            recent_events=deque(self.recent_events),
+            backend_session=self.backend_session,
+            live_by_raw_label=dict(self.live_by_raw_label),
+            op_event_by_label_raw=dict(self.op_event_by_label_raw),
+            op_event_index_by_label_raw=dict(self.op_event_index_by_label_raw),
+            live_index=self.live_index.copy(),
+            parent_op_label_raws={
+                key: list(value) for key, value in self.parent_op_label_raws.items()
+            },
+            child_op_label_raws={
+                key: list(value) for key, value in self.child_op_label_raws.items()
+            },
+            parent_param_label_raws={
+                key: list(value) for key, value in self.parent_param_label_raws.items()
+            },
+            output_variations_by_label_raw={
+                key: list(value) for key, value in self.output_variations_by_label_raw.items()
+            },
+            replacement_template_by_label_raw=dict(self.replacement_template_by_label_raw),
+            module_stack_by_label_raw=dict(self.module_stack_by_label_raw),
+            grad_fn_handles_by_label_raw=dict(self.grad_fn_handles_by_label_raw),
+            backward_event_seq=self.backward_event_seq,
+        )
+
     def next_backward_seq(self) -> int:
         """Return the next monotonic backward event sequence number."""
 

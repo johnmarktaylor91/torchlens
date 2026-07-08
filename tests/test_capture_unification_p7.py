@@ -457,3 +457,139 @@ def test_recording_to_trace_halted_without_payload_rejected() -> None:
     assert len(recording.records) == 0
     with pytest.raises(RuntimeError, match="halted Recording that retained no raw activation"):
         recording.to_trace()
+
+
+class _BNBeforeHalt(nn.Module):
+    """Linear -> BatchNorm (buffer op) -> Linear -> Linear, halt on 2nd linear."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.l1 = nn.Linear(4, 4)
+        self.bn = nn.BatchNorm1d(4)
+        self.l2 = nn.Linear(4, 4)
+        self.l3 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.l3(self.l2(self.bn(self.l1(x))))
+
+
+def _second_linear_halt(ctx: object) -> bool:
+    """Halt on the second ``linear`` call (a buffer op precedes it)."""
+
+    return getattr(ctx, "func_name", "") == "linear" and getattr(ctx, "label", "").startswith(
+        "linear_2"
+    )
+
+
+def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
+    """cert8 BLOCKER-1: to_trace() must not drain the frozen Recording's own events.
+
+    ``Recording`` is ``frozen=True`` and its ``_capture_events`` back the public
+    read-only ``records`` / ``recording_trace`` accessors. ``to_trace()`` used to
+    ALIAS ``self._capture_events`` into the new Trace, whose ``_postprocess()``
+    destructively drains it. Consequences: a second ``to_trace()`` crashed, and
+    ``recording_trace`` / ``records`` first read AFTER ``to_trace()`` memoized an
+    empty/wrong answer. ``to_trace()`` now hands postprocess a structural copy.
+    """
+
+    x = torch.randn(2, 4)
+
+    # (a) Two consecutive to_trace() calls both succeed and are equivalent.
+    rec = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
+    trace1 = rec.to_trace()
+    trace2 = rec.to_trace()
+    assert [op.layer_label for op in trace1.layer_list] == [
+        op.layer_label for op in trace2.layer_list
+    ]
+    assert trace1.num_ops == trace2.num_ops
+    check_metadata_invariants(trace1)
+    check_metadata_invariants(trace2)
+
+    # (b) recording_trace read AFTER to_trace() still returns the full stream,
+    #     matching a control recording read BEFORE to_trace().
+    rec_after = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
+    _ = rec_after.to_trace()
+    contexts_after = len(rec_after.recording_trace.contexts)
+
+    rec_before = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
+    contexts_before = len(rec_before.recording_trace.contexts)
+    _ = rec_before.to_trace()
+
+    assert contexts_after == contexts_before
+    assert contexts_after > 0
+
+    # (c) records accessor is likewise intact after to_trace().
+    rec_records = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
+    _ = rec_records.to_trace()
+    assert rec_records.n_records > 0
+
+
+def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None:
+    """cert8 MAJOR-1: halt provenance matches exhaustive when a buffer op precedes halt.
+
+    ``halt_reason`` / ``halt_frontier`` used to store raw capture-time labels,
+    which diverge between capture modes because exhaustive counts buffer ops that
+    predicate mode skips. Both paths now remap them to FINAL labels in postprocess
+    Step 10. For an eval-mode BatchNorm model (buffer READS only, matched node
+    counts) the halt labels match exhaustive ``tl.trace(halt=...)`` exactly.
+    """
+
+    x = torch.randn(3, 4)
+
+    exhaustive = tl.trace(_BNBeforeHalt().eval(), x, halt=_second_linear_halt)
+    cooked = tl.record(
+        _BNBeforeHalt().eval(),
+        x,
+        save=tl.func("linear"),
+        halt=_second_linear_halt,
+        random_seed=11,
+    ).to_trace()
+
+    assert cooked.halted is True
+    # Final labels (not raw) -- and they match exhaustive exactly.
+    assert cooked.halt_reason == exhaustive.halt_reason
+    assert cooked.halt_frontier == exhaustive.halt_frontier
+    assert not cooked.halt_reason.endswith("_raw")
+    check_metadata_invariants(cooked)
+    check_metadata_invariants(exhaustive)
+
+
+def test_recording_to_trace_buffer_writes_are_honestly_unavailable() -> None:
+    """cert8 MAJOR (buffers): cooked buffer-write fields are honest + documented.
+
+    Predicate capture does not track buffer WRITES, so a train-mode BatchNorm
+    model's mutated buffers must not masquerade as tracked writes. The cooked
+    Trace reports no buffer-write ops (``buffer_write_kind`` stays ``None``) and
+    still passes the full invariant chain; the limitation is documented on
+    ``Recording.to_trace`` and ``Trace.buffer_write_ops`` so ``None`` is not
+    silently misread as "read-only".
+    """
+
+    x = torch.randn(4, 4)
+    recording = tl.record(_BNBeforeHalt().train(), x, save=tl.func("linear"))
+    cooked = recording.to_trace()
+
+    # Honest: buffer reads are present, but no buffer WRITE is claimed.
+    assert cooked.buffer_write_ops == []
+    for label in cooked.buffer_layers:
+        assert cooked[label].buffer_write_kind is None
+
+    # Not corruption: the full invariant chain still passes.
+    check_metadata_invariants(cooked)
+
+    # Documented: the limitation is spelled out where a user would look.
+    assert "buffer-write" in type(recording).to_trace.__doc__
+    assert "not tracked" in type(cooked).buffer_write_ops.fget.__doc__
+
+
+def test_recording_to_trace_backfills_random_seed() -> None:
+    """cert8 MINOR-1: to_trace() backfills the real capture seed onto the Trace.
+
+    ``random_seed`` is a serialized (KEEP) field; it used to stay ``None`` after
+    ``to_trace()``. The seed genuinely used by the predicate-mode primary pass is
+    now copied from the runtime trace, so seed provenance survives cooking.
+    """
+
+    x = torch.randn(2, 4)
+    cooked = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"), random_seed=4242).to_trace()
+    assert cooked.random_seed == 4242

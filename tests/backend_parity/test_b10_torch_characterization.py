@@ -239,8 +239,13 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
     )
 
     assert trace.halted is True
-    assert trace.halt_reason == "relu_1_3_raw"
-    assert trace.halt_frontier == "relu_1_3_raw"
+    # halt_reason/halt_frontier are now remapped from raw to FINAL labels in
+    # postprocess Step 10 (_rename_model_history_layer_names), consistently for
+    # both the exhaustive tl.trace(halt=...) and cooked Recording.to_trace()
+    # paths, so halt provenance is a stable public label that matches across
+    # capture modes (was raw "relu_1_3_raw", capture-mode-local).
+    assert trace.halt_reason == "relu_1_2"
+    assert trace.halt_frontier == "relu_1_2"
     assert [layer.func_name for layer in trace.layer_list] == ["none", "__add__", "relu", "none"]
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None

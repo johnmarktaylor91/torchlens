@@ -241,6 +241,33 @@ class LiveIndex:
 
         return tuple(self.module_entries_by_label.get(label_raw, ()))
 
+    def copy(self) -> "LiveIndex":
+        """Return a structural copy holding the same event references.
+
+        All container fields are duplicated into fresh objects (nested lists
+        included) so that in-place mutation of the copy -- notably
+        ``clear()`` during materialization -- cannot reach back and corrupt the
+        source index. The indexed ``OpEvent`` objects are frozen and shared by
+        reference; only the containers are new.
+
+        Returns
+        -------
+        LiveIndex
+            Independent index over the same events.
+        """
+
+        return LiveIndex(
+            by_raw_label=dict(self.by_raw_label),
+            labels=list(self.labels),
+            children_by_parent=defaultdict(
+                list, {key: list(value) for key, value in self.children_by_parent.items()}
+            ),
+            module_entry_counts=defaultdict(int, self.module_entry_counts),
+            module_entries_by_label=defaultdict(
+                list, {key: list(value) for key, value in self.module_entries_by_label.items()}
+            ),
+        )
+
     def clear(self) -> None:
         """Clear all indexed events and sibling counters.
 

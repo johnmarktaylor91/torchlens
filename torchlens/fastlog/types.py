@@ -650,6 +650,32 @@ class Recording(CapturedRun):
             (``.halted`` True, frontier bound as the output node), mirroring the
             exhaustive ``tl.trace(model, x, halt=...)`` finalization path.
 
+        Notes
+        -----
+        Predicate-mode buffer-write limitation. The fastlog/predicate capture
+        that backs ``record(...)`` does NOT track registered-buffer *writes*
+        (``install_buffer_write_tracker`` is gated to exhaustive capture). In a
+        Trace cooked from a Recording this has two visible consequences that a
+        Trace from exhaustive ``tl.trace()`` does not share:
+
+        * ``Op.buffer_write_kind`` / ``Op.buffer_value_changed`` stay ``None`` on
+          every buffer Op, so a buffer that was provably MUTATED during the
+          forward pass (e.g. a training-mode ``BatchNorm``'s running stats)
+          looks identical to a genuinely read-only buffer. A ``None``
+          ``buffer_write_kind`` on a cooked Trace therefore means "buffer writes
+          were not tracked in predicate mode", NOT "this buffer was
+          provably not written". Buffer *reads* are still captured. Use
+          ``tl.trace(model, x)`` if you need faithful buffer-write provenance.
+        * Because the write-back / ``num_batches_tracked`` bump ops are not
+          captured, a training-mode buffer-writing model yields FEWER graph
+          nodes than exhaustive capture, which shifts the global-index component
+          of every final label downstream of the first buffer write. For such
+          models ``halt_reason`` / ``halt_frontier`` (and other final labels)
+          can differ from ``tl.trace(model, x, halt=...)`` even though both
+          describe the same semantic halt point. Eval-mode and
+          buffer-write-free models are unaffected: halt provenance matches
+          exhaustive capture exactly (both are remapped to final labels).
+
         Raises
         ------
         RuntimeError
@@ -677,7 +703,24 @@ class Recording(CapturedRun):
         trace.capture_mode = "exhaustive"
         trace._predicate_save_options = RecordingOptions()
         trace._replay_arg_version_data_complete = False
-        trace.capture_events = self._capture_events
+        # Hand postprocess a STRUCTURAL COPY, never this frozen Recording's own
+        # `_capture_events`. `_postprocess()` destructively drains the event
+        # containers it materializes (`_materialize.py` `.clear()`s op_events,
+        # module_events, live_index, ... and `graph_traversal.py` replaces
+        # op_events entries in place). Aliasing the Recording's own buffer here
+        # would silently empty a frozen=True object's read-only event stream:
+        # a second `.to_trace()` would then crash ("could not attribute a model
+        # output tensor to any traced op") and the lazy `recording_trace` /
+        # `records` accessors would memoize empty/wrong answers if first read
+        # AFTER `to_trace()`. The copy shares the frozen OpEvents + tensor
+        # payloads by reference (cheap; no activation cloning) while giving the
+        # materializer its own drainable containers. NOTE: `output_layers`,
+        # `input_layers`, `buffer_layers`, `internal_source_ops`, the
+        # `_layer_counter` seed, and `_recover_halt_frontier()` all read from
+        # `self._capture_events` (the original, intact) below -- only the
+        # materialized `trace.capture_events` is the copy.
+        events_for_replay = self._capture_events.copy_for_replay()
+        trace.capture_events = events_for_replay
         trace.output_layers = [
             event.label_raw
             for event in self._capture_events.op_events
@@ -800,6 +843,15 @@ class Recording(CapturedRun):
             trace.forward_duration = runtime_trace.forward_duration
             trace.forward_peak_memory = runtime_trace.forward_peak_memory
             trace.forward_memory_backend = runtime_trace.forward_memory_backend
+            # The predicate-mode primary pass (capture/trace.py) genuinely seeds
+            # and records the RNG seed on its runtime_trace (self.random_seed,
+            # set even when the caller passed random_seed=None). random_seed is a
+            # FieldPolicy.KEEP (serialized) field, so backfill it from the trace
+            # that actually used it rather than leaving Trace.random_seed at its
+            # None dataclass default -- no fabrication, it is the real seed.
+            runtime_seed = getattr(runtime_trace, "random_seed", None)
+            if runtime_seed is not None:
+                trace.random_seed = runtime_seed
 
         # Seed the raw-index high-water mark before postprocess. The live torch
         # capture path advances trace._layer_counter once per real op *during*

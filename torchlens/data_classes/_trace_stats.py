@@ -1244,7 +1244,15 @@ class TraceStatsMixin(_TraceMixinBase):
 
     @property
     def buffer_write_ops(self: "Trace") -> list[str]:
-        """Labels for buffer Ops that record registered-buffer write events."""
+        """Labels for buffer Ops that record registered-buffer write events.
+
+        Note: buffer writes are only tracked in exhaustive capture. A Trace
+        cooked from a ``record(...)`` Recording (predicate mode) does not track
+        buffer writes, so this list is empty even for a model that mutated its
+        buffers (e.g. training-mode BatchNorm); ``buffer_write_kind is None``
+        there means "not tracked", not "read-only". See
+        ``Recording.to_trace``'s Notes.
+        """
 
         return [
             op.label for op in self.layer_list if op.is_buffer and op.buffer_write_kind is not None
