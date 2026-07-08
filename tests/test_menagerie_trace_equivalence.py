@@ -29,6 +29,7 @@ from menagerie.structural_digest import (
 )
 from menagerie.trace_equivalence_audit import (
     KNOWN_DIVERGENT_FIELDS,
+    MEASUREMENT_COLUMNS,
     PROVENANCE_COLUMNS,
 )
 from menagerie.trace_summary import (
@@ -98,7 +99,15 @@ def test_summarize_trace_single_trace_matches_old_three_trace_path() -> None:
     new_row = summarize_trace("m", trace, "recipe", compute_identity_hashes=True)
 
     assert tuple(new_row) == TRACE_SUMMARY_COLUMNS
-    assert new_row == old_row
+    # forward_peak_memory_* are per-capture runtime measurements (RSS delta /
+    # tracemalloc peak), nondeterministic across separate traces by construction
+    # since torchlens 45537c6e made them live; every structural/metadata field
+    # must still match byte-identically.
+    structural = {k: v for k, v in new_row.items() if k not in MEASUREMENT_COLUMNS}
+    assert structural == {k: v for k, v in old_row.items() if k not in MEASUREMENT_COLUMNS}
+    for column in MEASUREMENT_COLUMNS:
+        assert new_row[column] >= 0
+        assert old_row[column] >= 0
 
 
 def test_unified_hashes_match_public_entry_point_retrace() -> None:
@@ -151,7 +160,9 @@ def test_cnn_is_inference_only_insensitive_except_distance_fields() -> None:
     diffs = {
         column
         for column in TRACE_SUMMARY_COLUMNS
-        if column not in PROVENANCE_COLUMNS and val_row.get(column) != meta_row.get(column)
+        if column not in PROVENANCE_COLUMNS
+        and column not in MEASUREMENT_COLUMNS
+        and val_row.get(column) != meta_row.get(column)
     }
     assert diffs <= KNOWN_DIVERGENT_FIELDS, (
         f"unexpected CNN divergence: {diffs - KNOWN_DIVERGENT_FIELDS}"

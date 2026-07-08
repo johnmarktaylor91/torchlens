@@ -54,6 +54,21 @@ PROVENANCE_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
+# Per-capture RUNTIME MEASUREMENTS: real values measured around each individual
+# forward pass (RSS delta / tracemalloc peak, see torchlens
+# ``_forward_peak_memory_bracket``). They are nondeterministic across separate
+# captures by construction (allocator warm-up makes the first trace in a process
+# report a far larger RSS delta), so they carry no cross-trace equivalence
+# signal and are excluded from the structural comparison. They became live
+# measurements in torchlens 45537c6e (previously always 0, hence trivially
+# equal); the structural fields stay strictly compared.
+MEASUREMENT_COLUMNS: frozenset[str] = frozenset(
+    {
+        "forward_peak_memory_bytes",
+        "forward_peak_memory_mb",
+    }
+)
+
 # The KNOWN-DIVERGENT set, root-caused to the ``mark_layer_depths`` capture-option
 # difference (the validation trace is built with ``mark_layer_depths=False`` so
 # per-op ``max_distance_from_input`` is ``None``; the metadata trace computes it).
@@ -118,7 +133,7 @@ class AuditReport:
     def equivalent_fields(self) -> set[str]:
         """Return structural fields proven identical across every compared model."""
 
-        comparable = set(TRACE_SUMMARY_COLUMNS) - PROVENANCE_COLUMNS
+        comparable = set(TRACE_SUMMARY_COLUMNS) - PROVENANCE_COLUMNS - MEASUREMENT_COLUMNS
         return comparable - self.divergent_fields
 
     def to_dict(self) -> dict[str, Any]:
@@ -223,7 +238,7 @@ def audit_row(row: CatalogRow) -> RowAudit:
 
     diff_fields: dict[str, tuple[Any, Any]] = {}
     for column in TRACE_SUMMARY_COLUMNS:
-        if column in PROVENANCE_COLUMNS:
+        if column in PROVENANCE_COLUMNS or column in MEASUREMENT_COLUMNS:
             continue
         if val_row.get(column) != meta_row.get(column):
             diff_fields[column] = (val_row.get(column), meta_row.get(column))
