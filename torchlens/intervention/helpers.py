@@ -1041,7 +1041,7 @@ def helper_from_serialized(
     *,
     tensor_loader: Callable[[str], torch.Tensor],
     import_resolver: Callable[[str], Callable[..., Any]],
-    value_decoder: Callable[[Any], Any] | None = None,
+    value_decoder: Callable[[Any], Any],
 ) -> HelperSpec | Callable[..., Any]:
     """Reconstruct a helper or callable from serialized helper data.
 
@@ -1054,15 +1054,20 @@ def helper_from_serialized(
     import_resolver:
         Callable resolving ``module:qualname`` import references.
     value_decoder:
-        Full-codec decoder for a builtin helper's ``args``/``kwargs``. When
-        provided (the maintained ``save.py`` load path passes ``_deserialize_value``
-        bound to the loaded tensor map), it understands the *entire* wrapper-tag
-        namespace ``_serialize_value`` emits (``__tensor_ref__``, ``__callable__``,
-        ``__helper__``, ``__opaque_audit__``, ``__output_path_component__``,
-        ``__dict_items__``). Falling back to the narrow ``_decode_jsonish`` (only
-        ``__tensor_ref__``) silently returned every other wrapper as a raw dict,
-        corrupting callable/opaque helper arguments -- so a decoder that stays in
-        lockstep with the encoder is required for a correct round trip.
+        Full-codec decoder for a builtin helper's ``args``/``kwargs``. REQUIRED,
+        with no narrow-decoder fallback: the maintained ``save.py`` load path
+        passes ``_deserialize_value`` bound to the loaded tensor map, which
+        understands the *entire* wrapper-tag namespace ``_serialize_value`` emits
+        (``__tensor_ref__``, ``__callable__``, ``__helper__``, ``__opaque_audit__``,
+        ``__output_path_component__``, ``__dict_items__``). A narrower decoder that
+        only understands ``__tensor_ref__`` would silently return every other
+        wrapper as a raw dict, corrupting callable/opaque helper arguments until the
+        corrupted helper crashes several frames downstream at fire time -- the exact
+        failure mode this parameter has no default for. See ``_decode_jsonish``
+        (retained only as the fixture pinning that gap for
+        ``test_decode_gap_would_have_returned_raw_dict``; it is never called from
+        production code) for the narrow decoder this parameter must never fall back
+        to.
 
     Returns
     -------
@@ -1070,7 +1075,6 @@ def helper_from_serialized(
         Runtime helper spec or import-ref callable.
     """
 
-    decode = value_decoder or (lambda value: _decode_jsonish(value, tensor_loader))
     portability = data["portability"]
     if portability == "import_ref":
         import_path = str(data["import_path"])
@@ -1102,8 +1106,8 @@ def helper_from_serialized(
         )
 
     name = data["name"]
-    args = tuple(decode(value) for value in data.get("args", []))
-    kwargs = {str(key): decode(value) for key, value in data.get("kwargs", {}).items()}
+    args = tuple(value_decoder(value) for value in data.get("args", []))
+    kwargs = {str(key): value_decoder(value) for key, value in data.get("kwargs", {}).items()}
     # An audit-level save (or any save carrying an opaque argument) decodes those
     # arguments into non-executable ``opaque_audit`` placeholders. Feeding such a
     # placeholder into the real builtin constructor would build a helper that only
@@ -1255,7 +1259,19 @@ def _non_executable_builtin_placeholder(
 
 
 def _decode_jsonish(value: Any, tensor_loader: Callable[[str], torch.Tensor]) -> Any:
-    """Decode JSON-safe helper argument data.
+    """QUARANTINED -- narrow legacy decoder, dead on every maintained code path.
+
+    This only understands the ``__tensor_ref__`` wrapper tag; every other wrapper
+    ``_serialize_value``/``save.py`` can emit (``__callable__``, ``__helper__``,
+    ``__opaque_audit__``, ``__output_path_component__``, ``__dict_items__``) passes
+    through unchanged as a raw dict -- silently corrupting callable/opaque helper
+    arguments. ``helper_from_serialized`` used to fall back to this decoder when
+    its ``value_decoder`` parameter was omitted; that default was removed (cert9)
+    because it re-triggered the exact BLOCKER-2 corruption class the maintained
+    ``save.py`` load path closed. Nothing in production calls this function anymore
+    -- it is retained ONLY so ``test_decode_gap_would_have_returned_raw_dict`` can
+    keep pinning the failure mode ``value_decoder`` exists to prevent. Do not wire
+    this back in as a fallback for any decoder parameter.
 
     Parameters
     ----------

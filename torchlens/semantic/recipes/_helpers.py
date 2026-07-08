@@ -89,12 +89,28 @@ def first_input(module: Any) -> Any | AbsenceReason:
 
 
 def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
-    """Return a read-only spec for a module's first captured input."""
+    """Return a spec for a module's first captured input.
+
+    Falls back to resolving the input through the op graph -- the same fallback
+    ``module_input_op_spec`` already implements -- when ``call.forward_args`` is
+    empty/``None``. Finalization ("GC-11",
+    ``torchlens/postprocess/finalization.py``) unconditionally nulls
+    ``forward_args``/``forward_kwargs`` for every ``module_identity_mode`` except
+    ``pytree_module``/``object_module`` -- i.e. for the standard/default
+    ``torch_module`` mode used by ordinary ``nn.Module`` tracing -- regardless of
+    whether ``save_arg_values=True`` was passed. Without this fallback the
+    "input"/"indices" facet was reported as never captured even when the value
+    was fully captured, saved, and trivially readable one line away via
+    ``call.input_ops[0]``.
+    """
 
     value = first_input(module)
-    if isinstance(value, AbsenceReason):
-        return value
-    return FacetSpec.from_home(value, home_kind="module_input", recipe_id=recipe_id)
+    if not isinstance(value, AbsenceReason):
+        return FacetSpec.from_home(value, home_kind="module_input", recipe_id=recipe_id)
+    op_spec = module_input_op_spec(module, recipe_id)
+    if not isinstance(op_spec, AbsenceReason):
+        return op_spec
+    return value
 
 
 def module_input_op_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:

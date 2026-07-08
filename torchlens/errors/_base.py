@@ -94,8 +94,11 @@ class TorchLensError(Exception):
         self.file_path = file_path
         self.line_no = line_no
         self.affected_sites = affected_sites
-        default = getattr(type(self), "severity", self.default_severity)
-        self.severity: Severity = _validate_severity(severity or default)
+        # ``severity`` is always declared as a class attribute on every
+        # TorchLensError/TorchLensWarning subclass (line 63/129 here), so it is
+        # always found via MRO -- ``getattr``'s default-arg fallback here was
+        # unreachable dead code (an ``AttributeError`` could never fire).
+        self.severity: Severity = _validate_severity(severity or type(self).severity)
         self.fields = dict(payload)
         if message is None and payload:
             message = _message_from_payload(type(self).__name__, self.fields)
@@ -160,8 +163,11 @@ class TorchLensWarning(UserWarning):
         self.file_path = file_path
         self.line_no = line_no
         self.affected_sites = affected_sites
-        default = getattr(type(self), "severity", self.default_severity)
-        self.severity: Severity = _validate_severity(severity or default)
+        # ``severity`` is always declared as a class attribute on every
+        # TorchLensError/TorchLensWarning subclass (line 63/129 here), so it is
+        # always found via MRO -- ``getattr``'s default-arg fallback here was
+        # unreachable dead code (an ``AttributeError`` could never fire).
+        self.severity: Severity = _validate_severity(severity or type(self).severity)
         self.fields = dict(payload)
         if message is None and payload:
             message = _message_from_payload(type(self).__name__, self.fields)

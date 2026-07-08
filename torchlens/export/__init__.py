@@ -860,8 +860,12 @@ def _parquet_safe_dataframe(dataframe: Any) -> Any:
     return sanitized
 
 
-def _parquet_cell(value: Any) -> Any:
-    """Return a pyarrow-compatible representation of a table cell.
+def _scalarize_cell(value: Any) -> Any:
+    """Return a scalar-safe representation of a table cell.
+
+    Shared body for :func:`_parquet_cell` and :func:`_tracker_cell`, which apply
+    the identical primitive-or-repr coercion for two distinct call sites
+    (pyarrow/Parquet column safety and strict tracker table types respectively).
 
     Parameters
     ----------
@@ -886,6 +890,23 @@ def _parquet_cell(value: Any) -> Any:
     except Exception:
         pass
     return repr(value)
+
+
+def _parquet_cell(value: Any) -> Any:
+    """Return a pyarrow-compatible representation of a table cell.
+
+    Parameters
+    ----------
+    value:
+        Original dataframe cell.
+
+    Returns
+    -------
+    Any
+        Primitive value or string representation.
+    """
+
+    return _scalarize_cell(value)
 
 
 def _tracker_cell(value: Any) -> Any:
@@ -902,18 +923,7 @@ def _tracker_cell(value: Any) -> Any:
         Primitive value or string representation.
     """
 
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    try:
-        import numpy as np
-        import pandas as pd
-
-        missing = pd.isna(value)
-        if isinstance(missing, bool | np.bool_) and bool(missing):
-            return None
-    except Exception:
-        pass
-    return repr(value)
+    return _scalarize_cell(value)
 
 
 def _sanitize_flamegraph_frame(frame: str) -> str:
