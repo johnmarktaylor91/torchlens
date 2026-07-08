@@ -18,7 +18,10 @@ from torchlens.constants import (  # noqa: E402
     PARAM_LOG_FIELD_ORDER,
 )
 from torchlens.data_classes._summary import format_call_arg  # noqa: E402
-from torchlens.data_classes.buffer import BufferAccessor  # noqa: E402
+from torchlens.data_classes.buffer import (  # noqa: E402
+    _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
+    BufferAccessor,
+)
 from torchlens.data_classes.module import ModuleCall  # noqa: E402
 from torchlens.data_classes.param import ParamAccessor  # noqa: E402
 
@@ -142,7 +145,10 @@ def io_pandas_log() -> tuple[Any, _IoPandasModel, torch.Tensor]:
     ("accessor", "field_order"),
     [
         (ParamAccessor({}), PARAM_LOG_FIELD_ORDER),
-        (BufferAccessor({}), BUFFER_LOG_FIELD_ORDER),
+        (
+            BufferAccessor({}),
+            [f for f in BUFFER_LOG_FIELD_ORDER if f not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS],
+        ),
     ],
 )
 def test_empty_accessors_to_pandas_schema(accessor: Any, field_order: list[str]) -> None:
@@ -181,6 +187,10 @@ def test_buffer_accessor_to_pandas_schema(
 ) -> None:
     """BufferAccessor should export one row per buffer with canonical columns.
 
+    Regression gate for the ``initial_value`` MAJOR: this column used to be
+    silently absent from ``BUFFER_LOG_FIELD_ORDER`` and therefore missing
+    from every ``to_pandas()`` export built on it.
+
     Parameters
     ----------
     io_pandas_log:
@@ -188,8 +198,14 @@ def test_buffer_accessor_to_pandas_schema(
     """
     log, _, _ = io_pandas_log
     df = log.buffers.to_pandas()
-    assert list(df.columns) == BUFFER_LOG_FIELD_ORDER
+    expected_columns = [
+        field for field in BUFFER_LOG_FIELD_ORDER if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+    ]
+    assert list(df.columns) == expected_columns
+    assert "initial_value" in df.columns
+    assert "versions" not in df.columns
     assert len(df) == len(log.buffers)
+    assert df.loc[0, "initial_value"] is not None
 
 
 def test_module_call_log_to_pandas_schema(

@@ -21,6 +21,24 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
+# Buffer fields deliberately omitted from Buffer.to_pandas() / BufferAccessor
+# .to_pandas() columns. Every field in BUFFER_LOG_FIELD_ORDER must either
+# appear as a dataframe column or be listed here -- tests/test_to_pandas_
+# field_coverage.py enforces this so new Buffer fields (or fields whose
+# FIELD_ORDER entry is later removed) can never silently drop out of the
+# buffer table again (the ``initial_value`` regression this guards against).
+_TO_PANDAS_EXCLUDED_BUFFER_FIELDS: frozenset[str] = frozenset(
+    {
+        # List of live Op child records, not a scalar table cell -- same
+        # "list of child records" exclusion category as BackwardPass
+        # .grad_fn_calls / GradFn.calls / Module.ops. Per-version scalars are
+        # already flattened into sibling columns (buffer_pass, shape, dtype,
+        # etc.) via the most recent version.
+        "versions",
+    }
+)
+
+
 def _buffer_log_to_row(buffer_log: "Buffer") -> Dict[str, Any]:
     """Convert a Buffer into one DataFrame row.
 
@@ -32,10 +50,15 @@ def _buffer_log_to_row(buffer_log: "Buffer") -> Dict[str, Any]:
     Returns
     -------
     Dict[str, Any]
-        Mapping from canonical field name to exported value.
+        Mapping from canonical field name to exported value, excluding the
+        fields in ``_TO_PANDAS_EXCLUDED_BUFFER_FIELDS``.
     """
 
-    return {field: getattr(buffer_log, field) for field in BUFFER_LOG_FIELD_ORDER}
+    return {
+        field: getattr(buffer_log, field)
+        for field in BUFFER_LOG_FIELD_ORDER
+        if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+    }
 
 
 class Buffer:
@@ -261,7 +284,11 @@ class Buffer:
         return writes[overwrite_index - 1].out
 
     def to_pandas(self) -> "pd.DataFrame":
-        """Export this Buffer as a one-row pandas DataFrame."""
+        """Export this Buffer as a one-row pandas DataFrame.
+
+        Driven by ``BUFFER_LOG_FIELD_ORDER`` minus the documented, genuinely
+        non-tabular exclusions in ``_TO_PANDAS_EXCLUDED_BUFFER_FIELDS``.
+        """
 
         try:
             import pandas as pd
@@ -270,7 +297,12 @@ class Buffer:
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        return pd.DataFrame([_buffer_log_to_row(self)], columns=BUFFER_LOG_FIELD_ORDER)
+        columns = [
+            field
+            for field in BUFFER_LOG_FIELD_ORDER
+            if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+        ]
+        return pd.DataFrame([_buffer_log_to_row(self)], columns=columns)
 
     def __repr__(self) -> str:
         """Return a concise multi-line buffer summary."""
@@ -349,7 +381,12 @@ class BufferAccessor(Accessor["Buffer"]):
         return "{" + inner + "}"
 
     def to_pandas(self) -> "pd.DataFrame":
-        """Export buffer metadata as a pandas DataFrame."""
+        """Export buffer metadata as a pandas DataFrame.
+
+        Driven by ``BUFFER_LOG_FIELD_ORDER`` minus the documented, genuinely
+        non-tabular exclusions in ``_TO_PANDAS_EXCLUDED_BUFFER_FIELDS`` -- see
+        ``Buffer.to_pandas`` for the per-row column derivation.
+        """
 
         try:
             import pandas as pd
@@ -358,5 +395,10 @@ class BufferAccessor(Accessor["Buffer"]):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
+        columns = [
+            field
+            for field in BUFFER_LOG_FIELD_ORDER
+            if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+        ]
         rows = [_buffer_log_to_row(buffer_log) for buffer_log in self._list]
-        return pd.DataFrame(rows, columns=BUFFER_LOG_FIELD_ORDER)
+        return pd.DataFrame(rows, columns=columns)

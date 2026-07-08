@@ -21,6 +21,7 @@ from torchlens.constants import (  # noqa: E402
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
+from torchlens.data_classes.buffer import _TO_PANDAS_EXCLUDED_BUFFER_FIELDS  # noqa: E402
 
 
 class _RecordExportModel(nn.Module):
@@ -96,7 +97,10 @@ def test_forward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_pa
     assert list(op.to_pandas().columns) == LAYER_PASS_LOG_FIELD_ORDER
     assert list(layer.to_pandas().columns) == LAYER_LOG_FIELD_ORDER
     assert list(param.to_pandas().columns) == PARAM_LOG_FIELD_ORDER
-    assert list(buffer.to_pandas().columns) == BUFFER_LOG_FIELD_ORDER
+    assert list(buffer.to_pandas().columns) == [
+        field for field in BUFFER_LOG_FIELD_ORDER if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+    ]
+    assert "initial_value" in buffer.to_pandas().columns
     assert list(module_call.to_pandas().columns) == MODULE_PASS_LOG_FIELD_ORDER
 
     _assert_round_trip(op, ["label", "layer_label", "type"], tmp_path)

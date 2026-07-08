@@ -19,9 +19,23 @@ Two independent bug classes were found and fixed in the field-order-sync sprint
 This file covers the six record surfaces from the cert4 MAJOR-3 finding that
 did NOT already have an equivalent regression test: ``Layer``, ``LayerAccessor``
 (``trace.layers.to_pandas()``), ``Module``, ``ModuleAccessor``
-(``trace.modules.to_pandas()``), ``BackwardPass``, and ``Op``. ``Buffer``,
-``Param``, ``ModuleCall``, and ``Trace`` already have equivalent coverage in
+(``trace.modules.to_pandas()``), ``BackwardPass``, and ``Op``. ``Param``,
+``ModuleCall``, and ``Trace`` already have equivalent coverage in
 ``tests/test_io_pandas.py`` / ``tests/test_record_export.py``.
+
+``Buffer`` is ALSO covered here (cert6/cert7 MAJOR-1): ``Buffer.initial_value``
+-- a real, populated field backed by a public ``@property`` and marked
+``FieldPolicy.KEEP`` -- was silently absent from ``BUFFER_LOG_FIELD_ORDER``, so
+it never appeared in ``Buffer.to_pandas()`` / ``BufferAccessor.to_pandas()``.
+``tests/test_io_pandas.py::test_buffer_accessor_to_pandas_schema`` only checked
+that the exported columns matched ``BUFFER_LOG_FIELD_ORDER`` -- a
+self-consistency check that can never catch a field missing from
+``BUFFER_LOG_FIELD_ORDER`` itself, since both sides of that comparison share
+the same blind spot. ``Buffer`` had also never been added to
+``test_field_order_has_no_keep_field_desync``'s parametrize list below (the
+one check in this file that DOES compare against the ground-truth
+``PORTABLE_STATE_SPEC``), so the class was never actually exercised despite the
+docstring here previously claiming it already had "equivalent coverage".
 """
 
 from __future__ import annotations
@@ -38,6 +52,7 @@ from torchlens import trace as trace_fn  # noqa: E402
 from torchlens._io import FieldPolicy  # noqa: E402
 from torchlens.constants import (  # noqa: E402
     BACKWARD_PASS_FIELD_ORDER,
+    BUFFER_LOG_FIELD_ORDER,
     LAYER_LOG_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
     MODULE_LOG_FIELD_ORDER,
@@ -45,6 +60,10 @@ from torchlens.constants import (  # noqa: E402
 from torchlens.data_classes.backward_pass import (  # noqa: E402
     BackwardPass,
     _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS,
+)
+from torchlens.data_classes.buffer import (  # noqa: E402
+    Buffer,
+    _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
 )
 from torchlens.data_classes.layer import Layer  # noqa: E402
 from torchlens.data_classes.module import Module, _TO_PANDAS_EXCLUDED_MODULE_FIELDS  # noqa: E402
@@ -58,14 +77,17 @@ class _FieldCoverageModel(nn.Module):
     The ``if``/``else`` on ``y.mean()`` gives at least one Layer/Op with
     ``is_in_conditional_body=True`` (the cert4 MAJOR-1 repro field), and the
     scalar sum output supports a real ``.backward()`` call for BackwardPass
-    field coverage.
+    field coverage. ``offset`` is a registered buffer that is read but never
+    overwritten in ``forward``, giving ``Buffer.initial_value`` (the cert6/
+    cert7 MAJOR-1 repro field) a real, populated value.
     """
 
     def __init__(self) -> None:
-        """Initialize a single linear submodule."""
+        """Initialize a single linear submodule and a static buffer."""
 
         super().__init__()
         self.linear = nn.Linear(2, 2)
+        self.register_buffer("offset", torch.tensor([0.25, -0.25]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run a conditional branch on the linear output, then reduce to scalar.
@@ -81,7 +103,7 @@ class _FieldCoverageModel(nn.Module):
             Scalar loss-like output.
         """
 
-        y = self.linear(x)
+        y = self.linear(x) + self.offset
         if y.mean() > 0:
             y = torch.relu(y)
         else:
@@ -143,16 +165,20 @@ def _field_policy_desync(cls: type[Any]) -> list[str]:
     return desynced
 
 
-@pytest.mark.parametrize("cls", [Layer, Module, BackwardPass, Op])
+@pytest.mark.parametrize("cls", [Layer, Module, BackwardPass, Op, Buffer])
 def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
     """No record class should have a KEEP-policy field missing from FIELD_ORDER.
 
-    Regression gate for the cert3/cert4 desync class: a field is set at
+    Regression gate for the cert3/cert4/cert6 desync class: a field is set at
     construction and marked ``FieldPolicy.KEEP`` in the class's
     PORTABLE_STATE_SPEC, yet the FIELD_ORDER constant in ``constants.py``
     never picked it up, so it silently vanished from every ``to_pandas()``
     export built on that constant (e.g. ``Layer.is_in_conditional_body``,
-    ``Buffer.module_address`` -- fixed by this same change).
+    ``Buffer.module_address``, ``Buffer.initial_value`` -- all fixed by this
+    same change). ``Buffer`` is included here specifically because it was
+    the cert6/cert7 MAJOR-1 gap: the class was never added to this
+    parametrize list even though its own ``PORTABLE_STATE_SPEC`` had a real
+    KEEP-and-missing field (``_initial_value``) the whole time.
     """
 
     desynced = _field_policy_desync(cls)
@@ -162,6 +188,43 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
         "constants.py. Add them to the FIELD_ORDER list next to their sibling "
         "fields so to_pandas() picks them up."
     )
+
+
+def test_buffer_to_pandas_covers_field_order(coverage_trace: Any) -> None:
+    """Buffer.to_pandas() must export every non-excluded BUFFER_LOG_FIELD_ORDER field.
+
+    Regression gate for cert6/cert7 MAJOR-1: ``initial_value`` -- a real,
+    populated field backed by a public ``@property`` and marked
+    ``FieldPolicy.KEEP`` -- used to be silently absent from
+    ``BUFFER_LOG_FIELD_ORDER``, so it never reached ``Buffer.to_pandas()`` /
+    ``BufferAccessor.to_pandas()`` even though the underlying data was real.
+    """
+
+    buffer = coverage_trace.buffers["offset"]
+    df = buffer.to_pandas()
+    columns = list(df.columns)
+
+    assert len(columns) == len(set(columns))
+    unaccounted = [
+        field_name
+        for field_name in BUFFER_LOG_FIELD_ORDER
+        if field_name not in columns and field_name not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+    ]
+    assert unaccounted == []
+    assert not (_TO_PANDAS_EXCLUDED_BUFFER_FIELDS & set(columns))
+    # Excluded fields are real Buffer fields (no stale exclusion entries).
+    assert _TO_PANDAS_EXCLUDED_BUFFER_FIELDS <= set(BUFFER_LOG_FIELD_ORDER)
+
+    # initial_value is a real, non-None value -- not just a present-but-empty
+    # column (the field the old hand-rolled/desynced FIELD_ORDER dropped).
+    assert "initial_value" in columns
+    assert df.loc[0, "initial_value"] is not None
+
+    # trace.buffers.to_pandas() delegates through BufferAccessor, which must
+    # inherit the same fix.
+    accessor_df = coverage_trace.buffers.to_pandas()
+    assert list(accessor_df.columns) == columns
+    assert accessor_df.loc[0, "initial_value"] is not None
 
 
 def test_layer_to_pandas_covers_field_order(coverage_trace: Any) -> None:
