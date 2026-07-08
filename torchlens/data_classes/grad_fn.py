@@ -10,7 +10,13 @@ import weakref
 import torch
 
 from .._errors import AmbiguousOpLookupError
-from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._io import (
+    FieldPolicy,
+    TLSPEC_VERSION,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ..quantities import Duration
 from ._accessor_base import Accessor
@@ -143,6 +149,36 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
         )
 
 
+# Typed container defaults for every non-Optional container field GradFn
+# stores directly. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value, and an absent field crashes instead of
+# restoring an empty typed container. Plain builtin types are used
+# deliberately.
+#
+# `calls` is intentionally included here (for `default_fill_state`'s
+# absent-key fill only -- a genuinely old pickle predating the
+# `GradFnCallAccessor` promotion) but excluded from the
+# `coerce_container_typed_state` call below via `_GRAD_FN_COERCE_EXCLUDE`:
+# once `__post_init__` has ever run, `self.calls` is always a
+# `GradFnCallAccessor`, never a plain `dict`, so it is a custom-accessor field
+# like `Module.ops`/`Module.params`, not a plain container -- coercing it
+# would call `dict(GradFnCallAccessor)`, which resolves through the
+# accessor's 0-based `__getitem__` and corrupts/crashes on 1-based call-index
+# keys.
+_GRAD_FN_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "modules": [],
+    "next_grad_fn_ids": [],
+    "parents": [],
+    "children": [],
+    "siblings": [],
+    "co_parents": [],
+    "calls": {},
+}
+_GRAD_FN_COERCE_EXCLUDE: frozenset[str] = frozenset({"calls"})
+
+
 def _clone_grad_value(value: Any) -> Any:
     """Detach and clone tensors in a nested autograd hook payload.
 
@@ -269,9 +305,19 @@ class GradFn:
             call.source_trace = self.source_trace
 
     def __getstate__(self) -> dict[str, Any]:
-        """Return pickle state with an IO format marker."""
+        """Return pickle state with weakrefs stripped and an IO format marker.
+
+        ``_source_trace_ref`` is a live ``weakref.ref`` to the owning ``Trace``
+        whenever a backward pass was captured (the normal case for any real
+        backward-pass trace), and ``weakref`` objects cannot be pickled. Null
+        it here, mirroring every sibling record class
+        (``GradFnCall``/``Op``/``Layer``/``Param``/``Buffer``/...), so
+        ``pickle.dumps(trace)`` does not crash for traces with a captured
+        backward pass.
+        """
 
         state = self.__dict__.copy()
+        state["_source_trace_ref"] = None
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 
@@ -279,42 +325,41 @@ class GradFn:
         """Restore pickle state and fill fields added in newer versions."""
 
         read_tlspec_version(state, cls_name=type(self).__name__)
-        default_fill_state(
-            state,
-            defaults={
-                "step_index": state.get("trace_" + "index", state.get("overall_" + "index", 0)),
-                "has_op": not bool(state.get("is_" + "intervening", True)),
-                "op_label": None,
-                "next_grad_fn_ids": [],
-                "parents": [],
-                "children": [],
-                "siblings": [],
-                "co_parents": [],
-                "calls": {},
-                "order": None,
-                "origin_backward_pass": None,
-                "creator_object_id": None,
-                "differentiates": None,
-                "modules": [],
-                "module_address": None,
-                "module_membership_source": None,
-                "_source_trace_ref": None,
-                "class_source_file": None,
-                "class_source_line": None,
-                "class_docstring": None,
-                "init_source_file": None,
-                "init_source_line": None,
-                "init_signature": None,
-                "init_docstring": None,
-                "forward_source_file": None,
-                "forward_source_line": None,
-                "forward_signature": None,
-                "forward_docstring": None,
-                "backward_source_file": None,
-                "backward_source_line": None,
-                "backward_signature": None,
-                "backward_docstring": None,
-            },
+        grad_fn_setstate_defaults: dict[str, Any] = {
+            **_GRAD_FN_CONTAINER_DEFAULTS,
+            "step_index": state.get("trace_" + "index", state.get("overall_" + "index", 0)),
+            "has_op": not bool(state.get("is_" + "intervening", True)),
+            "op_label": None,
+            "order": None,
+            "origin_backward_pass": None,
+            "creator_object_id": None,
+            "differentiates": None,
+            "module_address": None,
+            "module_membership_source": None,
+            "_source_trace_ref": None,
+            "class_source_file": None,
+            "class_source_line": None,
+            "class_docstring": None,
+            "init_source_file": None,
+            "init_source_line": None,
+            "init_signature": None,
+            "init_docstring": None,
+            "forward_source_file": None,
+            "forward_source_line": None,
+            "forward_signature": None,
+            "forward_docstring": None,
+            "backward_source_file": None,
+            "backward_source_line": None,
+            "backward_signature": None,
+            "backward_docstring": None,
+        }
+        default_fill_state(state, defaults=grad_fn_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states.
+        # `default_fill_state` only fills absent keys; this closes the same
+        # gap `Trace`/`Op` already close for their own fields. `calls` is
+        # excluded -- see `_GRAD_FN_COERCE_EXCLUDE`.
+        coerce_container_typed_state(
+            state, grad_fn_setstate_defaults, exclude=_GRAD_FN_COERCE_EXCLUDE
         )
         legacy_op = state.pop("op", None)
         if legacy_op is not None and state.get("op_label") is None:

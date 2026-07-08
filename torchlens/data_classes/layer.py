@@ -36,7 +36,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, cas
 
 from .._deprecations import MISSING
 from .._errors import AmbiguousOpLookupError
-from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._io import (
+    FieldPolicy,
+    TLSPEC_VERSION,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
 from ..constants import LAYER_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
@@ -68,6 +74,35 @@ _MULTI_PASS_PER_CALL_LAYER_FIELDS: frozenset[str] = frozenset(
         "transformed_grad",
     }
 )
+
+# Typed container defaults for every non-Optional container field Layer
+# stores directly (as opposed to delegating to ``self.ops[i]``). Same defect
+# class as ``Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`` /
+# ``Trace._MODEL_LOG_CONTAINER_DEFAULTS``: without this,
+# ``coerce_container_typed_state`` cannot repair a present-but-wrong-typed
+# legacy value (e.g. ``equivalent_ops`` serialized as a ``list`` where a
+# ``set`` is now declared), and an absent field crashes instead of restoring
+# an empty typed container. Plain builtin types are used deliberately.
+_LAYER_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "arg_names": (),
+    "param_shapes": [],
+    "_param_barcodes": [],
+    "_param_logs": [],
+    "equivalent_ops": set(),
+    "in_conditionals": [],
+    "conditional_role_stacks": [],
+    "conditional_branch_stack_ops": {},
+    "conditional_arm_children": {},
+    "modules": [],
+    "output_of_modules": [],
+    "output_of_module_calls": [],
+    "conditional_entry_children": [],
+    "conditional_then_children": [],
+    "conditional_elif_children": {},
+    "conditional_else_children": [],
+    "annotations": {},
+    "call_labels": [],
+}
 
 
 def _layer_log_to_row(layer_log: "Layer") -> Dict[str, Any]:
@@ -697,28 +732,32 @@ class Layer:
             state["ops"] = state.pop("passes")
         if "call_labels" not in state and "pass_labels" in state:
             state["call_labels"] = state.pop("pass_labels")
-        default_fill_state(
-            state,
-            defaults={
-                "_source_trace_ref": None,
-                "annotations": {},
-                "autograd_memory": None,
-                "total_autograd_memory": None,
-                "num_autograd_tensors": None,
-                "transformed_out": None,
-                "transformed_out_shape": None,
-                "transformed_out_dtype": None,
-                "dtype_ref": DtypeRef.from_value(state.get("dtype")),
-                "device_ref": None,
-                "backend_address": state.get("address"),
-                "resolver_status": "resolved",
-                "transformed_activation_memory": None,
-                "transformed_grad": None,
-                "transformed_grad_shape": None,
-                "transformed_grad_dtype": None,
-                "transformed_gradient_memory": None,
-            },
-        )
+        layer_setstate_defaults: dict[str, Any] = {
+            **_LAYER_LOG_CONTAINER_DEFAULTS,
+            "_source_trace_ref": None,
+            "annotations": {},
+            "autograd_memory": None,
+            "total_autograd_memory": None,
+            "num_autograd_tensors": None,
+            "transformed_out": None,
+            "transformed_out_shape": None,
+            "transformed_out_dtype": None,
+            "dtype_ref": DtypeRef.from_value(state.get("dtype")),
+            "device_ref": None,
+            "backend_address": state.get("address"),
+            "resolver_status": "resolved",
+            "transformed_activation_memory": None,
+            "transformed_grad": None,
+            "transformed_grad_shape": None,
+            "transformed_grad_dtype": None,
+            "transformed_gradient_memory": None,
+        }
+        default_fill_state(state, defaults=layer_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states
+        # (e.g. `equivalent_ops` serialized as a `list` where a `set` is now
+        # declared). `default_fill_state` only fills absent keys; this closes
+        # the same gap `Trace`/`Op` already close for their own fields.
+        coerce_container_typed_state(state, layer_setstate_defaults)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
         if state.get("backend_address") is None:

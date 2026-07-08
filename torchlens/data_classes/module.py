@@ -40,7 +40,13 @@ from typing import (
 import torch
 
 from .._errors import AmbiguousOpLookupError
-from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._io import (
+    FieldPolicy,
+    TLSPEC_VERSION,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
 from ..constants import LAYER_LOG_FIELD_ORDER, MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
@@ -440,6 +446,28 @@ def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
         else None
     )
     return row
+
+
+# Typed container defaults for every non-Optional container field ModuleCall
+# stores directly. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value, and an absent field crashes instead of
+# restoring an empty typed container. Plain builtin types are used
+# deliberately.
+_MODULE_CALL_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "all_addresses": [],
+    "ops": [],
+    "input_ops": [],
+    "input_layers": [],
+    "output_ops": [],
+    "output_layers": [],
+    "output_paths": (),
+    "forward_arg_names": [],
+    "code_context": [],
+    "module_call_stack": [],
+    "call_children": [],
+}
 
 
 @dataclass(init=False)
@@ -1141,32 +1169,65 @@ class ModuleCall:
             state["_forward_args_template"] = state.pop("forward_args_template")
         if "forward_kwargs_template" in state:
             state["_forward_kwargs_template"] = state.pop("forward_kwargs_template")
-        default_fill_state(
-            state,
-            defaults={
-                "all_addresses": [state["address"]],
-                "cls": None,
-                "class_name": "",
-                "class_qualname": "",
-                "ordinal_index": 0,
-                "forward_arg_names": [],
-                "num_forward_args_total": 0,
-                "num_forward_pos_args": 0,
-                "num_forward_kwargs": 0,
-                "forward_args_summary": "",
-                "forward_kwargs_summary": "",
-                "_forward_args_template": None,
-                "_forward_kwargs_template": None,
-                "forward_duration": 0.0,
-                "code_context": [],
-                "module_call_stack": [],
-                "_source_trace_ref": None,
-                "output_structure": None,
-                "output_paths": (),
-            },
-        )
+        module_call_setstate_defaults: dict[str, Any] = {
+            **_MODULE_CALL_CONTAINER_DEFAULTS,
+            "all_addresses": [state["address"]],
+            "cls": None,
+            "class_name": "",
+            "class_qualname": "",
+            "ordinal_index": 0,
+            "forward_arg_names": [],
+            "num_forward_args_total": 0,
+            "num_forward_pos_args": 0,
+            "num_forward_kwargs": 0,
+            "forward_args_summary": "",
+            "forward_kwargs_summary": "",
+            "_forward_args_template": None,
+            "_forward_kwargs_template": None,
+            "forward_duration": 0.0,
+            "code_context": [],
+            "module_call_stack": [],
+            "_source_trace_ref": None,
+            "output_structure": None,
+            "output_paths": (),
+        }
+        default_fill_state(state, defaults=module_call_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states.
+        # `default_fill_state` only fills absent keys; this closes the same
+        # gap `Trace`/`Op` already close for their own fields.
+        coerce_container_typed_state(state, module_call_setstate_defaults)
         state["forward_duration"] = Duration(state.get("forward_duration") or 0.0)
         self.__dict__.update(state)
+
+
+# Typed container defaults for every non-Optional container field Module
+# stores directly. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value, and an absent field crashes instead of
+# restoring an empty typed container. Plain builtin types are used
+# deliberately. `ops`/`params`/`recursive_params` are custom accessor classes
+# (not plain containers) and are handled separately, below.
+_MODULE_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "all_addresses": [],
+    "address_children": [],
+    "call_children": [],
+    "call_labels": [],
+    "layer_labels": [],
+    "input_ops": [],
+    "input_layers": [],
+    "output_ops": [],
+    "output_layers": [],
+    "buffer_layers": [],
+    "forward_pre_hooks": [],
+    "forward_hooks": [],
+    "backward_pre_hooks": [],
+    "backward_hooks": [],
+    "full_backward_pre_hooks": [],
+    "full_backward_hooks": [],
+    "custom_attributes": {},
+    "custom_methods": [],
+}
 
 
 @dataclass(init=False)
@@ -1841,30 +1902,26 @@ class Module:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without touching disk."""
         read_tlspec_version(state, cls_name=type(self).__name__)
-        default_fill_state(
-            state,
-            defaults={
-                "_buffer_accessor": None,
-                "_source_trace_ref": None,
-                "class_source_file": None,
-                "class_source_line": None,
-                "init_source_file": None,
-                "init_source_line": None,
-                "forward_source_file": None,
-                "forward_source_line": None,
-                "input_ops": [],
-                "input_layers": [],
-                "output_ops": [],
-                "output_layers": [],
-                "training": True,
-                "forward_pre_hooks": [],
-                "forward_hooks": [],
-                "backward_pre_hooks": [],
-                "backward_hooks": [],
-                "full_backward_pre_hooks": [],
-                "full_backward_hooks": [],
-            },
-        )
+        module_setstate_defaults: dict[str, Any] = {
+            **_MODULE_CONTAINER_DEFAULTS,
+            "_buffer_accessor": None,
+            "_source_trace_ref": None,
+            "class_source_file": None,
+            "class_source_line": None,
+            "init_source_file": None,
+            "init_source_line": None,
+            "forward_source_file": None,
+            "forward_source_line": None,
+            "training": True,
+        }
+        default_fill_state(state, defaults=module_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states.
+        # `default_fill_state` only fills absent keys; this closes the same
+        # gap `Trace`/`Op` already close for their own fields. `ops`/`params`/
+        # `recursive_params` are accessor classes handled separately below,
+        # not plain containers, so they are intentionally absent from
+        # `_MODULE_CONTAINER_DEFAULTS`.
+        coerce_container_typed_state(state, module_setstate_defaults)
         self.__dict__.update(state)
         if not isinstance(self.ops, ModuleCallAccessor):
             self.ops = ModuleCallAccessor(self.ops)

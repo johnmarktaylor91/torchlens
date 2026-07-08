@@ -9,10 +9,24 @@ import weakref
 if TYPE_CHECKING:
     import pandas as pd
 
-from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._io import (
+    FieldPolicy,
+    TLSPEC_VERSION,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
 from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
 from ..quantities import Duration
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+
+# GradFnCall currently declares no plain-container (list/dict/tuple/set)
+# fields -- every field is scalar, `Any`-typed blob, or a weakref. This empty
+# mapping documents that and keeps `GradFnCall.__setstate__` calling
+# `coerce_container_typed_state` for consistency with every sibling record
+# class (`Op`/`Layer`/`Param`/`GradFn`/...), so a future container field added
+# to this dataclass is automatically covered instead of silently missed.
+_GRAD_FN_CALL_CONTAINER_DEFAULTS: dict[str, Any] = {}
 
 
 @dataclass
@@ -73,21 +87,24 @@ class GradFnCall:
         """Restore pickle state and fill fields added in newer versions."""
 
         read_tlspec_version(state, cls_name=type(self).__name__)
-        default_fill_state(
-            state,
-            defaults={
-                "label": "",
-                "ordinal": state.get("call_index"),
-                "backward_pass_index": None,
-                "grad_inputs": None,
-                "grad_outputs": None,
-                "intervention_fire_ref": None,
-                "timestamp": None,
-                "_time_started": None,
-                "_time_finished": None,
-                "_source_trace_ref": None,
-            },
-        )
+        grad_fn_call_setstate_defaults: dict[str, Any] = {
+            **_GRAD_FN_CALL_CONTAINER_DEFAULTS,
+            "label": "",
+            "ordinal": state.get("call_index"),
+            "backward_pass_index": None,
+            "grad_inputs": None,
+            "grad_outputs": None,
+            "intervention_fire_ref": None,
+            "timestamp": None,
+            "_time_started": None,
+            "_time_finished": None,
+            "_source_trace_ref": None,
+        }
+        default_fill_state(state, defaults=grad_fn_call_setstate_defaults)
+        # No-op today (no container fields declared), but keeps this class
+        # consistent with every sibling record class and automatically covers
+        # any container field added to this dataclass in the future.
+        coerce_container_typed_state(state, grad_fn_call_setstate_defaults)
         if "duration" in state and "_time_started" not in state and "_time_finished" not in state:
             state["_time_started"] = 0.0
             state["_time_finished"] = float(state.pop("duration"))

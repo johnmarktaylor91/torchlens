@@ -26,7 +26,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import torch
 
 from .._errors import AmbiguousOpLookupError
-from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._io import (
+    FieldPolicy,
+    TLSPEC_VERSION,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
 from .._errors import PostTraceParamUnavailable
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..ir.refs import DeviceRef, DtypeRef
@@ -55,6 +61,23 @@ def _param_log_to_row(param_log: "Param") -> Dict[str, Any]:
         Mapping from canonical field name to exported value.
     """
     return {field: getattr(param_log, field) for field in PARAM_LOG_FIELD_ORDER}
+
+
+# Typed container defaults for every non-Optional container field Param
+# stores directly. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value (e.g. `co_parent_params` serialized as
+# a `set` where a `list` is now declared), and an absent field crashes instead
+# of restoring an empty typed container. Plain builtin types are used
+# deliberately.
+_PARAM_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "all_addresses": [],
+    "all_module_addresses": [],
+    "used_by_ops": [],
+    "used_by_layers": [],
+    "co_parent_params": [],
+}
 
 
 class Param:
@@ -647,21 +670,24 @@ class Param:
             state["param_memory"] = state.pop("memory")
         if "is_trainable" not in state and "trainable" in state:
             state["is_trainable"] = state.pop("trainable")
-        default_fill_state(
-            state,
-            defaults={
-                "_param_ref": None,
-                "_param_ref_released": False,
-                "_source_trace_ref": None,
-                "dtype_ref": DtypeRef.from_value(state.get("dtype")),
-                "device_ref": None,
-                "backend_address": state.get("address"),
-                "resolver_status": "resolved",
-                "co_parent_params": [],
-                "_derived_grad_payload": None,
-                "_derived_grad_record_path": None,
-            },
-        )
+        param_setstate_defaults: dict[str, Any] = {
+            **_PARAM_CONTAINER_DEFAULTS,
+            "_param_ref": None,
+            "_param_ref_released": False,
+            "_source_trace_ref": None,
+            "dtype_ref": DtypeRef.from_value(state.get("dtype")),
+            "device_ref": None,
+            "backend_address": state.get("address"),
+            "resolver_status": "resolved",
+            "_derived_grad_payload": None,
+            "_derived_grad_record_path": None,
+        }
+        default_fill_state(state, defaults=param_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states
+        # (e.g. `co_parent_params` serialized as a `set` where a `list` is now
+        # declared). `default_fill_state` only fills absent keys; this closes
+        # the same gap `Trace`/`Op` already close for their own fields.
+        coerce_container_typed_state(state, param_setstate_defaults)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
         if state.get("backend_address") is None:

@@ -36,6 +36,30 @@ class Accessor(Generic[T]):
         if source_ref is not None:
             self._source_ref = source_ref
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state with the owning-Trace weakref stripped.
+
+        ``_source_ref`` (set only by some accessor subclasses -- e.g.
+        ``BufferAccessor``/``GradFnCallAccessor``/``LayerAccessor``) is a live
+        ``weakref.ref`` to the owning ``Trace``, and ``weakref`` objects cannot
+        be pickled. Stripping it here at the shared base class closes this gap
+        for every ``Accessor`` subclass at once, mirroring the weakref-nulling
+        ``__getstate__`` every record class (``Op``/``Layer``/``Param``/...)
+        already implements; without this, ``pickle.dumps(trace.buffers)`` /
+        ``pickle.dumps(trace.layers)`` crash with
+        ``TypeError: cannot pickle 'weakref.ReferenceType' object``.
+        """
+
+        state = self.__dict__.copy()
+        if "_source_ref" in state:
+            state["_source_ref"] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickle state without reviving the owning-Trace weakref."""
+
+        self.__dict__.update(state)
+
     def __getitem__(self, key: int | str) -> T:
         """Return an item by ordinal index, exact key, or subclass-specific lookup."""
         if isinstance(key, int):

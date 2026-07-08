@@ -6,7 +6,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 import weakref
 
-from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._io import (
+    FieldPolicy,
+    TLSPEC_VERSION,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
 from ..constants import BACKWARD_PASS_FIELD_ORDER
 from ..quantities import Duration
 from ._accessor_base import Accessor
@@ -14,6 +20,20 @@ from .field_policy import build_record_field_policy_table, portable_state_spec_f
 
 if TYPE_CHECKING:
     import pandas as pd
+
+# Typed container defaults for every non-Optional container field
+# BackwardPass declares. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value, and an absent field crashes instead of
+# restoring an empty typed container. Plain builtin types are used
+# deliberately.
+_BACKWARD_PASS_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "root_grad_fn_ids": [],
+    "root_meta": (),
+    "inputs_subset": (),
+    "grad_fn_calls": [],
+}
 
 
 # BackwardPass fields deliberately omitted from ``BackwardPass.to_pandas()``
@@ -109,27 +129,26 @@ class BackwardPass:
         """Restore pickle state and fill fields added in newer versions."""
 
         read_tlspec_version(state, cls_name=type(self).__name__)
-        default_fill_state(
-            state,
-            defaults={
-                "outer_context": None,
-                "backward_call_context": None,
-                "root_grad_fn_ids": [],
-                "root_meta": (),
-                "root_grad_arguments": None,
-                "inputs_subset": (),
-                "order": None,
-                "origin_backward_pass": None,
-                "engine_flags": None,
-                "save_grads_policy": None,
-                "duration": None,
-                "peak_memory": None,
-                "status": "ok",
-                "order_attribution_coverage": None,
-                "grad_fn_calls": [],
-                "_source_trace_ref": None,
-            },
-        )
+        backward_pass_setstate_defaults: dict[str, Any] = {
+            **_BACKWARD_PASS_CONTAINER_DEFAULTS,
+            "outer_context": None,
+            "backward_call_context": None,
+            "root_grad_arguments": None,
+            "order": None,
+            "origin_backward_pass": None,
+            "engine_flags": None,
+            "save_grads_policy": None,
+            "duration": None,
+            "peak_memory": None,
+            "status": "ok",
+            "order_attribution_coverage": None,
+            "_source_trace_ref": None,
+        }
+        default_fill_state(state, defaults=backward_pass_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states.
+        # `default_fill_state` only fills absent keys; this closes the same
+        # gap `Trace`/`Op` already close for their own fields.
+        coerce_container_typed_state(state, backward_pass_setstate_defaults)
         state.pop("call_context", None)
         self.__dict__.update(state)
 
