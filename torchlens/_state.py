@@ -408,6 +408,108 @@ here means the model's forward and submodule hooks are already installed.
 """
 
 # ---------------------------------------------------------------------------
+# Module role-swap tracking (root vs non-root, per prepared tree)
+# ---------------------------------------------------------------------------
+# ``_prepare_model_once`` assigns role-DEPENDENT permanent metadata: a module's
+# dotted address (root-relative) and, for non-root modules, a toggle-gated
+# ``forward`` decoration. The root's ``forward`` is deliberately left UNDECORATED
+# because ``trace`` invokes and frames it separately. That assignment silently
+# assumed a module's root/non-root role never changes across its lifetime.
+#
+# It can: the SAME module can be traced as a non-root submodule in one trace and
+# as its own top-level root in a later trace (or vice versa). When that happens,
+# the metadata cached for the old role is stale for the new one -- a decorated
+# forward run as a root crashes ``push_frame`` (the root is never registered in
+# the per-session module-call dicts), and a descendant re-rooted under a new
+# model leaves its ancestor's cached addresses pointing at the wrong root.
+#
+# These two structures let ``_prepare_model_once`` keep its O(1) cache fast path
+# for the overwhelmingly common case (a model traced repeatedly in a fixed role,
+# or independent models traced in any interleaving) while forcing a correct
+# re-preparation of exactly the trees whose role assignment went stale.
+
+_prepared_root_by_module: "weakref.WeakKeyDictionary[Any, weakref.ref[Any]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""module -> weakref to the ROOT model it was last prepared under.
+
+Weak on both sides: the key (module) is weakly held by the WeakKeyDictionary,
+and the value is a ``weakref.ref`` to the root, so neither keeps the other alive.
+Read/written only through the helpers below during ``_prepare_model_once``.
+"""
+
+_stale_prepared_roots: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Prepared root models whose cached role metadata is known to be stale.
+
+A root lands here when some module in its subtree is later re-prepared under a
+DIFFERENT root (role swap). ``_prepare_model_once`` treats a stale root as
+un-prepared for the fast-path check and re-establishes its tree's addresses and
+forward decorations before clearing the staleness flag.
+"""
+
+
+def record_module_root_prep(root: Any, module: Any) -> None:
+    """Stamp ``module`` as prepared under ``root``; flag a displaced prior root.
+
+    If ``module`` was previously prepared under a different (still-live) root,
+    that prior root's cached tree now has a re-rooted descendant and is marked
+    stale so its next preparation re-establishes correct role metadata.
+
+    Parameters
+    ----------
+    root:
+        The root model whose ``_prepare_model_once`` traversal is running.
+    module:
+        A module (the root itself or any descendant) being (re)prepared.
+
+    Returns
+    -------
+    None
+        ``_prepared_root_by_module`` and ``_stale_prepared_roots`` are updated in
+        place.
+    """
+    previous = _prepared_root_by_module.get(module)
+    if previous is not None:
+        previous_root = previous()
+        if previous_root is not None and previous_root is not root:
+            _stale_prepared_roots.add(previous_root)
+    _prepared_root_by_module[module] = weakref.ref(root)
+
+
+def root_prep_is_stale(root: Any) -> bool:
+    """Return whether ``root``'s cached role metadata is known to be stale.
+
+    Parameters
+    ----------
+    root:
+        Candidate root model.
+
+    Returns
+    -------
+    bool
+        ``True`` when a descendant of ``root`` was re-rooted under another model
+        since ``root`` was last prepared.
+    """
+    return root in _stale_prepared_roots
+
+
+def clear_root_prep_stale(root: Any) -> None:
+    """Clear the staleness flag for ``root`` after re-preparing its tree.
+
+    Parameters
+    ----------
+    root:
+        Root model that has just been (re)prepared.
+
+    Returns
+    -------
+    None
+        ``_stale_prepared_roots`` is updated in place.
+    """
+    _stale_prepared_roots.discard(root)
+
+
+# ---------------------------------------------------------------------------
 # Usage stats — opt-in per-function call counting for coverage analysis
 # ---------------------------------------------------------------------------
 
