@@ -54,6 +54,48 @@ if TYPE_CHECKING:
 
 _LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref", "grad_ref"))
 
+# Per-pass fields that ``Layer`` resolves via ``_single_pass_or_error``: they
+# describe ONE op/pass and deliberately raise ``ValueError`` on a multi-pass
+# (recurrent) Layer, directing the user to a specific ``layer.ops[i]`` pass.
+# The field-order-driven ``to_pandas`` row builders cannot let that raise, so
+# they report these as None for multi-pass Layers -- mirroring
+# ``_MULTI_CALL_PER_PASS_MODULE_FIELDS`` one level up in module.py. No
+# information is lost: the per-pass value remains reachable via
+# ``layer.ops[i].transformed_out`` / ``.transformed_grad``.
+_MULTI_PASS_PER_CALL_LAYER_FIELDS: frozenset[str] = frozenset(
+    {
+        "transformed_out",
+        "transformed_grad",
+    }
+)
+
+
+def _layer_log_to_row(layer_log: "Layer") -> Dict[str, Any]:
+    """Convert a Layer into one DataFrame row.
+
+    Parameters
+    ----------
+    layer_log:
+        Layer metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value, ordered by
+        ``LAYER_LOG_FIELD_ORDER``. Per-pass fields
+        (``_MULTI_PASS_PER_CALL_LAYER_FIELDS``) are reported as ``None`` for
+        multi-pass Layers so the table never raises.
+    """
+
+    multi_pass = layer_log.num_passes > 1
+    row: Dict[str, Any] = {}
+    for field_name in LAYER_LOG_FIELD_ORDER:
+        if multi_pass and field_name in _MULTI_PASS_PER_CALL_LAYER_FIELDS:
+            row[field_name] = None
+            continue
+        row[field_name] = getattr(layer_log, field_name)
+    return row
+
 
 class OpAccessor(Accessor["Op"]):
     """Scoped dict-like accessor for the Op entries owned by one Layer."""
@@ -1364,6 +1406,11 @@ class Layer:
     def to_pandas(self) -> "pd.DataFrame":
         """Export this Layer as a one-row pandas DataFrame.
 
+        Per-pass fields (``_MULTI_PASS_PER_CALL_LAYER_FIELDS``, e.g.
+        ``transformed_out``/``transformed_grad``) are reported as ``None``
+        for multi-pass (recurrent) Layers instead of raising -- access them
+        per-pass via ``layer.ops[i].transformed_out`` instead.
+
         Returns
         -------
         pd.DataFrame
@@ -1378,7 +1425,7 @@ class Layer:
             ) from e
         from ..constants import LAYER_LOG_FIELD_ORDER
 
-        row = {field_name: getattr(self, field_name) for field_name in LAYER_LOG_FIELD_ORDER}
+        row = _layer_log_to_row(self)
         return pd.DataFrame([row], columns=LAYER_LOG_FIELD_ORDER)
 
     # ********************************************
@@ -1610,9 +1657,11 @@ class LayerAccessor(Accessor["Layer"]):
     def to_pandas(self) -> "pd.DataFrame":
         """One row per unique layer (aggregate view), ordered by ``LAYER_LOG_FIELD_ORDER``.
 
-        Delegates to each ``Layer.to_pandas()`` so every field in
-        ``LAYER_LOG_FIELD_ORDER`` is exported -- this used to hand-roll a
+        Builds each row the same way as ``Layer.to_pandas()`` so every field
+        in ``LAYER_LOG_FIELD_ORDER`` is exported -- this used to hand-roll a
         12-field subset that silently dropped most populated Layer fields.
+        Per-pass fields (``_MULTI_PASS_PER_CALL_LAYER_FIELDS``) are reported
+        as ``None`` for multi-pass (recurrent) layers instead of raising.
         """
         try:
             import pandas as pd
@@ -1623,8 +1672,5 @@ class LayerAccessor(Accessor["Layer"]):
 
         if not self._list:
             return pd.DataFrame(columns=LAYER_LOG_FIELD_ORDER)
-        rows = [
-            {field_name: getattr(ll, field_name) for field_name in LAYER_LOG_FIELD_ORDER}
-            for ll in self._list
-        ]
+        rows = [_layer_log_to_row(ll) for ll in self._list]
         return pd.DataFrame(rows, columns=LAYER_LOG_FIELD_ORDER)

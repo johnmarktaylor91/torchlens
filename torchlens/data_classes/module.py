@@ -45,6 +45,7 @@ from ..constants import LAYER_LOG_FIELD_ORDER, MODULE_LOG_FIELD_ORDER, MODULE_PA
 from ..quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from .layer import _layer_log_to_row
 from ._runtime_handles import runtime_handle_from_trace
 from ._repr import format_summary_lines
 
@@ -2365,11 +2366,14 @@ class Module:
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.
 
-        Delegates to each ``Layer.to_pandas()`` (``LAYER_LOG_FIELD_ORDER``) so
-        every populated Layer field is exported -- this used to hand-roll a
-        6-field subset that silently dropped the rest. ``num_ops`` is kept as
-        a trailing convenience column (a derived ``len(layer.ops)`` count, not
-        a stored field, so it isn't part of ``LAYER_LOG_FIELD_ORDER`` itself).
+        Builds each row the same way as ``Layer.to_pandas()``
+        (``LAYER_LOG_FIELD_ORDER``) so every populated Layer field is
+        exported -- this used to hand-roll a 6-field subset that silently
+        dropped the rest. ``num_ops`` is kept as a trailing convenience
+        column (a derived ``len(layer.ops)`` count, not a stored field, so
+        it isn't part of ``LAYER_LOG_FIELD_ORDER`` itself). Per-pass fields
+        (e.g. ``transformed_out``/``transformed_grad``) are reported as
+        ``None`` for multi-pass (recurrent) layers instead of raising.
 
         Returns
         -------
@@ -2392,7 +2396,7 @@ class Module:
         rows = []
         for label in self.layer_labels:
             entry = self._source_trace[label]
-            row = {field_name: getattr(entry, field_name) for field_name in LAYER_LOG_FIELD_ORDER}
+            row = _layer_log_to_row(entry)
             row["num_ops"] = getattr(entry, "num_ops", 1)
             rows.append(row)
         return pd.DataFrame(rows, columns=columns)

@@ -392,7 +392,10 @@ class TestModuleAccessorSummary:
         from torchlens.validation.invariants import check_metadata_invariants
 
         model = example_models.RecurrentParamsSimple()
-        log = trace_fn(model, input_2d)
+        # activation_transform=identity forces transformed_out to be populated
+        # (it stays None with no transform), so the single-pass-vs-multi-pass
+        # None-guard assertions below are meaningful rather than trivially true.
+        log = trace_fn(model, input_2d, activation_transform=lambda x: x)
 
         # The whole table renders without raising.
         df = log.modules.to_pandas()
@@ -426,6 +429,40 @@ class TestModuleAccessorSummary:
             or fc1_row["func_calls_duration"] != (fc1_row["func_calls_duration"])
         )  # None or NaN
         assert float(fc1_row["total_func_calls_duration"]) >= 0.0
+
+        # BLOCKER regression (cert5/cert6): the SAME bug class one layer down --
+        # ``Layer.to_pandas()``, ``LayerAccessor.to_pandas()`` (trace.layers.to_pandas()),
+        # and a single-module ``Module["addr"].to_pandas()`` all delegate to
+        # ``transformed_out``/``transformed_grad``, which raise ValueError via
+        # ``Layer._single_pass_or_error()`` for any multi-pass (recurrent) layer.
+        # None of these three surfaces were covered by the assertions above, which
+        # is exactly why the regression slipped through hotfix2.
+        multi_pass_labels = [label for label in fc1.layer_labels if log[label].num_passes > 1]
+        assert multi_pass_labels, "fixture must contain a multi-pass layer to exercise this gap"
+
+        # 1) Layer.to_pandas() directly.
+        multi_pass_layer = log[multi_pass_labels[0]]
+        layer_df = multi_pass_layer.to_pandas()
+        assert len(layer_df) == 1
+        assert layer_df.iloc[0]["transformed_out"] is None
+        assert layer_df.iloc[0]["transformed_grad"] is None
+
+        # 2) trace.layers.to_pandas() (LayerAccessor).
+        layers_df = log.layers.to_pandas()
+        assert len(layers_df) == len(log.layers)
+        multi_pass_row = layers_df[layers_df["layer_label"] == multi_pass_labels[0]].iloc[0]
+        assert multi_pass_row["transformed_out"] is None
+        assert multi_pass_row["transformed_grad"] is None
+        # Single-pass layers keep their real (non-None) per-pass values.
+        single_pass_row = layers_df[layers_df["num_passes"] == 1].iloc[0]
+        assert single_pass_row["transformed_out"] is not None
+
+        # 3) trace.modules["addr"].to_pandas() -- the per-module layer export.
+        fc1_layers_df = fc1.to_pandas()
+        assert len(fc1_layers_df) == fc1.num_layers
+        fc1_layer_row = fc1_layers_df[fc1_layers_df["layer_label"] == multi_pass_labels[0]].iloc[0]
+        assert fc1_layer_row["transformed_out"] is None
+        assert fc1_layer_row["transformed_grad"] is None
 
         assert check_metadata_invariants(log) is True
 
