@@ -11,6 +11,7 @@ from ..data_classes.layer import Layer
 from ..data_classes.module import ModuleAccessor
 from ..data_classes.trace import Trace, _init_module_hierarchy_data
 from ..postprocess.finalization import _build_module_logs, _build_root_module_log
+from ..quantities import Bytes
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -82,6 +83,8 @@ def finalize_single_pass_trace(
             enrich_op(op_log)
         if attach_op_params is not None:
             attach_op_params(op_log, trace, seen_param_barcodes)
+            if not isinstance(op_log.param_memory, Bytes):
+                op_log.param_memory = Bytes(int(op_log.param_memory))
         if getattr(op_log, "_param_logs", []):
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
@@ -109,6 +112,7 @@ def finalize_single_pass_trace(
     trace.backend = cast(BackendName, backend_name)
     if finish_before_module_logs:
         trace._tracing_finished = True
+        _set_per_op_tracing_finished(trace)
     if module_tree is None:
         trace.module_identity_mode = "function_root"
         attach_function_root_module(trace)
@@ -117,6 +121,34 @@ def finalize_single_pass_trace(
         attach_object_module_logs(trace, module_tree)
     if not finish_before_module_logs:
         trace._tracing_finished = True
+        _set_per_op_tracing_finished(trace)
+
+
+def _set_per_op_tracing_finished(trace: Trace) -> None:
+    """Flip ``_tracing_finished`` on every retained op, mirroring the torch path.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ``_tracing_finished`` flag was just set at the trace level.
+
+    Returns
+    -------
+    None
+        Every op reachable via ``trace.layer_dict_main_keys`` is mutated in place.
+
+    Notes
+    -----
+    Mirrors ``torchlens.postprocess.finalization._set_tracing_finished``, which
+    also flips this flag on every retained ``OpLog`` (not just the trace). Without
+    this, preview-backend ops stay stuck on the "mid-capture" ``__str__``/repr
+    branch, which assumes torch-only attributes (e.g. ``grad_fn``) and crashes
+    on non-torch tensors.
+    """
+
+    for layer_label in trace.layer_dict_main_keys:
+        op_log = trace.layer_dict_main_keys[layer_label]
+        op_log._tracing_finished = True
 
 
 def attach_function_root_module(trace: Trace) -> None:
