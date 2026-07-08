@@ -35,12 +35,12 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "Trace",
         Trace,
         tuple(constants.MODEL_LOG_FIELD_ORDER),
+        # _grad_fn_param_refs, _phase_timings, and _replay_arg_version_data_complete
+        # were promoted into MODEL_LOG_FIELD_ORDER (cert10), so only the two
+        # remaining portable-only fields stay documented here.
         portable_only_fields=frozenset(
             {
                 "_buffer_initial_values",
-                "_grad_fn_param_refs",
-                "_phase_timings",
-                "_replay_arg_version_data_complete",
                 "ops_with_params",
             }
         ),
@@ -90,7 +90,8 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "input_memory",
                 "input_ops",
                 "input_shapes",
-                "interventions",
+                # "interventions" became a KEEP (portable) ordered field in
+                # cert10, so it is no longer a documented DROP display field.
                 "is_internally_initialized",
                 "kwargs_template",
                 "num_inputs",
@@ -103,22 +104,10 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "Layer",
         Layer,
         tuple(constants.LAYER_LOG_FIELD_ORDER),
-        portable_only_fields=frozenset(
-            {
-                "_is_in_conditional_body",
-                "buffer_pass",
-                "buffer_replay_validated",
-                "buffer_source_func_name",
-                "buffer_value_changed",
-                "buffer_write_kind",
-                "has_input_ancestor",
-                "io_role",
-                "is_atomic_module",
-                "is_in_conditional_body",
-                "output_of_module_calls",
-                "output_of_modules",
-            }
-        ),
+        # The buffer_*/io_role/is_atomic_module/output_of_* fields were promoted
+        # into LAYER_LOG_FIELD_ORDER (cert10); only the private conditional-body
+        # flag remains portable-only.
+        portable_only_fields=frozenset({"_is_in_conditional_body"}),
         dropped_display_fields=frozenset(
             {"activation_transform", "func", "grad_fn", "grad_fn_handle"}
         ),
@@ -141,16 +130,15 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "Param",
         Param,
         tuple(constants.PARAM_LOG_FIELD_ORDER),
+        # _derived_grad_record_path, all_addresses, and all_module_addresses were
+        # promoted into PARAM_LOG_FIELD_ORDER (cert10).
         portable_only_fields=frozenset(
             {
                 "_derived_grad_payload",
-                "_derived_grad_record_path",
                 "_grad_dtype",
                 "_grad_memory",
                 "_grad_shape",
                 "_has_grad",
-                "all_addresses",
-                "all_module_addresses",
             }
         ),
     ),
@@ -158,7 +146,9 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "Buffer",
         Buffer,
         tuple(constants.BUFFER_LOG_FIELD_ORDER),
-        portable_only_fields=frozenset({"_initial_value", "module_address", "versions"}),
+        # module_address and versions were promoted into BUFFER_LOG_FIELD_ORDER
+        # (cert10).
+        portable_only_fields=frozenset({"_initial_value"}),
     ),
     FieldOrderCase("GradFn", GradFn, tuple(constants.GRAD_FN_LOG_FIELD_ORDER)),
     FieldOrderCase(
