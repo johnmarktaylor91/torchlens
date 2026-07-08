@@ -40,6 +40,23 @@ class FlatFunctional(nn.Module):
         return torch.relu(x) * 2 + 1
 
 
+class DuplicateTensorOutput(nn.Module):
+    """Model whose ``forward()`` returns the SAME tensor object more than once."""
+
+    def __init__(self) -> None:
+        """Initialize a small linear-relu stack."""
+
+        super().__init__()
+        self.l1 = nn.Linear(4, 4)
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return the same computed tensor twice (dual-head / siamese-style)."""
+
+        y = self.relu(self.l1(x))
+        return (y, y)
+
+
 class NestedBlocks(nn.Module):
     """Two-plus-level module tree (``block.0`` / ``block.1`` are depth 2)."""
 
@@ -522,6 +539,47 @@ def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
     rec_records = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
     _ = rec_records.to_trace()
     assert rec_records.n_records > 0
+
+
+def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() -> None:
+    """cert9 BLOCKER-1: repeat to_trace() must survive Step 12 undecorating shared outputs.
+
+    ``copy_for_replay()`` (cert8 BLOCKER-1 fix) protects the frozen Recording's
+    ``CaptureEvents``/``LiveIndex`` containers from ``_postprocess()``'s
+    destructive draining, but structurally cannot protect a sibling side
+    channel: the model's real output tensor OBJECTS, which ``to_trace()``
+    retains and hands to ``_postprocess()`` BY REFERENCE across every call
+    (never copied, for cost reasons). Postprocess Step 12
+    (``_undecorate_all_saved_tensors``) strips the private ``._tl`` metadata --
+    including ``label_raw`` -- off those same tensor objects. Whenever the
+    output-tensor count doesn't equal the output-label count (e.g. a model
+    returning the same tensor object twice, ``return (y, y)``),
+    ``graph_traversal.py``'s ``_resolve_output_parent_labels`` falls off its
+    fast path and re-reads that now-cleared ``label_raw`` on the SECOND
+    ``to_trace()`` call, raising "could not attribute a model output tensor to
+    any traced op". ``to_trace()`` must snapshot and restore each retained
+    output tensor's label across ``_postprocess()`` so repeat calls stay safe
+    regardless of output-tensor/output-label count parity.
+    """
+
+    x = torch.randn(2, 4)
+    rec = tl.record(DuplicateTensorOutput().eval(), x, save=tl.func("relu"))
+
+    trace1 = rec.to_trace()
+    trace2 = rec.to_trace()
+
+    assert trace1.output_layers == trace2.output_layers
+    assert len(trace1.output_layers) == 2
+    assert [op.layer_label for op in trace1.layer_list] == [
+        op.layer_label for op in trace2.layer_list
+    ]
+    check_metadata_invariants(trace1)
+    check_metadata_invariants(trace2)
+
+    # A third call keeps working too -- the restore isn't a one-shot patch.
+    trace3 = rec.to_trace()
+    assert trace3.output_layers == trace1.output_layers
+    check_metadata_invariants(trace3)
 
 
 def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None:

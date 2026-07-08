@@ -870,10 +870,37 @@ class Recording(CapturedRun):
         if self._capture_events.op_events:
             trace._layer_counter = max(event.raw_index for event in self._capture_events.op_events)
 
+        # Snapshot each retained output tensor's raw label BEFORE handing it to
+        # _postprocess(). Step 12 (_undecorate_all_saved_tensors,
+        # postprocess/finalization.py) strips the private `._tl` metadata --
+        # including `label_raw` -- off every saved tensor, and `halt_output_tensors`
+        # here are the SAME tensor objects retained across every to_trace() call on
+        # this frozen Recording (never copied; see the copy_for_replay() note above
+        # -- tensors are intentionally shared by reference for cost reasons, so that
+        # fix structurally cannot protect this side-channel). Without restoring the
+        # label afterward, a second to_trace() call falls into
+        # graph_traversal.py's _resolve_output_parent_labels() slow path (reached
+        # whenever the output-tensor count doesn't equal the output-label count --
+        # e.g. a model returning the same tensor twice, `return (y, y)`), which
+        # reads get_tensor_label() and finds it already cleared by the FIRST call,
+        # raising "could not attribute a model output tensor to any traced op".
+        from ..backends.torch._tl import get_tensor_label, set_tensor_label
+
+        _retained_output_labels = [get_tensor_label(t) for t in halt_output_tensors]
+
         trace._postprocess(
             halt_output_tensors,
             halt_output_addresses,
         )
+
+        # Restore any label Step 12 just cleared so the NEXT to_trace() call on
+        # this same Recording can still resolve it. Only restores what was
+        # actually there before -- no fabrication -- and only touches tensors
+        # that lost their label (leaves anything Step 12 didn't clear alone).
+        for _t, _label in zip(halt_output_tensors, _retained_output_labels):
+            if _label is not None and get_tensor_label(_t) is None:
+                set_tensor_label(_t, _label)
+
         return trace
 
     def _recover_halt_frontier(self) -> "tuple[str, torch.Tensor]":
