@@ -788,7 +788,15 @@ def render_rank_layout(
         pw = compute_module_penwidth(depth, max_nest)
         ls = "solid" if module_has_ancestor.get(mod_key) else "dashed"
 
-        cluster_label = f'<<B>@{title}</B><br align="left"/>({mod_type})<br align="left"/>>'
+        # ``title`` is derived from the module address, which can contain
+        # arbitrary user text (e.g. an ``nn.ModuleDict`` key like
+        # ``"score & rank"``) -- escape both it and the class name before
+        # they land in the Graphviz HTML-like label.
+        escaped_title = html_escape(title)
+        escaped_mod_type = html_escape(mod_type)
+        cluster_label = (
+            f'<<B>@{escaped_title}</B><br align="left"/>({escaped_mod_type})<br align="left"/>>'
+        )
 
         # Apply module overrides
         mod_attrs = {

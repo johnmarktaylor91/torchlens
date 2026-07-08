@@ -1667,15 +1667,15 @@ def _setup_subgraphs_recurse(
             else:
                 line_style = "dashed"
 
-            # ``title_already_escaped=True`` preserves the existing byte-level
-            # output: Trace subgraph titles never contain HTML specials, so
-            # the title is fed through verbatim, matching the legacy format.
+            # Module-address-derived titles can contain arbitrary user text
+            # (e.g. an ``nn.ModuleDict`` key like ``"score & rank"``), so the
+            # title must go through ``html_escape`` like any other
+            # user-provided string -- do not assume it is HTML-safe.
             module_args = make_module_cluster_attrs(
                 title=subgraph_title,
                 module_type=module_type,
                 line_style=line_style,
                 penwidth=pen_width,
-                title_already_escaped=True,
             )
 
             for arg_name, arg_val in overrides.module.items():  # type: ignore[union-attr]

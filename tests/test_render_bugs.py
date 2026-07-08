@@ -99,6 +99,23 @@ class _SpecialCharDictOutputModel(nn.Module):
         return {"loss & aux": x + 1, "b": x + 2}
 
 
+class _ModuleDictSpecialKeyModel(nn.Module):
+    """Model whose ``nn.ModuleDict`` key contains an HTML-special character."""
+
+    def __init__(self) -> None:
+        """Initialize a ModuleDict keyed by a string containing ``&``."""
+
+        super().__init__()
+        self.heads = nn.ModuleDict(
+            {"score & rank": nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the ``"score & rank"`` branch."""
+
+        return self.heads["score & rank"](x)
+
+
 class _LSTMCellSeq(nn.Module):
     """Loop over an LSTMCell whose call returns two tensors."""
 
@@ -566,6 +583,48 @@ def test_grad_edges_use_preserved_edge_cluster_key(
         trace.cleanup()
 
     assert modules_by_edge[("relu", "sigmoid")] == "block.inner:1"
+
+
+def test_module_cluster_title_escapes_html_special_moduledict_key(tmp_path: Path) -> None:
+    """Module cluster titles HTML-escape special characters from module addresses.
+
+    Regression test for the module-address cluster-title bug: an
+    ``nn.ModuleDict`` key containing ``&`` (e.g. ``"score & rank"``) becomes
+    part of the module address used as the cluster title in both render
+    engines. ``_setup_subgraphs_recurse`` (``_render_dot.py``) previously
+    passed ``title_already_escaped=True`` on the false assumption that Trace
+    subgraph titles never contain HTML specials, and the rank-layout
+    engine's ``_write_cluster`` (``_rank_layout_internal/layout.py``) built
+    its ``cluster_label`` with zero escaping at all. Raw ``&`` in a Graphviz
+    HTML-like cluster label breaks the parser, raising
+    ``GraphvizRenderError`` on ``draw()`` -- reproduced on the DEFAULT (dot)
+    render engine with DEFAULT settings by reverting the fix and re-running
+    this exact scenario. Renders to an actual SVG file through the real
+    Graphviz binary to verify end-to-end, not just at the string-building
+    layer.
+    """
+
+    trace = tl.trace(_ModuleDictSpecialKeyModel(), torch.randn(2, 3))
+    outpath = tmp_path / "moduledict_special_char"
+    try:
+        # Must NOT raise GraphvizRenderError -- the raw "&" in the
+        # ModuleDict key previously broke the HTML-like label parser
+        # mid-render of the "heads.score & rank" module cluster.
+        dot = trace.draw(
+            vis_outpath=str(outpath),
+            vis_save_only=True,
+            vis_fileformat="svg",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    assert "score &amp; rank" in dot
+    assert "score & rank<" not in dot  # raw ampersand must not survive
+    svg_path = outpath.with_suffix(".svg")
+    assert svg_path.exists()
+    svg_text = svg_path.read_text(encoding="utf-8")
+    assert "score &amp; rank" in svg_text
 
 
 def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> None:
