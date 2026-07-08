@@ -7,6 +7,7 @@ from ._render_leaf import *
 from ._render_edges import *
 from ._render_nodes import *
 from ._render_flow import *
+from ._render_utils import html_escape
 
 
 def _view_rendered_file(filepath: str) -> None:
@@ -468,7 +469,7 @@ def draw(
         )
 
     graph_caption = (
-        f"<<FONT COLOR='{theme.default_font}'><B>{self.model_class_name}</B>"
+        f"<<FONT COLOR='{theme.default_font}'><B>{html_escape(self.model_class_name)}</B>"
         f"<br align='left'/>{self.num_tensors} tensors total ({self.total_activation_memory})"
         f"<br align='left'/>{params_detail}<br align='left'/></FONT>>"
     )

@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 from typing import Any
 
 from .._label_format import format_memory, format_shape
-from .._render_utils import _open_file_quietly
+from .._render_utils import _open_file_quietly, html_escape
 from ..code_panel import _code_panel_label
 
 SPAN_LOCAL = 12
@@ -1081,5 +1081,5 @@ def _add_arg_label(
                     arg_labels.append(f"{arg_type[:-1]} {arg_loc}")
 
     if arg_labels:
-        label_str = "<br/>".join(arg_labels)
+        label_str = "<br/>".join(html_escape(str(label)) for label in arg_labels)
         edge_dict["label"] = f"<<FONT POINT-SIZE='10'><b>{label_str}</b></FONT>>"

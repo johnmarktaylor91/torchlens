@@ -7,6 +7,7 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
+from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -126,3 +127,41 @@ def test_paddle_object_module_vs_function_root() -> None:
     assert object_trace.module_identity_mode == "object_module"
     assert function_trace.module_identity_mode == "function_root"
     assert [module.address for module in function_trace.modules] == ["self"]
+
+
+class PaddleSingleLinear(paddle.nn.Layer):
+    """Minimal parameterized Paddle layer for finalization regression tests."""
+
+    def __init__(self) -> None:
+        """Initialize the single linear child."""
+
+        super().__init__()
+        self.fc = paddle.nn.Linear(4, 4)
+
+    def forward(self, x: object) -> object:
+        """Run the linear layer."""
+
+        return self.fc(x)
+
+
+def test_paddle_num_layers_with_params_populated_in_object_module_mode() -> None:
+    """``_finish_trace`` must populate ``trace.num_layers_with_params``.
+
+    Regression test: ``PaddleBackend._finish_trace``
+    (``torchlens/backends/paddle/backend.py``) calls the shared
+    ``finalize_single_pass_trace`` helper without
+    ``count_layers_with_attached_params=True``, so ``op_log._param_logs`` was
+    attached correctly per-op but the trace-level summary counter
+    ``trace.num_layers_with_params`` stayed at its dataclass default of ``0``
+    on every parameterized Paddle model -- silently wrong, and it trips the
+    ``[param_xrefs]`` metadata invariant (``_check_layer_param_aggregate_dedup``)
+    for any object-module-mode trace with attached params. The sibling MLX
+    backend passes the same flag at the identical call site and is correct;
+    Paddle must match.
+    """
+
+    trace = tl.trace(PaddleSingleLinear(), _input(), backend="paddle")
+
+    assert trace.module_identity_mode == "object_module"
+    assert trace.num_layers_with_params == 1
+    assert check_metadata_invariants(trace) is True

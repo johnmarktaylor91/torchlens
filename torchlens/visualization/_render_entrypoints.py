@@ -8,6 +8,7 @@ from ._render_edges import *
 from ._render_nodes import *
 from ._render_flow import *
 from ._render_dot import *
+from ._render_utils import html_escape
 
 
 def render_backward_graph(
@@ -85,7 +86,7 @@ def render_backward_graph(
     vis_outpath = _strip_render_extension(vis_outpath)
 
     graph_caption = (
-        f"<<B>{self.model_class_name} backward graph</B><br align='left'/>"
+        f"<<B>{html_escape(self.model_class_name)} backward graph</B><br align='left'/>"
         f"{self.num_grad_fns} grad_fn_handle nodes"
         f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}"
@@ -307,7 +308,7 @@ def render_combined_graph(
     )
 
     graph_caption = (
-        f"<<B>{self.model_class_name} combined forward/backward graph</B><br align='left'/>"
+        f"<<B>{html_escape(self.model_class_name)} combined forward/backward graph</B><br align='left'/>"
         f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn_handle nodes"
         f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"

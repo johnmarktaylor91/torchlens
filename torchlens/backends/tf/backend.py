@@ -552,6 +552,7 @@ class TFBackend:
             attach_object_module_logs=_attach_object_module_logs,
             attach_op_params=_attach_tf_op_params_for_finalize,
             update_param_usage=False,
+            count_layers_with_attached_params=True,
         )
 
     def normalize_call(self, *args: Any, **kwargs: Any) -> TFCallPlan:

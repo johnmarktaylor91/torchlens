@@ -11,6 +11,7 @@ import torchlens as tl
 from conftest import tensorflow_backend_modules
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tf.validation import replay_allowlist
+from torchlens.validation.invariants import check_metadata_invariants
 from torchlens.validation.status import ValidationReplayStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
@@ -246,3 +247,29 @@ def test_tf_validation_positive_cnn_and_transformer_report_replay_coverage() -> 
         assert status.failed_node_count == 0
         assert status.replayed_node_count > 0
         assert getattr(trace, "_tf_validation_result").replayed_histogram
+
+
+def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
+    """``_finish_trace`` must populate ``trace.num_layers_with_params``.
+
+    Sibling-gap regression test for the Paddle backend's identical bug: TF's
+    ``TFBackend._finish_trace`` (``torchlens/backends/tf/backend.py``) calls
+    the shared ``finalize_single_pass_trace`` helper with
+    ``attach_op_params=_attach_tf_op_params_for_finalize`` (so per-op
+    ``_param_logs`` are attached correctly) but -- before this fix -- without
+    ``count_layers_with_attached_params=True`` and without
+    ``update_param_totals_from_layers=True``, so the trace-level summary
+    counter ``trace.num_layers_with_params`` stayed at its dataclass default
+    of ``0`` for every parameterized Keras model. That trips the
+    ``[param_xrefs]`` metadata invariant
+    (``_check_layer_param_aggregate_dedup``) for any object-module-mode
+    trace with attached params, exactly like the Paddle backend's MAJOR
+    finding. MLX already passes the flag at the identical call site; TF and
+    Paddle must both match it.
+    """
+
+    trace = tl.trace(SmallCnn(), tf.ones((1, 8, 8, 1), dtype=tf.float32), backend="tf")
+
+    assert trace.module_identity_mode == "object_module"
+    assert trace.num_layers_with_params > 0
+    assert check_metadata_invariants(trace) is True

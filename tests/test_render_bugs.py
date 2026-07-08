@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -592,3 +593,105 @@ def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> Non
         assert content_rect.get_area() > 0.01 * page_rect.get_area()
     finally:
         document.close()
+
+
+class _TwoInputSubModel(nn.Module):
+    """Non-commutative op with two distinct parents, for arg-label tests."""
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return ``x - y``.
+
+        Parameters
+        ----------
+        x:
+            First input tensor.
+        y:
+            Second input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Difference of the two inputs.
+        """
+        return torch.sub(x, y)
+
+
+def test_rank_layout_escapes_html_special_chars_in_arg_edge_use_labels(
+    tmp_path: Path,
+) -> None:
+    """Rank-engine arg-position labels must escape HTML specials.
+
+    ``_add_arg_label`` (the rank-layout engine's argument-position labeler,
+    ``torchlens/visualization/_rank_layout_internal/layout.py``) builds its
+    label text from ``render_edge.argument_label``, which for ``Op`` children
+    is derived from ``edge_uses[].arg_path`` (see
+    ``_edge_use_argument_label``/``_arg_path_label_value`` in
+    ``_render_flow.py``). Real capture can populate ``arg_path`` with
+    container-key text pulled from a nested dict/list container argument
+    (``DictKey``/``HFKey`` components carry the raw key string verbatim).
+    Before the fix, that text was interpolated into the rank engine's
+    Graphviz HTML-like edge label unescaped, so a key containing ``<``,
+    ``>``, or ``&`` raised a real ``neato`` parse failure
+    (``RuntimeError: neato rendering failed ... not well-formed (invalid
+    token)``) -- confirmed by reverting the fix and re-running this exact
+    scenario. This mirrors the parallel fix already applied to the dot
+    engine's ``_label_node_arguments_if_needed`` in ``_render_edges.py``.
+    """
+
+    trace = tl.trace(_TwoInputSubModel(), (torch.randn(3), torch.randn(3)))
+    try:
+        sub_op = trace["sub_1_1:1"]
+        # Simulate a container-key edge use (e.g. a DictKey/HFKey component
+        # whose ``.key`` carries arbitrary output-dict text) landing in
+        # ``arg_path`` for the first positional edge use, matching the real
+        # data shape produced by container-argument capture.
+        mutated_edge_uses = tuple(
+            dataclasses.replace(record, arg_path=("loss & aux <script>",))
+            if record.arg_kind == "positional" and record.arg_path == (0,)
+            else record
+            for record in sub_op.edge_uses
+        )
+        sub_op._edge_uses = mutated_edge_uses  # type: ignore[attr-defined]
+
+        dot = trace.draw(
+            vis_node_placement="rank",
+            vis_outpath=str(tmp_path / "rank_html_escape"),
+            vis_save_only=True,
+            vis_fileformat="svg",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    assert "arg loss &amp; aux &lt;script&gt;" in dot
+    assert "loss & aux <script>" not in dot
+
+
+def test_rank_layout_model_class_name_html_specials_render_cleanly(
+    tmp_path: Path,
+) -> None:
+    """Rank-engine graph caption must escape HTML specials in the class name.
+
+    Defense-in-depth companion to the arg-label fix: ``model_class_name`` is
+    interpolated into the top-level graph caption
+    (``_render_dot.py:build_and_render_graph``) and the backward/combined
+    graph captions (``_render_entrypoints.py``). A class name containing
+    ``<``, ``>``, or ``&`` (dynamically constructed via ``type(...)``) must
+    not break the Graphviz HTML-like label parser.
+    """
+
+    model_cls = type("Loss&Aux<Model>", (nn.Module,), {"forward": lambda self, x: x.relu()})
+    trace = tl.trace(model_cls(), torch.randn(3))
+    try:
+        dot = trace.draw(
+            vis_node_placement="rank",
+            vis_outpath=str(tmp_path / "rank_class_name_escape"),
+            vis_save_only=True,
+            vis_fileformat="svg",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    assert "Loss&amp;Aux&lt;Model&gt;" in dot
+    assert "Loss&Aux<Model>" not in dot

@@ -1420,6 +1420,7 @@ class PaddleBackend:
             attach_function_root_module=attach_function_root_module,
             attach_object_module_logs=self._attach_object_module_logs,
             attach_op_params=_attach_paddle_op_params_for_finalize,
+            count_layers_with_attached_params=True,
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: PaddleModuleTree) -> None:
