@@ -1041,6 +1041,29 @@ def _terminal_status_placeholders() -> str:
     return ",".join("?" for _status in TERMINAL_STATUSES)
 
 
+# Completeness deliberately ranks by RECENCY ONLY, unlike the ledger's
+# ``current_verification`` view, which prefers real-forward rows so that a
+# NULL-forward env-smoke/cascade artifact can never mask a validated run in
+# ``verified_count`` (integrity gate 8c55786a). The completeness audit answers a
+# different question -- "is this model's LATEST disposition terminal at the
+# current identity tuple?" -- so a latest skipped/deferred row must surface and
+# leave the catalog row incomplete (validation-honesty ruling 1ede069d). Do NOT
+# "unify" this back onto the shared view; both tripwires are load-bearing.
+_LATEST_VERIFICATION_CTE = """latest_verification AS (
+            SELECT *
+            FROM (
+                SELECT
+                    verification_runs.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY stable_id
+                        ORDER BY finished_at DESC, run_id DESC
+                    ) AS rn
+                FROM verification_runs
+            )
+            WHERE rn = 1
+        )"""
+
+
 def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
     """Return catalog rows lacking a current-recipe terminal row.
 
@@ -1058,27 +1081,28 @@ def _completeness_issues(conn: sqlite3.Connection) -> list[CompletenessIssue]:
     placeholders = _terminal_status_placeholders()
     rows = conn.execute(
         f"""
-        WITH current_terminal AS (
+        WITH {_LATEST_VERIFICATION_CTE},
+        current_terminal AS (
             SELECT
-                current_verification.stable_id,
-                current_verification.recipe_revision_sha256,
-                current_verification.status
-            FROM current_verification
+                latest_verification.stable_id,
+                latest_verification.recipe_revision_sha256,
+                latest_verification.status
+            FROM latest_verification
             JOIN temp_current_verification_targets AS target
-              ON target.stable_id = current_verification.stable_id
-             AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
-             AND target.torchlens_source_hash = current_verification.torchlens_source_hash
-             AND target.env_hash = current_verification.env_hash
-             AND target.lock_hash = current_verification.lock_hash
-             AND target.device_requested = current_verification.device_requested
-             AND target.scope = current_verification.scope
-            WHERE current_verification.status IN ({placeholders})
-              AND current_verification.torchlens_source_hash != 'legacy-unknown'
-              AND current_verification.lock_hash != 'legacy-unknown'
+              ON target.stable_id = latest_verification.stable_id
+             AND target.recipe_revision_sha256 = latest_verification.recipe_revision_sha256
+             AND target.torchlens_source_hash = latest_verification.torchlens_source_hash
+             AND target.env_hash = latest_verification.env_hash
+             AND target.lock_hash = latest_verification.lock_hash
+             AND target.device_requested = latest_verification.device_requested
+             AND target.scope = latest_verification.scope
+            WHERE latest_verification.status IN ({placeholders})
+              AND latest_verification.torchlens_source_hash != 'legacy-unknown'
+              AND latest_verification.lock_hash != 'legacy-unknown'
         ),
         latest_run AS (
             SELECT stable_id, recipe_revision_sha256, status
-            FROM current_verification
+            FROM latest_verification
         )
         SELECT
             catalog_snapshot.stable_id,
@@ -1139,23 +1163,24 @@ def _terminal_by_status(conn: sqlite3.Connection) -> dict[str, int]:
     placeholders = _terminal_status_placeholders()
     rows = conn.execute(
         f"""
-        WITH current_terminal AS (
+        WITH {_LATEST_VERIFICATION_CTE},
+        current_terminal AS (
             SELECT
-                current_verification.stable_id,
-                current_verification.recipe_revision_sha256,
-                current_verification.status
-            FROM current_verification
+                latest_verification.stable_id,
+                latest_verification.recipe_revision_sha256,
+                latest_verification.status
+            FROM latest_verification
             JOIN temp_current_verification_targets AS target
-              ON target.stable_id = current_verification.stable_id
-             AND target.recipe_revision_sha256 = current_verification.recipe_revision_sha256
-             AND target.torchlens_source_hash = current_verification.torchlens_source_hash
-             AND target.env_hash = current_verification.env_hash
-             AND target.lock_hash = current_verification.lock_hash
-             AND target.device_requested = current_verification.device_requested
-             AND target.scope = current_verification.scope
-            WHERE current_verification.status IN ({placeholders})
-              AND current_verification.torchlens_source_hash != 'legacy-unknown'
-              AND current_verification.lock_hash != 'legacy-unknown'
+              ON target.stable_id = latest_verification.stable_id
+             AND target.recipe_revision_sha256 = latest_verification.recipe_revision_sha256
+             AND target.torchlens_source_hash = latest_verification.torchlens_source_hash
+             AND target.env_hash = latest_verification.env_hash
+             AND target.lock_hash = latest_verification.lock_hash
+             AND target.device_requested = latest_verification.device_requested
+             AND target.scope = latest_verification.scope
+            WHERE latest_verification.status IN ({placeholders})
+              AND latest_verification.torchlens_source_hash != 'legacy-unknown'
+              AND latest_verification.lock_hash != 'legacy-unknown'
         )
         SELECT current_terminal.status, COUNT(*) AS count
         FROM catalog_snapshot
