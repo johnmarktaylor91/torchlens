@@ -728,6 +728,23 @@ class Recording(CapturedRun):
             trace.forward_peak_memory = runtime_trace.forward_peak_memory
             trace.forward_memory_backend = runtime_trace.forward_memory_backend
 
+        # Seed the raw-index high-water mark before postprocess. The live torch
+        # capture path advances trace._layer_counter once per real op *during*
+        # the forward pass (backends/torch/ops.py, sources.py), so by the time
+        # postprocess Step 1 (_add_output_layers, graph_traversal.py) synthesizes
+        # the dedicated output node(s) via `self._layer_counter += 1`, the counter
+        # already sits at the last captured op's raw_index and each new output
+        # node gets a fresh, strictly-larger raw_index. Replaying events straight
+        # into a brand-new Trace here skips that live-dispatch bookkeeping, so
+        # without this seed _layer_counter stays at 0 and the first output node is
+        # stamped raw_index=1 -- colliding with input_1 (which carries its own
+        # captured raw_index=1) and violating the graph_ordering invariant's
+        # raw_index-uniqueness/monotonicity contract. Seed from the true
+        # event-stream high-water mark so output-node numbering continues from
+        # there, matching the live-capture path exactly.
+        if self._capture_events.op_events:
+            trace._layer_counter = max(event.raw_index for event in self._capture_events.op_events)
+
         trace._postprocess(
             list(self._output_tensors),
             list(self._output_tensor_addresses),

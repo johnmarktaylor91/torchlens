@@ -12,6 +12,7 @@ import torchlens as tl
 from torchlens.validation.invariants import (
     _check_special_layer_lists,
     _check_trace_self_consistency,
+    check_metadata_invariants,
 )
 
 
@@ -28,6 +29,49 @@ class ConvReluAdd(nn.Module):
         """Run a conv, relu, and add operation."""
 
         return torch.relu(self.conv(x)) + 1
+
+
+class FlatFunctional(nn.Module):
+    """Submodule-free model (pure functional forward, no ``nn.Module`` children)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run only free functions so the module tree is just the root ``self``."""
+
+        return torch.relu(x) * 2 + 1
+
+
+class NestedBlocks(nn.Module):
+    """Two-plus-level module tree (``block.0`` / ``block.1`` are depth 2)."""
+
+    def __init__(self) -> None:
+        """Initialize a top-level linear plus a nested Sequential block."""
+
+        super().__init__()
+        self.l1 = nn.Linear(4, 4)
+        self.block = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Route through the top-level linear then the nested block."""
+
+        return self.block(self.l1(x))
+
+
+def _module_tree(trace: tl.Trace) -> dict[str, tuple[str | None, tuple[str, ...]]]:
+    """Return each module's (address_parent, address_children) address tree."""
+
+    return {
+        module.address: (module.address_parent, tuple(module.address_children))
+        for module in trace.modules
+    }
+
+
+def _module_call_stacks(trace: tl.Trace) -> dict[str, list[str]]:
+    """Return each module call's reconstructed ``module_call_stack``."""
+
+    return {
+        module_call.call_label: list(module_call.module_call_stack)
+        for module_call in trace.module_calls
+    }
 
 
 def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[str, ...]]]:
@@ -93,15 +137,14 @@ def test_recording_to_trace_backfills_timing_and_input_layers() -> None:
     unconditional failure of the special_layer_lists metadata invariant for
     every ``record().to_trace()`` output.
 
-    Deliberately checks the two specific invariant groups this fix targets
+    Checks the two specific invariant groups this fix originally targeted
     (``special_layer_lists`` for input_layers<->is_input consistency,
-    ``trace_self_consistency`` for the timing/output_layers checks) rather
-    than the full ``check_metadata_invariants()`` suite: a separate,
-    pre-existing, and unrelated gap in how the fastlog replay path populates
-    module-address-tree metadata (``module_hierarchy``) independently fails
-    the full suite for any model with a nested submodule, masked until now by
-    this very bug always raising first. That gap is out of scope here and is
-    tracked separately.
+    ``trace_self_consistency`` for the timing/output_layers checks). The
+    once-separate ``graph_ordering`` (raw-index) and ``module_hierarchy``
+    (module-address-tree) gaps that used to keep the FULL
+    ``check_metadata_invariants()`` suite red for ``record().to_trace()`` are
+    now closed too; the full-chain guarantee is exercised by
+    ``test_recording_to_trace_passes_full_metadata_invariants`` below.
     """
 
     model = ConvReluAdd()
@@ -130,6 +173,72 @@ def test_recording_to_trace_backfills_timing_and_input_layers() -> None:
     # The two invariant groups this fix targets must pass cleanly.
     _check_trace_self_consistency(cooked)
     _check_special_layer_lists(cooked)
+
+
+@pytest.mark.parametrize(
+    "model_factory",
+    [FlatFunctional, NestedBlocks],
+    ids=["flat_submodule_free", "nested_two_levels"],
+)
+def test_recording_to_trace_passes_full_metadata_invariants(model_factory) -> None:
+    """record().to_trace() passes the FULL invariant chain for both shapes.
+
+    Round-6 certification found two independent producer gaps that each left a
+    ``record(...).to_trace()`` Trace failing ``check_metadata_invariants()`` --
+    but the round-6 regression test only exercised two named invariant groups,
+    so both slipped through:
+
+    * ``graph_ordering`` -- ``Recording.to_trace()`` never seeded
+      ``trace._layer_counter`` from the replayed event stream, so postprocess's
+      synthetic output node was stamped ``raw_index=1``, colliding with
+      ``input_1`` (fails even for a flat, submodule-free model).
+    * ``module_hierarchy`` -- the fastlog recorder dropped the real
+      ``ModulePrepEvent``s (root ``address_children`` came back empty) and emitted
+      no module-call-stack metadata (every ``ModuleCall.module_call_stack`` was
+      ``[]``), failing for any model with a submodule.
+
+    This asserts the WHOLE ``check_metadata_invariants()`` chain -- not a hand-
+    picked subset -- passes for both a flat model and a >=2-level nested model,
+    the exact mistake (checking only named invariants) that let round 6 ship
+    these gaps.
+    """
+
+    model = model_factory().eval()
+    x = torch.randn(2, 4)
+
+    cooked = tl.record(model, x, save=tl.func("relu"), random_seed=41).to_trace()
+
+    # FULL chain -- must not raise MetadataInvariantError for any contract.
+    check_metadata_invariants(cooked)
+
+    # graph_ordering specifics: raw_index unique AND monotonically increasing.
+    raw_indices = [op.raw_index for op in cooked.layer_list]
+    assert len(raw_indices) == len(set(raw_indices)), "raw_index values must be unique"
+    assert raw_indices == sorted(raw_indices), "raw_index must be monotonically increasing"
+
+
+@pytest.mark.parametrize(
+    "model_factory",
+    [FlatFunctional, NestedBlocks],
+    ids=["flat_submodule_free", "nested_two_levels"],
+)
+def test_recording_to_trace_module_tree_matches_exhaustive(model_factory) -> None:
+    """to_trace() rebuilds the SAME module address tree and call stacks as tl.trace().
+
+    The module-hierarchy fix must reconstruct the module tree identically to a
+    live exhaustive capture, not merely "pass the invariant". Compares the full
+    ``(address_parent, address_children)`` address tree and every
+    ``ModuleCall.module_call_stack`` against the exhaustive ``tl.trace`` of the
+    same model.
+    """
+
+    x = torch.randn(2, 4)
+
+    cooked = tl.record(model_factory().eval(), x, save=tl.func("relu"), random_seed=41).to_trace()
+    exhaustive = tl.trace(model_factory().eval(), x, random_seed=41)
+
+    assert _module_tree(cooked) == _module_tree(exhaustive)
+    assert _module_call_stacks(cooked) == _module_call_stacks(exhaustive)
 
 
 def test_record_save_matches_deprecated_keep_op_alias() -> None:

@@ -416,6 +416,7 @@ class Recorder:
                     postprocess=False,
                 )
         except HaltSignal as halt_exc:
+            self._carry_module_structure_events(trace)
             self._capture_events.extend(trace.capture_events.op_events)
             object.__setattr__(
                 self._state.recording,
@@ -448,6 +449,7 @@ class Recorder:
             self._state.recording.end_times.append(time.time())
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(trace, output)
         trace.__dict__.pop("_output_attribution_input_tensors", None)
+        self._carry_module_structure_events(trace)
         self._capture_events.extend(trace.capture_events.op_events)
         trace.capture_events = self._capture_events
         trace._capture_events = self._capture_events
@@ -460,6 +462,45 @@ class Recorder:
             max(self._state.recording.n_ops, self._next_pass_index),
         )
         return output
+
+    def _carry_module_structure_events(self, trace: Trace) -> None:
+        """Retain the pass's module prep/enter/exit events for ``to_trace()``.
+
+        The predicate-capture per-pass ``trace`` created in
+        :meth:`_run_unified_capture` owns its own ``CaptureEvents`` while the
+        forward runs: model preparation emits one ``ModulePrepEvent`` per module
+        (``backends/torch/model_prep.py``) onto it, carrying each module's real
+        ``address_children`` / source metadata. The recorder then extends only
+        ``op_events`` into its own longer-lived ``self._capture_events`` and
+        reassigns ``trace.capture_events`` away, orphaning those prep events.
+
+        ``Recording.to_trace()`` rebuilds a fresh ``Trace`` from exactly
+        ``self._capture_events`` and runs the same postprocess pipeline as a live
+        capture. Without the module prep events, ``_module_metadata`` stays empty
+        and ``_build_root_module_log`` (postprocess finalization) falls back to
+        deriving the root's ``address_children`` from ``top_level_modules`` --
+        which is empty whenever every op's module stack starts at ``self`` --
+        yielding a root ``Module`` with no ``address_children`` and a
+        ``module_hierarchy`` invariant failure for any model with a submodule.
+
+        Carry the real prep (and, for symmetry, any enter/exit) events across so
+        ``to_trace()``'s materialize step applies them exactly as an exhaustive
+        capture would. Guarded on emptiness so multi-pass recordings -- which
+        re-prepare the model and re-emit identical prep events every pass -- keep
+        a single, non-duplicated set.
+        """
+
+        if self._capture_events is None:
+            return
+        source = getattr(trace, "capture_events", None)
+        if source is None or source is self._capture_events:
+            return
+        if not self._capture_events.module_prep_events:
+            self._capture_events.module_prep_events.extend(source.module_prep_events)
+        if not self._capture_events.module_enter_events:
+            self._capture_events.module_enter_events.extend(source.module_enter_events)
+        if not self._capture_events.module_exit_events:
+            self._capture_events.module_exit_events.extend(source.module_exit_events)
 
     def _mark_halted_pass(self, pass_index: int, halt_exc: HaltSignal) -> None:
         """Persist halt state for the given pass."""

@@ -1098,6 +1098,46 @@ def _rebuild_module_side_channels(trace: "Trace", events: CaptureEvents) -> None
         _apply_module_enter_event(trace, enter_event, module_enter_addresses[id(enter_event)])
     for exit_event in events.module_exit_events:
         _apply_module_exit_event(trace, exit_event)
+    if not events.module_enter_events:
+        _fill_module_call_stacks_from_op_events(trace, events.op_events)
+
+
+def _fill_module_call_stacks_from_op_events(trace: "Trace", op_events: list[OpEvent]) -> None:
+    """Rebuild ``module_call_stacks`` from op module stacks (predicate path).
+
+    The exhaustive torch capture records each module call's ancestor chain into
+    ``mbd["module_call_stacks"]`` at prep time (``backends/torch/model_prep.py``:
+    ``call_stack = [f"{f.address}:{f.pass_index}" for f in stack[:-1]]``, where the
+    undecorated root ``self`` never appears in the stack). ``_apply_module_enter_event``
+    replays that into the same dict during materialize. The predicate/fastlog
+    capture path emits no typed ``ModuleEnterEvent``s, so that dict stays empty and
+    every reconstructed ``ModuleCall.module_call_stack`` is ``[]`` -- which fails the
+    ``module_hierarchy`` invariant's call-tree-link check (e.g. "ModuleCall
+    'block.0:1' module_call_stack=[] does not start with ['block:1']").
+
+    Each predicate ``OpEvent`` carries its full capture-time ``module_stack``
+    (``tuple[ModuleFrame, ...]`` of ``(address, call_index)`` from root ``self`` down
+    to the innermost module). For a frame at position ``i`` the module call's
+    ancestor stack is ``module_stack[:i]`` with the reserved root ``self`` dropped --
+    reproducing exactly the exhaustive ``stack[:-1]`` value (which also excludes the
+    never-pushed root). Fill only missing entries so this stays a faithful
+    reconstruction, never an override of any authoritative enter-event value.
+    """
+
+    stacks = trace._module_build_data["module_call_stacks"]
+    for event in op_events:
+        module_stack = event.module_stack
+        for index, frame in enumerate(module_stack):
+            if frame.address == "self":
+                continue
+            call_label = f"{frame.address}:{frame.call_index}"
+            if call_label in stacks:
+                continue
+            stacks[call_label] = [
+                f"{ancestor.address}:{ancestor.call_index}"
+                for ancestor in module_stack[:index]
+                if ancestor.address != "self"
+            ]
 
 
 def _apply_module_prep_event(trace: "Trace", event: ModulePrepEvent) -> None:
