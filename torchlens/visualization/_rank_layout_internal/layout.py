@@ -768,7 +768,16 @@ def render_rank_layout(
         """Recursively write a cluster subgraph with its nodes and children."""
         prefix = "  " * indent
         safe = mod_key.replace(":", "_pass").replace(".", "_")
-        lines.append(f"{prefix}subgraph cluster_{safe} {{")
+        # ``safe`` only substitutes ``:``/``.`` -- it still carries through
+        # arbitrary module-address text (e.g. an ``nn.ModuleDict`` key like
+        # ``"a<b>&c"``). Route the subgraph identifier through ``_dot_id()``,
+        # the same quoting helper every other raw-DOT identifier in this file
+        # uses (node names at ``_node_line``, edge tail/head names below), so
+        # characters illegal in an unquoted Graphviz ID don't get spliced
+        # into raw DOT text. Quoting is safe for subgraph names too: neato
+        # still recognizes the "cluster" prefix and applies cluster styling
+        # whether or not the name is quoted.
+        lines.append(f"{prefix}subgraph {_dot_id(f'cluster_{safe}')} {{")
 
         mod_addr = mod_key.split(":")[0] if ":" in mod_key else mod_key
         try:

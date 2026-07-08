@@ -116,6 +116,23 @@ class _ModuleDictSpecialKeyModel(nn.Module):
         return self.heads["score & rank"](x)
 
 
+class _ModuleDictAngleAmpersandKeyModel(nn.Module):
+    """Model whose ``nn.ModuleDict`` key mixes ``<``, ``>``, and ``&``."""
+
+    def __init__(self) -> None:
+        """Initialize a ModuleDict keyed by a string with mixed DOT-illegal chars."""
+
+        super().__init__()
+        self.heads = nn.ModuleDict(
+            {"a<b>&c": nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the ``"a<b>&c"`` branch."""
+
+        return self.heads["a<b>&c"](x)
+
+
 class _LSTMCellSeq(nn.Module):
     """Loop over an LSTMCell whose call returns two tensors."""
 
@@ -625,6 +642,57 @@ def test_module_cluster_title_escapes_html_special_moduledict_key(tmp_path: Path
     assert svg_path.exists()
     svg_text = svg_path.read_text(encoding="utf-8")
     assert "score &amp; rank" in svg_text
+
+
+def test_rank_engine_cluster_subgraph_id_quotes_moduledict_special_key(
+    tmp_path: Path,
+) -> None:
+    """Rank-layout ``_write_cluster`` quotes the subgraph identifier, not just the label.
+
+    Regression test for a gap left by the F4 fix (``bfe71593``): that commit
+    HTML-escaped the cluster *label* text (``cluster_label`` in
+    ``_write_cluster``) but the raw DOT *subgraph identifier* built two lines
+    earlier (``subgraph cluster_{safe} {``) was spliced straight into the DOT
+    source with no sanitization at all -- unlike every other raw-DOT
+    identifier in this file (node names, edge tail/head names), which route
+    through the ``_dot_id()`` quoting helper. An ``nn.ModuleDict`` key
+    containing ``<``, ``>``, and ``&`` together produces an unquoted
+    subgraph name like ``subgraph cluster_heads_a<b>&c_pass1 {``, which
+    ``neato`` rejects with a raw ``syntax error near '>'`` -- a real crash on
+    the rank engine, reachable by default whenever ``vis_node_placement=
+    "auto"`` promotes to rank for a large enough graph.
+
+    Exercises the *explicit* rank engine (``vis_node_placement="rank"``),
+    which the shipped ``test_module_cluster_title_escapes_html_special_
+    moduledict_key`` test above never does (it only calls ``draw()`` with
+    default -- i.e. dot-engine -- settings), plus the default dot engine for
+    parity.
+    """
+
+    for engine_kwargs in ({}, {"vis_node_placement": "rank"}):
+        trace = tl.trace(_ModuleDictAngleAmpersandKeyModel(), torch.randn(2, 3))
+        outpath = tmp_path / f"moduledict_angle_amp{'_rank' if engine_kwargs else '_dot'}"
+        try:
+            # Must not raise: neither a GraphvizRenderError (dot engine) nor a
+            # RuntimeError from a failed `neato` subprocess (rank engine).
+            dot = trace.draw(
+                vis_outpath=str(outpath),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                order_siblings=False,
+                **engine_kwargs,
+            )
+        finally:
+            trace.cleanup()
+
+        # The label is HTML-escaped (F4 fix, still holding)...
+        assert "a&lt;b&gt;&amp;c" in dot
+        # ...and the subgraph identifier itself must be quoted so the raw
+        # `<`/`>`/`&` never appear unescaped/unquoted in the DOT source as a
+        # bare identifier.
+        assert "subgraph cluster_heads_a<b>&c" not in dot
+        svg_path = outpath.with_suffix(".svg")
+        assert svg_path.exists()
 
 
 def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> None:
