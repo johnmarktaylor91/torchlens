@@ -595,6 +595,31 @@ def test_validate_tlspec_enforces_shipped_schema_properties_pattern(tmp_path: Pa
 
 
 @pytest.mark.smoke
+def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Path) -> None:
+    """Schema v2 (every non-torch backend) must reject malformed ``python_version`` too.
+
+    Regression test for a MAJOR finding: the round that made
+    ``schemas/tlspec_manifest_v1.json``'s ``properties`` block load-bearing
+    (see ``test_validate_tlspec_enforces_shipped_schema_properties_pattern``)
+    only exercised schema v1 (the torch-backend default). Schema v2 --
+    written for every non-torch backend (mlx/tf/paddle/tinygrad/jax/...) --
+    declared ``python_version`` in its ``required`` list but never in its
+    ``properties`` block, so the pattern constraint was decorative there: a
+    malformed ``python_version`` silently passed ``validate_tlspec()`` for
+    any schema-v2 bundle.
+    """
+
+    path = tmp_path / "bad_python_version_v2.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    manifest["python_version"] = "not-a-version"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ValueError, match="python_version"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
 def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
     """Schema v2 accepts MLX materialized backend/runtime and body fields."""
 

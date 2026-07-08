@@ -17,6 +17,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 import torch
 
 from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
@@ -853,6 +854,9 @@ def _stringify_value(value: Any) -> str:
     return f"<scrubbed:{type(value).__name__}>"
 
 
+_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor, np.ndarray)
+
+
 def _is_safely_picklable(value: Any) -> bool:
     """Return whether ``value`` can be pickled without raising.
 
@@ -869,6 +873,15 @@ def _is_safely_picklable(value: Any) -> bool:
     otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
     atomic-write/backup-restore contract).
 
+    ``torch.Tensor`` and ``numpy.ndarray`` are exempted from the probe:
+    they always support the standard pickle protocol via their own
+    ``__reduce_ex__`` (unlike generators/locks/file handles/sockets, they
+    hold no live OS resources that could make pickling fail), so probing
+    them would only pay a full extra ``pickle.dumps()`` pass -- doubling
+    CPU and transiently doubling peak memory -- for a result that is
+    always ``True``. Skipping the probe for these two types keeps the
+    live-resource detection intact for every value it actually protects.
+
     Parameters
     ----------
     value:
@@ -879,6 +892,9 @@ def _is_safely_picklable(value: Any) -> bool:
     bool
         ``True`` if ``pickle.dumps(value)`` succeeds, ``False`` otherwise.
     """
+
+    if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
+        return True
 
     try:
         pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)

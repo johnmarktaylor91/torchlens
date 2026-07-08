@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pickle
 from pathlib import Path
 from typing import Any, Callable
 
@@ -644,6 +645,51 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     assert not any(p.exists() for p in tmp_dirs)
 
 
+class _LegacyPicklePlaceholder:
+    """Trivial module-level class used to force ``find_class`` during unpickling."""
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+def test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare ``TypeError`` unpickling a legacy multi-trace ``Bundle`` must not escape.
+
+    Regression test for a recurrence of the round-5 bug class:
+    ``_load_unified_bundle()``'s legacy (pre-``bundle.json``) pickle-load
+    path -- reached from public ``tl.load(path)`` whenever ``manifest.json``
+    declares ``kind: "bundle"`` and no ``bundle.json`` sibling exists (old-
+    format bundles, an explicitly supported backward-compat case) -- was
+    missing ``TypeError`` from its except tuple, unlike the three sibling
+    call sites round 5 fixed (``bundle.py`` save, main-trace load,
+    ``streaming.py`` finalize). A bare ``TypeError`` (the same failure mode
+    ``pickle`` raises for many live-resource/incompatible-global objects)
+    escaped uncaught instead of the documented ``TorchLensIOError``.
+    """
+
+    bundle_path = tmp_path / "legacy_bundle.tl"
+    bundle_path.mkdir()
+    (bundle_path / "manifest.json").write_text(
+        json.dumps({"kind": "bundle", "tlspec_version": TLSPEC_VERSION}), encoding="utf-8"
+    )
+    (bundle_path / "metadata.pkl").write_bytes(pickle.dumps(_LegacyPicklePlaceholder(1)))
+
+    def _poisoned_find_class(*_args: Any, **_kwargs: Any) -> Any:
+        raise TypeError("simulated live-resource unpickling failure")
+
+    monkeypatch.setattr(
+        "torchlens._io.bundle._RenameAwareUnpickler.find_class", _poisoned_find_class
+    )
+
+    with pytest.raises(TorchLensIOError) as excinfo:
+        load(bundle_path)
+
+    assert isinstance(excinfo.value.__cause__, TypeError)
+
+
 def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
     tmp_path: Path,
 ) -> None:
@@ -681,6 +727,55 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
     assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
     assert torch.equal(loaded.raw_input["tensor"], raw_input["tensor"])
     assert loaded.raw_input["meta"] == "<scrubbed:generator>"
+
+
+def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A large tensor in ``save_raw_input=True`` must not be pickle-probed twice.
+
+    Regression test for a MAJOR cost regression: ``_is_safely_picklable``'s
+    ``stringify_unknown`` probe called ``pickle.dumps()`` on every unspecced
+    value reached via ``save_raw_input``/``save_raw_output`` -- including
+    large tensors, which is the entire point of choosing the ``True`` "full
+    retention" policy over the default bounded ``"small"`` policy -- doubling
+    CPU cost and transiently doubling peak memory. ``torch.Tensor`` and
+    ``numpy.ndarray`` are known-serializable via their own ``__reduce_ex__``
+    (unlike generators/locks/file handles), so the probe should be skipped
+    for them entirely while the value still round-trips exactly.
+    """
+
+    tensor_dumps_calls = 0
+    real_dumps = pickle.dumps
+
+    def _counting_dumps(value: Any, *args: Any, **kwargs: Any) -> bytes:
+        nonlocal tensor_dumps_calls
+        if isinstance(value, torch.Tensor):
+            tensor_dumps_calls += 1
+        return real_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr("torchlens._io.scrub.pickle.dumps", _counting_dumps)
+
+    model = nn.Linear(3, 3)
+    large_tensor = torch.randn(200, 200)
+    raw_input = {"tensor": large_tensor, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        transform=lambda d: d["x"],
+        save_raw_input=True,
+        random_seed=0,
+    )
+
+    bundle_path = tmp_path / "raw_input_large_tensor_bundle.tl"
+    save(trace, bundle_path)
+
+    assert tensor_dumps_calls == 0
+
+    loaded = load(bundle_path)
+    assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.raw_input["tensor"], large_tensor)
 
 
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
@@ -731,6 +826,49 @@ def test_cleanup_tmp_removes_partial_temp_directories(tmp_path: Path) -> None:
 
     assert removed == [partial_tmp_path]
     assert not partial_tmp_path.exists()
+
+
+def test_cleanup_tmp_removes_redundant_backup_when_bundle_exists(tmp_path: Path) -> None:
+    """A ``.bak.*`` sibling next to an existing bundle is provably redundant."""
+
+    target_path = tmp_path / "bundle.tl"
+    target_path.mkdir()
+    (target_path / "marker").write_text("current", encoding="utf-8")
+    bak_path = tmp_path / f"{target_path.name}.bak.deadbeef"
+    bak_path.mkdir()
+    (bak_path / "marker").write_text("stale", encoding="utf-8")
+
+    removed = cleanup_tmp(target_path)
+
+    assert removed == [bak_path]
+    assert not bak_path.exists()
+    assert target_path.exists()
+    assert (target_path / "marker").read_text(encoding="utf-8") == "current"
+
+
+def test_cleanup_tmp_restores_orphaned_backup_when_bundle_missing(tmp_path: Path) -> None:
+    """A double-failure orphaned ``.bak.*`` dir should be recovered onto ``bundle_path``.
+
+    Regression test for the round-5 MINOR: if ``save(overwrite=True)`` fails
+    and the best-effort ``_restore_backup()`` step also fails (a second,
+    independent I/O failure), the ``.bak.<uuid>`` sibling was previously left
+    permanently orphaned with no sweep mechanism -- ``cleanup_tmp()`` only
+    globbed ``.tmp.*``. Since the backup holds the only surviving copy of the
+    pre-overwrite bundle, the fix restores it onto the missing ``bundle_path``
+    instead of deleting it.
+    """
+
+    target_path = tmp_path / "bundle.tl"
+    bak_path = tmp_path / f"{target_path.name}.bak.deadbeef"
+    bak_path.mkdir()
+    (bak_path / "marker").write_text("recovered", encoding="utf-8")
+
+    removed = cleanup_tmp(target_path)
+
+    assert removed == [target_path]
+    assert not bak_path.exists()
+    assert target_path.exists()
+    assert (target_path / "marker").read_text(encoding="utf-8") == "recovered"
 
 
 def _torch_minor_mismatch_version() -> str:

@@ -907,13 +907,14 @@ def _load_unified_bundle(bundle_path: Path) -> "Bundle":
     _reject_symlink_path(legacy_pickle_path, context="bundle metadata")
     try:
         with legacy_pickle_path.open("rb") as handle:
-            bundle = pickle.load(handle)
+            bundle = _RenameAwareUnpickler(handle).load()
     except (
         pickle.UnpicklingError,
         EOFError,
         OSError,
         AttributeError,
         ImportError,
+        TypeError,
         ValueError,
     ) as exc:
         raise TorchLensIOError(
@@ -1011,24 +1012,36 @@ def _read_manifest_object(path: Path) -> dict[str, Any]:
 
 
 def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
-    """Remove leftover sibling temp bundle directories for one target path.
+    """Remove leftover sibling temp/backup bundle directories for one target path.
+
+    Also sweeps orphaned ``.bak.<uuid>`` directories left behind when
+    ``save(overwrite=True)`` fails and the best-effort ``_restore_backup()``
+    step that normally renames the backup back onto ``bundle_path`` itself
+    fails too (e.g. a second, independent I/O failure). If ``bundle_path``
+    already exists, a sibling ``.bak.*`` dir is provably redundant (the save
+    or a prior restore already completed) and is always removed. If
+    ``bundle_path`` is missing, the ``.bak.*`` dir holds the only surviving
+    copy of the pre-overwrite bundle, so it is restored back onto
+    ``bundle_path`` (recovering the data) instead of deleted, unless
+    ``bundle_path`` reappears mid-sweep from another candidate.
 
     Parameters
     ----------
     path:
-        Final bundle path whose ``.tmp.*`` siblings should be inspected.
+        Final bundle path whose ``.tmp.*``/``.bak.*`` siblings should be inspected.
     force:
         Whether temp dirs without a ``PARTIAL`` sentinel should also be removed.
 
     Returns
     -------
     list[Path]
-        Removed temp directory paths.
+        Removed temp directory paths, plus any restored backup paths (now
+        living at ``bundle_path``).
 
     Raises
     ------
     TorchLensIOError
-        If the requested target path or candidate temp dirs are symlinks.
+        If the requested target path or candidate temp/backup dirs are symlinks.
 
     Examples
     --------
@@ -1044,8 +1057,8 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="cleanup target")
     removed: list[Path] = []
-    pattern = f"{bundle_path.name}.tmp.*"
-    for candidate in bundle_path.parent.glob(pattern):
+    tmp_pattern = f"{bundle_path.name}.tmp.*"
+    for candidate in bundle_path.parent.glob(tmp_pattern):
         if candidate.is_symlink():
             raise TorchLensIOError(f"Refusing to clean symlink temp directory {candidate}.")
         if not candidate.is_dir():
@@ -1059,6 +1072,27 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
             UserWarning,
             stacklevel=2,
         )
+
+    bak_pattern = f"{bundle_path.name}.bak.*"
+    for candidate in bundle_path.parent.glob(bak_pattern):
+        if candidate.is_symlink():
+            raise TorchLensIOError(f"Refusing to clean symlink backup directory {candidate}.")
+        if not candidate.is_dir():
+            continue
+        if bundle_path.exists():
+            shutil.rmtree(candidate)
+            removed.append(candidate)
+            continue
+        _restore_backup(candidate, bundle_path)
+        if not candidate.exists():
+            removed.append(bundle_path)
+        else:
+            warnings.warn(
+                f"Leaving orphaned backup directory {candidate} in place; "
+                "restoring it onto the missing bundle path failed.",
+                UserWarning,
+                stacklevel=2,
+            )
     return removed
 
 
