@@ -619,6 +619,52 @@ def test_jax_trace_captures_equation_ops_and_params() -> None:
     assert trace.validate_forward_pass([])
 
 
+def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
+    """``function_root`` mode must attribute params to the ops that use them.
+
+    Regression test: ``jax_container_path`` is only set on the input-SOURCE
+    event where a param first enters the trace (``_emit_arg_sources`` in
+    ``torchlens/backends/jax/backend.py``) -- it is never set on the
+    downstream ops that actually consume the param in a computation. The
+    param-attach loop in ``_finish_trace`` previously matched directly on
+    that annotation, so ``uses_params``/``used_by_ops``/``used_by_layers``
+    all pointed at the input-echo ``input`` op instead of the real
+    ``dot_general``/``broadcast_in_dim`` consumer, and
+    ``trace.num_layers_with_params`` stayed 0 (confirmed by reverting the
+    fix and re-running this exact scenario). Now params are attached to the
+    op whose graph ``parents`` include the param's source label -- i.e. the
+    op that actually took the param value as a computational operand.
+    """
+
+    params = _params()
+    x = jnp.ones((2, 3))
+
+    trace = _trace_jax(_mlp, (params, x))
+
+    assert trace.module_identity_mode == "function_root"
+    # 3 distinct layers genuinely use a param: the two matmuls (w1, w2) and
+    # the bias broadcast (b1).
+    assert trace.num_layers_with_params == 3
+
+    param_using_ops = {op.label: op for op in trace.layer_list if op.uses_params}
+    assert param_using_ops
+    # No bare input-echo op should be reported as "using" a param -- params
+    # are consumed downstream, not at the point they enter the trace.
+    for op in param_using_ops.values():
+        assert op.func_name != "input"
+        assert op.func_name in {"dot_general", "broadcast_in_dim"}
+
+    used_addresses = {param.address for op in param_using_ops.values() for param in op._param_logs}
+    assert used_addresses == {"w1", "b1", "w2"}
+
+    for address in ("w1", "b1", "w2"):
+        param = trace.params[address]
+        assert param.used_by_ops, f"{address} should record at least one consuming op"
+        assert param.used_by_layers, f"{address} should record at least one consuming layer"
+        for op_label in param.used_by_ops:
+            assert trace[op_label].func_name != "input"
+
+
 def test_jax_trace_preserves_nested_param_paths() -> None:
     """Nested pytree parameter leaves should be addressable without raising."""
 

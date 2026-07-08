@@ -51,7 +51,7 @@ from ...postprocess.loop_grouping_adapter import (
     RecurrenceNode,
     group_recurrent_nodes,
 )
-from ...quantities import Duration
+from ...quantities import Bytes, Duration
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
@@ -2005,17 +2005,92 @@ class JAXBackend:
             for op_log in trace.layer_list
             if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
         )
-        for op_log in trace.layer_list:
-            path = getattr(op_log, "annotations", {}).get("jax_container_path")
-            if not isinstance(path, str) or not path.startswith("0."):
-                continue
-            param_address = path.removeprefix("0.")
-            if param_address not in trace.param_logs:
-                continue
-            param = trace.param_logs[param_address]
-            op_log._param_barcodes = [param.barcode]
-            op_log._param_logs = [param]
-            op_log.num_params = param.num_params
+        if module_tree is None:
+            # ``jax_container_path`` is only set on the input-SOURCE event
+            # where a param first enters the trace (``_emit_arg_sources``
+            # above) -- it is never set on the downstream ops that actually
+            # consume the param in a computation (e.g. the matmul/conv that
+            # takes the param as an operand). Matching on it directly (as
+            # the old code did) attaches params to the input-echo op
+            # instead of the op that genuinely uses them, so
+            # ``uses_params``/``used_by_ops``/``num_layers_with_params``
+            # never reflect real param usage. Mirror
+            # ``_attach_pytree_op_params`` above (and the equivalent
+            # ``torch``/``mlx``/``paddle`` param attribution): resolve each
+            # param's source-event label, then attach the param to every op
+            # whose graph ``parents`` include that source label -- i.e. the
+            # op that actually took the param value as a computational
+            # operand.
+            param_log_by_source_label: dict[str, Param] = {}
+            for op_log in trace.layer_list:
+                path = getattr(op_log, "annotations", {}).get("jax_container_path")
+                if not isinstance(path, str) or not path.startswith("0."):
+                    continue
+                param_address = path.removeprefix("0.")
+                if param_address not in trace.param_logs:
+                    continue
+                param_log_by_source_label[op_log.label] = trace.param_logs[param_address]
+
+            if param_log_by_source_label:
+                for op_log in trace.layer_list:
+                    seen_barcodes: set[str] = set()
+                    consumed_params: list[Param] = []
+                    for parent_label in op_log.parents:
+                        if not isinstance(parent_label, str):
+                            continue
+                        param = param_log_by_source_label.get(parent_label)
+                        if param is None or param.barcode in seen_barcodes:
+                            continue
+                        seen_barcodes.add(param.barcode)
+                        consumed_params.append(param)
+                    if not consumed_params:
+                        continue
+                    op_log._param_barcodes = [param.barcode for param in consumed_params]
+                    op_log._param_logs = consumed_params
+                    op_log.param_shapes = [param.shape for param in consumed_params]
+                    op_log.num_params = sum(param.num_params for param in consumed_params)
+                    op_log.num_params_trainable = sum(
+                        param.num_params for param in consumed_params if param.is_trainable
+                    )
+                    op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
+                    op_log.param_memory = Bytes(
+                        sum(int(param.param_memory) for param in consumed_params)
+                    )
+                    for param in consumed_params:
+                        if op_log.label not in param.used_by_ops:
+                            param.used_by_ops.append(op_log.label)
+                        if op_log.layer_label not in param.used_by_layers:
+                            param.used_by_layers.append(op_log.layer_label)
+                        if op_log.layer_label not in trace.layers_with_params[param.barcode]:
+                            trace.layers_with_params[param.barcode].append(op_log.layer_label)
+
+            # Recompute the trace-level aggregate param counters from the
+            # (now-correct) per-op attribution, deduplicating by
+            # ``layer_label`` -- mirrors ``_attach_pytree_op_params`` above.
+            # These were previously set once, early, to the total count of
+            # ALL param-pytree leaves regardless of whether the traced
+            # function actually consumes them, which both over-reports
+            # unused params and fails ``check_metadata_invariants``'
+            # ``trace_self_consistency`` check (which independently
+            # recomputes the same dedup-by-layer sum from ``layer_list``).
+            trace.num_layers_with_params = len(
+                {op.layer_label for op in trace.layer_list if op.uses_params}
+            )
+            seen_layers: set[str] = set()
+            num_param_tensors = 0
+            num_params = 0
+            num_params_trainable = 0
+            for op_log in trace.layer_list:
+                if op_log.layer_label in seen_layers:
+                    continue
+                seen_layers.add(op_log.layer_label)
+                num_param_tensors += op_log.num_param_tensors
+                num_params += op_log.num_params
+                num_params_trainable += op_log.num_params_trainable
+            trace.num_param_tensors = num_param_tensors
+            trace.num_params = num_params
+            trace.num_params_trainable = num_params_trainable
+            trace.num_params_frozen = num_params - num_params_trainable
         trace.output_layers = [
             trace._raw_layer_dict[label].layer_label if label in trace._raw_layer_dict else label
             for label in trace.output_layers
