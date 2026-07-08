@@ -277,29 +277,47 @@ def _tf_can_handle(
     try:
         import keras
         import tensorflow as tf
+
+        if not _tf_runtime_supported(tf, keras):
+            return False
+
+        active_keras_backend = str(keras.backend.backend())
+        if active_keras_backend != "tensorflow":
+            if _is_keras_object(model):
+                raise BackendMismatchError(
+                    "backend='tf' requires keras.backend.backend() == 'tensorflow'; "
+                    f"active keras backend is {active_keras_backend!r}."
+                )
+            return False
+        if isinstance(model, tf.Module):
+            return True
+        if _is_tf_concrete_function(model, tf):
+            return True
+        if hasattr(model, "get_concrete_function"):
+            return True
+        if _has_saved_model_signatures(model):
+            return True
+        return callable(model) and _contains_tf_tensor(input_args, input_kwargs, tf)
+    except BackendMismatchError:
+        # A genuinely mismatched Keras backend setting (e.g. Keras configured
+        # for torch/jax while ``backend='tf'`` was explicitly requested) is
+        # real, actionable signal for the caller -- never swallow it.
+        raise
     except ImportError:
+        # TensorFlow/Keras are simply not installed.
         return False
-
-    if not _tf_runtime_supported(tf, keras):
+    except Exception:
+        # A broken-but-technically-importable TF/Keras install (numpy/
+        # protobuf ABI mismatch, partial C-extension init, etc.) can raise
+        # almost anything OTHER than ImportError from the import statements
+        # above, or from any keras/tf attribute access used to determine
+        # handleability. This function is only a "can this backend handle
+        # the input" PROBE used by autorouting -- it must never crash the
+        # whole autorouter and take down capture attempts for every OTHER
+        # backend (torch, mlx, ...) just because TF happens to be
+        # installed-but-broken in the environment. Treat any such failure
+        # as "cannot handle" rather than letting it propagate.
         return False
-
-    active_keras_backend = str(keras.backend.backend())
-    if active_keras_backend != "tensorflow":
-        if _is_keras_object(model):
-            raise BackendMismatchError(
-                "backend='tf' requires keras.backend.backend() == 'tensorflow'; "
-                f"active keras backend is {active_keras_backend!r}."
-            )
-        return False
-    if isinstance(model, tf.Module):
-        return True
-    if _is_tf_concrete_function(model, tf):
-        return True
-    if hasattr(model, "get_concrete_function"):
-        return True
-    if _has_saved_model_signatures(model):
-        return True
-    return callable(model) and _contains_tf_tensor(input_args, input_kwargs, tf)
 
 
 def _contains_paddle_tensor(input_args: object, input_kwargs: object, paddle: object) -> bool:

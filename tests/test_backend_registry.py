@@ -717,6 +717,91 @@ def test_tf_detector_declines_unsupported_tensorflow_stack(
     assert not _tf_can_handle(tf_module.Module(), object(), None)
 
 
+def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken-but-importable TF/Keras install must not crash the autorouter.
+
+    Regression test: ``_tf_can_handle`` previously wrapped ``import keras`` /
+    ``import tensorflow`` in a ``try/except ImportError`` only. A TF/Keras
+    install that is present but broken (e.g. a numpy/protobuf ABI mismatch)
+    can raise exceptions other than ``ImportError`` -- ``TypeError``,
+    ``AttributeError``, ``RuntimeError``, etc. -- from the import statements
+    themselves or from any keras/tf attribute access used afterward to
+    determine handleability. Those exceptions previously propagated
+    uncaught out of the can-handle PROBE, up through
+    ``resolve_backend_spec``'s ``[... for spec in registered_backend_specs()
+    if spec.can_handle(...)]`` comprehension, crashing the entire
+    autorouter -- and thus ANY capture attempt, regardless of which backend
+    the caller actually wanted -- any time TF happens to be
+    installed-but-broken in the environment. Confirmed by reverting the fix
+    and re-running this exact scenario (see below). Now the probe treats
+    any such failure as "cannot handle" and autorouting continues to work
+    for other backends.
+    """
+
+    original_import = builtins.__import__
+
+    def _raise_non_import_error(
+        name: str,
+        globals: dict[str, Any] | None = None,
+        locals: dict[str, Any] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> Any:
+        """Simulate a broken-but-technically-importable TF/Keras install."""
+
+        if name in {"tensorflow", "keras"}:
+            raise RuntimeError("simulated numpy/protobuf ABI break")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _raise_non_import_error)
+
+    # Must NOT raise -- a broken TF/Keras install is only "cannot handle",
+    # never a crash.
+    assert _tf_can_handle(lambda x: x, object(), None) is False
+
+    # Autorouting must still resolve a plain torch nn.Module to the torch
+    # backend even though the TF probe raised internally -- the crash must
+    # not propagate up through ``resolve_backend_spec``.
+    assert resolve_backend_spec(None, _TinyModel(), torch.ones(1)).name == "torch"
+    trace = tl.trace(_TinyModel(), torch.ones(1))
+    assert trace.backend == "torch"
+
+
+def test_tf_detector_reraises_genuine_backend_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The broadened exception guard must not swallow a real backend mismatch.
+
+    ``_tf_can_handle`` deliberately raises ``BackendMismatchError`` when a
+    Keras object is configured for a non-TensorFlow Keras backend and
+    ``backend='tf'`` is explicitly requested. That is actionable user-facing
+    signal, not an ABI crash, so the broadened ``except Exception`` guard
+    added to swallow broken-install probe failures must not also swallow it.
+    """
+
+    keras_module = types.ModuleType("keras")
+    keras_module.__version__ = "3.0.0"
+    keras_module.backend = types.SimpleNamespace(backend=lambda: "torch")
+
+    tf_module = types.ModuleType("tensorflow")
+    tf_module.__version__ = "2.16.0"
+    tf_module.Module = type("TFModule", (), {})
+    tf_module.Tensor = type("TFTensor", (), {})
+    tf_module.Variable = type("TFVariable", (), {})
+    tf_module.types = types.SimpleNamespace(
+        experimental=types.SimpleNamespace(ConcreteFunction=type("ConcreteFunction", (), {}))
+    )
+
+    monkeypatch.setitem(sys.modules, "keras", keras_module)
+    monkeypatch.setitem(sys.modules, "tensorflow", tf_module)
+
+    keras_model = type("KerasModel", (), {"__module__": "keras.src.models.model"})()
+    with pytest.raises(BackendMismatchError, match="active keras backend is 'torch'"):
+        _tf_can_handle(keras_model, object(), None)
+
+
 def test_tf_backend_rejects_random_seed_without_importing_tensorflow() -> None:
     """TensorFlow preview random_seed is a typed unsupported option."""
 
