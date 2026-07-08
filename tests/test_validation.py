@@ -1936,6 +1936,59 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
     assert validate_forward_pass(model, [x], input_kwargs={})
 
 
+def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None:
+    """A raw ``register_forward_hook`` on the TOP-LEVEL model (depth 0) must
+    ALSO validate cleanly, and produce a correct module-call record.
+
+    Cert round 6 found this hard-crashing with an uninterpretable ``KeyError``
+    at ``model_prep.py``'s ``trace._mod_call_index[id(module)]`` lookup: the
+    root model's ``forward`` is deliberately never decorated
+    (``_prepare_model_once``'s ``_visit_once`` -- "Root module is handled
+    separately by trace"), so it is never registered in ``_mod_call_index``
+    at all, unlike every non-root module (which the round-5 fix already
+    covered at hook depths 1/2/3). This is the ROOT-specific gap: no amount
+    of ancestor-stack reconstruction helps because the root is never in the
+    dict in the first place.
+
+    Beyond just not crashing, the synthesized placeholder's ``module`` field
+    must be the semantically correct value: ``None``, matching the
+    established convention for ops with no owning submodule (see
+    ``sources.py``'s ``modules[-1] if modules else None``) -- NOT a bogus
+    ``("", index)`` tuple, which would finalize into an uninterpretable
+    ``":<index>"`` module-call label.
+    """
+
+    def _substituting_hook(module, inputs, output):  # type: ignore[no-untyped-def]
+        # Bypasses TorchLens's python-level wrapping -- a real opaque replacement.
+        fresh = torch.ops.aten.zeros.default([*output.shape], dtype=output.dtype)
+        return torch.ops.aten.add.Tensor(fresh, output)
+
+    class _Mlp(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(4, 4)
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.relu(self.fc1(x))
+
+    model = _Mlp().eval()
+    model.register_forward_hook(_substituting_hook)  # DEPTH 0: hook on the root model
+    x = torch.randn(3, 4)
+    log = trace_fn(model, [x], {})
+    try:
+        placeholders = _functionless_replacement_ops(log)
+        assert placeholders, "expected a genuine intervention_replacement placeholder"
+        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        # The placeholder has no owning submodule -- it must carry `module=None`,
+        # not a bogus `("", index)`/`":index"` label.
+        assert all(op.module is None for op in placeholders)
+        check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+    assert validate_forward_pass(model, [x], input_kwargs={})
+
+
 def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth() -> None:
     """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
     observer hook, on a module nested 2+ address levels deep, must stay

@@ -1345,7 +1345,22 @@ def _ensure_module_output_tensor_logged(
         for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
     address = _module_address(module)
-    module_call_index = trace._mod_call_index[id(module)]
+    # The TOP-LEVEL model is never registered in `_mod_call_index` -- its
+    # `forward` is deliberately left undecorated ("Root module is handled
+    # separately by trace", `_prepare_model_once`'s `_visit_once`), so
+    # `push_frame` (the sole incrementer) never runs for it. A raw
+    # `register_forward_hook` on the root module itself (depth 0) therefore
+    # hits this lookup with a module never present in the dict. Default to 1,
+    # matching the codebase's fixed "self:1" convention for the root's single
+    # canonical call (see `torchlens/postprocess/finalization.py`). This
+    # default is provably inert for the root: `address` is `""` for the root
+    # (see `_module_address`), so every use of `module_call_index` below that
+    # feeds the module-stack/equivalence-class machinery is gated on
+    # `if address` and skips it entirely for the root case; only the
+    # `"module"` field write further down carries the value, and it is
+    # explicitly `None`-gated there too so a bogus `":1"` label never reaches
+    # postprocessing.
+    module_call_index = trace._mod_call_index.get(id(module), 1)
     # Both kinds must carry the FULL exhaustive module stack -- exactly like every
     # real op (see sources.py / ops.py) -- not just the innermost frame. Truncating
     # to [(address, idx)] mis-parents any synthesized op whose module is nested 2+
@@ -1558,7 +1573,14 @@ def _ensure_module_output_tensor_logged(
             "conditional_elif_children": {},
             "conditional_else_children": [],
             "conditional_arm_children": {},
-            "module": (address, module_call_index),
+            # `module=None` when there is no owning submodule (matches the
+            # convention in sources.py's `modules[-1] if modules else None`
+            # for ordinary ops) -- the root model itself has `address == ""`
+            # and is never a real "module" entry, so `(address, ...)` would
+            # otherwise finalize into a bogus `":<index>"` label (see
+            # `_module_call_label` / `labeling.py`) that fails the
+            # module-hierarchy invariant lookup during postprocessing.
+            "module": (address, module_call_index) if address else None,
             "_address_normalized": None,
             "modules": modules,
             "module_call_stack": [],
