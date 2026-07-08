@@ -364,15 +364,22 @@ def test_forward_backward_validation_result_persists_scope_and_backward_pass(
     assert dict(stored) == {"scope": "forward+backward", "forward_pass": 1, "backward_pass": 1}
 
 
+@pytest.mark.slow
 def test_worker_under_memory_cap_validates() -> None:
-    """A real worker below its RSS cap returns the normal validated status."""
+    """A real worker below its RSS cap returns the normal validated status.
+
+    The concern is the memory cap (a capped worker under its RSS budget must
+    still validate normally), not wall-clock. The subprocess pays a fresh
+    heavy-import startup cost that varies by machine (~45s on the Linux
+    workstation), so the incidental timeout budget is generous.
+    """
 
     result = validate_with_timeout(
         _catalog_row(65),
         dry_run=False,
         scope="forward",
         device="cpu",
-        timeout_sec=20.0,
+        timeout_sec=180.0,
         worker_memory_cap_gb=4.0,
     )
 
