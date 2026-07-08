@@ -316,9 +316,23 @@ class TestLayerLogDisplay:
 
 
 class TestConvenienceAliases:
-    def test_layer_label_no_pass_alias(self, simple_log):
-        for layer_log in simple_log.layer_logs.values():
-            assert layer_log.layer_label == layer_log.layer_label
+    def test_layer_label_no_pass_alias(self, recurrent_log):
+        """``Op.layer_label`` is the pass-free alias of the pass-qualified ``Op.label``.
+
+        ``layer_label_no_pass`` (the field this test originally exercised) was
+        retired: ``Op.layer_label`` is itself already the canonical no-pass label
+        (assigned in ``postprocess/labeling.py``). Assert the real relationship
+        that name implies: stripping the ``:<pass_index>`` suffix from the
+        pass-qualified ``label`` always recovers ``layer_label``, and
+        ``layer_label`` itself never carries a pass qualifier -- including across
+        a recurrent layer's multiple passes, where every pass shares one
+        ``layer_label`` but has a distinct pass-qualified ``label``.
+        """
+
+        for layer_log in recurrent_log.layer_logs.values():
+            for op in layer_log.ops.values():
+                assert ":" not in op.layer_label
+                assert op.label == f"{op.layer_label}:{op.pass_index}"
 
     def test_params_accessor(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():

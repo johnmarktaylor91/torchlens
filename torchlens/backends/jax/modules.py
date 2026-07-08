@@ -910,11 +910,11 @@ def _module_source_metadata(module: Any) -> dict[str, Any]:
     init = getattr(cls, "__init__", None)
     call = getattr(cls, "__call__", None)
     return {
-        "class_source_file": inspect.getsourcefile(cls),
+        "class_source_file": _safe_source_file(cls),
         "class_source_line": _source_line(cls),
-        "init_source_file": inspect.getsourcefile(init) if init is not None else None,
+        "init_source_file": _safe_source_file(init) if init is not None else None,
         "init_source_line": _source_line(init),
-        "forward_source_file": inspect.getsourcefile(call) if call is not None else None,
+        "forward_source_file": _safe_source_file(call) if call is not None else None,
         "forward_source_line": _source_line(call),
         "class_docstring": inspect.getdoc(cls),
         "init_signature": _signature_string(init),
@@ -922,6 +922,28 @@ def _module_source_metadata(module: Any) -> dict[str, Any]:
         "forward_signature": _signature_string(call),
         "forward_docstring": inspect.getdoc(call) if call is not None else None,
     }
+
+
+def _safe_source_file(obj: Any) -> str | None:
+    """Return the source file for ``obj`` when inspectable.
+
+    Parameters
+    ----------
+    obj
+        Object to inspect.
+
+    Returns
+    -------
+    str | None
+        Source file path, or ``None`` when ``obj`` is not inspectable (e.g.
+        a class defined without a backing source file, such as one built
+        via ``exec``/``compile`` or implemented as a builtin).
+    """
+
+    try:
+        return inspect.getsourcefile(obj)
+    except (OSError, TypeError):
+        return None
 
 
 def _source_line(obj: Any) -> int | None:
