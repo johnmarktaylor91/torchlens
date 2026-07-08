@@ -1,0 +1,31 @@
+[workspace]
+name = "torchlens-menagerie-audio"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+"python" = "3.11.*"
+"pip" = "*"
+"setuptools" = "<74"
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu121"]
+index-strategy = "unsafe-best-match"
+
+[pypi-dependencies]
+"graphviz" = "*"
+"safetensors" = ">=0.4"
+"tqdm" = "*"
+"typing_extensions" = ">=4.0"
+"pillow" = ">=9"
+"pydantic" = ">=2"
+"psutil" = ">=5.9"
+"torch" = "==2.4.1"
+"torchvision" = "==0.19.1"
+"torchaudio" = "==2.4.1"
+"numpy" = ">=2.0,<2.2"
+"speechbrain" = "==1.1.0"
+"espnet" = "==202511"
+"demucs" = "==4.0.1"
+"encodec" = "*"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import namedtuple
 from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -480,3 +481,125 @@ def test_literal_container_spec_is_picklable() -> None:
 
     spec = ContainerSpec(kind="literal", literal_value=3)
     assert pickle.loads(pickle.dumps(spec)) == spec
+
+
+class _OpaqueExpr(tuple[Any, ...]):
+    """Tuple-like opaque object that raises like a Narwhals/Polars expression."""
+
+    def __new__(cls) -> "_OpaqueExpr":
+        """Create an empty tuple payload for the opaque expression."""
+
+        return super().__new__(cls, ())
+
+    def __iter__(self) -> Iterator[Any]:
+        """Raise the non-iterable expression error seen in forecast-table outputs."""
+
+        raise TypeError("'Expr' object is not iterable")
+
+
+class _OpaqueOutputModel(nn.Module):
+    """Model returning a real tensor output beside an opaque expression leaf."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, _OpaqueExpr]:
+        """Return one tensor output and one opaque non-output object.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, _OpaqueExpr]
+            Tensor model output alongside an opaque expression object.
+        """
+
+        return x.relu(), _OpaqueExpr()
+
+
+def test_opaque_non_iterable_output_leaf_preserves_tensor_outputs() -> None:
+    """Opaque non-iterable output leaves do not hide sibling tensor outputs."""
+
+    trace = tl.trace(_OpaqueOutputModel(), torch.tensor([-1.0, 2.0]))
+
+    assert len(trace.output_layers) == 1
+    assert torch.equal(trace[trace.output_layers[0]].out, torch.tensor([0.0, 2.0]))
+
+
+class _OpaqueTensorHolder:
+    """Opaque object holding tensors that the structured walk cannot descend.
+
+    Mimics ``detectron2.structures.Instances``: not a tuple/list/dict/namedtuple/
+    dataclass/registered container, so ``_build_container_spec`` records it as a
+    childless leaf and ``_walk_supported_output_container`` falls back to BFS to
+    recover the tensors it holds.
+    """
+
+    def __init__(self, tensors: list[torch.Tensor]) -> None:
+        """Store tensors as plain attributes for BFS discovery."""
+
+        self._tensors = tensors
+
+
+class _OpaqueInListSubmodule(nn.Module):
+    """Submodule returning ``(list[opaque], {})`` -- the detectron2 roi_heads shape."""
+
+    def forward(self, x: torch.Tensor) -> tuple[list[_OpaqueTensorHolder], dict[str, Any]]:
+        """Return one opaque holder nested in a list inside a 2-tuple."""
+
+        return [_OpaqueTensorHolder([x.relu(), x.neg()])], {}
+
+
+class _OpaqueInListModel(nn.Module):
+    """Top-level model wrapping the opaque-in-list submodule."""
+
+    def __init__(self) -> None:
+        """Build the nested submodule."""
+
+        super().__init__()
+        self.sub = _OpaqueInListSubmodule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the submodule and return a plain tensor output."""
+
+        self.sub(x)
+        return x.sigmoid()
+
+
+def test_opaque_in_list_module_output_structure_matches_output_paths() -> None:
+    """Regression: BFS-fallback output tensors keep the outer container spec.
+
+    Reduced repro of the detectron2 mask_rcnn_R_50_C4 (menagerie m4024/m4025)
+    ``MetadataInvariantError[module_hierarchy]``. The roi_heads submodule returns
+    ``(list[Instances], {})``; the per-op ``container_path`` walk descends to depth
+    two via the BFS fallback, but the fallback formerly dropped the root container
+    spec (yielding ``None``). That left ``output_structure`` unset, so it was
+    back-filled from an unrelated output layer whose leaf paths disagreed with the
+    real ``output_paths`` -- exactly what the module_hierarchy invariant flags.
+
+    The fix propagates the outer ``root_spec`` from the BFS fallback so the
+    module-call ``output_structure`` and its ``output_paths`` describe the same
+    container depth, and the invariant holds legitimately.
+    """
+
+    from torchlens.validation.invariants import (
+        _container_tensor_leaf_paths,
+        check_metadata_invariants,
+    )
+
+    trace = tl.trace(_OpaqueInListModel(), torch.tensor([-1.0, 2.0]))
+
+    call = trace.module_calls["sub:1"]
+    assert call.output_structure is not None
+    # Outer container is the real (list, dict) tuple, not a back-filled stand-in.
+    assert call.output_structure.kind == "tuple"
+    assert call.output_structure.length == 2
+
+    structure_paths = set(_container_tensor_leaf_paths(call.output_structure))
+    output_paths = {tuple(path) for path in (call.output_paths or ()) if tuple(path)}
+    assert structure_paths == output_paths
+    # The opaque holder lives at list slot 0 inside tuple slot 0.
+    assert output_paths == {(TupleIndex(index=0), TupleIndex(index=0))}
+
+    # The tripwire must hold -- not be exempted.
+    check_metadata_invariants(trace)

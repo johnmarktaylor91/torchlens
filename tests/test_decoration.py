@@ -80,6 +80,38 @@ class InplaceModel(nn.Module):
         return x
 
 
+class SameObjectReturnModel(nn.Module):
+    """Record object identity for torch operations that return their input."""
+
+    def __init__(self) -> None:
+        """Initialize identity observations."""
+
+        super().__init__()
+        self.contiguous_returned_input: bool | None = None
+        self.inplace_returned_input: bool | None = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply same-object-returning tensor operations.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Mutated clone after same-object return checks.
+        """
+
+        y = x.contiguous()
+        self.contiguous_returned_input = y is x
+        z = y.clone()
+        out = z.add_(1)
+        self.inplace_returned_input = out is z
+        return out
+
+
 class PropertyAccessModel(nn.Module):
     def forward(self, x):
         return x.real + x.T.sum()
@@ -1059,6 +1091,14 @@ class TestInPlaceOps:
         result = trace_fn(model, x)
         output = result.output_layers
         assert len(output) > 0
+
+    def test_same_object_returns_preserve_python_identity(self) -> None:
+        """Active logging must not replace PyTorch same-object returns with clones."""
+
+        model = SameObjectReturnModel()
+        trace_fn(model, torch.randn(2, 3))
+        assert model.contiguous_returned_input is True
+        assert model.inplace_returned_input is True
 
 
 # =========================================================================

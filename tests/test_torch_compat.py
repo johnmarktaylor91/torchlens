@@ -230,3 +230,65 @@ def test_tensor_sequence_slot_fix_absence_is_nonfatal(
     with pytest.warns(UserWarning, match="HAS_TENSOR_SEQUENCE_SLOT_FIX"):
         assert tc.fix_tensor_sequence_slot() is False
     assert tc.HAS_TENSOR_SEQUENCE_SLOT_FIX is False
+
+
+def test_private_torch_capability_flags_present_on_supported_range() -> None:
+    """Private torch integration flags should be present on the supported range."""
+    snapshot = tc.get_torch_capability_snapshot()
+    required_present = {
+        "HAS_VARIABLE_FUNCTIONS",
+        "HAS_TORCH_VF",
+        "HAS_TORCH_FUNC",
+        "HAS_FUNCTORCH_APIS",
+        "HAS_FUNCTORCH_LEVEL_API",
+        "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
+        "HAS_JIT_BUILTIN_TABLE",
+        "HAS_DEVICE_CONTEXT_DISPATCH",
+        "HAS_DEVICE_CONSTRUCTORS",
+        "HAS_ACCUMULATE_GRAD_CLASS",
+        "HAS_FX_GRAPH_MODULE",
+        "HAS_DYNAMO_OPTIMIZED_MODULE",
+        "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+    }
+
+    assert required_present <= set(snapshot)
+    missing = sorted(name for name in required_present if not snapshot[name])
+    assert missing == []
+
+
+def test_vf_and_functorch_guards_return_working_namespaces() -> None:
+    """The guarded private namespaces should resolve to usable objects."""
+    variable_names = tc.get_variable_function_names()
+    torch_vf = tc.get_torch_vf_namespace()
+    functorch_apis = tc.get_optional_torch_namespace("torch._functorch.apis")
+
+    assert "add" in variable_names
+    assert torch_vf is not None
+    assert hasattr(torch_vf, "add")
+    assert functorch_apis is not None
+    assert hasattr(functorch_apis, "vmap")
+    assert hasattr(functorch_apis, "grad")
+
+
+def test_torch_capability_snapshot_contract() -> None:
+    """Capability snapshot keys and values provide a named torch-private API signal."""
+    snapshot = tc.get_torch_capability_snapshot()
+    expected = {
+        "HAS_AUTOCAST_DEVICE_TYPE_ARG": tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
+        "HAS_VARIABLE_FUNCTIONS": True,
+        "HAS_TORCH_VF": True,
+        "HAS_TORCH_FUNC": True,
+        "HAS_FUNCTORCH_APIS": True,
+        "HAS_FUNCTORCH_LEVEL_API": True,
+        "HAS_FUNCTORCH_WRAPPED_TENSOR_API": True,
+        "HAS_JIT_BUILTIN_TABLE": True,
+        "HAS_DEVICE_CONTEXT_DISPATCH": True,
+        "HAS_DEVICE_CONSTRUCTORS": True,
+        "HAS_ACCUMULATE_GRAD_CLASS": True,
+        "HAS_FX_GRAPH_MODULE": True,
+        "HAS_DYNAMO_OPTIMIZED_MODULE": True,
+        "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
+        "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED": tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
+    }
+
+    assert snapshot == expected

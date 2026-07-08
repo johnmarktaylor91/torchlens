@@ -1,110 +1,114 @@
 # Menagerie Update Recipe
 
-Use this procedure for incremental catalog updates. Keep bulk rendered graphs outside the
-repository.
+Use this procedure for public catalog updates. Keep rendered graphs and local
+databases outside commits.
 
-## 1. Discover Candidates
+## 1. Choose the Submission Path
 
-Run the process in `DISCOVER_MODELS.md`.
+There are two source-of-truth paths:
 
-Expected output:
+- **Non-classics:** append one typed JSONL record to
+  `menagerie/data/master_catalog.jsonl`. Deferred non-classics go in
+  `menagerie/data/deferred.jsonl` with a `deferral.reason`.
+- **Classics:** add or edit a Python module under `menagerie/classics/` and expose
+  entries through `MENAGERIE_ENTRIES` or the existing classics registry pattern.
+  Classics are not duplicated in JSONL; the registry is their sole source.
 
-- genuine new families
-- grep evidence proving absence
-- rejected already-present candidates
-- rejected variant/config/backbone candidates
-- ambiguous cases
+SQLite files are derived caches. `catalog.db` is rebuilt from JSONL plus the classics
+registry. `verification.db` is the append-only audit/provenance database.
 
-Do not add scale variants, backbone swaps, dataset configs, or checkpoint names as new
-families.
+## 2. Decide Whether the Entry Is Distinct
 
-## 2. Verify and Deduplicate
-
-Search the existing catalog before editing:
+Before adding a row, search for the name, aliases, paper acronym, and family:
 
 ```bash
-rg -i "candidate|alias|paper_acronym" menagerie/data/master_catalog.tsv
+rg -i "candidate|alias|paper_acronym" menagerie/data/master_catalog.jsonl menagerie/classics
+python -m menagerie.catalog build
 python -m menagerie.catalog query --family candidate
 python -m menagerie.catalog recipe candidate
 ```
 
-For each accepted row, fill the source schema:
+Use the `variant` field only when two rows are genuinely different designs under the
+same `(name, zoo)` natural key. Do not use it for ordinary scale, checkpoint,
+resolution, dataset, or backbone swaps. If the architecture is the same design, keep
+one family entry and document aliases or caveats in `notes`.
 
-```text
-name    zoo    constructor_call    input_shape    input_dtype    family    domain    era    notes
-```
+## 3. Write the Recipe
 
-Prefer tiny random-init constructors. If a row is only a public config sketch, say that in
-`notes` rather than pretending it is renderable.
+Preferred non-classics recipe type:
 
-## 3. Append Source Rows
+- `import-callable`: a constructor expression with explicit imports. Use this whenever
+  the model can be built from a normal import and call.
 
-Append new rows to `menagerie/data/master_catalog.tsv`. Keep it TSV-clean: exactly nine
-columns, no embedded tabs.
+Legacy or exceptional recipe types:
 
-Rebuild canonical outputs:
+- `expression`: an eval expression. This is reported as code execution but is not
+  quarantined by itself.
+- `statement`: statement code assigning `model`. Simple import-plus-constructor
+  statements are allowed; statements with local classes/functions, lambdas, control
+  flow, or dynamic `exec`/`eval` are quarantined.
+- `exec-string`: arbitrary multi-line exec body. Discouraged and quarantined.
+
+Every record has an always-callable `input` builder. The builder must return the real
+runtime input object whenever possible. Use `NoInput` only for wrappers whose forward
+method intentionally ignores the input, and set `input_is_real=false` honestly. Do not
+reintroduce prose input parsing.
+
+## 4. Validate the Source
+
+Run the schema gate before rendering:
 
 ```bash
+python -m menagerie.tools.validate_catalog
 python -m menagerie.catalog build
 python -m menagerie.catalog stats
+python -m menagerie.status
 ```
 
-Review the new family/domain counts. If normalization created a duplicate spelling,
-update `catalog.py` normalization rules and rebuild.
+The validation pre-commit gate rejects unknown fields, duplicate natural keys, classics
+rows in JSONL, and deferred rows without a reason.
 
-## 4. Render Only New Deltas
+## 5. Render, Validate, Verify, Status
 
-If the previous highest `model_id` was `10216`, render only new rows:
+Render a delta or focused sample:
 
 ```bash
 python -m menagerie.generate_menagerie \
-  --since 10216 \
   --only-new \
   --out-dir /tmp/torchlens_menagerie_gallery
 ```
 
-For local smoke tests without installing dependencies:
+Validate TorchLens replay separately:
 
 ```bash
-python -m menagerie.generate_menagerie \
-  --since 10216 \
-  --only-new \
-  --no-install-deps \
-  --timeout-sec 60 \
-  --out-dir /tmp/torchlens_menagerie_gallery
+python -m menagerie.validate_menagerie \
+  --out-dir /tmp/torchlens_menagerie_validation \
+  --no-install-deps
 ```
 
-The renderer appends `manifest.tsv`, skips rows already rendered, and rebuilds gallery
-indexes unless `--skip-index` is set.
-
-## 5. Rebuild Indexes
-
-After rendering or copying manifests between machines:
+Use the gates before finishing:
 
 ```bash
-python -m menagerie.generate_menagerie \
-  --index-only \
-  --out-dir /tmp/torchlens_menagerie_gallery
+python -m menagerie.tools.validate_catalog
+python -m menagerie.tools.parity_check
+python -m menagerie.status
+python -m menagerie.status --provenance
 ```
 
-Review:
+`status` reports the honest funnel: total catalog models, expected models, rendered
+coverage, current-version validation, deferred rows, narrowed quarantined arbitrary-exec
+rows, and the separate count of all models built via code execution.
 
-- `INDEX.md`
-- `FEATURED.md`
-- representative `domain/INDEX.md`
-- representative `domain/family/INDEX.md`
+## 6. Record Provenance
 
-## 6. Record Outcomes
+When a discovery sweep adds entries, record the wave in `verification.db` through
+`menagerie.provenance.record_sweep(...)` or the historical importer pattern in
+`menagerie.tools.import_provenance`. Set `added_wave` on new JSONL rows to the
+corresponding `sweep_id` so `python -m menagerie.status --provenance` can join models
+back to the sweep.
 
-Summarize:
+## 7. Commit Scope
 
-- rows added
-- families added
-- constructors verified
-- rows rendered
-- rows skipped with reasons
-- dependency clusters that failed
-- any normalization rule changes
-
-Do not commit bulk graph output. Only commit catalog/tooling/docs changes that are meant
-to be public.
+Commit only public source changes: JSONL records, classics modules, tests, and docs.
+Do not commit generated `catalog.db`, `verification.db`, `.candidate` files, or rendered
+gallery output.

@@ -1,0 +1,27 @@
+[workspace]
+name = "torchlens-menagerie-yolox_sg"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+"python" = "3.11.*"
+"pip" = "*"
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu121"]
+index-strategy = "unsafe-best-match"
+no-build-isolation = ["yolox"]
+
+[pypi-dependencies]
+"graphviz" = "*"
+"safetensors" = ">=0.4"
+"tqdm" = "*"
+"typing_extensions" = ">=4.0"
+"pillow" = ">=9"
+"pydantic" = ">=2"
+"psutil" = ">=5.9"
+"torch" = "==2.4.1"
+"torchvision" = "==0.19.1"
+"yolox" = "==0.3.0"
+"super-gradients" = "==3.7.1"

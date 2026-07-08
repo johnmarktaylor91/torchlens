@@ -14,18 +14,30 @@ jobs:
   smoke:
     name: Smoke (torch ${{ matrix.torch }}, py ${{ matrix.python }})
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        # Cover the declared torch floor (2.1) and recent versions.
-        # Torch 2.1 has no Python 3.12 wheels, so keep that entry on 3.11.
+        # Cover the declared torch floor (2.1, on both supported pythons),
+        # the current dev baseline, and the newest installable CPU torch as
+        # an early warning signal. Torch 2.1 has no Python 3.12 wheels.
         include:
           - python: "3.11"
             torch: "2.1.*"
+            experimental: false
+            pytest: 'pytest tests/ -m smoke tests/test_torch_compat.py -x --tb=short -q'
           - python: "3.10"
-            torch: "2.4.*"
+            torch: "2.1.*"
+            experimental: false
+            pytest: 'pytest tests/ -m smoke tests/test_torch_compat.py -x --tb=short -q'
           - python: "3.11"
-            torch: "2.7.*"
+            torch: "2.8.*"
+            experimental: false
+            pytest: 'pytest tests/ -m "not slow" -x --tb=short -q'
+          - python: "3.11"
+            torch: "latest"
+            experimental: true
+            pytest: 'pytest tests/ -m smoke tests/test_torch_compat.py -x --tb=short -q'
     steps:
       - uses: actions/checkout@v4
 
@@ -43,8 +55,12 @@ jobs:
 
       - name: Install torch (${{ matrix.torch }}, CPU wheel)
         run: |
-          uv pip install --system "torch==${{ matrix.torch }}" \
-            --index-url https://download.pytorch.org/whl/cpu
+          if [ "${{ matrix.torch }}" = "latest" ]; then
+            uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+          else
+            uv pip install --system "torch==${{ matrix.torch }}" \
+              --index-url https://download.pytorch.org/whl/cpu
+          fi
 
       - name: Install torchlens (with test extras)
         run: |
@@ -52,4 +68,4 @@ jobs:
 
       - name: Run smoke tests
         run: |
-          pytest tests/ -m smoke -x --tb=short -q
+          ${{ matrix.pytest }}

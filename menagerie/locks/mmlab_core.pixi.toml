@@ -1,0 +1,37 @@
+[workspace]
+name = "torchlens-menagerie-mmlab_core"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+"python" = "3.11.*"
+"pip" = "*"
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu121"]
+find-links = [{ url = "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html" }]
+index-strategy = "unsafe-best-match"
+no-build-isolation = ["mmcv"]
+
+[pypi-dependencies]
+"graphviz" = "*"
+"safetensors" = ">=0.4"
+"tqdm" = "*"
+"typing_extensions" = ">=4.0"
+"pillow" = ">=9"
+"pydantic" = ">=2"
+"psutil" = ">=5.9"
+"torch" = "==2.1.0+cu121"
+"torchvision" = "==0.16.0+cu121"
+"numpy" = "<2"
+"openmim" = "*"
+"ftfy" = "*"
+"regex" = "*"
+"xtcocotools" = "*"
+"munkres" = "*"
+"mmengine" = "==0.10.7"
+"mmcv" = "==2.1.0"
+"mmdet" = "==3.3.0"
+"mmsegmentation" = "==1.2.2"
+"mmpretrain" = "==1.2.0"

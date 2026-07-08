@@ -8,15 +8,27 @@ import re
 import sqlite3
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
+
+from menagerie.identity import ensure_stable_ids, recipe_revision_sha256
+from menagerie.schema import (
+    CatalogRecord,
+    VerificationExpectation,
+    load_jsonl,
+    recipe_is_quarantined,
+    validate_records,
+)
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SOURCE_TSV = DATA_DIR / "master_catalog.tsv"
+SOURCE_JSONL = DATA_DIR / "master_catalog.jsonl"
+DEFERRED_JSONL = DATA_DIR / "deferred.jsonl"
 CANONICAL_TSV = DATA_DIR / "catalog_canonical.tsv"
 CATALOG_DB = DATA_DIR / "catalog.db"
+STABLE_IDS_JSONL = DATA_DIR / "stable_ids.jsonl"
 SOURCE_COLUMNS = (
     "name",
     "zoo",
@@ -30,7 +42,10 @@ SOURCE_COLUMNS = (
 )
 CANONICAL_COLUMNS = (
     "model_id",
+    "display_index",
+    "stable_id",
     "name",
+    "variant",
     "family",
     "family_normalized",
     "domain",
@@ -41,6 +56,11 @@ CANONICAL_COLUMNS = (
     "era",
     "verified",
     "notes",
+    "source",
+    "recipe_revision_sha256",
+    "input_is_real",
+    "verification_expectation",
+    "quarantine",
 )
 
 
@@ -122,9 +142,15 @@ class CatalogRow:
     Parameters
     ----------
     model_id:
-        Stable integer identifier assigned after deduplication.
+        Alias for ``display_index``. This is not an identity key.
+    display_index:
+        Human-facing integer index assigned after sorting.
+    stable_id:
+        Opaque durable model identity.
     name:
         Model name from the source catalog.
+    variant:
+        Optional natural-key discriminator for same-name/same-zoo rows.
     family:
         Source family string.
     family_normalized:
@@ -145,10 +171,24 @@ class CatalogRow:
         Whether the source metadata indicates an instantiable recipe.
     notes:
         Source notes.
+    source:
+        Canonical source stream: ``catalog`` for TSV rows or ``classics`` for registry rows.
+    recipe_revision_sha256:
+        Frozen recipe fingerprint for the row's current construction recipe.
+    input_is_real:
+        Whether the runtime input is a real example input rather than a sentinel ignored by a
+        wrapper.
+    verification_expectation:
+        Expected validation posture for honest reporting.
+    quarantine:
+        Whether the row uses a quarantined executable recipe form.
     """
 
     model_id: int
+    display_index: int
+    stable_id: str
     name: str
+    variant: str
     family: str
     family_normalized: str
     domain: str
@@ -159,6 +199,38 @@ class CatalogRow:
     era: str
     verified: bool
     notes: str
+    source: str
+    recipe_revision_sha256: str
+    input_is_real: bool = True
+    verification_expectation: str = "forward_required"
+    quarantine: bool = False
+
+
+def catalog_row_from_payload(payload: Mapping[str, Any]) -> CatalogRow:
+    """Build a catalog row from a JSON-compatible payload.
+
+    Parameters
+    ----------
+    payload:
+        JSON-compatible row payload.
+
+    Returns
+    -------
+    CatalogRow
+        Catalog row reconstructed from every dataclass field.
+    """
+
+    values: dict[str, Any] = {}
+    for field in fields(CatalogRow):
+        if field.name in payload:
+            values[field.name] = payload[field.name]
+        elif field.default is not MISSING:
+            values[field.name] = field.default
+        elif field.default_factory is not MISSING:
+            values[field.name] = field.default_factory()
+        else:
+            values[field.name] = payload[field.name]
+    return CatalogRow(**values)
 
 
 def macro_domain(raw: str) -> str:
@@ -604,12 +676,115 @@ def _source_rows(source_tsv: Path = SOURCE_TSV) -> list[dict[str, str]]:
         return []
     first = [value.strip() for value in raw_rows[0]]
     data_rows = raw_rows[1:] if first == list(SOURCE_COLUMNS) else raw_rows
+    from menagerie.classics import CLASSIC_ZOO, CLASSICS
+
     rows = []
     for index, row in enumerate(data_rows, start=1):
         if len(row) != len(SOURCE_COLUMNS):
             raise ValueError(f"{source_tsv}:{index} has {len(row)} columns, expected 9")
-        rows.append(dict(zip(SOURCE_COLUMNS, row)))
+        parsed = dict(zip(SOURCE_COLUMNS, row))
+        if parsed["zoo"] == CLASSIC_ZOO and parsed["name"] in CLASSICS:
+            continue
+        rows.append(parsed)
     return rows
+
+
+def _constructor_from_record(record: CatalogRecord) -> str:
+    """Return the legacy constructor text preserved in a typed record.
+
+    Parameters
+    ----------
+    record:
+        Typed catalog record.
+
+    Returns
+    -------
+    str
+        Constructor text used by legacy row consumers.
+    """
+
+    legacy_constructor = record.legacy.get("constructor_call")
+    if isinstance(legacy_constructor, str):
+        return legacy_constructor
+    recipe = record.recipe
+    if recipe.type in {"import-callable", "expression"}:
+        return recipe.expr
+    if recipe.type == "statement":
+        return recipe.code
+    if recipe.type == "exec-string":
+        return recipe.body
+    raise ValueError(f"unsupported recipe type={recipe.type!r}")
+
+
+def _row_from_record(record: CatalogRecord, source: str) -> dict[str, str | bool]:
+    """Convert one typed JSONL record to the canonical build row shape.
+
+    Parameters
+    ----------
+    record:
+        Typed catalog record.
+    source:
+        Source stream label for the canonical row.
+
+    Returns
+    -------
+    dict[str, str | bool]
+        Row dictionary ready for normalization and identity assignment.
+    """
+
+    notes = record.notes
+    verified = record.verification_expectation == VerificationExpectation.forward_required
+    if record.verification_expectation == VerificationExpectation.deferred:
+        reason = record.deferral.reason if record.deferral is not None else "deferred"
+        notes = (
+            f"{notes}; verification_expectation=deferred; deferral_reason={reason}"
+            if notes
+            else f"verification_expectation=deferred; deferral_reason={reason}"
+        )
+    return {
+        "name": record.name,
+        "variant": record.variant,
+        "zoo": record.zoo,
+        "constructor_call": _constructor_from_record(record),
+        "input_shape": record.input_shape or "",
+        "input_dtype": record.input_dtype or "",
+        "family": record.family,
+        "domain": record.domain,
+        "era": record.era,
+        "notes": notes,
+        "verified": verified,
+        "source": source,
+        "input_is_real": record.input_is_real,
+        "verification_expectation": record.verification_expectation.value,
+        "quarantine": recipe_is_quarantined(record.recipe),
+    }
+
+
+def _jsonl_source_rows(
+    source_jsonl: Path = SOURCE_JSONL, deferred_jsonl: Path = DEFERRED_JSONL
+) -> list[dict[str, str | bool]]:
+    """Load typed non-classics rows from committed JSONL sources.
+
+    Parameters
+    ----------
+    source_jsonl:
+        Forward-required non-classics JSONL source.
+    deferred_jsonl:
+        Honestly deferred non-classics JSONL source.
+
+    Returns
+    -------
+    list[dict[str, str | bool]]
+        Source rows converted from typed records.
+    """
+
+    records = load_jsonl(source_jsonl)
+    deferred_records = load_jsonl(deferred_jsonl) if deferred_jsonl.exists() else []
+    validate_records([*records, *deferred_records])
+    return [
+        *[_row_from_record(record, "catalog") for record in records],
+        *[_row_from_record(record, "catalog") for record in deferred_records],
+    ]
 
 
 def _shape_dtype_for_input(example: Any) -> tuple[str, str]:
@@ -671,13 +846,20 @@ def _classics_source_rows() -> list[dict[str, str]]:
         example = entry["example_input"]()
         input_shape, input_dtype = _shape_dtype_for_input(example)
         paper = str(entry["paper"])
-        notes = "verified; traced; source=historical-reimplementation"
+        zoo = str(entry.get("zoo") or CLASSIC_ZOO)
+        origin = {
+            CLASSIC_ZOO: "historical-reimplementation",
+            "vendored-pytorch": "vendored-real-repo-code",
+            "ported-pytorch": "faithful-port-of-real-code",
+            "reimpl-pytorch": "faithful-reimplementation-from-description",
+        }.get(zoo, zoo)
+        notes = f"verified; traced; source={origin}"
         if paper:
             notes = f"{notes}; paper={paper}"
         rows.append(
             {
                 "name": name,
-                "zoo": CLASSIC_ZOO,
+                "zoo": zoo,
                 "constructor_call": f"menagerie.classics.{module_name}.{build_name}()",
                 "input_shape": input_shape,
                 "input_dtype": input_dtype,
@@ -690,13 +872,17 @@ def _classics_source_rows() -> list[dict[str, str]]:
     return rows
 
 
-def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
+def build_canonical_rows(
+    source_jsonl: Path = SOURCE_JSONL, deferred_jsonl: Path = DEFERRED_JSONL
+) -> list[CatalogRow]:
     """Build normalized, deduplicated catalog rows.
 
     Parameters
     ----------
-    source_tsv:
-        Source TSV path.
+    source_jsonl:
+        Forward-required non-classics JSONL source.
+    deferred_jsonl:
+        Honestly deferred non-classics JSONL source.
 
     Returns
     -------
@@ -705,7 +891,7 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
     """
 
     intermediate = []
-    for row in [*_source_rows(source_tsv), *_classics_source_rows()]:
+    for row in _jsonl_source_rows(source_jsonl, deferred_jsonl):
         normalized = normalize_family(row["family"], row["name"], row["zoo"])
         intermediate.append(
             {
@@ -713,42 +899,49 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
                 "family_normalized": normalized,
                 "domain": macro_domain(row["domain"]),
                 "verified": is_verified(row["notes"], row["zoo"]),
+                "source": "catalog",
+            }
+        )
+    for row in _classics_source_rows():
+        normalized = normalize_family(row["family"], row["name"], row["zoo"])
+        intermediate.append(
+            {
+                **row,
+                "family_normalized": normalized,
+                "domain": macro_domain(row["domain"]),
+                "verified": True,
+                "source": "classics",
+                "input_is_real": True,
+                "verification_expectation": VerificationExpectation.forward_required.value,
+                "quarantine": False,
             }
         )
     representative_map = normalize_family_representatives(intermediate)
-    deduped: dict[tuple[str, str, str, str, str], dict[str, str | bool]] = {}
     for row in intermediate:
         row["family_normalized"] = representative_map[row["family_normalized"]]
-        key = (
-            row["name"].lower(),
-            row["zoo"].lower(),
-            row["constructor_call"],
-            row["input_shape"],
-            row["input_dtype"],
-        )
-        current = deduped.get(key)
-        if current is None:
-            deduped[key] = row
-            continue
-        current_notes = str(current["notes"])
-        new_notes = str(row["notes"])
-        if new_notes and new_notes not in current_notes:
-            current["notes"] = (
-                f"{current_notes}; duplicate_note={new_notes}" if current_notes else new_notes
-            )
-        current["verified"] = bool(current["verified"]) or bool(row["verified"])
     sorted_rows = sorted(
-        deduped.values(),
+        intermediate,
         key=lambda item: (
             str(item["family_normalized"]).lower(),
             str(item["name"]).lower(),
             str(item["zoo"]).lower(),
         ),
     )
-    return [
-        CatalogRow(
+    variants = [str(row.get("variant", "")) for row in sorted_rows]
+
+    stable_keys = {
+        (str(row["name"]), str(row["zoo"]), variant) for row, variant in zip(sorted_rows, variants)
+    }
+    stable_ids = ensure_stable_ids(stable_keys, STABLE_IDS_JSONL)
+
+    canonical_rows = []
+    for index, (row, variant) in enumerate(zip(sorted_rows, variants), start=1):
+        draft = CatalogRow(
             model_id=index,
+            display_index=index,
+            stable_id=stable_ids[(str(row["name"]), str(row["zoo"]), variant)],
             name=str(row["name"]),
+            variant=variant,
             family=str(row["family"]),
             family_normalized=str(row["family_normalized"]),
             domain=str(row["domain"]),
@@ -759,9 +952,50 @@ def build_canonical_rows(source_tsv: Path = SOURCE_TSV) -> list[CatalogRow]:
             era=str(row["era"]),
             verified=bool(row["verified"]),
             notes=str(row["notes"]),
+            source=str(row["source"]),
+            recipe_revision_sha256="",
+            input_is_real=bool(row.get("input_is_real", True)),
+            verification_expectation=str(
+                row.get("verification_expectation", VerificationExpectation.forward_required.value)
+            ),
+            quarantine=bool(row.get("quarantine", False)),
         )
-        for index, row in enumerate(sorted_rows, start=1)
+        canonical_rows.append(
+            CatalogRow(
+                **{
+                    **draft.__dict__,
+                    "recipe_revision_sha256": recipe_revision_sha256(draft),
+                }
+            )
+        )
+    assert_catalog_identity(canonical_rows)
+    return canonical_rows
+
+
+def assert_catalog_identity(rows: Sequence[CatalogRow]) -> None:
+    """Assert canonical row identity invariants.
+
+    Parameters
+    ----------
+    rows:
+        Canonical rows to validate.
+
+    Raises
+    ------
+    AssertionError
+        If stable IDs or natural keys are duplicated.
+    """
+
+    stable_ids = [row.stable_id for row in rows]
+    natural_keys = [(row.name, row.zoo, row.variant) for row in rows]
+    duplicate_stable_ids = [
+        stable_id for stable_id, count in Counter(stable_ids).items() if count > 1
     ]
+    duplicate_natural_keys = [key for key, count in Counter(natural_keys).items() if count > 1]
+    if duplicate_stable_ids:
+        raise AssertionError(f"duplicate stable_id values: {duplicate_stable_ids[:10]!r}")
+    if duplicate_natural_keys:
+        raise AssertionError(f"duplicate natural keys: {duplicate_natural_keys[:10]!r}")
 
 
 def write_catalog(
@@ -795,7 +1029,10 @@ def write_catalog(
             """
             CREATE TABLE models (
                 model_id INTEGER PRIMARY KEY,
+                display_index INTEGER NOT NULL,
+                stable_id TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
+                variant TEXT NOT NULL DEFAULT '',
                 family TEXT NOT NULL,
                 family_normalized TEXT NOT NULL,
                 domain TEXT NOT NULL,
@@ -805,18 +1042,27 @@ def write_catalog(
                 input_dtype TEXT NOT NULL,
                 era TEXT NOT NULL,
                 verified INTEGER NOT NULL,
-                notes TEXT NOT NULL
+                notes TEXT NOT NULL,
+                source TEXT NOT NULL,
+                recipe_revision_sha256 TEXT NOT NULL,
+                input_is_real INTEGER NOT NULL DEFAULT 1,
+                verification_expectation TEXT NOT NULL DEFAULT 'forward_required',
+                quarantine INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(name, zoo, variant)
             )
             """
         )
         connection.executemany(
             """
-            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO models VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     row.model_id,
+                    row.display_index,
+                    row.stable_id,
                     row.name,
+                    row.variant,
                     row.family,
                     row.family_normalized,
                     row.domain,
@@ -827,9 +1073,18 @@ def write_catalog(
                     row.era,
                     int(row.verified),
                     row.notes,
+                    row.source,
+                    row.recipe_revision_sha256,
+                    int(row.input_is_real),
+                    row.verification_expectation,
+                    int(row.quarantine),
                 )
                 for row in rows
             ],
+        )
+        connection.execute("CREATE UNIQUE INDEX idx_models_stable_id ON models(stable_id)")
+        connection.execute(
+            "CREATE UNIQUE INDEX idx_models_natural_key ON models(name, zoo, variant)"
         )
         connection.execute("CREATE INDEX idx_models_name ON models(name)")
         connection.execute("CREATE INDEX idx_models_family ON models(family_normalized)")
@@ -913,17 +1168,25 @@ def load_rows(
     return [
         CatalogRow(
             model_id=row[0],
-            name=row[1],
-            family=row[2],
-            family_normalized=row[3],
-            domain=row[4],
-            zoo=row[5],
-            constructor_call=row[6],
-            input_shape=row[7],
-            input_dtype=row[8],
-            era=row[9],
-            verified=bool(row[10]),
-            notes=row[11],
+            display_index=row[1],
+            stable_id=row[2],
+            name=row[3],
+            variant=row[4],
+            family=row[5],
+            family_normalized=row[6],
+            domain=row[7],
+            zoo=row[8],
+            constructor_call=row[9],
+            input_shape=row[10],
+            input_dtype=row[11],
+            era=row[12],
+            verified=bool(row[13]),
+            notes=row[14],
+            source=row[15],
+            recipe_revision_sha256=row[16],
+            input_is_real=bool(row[17]) if len(row) > 17 else True,
+            verification_expectation=str(row[18]) if len(row) > 18 else "forward_required",
+            quarantine=bool(row[19]) if len(row) > 19 else False,
         )
         for row in rows
     ]
@@ -967,17 +1230,25 @@ def find_recipe(name: str, db_path: Path = CATALOG_DB) -> CatalogRow:
         raise LookupError(f"No catalog model matched {name!r}")
     return CatalogRow(
         model_id=row[0],
-        name=row[1],
-        family=row[2],
-        family_normalized=row[3],
-        domain=row[4],
-        zoo=row[5],
-        constructor_call=row[6],
-        input_shape=row[7],
-        input_dtype=row[8],
-        era=row[9],
-        verified=bool(row[10]),
-        notes=row[11],
+        display_index=row[1],
+        stable_id=row[2],
+        name=row[3],
+        variant=row[4],
+        family=row[5],
+        family_normalized=row[6],
+        domain=row[7],
+        zoo=row[8],
+        constructor_call=row[9],
+        input_shape=row[10],
+        input_dtype=row[11],
+        era=row[12],
+        verified=bool(row[13]),
+        notes=row[14],
+        source=row[15],
+        recipe_revision_sha256=row[16],
+        input_is_real=bool(row[17]) if len(row) > 17 else True,
+        verification_expectation=str(row[18]) if len(row) > 18 else "forward_required",
+        quarantine=bool(row[19]) if len(row) > 19 else False,
     )
 
 
@@ -1062,7 +1333,7 @@ def _build_command(args: argparse.Namespace) -> int:
         Process exit code.
     """
 
-    rows = build_canonical_rows(args.source)
+    rows = build_canonical_rows(args.source_jsonl, args.deferred_jsonl)
     write_catalog(rows, args.tsv, args.db)
     print(f"wrote {len(rows)} rows")
     print(f"tsv={args.tsv}")
@@ -1149,7 +1420,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     build = subparsers.add_parser("build", help="rebuild canonical TSV and SQLite DB")
-    build.add_argument("--source", type=Path, default=SOURCE_TSV)
+    build.add_argument("--source-jsonl", type=Path, default=SOURCE_JSONL)
+    build.add_argument("--deferred-jsonl", type=Path, default=DEFERRED_JSONL)
     build.add_argument("--tsv", type=Path, default=CANONICAL_TSV)
     build.add_argument("--db", type=Path, default=CATALOG_DB)
     build.set_defaults(func=_build_command)

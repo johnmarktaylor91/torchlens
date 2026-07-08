@@ -130,7 +130,7 @@ quantum/exotic substrates, non-English history, the 2024-26 frontier. The hostil
 > dispatch your own subagents to fan out by axis in parallel, then merge + dedup their finds. Spend freely;
 > maximum effort.
 >
-> **OUTPUT.** A TSV, one row per genuinely-missing DISTINCT family, tab-separated:
+> **OUTPUT.** A structured candidate list, one row per genuinely-missing DISTINCT family, with:
 > `name, year, origin_language_or_lab, field, distinct_mechanism_oneline, why_not_a_variant, has_pytorch_impl(yes/no + repo), source_url`.
 > Plus a short narrative: where the catalog was weakest (which fields / languages / eras / venues yielded
 > the most misses), the search strategies you used (including any you invented), and the total count.
@@ -145,14 +145,14 @@ Two paths, decided per family by whether a usable PyTorch implementation exists.
 
 **Always dedup first:** `grep -i "<name>" menagerie/data/catalog_canonical.tsv` (and alias spellings).
 
-### A. The family HAS a public PyTorch impl → catalog-add (no code to write)
-Append one tab-separated row to `menagerie/data/master_catalog.tsv` (9 columns, no surrounding quotes):
-```
-name <TAB> zoo <TAB> constructor_call <TAB> input_shape <TAB> input_dtype <TAB> family <TAB> domain <TAB> era <TAB> notes
-```
-- `constructor_call`: a random-init construction expression (e.g. `timm.create_model('xxx', pretrained=False)`
-  or `from pkg import M; model = M(cfg)`), or an honest sketch in `notes` if only web/config exists.
-- `input_shape` like `(1,3,224,224)`; `input_dtype` like `float32`; `era` = year; `notes` = repo + caveats.
+### A. The family HAS a public PyTorch impl → typed JSONL catalog-add
+Append one typed record to `menagerie/data/master_catalog.jsonl`. Use `deferred.jsonl` instead when
+the family exists but needs an honest deferral reason before it can be built.
+- Prefer `recipe.type="import-callable"` with explicit imports and an always-callable `input` builder.
+- Use `expression` or simple `statement` only when a normal constructor expression cannot represent the
+  recipe. `exec-string` is discouraged and quarantined.
+- Set `input_is_real=false` only for wrappers whose forward method intentionally ignores the input.
+- Use `variant` only for genuinely distinct designs under the same `(name, zoo)` natural key.
 Then rebuild + (optionally) render:
 ```bash
 cd <repo>
@@ -181,10 +181,11 @@ The registry auto-discovers any `classics/*.py` exposing `MENAGERIE_ENTRIES`, an
 into the catalog automatically — no manifest edit needed.
 
 ### Commit conventions
-- Track `menagerie/**/*.py` and `menagerie/data/master_catalog.tsv`. The SQLite DB, the canonical TSV, and
-  bulk render outputs are gitignored (regenerated). **No AI attribution** in commits (humans only).
-- The catalog TSV is exempted from the large-file pre-commit hook; new high-entropy strings in catalog
-  data may need a `detect-secrets scan --baseline .secrets.baseline` refresh (they are false positives).
+- Track `menagerie/**/*.py`, `menagerie/data/master_catalog.jsonl`, and
+  `menagerie/data/deferred.jsonl` when they change. The SQLite DB, candidate migration outputs, and
+  bulk render outputs are regenerated. **No AI attribution** in commits (humans only).
+- New high-entropy strings in catalog data may need a `detect-secrets scan --baseline .secrets.baseline`
+  refresh when they are false positives.
 - Conventional commit, e.g. `feat(menagerie): add <N> model families from <date> discovery sweep`.
 
 ---

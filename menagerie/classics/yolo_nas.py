@@ -138,9 +138,9 @@ class QSPBlock(nn.Module):
 
 
 class DecoupledHead(nn.Module):
-    """YOLO-NAS/PP-YOLOE decoupled box, objectness, and class head."""
+    """YOLO-NAS/PP-YOLOE decoupled DFL box, objectness, and class head."""
 
-    def __init__(self, channels: int, classes: int) -> None:
+    def __init__(self, channels: int, classes: int, bins: int = 8) -> None:
         """Initialize one detection head branch.
 
         Parameters
@@ -149,12 +149,16 @@ class DecoupledHead(nn.Module):
             Input feature channels.
         classes:
             Number of object classes.
+        bins:
+            Number of distribution focal loss bins per box side.
         """
 
         super().__init__()
-        self.box = nn.Sequential(ConvBNAct(channels, channels), nn.Conv2d(channels, 4, 1))
+        self.bins = bins
+        self.box = nn.Sequential(ConvBNAct(channels, channels), nn.Conv2d(channels, 4 * bins, 1))
         self.obj = nn.Sequential(ConvBNAct(channels, channels), nn.Conv2d(channels, 1, 1))
         self.cls = nn.Sequential(ConvBNAct(channels, channels), nn.Conv2d(channels, classes, 1))
+        self.register_buffer("project", torch.arange(bins, dtype=torch.float32))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Predict dense detection logits at one feature scale.
@@ -170,7 +174,11 @@ class DecoupledHead(nn.Module):
             Concatenated box/object/class logits.
         """
 
-        return torch.cat([self.box(x), self.obj(x), self.cls(x)], dim=1)
+        b, _, h, w = x.shape
+        box_logits = self.box(x).view(b, 4, self.bins, h, w)
+        project = self.project.to(device=x.device, dtype=x.dtype).view(1, 1, self.bins, 1, 1)
+        box = (box_logits.softmax(dim=2) * project).sum(dim=2)
+        return torch.cat([box, self.obj(x), self.cls(x)], dim=1)
 
 
 class YOLONAS(nn.Module):
@@ -390,6 +398,27 @@ def example_input() -> torch.Tensor:
 
 
 MENAGERIE_ENTRIES = [
+    (
+        "super_gradients_yolo_nas_s",
+        "build_yolo_nas_s",
+        "example_input",
+        "2023",
+        "DC",
+    ),
+    (
+        "super_gradients_yolo_nas_m",
+        "build_yolo_nas_m",
+        "example_input",
+        "2023",
+        "DC",
+    ),
+    (
+        "super_gradients_yolo_nas_l",
+        "build_yolo_nas_l",
+        "example_input",
+        "2023",
+        "DC",
+    ),
     (
         "YOLO-NAS-S (RepVGG-QSP detector, PAN neck, decoupled head)",
         "build_yolo_nas_s",

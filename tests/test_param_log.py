@@ -45,6 +45,34 @@ class _TiedParameterModel(nn.Module):
         return self.left(x) + self.right(x)
 
 
+class _TiedEmbeddingHead(nn.Module):
+    """Small model with a decoder head tied to the embedding table."""
+
+    def __init__(self) -> None:
+        """Initialize tied embedding and projection modules."""
+
+        super().__init__()
+        self.embed = nn.Embedding(7, 3)
+        self.head = nn.Linear(3, 7, bias=False)
+        self.head.weight = self.embed.weight
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Project embedded token IDs with the tied output head.
+
+        Parameters
+        ----------
+        x:
+            Token IDs.
+
+        Returns
+        -------
+        torch.Tensor
+            Per-token logits summed across the sequence.
+        """
+
+        return self.head(self.embed(x)).sum(dim=1)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -334,6 +362,17 @@ class TestLinkedParams:
             for other_addr in pl.co_parent_params:
                 other = mh.params[other_addr]
                 assert pl.address in other.co_parent_params
+
+    def test_tied_weight_alias_resolves(self) -> None:
+        """Tied parameter addresses are aliases, not unresolved co-parents."""
+
+        mh = trace_fn(_TiedEmbeddingHead(), torch.tensor([[1, 2, 3]]))
+        tied = mh.params["embed.weight"]
+        assert mh.params["head.weight"] is tied
+        assert tied.all_addresses == ["embed.weight", "head.weight"]
+        assert "head" in tied.all_module_addresses
+        assert "head.weight" not in tied.co_parent_params
+        assert mh.check_metadata_invariants() is True
 
 
 # ---------------------------------------------------------------------------

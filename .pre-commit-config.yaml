@@ -7,7 +7,7 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         # canonical perf baselines + the menagerie catalog are intentional large data artifacts
-        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.tsv)$
+        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl)$
       - id: detect-private-key
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

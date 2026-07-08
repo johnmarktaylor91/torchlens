@@ -124,6 +124,23 @@ def test_tensor_info_fields(small_input):
     assert len(str(mh.total_activation_memory)) > 0
 
 
+def test_forward_peak_memory_is_populated(small_input):
+    """forward_peak_memory reflects a real forward-pass peak, not a hard zero.
+
+    Regression: forward_peak_memory was declared and serialized but never written,
+    so it was always 0 while backward_peak_memory was measured. The forward pass
+    is now bracketed by a CPU/CUDA peak-memory probe (CUDA device peak; CPU host
+    RSS delta combined with the tracemalloc Python-allocation peak so even small
+    models read positive).
+    """
+
+    model = example_models.SimpleFF()
+    mh = trace_fn(model, small_input)
+    assert isinstance(mh.forward_peak_memory, torchlens.Bytes)
+    assert int(mh.forward_peak_memory) > 0
+    assert mh.forward_memory_backend in {"cpu", "cuda", "mps"}
+
+
 def test_param_info_fields(small_input):
     model = example_models.BatchNormModel()
     mh = trace_fn(model, small_input)

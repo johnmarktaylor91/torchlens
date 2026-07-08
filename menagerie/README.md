@@ -3,34 +3,39 @@
 The menagerie is a public, reproducible toolkit for cataloging neural-network model
 families and rendering their TorchLens computational graphs. It has two parts:
 
-- `catalog.py`: builds, normalizes, queries, and exports the model catalog.
+- `catalog.py`: builds, normalizes, and queries the model catalog.
 - `generate_menagerie.py`: resolves dependency clusters, renders models one at a time,
   purges per-model caches, and writes browsable gallery indexes.
 
 Bulk graph output should go outside the repository, for example
 `/tmp/torchlens_menagerie_gallery` or a large external volume.
 
-## Catalog Schema
+## Catalog Sources
 
-The source TSV lives at `menagerie/data/master_catalog.tsv` and uses nine columns:
+The source of truth is append-only typed JSONL plus the classics registry:
 
-```text
-name    zoo    constructor_call    input_shape    input_dtype    family    domain    era    notes
-```
+- `menagerie/data/master_catalog.jsonl`: non-classics expected to build and validate.
+- `menagerie/data/deferred.jsonl`: non-classics with an explicit deferral reason.
+- `menagerie/classics/`: hand-built historical reimplementations exposed by the
+  classics registry. These are not duplicated in JSONL.
 
-`python -m menagerie.catalog build` normalizes that source into:
+`python -m menagerie.catalog build` normalizes JSONL plus classics into derived
+artifacts:
 
-- `menagerie/data/catalog_canonical.tsv`
-- `menagerie/data/catalog.db`
+- `menagerie/data/catalog_canonical.tsv` for inspection/export.
+- `menagerie/data/catalog.db` as a rebuildable SQLite cache.
 
 The canonical rows add:
 
-- `model_id`: stable integer row id after sorting.
+- `model_id` / `display_index`: human-facing integer row id after sorting.
+- `stable_id`: durable natural-key identity.
+- `recipe_revision_sha256`: current recipe fingerprint.
 - `family_normalized`: canonical family label.
-- `verified`: recipe signal inferred from notes and known zoos.
+- `input_is_real`, `verification_expectation`, and `quarantine`: typed reporting flags.
 
-The catalog intentionally keeps distinct rows when the same model name appears in different
-zoos or has different constructor/input recipes.
+`verification.db` is separate from `catalog.db`: it is the append-only ledger for
+verification runs and sweep provenance. The catalog intentionally keeps distinct rows
+when the same model name appears in different zoos or has a real `variant` value.
 
 ## Catalog Commands
 
@@ -122,32 +127,40 @@ without a random-init path.
 ## Validating Every Model
 
 `validate_menagerie.py` runs TorchLens replay validation over menagerie recipes without
-rendering graphs:
+rendering graphs. A validated row means TorchLens captured the model, replayed the
+captured forward pass, matched model outputs, and passed metadata-invariant validation.
+See [docs/menagerie-validation.md](../docs/menagerie-validation.md) for the full
+procedure, ledger semantics, status taxonomy, pixi environment-island workflow, and
+memory-aware scheduler details.
 
 ```bash
 python -m menagerie.validate_menagerie \
-  --verified-only \
   --out-dir /tmp/torchlens_menagerie_validation \
-  --no-install-deps
+  --memory-budget-gb 48 \
+  --worker-memory-cap-gb 16 \
+  --timeout-sec 240
 ```
 
 Validation is independent from rendering. It uses its own default output directory and
 append-only `validation_manifest.tsv`, then writes `validation_summary.json` and
 `VALIDATION_REPORT.md`. The renderer's `manifest.tsv` is not read or updated.
 
-The default `--scope forward` calls `torchlens.validate_forward_pass(...,
-validate_metadata=True)` for the claim that saved activations replay the forward pass
-and satisfy metadata invariants. `--scope forward+backward` additionally tries backward
+The default `--scope forward` uses TorchLens forward validation with
+`validate_metadata=True`. `--scope forward+backward` additionally tries backward
 validation with a scalar loss over floating tensor outputs.
 
 Useful validation controls:
 
 ```bash
 # Retry only non-validated rows in the validation manifest.
-python -m menagerie.validate_menagerie --revalidate-failed
+python -m menagerie.validate_menagerie \
+  --out-dir /tmp/torchlens_menagerie_validation \
+  --revalidate-failed
 
 # Rebuild validation_summary.json and VALIDATION_REPORT.md from the manifest.
-python -m menagerie.validate_menagerie --report-only
+python -m menagerie.validate_menagerie \
+  --out-dir /tmp/torchlens_menagerie_validation \
+  --report-only
 
 # Validate a tiny local sample.
 python -m menagerie.validate_menagerie \
@@ -155,6 +168,46 @@ python -m menagerie.validate_menagerie \
   --subset 3 \
   --no-install-deps \
   --out-dir /tmp/val_smoke
+```
+
+### Incremental skip and force re-runs
+
+Validation is **incremental by default**: a model is skipped when its CURRENT
+identity tuple -- `recipe_revision_sha256`, `torchlens_source_hash` (git HEAD +
+diff + untracked over `torchlens/` and `menagerie/`), `env_hash`, `lock_hash`,
+the resolved `device_requested`, `scope`, and `input_scale` -- matches a genuine
+current-identity `passed` row in the cascade-aware `current_verification_real`
+ledger view. A skipped model is recorded `validated` from its real ledger row, so
+rendering and metadata still process it. An unchanged re-run therefore completes
+in minutes.
+
+Skip is a **tripwire**: a model is re-validated whenever ANY identity component
+changed (edited source, new env/lock, a different device or scope), whenever a
+component is degraded (`input_scale=NULL`), and whenever the current row is NOT a
+clean pass (`failed:*` / `timeout` / `install_failed` -- those are RETRIED) or is
+a suppressed batch-cascade artifact. When in doubt, it validates.
+
+Two explicit overrides re-run already-validated models (for the acceptance run,
+timing, or debugging):
+
+```bash
+# Re-validate EVERY selected model regardless of the ledger
+# (the acceptance + timing run).
+python -m menagerie.validate_menagerie --force-full \
+  --out-dir /tmp/torchlens_menagerie_validation
+
+# Re-validate ONLY the selected models regardless of the ledger
+# (targeted; composable with --stable-ids / --family / any selection filter).
+python -m menagerie.validate_menagerie --force --stable-ids m500 m4527
+```
+
+Both flags are forwarded by `run_all.py`: `--force-full` re-runs every phase AND
+re-validates all selected models; `--force` re-runs phases AND re-validates only
+the selected models against the ledger.
+
+```bash
+python -m menagerie.run_all --force-full        # full acceptance + timing run
+python -m menagerie.run_all --force --family resnet   # targeted re-run
 ```
 
 ## Cross-environment rendering (rerun-safe)
@@ -204,4 +257,4 @@ python -m menagerie.run_across_envs --setup-only --envs <env> --execute
 ## Update Flow
 
 See `DISCOVER_MODELS.md` for the recurring discovery prompt and `UPDATE_RECIPE.md` for
-the incremental update procedure.
+the JSONL/classics update procedure.

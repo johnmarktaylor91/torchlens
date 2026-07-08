@@ -5,31 +5,42 @@ deep clone helpers, and integration tests through specific exemption paths.
 """
 
 from collections import namedtuple
+from dataclasses import replace
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass
 import torchlens.user_funcs as user_funcs
 from torchlens.errors import MetadataInvariantError
+from torchlens.fastlog import RecordContext
+from torchlens.options import SaveOptions
 from torchlens.validation import check_metadata_invariants
 from torchlens.intervention.types import DictKey
+from torchlens.validation.invariants import check_func_call_id_invariant
 from torchlens.validation import validate_saved_outs as validate_from_subpkg
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     SKIP_PERTURBATION_ENTIRELY,
     STRUCTURAL_ARG_POSITIONS,
     CUSTOM_EXEMPTION_CHECKS,
+    posthoc_perturb_check,
 )
 from torchlens.validation.core import (
     _perturb_layer_outs,
     _deep_clone_tensors,
     _copy_validation_args,
     _execute_func_with_restored_state,
+    _check_perturbation_exemptions,
+    _restore_live_parameter_args_for_replay,
+    _op_reduction_depth,
+    _deep_numeric_replay_matches_saved,
+    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
 )
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
@@ -39,6 +50,58 @@ from torchlens.validation.status import (
     ValidationReplayStatus,
 )
 from torchlens.utils.tensor_utils import tensor_nanequal
+
+_TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
+_TEST_FORWARD_GLOBAL_PAYLOAD: dict[str, torch.Tensor] | None = None
+
+
+class _StaleLabelConstantModel(nn.Module):
+    """Model that consumes an unregistered tensor carrying a stale label."""
+
+    def __init__(self) -> None:
+        """Initialize a constant tensor that is not a registered buffer."""
+
+        super().__init__()
+        self.constant = torch.ones(2, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the unregistered constant to the input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Shifted tensor.
+        """
+
+        return x + self.constant
+
+
+_TensorLiteralReturn = namedtuple("_TensorLiteralReturn", ("values", "valid"))
+
+
+class _TensorLiteralOutputModel(nn.Module):
+    """Model returning a tensor plus literal metadata in one container."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, bool]:
+        """Return a namedtuple-style mixed output.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, bool]
+            Tensor output and literal validity flag.
+        """
+
+        return _TensorLiteralReturn(values=x + 1, valid=False)
 
 
 # =============================================================================
@@ -111,6 +174,474 @@ def test_validate_forward_pass_importable():
     assert callable(validate_forward_pass)
 
 
+class _ScatterAggregationModel(nn.Module):
+    """A message-passing-style model whose forward aggregates messages into a
+    destination tensor with an in-place ``index_add_`` (the GNN/molecular pattern).
+
+    Under multi-threading, an in-place scatter perturbation can race so the
+    perturbed output is indistinguishable from the original, spuriously failing
+    the sensitivity check. The determinism stabilizer in ``_validate_forward_pass_torch``
+    makes the perturbation reproducible so validation is stably True.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+        messages = self.lin(x)
+        aggregated = torch.zeros(4, 8)
+        aggregated.index_add_(0, index, messages)
+        return aggregated.sum(dim=1)
+
+
+def test_validation_determinism_stabilizes_inplace_scatter_perturbation() -> None:
+    """A scatter-aggregation model validates stably True across repeated runs.
+
+    Exercises the determinism stabilizer (``torch.use_deterministic_algorithms(
+    True, warn_only=True)`` around capture + replay + perturbation): the
+    nondeterministic in-place-scatter perturbation flake (the GNN "regression"
+    class) must not surface, so validation does not flake to False.
+    """
+
+    model = _ScatterAggregationModel().eval()
+    x = torch.randn(10, 8)
+    index = torch.tensor([0, 0, 0, 1, 1, 2, 2, 3, 3, 3])
+
+    results = [validate_forward_pass(model, (x, index)) for _ in range(5)]
+    assert all(results), results
+
+
+def test_validation_restores_prior_deterministic_algorithms_setting() -> None:
+    """The determinism stabilizer must save and restore the prior torch setting.
+
+    Validation flips ``use_deterministic_algorithms`` on for its own capture +
+    replay, but it must leave the process-wide setting exactly as it found it
+    (both the enabled flag AND the warn_only flag) so it does not leak into the
+    caller's environment.
+    """
+
+    model = _ScatterAggregationModel().eval()
+    x = torch.randn(10, 8)
+    index = torch.tensor([0, 0, 0, 1, 1, 2, 2, 3, 3, 3])
+
+    prior_enabled = torch.are_deterministic_algorithms_enabled()
+    prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    try:
+        validate_forward_pass(model, (x, index))
+        assert torch.are_deterministic_algorithms_enabled() is prior_enabled
+        assert torch.is_deterministic_algorithms_warn_only_enabled() is prior_warn_only
+
+        # And it restores a non-default prior setting (enabled, not warn_only) too.
+        torch.use_deterministic_algorithms(True, warn_only=False)
+        validate_forward_pass(model, (x, index))
+        assert torch.are_deterministic_algorithms_enabled() is True
+        assert torch.is_deterministic_algorithms_warn_only_enabled() is False
+    finally:
+        torch.use_deterministic_algorithms(prior_enabled, warn_only=prior_warn_only)
+
+
+def test_validation_default_threads_and_explicit_single_thread_pin_restore() -> None:
+    """LOAD-BEARING: default forwards use process threads; explicit pin restores.
+
+    This is the host-independent mechanism gate for the inter-run multi-thread
+    float-reduction-order fix. The drift it removes (~3e-7 ground-truth output
+    disagreement straddling ``GROUND_TRUTH_OUTPUT_RTOL=1e-6``, plus the MoE
+    masked-gate perturbation flake) is hardware/thread-count dependent and may
+    not reproduce on every host, so we assert the retry mechanism directly
+    rather than relying on a host reproducing the flake:
+
+    * the default harness call does not override the process thread count;
+    * ``num_threads=1`` is observed from inside the validation forwards;
+    * the process-wide thread count is restored afterward, so the retry pin does
+      not leak into the caller's (or later tests') environment.
+    """
+
+    observed_threads: list[int] = []
+
+    class _ThreadProbeModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            observed_threads.append(torch.get_num_threads())
+            return self.lin(x)
+
+    model = _ThreadProbeModel().eval()
+    x = torch.randn(2, 4)
+
+    prior_num_threads = torch.get_num_threads()
+    try:
+        torch.set_num_threads(max(2, prior_num_threads))
+        default_threads = torch.get_num_threads()
+        result = validate_forward_pass(model, (x,))
+        assert result is True
+        assert observed_threads, "probe model forward was never invoked"
+        assert all(t == default_threads for t in observed_threads), observed_threads
+        assert torch.get_num_threads() == default_threads
+
+        observed_threads.clear()
+        result = user_funcs._validate_forward_pass_torch(model, (x,), num_threads=1)
+        assert result is True
+        # The explicit deterministic retry pin wraps both the ground-truth and
+        # capture forwards inside the harness.
+        assert observed_threads, "probe model forward was never invoked"
+        assert all(t == 1 for t in observed_threads), observed_threads
+        assert torch.get_num_threads() == default_threads
+    finally:
+        torch.set_num_threads(prior_num_threads)
+
+
+class _SpectralGCNGroundTruthDriftModel(nn.Module):
+    """A Chebyshev-spectral-conv-style model (MSTGCN / TGT-MSTGCN family) whose
+    ground-truth output drifts ~3e-7 between two clean forwards under multi-threaded
+    float reduction-order -- straddling the strict phase-0 ground-truth bar
+    (``GROUND_TRUTH_OUTPUT_RTOL=1e-6``) -- yet goes bit-exact under a single thread.
+
+    The forward stacks many repeated sparse-aggregation reductions (the Chebyshev
+    polynomial recurrence over a graph adjacency) so the parallel accumulation order
+    is unpinned; this is the structure that makes the spectral-GCN family FLAKY at
+    the strict ground-truth tolerance without the harness single-thread pin.
+    """
+
+    def __init__(self, n: int = 64, hops: int = 6) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        # A dense graph adjacency (the spectral operator); repeated matmuls against
+        # it are the Chebyshev recurrence whose reduction order is thread-dependent.
+        self.register_buffer("adj", torch.randn(n, n) / n)
+        self.lin = nn.Linear(n, n)
+        self.hops = hops
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.lin(x)
+        acc = h
+        prev = h
+        cur = torch.matmul(h, self.adj)
+        # Chebyshev recurrence T_k = 2 * adj @ T_{k-1} - T_{k-2}, accumulated.
+        for _ in range(self.hops):
+            acc = acc + cur
+            nxt = 2.0 * torch.matmul(cur, self.adj) - prev
+            prev, cur = cur, nxt
+        return acc.sum(dim=0, keepdim=True)
+
+
+def test_validation_spectral_gcn_ground_truth_determinism() -> None:
+    """GATE (B/C-1): spectral-GCN ground-truth stability across N>=5 repeats.
+
+    A Chebyshev-spectral-conv model (MSTGCN / TGT-MSTGCN family) -- the structure
+    whose two clean forwards disagreed by ~3e-7 at the output under multi-threaded
+    reduction order, straddling the strict phase-0 ground-truth bar
+    (``GROUND_TRUTH_OUTPUT_RTOL=1e-6``) -- validates stably True across repeats now
+    that the harness pins a single intra-op thread.
+
+    NOTE: the underlying multi-thread reduction-order drift is hardware/thread-count
+    dependent and does not reproduce on every host; the host-independent guard for
+    the pin's mechanism is
+    ``test_validation_pins_single_thread_inside_harness_and_restores``. This gate
+    additionally pins down that the real spectral-GCN aggregation class validates
+    GREEN (and reproducibly so) under the fix, WITHOUT loosening any tolerance --
+    the strict 1e-6 bar is unchanged.
+    """
+
+    model = _SpectralGCNGroundTruthDriftModel().eval()
+    x = torch.randn(32, 64)
+
+    results = [validate_forward_pass(model, (x,)) for _ in range(5)]
+    assert all(results), results
+
+
+class _MoEMaskedGateModel(nn.Module):
+    """A Mixture-of-Experts-style masked-gate model (minimax / nllb-moe family)
+    whose routing builds a boolean mask via a comparison (``lt``) and gates expert
+    outputs through a ``where`` / elementwise ``mul``.
+
+    Under multi-threaded reduction order, perturbing the routing mask sometimes
+    leaves the gated output unchanged (the perturbed position is already masked to
+    zero / re-selects the same path), spuriously failing the perturbation
+    sensitivity check. The harness single-thread pin makes the gating reproducible
+    so the sensitivity outcome is stable.
+    """
+
+    def __init__(self, dim: int = 32, n_experts: int = 4) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.router = nn.Linear(dim, n_experts)
+        self.experts = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_experts))
+        self.n_experts = n_experts
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        scores = self.router(x)  # (B, n_experts)
+        # Boolean routing mask: keep experts scoring above the per-token mean.
+        threshold = scores.mean(dim=-1, keepdim=True)
+        gate = scores.lt(threshold)  # boolean mask feeding where/mul
+        out = torch.zeros_like(x)
+        for i, expert in enumerate(self.experts):
+            keep = gate[:, i : i + 1]
+            contrib = torch.where(keep, expert(x), torch.zeros_like(x))
+            out = out + contrib * scores[:, i : i + 1]
+        return out
+
+
+def test_validation_moe_masked_gate_perturbation_determinism() -> None:
+    """GATE (B/C-2): MoE masked-gate perturbation stability across N>=5 repeats.
+
+    A Mixture-of-Experts masked-gate model (minimax / nllb-moe family) whose routing
+    builds a boolean mask via ``lt`` and gates expert outputs through ``where`` /
+    elementwise ``mul`` -- the structure whose perturbation sensitivity check flaked
+    under multi-threaded reduction order (the perturbed mask sometimes left the
+    output unchanged) -- validates stably True across repeats now that the harness
+    pins a single intra-op thread.
+
+    NOTE: as with the spectral-GCN gate, the underlying thread non-determinism is
+    host-dependent; the mechanism guard is
+    ``test_validation_pins_single_thread_inside_harness_and_restores``. This gate
+    pins down that the real masked-gate routing class validates GREEN reproducibly
+    under the fix, WITHOUT broadening the perturbation tolerance or skipping the
+    check -- the sensitivity check still runs at full strictness.
+    """
+
+    model = _MoEMaskedGateModel().eval()
+    x = torch.randn(16, 32)
+
+    results = [validate_forward_pass(model, (x,)) for _ in range(5)]
+    assert all(results), results
+
+
+def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
+    """Replay args use live parameters only when saved snapshots still match."""
+
+    live_param = nn.Parameter(torch.tensor([[1.0, 2.0], [3.0, 4.0]]))
+    saved_parent = live_param.detach().clone()
+    saved_param = live_param.detach().clone()
+    input_args = {"args": [saved_parent, saved_param], "kwargs": {}}
+    layer = SimpleNamespace(
+        is_inplace=False,
+        _param_logs=[SimpleNamespace(handle=live_param)],
+        parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
+    )
+
+    _restore_live_parameter_args_for_replay(input_args, cast(Any, layer))
+
+    assert input_args["args"][0] is saved_parent
+    assert input_args["args"][1] is live_param
+
+    stale_snapshot = live_param.detach().clone()
+    with torch.no_grad():
+        live_param.add_(1.0)
+    stale_args = {"args": [stale_snapshot], "kwargs": {}}
+    stale_layer = SimpleNamespace(
+        is_inplace=False,
+        _param_logs=[SimpleNamespace(handle=live_param)],
+        parent_arg_positions={"args": {}, "kwargs": {}},
+    )
+
+    _restore_live_parameter_args_for_replay(stale_args, cast(Any, stale_layer))
+
+    assert stale_args["args"][0] is stale_snapshot
+
+
+def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:
+    """A second trace should not see stale labels on nested model-owned tensors."""
+
+    class TensorCache:
+        """Small model-owned cache that stores tensors below a custom object."""
+
+        def __init__(self) -> None:
+            """Initialize an empty tensor cache."""
+
+            self.items: dict[str, torch.Tensor | None] = {"mask": None}
+
+    class CachedTensorBlock(nn.Module):
+        """Consume a cached tensor in a child module."""
+
+        def forward(self, cached: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+            """Add the cached tensor to the live input.
+
+            Parameters
+            ----------
+            cached
+                Tensor cached on the parent module during an earlier trace.
+            x
+                Live model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Elementwise sum of the cached tensor and input.
+            """
+
+            return cached + x
+
+    class NestedCachedTensorModel(nn.Module):
+        """Model that keeps an op output in a nested custom cache."""
+
+        def __init__(self) -> None:
+            """Initialize the nested cache and child module."""
+
+            super().__init__()
+            self.cache = TensorCache()
+            self.block = CachedTensorBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model while reusing a nested cached tensor.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Child-module output.
+            """
+
+            if self.cache.items["mask"] is None:
+                self.cache.items["mask"] = torch.ones_like(x)
+            return self.block(cast(torch.Tensor, self.cache.items["mask"]), x)
+
+    model = NestedCachedTensorModel()
+    x = torch.randn(2, 3)
+
+    tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+    second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+
+    assert second_trace.num_ops > 0
+
+
+def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
+    """A second trace should not see stale labels on forward-global tensors."""
+
+    global _TEST_FORWARD_GLOBAL_TENSOR
+
+    class GlobalTensorBlock(nn.Module):
+        """Consume a tensor read from the caller module's globals."""
+
+        def forward(self, cached: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+            """Add a global tensor to a live input.
+
+            Parameters
+            ----------
+            cached
+                Tensor captured through the parent forward function's globals.
+            x
+                Live model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Elementwise sum of the cached tensor and input.
+            """
+
+            return cached + x
+
+    class GlobalTensorForwardModel(nn.Module):
+        """Model whose forward reads a tensor from function globals."""
+
+        def __init__(self) -> None:
+            """Initialize the child module."""
+
+            super().__init__()
+            self.block = GlobalTensorBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model with a global tensor input to the child module.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Child-module output.
+            """
+
+            return self.block(cast(torch.Tensor, _TEST_FORWARD_GLOBAL_TENSOR), x)
+
+    x = torch.randn(2, 3)
+    _TEST_FORWARD_GLOBAL_TENSOR = torch.ones_like(x)
+    try:
+        model = GlobalTensorForwardModel()
+
+        tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+        second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+
+        assert second_trace.num_ops > 0
+    finally:
+        _TEST_FORWARD_GLOBAL_TENSOR = None
+
+
+def test_trace_clears_forward_global_container_tensor_labels_between_sessions() -> None:
+    """A second trace should not see stale labels inside forward-global containers."""
+
+    global _TEST_FORWARD_GLOBAL_PAYLOAD
+
+    class GlobalPayloadForwardModel(nn.Module):
+        """Model whose forward reads a tensor from a global container."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the model with a tensor stored in a global dict.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            torch.Tensor
+                Elementwise sum of the cached global tensor and input.
+            """
+
+            assert _TEST_FORWARD_GLOBAL_PAYLOAD is not None
+            return x + _TEST_FORWARD_GLOBAL_PAYLOAD["value"]
+
+    x = torch.randn(2, 3)
+    _TEST_FORWARD_GLOBAL_PAYLOAD = {"value": torch.ones_like(x)}
+    try:
+        model = GlobalPayloadForwardModel()
+
+        assert validate_forward_pass(model, x, validate_metadata=True) is True
+        second_trace = tl.trace(model, x, save=None, layers_to_save=None, inference_only=True)
+
+        assert second_trace.num_ops > 0
+    finally:
+        _TEST_FORWARD_GLOBAL_PAYLOAD = None
+
+
+def test_validate_forward_pass_replays_tuple_output_identity_leaf() -> None:
+    """Output identity replay should not index into an already-selected tensor leaf."""
+
+    class TupleChunkOutputModel(nn.Module):
+        """Return a tuple whose first element is a multi-output op leaf."""
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            """Return two tensors in a tuple.
+
+            Parameters
+            ----------
+            x
+                Model input.
+
+            Returns
+            -------
+            tuple[torch.Tensor, torch.Tensor]
+                First chunk and a derived tensor.
+            """
+
+            first, _second = x.chunk(2, dim=1)
+            return first, x + 1
+
+    model = TupleChunkOutputModel()
+    x = torch.randn(1, 4, 1)
+
+    assert tl.validate_forward_pass(model, x, validate_metadata=True) is True
+
+
 def test_validate_forward_pass_replays_dict_output_by_typed_path() -> None:
     """Validation replay indexes dict-returning outputs by typed container path."""
 
@@ -160,6 +691,120 @@ def test_validate_forward_pass_replays_dict_output_by_typed_path() -> None:
             return output["logits"] * 2
 
     assert validate_forward_pass(DictOutputModel(), torch.tensor([-1.0, 2.0]))
+
+
+def test_validate_forward_pass_uses_typed_ground_truth_leaf_order() -> None:
+    """Ground-truth output leaves follow capture's typed container traversal."""
+
+    UnpoolInfo = namedtuple("UnpoolInfo", ("edge_index", "cluster", "batch"))
+
+    class NestedNamedtupleOutput(nn.Module):
+        """Return a tuple with a nested namedtuple payload."""
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, UnpoolInfo]:
+            """Run the model.
+
+            Parameters
+            ----------
+            x
+                Input tensor.
+
+            Returns
+            -------
+            tuple[torch.Tensor, UnpoolInfo]
+                Tensor output plus namedtuple metadata leaves.
+            """
+
+            edge_index = torch.stack((torch.arange(4), torch.arange(4).flip(0)))
+            cluster = torch.zeros(4, dtype=torch.long)
+            batch = torch.ones(4, dtype=torch.long)
+            return x + 1.0, UnpoolInfo(edge_index=edge_index, cluster=cluster, batch=batch)
+
+    assert validate_forward_pass(NestedNamedtupleOutput(), torch.randn(1, 3)) is True
+
+
+def test_validate_forward_pass_accepts_nested_lstm_module_outputs() -> None:
+    """Module output metadata preserves nn.LSTM's nested public return paths."""
+
+    class TupleLSTM(nn.Module):
+        """Return the raw nested output of an ``nn.LSTM`` module."""
+
+        def __init__(self) -> None:
+            """Initialize the LSTM fixture."""
+
+            super().__init__()
+            self.lstm = nn.LSTM(5, 7, batch_first=True)
+
+        def forward(
+            self, x: torch.Tensor
+        ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+            """Run the LSTM.
+
+            Parameters
+            ----------
+            x
+                Batch-major sequence input.
+
+            Returns
+            -------
+            tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]
+                Raw ``nn.LSTM`` output and hidden-state tuple.
+            """
+
+            return self.lstm(x)
+
+    model = TupleLSTM().eval()
+    x = torch.randn(2, 3, 5)
+
+    assert validate_forward_pass(model, x, validate_metadata=True) is True
+
+    trace = trace_fn(model, x, save_arg_values=True)
+    try:
+        path_reprs = {repr(path) for path in trace.module_calls["lstm:1"].output_paths}
+
+        assert path_reprs == {
+            "(TupleIndex(index=0),)",
+            "(TupleIndex(index=1), TupleIndex(index=0))",
+            "(TupleIndex(index=1), TupleIndex(index=1))",
+        }
+    finally:
+        trace.cleanup()
+
+
+def test_detached_reference_patcher_ignores_opaque_defaults() -> None:
+    """Detached-reference patching treats non-tuple defaults as opaque metadata."""
+
+    from torchlens.backends.torch.wrappers import _patch_function_defaults
+
+    class CallableWithOpaqueDefaults:
+        """Callable object exposing a non-standard ``__defaults__`` value."""
+
+        __defaults__ = object()
+
+        def __call__(self) -> None:
+            """Run the callable."""
+
+    candidate = CallableWithOpaqueDefaults()
+    original_defaults = candidate.__defaults__
+
+    _patch_function_defaults(candidate, {id(original_defaults): "replacement"})
+
+    assert candidate.__defaults__ is original_defaults
+
+
+def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
+    """Posthoc perturbation checks do not call unsupported ``unique`` on complex tensors."""
+
+    layer = SimpleNamespace(
+        func_name="fft",
+        saved_args=(torch.ones(4, dtype=torch.complex64),),
+        saved_kwargs={},
+        dtype=torch.complex64,
+        out=torch.ones(4, dtype=torch.complex64),
+        layer_label="fft_1_1",
+    )
+
+    assert posthoc_perturb_check(SimpleNamespace(), layer, ["input_1"], verbose=False) is True
 
 
 def test_validation_recompute_selects_dict_output_by_container_path() -> None:
@@ -541,7 +1186,9 @@ def test_custom_exemption_checks_are_callable():
 
 
 @pytest.mark.smoke
-def test_perturbation_changes_float_tensor():
+def test_perturbation_changes_float_tensor() -> None:
+    """Floating-point perturbation changes ordinary tensor values."""
+
     parent = torch.randn(10, 10)
     output = torch.randn(10, 10)
     perturbed = _perturb_layer_outs(parent, output)
@@ -549,12 +1196,143 @@ def test_perturbation_changes_float_tensor():
     assert perturbed.shape == parent.shape
 
 
-def test_perturbation_changes_int_tensor():
+def test_perturbation_scales_near_constant_float_to_large_output() -> None:
+    """Near-constant float perturbations scale up when child outputs are huge."""
+
+    parent = torch.zeros(16, dtype=torch.float32)
+    output = torch.full((16,), 1.0e30, dtype=torch.float32)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.abs().max() > 1.0e20
+    assert not torch.equal(output - perturbed, output)
+
+
+def test_perturbation_scales_tiny_float_range_to_large_output() -> None:
+    """Tiny float ranges scale up when otherwise swallowed by huge operands."""
+
+    parent = torch.linspace(-0.25, 0.25, 16, dtype=torch.float32)
+    output = torch.full((16,), 1.0e30, dtype=torch.float32)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.abs().max() > 1.0e20
+    assert not torch.equal(output + perturbed, output)
+
+
+def test_validation_perturbs_zero_parent_at_large_float_scale() -> None:
+    """Replay validation detects sensitivity when a zero parent meets a huge operand."""
+
+    class HugeSubZero(nn.Module):
+        """Model whose subtraction parent is zero but value-sensitive."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Subtract a data-derived zero tensor from a huge float tensor.
+
+            Parameters
+            ----------
+            x:
+                Input tensor used to shape the zero-valued parent.
+
+            Returns
+            -------
+            torch.Tensor
+                Huge float tensor with a zero-valued subtraction parent.
+            """
+
+            huge = torch.ones_like(x) * 1.0e30
+            zero = x * 0.0
+            return huge - zero
+
+    assert validate_forward_pass(HugeSubZero(), torch.ones(2, 3), random_seed=123)
+
+
+def test_perturbation_changes_int_tensor() -> None:
+    """Integer perturbation changes tensor values while preserving dtype."""
+
     parent = torch.randint(0, 100, (10, 10))
     output = torch.randn(10, 10)
     perturbed = _perturb_layer_outs(parent, output)
     assert not torch.equal(perturbed, parent)
     assert perturbed.dtype == parent.dtype
+
+
+@pytest.mark.smoke
+def test_perturbation_int64_saturated_max_does_not_overflow() -> None:
+    """C1 regression: an int64 parent holding INT64_MAX must not crash randint.
+
+    A legitimately captured int64 tensor that contains ``iinfo(int64).max``
+    (common as PyG sentinel/cluster index values) used to make
+    ``parent_outs.max() + 1`` wrap to ``INT64_MIN`` and raise
+    ``RuntimeError("random_ expects 'from' to be less than 'to'...")``. The
+    perturbation must run cleanly *and* still meaningfully perturb the tensor --
+    a no-op would silently disarm the validation tripwire.
+    """
+
+    imax = torch.iinfo(torch.int64).max
+    parent = torch.tensor([0, 5, imax, 100, imax, 42], dtype=torch.int64)
+    output = torch.randn(parent.shape)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    # (a) no raise (reached here), (b) genuinely perturbed, (c) dtype/shape kept.
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.dtype == torch.int64
+    assert perturbed.shape == parent.shape
+
+
+def test_perturbation_uint8_saturated_max_does_not_overflow() -> None:
+    """C1 regression: a uint8 parent at its dtype max must clamp, not overflow."""
+
+    umax = torch.iinfo(torch.uint8).max  # 255
+    parent = torch.tensor([0, 5, umax, 10, umax], dtype=torch.uint8)
+    output = torch.randn(parent.shape)
+
+    perturbed = _perturb_layer_outs(parent, output)
+
+    assert not torch.equal(perturbed, parent)
+    assert perturbed.dtype == torch.uint8
+    assert perturbed.shape == parent.shape
+
+
+def test_sagpooling_validates_end_to_end_without_perturb_overflow() -> None:
+    """C1 golden-model gate: a PyG SAGPooling graph validates green end-to-end.
+
+    SAGPooling emits an int64 index tensor carrying ``INT64_MAX`` during its
+    top-k selection. Before the fix this made the perturbation helper raise on a
+    successfully-captured trace (a validation-machinery crash masking 21 PyG
+    models). The tripwire must now run to a real pass/fail with no crash.
+    """
+
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import GCNConv, SAGPooling
+
+    torch.manual_seed(0)
+
+    class SAGPoolNet(nn.Module):
+        """Minimal GCN + SAGPooling graph that exercises the int64 sentinel path."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv = GCNConv(8, 16)
+            self.pool = SAGPooling(16, ratio=0.5)
+
+        def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+            """Embed nodes, then pool the graph and return the pooled features."""
+
+            x = self.conv(x, edge_index).relu()
+            x, edge_index, _, _, _, _ = self.pool(x, edge_index)
+            return x
+
+    n_nodes = 10
+    x = torch.randn(n_nodes, 8)
+    edge_index = torch.randint(0, n_nodes, (2, 30), dtype=torch.long)
+
+    # Returns True: the perturbation tripwire ran end-to-end with no overflow
+    # crash and the replay/perturbation checks genuinely passed.
+    assert validate_forward_pass(SAGPoolNet(), (x, edge_index), random_seed=1)
 
 
 def test_perturbation_changes_bool_tensor():
@@ -629,19 +1407,6 @@ def test_deep_clone_nested_dict_of_tensors():
     assert torch.equal(cloned["b"]["c"], original["b"]["c"])
 
 
-def test_deep_clone_preserves_namedtuple_type() -> None:
-    """Namedtuple containers are reconstructed with positional fields."""
-
-    point_type = namedtuple("Point", ["x", "y"])
-    original = point_type(torch.tensor([1.0]), torch.tensor([2.0]))
-
-    cloned = _deep_clone_tensors(original)
-
-    assert isinstance(cloned, point_type)
-    assert torch.equal(cloned.x, original.x)
-    assert torch.equal(cloned.y, original.y)
-
-
 def test_deep_clone_independence():
     """Modifying clone doesn't affect original."""
     original = [torch.tensor([1.0, 2.0]), torch.tensor([3.0, 4.0])]
@@ -654,6 +1419,19 @@ def test_deep_clone_preserves_non_tensors():
     original = [42, "hello", None, (1, 2)]
     cloned = _deep_clone_tensors(original)
     assert cloned == original
+
+
+def test_deep_clone_preserves_namedtuple_type() -> None:
+    """Namedtuple containers are reconstructed with positional fields."""
+
+    point_type = namedtuple("Point", ["x", "y"])
+    original = point_type(torch.tensor([1.0]), torch.tensor([2.0]))
+
+    cloned = _deep_clone_tensors(original)
+
+    assert isinstance(cloned, point_type)
+    assert torch.equal(cloned.x, original.x)
+    assert torch.equal(cloned.y, original.y)
 
 
 def test_copy_validation_args():
@@ -698,6 +1476,52 @@ class _ScatterModel(nn.Module):
         return x + out
 
 
+class _GatherIndexModel(nn.Module):
+    """Model that uses a tensor parent as a gather index."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Gather from ``x`` using a derived structural index tensor.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Gathered tensor plus a data dependency on ``x``.
+        """
+
+        index = torch.argmax(x, dim=1, keepdim=True).expand(-1, 2)
+        gathered = torch.gather(x, 1, index)
+        return gathered + x[:, :2]
+
+
+class _FunctionalScatterKwargsModel(nn.Module):
+    """Model that uses functional scatter with keyword index and src tensors."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scatter values into a destination whose prior values are overwritten.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scatter result plus a data dependency on ``x``.
+        """
+
+        order = torch.argsort(x, dim=-1)
+        src = torch.arange(x.shape[-1], dtype=x.dtype, device=x.device).expand_as(x)
+        dest = torch.zeros_like(x)
+        scattered = dest.scatter(dim=-1, index=order, src=src)
+        return scattered + x
+
+
 class _MaskedFillModel(nn.Module):
     """Model that uses masked_fill_."""
 
@@ -723,6 +1547,277 @@ class _ZerosLikeModel(nn.Module):
         return x + z
 
 
+class _NewTensorFactoryModel(nn.Module):
+    """Model that uses the input tensor as a ``new_tensor`` factory."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a constant tensor using ``x`` only as a factory template.
+
+        Parameters
+        ----------
+        x:
+            Input tensor providing dtype, device, and layout metadata.
+
+        Returns
+        -------
+        torch.Tensor
+            Input shifted by a constant factory-created scalar.
+        """
+
+        values = x.new_tensor([1.0, 2.0, 3.0])
+        return x + values.sum()
+
+
+class _RemainderDividendBelowDivisorModel(nn.Module):
+    """Model where the remainder divisor is locally value-invariant."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute a remainder whose output is exactly the dividend.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Remainder output plus the input to keep both parents live.
+        """
+
+        dividend = torch.sigmoid(x)
+        divisor = torch.full_like(dividend, 2.0)
+        return torch.remainder(dividend, divisor) + x
+
+
+class _WhereDifferentBranchesModel(nn.Module):
+    """Model whose ``where`` branches are value-sensitive and non-equal."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Select between distinct true and false branches.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Result of a value-sensitive ``torch.where`` call.
+        """
+
+        condition = x > 0
+        true_branch = x + 10.0
+        false_branch = x - 10.0
+        return torch.where(condition, true_branch, false_branch)
+
+
+class _WhereBranchSelectionModel(nn.Module):
+    """Model whose ``where`` condition selectedness is configurable."""
+
+    def __init__(self, condition_kind: str) -> None:
+        """Initialize the condition kind.
+
+        Parameters
+        ----------
+        condition_kind:
+            One of ``"all_true"``, ``"all_false"``, or ``"mixed"``.
+        """
+
+        super().__init__()
+        self.condition_kind = condition_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Select between distinct branches with the configured condition.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(2, 3)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of ``torch.where``.
+        """
+
+        if self.condition_kind == "all_true":
+            condition = torch.ones((), dtype=torch.bool, device=x.device)
+        elif self.condition_kind == "all_false":
+            condition = torch.zeros((), dtype=torch.bool, device=x.device)
+        elif self.condition_kind == "mixed":
+            condition = torch.tensor(
+                [[True, False, True], [False, True, False]],
+                dtype=torch.bool,
+                device=x.device,
+            )
+        else:
+            raise ValueError(f"Unknown condition kind: {self.condition_kind}")
+        true_branch = x + 10.0
+        false_branch = x - 10.0
+        return torch.where(condition, true_branch, false_branch)
+
+
+class _WhereSharedBranchModel(nn.Module):
+    """Model passing the same branch tensor to both ``where`` value slots."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply a mixed-condition ``where`` to the same branch tensor twice.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(2, 3)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of ``torch.where``.
+        """
+
+        condition = torch.tensor(
+            [[True, False, True], [False, True, False]],
+            dtype=torch.bool,
+            device=x.device,
+        )
+        branch = x + 1.0
+        return torch.where(condition, branch, branch)
+
+
+class _MaskedFillBranchSelectionModel(nn.Module):
+    """Model whose ``masked_fill`` mask selectedness is configurable."""
+
+    def __init__(self, mask_kind: str) -> None:
+        """Initialize the mask kind.
+
+        Parameters
+        ----------
+        mask_kind:
+            One of ``"all_true"``, ``"all_false"``, or ``"mixed"``.
+        """
+
+        super().__init__()
+        self.mask_kind = mask_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ``masked_fill`` with a 0-d tensor fill-value parent.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(2, 3)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of ``x.masked_fill(mask, value)``.
+        """
+
+        if self.mask_kind == "all_true":
+            mask = torch.ones_like(x, dtype=torch.bool)
+        elif self.mask_kind == "all_false":
+            mask = torch.zeros_like(x, dtype=torch.bool)
+        elif self.mask_kind == "mixed":
+            mask = torch.tensor(
+                [[True, False, True], [False, True, False]],
+                dtype=torch.bool,
+                device=x.device,
+            )
+        else:
+            raise ValueError(f"Unknown mask kind: {self.mask_kind}")
+        value = x.mean()
+        return x.masked_fill(mask, value)
+
+
+class _UnselectedWherePlaceholderModel(nn.Module):
+    """Model with an unselected ``where`` branch used for placeholder tripwires."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Route a real parent through an entirely unselected false branch.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of a ``where`` whose false branch is never selected.
+        """
+
+        condition = torch.ones_like(x, dtype=torch.bool)
+        selected = x + 1.0
+        unselected = x - 1.0
+        return torch.where(condition, selected, unselected)
+
+
+class _RemainderDividendAtLeastDivisorModel(nn.Module):
+    """Model where the remainder divisor must remain value-sensitive."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute a remainder whose output differs from the dividend.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Remainder output plus the input to keep the op live.
+        """
+
+        dividend = x.abs() + 5.0
+        divisor = torch.full_like(dividend, 2.0)
+        return torch.remainder(dividend, divisor) + x
+
+
+class _NewTensorDataArgModel(nn.Module):
+    """Model whose ``new_tensor`` data argument comes from a real parent op."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a tensor from value data, not only from a template.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Data-derived ``new_tensor`` result.
+        """
+
+        data = x + 1.0
+        return x.new_tensor(data) * 2.0
+
+
+class _PopulatedContainerOutputModel(nn.Module):
+    """Model returning a populated tuple/dict container of tensor leaves."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Return tensor leaves through a populated nested container.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        tuple[torch.Tensor, dict[str, torch.Tensor]]
+            Two real output leaves with non-empty container paths.
+        """
+
+        left = x + 1.0
+        right = x * 2.0
+        return left, {"right": right}
+
+
 class _EmptyLikeModel(nn.Module):
     """Model that uses empty_like (tests SKIP_VALIDATION_ENTIRELY)."""
 
@@ -730,6 +1825,407 @@ class _EmptyLikeModel(nn.Module):
         # empty_like output is nondeterministic — don't use it in computation
         _ = torch.empty_like(x)
         return x * 2
+
+
+def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
+    """Return the only layer in ``trace`` with the requested function name.
+
+    Parameters
+    ----------
+    trace:
+        Trace to search.
+    func_name:
+        Function name to locate.
+
+    Returns
+    -------
+    Any
+        The unique matching layer.
+    """
+
+    matches = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    assert len(matches) == 1
+    return matches[0]
+
+
+def _assert_custom_exemption_for_arg(
+    model: nn.Module,
+    x: torch.Tensor,
+    func_name: str,
+    arg_position: int,
+    expected: bool,
+) -> None:
+    """Assert direct and registry perturbation exemption results for one arg.
+
+    Parameters
+    ----------
+    model:
+        Model to trace and validate.
+    x:
+        Input tensor.
+    func_name:
+        Captured function name to inspect.
+    arg_position:
+        Positional parent arg slot to perturb.
+    expected:
+        Expected exemption result.
+    """
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        layer = _only_layer_with_func_name(trace, func_name)
+        parent = layer.parent_arg_positions["args"][arg_position]
+
+        assert CUSTOM_EXEMPTION_CHECKS[func_name](trace, layer, [parent]) is expected
+        assert _check_perturbation_exemptions(trace, layer, [parent]) is expected
+    finally:
+        trace.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Reduction-depth band-C eligibility predicate (validation/core.py)
+#
+# Band C grants a relaxed deep-numeric replay tolerance ONLY to ops that are
+# reductions with per-output accumulation depth >= 64 (the depth at which FP32
+# reorder round-off genuinely accrues). The eligibility is the FAITHFUL reduction
+# depth, NOT a graph-position (step_index) proxy NOR a conv/matmul func allowlist.
+# The tests below are the LOAD-BEARING gate: every injected-error case on a shallow
+# op MUST be caught (the predicate must NOT mask it), and a gross error on a deep
+# eligible op MUST still fail via band C's numeric caps. If any false-positive case
+# below ever returns True, the tripwire is disarmed -- DO NOT loosen the test.
+# ---------------------------------------------------------------------------
+
+
+def _make_deep_numeric_layer(
+    func_name: str,
+    saved_args: list[Any],
+    out: torch.Tensor,
+    saved_kwargs: dict[str, Any] | None = None,
+) -> Any:
+    """Build a minimal op stand-in for deep-numeric replay tests.
+
+    ``_op_reduction_depth`` and ``_deep_numeric_replay_matches_saved`` read only
+    ``func_name``, ``saved_args``, ``saved_kwargs`` and ``out``, so a namespace
+    suffices and keeps the predicate tests fast and capture-independent.
+    """
+
+    return SimpleNamespace(
+        func_name=func_name,
+        saved_args=saved_args,
+        saved_kwargs=saved_kwargs or {},
+        out=out,
+    )
+
+
+def test_op_reduction_depth_reads_all_reduction_categories() -> None:
+    """Per-output accumulation depth is read for every reduction category."""
+
+    # conv2d: weight (out=4, in/groups=8, kH=3, kW=3) -> 8*3*3 = 72 accumulations.
+    conv_layer = _make_deep_numeric_layer(
+        "conv2d", [torch.zeros(1, 8, 5, 5), torch.zeros(4, 8, 3, 3)], torch.zeros(1, 4, 3, 3)
+    )
+    assert _op_reduction_depth(conv_layer) == 72
+
+    # linear: weight (out=16, in=128) -> contracted K = 128.
+    linear_layer = _make_deep_numeric_layer(
+        "linear", [torch.zeros(2, 128), torch.zeros(16, 128)], torch.zeros(2, 16)
+    )
+    assert _op_reduction_depth(linear_layer) == 128
+
+    # matmul: (n, K) @ (K, m); first operand last dim is K = 64.
+    matmul_layer = _make_deep_numeric_layer(
+        "matmul", [torch.zeros(3, 64), torch.zeros(64, 5)], torch.zeros(3, 5)
+    )
+    assert _op_reduction_depth(matmul_layer) == 64
+
+    # scatter_add: max duplicate-index fan-in. Index 0 appears 1024 times -> 1024.
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    scatter_layer = _make_deep_numeric_layer(
+        "scatter_add", [torch.zeros(5), 0, deep_index, torch.ones(1024)], torch.zeros(5)
+    )
+    assert _op_reduction_depth(scatter_layer) == 1024
+
+    # sum over a dim: numel of the reduced dim.
+    sum_layer = _make_deep_numeric_layer("sum", [torch.zeros(3, 128)], torch.zeros(3), {"dim": 1})
+    assert _op_reduction_depth(sum_layer) == 128
+
+    # elementwise / structural ops have depth 1 and never reach the threshold.
+    assert (
+        _op_reduction_depth(_make_deep_numeric_layer("relu", [torch.zeros(4)], torch.zeros(4))) == 1
+    )
+    assert (
+        _op_reduction_depth(_make_deep_numeric_layer("add", [torch.zeros(4)], torch.zeros(4))) == 1
+    )
+
+
+def test_op_reduction_depth_reads_keyword_passed_operands() -> None:
+    """Depth must read operands passed by keyword, not just positionally.
+
+    A ``conv2d(x, weight=w)`` / ``matmul(a, other=b)`` / ``scatter_add(out, dim,
+    index=idx, src=s)`` call leaves the positional slot empty; reading positionally
+    only would drop depth to 0 and wrongly withhold band C (a fresh false-negative).
+    """
+
+    conv_layer = _make_deep_numeric_layer(
+        "conv2d",
+        [torch.zeros(1, 8, 5, 5)],
+        torch.zeros(1, 4, 3, 3),
+        saved_kwargs={"weight": torch.zeros(4, 8, 3, 3)},
+    )
+    assert _op_reduction_depth(conv_layer) == 72
+
+    linear_layer = _make_deep_numeric_layer(
+        "linear",
+        [torch.zeros(2, 128)],
+        torch.zeros(2, 16),
+        saved_kwargs={"weight": torch.zeros(16, 128)},
+    )
+    assert _op_reduction_depth(linear_layer) == 128
+
+    matmul_layer = _make_deep_numeric_layer(
+        "matmul",
+        [torch.zeros(3, 64)],
+        torch.zeros(3, 5),
+        saved_kwargs={"other": torch.zeros(64, 5)},
+    )
+    assert _op_reduction_depth(matmul_layer) == 64
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    scatter_layer = _make_deep_numeric_layer(
+        "scatter_add",
+        [torch.zeros(5), 0],
+        torch.zeros(5),
+        saved_kwargs={"index": deep_index, "src": torch.ones(1024)},
+    )
+    assert _op_reduction_depth(scatter_layer) == 1024
+
+
+def test_op_reduction_depth_undeterminable_is_zero_fail_toward_strict() -> None:
+    """When depth cannot be determined the predicate returns 0 (ineligible)."""
+
+    assert _op_reduction_depth(_make_deep_numeric_layer("conv2d", [], torch.zeros(1))) == 0
+    assert _op_reduction_depth(_make_deep_numeric_layer("matmul", [], torch.zeros(1))) == 0
+    # scatter with no index operand cannot be measured.
+    assert (
+        _op_reduction_depth(
+            _make_deep_numeric_layer("scatter_add", [torch.zeros(5), 0], torch.zeros(5))
+        )
+        == 0
+    )
+
+
+def test_deep_numeric_replay_recovers_deep_conv_cancellation_drift() -> None:
+    """A physically-deep conv accepts sub-1e-4 replay drift (the resnet recovery).
+
+    Mirrors the BiT ResNet-v2 (resnetv2_50x3_bit) false-negative: a wide,
+    high-channel conv replays to FP32 round-off (abs error well under the
+    deep-numeric atol of 1e-4 at activation scale ~90), concentrated on near-zero
+    cancelling outputs. This is the LEGIT deep-conv cancellation drifter that MUST
+    pass; the old step_index gate refused band C for the early such convs.
+    """
+
+    weight = torch.zeros(1536, 256, 1, 1)  # depth 256 >> threshold.
+    saved_out = torch.empty(1, 1536, 8, 8).uniform_(-90.0, 90.0)
+    recomputed = saved_out + torch.empty_like(saved_out).uniform_(-8.0e-5, 8.0e-5)
+    layer = _make_deep_numeric_layer("conv2d", [torch.zeros(1, 256, 8, 8), weight], saved_out)
+
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    # Strict band B (allow_tolerance) rejects this drift...
+    assert not tensor_nanequal(recomputed, saved_out, allow_tolerance=True)
+    # ...but band C accepts it for a deep conv (the recovery).
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is True
+
+
+def test_deep_numeric_replay_false_positive_shallow_scatter_depth2() -> None:
+    """LOAD-BEARING: a depth-2 scatter + ~5e-5 injection must NOT be masked.
+
+    Codex's exact false-positive case. A scatter with a single duplicate index has
+    fan-in depth 2 -- far below the threshold -- so band C is withheld and the
+    injected error is caught by strict band B. (The category-arm predicate that
+    granted band C to every scatter regardless of depth is what masked this; the
+    depth-over-all-reductions predicate does not.)
+    """
+
+    index = torch.tensor([0, 0, 1, 2])  # index 0 duplicated -> fan-in depth 2.
+    saved_out = torch.empty(3, 1).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0, 0] += 5.0e-5  # injected capture error.
+    layer = _make_deep_numeric_layer(
+        "scatter_add_", [torch.zeros(3, 1), 0, index.unsqueeze(1), torch.ones(4, 1)], saved_out
+    )
+
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_deep_numeric_replay_false_positive_shallow_linear_depth16() -> None:
+    """LOAD-BEARING: a depth-16 linear + 5e-5 injection must NOT be masked.
+
+    A late shallow linear (the GNN bug-masking population the old step_index gate
+    parachuted) is depth 16 < 64 -> band C withheld -> the injected error is caught.
+    """
+
+    saved_out = torch.empty(2, 8).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0, 0] += 5.0e-5
+    layer = _make_deep_numeric_layer("linear", [torch.zeros(2, 16), torch.zeros(8, 16)], saved_out)
+
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_deep_numeric_replay_gross_error_on_deep_scatter_still_fails() -> None:
+    """LOAD-BEARING: a deep ELIGIBLE scatter (depth 1024) + gross +10 still fails.
+
+    Eligibility (depth >= 64) does NOT make band C unbounded: its outlier-fraction
+    and scaled-diff caps reject a gross injected error even on a deep op.
+    """
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    saved_out = torch.empty(64).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed += 10.0  # gross error on every element.
+    layer = _make_deep_numeric_layer(
+        "scatter_add", [torch.zeros(64), 0, deep_index, torch.ones(1024)], saved_out
+    )
+
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_deep_numeric_replay_gross_error_on_deep_conv_still_fails() -> None:
+    """LOAD-BEARING: a deep ELIGIBLE conv (depth 1536) + gross +10 still fails."""
+
+    weight = torch.zeros(64, 1536, 1, 1)  # depth 1536 >> threshold.
+    saved_out = torch.empty(1, 64, 4, 4).uniform_(-1.0, 1.0)
+    recomputed = saved_out + 10.0
+    layer = _make_deep_numeric_layer("conv2d", [torch.zeros(1, 1536, 4, 4), weight], saved_out)
+
+    assert _op_reduction_depth(layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_op_reduction_depth_scatter_fan_in_is_per_destination_coordinate() -> None:
+    """LOAD-BEARING: an n-D scatter fan-in is counted PER destination coordinate.
+
+    Codex's exact false-positive: a row-/feature-wise ``scatter_add`` writes many
+    INDEPENDENT depth-2 destinations all at raw index ``0``. Counting the duplicate
+    raw index value ``0`` GLOBALLY conflates them into one huge fan-in and wrongly
+    grants band C to a genuinely shallow (depth-2) scatter, masking the ~5e-5 error
+    class. Counting per actual destination COORDINATE reports depth 2 -> ineligible.
+    """
+
+    destination = torch.zeros(100, 3)
+    index = torch.zeros(100, 2, dtype=torch.long)  # every row scatters to col 0.
+    src = torch.ones(100, 2)
+    saved_out = destination.scatter_add(1, index, src)  # each row col0 == 2.0.
+    recomputed = saved_out.clone()
+    recomputed[0, 0] += 5.0e-5  # injected capture error.
+    layer = _make_deep_numeric_layer("scatter_add", [destination, 1, index, src], saved_out)
+
+    # Two sources per destination -> depth 2 regardless of 200 raw duplicate zeros.
+    assert _op_reduction_depth(layer) == 2
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+    # A genuinely deep per-coordinate fan-in stays eligible.
+    deep_index = torch.zeros(10, 200, dtype=torch.long)
+    deep_src = torch.ones(10, 200)
+    deep_dst = torch.zeros(10, 3)
+    deep_out = deep_dst.scatter_add(1, deep_index, deep_src)
+    deep_layer = _make_deep_numeric_layer(
+        "scatter_add", [deep_dst, 1, deep_index, deep_src], deep_out
+    )
+    assert _op_reduction_depth(deep_layer) == 200  # 200 sources per (row, 0).
+    assert _op_reduction_depth(deep_layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+
+def test_op_reduction_depth_conv_transpose_is_shallow() -> None:
+    """LOAD-BEARING: transposed-conv depth uses the transposed weight layout.
+
+    ``conv_transpose`` weight is ``[in_channels, out_channels/groups, *kernel]``;
+    reusing the forward formula ``weight.numel() // weight.shape[0]`` reads the
+    out-channel axis and over-reports. ``ConvTranspose2d(1, 128, 1)`` accumulates
+    only ONE input element per output (depth 1), so it must be shallow/ineligible.
+    """
+
+    conv_t = nn.ConvTranspose2d(1, 128, kernel_size=1)
+    saved_out = torch.empty(1, 128, 8, 8).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed.view(-1)[0] += 5.0e-5
+    layer = _make_deep_numeric_layer(
+        "conv_transpose2d", [torch.zeros(1, 1, 8, 8), conv_t.weight], saved_out
+    )
+
+    assert _op_reduction_depth(layer) == 1  # in_channels(1) * prod(kernel)(1).
+    assert _op_reduction_depth(layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+    assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+    # A genuinely deep transposed conv (many in-channels) stays eligible.
+    deep_conv_t = nn.ConvTranspose2d(256, 4, kernel_size=3)  # weight [256, 4, 3, 3].
+    deep_out = torch.empty(1, 4, 10, 10).uniform_(-1.0, 1.0)
+    deep_layer = _make_deep_numeric_layer(
+        "conv_transpose2d", [torch.zeros(1, 256, 8, 8), deep_conv_t.weight], deep_out
+    )
+    assert _op_reduction_depth(deep_layer) == 256 * 9  # in_channels * prod(kernel).
+    assert _op_reduction_depth(deep_layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
+
+
+def test_op_reduction_depth_overwrite_scatter_is_ineligible() -> None:
+    """LOAD-BEARING: plain overwrite ``scatter``/``scatter_`` get no band C.
+
+    A plain scatter OVERWRITES the destination (last write wins) -- there is no FP32
+    accumulation, so its replay must stay on the strict global tolerance. The deep
+    duplicate-index pattern that would qualify an additive scatter must NOT qualify
+    an overwrite scatter; it falls through to depth 1.
+    """
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    saved_out = torch.empty(64).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0] += 5.0e-5
+    for func_name in ("scatter", "scatter_"):
+        layer = _make_deep_numeric_layer(
+            func_name, [torch.zeros(64), 0, deep_index, torch.ones(1024)], saved_out
+        )
+        assert _op_reduction_depth(layer) == 1, func_name
+        assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
+
+
+def test_op_reduction_depth_non_additive_scatter_reduce_is_ineligible() -> None:
+    """LOAD-BEARING: ``scatter_reduce`` max/min/prod modes get no band C.
+
+    Only the ADDITIVE ``sum``/``mean`` reduce-modes accumulate FP32 products and
+    drift with summation order; ``amax``/``amin``/``prod`` select or multiply and do
+    NOT exhibit accumulation-order round-off, so they stay strict (depth 0). The
+    additive modes remain eligible. The reduce mode is read from the ``reduce``
+    keyword (TorchLens-captured form) or positional arg 4 (free-function form).
+    """
+
+    deep_index = torch.zeros(1024, dtype=torch.long)
+    saved_out = torch.empty(64).uniform_(-1.0, 1.0)
+    recomputed = saved_out.clone()
+    recomputed[0] += 5.0e-5
+    base_args = [torch.zeros(64), 0, deep_index, torch.ones(1024)]
+
+    for mode in ("amax", "amin", "prod"):
+        kw_layer = _make_deep_numeric_layer(
+            "scatter_reduce", list(base_args), saved_out, saved_kwargs={"reduce": mode}
+        )
+        assert _op_reduction_depth(kw_layer) == 0, f"{mode} kwarg"
+        assert _deep_numeric_replay_matches_saved(kw_layer, recomputed) is False
+        pos_layer = _make_deep_numeric_layer("scatter_reduce", [*base_args, mode], saved_out)
+        assert _op_reduction_depth(pos_layer) == 0, f"{mode} positional"
+
+    for mode in ("sum", "mean"):
+        kw_layer = _make_deep_numeric_layer(
+            "scatter_reduce", list(base_args), saved_out, saved_kwargs={"reduce": mode}
+        )
+        assert _op_reduction_depth(kw_layer) == 1024, f"{mode} kwarg eligible"
+        pos_layer = _make_deep_numeric_layer("scatter_reduce", [*base_args, mode], saved_out)
+        assert _op_reduction_depth(pos_layer) == 1024, f"{mode} positional eligible"
 
 
 def test_validation_with_getitem_tensor_index():
@@ -744,6 +2240,22 @@ def test_validation_with_scatter():
     assert validate_forward_pass(model, x)
 
 
+def test_validation_with_gather_index_parent() -> None:
+    """Validate gather index tensors as structural perturbation parents."""
+
+    model = _GatherIndexModel()
+    x = torch.randn(4, 5)
+    assert validate_forward_pass(model, x, random_seed=123)
+
+
+def test_validation_with_functional_scatter_kwargs_full_overwrite() -> None:
+    """Validate functional scatter when index fully overwrites destination."""
+
+    model = _FunctionalScatterKwargsModel()
+    x = torch.randn(5, 7)
+    assert validate_forward_pass(model, x, random_seed=123)
+
+
 def test_validation_with_masked_fill():
     model = _MaskedFillModel()
     x = torch.randn(4, 4)
@@ -755,6 +2267,411 @@ def test_validation_with_functional_masked_fill() -> None:
     model = _FunctionalMaskedFillModel()
     x = torch.randn(4, 4)
     assert validate_forward_pass(model, x)
+
+
+def test_masked_fill_mixed_mask_input_branch_is_not_exempt() -> None:
+    """A mixed ``masked_fill`` mask leaves the input branch value-sensitive."""
+
+    model = _MaskedFillBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 0, False)
+
+
+def test_masked_fill_mixed_mask_fill_value_branch_is_not_exempt() -> None:
+    """A mixed ``masked_fill`` mask leaves the fill-value branch value-sensitive."""
+
+    model = _MaskedFillBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 2, False)
+
+
+def test_masked_fill_all_true_mask_input_branch_is_exempt() -> None:
+    """An all-true saved mask overwrites every input element."""
+
+    model = _MaskedFillBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 0, True)
+
+
+def test_masked_fill_all_true_mask_fill_value_branch_is_not_exempt() -> None:
+    """An all-true saved mask selects the fill-value branch everywhere."""
+
+    model = _MaskedFillBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 2, False)
+
+
+def test_masked_fill_all_false_mask_fill_value_branch_is_exempt() -> None:
+    """An all-false saved mask never selects the tensor fill-value branch."""
+
+    model = _MaskedFillBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 2, True)
+
+
+def test_masked_fill_all_false_mask_input_branch_is_not_exempt() -> None:
+    """An all-false saved mask selects the input branch everywhere."""
+
+    model = _MaskedFillBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "masked_fill", 0, False)
+
+
+def test_validation_with_setitem_slice_full_overwrite() -> None:
+    """Perturbing a fully overwritten ``__setitem__`` destination slice is exempt."""
+
+    class SetItemSliceOverwriteModel(nn.Module):
+        """Model that overwrites one destination slice with a value tensor."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Assign a replacement tensor into a selected destination slice.
+
+            Parameters
+            ----------
+            x:
+                Input tensor with a singleton slice dimension.
+
+            Returns
+            -------
+            torch.Tensor
+                Tensor after an indexed slice assignment.
+            """
+
+            destination = x.clone()
+            replacement = x[:, :, 0, :, :] + 1.0
+            destination[:, :, 0, :, :] = replacement
+            return destination
+
+    model = SetItemSliceOverwriteModel()
+    x = torch.randn(1, 3, 1, 4, 4)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        setitem_layer = _only_layer_with_func_name(trace, "__setitem__")
+        destination_parent = setitem_layer.parent_arg_positions["args"][0]
+        replacement_parent = setitem_layer.parent_arg_positions["args"][2]
+
+        assert _check_perturbation_exemptions(trace, setitem_layer, [destination_parent]) is True
+        assert _check_perturbation_exemptions(trace, setitem_layer, [replacement_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_validation_with_index_put_destination_full_overwrite() -> None:
+    """Perturbing a fully overwritten ``index_put_`` destination is exempt.
+
+    The destination's every row is overwritten by ``index_put_`` (accumulate
+    False), so its prior value is provably irrelevant -- the exact analogue of
+    the ``__setitem__`` destination-overwrite carve-out. Perturbing the VALUE
+    parent must NOT be exempt.
+    """
+
+    class IndexPutOverwriteModel(nn.Module):
+        """Model that fully overwrites a destination tensor via ``index_put_``."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite every destination row with a replacement tensor.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after a full ``index_put_`` overwrite.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x[torch.arange(x.shape[0])] + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutOverwriteModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        destination_parent = index_put_layer.parent_arg_positions["args"][0]
+        replacement_parent = index_put_layer.parent_arg_positions["args"][2]
+
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
+            is True
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [destination_parent]) is True
+        assert _check_perturbation_exemptions(trace, index_put_layer, [replacement_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
+    """A genuinely-influential ``index_put_`` destination must still be perturbed.
+
+    Only one row is overwritten; the un-indexed rows keep their prior value and
+    flow to the output, so the destination is influential. The exemption must NOT
+    fire (tripwire), and validation must still detect real sensitivity.
+    """
+
+    class IndexPutPartialModel(nn.Module):
+        """Model that overwrites only part of its ``index_put_`` destination."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite a single destination row, leaving the rest intact.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)`` with ``rows > 1``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination with one overwritten row and surviving prior rows.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.tensor([0])
+            replacement = x[[0]] + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutPartialModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        destination_parent = index_put_layer.parent_arg_positions["args"][0]
+
+        # Tripwire: the influential (partially-surviving) destination is NOT exempt.
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
+            is False
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [destination_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
+    """LOAD-BEARING: a VALUE parent equal to the destination must still be perturbed.
+
+    The index_put exemption identified its destination via ``torch.equal(perturbed,
+    destination)`` alone; if a value-parent's CONTENTS happen to equal the
+    destination, perturbing the value-parent was falsely exempted -- masking a
+    genuine sensitivity. The exemption must require the perturbed parent to be the
+    destination by ARG POSITION (``parent_arg_positions["args"][0]``), mirroring how
+    ``__setitem__`` identifies its destination. Here destination and value share
+    identical contents, so only arg-position disambiguates them.
+    """
+
+    class IndexPutValueEqualsDestModel(nn.Module):
+        """Overwrite a destination with a value tensor of identical contents."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Build destination and values with EQUAL contents, then overwrite.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after a full ``index_put_`` overwrite by an
+                equal-content value parent.
+            """
+
+            base = x * 0.0 + 3.0
+            destination = base.clone()
+            values = base.clone()  # value-parent CONTENTS equal the destination.
+            idx = torch.arange(x.shape[0])
+            destination.index_put_((idx,), values)
+            return destination
+
+    model = IndexPutValueEqualsDestModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        arg_positions = index_put_layer.parent_arg_positions["args"]
+        destination_parent = arg_positions[0]
+        value_parent = arg_positions[2]
+
+        # The value parent occupies arg slot 2, NOT 0 -- it must NOT be exempt even
+        # though its contents equal the destination (the false-exemption tripwire).
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [value_parent]) is False
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [value_parent]) is False
+
+        # The true destination (arg slot 0) remains a legitimate full-overwrite exempt.
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
+            is True
+        )
+    finally:
+        trace.cleanup()
+
+
+def test_index_put_accumulate_positional_destination_is_not_exempt() -> None:
+    """``index_put_`` with positional ``accumulate=True`` keeps destination values live."""
+
+    class IndexPutAccumulatePositionalModel(nn.Module):
+        """Model that accumulates into every destination row."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Accumulate replacement rows into the destination.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after accumulating values.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x + 1.0
+            destination.index_put_((idx,), replacement, True)
+            return destination
+
+    model = IndexPutAccumulatePositionalModel()
+    x = torch.randn(4, 5)
+
+    _assert_custom_exemption_for_arg(model, x, "index_put_", 0, False)
+
+
+def test_index_put_accumulate_kwarg_destination_is_not_exempt() -> None:
+    """``index_put_`` with kwarg ``accumulate=True`` keeps destination values live."""
+
+    class IndexPutAccumulateKwargModel(nn.Module):
+        """Model that accumulates into every destination row via kwarg."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Accumulate replacement rows into the destination.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after accumulating values.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x + 1.0
+            destination.index_put_((idx,), replacement, accumulate=True)
+            return destination
+
+    model = IndexPutAccumulateKwargModel()
+    x = torch.randn(4, 5)
+
+    _assert_custom_exemption_for_arg(model, x, "index_put_", 0, False)
+
+
+def test_index_put_duplicate_integer_indices_destination_is_not_exempt() -> None:
+    """Duplicate integer indices do not prove full destination coverage."""
+
+    class IndexPutDuplicateIndexModel(nn.Module):
+        """Model whose duplicate row indices leave one destination row live."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite with duplicate integer row indices.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(4, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after an ``index_put_`` with duplicate rows.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.tensor([0, 0, 1, 2], device=x.device)
+            replacement = x[idx] + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutDuplicateIndexModel()
+    x = torch.randn(4, 5)
+
+    _assert_custom_exemption_for_arg(model, x, "index_put_", 0, False)
+
+
+def test_index_put_index_parent_is_not_exempt() -> None:
+    """The ``index_put_`` exemption must never apply to the index parent."""
+
+    class IndexPutOverwriteModel(nn.Module):
+        """Model that fully overwrites a destination tensor via ``index_put_``."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Overwrite every destination row with a replacement tensor.
+
+            Parameters
+            ----------
+            x:
+                Input tensor of shape ``(rows, cols)``.
+
+            Returns
+            -------
+            torch.Tensor
+                Destination after a full ``index_put_`` overwrite.
+            """
+
+            destination = x.clone() + 0.5
+            idx = torch.arange(x.shape[0])
+            replacement = x + 1.0
+            destination.index_put_((idx,), replacement)
+            return destination
+
+    model = IndexPutOverwriteModel()
+    x = torch.randn(4, 5)
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        index_put_layer = _only_layer_with_func_name(trace, "index_put_")
+        index_parent = index_put_layer.parent_arg_positions["args"][(1, 0)]
+
+        assert (
+            CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [index_parent]) is False
+        )
+        assert _check_perturbation_exemptions(trace, index_put_layer, [index_parent]) is False
+    finally:
+        trace.cleanup()
 
 
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
@@ -782,6 +2699,215 @@ def test_validation_with_zeros_like():
     assert validate_forward_pass(model, x)
 
 
+def test_validation_with_new_tensor_factory_source() -> None:
+    """Perturbation skips the structural source tensor for ``new_tensor``."""
+
+    model = _NewTensorFactoryModel()
+    x = torch.randn(3, 3)
+    assert validate_forward_pass(model, x)
+
+
+def test_validation_with_remainder_dividend_below_divisor() -> None:
+    """Perturbation skips a divisor that is locally irrelevant to remainder."""
+
+    model = _RemainderDividendBelowDivisorModel()
+    x = torch.randn(3, 3)
+    assert validate_forward_pass(model, x)
+
+
+def test_where_different_branches_are_not_condition_exempt() -> None:
+    """Different ``where`` branches require real perturbation sensitivity."""
+
+    model = _WhereDifferentBranchesModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        where_layer = _only_layer_with_func_name(trace, "where")
+        condition_parent = where_layer.parent_arg_positions["args"][0]
+
+        assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [condition_parent]) is False
+        assert _check_perturbation_exemptions(trace, where_layer, [condition_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_where_mixed_condition_true_branch_is_not_exempt() -> None:
+    """A mixed saved condition leaves the true branch value-sensitive."""
+
+    model = _WhereBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, False)
+
+
+def test_where_mixed_condition_false_branch_is_not_exempt() -> None:
+    """A mixed saved condition leaves the false branch value-sensitive."""
+
+    model = _WhereBranchSelectionModel("mixed")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 2, False)
+
+
+def test_where_shared_branch_mixed_condition_is_not_branch_exempt() -> None:
+    """Equal-content ``where`` branches do not create branch-parent exemptions."""
+
+    model = _WhereSharedBranchModel()
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, False)
+    _assert_custom_exemption_for_arg(model, x, "where", 2, False)
+
+
+def test_where_all_false_condition_true_branch_is_exempt() -> None:
+    """An all-false saved condition never selects the true branch."""
+
+    model = _WhereBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, True)
+
+
+def test_where_all_false_condition_false_branch_is_not_exempt() -> None:
+    """An all-false saved condition selects the false branch everywhere."""
+
+    model = _WhereBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 2, False)
+
+
+def test_where_all_true_condition_false_branch_is_exempt() -> None:
+    """An all-true saved condition never selects the false branch."""
+
+    model = _WhereBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 2, True)
+
+
+def test_where_all_true_condition_true_branch_is_not_exempt() -> None:
+    """An all-true saved condition selects the true branch everywhere."""
+
+    model = _WhereBranchSelectionModel("all_true")
+    x = torch.randn(2, 3)
+
+    _assert_custom_exemption_for_arg(model, x, "where", 1, False)
+
+
+def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None:
+    """Branch selectedness must use saved args, not mutable parent outputs."""
+
+    model = _WhereBranchSelectionModel("all_false")
+    x = torch.randn(2, 3)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        where_layer = _only_layer_with_func_name(trace, "where")
+        condition_parent = where_layer.parent_arg_positions["args"][0]
+        true_parent = where_layer.parent_arg_positions["args"][1]
+        trace[condition_parent].out = torch.ones_like(trace[condition_parent].out)
+
+        assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [true_parent]) is True
+        assert _check_perturbation_exemptions(trace, where_layer, [true_parent]) is True
+    finally:
+        trace.cleanup()
+
+
+def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> None:
+    """TRIPWIRE: branch exemptions must not bless functionless placeholders."""
+
+    model = _UnselectedWherePlaceholderModel()
+    x = torch.randn(2, 3)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        where_layer = _only_layer_with_func_name(trace, "where")
+        unselected_parent = where_layer.parent_arg_positions["args"][2]
+
+        assert _check_perturbation_exemptions(trace, where_layer, [unselected_parent]) is True
+
+        placeholder = trace[unselected_parent]
+        placeholder.func = None
+        placeholder.func_name = "plain_placeholder"
+        placeholder.intervention_replaced = False
+        placeholder.is_internal_source = False
+
+        ground_truth = [model(x).detach().clone()]
+        with pytest.raises(MetadataInvariantError, match="func is not callable"):
+            trace.validate_forward_pass(ground_truth, validate_metadata=True)
+    finally:
+        trace.cleanup()
+
+
+def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> None:
+    """Remainder divisor perturbation is real when dividend is not the output."""
+
+    model = _RemainderDividendAtLeastDivisorModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        remainder_layer = _only_layer_with_func_name(trace, "remainder")
+        divisor_parent = remainder_layer.parent_arg_positions["args"][1]
+        ground_truth = [model(x).detach().clone()]
+
+        assert posthoc_perturb_check(trace, remainder_layer, [divisor_parent]) is False
+
+        remainder_layer.out = remainder_layer.out + 100.0
+        assert trace.validate_forward_pass(ground_truth, validate_metadata=False) is False
+    finally:
+        trace.cleanup()
+
+
+def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
+    """Only the ``new_tensor`` template arg is structural; data is value input."""
+
+    model = _NewTensorDataArgModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        new_tensor_layer = _only_layer_with_func_name(trace, "new_tensor")
+        data_parent = new_tensor_layer.parent_arg_positions["args"][1]
+
+        assert _check_perturbation_exemptions(trace, new_tensor_layer, [data_parent]) is False
+    finally:
+        trace.cleanup()
+
+
+def test_populated_multi_output_container_keeps_leaf_paths() -> None:
+    """Populated output containers must enumerate and validate real leaves."""
+
+    model = _PopulatedContainerOutputModel()
+    x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
+
+    assert validate_forward_pass(model, x, random_seed=123)
+
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        output_paths = {tuple(trace[label].container_path) for label in trace.output_layers}
+        output_path_reprs = {repr(path) for path in output_paths}
+        ground_truth = [x + 1.0, x * 2.0]
+
+        assert len(trace.output_layers) == 2
+        assert all(output_paths)
+        assert output_path_reprs == {
+            "(TupleIndex(index=0),)",
+            "(TupleIndex(index=1), DictKey(key='right'))",
+        }
+        assert trace.validate_forward_pass(ground_truth, validate_metadata=True) is True
+    finally:
+        trace.cleanup()
+
+
 def test_validation_with_empty_like():
     model = _EmptyLikeModel()
     x = torch.randn(3, 3)
@@ -806,6 +2932,21 @@ class _SimpleFF(nn.Module):
         """Run one attributed linear operation."""
 
         return self.fc(x)
+
+
+class _FirstInputModel(nn.Module):
+    """Return only the first input so the second input can remain unsaved."""
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Return the first input tensor."""
+
+        return x
+
+
+def _save_first_input_record(ctx: RecordContext) -> bool:
+    """Select only first-input records for selective-save validation tests."""
+
+    return ctx.label.startswith("input_1")
 
 
 class _RootOnlyModel(nn.Module):
@@ -842,12 +2983,51 @@ class _MidForwardGradModel(nn.Module):
         return self.fc2(hidden + adapted_bias)
 
 
+class _BufferWriteValidationModel(nn.Module):
+    """Model with one registered buffer read and write."""
+
+    def __init__(self) -> None:
+        """Initialize the registered buffer."""
+
+        super().__init__()
+        self.register_buffer("state", torch.zeros(2))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Read, mutate, and consume a registered buffer."""
+
+        y = self.state + x
+        self.state.copy_(y)
+        return self.state * x
+
+
+class _FuncCallSplitValidationModel(nn.Module):
+    """Model with a multi-output torch call in plain capture."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Split and recombine two tensor outputs."""
+
+        left, right = torch.split(x, 1, dim=0)
+        return left + right
+
+
 def _make_clean_log() -> Trace:
     """Return a Trace with all outs and metadata for a simple FF model."""
     from torchlens import trace as trace_fn
 
     model = _SimpleFF()
     return trace_fn(model, torch.randn(2, 5), random_seed=42)
+
+
+def _make_buffer_write_log() -> Trace:
+    """Return a trace with static and write buffer versions."""
+
+    return trace_fn(_BufferWriteValidationModel(), torch.ones(2), save_arg_values=True)
+
+
+def _make_func_call_split_log() -> Trace:
+    """Return a plain trace with a populated multi-output func_call_id group."""
+
+    return trace_fn(_FuncCallSplitValidationModel(), torch.randn(2, 3), random_seed=42)
 
 
 def _make_root_only_log() -> Trace:
@@ -957,6 +3137,484 @@ def test_region_replay_annotation_with_importer_provenance_passes_tripwire() -> 
         log.cleanup()
 
 
+def test_backend_identity_invariants_reject_torch_param_source_none_with_params() -> None:
+    """Torch identity invariants reject ``param_source='none'`` with params present."""
+
+    log = _make_clean_log()
+    try:
+        assert log.backend == "torch"
+        assert log.module_identity_mode == "torch_module"
+        assert log.param_source == "native-module"
+        assert log.num_param_tensors > 0
+
+        log.param_source = "none"
+
+        with pytest.raises(MetadataInvariantError, match="param_source='none'"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backend_identity_invariants_pass_healthy_resnet() -> None:
+    """Backend identity preconditions fire on a healthy torch ResNet trace."""
+
+    torchvision_models = pytest.importorskip("torchvision.models")
+    model = torchvision_models.resnet18(weights=None).eval()
+    log = trace_fn(model, torch.randn(1, 3, 32, 32), random_seed=42)
+    try:
+        assert log.backend == "torch"
+        assert log.module_identity_mode == "torch_module"
+        assert log.param_source == "native-module"
+        assert log.num_param_tensors > 0
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_backend_neutral_accessor_refs_reject_invalid_torch_status() -> None:
+    """Structural neutral accessor checks reject bad torch resolver status."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        assert victim.resolver_status == "resolved"
+
+        victim.resolver_status = "bogus"
+
+        with pytest.raises(MetadataInvariantError, match="invalid resolver_status"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backend_neutral_accessor_refs_reject_malformed_torch_dtype_ref() -> None:
+    """Structural neutral accessor checks reject refs missing a name."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        assert victim.dtype_ref is not None
+
+        victim.dtype_ref = SimpleNamespace(backend="torch", name="")
+
+        with pytest.raises(MetadataInvariantError, match="malformed dtype_ref"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backend_neutral_accessor_refs_pass_healthy_torch_trace() -> None:
+    """Structural neutral accessor preconditions fire on a healthy torch trace."""
+
+    log = _make_clean_log()
+    try:
+        records = [
+            *log.layer_list,
+            *list(log.layer_logs.values()),
+            *list(log.param_logs.values()),
+        ]
+        assert any(getattr(record, "resolver_status", None) == "resolved" for record in records)
+        assert any(getattr(record, "dtype_ref", None) is not None for record in records)
+        assert any(getattr(record, "device_ref", None) is not None for record in records)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_buffer_static_version_invariant_rejects_empty_versions() -> None:
+    """Buffer static-version contract rejects an accessor entity with no versions."""
+
+    log = _make_buffer_write_log()
+    try:
+        buffer = next(iter(log.buffers))
+        assert buffer.versions
+
+        buffer.versions = []
+
+        with pytest.raises(MetadataInvariantError, match="has no version nodes"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_write_version_invariant_rejects_sparse_pass_set() -> None:
+    """Buffer write-version contract rejects non-dense buffer_pass values."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.buffer_pass == 2
+
+        write_version.buffer_pass = 3
+
+        with pytest.raises(MetadataInvariantError, match="dense as a set"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
+    """Buffer write-version contract rejects populated sources that do not resolve."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.buffer_source is not None
+
+        write_version.buffer_source = "missing_raw_label"
+
+        with pytest.raises(MetadataInvariantError, match="unresolved buffer_source"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
+    """Replay-validated contract rejects a write version without saved source args."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.buffer_source is not None
+        assert write_version.saved_args
+
+        write_version.buffer_replay_validated = True
+        write_version.saved_args = []
+
+        with pytest.raises(MetadataInvariantError, match="saved source argument"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_buffer_integrity_preconditions_reach_real_trace() -> None:
+    """Buffer integrity contracts fire on static and write versions in a real trace."""
+
+    log = _make_buffer_write_log()
+    try:
+        buffer = next(iter(log.buffers))
+        assert buffer.versions
+        assert any(version.buffer_write_kind is None for version in buffer.versions)
+        assert any(version.buffer_write_kind is not None for version in buffer.versions)
+        assert {version.buffer_pass for version in buffer.versions} == {1, 2}
+        assert any(version.buffer_source is not None for version in buffer.versions)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_invariant_rejects_invalid_existing_record_kind() -> None:
+    """Edge-use contract rejects an invalid kind on a populated edge-use record."""
+
+    log = _make_clean_log()
+    try:
+        layer = next(layer for layer in log.layer_list if layer._edge_uses)
+        layer._edge_uses[0] = replace(layer._edge_uses[0], edge_use="bogus")
+
+        with pytest.raises(MetadataInvariantError, match="invalid edge_use kind"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_invariant_rejects_missing_parent_arg_reference() -> None:
+    """Parent-arg contract rejects populated entries whose labels do not resolve."""
+
+    log = _make_clean_log()
+    try:
+        layer = next(layer for layer in log.layer_list if layer.parent_arg_positions["args"])
+        first_position = next(iter(layer.parent_arg_positions["args"]))
+        layer.parent_arg_positions["args"][first_position] = "missing_parent_label"
+
+        with pytest.raises(MetadataInvariantError, match="references missing parent"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_parent_arg_preconditions_reach_real_trace() -> None:
+    """Edge-use and parent-arg contracts inspect populated metadata on a real trace."""
+
+    log = _make_clean_log()
+    try:
+        edge_use_layers = [layer for layer in log.layer_list if layer._edge_uses]
+        parent_arg_layers = [
+            layer
+            for layer in log.layer_list
+            if layer.parent_arg_positions["args"] or layer.parent_arg_positions["kwargs"]
+        ]
+        assert edge_use_layers
+        assert parent_arg_layers
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
+    """Buffer-source parent edges are valid even without per-edge use records."""
+
+    log = _make_buffer_write_log()
+    try:
+        write_version = next(
+            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+        )
+        assert write_version.parents
+        assert not write_version._edge_uses
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_stale_internal_source_label_is_relogged_not_reused() -> None:
+    """A stale tensor label must not become a missing live-index parent."""
+
+    from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+
+    model = _StaleLabelConstantModel()
+    set_tensor_label(model.constant, "internalsource_1_2_raw")
+
+    log = trace_fn(model, torch.zeros(2, 2))
+    try:
+        raw_labels = {entry._label_raw for entry in log.layer_list}
+        assert "internalsource_1_2_raw" not in raw_labels
+        assert get_tensor_label(model.constant) != "internalsource_1_2_raw"
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+    set_tensor_label(model.constant, "internalsource_1_2_raw")
+    assert validate_forward_pass(model, torch.zeros(2, 2), validate_metadata=True)
+
+
+def test_module_output_structure_allows_literal_metadata_fields() -> None:
+    """Module output-structure paths compare tensor leaves only."""
+
+    log = trace_fn(
+        _TensorLiteralOutputModel(),
+        torch.zeros(2, 2),
+        capture_container_structure=True,
+    )
+    try:
+        root_call = log.module_calls["self:1"]
+        assert root_call.output_ops == ["output_1"]
+        assert log[root_call.output_ops[0]].container_path
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_param_deep_xref_rejects_missing_op_back_reference() -> None:
+    """Param usage cannot point at an Op that no longer lists that Param."""
+
+    log = _make_clean_log()
+    try:
+        param = next(param for param in log.param_logs if param.used_by_ops)
+        op = log[param.used_by_ops[0]]
+        assert any(candidate.address == param.address for candidate in op._param_logs)
+
+        op._param_logs = [
+            candidate for candidate in op._param_logs if candidate.address != param.address
+        ]
+
+        with pytest.raises(MetadataInvariantError, match="does not list the Param"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_param_deep_xref_preconditions_reach_real_trace() -> None:
+    """Param deep-xref checks inspect populated reciprocal links on a real trace."""
+
+    log = _make_clean_log()
+    try:
+        used_params = [param for param in log.param_logs if param.num_uses_by_ops > 0]
+        assert used_params
+        assert any(param.used_by_layers for param in used_params)
+        assert log.layers_with_params
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
+    """Recurrent/shared params pass with pass-qualified uses and deduped aggregates."""
+
+    log = _make_recurrent_log()
+    try:
+        recurrent_param = next(param for param in log.param_logs if param.num_uses_by_ops > 1)
+        assert recurrent_param.num_uses_by_ops == len(recurrent_param.used_by_ops)
+        assert len(recurrent_param.used_by_layers) == 1
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None:
+    """Live transformed payload metadata must match the retained tensor."""
+
+    log = trace_fn(
+        _SimpleFF(),
+        torch.randn(2, 5),
+        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
+        random_seed=42,
+    )
+    try:
+        victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
+        assert victim.transformed_out_shape == ()
+
+        victim.transformed_out_shape = (999,)
+
+        with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> None:
+    """Live raw payload metadata must still be checked when the payload is retained."""
+
+    log = trace_fn(_SimpleFF(), torch.randn(2, 5), random_seed=42)
+    try:
+        victim = next(layer for layer in log.layer_list if layer.has_saved_activation)
+        assert victim.out is not None
+
+        victim.activation_memory = 999
+
+        with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None:
+    """Payload metadata checks inspect live raw and transformed activation payloads."""
+
+    log = trace_fn(
+        _SimpleFF(),
+        torch.randn(2, 5),
+        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
+        random_seed=42,
+    )
+    try:
+        assert any(layer.out is not None for layer in log.layer_list)
+        assert any(layer.transformed_out is not None for layer in log.layer_list)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_allows_selective_save_validation() -> None:
+    """Metadata validation must not read intentionally unsaved selective-save payloads."""
+
+    model = _FirstInputModel()
+    x = torch.randn(2, 5)
+    y = torch.randn(2, 5)
+    log = trace_fn(model, [x, y], save=_save_first_input_record, random_seed=42)
+    try:
+        assert any(not layer.has_saved_activation for layer in log.layer_list)
+        assert log.validate_forward_pass([x], validate_metadata=True) is True
+    finally:
+        log.cleanup()
+
+
+def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
+    """Gradient metadata without a live payload is legitimate after eviction."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(
+            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+        )
+        victim.grad = None
+        victim.transformed_grad = None
+        victim.has_grad = False
+        victim.grad_shape = (2, 3)
+        victim.grad_dtype = torch.float32
+        victim.gradient_memory = 24
+
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
+    """Plain capture compute ops must retain populated func_call_id metadata."""
+
+    log = _make_clean_log()
+    try:
+        victim = next(
+            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+        )
+        assert victim.func_call_id is not None
+
+        victim.func_call_id = None
+
+        with pytest.raises(MetadataInvariantError, match="has no func_call_id"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_invariant_rejects_plain_group_func_name_mismatch() -> None:
+    """Plain same-call groups compare function name and container spec only."""
+
+    log = _make_func_call_split_log()
+    try:
+        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        assert len(split_layers) == 2
+        assert len({layer.func_call_id for layer in split_layers}) == 1
+
+        split_layers[1].func_name = "chunk"
+
+        with pytest.raises(MetadataInvariantError, match="incompatible call metadata"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_plain_preconditions_reach_real_trace() -> None:
+    """The func_call_id check runs on a plain exhaustive multi-output trace."""
+
+    log = _make_func_call_split_log()
+    try:
+        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        assert len(split_layers) == 2
+        assert len({layer.func_call_id for layer in split_layers}) == 1
+        assert all(layer.container_path for layer in split_layers)
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_func_call_id_invariant_allows_sparse_recording_projection() -> None:
+    """Sparse recording projections do not require templates or container specs."""
+
+    recording = tl.record(
+        _SimpleLinear(),
+        torch.randn(2, 10),
+        save=tl.func("linear"),
+    )
+    log = recording.to_trace()
+    try:
+        compute_layers = [
+            layer for layer in log.layer_list if not (layer.is_input or layer.is_output)
+        ]
+        assert compute_layers
+        assert any(layer.func_call_id is not None for layer in compute_layers)
+        assert all(layer.args_template is None for layer in compute_layers)
+        assert all(layer.container_spec is None for layer in compute_layers)
+        result = check_func_call_id_invariant(log)
+        assert result.passed is True
+    finally:
+        log.cleanup()
+
+
 def test_clean_log_ops_as_method():
     """check_metadata_invariants works as a bound method on Trace."""
     log = _make_clean_log()
@@ -979,6 +3637,68 @@ def test_backward_invariants_with_intervening() -> None:
     assert any(not grad_fn_handle.has_op for grad_fn_handle in log.grad_fn_logs.values())
     assert check_metadata_invariants(log) is True
     log.cleanup()
+
+
+def test_grad_fn_topology_rejects_missing_reverse_child_link() -> None:
+    """Backward GradFn parent/child links must be bidirectional."""
+
+    log = _make_backward_log()
+    try:
+        parent = next(grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.children)
+        child = next(
+            grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.label == parent.children[0]
+        )
+        child.parents = [label for label in child.parents if label != parent.label]
+
+        with pytest.raises(MetadataInvariantError, match="does not list"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backward_pass_domain_rejects_invalid_status() -> None:
+    """BackwardPass domain fields reject values outside event enums."""
+
+    log = _make_backward_log()
+    try:
+        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass.status = "finished"
+
+        with pytest.raises(MetadataInvariantError, match="invalid status"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backward_pass_domain_rejects_root_mismatch() -> None:
+    """BackwardPass roots must agree with trace-level roots for the pass."""
+
+    log = _make_backward_log()
+    try:
+        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass.root_grad_fn_ids = []
+
+        with pytest.raises(MetadataInvariantError, match="root_grad_fn_ids do not match"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
+    """Phase-D backward checks run on a real backward-captured trace."""
+
+    log = _make_backward_log()
+    try:
+        assert log.has_backward_pass
+        assert log.grad_fn_logs
+        assert log.backward_pass_logs
+        assert any(
+            grad_fn.children or grad_fn.parents or grad_fn.next_grad_fn_ids
+            for grad_fn in log.grad_fn_logs.values()
+        )
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
 
 
 def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> None:
@@ -1135,6 +3855,64 @@ def test_corruption_module_back_reference():
     log.cleanup()
 
 
+def test_module_call_boundary_rejects_output_outside_ops() -> None:
+    """ModuleCall output ops must be produced inside the call."""
+
+    log = _make_nested_log()
+    try:
+        victim = log.modules["fc"].ops["fc:1"]
+        external_input = victim.input_ops[0]
+        assert external_input not in victim.ops
+
+        victim.output_ops = [external_input]
+
+        with pytest.raises(MetadataInvariantError, match="outside its ops"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_module_call_boundary_allows_external_inputs_on_nested_modules() -> None:
+    """ModuleCall input ops are allowed to come from the parent scope."""
+
+    log = _make_nested_log()
+    try:
+        fc_call = log.modules["fc"].ops["fc:1"]
+        assert fc_call.input_ops
+        assert fc_call.input_ops[0] not in fc_call.ops
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_module_call_tree_preconditions_reach_nested_trace() -> None:
+    """ModuleCall call-tree links and stacks are populated on a nested trace."""
+
+    log = _make_nested_log()
+    try:
+        layer1_call = log.module_calls["layer1:1"]
+        layer10_call = log.module_calls["layer1.0:1"]
+        assert layer1_call.call_parent == "self:1"
+        assert "layer1.0:1" in layer1_call.call_children
+        assert layer10_call.module_call_stack == ["layer1:1"]
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_module_call_output_structure_precondition_reaches_real_trace() -> None:
+    """Populated ModuleCall output structures are scoped to retained outputs."""
+
+    log = _make_tuple_output_module_log()
+    try:
+        sub_call = log.module_calls["sub:1"]
+        assert sub_call.output_structure is not None
+        assert sub_call.output_ops
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
 def test_torch_trace_metadata_invariants_still_green() -> None:
     """Torch traces still validate through the unchanged torch invariant path."""
 
@@ -1256,6 +4034,31 @@ class _NestedModel(nn.Module):
         return self.fc(x)
 
 
+class _TupleOutputSubmodule(nn.Module):
+    """Submodule that returns a tuple of tensors."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return two tensor leaves."""
+
+        return x + 1, x + 2
+
+
+class _TupleOutputModule(nn.Module):
+    """Model with a real ModuleCall output structure."""
+
+    def __init__(self) -> None:
+        """Initialize the tuple-output submodule."""
+
+        super().__init__()
+        self.sub = _TupleOutputSubmodule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Use one output from a tuple-returning child module."""
+
+        left, _right = self.sub(x)
+        return left * 2
+
+
 def _make_recurrent_log():
     from torchlens import trace as trace_fn
 
@@ -1266,6 +4069,14 @@ def _make_nested_log():
     from torchlens import trace as trace_fn
 
     return trace_fn(_NestedModel(), torch.randn(2, 5), random_seed=42)
+
+
+def _make_tuple_output_module_log() -> Trace:
+    """Return a trace with a ModuleCall output structure."""
+
+    from torchlens import trace as trace_fn
+
+    return trace_fn(_TupleOutputModule(), torch.randn(2, 5), random_seed=42)
 
 
 # -- M. Graph ordering corruption --
@@ -1703,15 +4514,6 @@ class _VmapMaskModel(nn.Module):
         return self.consumer(x, mask)
 
 
-class _ArangeInternalSourceOutputModel(nn.Module):
-    """Return a parentless internal-source tensor as the final output."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return an arange source that has no tensor parents."""
-
-        return torch.arange(x.shape[-1], device=x.device)
-
-
 def _functionless_replacement_ops(log: "Trace") -> list:
     """Return ops that are auto-synthesized functionless intervention placeholders.
 
@@ -1761,22 +4563,6 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     assert validate_forward_pass(model, [x], input_kwargs={})
 
 
-def test_plain_trace_internal_source_final_output_is_exempted() -> None:
-    """A structurally proven internal source may be the final output."""
-
-    model = _ArangeInternalSourceOutputModel().eval()
-    x = torch.randn(4, 4)
-    log = trace_fn(model, [x], {})
-    try:
-        assert log.output_layers == ["output_1"]
-        output_parent = log[log["output_1"].parents[0]]
-        assert output_parent.is_internal_source
-        check_metadata_invariants(log)
-        assert validate_forward_pass(model, [x], input_kwargs={})
-    finally:
-        log.cleanup()
-
-
 def test_plain_trace_mistral_has_no_functionless_replacement():
     """TRIPWIRE on the real reproducer: tiny Mistral must trace cleanly.
 
@@ -1804,6 +4590,129 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
     assert _functionless_replacement_ops(log) == []
     assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
     check_metadata_invariants(log)
+
+
+# ---------------------------------------------------------------------------
+# one-arg torch.where(condition) == nonzero index exemption (DUAL-LAB 2026-06-30)
+# ---------------------------------------------------------------------------
+
+
+def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
+    """Build a minimal ``where`` op layer mock for the one-arg index discriminator."""
+
+    return SimpleNamespace(
+        func_name="where",
+        saved_args=saved_args,
+        saved_kwargs=saved_kwargs,
+        dtype=dtype,
+        out=torch.zeros(4, dtype=dtype),
+        layer_label="where_1_1",
+    )
+
+
+def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
+    """One-arg positional ``torch.where(cond)`` (nonzero index form) is recognized."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer((torch.tensor([1, 0, 1, 0], dtype=torch.int64),), {})
+    assert _check_one_arg_where_index_exempt(layer) is True
+
+
+def test_one_arg_where_keyword_nonzero_is_index_exempt() -> None:
+    """Keyword ``torch.where(condition=cond)`` nonzero index form is recognized."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer((), {"condition": torch.tensor([1, 0, 1, 0], dtype=torch.int64)})
+    assert _check_one_arg_where_index_exempt(layer) is True
+
+
+def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
+    """LOAD-BEARING: ``torch.where(cond, input=a, other=b)`` (value select, branches in
+    kwargs, captured as len(saved_args)==1 with int output) must NOT be treated as the
+    one-arg index form -- the tripwire must stay armed for a genuine value-dependent branch."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer(
+        (torch.tensor([True, False, True, False]),),
+        {
+            "input": torch.tensor([1, 2, 3, 4], dtype=torch.int64),
+            "other": torch.tensor([5, 6, 7, 8], dtype=torch.int64),
+        },
+    )
+    assert _check_one_arg_where_index_exempt(layer) is False
+
+
+def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None:
+    """A 3-arg positional value-select ``where`` is never the one-arg index form."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer(
+        (
+            torch.tensor([True, False, True, False]),
+            torch.tensor([1, 2, 3, 4], dtype=torch.int64),
+            torch.tensor([5, 6, 7, 8], dtype=torch.int64),
+        ),
+        {},
+    )
+    assert _check_one_arg_where_index_exempt(layer) is False
+
+
+def test_float_output_where_is_not_one_arg_index_exempt() -> None:
+    """A non-integer output ``where`` is never treated as the one-arg index form."""
+
+    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+
+    layer = _where_layer((torch.tensor([1.0, 0.0, 1.0, 0.0]),), {}, dtype=torch.float32)
+    assert _check_one_arg_where_index_exempt(layer) is False
+
+
+class _OneArgWhereModel(nn.Module):
+    """Model exercising the one-arg ``torch.where(cond)`` nonzero index form."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sum over the nonzero indices of a boolean condition."""
+
+        condition = x > 0
+        indices = torch.where(condition)
+        return indices[0].sum() + x.sum()
+
+
+def test_one_arg_where_model_validates_forward() -> None:
+    """End-to-end: a model using one-arg ``torch.where`` passes forward replay validation."""
+
+    torch.manual_seed(0)
+    model = _OneArgWhereModel().eval()
+    example = torch.randint(-3, 3, (8,))
+    assert tl.validate(model, example, scope="forward") is True
+
+
+class _ArangeInternalSourceOutputModel(nn.Module):
+    """Return a parentless internal-source tensor as the final output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return an arange source that has no tensor parents."""
+
+        return torch.arange(x.shape[-1], device=x.device)
+
+
+def test_plain_trace_internal_source_final_output_is_exempted() -> None:
+    """A structurally proven internal source may be the final output."""
+
+    model = _ArangeInternalSourceOutputModel().eval()
+    x = torch.randn(4, 4)
+    log = trace_fn(model, [x], {})
+    try:
+        assert log.output_layers == ["output_1"]
+        output_parent = log[log["output_1"].parents[0]]
+        assert output_parent.is_internal_source
+        check_metadata_invariants(log)
+        assert validate_forward_pass(model, [x], input_kwargs={})
+    finally:
+        log.cleanup()
 
 
 class _RawAtenReluModule(nn.Module):

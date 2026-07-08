@@ -12,14 +12,14 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from menagerie.catalog import CATALOG_DB, CatalogRow, load_rows
-from menagerie.generate_menagerie import (
-    classics_example_input,
-    cuda_is_available,
+from menagerie.recipe import (
+    build_input_for_row,
     instantiate_model,
-    is_classics_row,
+)
+from menagerie.runtime import (
+    cuda_is_available,
     is_device_related_error,
     move_model_and_input_to_device,
-    tensor_for_recipe,
     unrenderable_reason,
 )
 
@@ -42,12 +42,18 @@ class HashRecord:
         Source or tracing status.
     error:
         Error text, when tracing failed.
+    stable_id:
+        Opaque durable model identity, when available.
+    recipe_revision_sha256:
+        Frozen recipe fingerprint, when available.
     """
 
     name: str
     graph_shape_hash: str
     status: str = ""
     error: str = ""
+    stable_id: str = ""
+    recipe_revision_sha256: str = ""
 
 
 def read_manifest_records(manifest_path: Path) -> tuple[list[HashRecord], bool]:
@@ -74,6 +80,8 @@ def read_manifest_records(manifest_path: Path) -> tuple[list[HashRecord], bool]:
                 name=str(row.get("name", "")),
                 graph_shape_hash=str(row.get("graph_shape_hash", "") or ""),
                 status=str(row.get("status", "") or ""),
+                stable_id=str(row.get("stable_id", "") or ""),
+                recipe_revision_sha256=str(row.get("recipe_revision_sha256", "") or ""),
             )
             for row in reader
             if row.get("name")
@@ -95,9 +103,7 @@ def build_input(row: CatalogRow) -> Any:
         Example input object.
     """
 
-    if is_classics_row(row):
-        return classics_example_input(row)
-    return tensor_for_recipe(row.input_shape, row.input_dtype)
+    return build_input_for_row(row)
 
 
 def trace_graph_shape_hash(model: Any, input_value: Any) -> str:

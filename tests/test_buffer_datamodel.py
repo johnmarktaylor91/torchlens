@@ -4,15 +4,64 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch import buffer_writes
+from torchlens.data_classes.cleanup import _scrub_per_op_equivalence_lists
 
 
 TensorFactory = Callable[[], torch.Tensor]
+
+
+def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None:
+    """Deleted buffer nodes leave no stale raw labels for final label mapping."""
+
+    op = SimpleNamespace(
+        parents=["buffer_3_raw", "add_1_raw"],
+        root_ancestors={"buffer_3_raw", "input_1_raw"},
+        children=["mul_1_raw", "buffer_3_raw"],
+        input_ancestors={"input_1_raw"},
+        output_descendants={"buffer_3_raw", "output_1_raw"},
+        internal_source_parents=["buffer_3_raw"],
+        internal_source_ancestors={"buffer_3_raw"},
+        conditional_entry_children=["buffer_3_raw"],
+        conditional_then_children=["buffer_3_raw", "relu_1_raw"],
+        conditional_else_children=[],
+        equivalent_ops=["buffer_3_raw", "add_1_raw"],
+        recurrent_ops=["buffer_3_raw"],
+        parent_arg_positions={
+            "args": {0: "buffer_3_raw", 1: "add_1_raw"},
+            "kwargs": {"bias": "buffer_3_raw"},
+        },
+        out_versions_by_child={"buffer_3_raw": torch.ones(1), "add_1_raw": torch.zeros(1)},
+        conditional_elif_children={0: ["buffer_3_raw", "add_1_raw"]},
+        conditional_arm_children={1: {"then": ["buffer_3_raw"], "else": ["add_1_raw"]}},
+    )
+
+    _scrub_per_op_equivalence_lists([op], {"buffer_3_raw"})
+
+    assert op.parents == ["add_1_raw"]
+    assert op.root_ancestors == {"input_1_raw"}
+    assert op.children == ["mul_1_raw"]
+    assert op.output_descendants == {"output_1_raw"}
+    assert op.internal_source_parents == []
+    assert op.internal_source_ancestors == set()
+    assert op.conditional_entry_children == []
+    assert op.conditional_then_children == ["relu_1_raw"]
+    # NOTE: op_equivalence_classes is a Trace-level dict, never a per-op field;
+    # the dead per-op scrub for it was removed by the cert round-1 data-model fix.
+    assert op.equivalent_ops == ["add_1_raw"]
+    assert op.recurrent_ops == []
+    assert op.parent_arg_positions == {"args": {1: "add_1_raw"}, "kwargs": {}}
+    assert set(op.out_versions_by_child) == {"add_1_raw"}
+    assert op.conditional_elif_children == {0: ["add_1_raw"]}
+    assert op.conditional_arm_children == {1: {"then": [], "else": ["add_1_raw"]}}
 
 
 class RecurrentReassign(nn.Module):
@@ -245,6 +294,40 @@ def test_storage_aliased_buffer_first_read_keeps_pre_mutation_snapshot() -> None
     assert torch.equal(trace["sum_2_3"].out, torch.tensor(2.0))
 
 
+class ManyBufferWrites(nn.Module):
+    """Model with many registered buffers but writes to only one of them."""
+
+    def __init__(self, num_extra_buffers: int = 48, steps: int = 8, extra_ops: int = 0) -> None:
+        """Initialize a repeated-write model with many unrelated buffers.
+
+        Parameters
+        ----------
+        num_extra_buffers:
+            Number of read-free registered buffers used to stress lookup scale.
+        steps:
+            Number of in-place writes to the target buffer.
+        extra_ops:
+            Number of additional non-buffer-writing ops appended to the forward.
+        """
+
+        super().__init__()
+        self.steps = steps
+        self.extra_ops = extra_ops
+        self.register_buffer("target", torch.zeros(2))
+        for index in range(num_extra_buffers):
+            self.register_buffer(f"unused_{index}", torch.full((2,), float(index)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Repeatedly mutate the target buffer while passing a non-buffer tensor arg."""
+
+        for _ in range(self.steps):
+            self.target.add_(x)
+        out = self.target + x
+        for _ in range(self.extra_ops):
+            out = out + 1.0
+        return out
+
+
 @pytest.mark.parametrize(
     ("model_factory", "input_factory", "expected_overwrites"),
     [
@@ -324,6 +407,51 @@ def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
     assert trace.layer_list.index(add_op) < trace.layer_list.index(buffer_2_op)
     assert batchnorm_op.raw_index < buffer_5_op.raw_index
     assert trace.layer_list.index(batchnorm_op) < trace.layer_list.index(buffer_5_op)
+
+
+def test_buffer_write_lookup_avoids_per_op_full_storage_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Storage-key calls scale with buffer WRITES, never with total op count.
+
+    The overlapping-alias refresh deliberately re-derives every registered
+    buffer's storage key on each journaled WRITE (a stale-index-safe full scan;
+    cert round-1 backends fix), so the write path is allowed to cost
+    O(writes x buffers). The regression this test guards against is the
+    pre-index pathology where EVERY traced op paid a full storage scan
+    (O(ops x buffers)): adding non-buffer-writing ops must cost only a few
+    per-op resolution lookups, never a per-op sweep over all buffers.
+    """
+
+    call_count = 0
+    original_storage_key = buffer_writes.storage_key
+
+    def counted_storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
+        """Count storage-key computations while preserving real behavior."""
+
+        nonlocal call_count
+        call_count += 1
+        return original_storage_key(tensor)
+
+    monkeypatch.setattr(buffer_writes, "storage_key", counted_storage_key)
+
+    num_buffers = 48 + 1
+    extra_ops = 16
+
+    trace = tl.trace(ManyBufferWrites(num_extra_buffers=48, steps=8), torch.ones(2))
+    base_count = call_count
+
+    call_count = 0
+    trace_extra = tl.trace(
+        ManyBufferWrites(num_extra_buffers=48, steps=8, extra_ops=extra_ops), torch.ones(2)
+    )
+    extra_count = call_count
+
+    assert trace.graph_shape_hash is not None
+    assert trace_extra.graph_shape_hash is not None
+    # A per-op full scan would add ~num_buffers calls for EACH extra op
+    # (~16 * 49 = 784); genuine per-op resolution adds only a handful.
+    assert extra_count - base_count < extra_ops * (num_buffers // 6)
 
 
 def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:

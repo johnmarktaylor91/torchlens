@@ -156,6 +156,7 @@ def _load_classics() -> dict[str, dict[str, Any]]:
             "family": canonical_name,
             "era": era,
             "paper": _paper_from_docstring(docstring),
+            "zoo": getattr(module, "MENAGERIE_ZOO", None) or CLASSIC_ZOO,
         }
 
     # Batch-2+ self-declaring modules: each exposes
@@ -182,14 +183,21 @@ def _load_classics() -> dict[str, dict[str, Any]]:
         for entry in entries:
             try:
                 canonical_name, build_attr, example_attr, year, code = entry
+                # Tolerate MENAGERIE_ENTRIES that pass callables directly instead of string
+                # attribute names (some generators emit the function objects).
+                build = build_attr if callable(build_attr) else getattr(module, build_attr)
+                example_input = (
+                    example_attr if callable(example_attr) else getattr(module, example_attr)
+                )
                 registry[canonical_name] = {
                     "module_path": module_path,
-                    "build": getattr(module, build_attr),
-                    "example_input": getattr(module, example_attr),
+                    "build": build,
+                    "example_input": example_input,
                     "year": str(year) or _year_from_docstring(docstring),
                     "family": canonical_name,
                     "era": code,
                     "paper": _paper_from_docstring(docstring),
+                    "zoo": getattr(module, "MENAGERIE_ZOO", None) or CLASSIC_ZOO,
                 }
             except Exception as exc:  # noqa: BLE001
                 CLASSICS_LOAD_ERRORS.append((stem, f"entry {entry!r}: {type(exc).__name__}: {exc}"))

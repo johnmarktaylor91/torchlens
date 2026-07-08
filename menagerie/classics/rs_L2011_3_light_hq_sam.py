@@ -1,0 +1,1294 @@
+# SOURCE: vendored from SysCV/sam-hq @ main (segment_anything/modeling/{tiny_vit_sam,mask_decoder_hq,
+# prompt_encoder,transformer,common,sam}.py + build_sam.py:build_sam_vit_t). Imports/relative-paths
+# adjusted minimally to collapse the package into one staging module; architecture untouched.
+# Light HQ-SAM = HQ-SAM's ViT-Tiny (Microsoft TinyViT backbone, MobileSAM-style) variant: fast
+# zero-shot promptable segmentation with the HQ-SAM high-quality mask-token decoder head.
+# Original copyright: Meta Platforms (Apache-2.0, base SAM code) + SysCV HQ-SAM team (mask_decoder_hq,
+# tiny_vit wiring) + Microsoft (TinyViT, MIT, adapted from LeViT/Swin).
+
+import itertools
+import math
+from functools import partial
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+import torch
+import torch.nn.functional as F
+from timm.models.layers import DropPath as TimmDropPath
+from timm.models.layers import to_2tuple, trunc_normal_
+from torch import Tensor, nn
+
+# ============================================================================
+# common.py
+# ============================================================================
+
+
+class MLPBlock(nn.Module):
+    def __init__(self, embedding_dim: int, mlp_dim: int, act: Type[nn.Module] = nn.GELU) -> None:
+        super().__init__()
+        self.lin1 = nn.Linear(embedding_dim, mlp_dim)
+        self.lin2 = nn.Linear(mlp_dim, embedding_dim)
+        self.act = act()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin2(self.act(self.lin1(x)))
+
+
+class LayerNorm2d(nn.Module):
+    def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(num_channels))
+        self.bias = nn.Parameter(torch.zeros(num_channels))
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        u = x.mean(1, keepdim=True)
+        s = (x - u).pow(2).mean(1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.eps)
+        x = self.weight[:, None, None] * x + self.bias[:, None, None]
+        return x
+
+
+# ============================================================================
+# tiny_vit_sam.py
+# ============================================================================
+
+
+class Conv2d_BN(torch.nn.Sequential):
+    def __init__(self, a, b, ks=1, stride=1, pad=0, dilation=1, groups=1, bn_weight_init=1):
+        super().__init__()
+        self.add_module("c", torch.nn.Conv2d(a, b, ks, stride, pad, dilation, groups, bias=False))
+        bn = torch.nn.BatchNorm2d(b)
+        torch.nn.init.constant_(bn.weight, bn_weight_init)
+        torch.nn.init.constant_(bn.bias, 0)
+        self.add_module("bn", bn)
+
+
+class DropPath(TimmDropPath):
+    def __init__(self, drop_prob=None):
+        super().__init__(drop_prob=drop_prob)
+        self.drop_prob = drop_prob
+
+    def __repr__(self):
+        msg = super().__repr__()
+        msg += f"(drop_prob={self.drop_prob})"
+        return msg
+
+
+class PatchEmbed(nn.Module):
+    def __init__(self, in_chans, embed_dim, resolution, activation):
+        super().__init__()
+        img_size: Tuple[int, int] = to_2tuple(resolution)
+        self.patches_resolution = (img_size[0] // 4, img_size[1] // 4)
+        self.num_patches = self.patches_resolution[0] * self.patches_resolution[1]
+        self.in_chans = in_chans
+        self.embed_dim = embed_dim
+        n = embed_dim
+        self.seq = nn.Sequential(
+            Conv2d_BN(in_chans, n // 2, 3, 2, 1),
+            activation(),
+            Conv2d_BN(n // 2, n, 3, 2, 1),
+        )
+
+    def forward(self, x):
+        return self.seq(x)
+
+
+class MBConv(nn.Module):
+    def __init__(self, in_chans, out_chans, expand_ratio, activation, drop_path):
+        super().__init__()
+        self.in_chans = in_chans
+        self.hidden_chans = int(in_chans * expand_ratio)
+        self.out_chans = out_chans
+
+        self.conv1 = Conv2d_BN(in_chans, self.hidden_chans, ks=1)
+        self.act1 = activation()
+
+        self.conv2 = Conv2d_BN(
+            self.hidden_chans, self.hidden_chans, ks=3, stride=1, pad=1, groups=self.hidden_chans
+        )
+        self.act2 = activation()
+
+        self.conv3 = Conv2d_BN(self.hidden_chans, out_chans, ks=1, bn_weight_init=0.0)
+        self.act3 = activation()
+
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+    def forward(self, x):
+        shortcut = x
+        x = self.conv1(x)
+        x = self.act1(x)
+        x = self.conv2(x)
+        x = self.act2(x)
+        x = self.conv3(x)
+        x = self.drop_path(x)
+        x += shortcut
+        x = self.act3(x)
+        return x
+
+
+class PatchMerging(nn.Module):
+    def __init__(self, input_resolution, dim, out_dim, activation):
+        super().__init__()
+        self.input_resolution = input_resolution
+        self.dim = dim
+        self.out_dim = out_dim
+        self.act = activation()
+        self.conv1 = Conv2d_BN(dim, out_dim, 1, 1, 0)
+        stride_c = 2
+        if out_dim == 320 or out_dim == 448 or out_dim == 576:
+            stride_c = 1
+        self.conv2 = Conv2d_BN(out_dim, out_dim, 3, stride_c, 1, groups=out_dim)
+        self.conv3 = Conv2d_BN(out_dim, out_dim, 1, 1, 0)
+
+    def forward(self, x):
+        if x.ndim == 3:
+            H, W = self.input_resolution
+            B = len(x)
+            x = x.view(B, H, W, -1).permute(0, 3, 1, 2)
+
+        x = self.conv1(x)
+        x = self.act(x)
+        x = self.conv2(x)
+        x = self.act(x)
+        x = self.conv3(x)
+        x = x.flatten(2).transpose(1, 2)
+        return x
+
+
+class ConvLayer(nn.Module):
+    def __init__(
+        self,
+        dim,
+        input_resolution,
+        depth,
+        activation,
+        drop_path=0.0,
+        downsample=None,
+        use_checkpoint=False,
+        out_dim=None,
+        conv_expand_ratio=4.0,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.input_resolution = input_resolution
+        self.depth = depth
+        self.use_checkpoint = use_checkpoint
+
+        self.blocks = nn.ModuleList(
+            [
+                MBConv(
+                    dim,
+                    dim,
+                    conv_expand_ratio,
+                    activation,
+                    drop_path[i] if isinstance(drop_path, list) else drop_path,
+                )
+                for i in range(depth)
+            ]
+        )
+
+        if downsample is not None:
+            self.downsample = downsample(
+                input_resolution, dim=dim, out_dim=out_dim, activation=activation
+            )
+        else:
+            self.downsample = None
+
+    def forward(self, x):
+        for blk in self.blocks:
+            x = blk(x)
+        if self.downsample is not None:
+            x = self.downsample(x)
+        return x
+
+
+class Mlp(nn.Module):
+    def __init__(
+        self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.0
+    ):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.norm = nn.LayerNorm(in_features)
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.act = act_layer()
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.norm(x)
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
+
+
+class TinyViTAttention(torch.nn.Module):
+    def __init__(self, dim, key_dim, num_heads=8, attn_ratio=4, resolution=(14, 14)):
+        super().__init__()
+        assert isinstance(resolution, tuple) and len(resolution) == 2
+        self.num_heads = num_heads
+        self.scale = key_dim**-0.5
+        self.key_dim = key_dim
+        self.nh_kd = nh_kd = key_dim * num_heads
+        self.d = int(attn_ratio * key_dim)
+        self.dh = int(attn_ratio * key_dim) * num_heads
+        self.attn_ratio = attn_ratio
+        h = self.dh + nh_kd * 2
+
+        self.norm = nn.LayerNorm(dim)
+        self.qkv = nn.Linear(dim, h)
+        self.proj = nn.Linear(self.dh, dim)
+
+        points = list(itertools.product(range(resolution[0]), range(resolution[1])))
+        N = len(points)
+        attention_offsets = {}
+        idxs = []
+        for p1 in points:
+            for p2 in points:
+                offset = (abs(p1[0] - p2[0]), abs(p1[1] - p2[1]))
+                if offset not in attention_offsets:
+                    attention_offsets[offset] = len(attention_offsets)
+                idxs.append(attention_offsets[offset])
+        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
+        self.register_buffer(
+            "attention_bias_idxs", torch.LongTensor(idxs).view(N, N), persistent=False
+        )
+
+    @torch.no_grad()
+    def train(self, mode=True):
+        super().train(mode)
+        if mode and hasattr(self, "ab"):
+            del self.ab
+        else:
+            self.register_buffer(
+                "ab", self.attention_biases[:, self.attention_bias_idxs], persistent=False
+            )
+
+    def forward(self, x):
+        B, N, _ = x.shape
+        x = self.norm(x)
+        qkv = self.qkv(x)
+        q, k, v = qkv.view(B, N, self.num_heads, -1).split(
+            [self.key_dim, self.key_dim, self.d], dim=3
+        )
+        q = q.permute(0, 2, 1, 3)
+        k = k.permute(0, 2, 1, 3)
+        v = v.permute(0, 2, 1, 3)
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale + (
+            self.attention_biases[:, self.attention_bias_idxs] if self.training else self.ab
+        )
+        attn = attn.softmax(dim=-1)
+        x = (attn @ v).transpose(1, 2).reshape(B, N, self.dh)
+        x = self.proj(x)
+        return x
+
+
+class TinyViTBlock(nn.Module):
+    def __init__(
+        self,
+        dim,
+        input_resolution,
+        num_heads,
+        window_size=7,
+        mlp_ratio=4.0,
+        drop=0.0,
+        drop_path=0.0,
+        local_conv_size=3,
+        activation=nn.GELU,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.input_resolution = input_resolution
+        self.num_heads = num_heads
+        assert window_size > 0, "window_size must be greater than 0"
+        self.window_size = window_size
+        self.mlp_ratio = mlp_ratio
+
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
+        assert dim % num_heads == 0, "dim must be divisible by num_heads"
+        head_dim = dim // num_heads
+
+        window_resolution = (window_size, window_size)
+        self.attn = TinyViTAttention(
+            dim, head_dim, num_heads, attn_ratio=1, resolution=window_resolution
+        )
+
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = Mlp(
+            in_features=dim, hidden_features=mlp_hidden_dim, act_layer=activation, drop=drop
+        )
+
+        pad = local_conv_size // 2
+        self.local_conv = Conv2d_BN(dim, dim, ks=local_conv_size, stride=1, pad=pad, groups=dim)
+
+    def forward(self, x):
+        H, W = self.input_resolution
+        B, L, C = x.shape
+        assert L == H * W, "input feature has wrong size"
+        res_x = x
+        if H == self.window_size and W == self.window_size:
+            x = self.attn(x)
+        else:
+            x = x.view(B, H, W, C)
+            pad_b = (self.window_size - H % self.window_size) % self.window_size
+            pad_r = (self.window_size - W % self.window_size) % self.window_size
+            padding = pad_b > 0 or pad_r > 0
+
+            if padding:
+                x = F.pad(x, (0, 0, 0, pad_r, 0, pad_b))
+
+            pH, pW = H + pad_b, W + pad_r
+            nH = pH // self.window_size
+            nW = pW // self.window_size
+            x = (
+                x.view(B, nH, self.window_size, nW, self.window_size, C)
+                .transpose(2, 3)
+                .reshape(B * nH * nW, self.window_size * self.window_size, C)
+            )
+            x = self.attn(x)
+            x = (
+                x.view(B, nH, nW, self.window_size, self.window_size, C)
+                .transpose(2, 3)
+                .reshape(B, pH, pW, C)
+            )
+
+            if padding:
+                x = x[:, :H, :W].contiguous()
+
+            x = x.view(B, L, C)
+
+        x = res_x + self.drop_path(x)
+
+        x = x.transpose(1, 2).reshape(B, C, H, W)
+        x = self.local_conv(x)
+        x = x.view(B, C, L).transpose(1, 2)
+
+        x = x + self.drop_path(self.mlp(x))
+        return x
+
+
+class BasicLayer(nn.Module):
+    def __init__(
+        self,
+        dim,
+        input_resolution,
+        depth,
+        num_heads,
+        window_size,
+        mlp_ratio=4.0,
+        drop=0.0,
+        drop_path=0.0,
+        downsample=None,
+        use_checkpoint=False,
+        local_conv_size=3,
+        activation=nn.GELU,
+        out_dim=None,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.input_resolution = input_resolution
+        self.depth = depth
+        self.use_checkpoint = use_checkpoint
+
+        self.blocks = nn.ModuleList(
+            [
+                TinyViTBlock(
+                    dim=dim,
+                    input_resolution=input_resolution,
+                    num_heads=num_heads,
+                    window_size=window_size,
+                    mlp_ratio=mlp_ratio,
+                    drop=drop,
+                    drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
+                    local_conv_size=local_conv_size,
+                    activation=activation,
+                )
+                for i in range(depth)
+            ]
+        )
+
+        if downsample is not None:
+            self.downsample = downsample(
+                input_resolution, dim=dim, out_dim=out_dim, activation=activation
+            )
+        else:
+            self.downsample = None
+
+    def forward(self, x):
+        for blk in self.blocks:
+            x = blk(x)
+        if self.downsample is not None:
+            x = self.downsample(x)
+        return x
+
+
+class TinyViT(nn.Module):
+    def __init__(
+        self,
+        img_size=224,
+        in_chans=3,
+        num_classes=1000,
+        embed_dims=[96, 192, 384, 768],
+        depths=[2, 2, 6, 2],
+        num_heads=[3, 6, 12, 24],
+        window_sizes=[7, 7, 14, 7],
+        mlp_ratio=4.0,
+        drop_rate=0.0,
+        drop_path_rate=0.1,
+        use_checkpoint=False,
+        mbconv_expand_ratio=4.0,
+        local_conv_size=3,
+        layer_lr_decay=1.0,
+    ):
+        super().__init__()
+        self.img_size = img_size
+        self.num_classes = num_classes
+        self.depths = depths
+        self.num_layers = len(depths)
+        self.mlp_ratio = mlp_ratio
+
+        activation = nn.GELU
+
+        self.patch_embed = PatchEmbed(
+            in_chans=in_chans, embed_dim=embed_dims[0], resolution=img_size, activation=activation
+        )
+
+        patches_resolution = self.patch_embed.patches_resolution
+        self.patches_resolution = patches_resolution
+
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+
+        self.layers = nn.ModuleList()
+        for i_layer in range(self.num_layers):
+            kwargs = dict(
+                dim=embed_dims[i_layer],
+                input_resolution=(
+                    patches_resolution[0] // (2 ** (i_layer - 1 if i_layer == 3 else i_layer)),
+                    patches_resolution[1] // (2 ** (i_layer - 1 if i_layer == 3 else i_layer)),
+                ),
+                depth=depths[i_layer],
+                drop_path=dpr[sum(depths[:i_layer]) : sum(depths[: i_layer + 1])],
+                downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
+                use_checkpoint=use_checkpoint,
+                out_dim=embed_dims[min(i_layer + 1, len(embed_dims) - 1)],
+                activation=activation,
+            )
+            if i_layer == 0:
+                layer = ConvLayer(conv_expand_ratio=mbconv_expand_ratio, **kwargs)
+            else:
+                layer = BasicLayer(
+                    num_heads=num_heads[i_layer],
+                    window_size=window_sizes[i_layer],
+                    mlp_ratio=self.mlp_ratio,
+                    drop=drop_rate,
+                    local_conv_size=local_conv_size,
+                    **kwargs,
+                )
+            self.layers.append(layer)
+
+        self.norm_head = nn.LayerNorm(embed_dims[-1])
+        self.head = (
+            nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else torch.nn.Identity()
+        )
+
+        self.apply(self._init_weights)
+        self.set_layer_lr_decay(layer_lr_decay)
+        self.neck = nn.Sequential(
+            nn.Conv2d(embed_dims[-1], 256, kernel_size=1, bias=False),
+            LayerNorm2d(256),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
+            LayerNorm2d(256),
+        )
+
+    def set_layer_lr_decay(self, layer_lr_decay):
+        decay_rate = layer_lr_decay
+        depth = sum(self.depths)
+        lr_scales = [decay_rate ** (depth - i - 1) for i in range(depth)]
+
+        def _set_lr_scale(m, scale):
+            for p in m.parameters():
+                p.lr_scale = scale
+
+        self.patch_embed.apply(lambda x: _set_lr_scale(x, lr_scales[0]))
+        i = 0
+        for layer in self.layers:
+            for block in layer.blocks:
+                block.apply(lambda x: _set_lr_scale(x, lr_scales[i]))
+                i += 1
+            if layer.downsample is not None:
+                layer.downsample.apply(lambda x: _set_lr_scale(x, lr_scales[i - 1]))
+        assert i == depth
+        for m in [self.norm_head, self.head]:
+            m.apply(lambda x: _set_lr_scale(x, lr_scales[-1]))
+
+        for k, p in self.named_parameters():
+            p.param_name = k
+
+        def _check_lr_scale(m):
+            for p in m.parameters():
+                assert hasattr(p, "param_name")
+
+        self.apply(_check_lr_scale)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=0.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def forward_features(self, x):
+        # x: (N, C, H, W)
+        x = self.patch_embed(x)
+
+        x = self.layers[0](x)
+        start_i = 1
+
+        interm_embeddings = []
+        for i in range(start_i, len(self.layers)):
+            layer = self.layers[i]
+            x = layer(x)
+            if i == 1:
+                interm_embeddings.append(x.view(x.shape[0], self._interm_hw, self._interm_hw, -1))
+
+        B, _, C = x.size()
+        x = x.view(B, self._interm_hw, self._interm_hw, C)
+        x = x.permute(0, 3, 1, 2)
+        x = self.neck(x)
+        return x, interm_embeddings
+
+    def forward(self, x):
+        x, interm_embeddings = self.forward_features(x)
+        return x, interm_embeddings
+
+
+# ============================================================================
+# prompt_encoder.py
+# ============================================================================
+
+
+class PromptEncoder(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int,
+        image_embedding_size: Tuple[int, int],
+        input_image_size: Tuple[int, int],
+        mask_in_chans: int,
+        activation: Type[nn.Module] = nn.GELU,
+    ) -> None:
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.input_image_size = input_image_size
+        self.image_embedding_size = image_embedding_size
+        self.pe_layer = PositionEmbeddingRandom(embed_dim // 2)
+
+        self.num_point_embeddings: int = 4
+        point_embeddings = [nn.Embedding(1, embed_dim) for i in range(self.num_point_embeddings)]
+        self.point_embeddings = nn.ModuleList(point_embeddings)
+        self.not_a_point_embed = nn.Embedding(1, embed_dim)
+
+        self.mask_input_size = (4 * image_embedding_size[0], 4 * image_embedding_size[1])
+        self.mask_downscaling = nn.Sequential(
+            nn.Conv2d(1, mask_in_chans // 4, kernel_size=2, stride=2),
+            LayerNorm2d(mask_in_chans // 4),
+            activation(),
+            nn.Conv2d(mask_in_chans // 4, mask_in_chans, kernel_size=2, stride=2),
+            LayerNorm2d(mask_in_chans),
+            activation(),
+            nn.Conv2d(mask_in_chans, embed_dim, kernel_size=1),
+        )
+        self.no_mask_embed = nn.Embedding(1, embed_dim)
+
+    def get_dense_pe(self) -> torch.Tensor:
+        return self.pe_layer(self.image_embedding_size).unsqueeze(0)
+
+    def _embed_points(self, points: torch.Tensor, labels: torch.Tensor, pad: bool) -> torch.Tensor:
+        points = points + 0.5
+        if pad:
+            padding_point = torch.zeros((points.shape[0], 1, 2), device=points.device)
+            padding_label = -torch.ones((labels.shape[0], 1), device=labels.device)
+            points = torch.cat([points, padding_point], dim=1)
+            labels = torch.cat([labels, padding_label], dim=1)
+        point_embedding = self.pe_layer.forward_with_coords(points, self.input_image_size)
+        point_embedding[labels == -1] = 0.0
+        point_embedding[labels == -1] += self.not_a_point_embed.weight
+        point_embedding[labels == 0] += self.point_embeddings[0].weight
+        point_embedding[labels == 1] += self.point_embeddings[1].weight
+        return point_embedding
+
+    def _embed_boxes(self, boxes: torch.Tensor) -> torch.Tensor:
+        boxes = boxes + 0.5
+        coords = boxes.reshape(-1, 2, 2)
+        corner_embedding = self.pe_layer.forward_with_coords(coords, self.input_image_size)
+        corner_embedding[:, 0, :] += self.point_embeddings[2].weight
+        corner_embedding[:, 1, :] += self.point_embeddings[3].weight
+        return corner_embedding
+
+    def _embed_masks(self, masks: torch.Tensor) -> torch.Tensor:
+        return self.mask_downscaling(masks)
+
+    def _get_batch_size(
+        self,
+        points: Optional[Tuple[torch.Tensor, torch.Tensor]],
+        boxes: Optional[torch.Tensor],
+        masks: Optional[torch.Tensor],
+    ) -> int:
+        if points is not None:
+            return points[0].shape[0]
+        elif boxes is not None:
+            return boxes.shape[0]
+        elif masks is not None:
+            return masks.shape[0]
+        else:
+            return 1
+
+    def _get_device(self) -> torch.device:
+        return self.point_embeddings[0].weight.device
+
+    def forward(
+        self,
+        points: Optional[Tuple[torch.Tensor, torch.Tensor]],
+        boxes: Optional[torch.Tensor],
+        masks: Optional[torch.Tensor],
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        bs = self._get_batch_size(points, boxes, masks)
+        sparse_embeddings = torch.empty((bs, 0, self.embed_dim), device=self._get_device())
+        if points is not None:
+            coords, labels = points
+            point_embeddings = self._embed_points(coords, labels, pad=(boxes is None))
+            sparse_embeddings = torch.cat([sparse_embeddings, point_embeddings], dim=1)
+        if boxes is not None:
+            box_embeddings = self._embed_boxes(boxes)
+            sparse_embeddings = torch.cat([sparse_embeddings, box_embeddings], dim=1)
+
+        if masks is not None:
+            dense_embeddings = self._embed_masks(masks)
+        else:
+            dense_embeddings = self.no_mask_embed.weight.reshape(1, -1, 1, 1).expand(
+                bs, -1, self.image_embedding_size[0], self.image_embedding_size[1]
+            )
+
+        return sparse_embeddings, dense_embeddings
+
+
+class PositionEmbeddingRandom(nn.Module):
+    def __init__(self, num_pos_feats: int = 64, scale: Optional[float] = None) -> None:
+        super().__init__()
+        if scale is None or scale <= 0.0:
+            scale = 1.0
+        self.register_buffer(
+            "positional_encoding_gaussian_matrix", scale * torch.randn((2, num_pos_feats))
+        )
+
+    def _pe_encoding(self, coords: torch.Tensor) -> torch.Tensor:
+        coords = 2 * coords - 1
+        coords = coords @ self.positional_encoding_gaussian_matrix
+        coords = 2 * math.pi * coords
+        return torch.cat([torch.sin(coords), torch.cos(coords)], dim=-1)
+
+    def forward(self, size: Tuple[int, int]) -> torch.Tensor:
+        h, w = size
+        device: Any = self.positional_encoding_gaussian_matrix.device
+        grid = torch.ones((h, w), device=device, dtype=torch.float32)
+        y_embed = grid.cumsum(dim=0) - 0.5
+        x_embed = grid.cumsum(dim=1) - 0.5
+        y_embed = y_embed / h
+        x_embed = x_embed / w
+
+        pe = self._pe_encoding(torch.stack([x_embed, y_embed], dim=-1))
+        return pe.permute(2, 0, 1)
+
+    def forward_with_coords(
+        self, coords_input: torch.Tensor, image_size: Tuple[int, int]
+    ) -> torch.Tensor:
+        coords = coords_input.clone()
+        coords[:, :, 0] = coords[:, :, 0] / image_size[1]
+        coords[:, :, 1] = coords[:, :, 1] / image_size[0]
+        return self._pe_encoding(coords.to(torch.float))
+
+
+# ============================================================================
+# transformer.py
+# ============================================================================
+
+
+class TwoWayTransformer(nn.Module):
+    def __init__(
+        self,
+        depth: int,
+        embedding_dim: int,
+        num_heads: int,
+        mlp_dim: int,
+        activation: Type[nn.Module] = nn.ReLU,
+        attention_downsample_rate: int = 2,
+    ) -> None:
+        super().__init__()
+        self.depth = depth
+        self.embedding_dim = embedding_dim
+        self.num_heads = num_heads
+        self.mlp_dim = mlp_dim
+        self.layers = nn.ModuleList()
+
+        for i in range(depth):
+            self.layers.append(
+                TwoWayAttentionBlock(
+                    embedding_dim=embedding_dim,
+                    num_heads=num_heads,
+                    mlp_dim=mlp_dim,
+                    activation=activation,
+                    attention_downsample_rate=attention_downsample_rate,
+                    skip_first_layer_pe=(i == 0),
+                )
+            )
+
+        self.final_attn_token_to_image = TransformerAttention(
+            embedding_dim, num_heads, downsample_rate=attention_downsample_rate
+        )
+        self.norm_final_attn = nn.LayerNorm(embedding_dim)
+
+    def forward(
+        self, image_embedding: Tensor, image_pe: Tensor, point_embedding: Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        bs, c, h, w = image_embedding.shape
+        image_embedding = image_embedding.flatten(2).permute(0, 2, 1)
+        image_pe = image_pe.flatten(2).permute(0, 2, 1)
+
+        queries = point_embedding
+        keys = image_embedding
+
+        for layer in self.layers:
+            queries, keys = layer(
+                queries=queries, keys=keys, query_pe=point_embedding, key_pe=image_pe
+            )
+
+        q = queries + point_embedding
+        k = keys + image_pe
+        attn_out = self.final_attn_token_to_image(q=q, k=k, v=keys)
+        queries = queries + attn_out
+        queries = self.norm_final_attn(queries)
+
+        return queries, keys
+
+
+class TwoWayAttentionBlock(nn.Module):
+    def __init__(
+        self,
+        embedding_dim: int,
+        num_heads: int,
+        mlp_dim: int = 2048,
+        activation: Type[nn.Module] = nn.ReLU,
+        attention_downsample_rate: int = 2,
+        skip_first_layer_pe: bool = False,
+    ) -> None:
+        super().__init__()
+        self.self_attn = TransformerAttention(embedding_dim, num_heads)
+        self.norm1 = nn.LayerNorm(embedding_dim)
+
+        self.cross_attn_token_to_image = TransformerAttention(
+            embedding_dim, num_heads, downsample_rate=attention_downsample_rate
+        )
+        self.norm2 = nn.LayerNorm(embedding_dim)
+
+        self.mlp = MLPBlock(embedding_dim, mlp_dim, activation)
+        self.norm3 = nn.LayerNorm(embedding_dim)
+
+        self.norm4 = nn.LayerNorm(embedding_dim)
+        self.cross_attn_image_to_token = TransformerAttention(
+            embedding_dim, num_heads, downsample_rate=attention_downsample_rate
+        )
+
+        self.skip_first_layer_pe = skip_first_layer_pe
+
+    def forward(
+        self, queries: Tensor, keys: Tensor, query_pe: Tensor, key_pe: Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        if self.skip_first_layer_pe:
+            queries = self.self_attn(q=queries, k=queries, v=queries)
+        else:
+            q = queries + query_pe
+            attn_out = self.self_attn(q=q, k=q, v=queries)
+            queries = queries + attn_out
+        queries = self.norm1(queries)
+
+        q = queries + query_pe
+        k = keys + key_pe
+        attn_out = self.cross_attn_token_to_image(q=q, k=k, v=keys)
+        queries = queries + attn_out
+        queries = self.norm2(queries)
+
+        mlp_out = self.mlp(queries)
+        queries = queries + mlp_out
+        queries = self.norm3(queries)
+
+        q = queries + query_pe
+        k = keys + key_pe
+        attn_out = self.cross_attn_image_to_token(q=k, k=q, v=queries)
+        keys = keys + attn_out
+        keys = self.norm4(keys)
+
+        return queries, keys
+
+
+class TransformerAttention(nn.Module):
+    def __init__(self, embedding_dim: int, num_heads: int, downsample_rate: int = 1) -> None:
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.internal_dim = embedding_dim // downsample_rate
+        self.num_heads = num_heads
+        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
+
+        self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.v_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.out_proj = nn.Linear(self.internal_dim, embedding_dim)
+
+    def _separate_heads(self, x: Tensor, num_heads: int) -> Tensor:
+        b, n, c = x.shape
+        x = x.reshape(b, n, num_heads, c // num_heads)
+        return x.transpose(1, 2)
+
+    def _recombine_heads(self, x: Tensor) -> Tensor:
+        b, n_heads, n_tokens, c_per_head = x.shape
+        x = x.transpose(1, 2)
+        return x.reshape(b, n_tokens, n_heads * c_per_head)
+
+    def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+        q = self.q_proj(q)
+        k = self.k_proj(k)
+        v = self.v_proj(v)
+
+        q = self._separate_heads(q, self.num_heads)
+        k = self._separate_heads(k, self.num_heads)
+        v = self._separate_heads(v, self.num_heads)
+
+        _, _, _, c_per_head = q.shape
+        attn = q @ k.permute(0, 1, 3, 2)
+        attn = attn / math.sqrt(c_per_head)
+        attn = torch.softmax(attn, dim=-1)
+
+        out = attn @ v
+        out = self._recombine_heads(out)
+        out = self.out_proj(out)
+
+        return out
+
+
+# ============================================================================
+# mask_decoder_hq.py
+# ============================================================================
+
+
+class MaskDecoderHQ(nn.Module):
+    def __init__(
+        self,
+        *,
+        transformer_dim: int,
+        transformer: nn.Module,
+        num_multimask_outputs: int = 3,
+        activation: Type[nn.Module] = nn.GELU,
+        iou_head_depth: int = 3,
+        iou_head_hidden_dim: int = 256,
+        vit_dim: int = 1024,
+    ) -> None:
+        super().__init__()
+        self.transformer_dim = transformer_dim
+        self.transformer = transformer
+
+        self.num_multimask_outputs = num_multimask_outputs
+
+        self.iou_token = nn.Embedding(1, transformer_dim)
+        self.num_mask_tokens = num_multimask_outputs + 1
+        self.mask_tokens = nn.Embedding(self.num_mask_tokens, transformer_dim)
+
+        self.output_upscaling = nn.Sequential(
+            nn.ConvTranspose2d(transformer_dim, transformer_dim // 4, kernel_size=2, stride=2),
+            LayerNorm2d(transformer_dim // 4),
+            activation(),
+            nn.ConvTranspose2d(transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2),
+            activation(),
+        )
+        self.output_hypernetworks_mlps = nn.ModuleList(
+            [
+                MaskDecoderMLP(transformer_dim, transformer_dim, transformer_dim // 8, 3)
+                for i in range(self.num_mask_tokens)
+            ]
+        )
+
+        self.iou_prediction_head = MaskDecoderMLP(
+            transformer_dim, iou_head_hidden_dim, self.num_mask_tokens, iou_head_depth
+        )
+
+        # HQ-SAM parameters
+        self.hf_token = nn.Embedding(1, transformer_dim)
+        self.hf_mlp = MaskDecoderMLP(transformer_dim, transformer_dim, transformer_dim // 8, 3)
+        self.num_mask_tokens = self.num_mask_tokens + 1
+
+        self.compress_vit_feat = nn.Sequential(
+            nn.ConvTranspose2d(vit_dim, transformer_dim, kernel_size=2, stride=2),
+            LayerNorm2d(transformer_dim),
+            nn.GELU(),
+            nn.ConvTranspose2d(transformer_dim, transformer_dim // 8, kernel_size=2, stride=2),
+        )
+
+        self.embedding_encoder = nn.Sequential(
+            nn.ConvTranspose2d(transformer_dim, transformer_dim // 4, kernel_size=2, stride=2),
+            LayerNorm2d(transformer_dim // 4),
+            nn.GELU(),
+            nn.ConvTranspose2d(transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2),
+        )
+        self.embedding_maskfeature = nn.Sequential(
+            nn.Conv2d(transformer_dim // 8, transformer_dim // 4, 3, 1, 1),
+            LayerNorm2d(transformer_dim // 4),
+            nn.GELU(),
+            nn.Conv2d(transformer_dim // 4, transformer_dim // 8, 3, 1, 1),
+        )
+
+    def forward(
+        self,
+        image_embeddings: torch.Tensor,
+        image_pe: torch.Tensor,
+        sparse_prompt_embeddings: torch.Tensor,
+        dense_prompt_embeddings: torch.Tensor,
+        multimask_output: bool,
+        hq_token_only: bool,
+        interm_embeddings: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        vit_features = interm_embeddings[0].permute(0, 3, 1, 2)
+        hq_features = self.embedding_encoder(image_embeddings) + self.compress_vit_feat(
+            vit_features
+        )
+
+        masks, iou_pred = self.predict_masks(
+            image_embeddings=image_embeddings,
+            image_pe=image_pe,
+            sparse_prompt_embeddings=sparse_prompt_embeddings,
+            dense_prompt_embeddings=dense_prompt_embeddings,
+            hq_features=hq_features,
+        )
+
+        if multimask_output:
+            mask_slice = slice(1, self.num_mask_tokens - 1)
+            iou_pred = iou_pred[:, mask_slice]
+            iou_pred, max_iou_idx = torch.max(iou_pred, dim=1)
+            iou_pred = iou_pred.unsqueeze(1)
+            masks_multi = masks[:, mask_slice, :, :]
+            masks_sam = masks_multi[torch.arange(masks_multi.size(0)), max_iou_idx].unsqueeze(1)
+        else:
+            mask_slice = slice(0, 1)
+            iou_pred = iou_pred[:, mask_slice]
+            masks_sam = masks[:, mask_slice]
+
+        masks_hq = masks[:, slice(self.num_mask_tokens - 1, self.num_mask_tokens)]
+        if hq_token_only:
+            masks = masks_hq
+        else:
+            masks = masks_sam + masks_hq
+        return masks, iou_pred
+
+    def predict_masks(
+        self,
+        image_embeddings: torch.Tensor,
+        image_pe: torch.Tensor,
+        sparse_prompt_embeddings: torch.Tensor,
+        dense_prompt_embeddings: torch.Tensor,
+        hq_features: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        output_tokens = torch.cat(
+            [self.iou_token.weight, self.mask_tokens.weight, self.hf_token.weight], dim=0
+        )
+        output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
+        tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
+
+        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+        src = src + dense_prompt_embeddings
+        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        b, c, h, w = src.shape
+
+        hs, src = self.transformer(src, pos_src, tokens)
+        iou_token_out = hs[:, 0, :]
+        mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
+
+        src = src.transpose(1, 2).view(b, c, h, w)
+
+        upscaled_embedding_sam = self.output_upscaling(src)
+        upscaled_embedding_hq = self.embedding_maskfeature(
+            upscaled_embedding_sam
+        ) + hq_features.repeat(b, 1, 1, 1)
+
+        hyper_in_list: List[torch.Tensor] = []
+        for i in range(self.num_mask_tokens):
+            if i < self.num_mask_tokens - 1:
+                hyper_in_list.append(self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :]))
+            else:
+                hyper_in_list.append(self.hf_mlp(mask_tokens_out[:, i, :]))
+
+        hyper_in = torch.stack(hyper_in_list, dim=1)
+        b, c, h, w = upscaled_embedding_sam.shape
+
+        masks_sam = (
+            hyper_in[:, : self.num_mask_tokens - 1] @ upscaled_embedding_sam.view(b, c, h * w)
+        ).view(b, -1, h, w)
+        masks_sam_hq = (
+            hyper_in[:, self.num_mask_tokens - 1 :] @ upscaled_embedding_hq.view(b, c, h * w)
+        ).view(b, -1, h, w)
+        masks = torch.cat([masks_sam, masks_sam_hq], dim=1)
+        iou_pred = self.iou_prediction_head(iou_token_out)
+
+        return masks, iou_pred
+
+
+class MaskDecoderMLP(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int,
+        sigmoid_output: bool = False,
+    ) -> None:
+        super().__init__()
+        self.num_layers = num_layers
+        h = [hidden_dim] * (num_layers - 1)
+        self.layers = nn.ModuleList(
+            nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim])
+        )
+        self.sigmoid_output = sigmoid_output
+
+    def forward(self, x):
+        for i, layer in enumerate(self.layers):
+            x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
+        if self.sigmoid_output:
+            x = F.sigmoid(x)
+        return x
+
+
+# ============================================================================
+# sam.py
+# ============================================================================
+
+
+class Sam(nn.Module):
+    mask_threshold: float = 0.0
+    image_format: str = "RGB"
+
+    def __init__(
+        self,
+        image_encoder: nn.Module,
+        prompt_encoder: PromptEncoder,
+        mask_decoder: nn.Module,
+        pixel_mean: List[float] = [123.675, 116.28, 103.53],
+        pixel_std: List[float] = [58.395, 57.12, 57.375],
+    ) -> None:
+        super().__init__()
+        self.image_encoder = image_encoder
+        self.prompt_encoder = prompt_encoder
+        self.mask_decoder = mask_decoder
+        self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
+        self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
+
+    @property
+    def device(self) -> Any:
+        return self.pixel_mean.device
+
+    def forward(
+        self,
+        batched_input: List[Dict[str, Any]],
+        multimask_output: bool,
+        hq_token_only: bool = False,
+    ) -> List[Dict[str, torch.Tensor]]:
+        input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
+        image_embeddings, interm_embeddings = self.image_encoder(input_images)
+        interm_embeddings = interm_embeddings[0]
+
+        outputs = []
+        for image_record, curr_embedding, curr_interm in zip(
+            batched_input, image_embeddings, interm_embeddings
+        ):
+            if "point_coords" in image_record:
+                points = (image_record["point_coords"], image_record["point_labels"])
+            else:
+                points = None
+            sparse_embeddings, dense_embeddings = self.prompt_encoder(
+                points=points,
+                boxes=image_record.get("boxes", None),
+                masks=image_record.get("mask_inputs", None),
+            )
+            low_res_masks, iou_predictions = self.mask_decoder(
+                image_embeddings=curr_embedding.unsqueeze(0),
+                image_pe=self.prompt_encoder.get_dense_pe(),
+                sparse_prompt_embeddings=sparse_embeddings,
+                dense_prompt_embeddings=dense_embeddings,
+                multimask_output=multimask_output,
+                hq_token_only=hq_token_only,
+                interm_embeddings=curr_interm.unsqueeze(0).unsqueeze(0),
+            )
+            masks = self.postprocess_masks(
+                low_res_masks,
+                input_size=image_record["image"].shape[-2:],
+                original_size=image_record["original_size"],
+            )
+            masks = masks > self.mask_threshold
+            outputs.append(
+                {
+                    "masks": masks,
+                    "iou_predictions": iou_predictions,
+                    "low_res_logits": low_res_masks,
+                }
+            )
+        return outputs
+
+    def postprocess_masks(
+        self, masks: torch.Tensor, input_size: Tuple[int, ...], original_size: Tuple[int, ...]
+    ) -> torch.Tensor:
+        masks = F.interpolate(
+            masks,
+            (self.image_encoder.img_size, self.image_encoder.img_size),
+            mode="bilinear",
+            align_corners=False,
+        )
+        masks = masks[..., : input_size[0], : input_size[1]]
+        masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
+        return masks
+
+    def preprocess(self, x: torch.Tensor) -> torch.Tensor:
+        x = (x - self.pixel_mean) / self.pixel_std
+        h, w = x.shape[-2:]
+        padh = self.image_encoder.img_size - h
+        padw = self.image_encoder.img_size - w
+        x = F.pad(x, (0, padw, 0, padh))
+        return x
+
+
+# ============================================================================
+# Menagerie staging entry points
+# ============================================================================
+#
+# build_sam_vit_t (the real Light-HQ-SAM constructor) hardcodes TinyViT's forward_features to
+# reshape to a 64x64 grid (img_size=1024, patch_size=16 -> 1024/16=64), so this staging module
+# keeps that exact real-repo sizing but shrinks channel widths/depths for a fast trace. We add
+# an `_interm_hw` attribute (computed from patches_resolution) so the shrunk TinyViT still uses
+# the correct grid size instead of the hardcoded literal 64 -- this generalizes the real forward
+# logic rather than altering its architecture.
+
+MENAGERIE_ZOO = "vendored-pytorch"
+
+
+def build_light_hq_sam():
+    """Tiny Light HQ-SAM: TinyViT image encoder (SAM-HQ ViT-Tiny/MobileSAM-style backbone) +
+    PromptEncoder + MaskDecoderHQ, matching build_sam_vit_t's real wiring at reduced scale."""
+    torch.manual_seed(0)
+    prompt_embed_dim = 32
+    image_size = 64
+    # Total TinyViT downsampling = PatchEmbed's 4x * two PatchMerging stages' 2x each = 16x
+    # (matches the real build_sam_vit_t: img_size=1024, vit_patch_size=16 -> 1024/16=64, and
+    # TinyViT's own patches_resolution(64) -> 3 stage downsamples -> 8, times PatchEmbed's
+    # implicit factor baked into "patches_resolution" already accounting for the first 4x).
+    vit_patch_size = 16
+    image_embedding_size = image_size // vit_patch_size  # 4
+
+    embed_dims = [16, 32, 64]
+    image_encoder = TinyViT(
+        img_size=image_size,
+        in_chans=3,
+        num_classes=0,
+        embed_dims=embed_dims,
+        depths=[1, 1, 1],
+        num_heads=[2, 4, 8],
+        window_sizes=[4, 4, 4],
+        mlp_ratio=2.0,
+        drop_rate=0.0,
+        drop_path_rate=0.0,
+        use_checkpoint=False,
+        mbconv_expand_ratio=2.0,
+        local_conv_size=3,
+        layer_lr_decay=1.0,
+    )
+    # neck always projects to 256 channels (see TinyViT.__init__); override for a tiny trace.
+    image_encoder.neck = nn.Sequential(
+        nn.Conv2d(image_encoder.layers[-1].dim, prompt_embed_dim, kernel_size=1, bias=False),
+        LayerNorm2d(prompt_embed_dim),
+        nn.Conv2d(prompt_embed_dim, prompt_embed_dim, kernel_size=3, padding=1, bias=False),
+        LayerNorm2d(prompt_embed_dim),
+    )
+    # forward_features hardcodes a 64x64 grid in the real repo (assumes img_size=1024,
+    # patch_size=16 -> 3 PatchMerging downsamples of patches_resolution=64 -> 8). This tiny
+    # config has 3 TinyViT stages with 2 PatchMerging downsamples after patch_embed's
+    # patches_resolution, so the final (and the i==1 interm) grid is patches_resolution / 4.
+    image_encoder._interm_hw = image_encoder.patches_resolution[0] // 4
+
+    sam = Sam(
+        image_encoder=image_encoder,
+        prompt_encoder=PromptEncoder(
+            embed_dim=prompt_embed_dim,
+            image_embedding_size=(image_embedding_size, image_embedding_size),
+            input_image_size=(image_size, image_size),
+            mask_in_chans=8,
+        ),
+        mask_decoder=MaskDecoderHQ(
+            num_multimask_outputs=3,
+            transformer=TwoWayTransformer(
+                depth=1,
+                embedding_dim=prompt_embed_dim,
+                mlp_dim=64,
+                num_heads=2,
+            ),
+            transformer_dim=prompt_embed_dim,
+            iou_head_depth=1,
+            iou_head_hidden_dim=32,
+            # vit_dim = channel width of interm_embeddings[0], i.e. the feature captured right
+            # after layers[1] runs (see TinyViT.forward_features: `if i == 1: interm_embeddings
+            # .append(...)`), which is embed_dims[2] after that stage's PatchMerging downsample
+            # (matches the real build_sam_vit_t: embed_dims=[64,128,160,320] -> vit_dim=160).
+            vit_dim=embed_dims[2],
+        ),
+        pixel_mean=[123.675, 116.28, 103.53],
+        pixel_std=[58.395, 57.12, 57.375],
+    )
+    sam.eval()
+    return sam
+
+
+class _SamTraceWrapper(nn.Module):
+    """Thin call-shape adapter: Sam.forward expects a list-of-dict batched_input; TorchLens
+    traces a plain nn.Module(*args) call, so this wraps the single-image call exactly as
+    SamPredictor does internally (see segment_anything/predictor.py set_image + predict)."""
+
+    def __init__(self, sam: Sam):
+        super().__init__()
+        self.sam = sam
+
+    def forward(self, image: torch.Tensor):
+        size = image.shape[-2:]
+        out = self.sam(
+            [{"image": image[0], "original_size": (int(size[0]), int(size[1]))}],
+            multimask_output=False,
+            hq_token_only=False,
+        )
+        return out[0]["low_res_logits"], out[0]["iou_predictions"]
+
+
+def build_light_hq_sam_wrapped():
+    return _SamTraceWrapper(build_light_hq_sam())
+
+
+def example_input_light_hq_sam():
+    torch.manual_seed(0)
+    return torch.rand(1, 3, 64, 64)
+
+
+MENAGERIE_ENTRIES = [
+    (
+        "Light-HQ-SAM",
+        build_light_hq_sam_wrapped,
+        example_input_light_hq_sam,
+        2023,
+        "vendored-pytorch",
+    ),
+]

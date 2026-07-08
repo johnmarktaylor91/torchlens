@@ -34,16 +34,19 @@ canonical builder then:
 5. Marks rows as verified when notes or known zoos indicate a random-init construction
    path, while preserving caveats in `notes`.
 
-The normalization code is intentionally conservative. It does not erase differences in
-source zoo or constructor recipe just to force a lower row count.
+The public source of truth is `master_catalog.jsonl` plus `deferred.jsonl` for
+non-classics and the `menagerie/classics/` registry for hand-built historical models.
+`catalog.db` is a derived cache; `verification.db` is the append-only verification and
+provenance ledger. The normalization code is intentionally conservative. It does not
+erase differences in source zoo or constructor recipe just to force a lower row count.
 
 ## Architectural Deduplication
 
-Rendered and validated manifests record `graph_shape_hash`, TorchLens's canonical
-architecture deduplication key. The hash is computed from the traced graph shape and is
-verified to be parameter-invariant, input-resolution-invariant, and batch-invariant, so
-rows with the same nonblank hash should be treated as the same architecture for dedup
-reporting even when they come from different names, zoos, or constructor recipes.
+Rendered and validated manifests record `graph_shape_hash`, TorchLens's shape-blind
+structural digest for dedup reporting. It is useful for finding repeated topology across
+names, zoos, and constructor recipes, but it is not a proof that every shape-sensitive
+architecture detail is identical. Treat collisions as strong dedup evidence to review,
+not as an automatic claim that two entries are the same in every semantic respect.
 
 ## Integrity Bug Lesson
 
@@ -65,14 +68,17 @@ The corrected workflow therefore separates four questions:
 
 ## Current Numbers
 
-The corrected public source TSV has 10,216 source rows. In this working tree, the
-canonical SQLite database currently preserves 10,216 rows because the deduplication key
-keeps distinct zoo/constructor/input recipes. The catalog has roughly 3,200 normalized
-families depending on the normalization pass.
+The corrected public JSONL/classics system currently builds a derived SQLite catalog
+from the typed JSONL records and classics registry. Counts should be read from:
 
-The verified flag is not a guarantee that a row will render on a given machine. It means
-the source metadata suggests an instantiable recipe. The renderer records actual outcomes
-in `manifest.tsv` as `rendered`, `skipped:<reason>`, or `failed:<reason>`.
+```bash
+python -m menagerie.catalog stats
+python -m menagerie.status
+```
+
+The `verification_expectation` field and status funnel are the public reporting surface.
+The renderer records actual outcomes in `manifest.tsv` as `rendered`,
+`skipped:<reason>`, or `failed:<reason>`.
 
 ## Caveats
 

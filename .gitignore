@@ -176,3 +176,9 @@ notebooks/audit/_artifacts/
 
 # Perf-suite per-cell scratch (incremental run state; committed baselines live in perf_baselines/)
 benchmarks/.perf_cells/
+
+# Menagerie verification ledger is environment-specific append-only run state.
+menagerie/data/verification.db*
+
+# Codex CLI per-session working artifact (file or dir).
+.codex

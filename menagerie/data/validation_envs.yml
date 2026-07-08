@@ -1,0 +1,619 @@
+schema_version: 1
+pixi:
+  installed_version: "0.70.2"
+  install_method: "conda create -p /tmp/tlpixi -c conda-forge pixi -y"
+  managed_cache_root: "~/.cache/torchlens/menagerie/envs"
+  disk_free_reserve_gib: 25
+assignment:
+  invariant: "Every catalog row is assigned to exactly one island; base-capable rows assign to base."
+  empirical_manifest: "menagerie/data/routing_manifest.tsv"
+  empirical_manifest_sha256: "83b2a66167e4b5361816bdc7d28eed2963b38107fe353fd2fd0b05303e1e0c41"  # pragma: allowlist secret
+  dependency_unavailable_status: "skipped:dependency_unavailable"
+  base_modules:
+    - builtins
+    - menagerie
+    - pathlib
+    - torch
+  cluster_envs:
+    audioseal: audio
+    cnn: misc
+    espnet2: audio
+    gvp: geom_sci
+    lerobot+torch: gpu_tail
+    miscc: misc
+    miscc+torch: misc
+    mmdet+mmengine: mmlab_core
+    mmengine+mmsegmentation: mmlab_core
+    mmocr: mmocr
+    nemo: audio
+    nequip+torch: geom_sci
+    neuralforecast+torch: forecast_tab
+    pytorch_widedeep: forecast_tab
+    s2cnn: geom_sci
+    schnetpack+torch: geom_sci
+    sgmse: audio
+    siamrpn: misc
+    sonata: misc
+    spikingtorch: snn
+    super_gradients: yolox_sg
+    tinycudann: gpu_tail
+    yolox: yolox_sg
+  direct_envs:
+    m4034: gpu_tail
+    m4921: gpu_tail
+    m4922: gpu_tail
+    m4928: gpu_tail
+    m4932: gpu_tail
+    m5624: gpu_tail
+    m5625: gpu_tail
+    m5626: gpu_tail
+    m11955: gpu_tail
+    m11956: gpu_tail
+  fallback_dependency_env: gpu_tail
+islands:
+  base:
+    description: "Current editable TorchLens environment for dependency-free and base PyTorch rows."
+    selectors:
+      catch_all_base: true
+    python: "3.11"
+    torch_pin: "current"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi: []
+    smoke_stable_ids:
+      - m2
+      - m10
+    expected_device: cpu
+    disk_estimate_gib: 0
+    status_policy:
+      default_status: passed
+      unavailable_status: env_unavailable
+      failure_status: failed
+  mmlab_core:
+    description: "OpenMMLab detection, segmentation, and pretrain stack without pose/OCR caps."
+    selectors:
+      cluster_patterns:
+        - "^mmdet\\+mmengine$"
+        - "^mmengine$"
+        - "^mmengine\\+mmsegmentation$"
+      module_patterns:
+        - "^mmdet$"
+        - "^mmcv$"
+        - "^mmengine$"
+        - "^mmseg$"
+        - "^mmpretrain$"
+      zoo_patterns:
+        - "mmdet"
+        - "mmdetection"
+        - "mmseg"
+        - "mmsegmentation"
+        - "mmpretrain"
+        - "mmcls"
+        - "open-mmlab"
+        - "openmmlab"
+      exclude_zoo_patterns:
+        - "mmpose"
+        - "mmocr"
+        - "mmagic"
+      exclude_module_patterns:
+        - "^mmpose$"
+        - "^mmocr$"
+    python: "3.11"
+    torch_pin: "torch==2.1.0+cu121 torchvision==0.16.0+cu121"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+      find_links:
+        - "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html"
+      no_build_isolation:
+        - mmcv
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.1.0+cu121"
+        - "torchvision==0.16.0+cu121"
+        - "numpy<2"
+        - openmim
+        - ftfy
+        - regex
+        - xtcocotools
+        - munkres
+        - "mmengine==0.10.7"
+        - "mmcv==2.1.0"
+        - "mmdet==3.3.0"
+        - "mmsegmentation==1.2.2"
+        - "mmpretrain==1.2.0"
+    smoke_stable_ids:
+      - m6375
+      - m7069
+    expected_device: cpu
+    disk_estimate_gib: 8
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+      notes: "Legacy conda recipe was empirically working, but pixi lock/build is still unproven."
+  mmpose:
+    description: "OpenMMLab pose island with mmpose-specific dependency caps."
+    selectors:
+      cluster_patterns:
+        - "^mmpose"
+      module_patterns:
+        - "^mmpose$"
+      zoo_patterns:
+        - "mmpose"
+      name_patterns:
+        - "mmpose"
+    python: "3.11"
+    torch_pin: "torch==2.1.0+cu121 torchvision==0.16.0+cu121"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+      find_links:
+        - "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html"
+      no_build_isolation:
+        - mmcv
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.1.0+cu121"
+        - "torchvision==0.16.0+cu121"
+        - "numpy<2"
+        - openmim
+        - ftfy
+        - regex
+        - xtcocotools
+        - munkres
+        - "mmengine==0.10.7"
+        - "mmcv==2.1.0"
+        - "mmdet==3.2.0"
+        - "mmpose==1.3.2"
+    smoke_stable_ids:
+      - m6875
+    expected_device: cpu
+    disk_estimate_gib: 9
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  mmocr:
+    description: "OpenMMLab OCR island pinned separately from current mmdet/mmseg caps."
+    selectors:
+      cluster_patterns:
+        - "^mmocr"
+      module_patterns:
+        - "^mmocr$"
+      zoo_patterns:
+        - "mmocr"
+      name_patterns:
+        - "mmocr"
+    python: "3.11"
+    torch_pin: "torch==2.1.0+cu121 torchvision==0.16.0+cu121"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+      find_links:
+        - "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html"
+      no_build_isolation:
+        - mmcv
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.1.0+cu121"
+        - "torchvision==0.16.0+cu121"
+        - "numpy<2"
+        - openmim
+        - ftfy
+        - regex
+        - munkres
+        - "mmengine==0.10.7"
+        - "mmcv==2.0.1"
+        - "mmdet==3.1.0"
+        - "mmocr==1.0.1"
+    smoke_stable_ids:
+      - m952
+      - m953
+    expected_device: cpu
+    disk_estimate_gib: 9
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  yolox_sg:
+    description: "YOLOX and SuperGradients source/build-heavy detection tail."
+    selectors:
+      cluster_patterns:
+        - "^yolox$"
+        - "^super_gradients$"
+      module_patterns:
+        - "^yolox$"
+        - "^super_gradients$"
+      zoo_patterns:
+        - "yolox"
+        - "super-gradients"
+        - "super_gradients"
+        - "ByteTrack"
+      name_patterns:
+        - "yolox"
+        - "super_gradients"
+      exclude_zoo_patterns:
+        - "mmdet"
+        - "mmdetection"
+        - "mmpose"
+        - "open-mmlab"
+      exclude_name_patterns:
+        - "mmdet"
+        - "mmpose"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+      no_build_isolation:
+        - yolox
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - "yolox==0.3.0"
+        - "super-gradients==3.7.1"
+    smoke_stable_ids:
+      - m11542
+      - m10350
+    expected_device: cpu
+    disk_estimate_gib: 7
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  audio:
+    description: "Speech and audio frameworks with mutually sensitive torch/numpy pins."
+    selectors:
+      cluster_patterns:
+        - "^speechbrain$"
+        - "^espnet2$"
+        - "^nemo$"
+        - "^demucs$"
+        - "^encodec$"
+        - "^audioseal$"
+        - "^sgmse$"
+      module_patterns:
+        - "^speechbrain$"
+        - "^espnet2$"
+        - "^nemo$"
+        - "^demucs$"
+        - "^encodec$"
+        - "^audioseal$"
+        - "^sgmse$"
+      zoo_patterns:
+        - "speechbrain"
+        - "espnet"
+        - "nemo"
+        - "torchaudio"
+        - "demucs"
+        - "encodec"
+        - "audiocraft"
+        - "audioseal"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+        - "setuptools<74"
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - "torchaudio==2.4.1"
+        - "numpy>=2.0,<2.2"
+        - "speechbrain==1.1.0"
+        - "espnet==202511"
+        - "demucs==4.0.1"
+        - encodec
+    smoke_stable_ids:
+      - m9041
+      - m4746
+    expected_device: cpu
+    disk_estimate_gib: 10
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  forecast_tab:
+    description: "Forecasting, recommender, and tabular PyTorch packages."
+    selectors:
+      cluster_patterns:
+        - "^neuralforecast"
+        - "^pytorch_widedeep$"
+        - "^recbole$"
+        - "^deepctr_torch\\+torch$"
+      module_patterns:
+        - "^neuralforecast$"
+        - "^gluonts$"
+        - "^pytorch_widedeep$"
+        - "^recbole$"
+        - "^deepctr_torch$"
+        - "^fuxictr$"
+      zoo_patterns:
+        - "neuralforecast"
+        - "gluonts"
+        - "Time-Series-Library"
+        - "recbole"
+        - "RecBole"
+        - "deepctr"
+        - "pytorch-widedeep"
+        - "widedeep"
+        - "pytorch-tabular"
+        - "fuxictr"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+        - "packaging<25"
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - "numpy<2"
+        - "pandas<3"
+        - "neuralforecast==3.1.9"
+        - "pytorch-widedeep==1.7.0"
+        - "recbole==1.2.1"
+        - "deepctr-torch==0.3.0"
+        - "fuxictr==2.3.9"
+        - "gluonts[torch]==0.16.2"
+    smoke_stable_ids:
+      - m3392
+      - m2476
+    expected_device: cpu
+    disk_estimate_gib: 6
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  geom_sci:
+    description: "Graph, geometric, molecular, and scientific ML packages."
+    selectors:
+      cluster_patterns:
+        - "torch-geometric"
+        - "^e3nn"
+        - "^pykeen$"
+        - "^ogb"
+        - "^schnetpack"
+        - "^nequip"
+        - "^torch\\+torchmdnet$"
+        - "^gvp$"
+        - "^egnn_pytorch"
+        - "^s2cnn$"
+        - "^pennylane"
+      module_patterns:
+        - "^torch_geometric$"
+        - "^e3nn$"
+        - "^pykeen$"
+        - "^ogb$"
+        - "^schnetpack$"
+        - "^nequip$"
+        - "^torchmdnet$"
+        - "^gvp$"
+        - "^egnn_pytorch$"
+        - "^s2cnn$"
+        - "^pennylane$"
+      zoo_patterns:
+        - "torch_geometric"
+        - "torch-geometric"
+        - "pyg"
+        - "pykeen"
+        - "e3nn"
+        - "mace"
+        - "schnetpack"
+        - "ogb"
+        - "fairchem"
+        - "ocp"
+        - "torchmd"
+        - "nequip"
+        - "egnn"
+        - "pennylane"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - "numpy>=2.0,<2.2"
+        - nequip
+        - gvp
+        - s2cnn
+        - "schnetpack==2.1.1"
+    smoke_stable_ids:
+      - m5
+      - m4421
+    expected_device: cpu
+    disk_estimate_gib: 8
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  snn:
+    description: "Spiking-neural-network packages with isolated neuron APIs."
+    selectors:
+      cluster_patterns:
+        - "^spikingjelly"
+        - "^snntorch"
+        - "^norse$"
+        - "^bindsnet$"
+        - "^spikingtorch$"
+      module_patterns:
+        - "^spikingjelly$"
+        - "^snntorch$"
+        - "^norse$"
+        - "^bindsnet$"
+        - "^spikingtorch$"
+      zoo_patterns:
+        - "spikingjelly"
+        - "snntorch"
+        - "norse"
+        - "bindsnet"
+        - "spikingtorch"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - spikingtorch
+    smoke_stable_ids:
+      - m10226
+    expected_device: cpu
+    disk_estimate_gib: 5
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  misc:
+    description: "Small dependency tail with source-only or unclear package availability."
+    selectors:
+      cluster_patterns:
+        - "^cnn$"
+        - "^miscc"
+        - "^siamrpn$"
+        - "^sonata$"
+      module_patterns:
+        - "^cnn$"
+        - "^miscc$"
+        - "^siamrpn$"
+        - "^sonata$"
+      zoo_patterns:
+        - "siamrpn"
+        - "sonata"
+    python: "3.11"
+    torch_pin: "torch==2.4.1 torchvision==0.19.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu121"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu121"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.4.1"
+        - "torchvision==0.19.1"
+        - "cnn"
+        - "miscc"
+        - "siamrpn"
+        - "sonata"
+    smoke_stable_ids:
+      - m467
+      - m3549
+    expected_device: cpu
+    disk_estimate_gib: 6
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed
+  gpu_tail:
+    description: "GPU/source/build-heavy dependency tail not yet proven as smaller islands."
+    selectors:
+      catch_all_dependency: true
+      cluster_patterns:
+        - "^fla$"
+        - "^diffusers"
+        - "^pytorchvideo"
+        - "^normflows"
+        - "^nflows"
+        - "^lerobot"
+        - "^mambapy$"
+        - "^tinycudann$"
+        - "^lightly$"
+        - "^super-image$"
+        - "^open-clip-torch$"
+      module_patterns:
+        - "^fla$"
+        - "^diffusers$"
+        - "^pytorchvideo$"
+        - "^normflows$"
+        - "^nflows$"
+        - "^lerobot$"
+        - "^mambapy$"
+        - "^tinycudann$"
+        - "^lightly$"
+        - "^super_image$"
+        - "^open_clip$"
+      zoo_patterns:
+        - "detectron2"
+        - "flash-linear-attention"
+        - "fla"
+        - "lightweight-gan"
+        - "diffusers"
+        - "pytorchvideo"
+        - "normflows"
+        - "nflows"
+        - "lerobot"
+        - "tiny-cuda"
+        - "mambapy"
+        - "lightly"
+        - "super-image"
+        - "open_clip"
+        - "open-clip"
+    python: "3.11"
+    torch_pin: "torch==2.7.1 torchvision==0.22.1"
+    torch_index_url: "https://download.pytorch.org/whl/cu126"
+    pypi_options:
+      extra_index_urls:
+        - "https://download.pytorch.org/whl/cu126"
+    packages:
+      conda:
+        - "python=3.11"
+        - pip
+      pypi:
+        - "torch==2.7.1"
+        - "torchvision==0.22.1"
+        - lerobot
+        - tinycudann
+    smoke_stable_ids:
+      - m5575
+      - m10552
+    expected_device: cuda
+    disk_estimate_gib: 12
+    status_policy:
+      default_status: env_unavailable
+      unavailable_status: env_unavailable
+      failure_status: install_failed

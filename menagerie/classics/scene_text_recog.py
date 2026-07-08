@@ -84,13 +84,54 @@ class TextCNN(nn.Module):
 
 
 class BiLSTMEncoder(nn.Module):
+    """Bidirectional LSTM encoder that exposes only the sequence output."""
+
     def __init__(self, in_dim: int = 256, hidden: int = 256) -> None:
+        """Initialize explicit forward/backward LSTM cells.
+
+        Parameters
+        ----------
+        in_dim:
+            Input feature dimension.
+        hidden:
+            Hidden size per direction.
+        """
+
         super().__init__()
-        self.lstm = nn.LSTM(in_dim, hidden, num_layers=1, bidirectional=True, batch_first=True)
+        self.forward_cell = nn.LSTMCell(in_dim, hidden)
+        self.backward_cell = nn.LSTMCell(in_dim, hidden)
+        self.hidden = hidden
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.lstm(x)
-        return out  # (B, T, 2*hidden)
+        """Encode a feature sequence in both directions.
+
+        Parameters
+        ----------
+        x:
+            Sequence tensor with shape ``(batch, steps, in_dim)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Bidirectional sequence features with shape ``(batch, steps, 2 * hidden)``.
+        """
+
+        batch = x.shape[0]
+        h_f = torch.zeros(batch, self.hidden, dtype=x.dtype, device=x.device)
+        c_f = torch.zeros_like(h_f)
+        h_b = torch.zeros_like(h_f)
+        c_b = torch.zeros_like(h_f)
+        forward_states = []
+        backward_states = []
+        for step in range(x.shape[1]):
+            h_f, c_f = self.forward_cell(x[:, step], (h_f, c_f))
+            forward_states.append(h_f)
+            rev_step = x.shape[1] - step - 1
+            h_b, c_b = self.backward_cell(x[:, rev_step], (h_b, c_b))
+            backward_states.append(h_b)
+        forward_out = torch.stack(forward_states, dim=1)
+        backward_out = torch.stack(list(reversed(backward_states)), dim=1)
+        return torch.cat([forward_out, backward_out], dim=-1)
 
 
 # ===========================================================================

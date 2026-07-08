@@ -19,7 +19,7 @@ Retrieval / NAR** (arXiv 2307.07919, ICLR 2024), **ONNX Model Zoo** (github.com/
 ## 1. Curation methods to adopt
 
 Each lesson is mapped to a concrete change in our pipeline (`DISCOVER_MODELS.md`,
-`catalog.py`, `discover_crawler.py`, `master_catalog.tsv`).
+`catalog.py`, `discover_crawler.py`, `master_catalog.jsonl`, and the classics registry).
 
 ### 1.1 Add the prior-art datasets' own model lists as explicit harvest sources
 Younger draws from **Hugging Face Hub + ONNX Model Zoo + PyTorch Hub + Kaggle Models**; NAR from
@@ -141,10 +141,9 @@ Union of the best-of-breed schemas, mapped to what TorchLens already produces pe
   (PyTorch-Geometric style); DeepNets-1M = HDF5 graphs + JSON meta + a shipped generator; NAS-Bench =
   TFRecord / `.pth` dict behind a query API; GitGraph = MongoDB + graph-tool; ONNX Zoo = protobuf.
 - **Our canonical artifact is the TorchLens Trace** (richer than any of the above). For *release*,
-  offer downstream-friendly EXPORTS: per-architecture JSON/NetworkX/PyG graph + a per-op metadata
-  table, generated FROM the Trace. Keep the catalog TSV (9 cols: name, zoo, constructor_call,
-  input_shape, input_dtype, family, domain, era, notes) as the human-curatable index; ship the
-  rendered graphs as the dataset.
+  offer downstream-friendly exports: per-architecture JSON/NetworkX/PyG graph + a per-op metadata
+  table, generated from the Trace. Keep the typed JSONL catalog plus classics registry as the
+  human-curatable source; ship rendered graphs as derived dataset artifacts.
 
 ### 2.3 How to release it
 - **Release vehicle: Hugging Face dataset.** ONNX Zoo *migrated off GitHub LFS to HF*
