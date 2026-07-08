@@ -3418,6 +3418,14 @@ class Op:
         else:
             s = ""
             s += f"\n\t\t{tensor_stats_summary(self.out)}"
+            if not isinstance(self.out, torch.Tensor):
+                # Preview-backend (non-torch) saved activation, e.g. MLX/tinygrad/
+                # TF/JAX/Paddle. The slice-then-clone preview below relies on
+                # torch-only methods (.detach(), .requires_grad, .clone()); the
+                # stats-summary line above already reports shape/dtype safely, so
+                # skip the raw-content preview rather than duck-typing torch-only
+                # calls across every preview backend's array type.
+                return s
             tensor_size_shown = 8
             # Use logged shape, not live tensor shape (#45)
             saved_shape = self.shape if self.shape is not None else self.out.shape

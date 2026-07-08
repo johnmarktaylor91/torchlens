@@ -224,20 +224,65 @@ def _format_percent(value: float) -> str:
     return f"{value:.3g}%"
 
 
-def tensor_stats_summary(tensor: torch.Tensor) -> str:
+def _non_torch_array_summary(array: Any) -> str:
+    """Return a backend-generic one-line summary for a non-``torch.Tensor`` array.
+
+    Used for saved activations captured under a preview (non-torch) backend
+    -- e.g. MLX, tinygrad, TensorFlow, JAX, Paddle -- whose array types do not
+    share ``torch.Tensor``'s ``.device``/``grad_fn``/dtype-cast surface. Only
+    duck-typed, near-universal attributes (``.shape``, ``.dtype``) are read;
+    no torch-only numeric stats (mean/std/min/max/nan/inf/zero counts) are
+    attempted, since those rely on torch-specific reductions that do not
+    exist -- or behave differently -- across array libraries.
+
+    Parameters
+    ----------
+    array:
+        Non-torch array-like object to summarize.
+
+    Returns
+    -------
+    str
+        One-line summary with whatever shape/dtype information the object
+        exposes. Never raises.
+    """
+
+    shape = getattr(array, "shape", None)
+    if shape is not None:
+        try:
+            shape_text = "Tensor[" + ", ".join(str(dim) for dim in tuple(shape)) + "]"
+        except TypeError:
+            shape_text = f"Tensor[{shape}]"
+    else:
+        shape_text = "Tensor[?]"
+    dtype = getattr(array, "dtype", None)
+    dtype_text = str(dtype) if dtype is not None else "unknown dtype"
+    return f"{shape_text} {dtype_text}"
+
+
+def tensor_stats_summary(tensor: Any) -> str:
     """Return a lovely-style one-line tensor statistics summary.
 
     Parameters
     ----------
     tensor:
-        Tensor to summarize.
+        Tensor to summarize. Non-``torch.Tensor`` arrays (saved activations
+        from a preview backend such as MLX/tinygrad/TF/JAX/Paddle) are
+        handled defensively via :func:`_non_torch_array_summary`: shape and
+        dtype are reported when available and torch-only numeric stats are
+        omitted, rather than raising ``AttributeError``. The ``torch.Tensor``
+        path below is unchanged.
 
     Returns
     -------
     str
         One-line summary with shape, dtype, device, scalar stats, and
-        NaN/Inf warning flags when present.
+        NaN/Inf warning flags when present (torch tensors), or a reduced
+        shape/dtype-only summary (non-torch arrays).
     """
+
+    if not isinstance(tensor, torch.Tensor):
+        return _non_torch_array_summary(tensor)
 
     shape = ", ".join(str(dim) for dim in tuple(tensor.shape))
     shape_text = f"Tensor[{shape}]" if shape else "Tensor[]"
