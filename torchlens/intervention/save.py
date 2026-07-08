@@ -1102,10 +1102,16 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
     if isinstance(value, dict) and "__tensor_ref__" in value:
         return tensors[str(value["__tensor_ref__"])]
     if isinstance(value, dict) and "__helper__" in value:
+        # Decode a builtin helper's args/kwargs through THIS same full codec so the
+        # decoder stays in lockstep with ``_serialize_value``. The narrow
+        # ``_decode_jsonish`` fallback only understood ``__tensor_ref__`` and
+        # silently returned every other wrapper (``__callable__``/``__opaque_audit__``/
+        # ...) as a raw dict, corrupting callable/opaque helper arguments.
         return helper_from_serialized(
             value["__helper__"],
             tensor_loader=lambda tensor_id: tensors[tensor_id],
             import_resolver=_resolve_import_ref,
+            value_decoder=lambda item: _deserialize_value(item, tensors),
         )
     if isinstance(value, dict) and "__callable__" in value:
         callable_payload = value["__callable__"]

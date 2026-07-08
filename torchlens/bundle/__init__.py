@@ -1394,6 +1394,12 @@ class Bundle:
 
         left_log = self._members[left_name]
         right_log = self._members[right_name]
+        # Match every other caller of relative_l1_scalar in this subsystem
+        # (_diff_row/_diff_matrix/most_changed/_distance_value): the scalar
+        # fallback fires ONLY when both operands are scalar-like; multi-element
+        # activations route through a real vector metric. Without this guard
+        # relative_l1_scalar silently truncates each site to its first element.
+        metric_fn = resolve_metric("cosine")
         rows: list[tuple[str, float]] = []
         for left_site in getattr(left_log, "layer_list", []):
             label = str(left_site.layer_label)
@@ -1408,7 +1414,11 @@ class Bundle:
                 torch.Tensor,
             ):
                 continue
-            value = relative_l1_scalar(left_out, right_out)
+            value = (
+                relative_l1_scalar(left_out, right_out)
+                if is_scalar_like(left_out) and is_scalar_like(right_out)
+                else metric_fn(left_out, right_out)
+            )
             rows.append((label, float(value.detach().item())))
         return rows
 

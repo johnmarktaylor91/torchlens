@@ -134,6 +134,19 @@ class DirectWriteInExecutableSaveError(ConfigurationError, ValueError):
     """Raised when executable spec save sees direct out writes."""
 
 
+class NonExecutableSpecError(ConfigurationError, RuntimeError):
+    """Raised when a non-executable (audit-level) loaded helper is run.
+
+    An audit-level save (or any save carrying an opaque argument) records a
+    helper for inspection only -- its arguments cannot be reconstructed into a
+    live callable. Attempting to fire such a helper raises this loud error at
+    use time rather than silently loading a corrupted argument and crashing
+    several frames downstream with a misleading message.
+    """
+
+    severity = "fatal"
+
+
 class UnserializableDictKeyError(ConfigurationError, TypeError):
     """Raised when a spec dict key cannot be preserved through save/load.
 
@@ -324,6 +337,7 @@ __all__ = [
     "MultiMatchWarning",
     "MutateInPlaceWarning",
     "NoParentError",
+    "NonExecutableSpecError",
     "OpaqueCallableInExecutableSaveError",
     "UnserializableDictKeyError",
     "RecursiveTracingError",

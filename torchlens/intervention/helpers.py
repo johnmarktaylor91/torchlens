@@ -11,6 +11,7 @@ from torch import nn
 from .errors import (
     AxisAmbiguityError,
     HookValueError,
+    NonExecutableSpecError,
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
 )
@@ -1040,6 +1041,7 @@ def helper_from_serialized(
     *,
     tensor_loader: Callable[[str], torch.Tensor],
     import_resolver: Callable[[str], Callable[..., Any]],
+    value_decoder: Callable[[Any], Any] | None = None,
 ) -> HelperSpec | Callable[..., Any]:
     """Reconstruct a helper or callable from serialized helper data.
 
@@ -1051,6 +1053,16 @@ def helper_from_serialized(
         Callable mapping tensor reference IDs to loaded tensors.
     import_resolver:
         Callable resolving ``module:qualname`` import references.
+    value_decoder:
+        Full-codec decoder for a builtin helper's ``args``/``kwargs``. When
+        provided (the maintained ``save.py`` load path passes ``_deserialize_value``
+        bound to the loaded tensor map), it understands the *entire* wrapper-tag
+        namespace ``_serialize_value`` emits (``__tensor_ref__``, ``__callable__``,
+        ``__helper__``, ``__opaque_audit__``, ``__output_path_component__``,
+        ``__dict_items__``). Falling back to the narrow ``_decode_jsonish`` (only
+        ``__tensor_ref__``) silently returned every other wrapper as a raw dict,
+        corrupting callable/opaque helper arguments -- so a decoder that stays in
+        lockstep with the encoder is required for a correct round trip.
 
     Returns
     -------
@@ -1058,6 +1070,7 @@ def helper_from_serialized(
         Runtime helper spec or import-ref callable.
     """
 
+    decode = value_decoder or (lambda value: _decode_jsonish(value, tensor_loader))
     portability = data["portability"]
     if portability == "import_ref":
         import_path = str(data["import_path"])
@@ -1089,11 +1102,17 @@ def helper_from_serialized(
         )
 
     name = data["name"]
-    args = tuple(_decode_jsonish(value, tensor_loader) for value in data.get("args", []))
-    kwargs = {
-        str(key): _decode_jsonish(value, tensor_loader)
-        for key, value in data.get("kwargs", {}).items()
-    }
+    args = tuple(decode(value) for value in data.get("args", []))
+    kwargs = {str(key): decode(value) for key, value in data.get("kwargs", {}).items()}
+    # An audit-level save (or any save carrying an opaque argument) decodes those
+    # arguments into non-executable ``opaque_audit`` placeholders. Feeding such a
+    # placeholder into the real builtin constructor would build a helper that only
+    # crashes -- with a misleading, several-frames-removed error -- when it later
+    # fires. Detect it here and return an explicit non-executable placeholder whose
+    # factory raises a clear ``NonExecutableSpecError`` at use time instead.
+    opaque_arg = _first_non_executable_arg(args, kwargs)
+    if opaque_arg is not None:
+        return _non_executable_builtin_placeholder(name, opaque_arg, data)
     constructors: dict[str, Callable[..., HelperSpec]] = {
         "zero_ablate": zero_ablate,
         "mean_ablate": mean_ablate,
@@ -1116,6 +1135,123 @@ def helper_from_serialized(
     if name not in constructors:
         raise ValueError(f"Unknown builtin helper {name!r}")
     return constructors[name](*args, **kwargs)
+
+
+def _is_non_executable_placeholder(value: Any) -> bool:
+    """Whether a decoded argument is a non-executable ``opaque_audit`` placeholder.
+
+    Parameters
+    ----------
+    value:
+        Decoded helper argument.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``value`` is a HelperSpec that was reconstructed as an
+        ``opaque_audit`` (audit-only, factory-less) placeholder.
+    """
+
+    return isinstance(value, HelperSpec) and value.portability == "opaque_audit"
+
+
+def _first_non_executable_arg(args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Any | None:
+    """Return the first non-executable placeholder in ``args``/``kwargs``, if any.
+
+    Recurses into lists, tuples, and dict values so a placeholder nested inside a
+    container argument is still detected.
+
+    Parameters
+    ----------
+    args:
+        Decoded positional helper arguments.
+    kwargs:
+        Decoded keyword helper arguments.
+
+    Returns
+    -------
+    Any | None
+        The offending placeholder, or ``None`` when every argument is executable.
+    """
+
+    def _scan(value: Any) -> Any | None:
+        if _is_non_executable_placeholder(value):
+            return value
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                found = _scan(item)
+                if found is not None:
+                    return found
+        elif isinstance(value, Mapping):
+            for item in value.values():
+                found = _scan(item)
+                if found is not None:
+                    return found
+        return None
+
+    for value in args:
+        found = _scan(value)
+        if found is not None:
+            return found
+    for value in kwargs.values():
+        found = _scan(value)
+        if found is not None:
+            return found
+    return None
+
+
+def _non_executable_builtin_placeholder(
+    name: str, opaque_arg: Any, data: Mapping[str, Any]
+) -> HelperSpec:
+    """Build a non-executable placeholder for a builtin helper with opaque args.
+
+    Parameters
+    ----------
+    name:
+        Builtin helper name.
+    opaque_arg:
+        The decoded ``opaque_audit`` placeholder that made the helper
+        non-executable.
+    data:
+        Original serialized helper payload (used to preserve identity metadata).
+
+    Returns
+    -------
+    HelperSpec
+        An ``opaque_audit`` spec whose factory raises ``NonExecutableSpecError``
+        when fired, so a corrupted argument fails loudly at use time rather than
+        several frames downstream.
+    """
+
+    def factory() -> Callable[..., Any]:
+        """Refuse to build a runtime hook for a non-executable helper.
+
+        Raises
+        ------
+        NonExecutableSpecError
+            Always -- the helper carries an audit-only opaque argument.
+        """
+
+        raise NonExecutableSpecError(
+            f"Builtin helper {name!r} was loaded with a non-executable "
+            f"(audit-only) argument {opaque_arg!r} and cannot be run. Re-save the "
+            "intervention at level='executable_with_callables' (or 'portable') "
+            "with a reconstructible argument to obtain an executable spec."
+        )
+
+    return HelperSpec(
+        helper_name=name,
+        portability="opaque_audit",
+        kind=cast(Any, data.get("kind", "forward")),
+        direction=cast(Any, data.get("direction")),
+        factory=factory,
+        metadata=(
+            ("repr", f"<non-executable {name} helper (audit-only argument)>"),
+            ("executable", False),
+        ),
+        batch_independent=bool(data.get("batch_independent", False)),
+        compatible_with_append=bool(data.get("compatible_with_append", False)),
+    )
 
 
 def _decode_jsonish(value: Any, tensor_loader: Callable[[str], torch.Tensor]) -> Any:
