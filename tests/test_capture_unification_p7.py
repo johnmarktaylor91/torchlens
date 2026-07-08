@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.validation.invariants import (
+    _check_special_layer_lists,
+    _check_trace_self_consistency,
+)
 
 
 class ConvReluAdd(nn.Module):
@@ -72,6 +78,58 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
     unsaved = next(op for op in cooked.layer_list if op.layer_type == "relu")
     with pytest.raises(ValueError, match="no saved payload.*save="):
         _ = unsaved.out
+
+
+def test_recording_to_trace_backfills_timing_and_input_layers() -> None:
+    """record().to_trace() seeds live-dispatch bookkeeping the replay path skips.
+
+    Regression test for the ``Recording.to_trace()`` bridge: unlike every real
+    capture backend, replaying captured events into a fresh ``Trace`` used to
+    skip the live-dispatch setup that stamps ``capture_start_time`` and
+    back-fills ``input_layers`` (only ``output_layers`` was handled). That left
+    ``cleanup_duration`` computing as ``time.time() - 0 - 0 - 0`` (a
+    multi-decade-off ``Duration``) and made ``input_layers`` empty even though
+    individual ``Op`` entries still carried ``is_input=True`` -- an
+    unconditional failure of the special_layer_lists metadata invariant for
+    every ``record().to_trace()`` output.
+
+    Deliberately checks the two specific invariant groups this fix targets
+    (``special_layer_lists`` for input_layers<->is_input consistency,
+    ``trace_self_consistency`` for the timing/output_layers checks) rather
+    than the full ``check_metadata_invariants()`` suite: a separate,
+    pre-existing, and unrelated gap in how the fastlog replay path populates
+    module-address-tree metadata (``module_hierarchy``) independently fails
+    the full suite for any model with a nested submodule, masked until now by
+    this very bug always raising first. That gap is out of scope here and is
+    tracked separately.
+    """
+
+    model = ConvReluAdd()
+    x = torch.randn(1, 1, 4, 4)
+
+    before = time.time()
+    recording = tl.record(model, x, save=tl.func("conv2d"), random_seed=31)
+    cooked = recording.to_trace()
+    after = time.time()
+
+    # capture_start_time must be a real, in-window wall-clock timestamp, not
+    # the dataclass default of 0 (epoch).
+    assert before <= cooked.capture_start_time <= after
+
+    # cleanup_duration must be a small, real duration -- not the
+    # `time.time() - 0 - 0 - 0` garbage value (effectively "now", i.e. ~56
+    # years for a 2026 run) the missing back-fill used to produce.
+    assert 0 <= cooked.cleanup_duration < 60.0
+
+    # input_layers must be symmetrically back-filled just like output_layers
+    # already was, and must match the set of Ops actually flagged is_input.
+    assert cooked.input_layers
+    expected_inputs = {op.layer_label for op in cooked.layer_list if op.is_input}
+    assert set(cooked.input_layers) == expected_inputs
+
+    # The two invariant groups this fix targets must pass cleanly.
+    _check_trace_self_consistency(cooked)
+    _check_special_layer_lists(cooked)
 
 
 def test_record_save_matches_deprecated_keep_op_alias() -> None:

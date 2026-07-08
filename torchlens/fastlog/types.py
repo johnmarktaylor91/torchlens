@@ -677,6 +677,57 @@ class Recording(CapturedRun):
             for event in self._capture_events.op_events
             if getattr(event, "is_output_parent", False)
         ]
+        # Symmetric with the output_layers back-fill above: the fastlog
+        # predicate-capture path stamps OpEvent.kind from the raw
+        # RecordContext.kind ("input"/"buffer"/"op"/...), not the "source"
+        # convention `_materialize.py` checks (`event.kind == "source"`,
+        # which torch/backends/ops.py's canonical event builder only ever
+        # produces from an exhaustive-mode capture). The per-layer is_input
+        # flag that actually lands on each Op is authoritatively normalized
+        # from layer_type alone (`_normalize_io_role_flags`,
+        # torchlens/postprocess/labeling.py: `is_input = layer_type ==
+        # "input"`), independent of event.kind. Match that exact criterion
+        # here so the replayed Trace satisfies check_metadata_invariants'
+        # bidirectional input_layers <-> is_input consistency check, instead
+        # of leaving input_layers empty while individual Ops still carry
+        # is_input=True.
+        trace.input_layers = [
+            event.label_raw
+            for event in self._capture_events.op_events
+            if event.layer_type == "input"
+        ]
+
+        # The live capture path (torchlens/capture/trace.py) sets
+        # capture_start_time/setup_duration/forward_duration/forward_peak_memory/
+        # forward_memory_backend on the Trace it builds *during* the forward
+        # pass, before _postprocess() runs. Replaying captured events into a
+        # brand-new Trace here skips that live-dispatch setup entirely, so
+        # without this back-fill capture_start_time stays at the dataclass
+        # default of 0 and _log_time_elapsed (postprocess Step 14) computes
+        # cleanup_duration as `time.time() - 0 - 0 - 0`, a garbage
+        # multi-decade Duration. Seed capture_start_time from the Recording's
+        # own directly-measured first pass-start timestamp (always populated
+        # for a non-failed recording with retained capture events), and copy
+        # the remaining timing/memory fields from the fastlog Recorder's
+        # internal runtime_trace when reachable -- that trace genuinely
+        # measured them via the same _forward_peak_memory_bracket helper the
+        # normal capture path uses (predicate-mode primary pass, see
+        # torchlens/capture/trace.py's _run_predicate_forward_with_root_frame),
+        # they are just otherwise discarded once the pass completes. Fields
+        # that were not actually measured are left at their honest Trace
+        # defaults -- no fabrication.
+        recording_state = getattr(self, "_recording_state", None)
+        runtime_trace = getattr(recording_state, "runtime_trace", None)
+        if self.start_times:
+            trace.capture_start_time = self.start_times[0]
+        elif runtime_trace is not None:
+            trace.capture_start_time = runtime_trace.capture_start_time
+        if runtime_trace is not None:
+            trace.setup_duration = runtime_trace.setup_duration
+            trace.forward_duration = runtime_trace.forward_duration
+            trace.forward_peak_memory = runtime_trace.forward_peak_memory
+            trace.forward_memory_backend = runtime_trace.forward_memory_backend
+
         trace._postprocess(
             list(self._output_tensors),
             list(self._output_tensor_addresses),

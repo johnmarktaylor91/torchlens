@@ -4617,7 +4617,19 @@ def _resolve_trace_label(ml: "Trace", label: str) -> str | None:
 
     all_keys = set(getattr(ml, "layer_dict_all_keys", {}))
     final_label = getattr(ml, "_raw_to_final_layer_labels", {}).get(label)
-    if final_label in all_keys:
+    # `.get(label)` returns None both when `label` genuinely has no raw-label
+    # mapping (the common case for an already-final label) and, in principle,
+    # if a raw label were ever mapped to a literal ``None`` value. Either way,
+    # a `None` `final_label` must never be treated as "resolved": some traces
+    # legitimately register a `None` lookup key in `layer_dict_all_keys`
+    # (e.g. a layer with an unset `io_role`), so `None in all_keys` can be
+    # True even though no real label resolved. Without this guard that
+    # collision made every already-final label whose raw form does not
+    # remap (i.e. almost all of them) silently resolve to `None` instead of
+    # falling through to the `label in all_keys` check below, so a
+    # perfectly valid parent reference like "relu_1_2" was reported as
+    # "missing" by check_metadata_invariants.
+    if final_label is not None and final_label in all_keys:
         return final_label
     if label in all_keys:
         return label
