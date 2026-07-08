@@ -100,6 +100,9 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "gather": {2},  # index tensor
     "index_select": {2},  # index tensor
     "scatter_": {2},  # index tensor
+    "scatter_add_": {2},  # index tensor -- same OOB class as scatter_; dest/src stay strict
+    "scatter_add": {2},  # out-of-place spelling
+    "scatteradd": {2},  # canonicalized spelling
     "maskedfill": {1},  # mask tensor; TorchLens canonical name for Tensor.masked_fill
     "masked_fill": {1},  # mask tensor
     "masked_fill_": {1},  # mask tensor
@@ -108,6 +111,16 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "type_as": {1},  # type template tensor (value irrelevant)
     "new_tensor": {0},  # source tensor is a dtype/device/layout factory
     "newtensor": {0},  # canonicalized torch.Tensor.new_tensor spelling
+    # Tensor.new_full/new_zeros/new_ones self args are pure dtype/device/layout
+    # factory templates: the output is determined entirely by size/fill args,
+    # never by the self tensor's VALUES (e.g. PyG SAGPooling's
+    # ``num_nodes.new_full((n,), -1)``). Same class as new_tensor arg 0.
+    "new_full": {0},
+    "newfull": {0},
+    "new_zeros": {0},
+    "newzeros": {0},
+    "new_ones": {0},
+    "newones": {0},
 }
 
 
@@ -1159,6 +1172,14 @@ def _posthoc_structural_output_decision(
 
     if layer.func_name == "to" and len(args) > 1 and isinstance(args[1], torch.Tensor):
         return PosthocPerturbDecision(True, "type_template_output")
+    if _integer_cast_quantization_applies(layer, args):
+        return PosthocPerturbDecision(
+            True,
+            "integer_cast_quantization",
+            "float->integer cast output changes only when the perturbation crosses an "
+            "integer boundary; a same-bucket perturbation is quantization, not a "
+            "dropped dependency (arg-identity logging still guards the mapping)",
+        )
     if layer.func_name in ["meshgrid", "broadcast_tensors"]:
         return PosthocPerturbDecision(True, "structural_output_template")
     if layer.func_name in [
@@ -1290,6 +1311,48 @@ def _empty_getitem_output(layer: Op) -> bool:
         and isinstance(output, torch.Tensor)
         and output.numel() == 0
     )
+
+
+_INTEGER_CAST_DTYPES = frozenset(
+    {
+        torch.uint8,
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+    }
+)
+
+
+def _integer_cast_quantization_applies(layer: Op, args: tuple[Any, ...]) -> bool:
+    """Return whether an unchanged perturbation is float->integer quantization.
+
+    NARROW predicate for ``Tensor.to(integer_dtype)``: the perturbation ran the
+    REAL func with the perturbed floating parent substituted (that is how the
+    insensitivity was observed), so an unchanged integer output proves the
+    perturbation stayed inside the same integer buckets -- a quantization
+    effect, never a dropped-dependency mask. Float->float and other casts stay
+    strict, where value insensitivity would indicate a real capture bug.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose unchanged perturbation output is being classified.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    bool
+        Whether the integer-cast quantization exemption applies.
+    """
+
+    if layer.func_name != "to" or len(args) < 2:
+        return False
+    if args[1] not in _INTEGER_CAST_DTYPES:
+        return False
+    source = args[0]
+    return isinstance(source, torch.Tensor) and torch.is_floating_point(source)
 
 
 def _posthoc_overwrite_decision(

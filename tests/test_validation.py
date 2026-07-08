@@ -822,6 +822,93 @@ def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
     assert decision.reason == "no_posthoc_exemption"
 
 
+def _cast_layer(source: torch.Tensor, target: object) -> SimpleNamespace:
+    """Build a fake ``to()`` op record for posthoc-decision tests.
+
+    Parameters
+    ----------
+    source:
+        Saved source tensor (args[0]).
+    target:
+        Saved cast target (args[1]).
+
+    Returns
+    -------
+    SimpleNamespace
+        Minimal op-like record for ``posthoc_perturb_check``.
+    """
+
+    out = source.to(target) if isinstance(target, torch.dtype) else source
+    return SimpleNamespace(
+        func_name="to",
+        saved_args=(source, target),
+        saved_kwargs={},
+        dtype=out.dtype,
+        out=out,
+        layer_label="to_1_1",
+        parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
+        parents=["input_1"],
+    )
+
+
+def test_posthoc_integer_cast_quantization_is_exempt_only_for_float_to_int() -> None:
+    """Float->int cast insensitivity is quantization; other casts stay strict.
+
+    Positive: a floating source cast to an integer dtype is exempt (a
+    same-integer-bucket perturbation cannot change the output by construction).
+    Negatives (the bug-mask guards): float->float and int->int casts must NOT
+    be exempt -- value insensitivity there would indicate a real capture bug.
+    """
+
+    float_to_int = posthoc_perturb_check(
+        SimpleNamespace(), _cast_layer(torch.tensor([5.0]), torch.int64), ["input_1"]
+    )
+    assert float_to_int.exempt is True
+    assert float_to_int.reason == "integer_cast_quantization"
+
+    float_to_float = posthoc_perturb_check(
+        SimpleNamespace(), _cast_layer(torch.tensor([5.0]), torch.float64), ["input_1"]
+    )
+    assert float_to_float.exempt is False
+
+    int_to_int = posthoc_perturb_check(
+        SimpleNamespace(), _cast_layer(torch.tensor([5]), torch.int32), ["input_1"]
+    )
+    assert int_to_int.exempt is False
+
+
+def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> None:
+    """A parent occupying ONLY kwargs['out'] is exempt; mixed positions stay strict.
+
+    Positive: torch's ``out=`` convention makes the destination a write-only
+    storage target (PyG SAGPooling's ``cumsum(counts, out=ptr[1:])``), so its
+    prior values never influence the result. Negatives (the bug-mask guards):
+    a parent that also feeds a positional slot, or occupies a non-``out``
+    keyword, feeds real values and must NOT be exempt.
+    """
+
+    from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
+
+    pure_out = SimpleNamespace(
+        parent_arg_positions={"args": {0: "data_1"}, "kwargs": {"out": "dest_1"}}
+    )
+    assert _perturbed_parents_only_occupy_out_kwarg(pure_out, ["dest_1"]) is True
+    # The data parent stays strict even on the same op.
+    assert _perturbed_parents_only_occupy_out_kwarg(pure_out, ["data_1"]) is False
+
+    also_positional = SimpleNamespace(
+        parent_arg_positions={"args": {0: "dest_1"}, "kwargs": {"out": "dest_1"}}
+    )
+    assert _perturbed_parents_only_occupy_out_kwarg(also_positional, ["dest_1"]) is False
+
+    other_kwarg = SimpleNamespace(
+        parent_arg_positions={"args": {}, "kwargs": {"out": "dest_1", "src": "dest_1"}}
+    )
+    assert _perturbed_parents_only_occupy_out_kwarg(other_kwarg, ["dest_1"]) is False
+
+    assert _perturbed_parents_only_occupy_out_kwarg(pure_out, []) is False
+
+
 def test_validation_recompute_selects_dict_output_by_container_path() -> None:
     """Validation replay selects a dict leaf by typed path, not raw integer index."""
 
@@ -2514,7 +2601,12 @@ def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
                 equal-content value parent.
             """
 
-            base = x * 0.0 + 3.0
+            # Non-constant shared contents: cert10 removed the blanket
+            # constant-output posthoc excuse (74318b5d), which previously
+            # absorbed the genuinely-insensitive index-parent perturbation of a
+            # constant output. Equal dest/value CONTENTS -- the arg-position
+            # discrimination concern -- are preserved.
+            base = x + 3.0
             destination = base.clone()
             values = base.clone()  # value-parent CONTENTS equal the destination.
             idx = torch.arange(x.shape[0])

@@ -1509,12 +1509,15 @@ def _check_perturbation_exemptions(
 ) -> bool:
     """Check whether a perturbation check should be skipped for registry-based reasons.
 
-    Checks three exemption sources in order:
+    Checks four exemption sources in order:
     1. Empty tensors (numel==0) -- perturbing an empty tensor is meaningless.
-    2. Structural arg positions (``STRUCTURAL_ARG_POSITIONS``) -- the perturbed
+    2. Pure ``out=`` kwarg destinations -- the perturbed parent occupies ONLY
+       the ``out=`` keyword slot, a storage target the op fully overwrites by
+       torch API contract, so its prior values never influence the result.
+    3. Structural arg positions (``STRUCTURAL_ARG_POSITIONS``) -- the perturbed
        layer occupies a position that controls structure, not values (e.g.,
        index tensors for ``embedding``, ``index_select``).
-    3. Custom exemption functions (``CUSTOM_EXEMPTION_CHECKS``) -- op-specific
+    4. Custom exemption functions (``CUSTOM_EXEMPTION_CHECKS``) -- op-specific
        logic for complex cases like ``__getitem__``, ``lstm``, etc.
 
     Returns True if the perturbation is exempt (caller should skip), False otherwise.
@@ -1524,6 +1527,17 @@ def _check_perturbation_exemptions(
         p_entry = _op_for_validation_label(self, perturbed_label)
         if p_entry.out is not None and p_entry.out.numel() == 0:
             return True
+
+    # Registry 2: pure out= kwarg destination. torch's out= convention makes the
+    # destination a write-only storage target (values fully overwritten); a
+    # parent whose ONLY position on this op is kwargs['out'] is definitionally
+    # perturbation-insensitive (e.g. PyG SAGPooling's
+    # ``torch.cumsum(counts, out=ptr[1:])`` writing into a new_empty view).
+    # NARROW by construction: a parent that ALSO occupies any positional or
+    # other keyword slot feeds real values and stays strict, so a genuine
+    # dropped-dependency capture bug still fails.
+    if _perturbed_parents_only_occupy_out_kwarg(layer, layers_to_perturb):
+        return True
 
     func_name = layer.func_name
 
@@ -1540,6 +1554,41 @@ def _check_perturbation_exemptions(
             return True
 
     return False
+
+
+def _perturbed_parents_only_occupy_out_kwarg(layer: Op, layers_to_perturb: List[str]) -> bool:
+    """Return whether every perturbed parent is purely an ``out=`` destination.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose parents are being perturbed.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+
+    Returns
+    -------
+    bool
+        True when each perturbed parent's only recorded position on ``layer``
+        is the ``out`` keyword argument (a write-only storage target under the
+        torch ``out=`` convention). A parent that also occupies a positional or
+        non-``out`` keyword slot feeds real values and is NOT exempt.
+    """
+
+    if not layers_to_perturb:
+        return False
+    positions = getattr(layer, "parent_arg_positions", None) or {}
+    arg_positions = positions.get("args", {}) or {}
+    kwarg_positions = positions.get("kwargs", {}) or {}
+    for perturbed_label in layers_to_perturb:
+        if perturbed_label in arg_positions.values():
+            return False
+        occupied_kwargs = {
+            key for key, label in kwarg_positions.items() if label == perturbed_label
+        }
+        if occupied_kwargs != {"out"}:
+            return False
+    return True
 
 
 def _execute_func_with_restored_state(
