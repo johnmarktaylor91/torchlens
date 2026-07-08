@@ -645,12 +645,18 @@ class Recording(CapturedRun):
         Returns
         -------
         Trace
-            Trace built by the normal Step-0 materializer and postprocess pipeline.
+            Trace built by the normal Step-0 materializer and postprocess
+            pipeline. A halted recording produces a valid halted Trace
+            (``.halted`` True, frontier bound as the output node), mirroring the
+            exhaustive ``tl.trace(model, x, halt=...)`` finalization path.
 
         Raises
         ------
         RuntimeError
-            If the recording does not retain the topology-complete event stream.
+            If the recording is a failed partial capture, if it does not retain
+            the topology-complete event stream (e.g. disk-recovered), or if it
+            is halted but retained no raw activation payload to bind as the
+            output frontier.
         """
 
         if self.failed:
@@ -677,6 +683,31 @@ class Recording(CapturedRun):
             for event in self._capture_events.op_events
             if getattr(event, "is_output_parent", False)
         ]
+        # Halt-finalization parity. A halted recording never reached the
+        # model's real return, so no captured event carries is_output_parent
+        # (the output-marking step that stamps it only runs on a completed
+        # pass). The exhaustive path handles this in _finalize_halted_trace
+        # (capture/trace.py): it recovers a frontier-output tensor, sets
+        # halted/halt_reason/halt_frontier, and marks that frontier as the
+        # output parent so postprocess Step 1 synthesizes a dedicated output_N
+        # node. Mirror that here so a halted Recording.to_trace() yields a
+        # VALID halted Trace whose .halted is True (not silently False) and
+        # whose output_layers/trace_self_consistency invariants hold -- instead
+        # of the previous silent-wrong-.halted + "No output layers found"
+        # crash. Self._output_tensors is empty for a halted pass, so seed the
+        # frontier's saved payload as the sole output tensor (no fabrication --
+        # the tensor is the recording's own retained raw activation).
+        halt_output_tensors = list(self._output_tensors)
+        halt_output_addresses = list(self._output_tensor_addresses)
+        if self.halted:
+            frontier_label, frontier_tensor = self._recover_halt_frontier()
+            trace.halted = True
+            trace.halt_reason = self.halt_reason
+            trace.halt_frontier = self.halt_reason
+            trace.raw_output = None
+            trace.output_layers = [frontier_label]
+            halt_output_tensors = [frontier_tensor]
+            halt_output_addresses = [""]
         # Symmetric with the output_layers back-fill above: the fastlog
         # predicate-capture path stamps OpEvent.kind from the raw
         # RecordContext.kind ("input"/"buffer"/"op"/...), not the "source"
@@ -695,6 +726,48 @@ class Recording(CapturedRun):
             event.label_raw
             for event in self._capture_events.op_events
             if event.layer_type == "input"
+        ]
+        # Complete the special-layer-list backfill for the remaining two of the
+        # five (list <-> per-Op-flag) pairs the `special_layer_lists` invariant
+        # checks (torchlens/validation/invariants.py `_SPECIAL_LIST_FLAG_PAIRS`:
+        # input_layers, output_layers, buffer_layers, internal_source_ops,
+        # internal_sink_ops). `input_layers`/`output_layers` are seeded above;
+        # `internal_sink_ops` is NOT seeded here on purpose -- it is computed
+        # fresh inside `_postprocess()` (graph_traversal.py
+        # `_log_internally_terminated_tensor`; buffer-write sinks are stamped by
+        # Step 6 `_fix_buffer_layers`), so it self-heals from the replayed event
+        # stream. `buffer_layers` and `internal_source_ops`, by contrast, are
+        # populated by `.append()` calls made directly on the LIVE per-pass Trace
+        # DURING capture (backends/torch/sources.py, ops.py, model_prep.py) --
+        # exactly the same mechanism as `input_layers` -- and are therefore
+        # dropped when replaying events into a brand-new Trace unless seeded here.
+        #
+        # `buffer_layers` is load-bearing, not just invariant bookkeeping:
+        # postprocess Step 6 `_fix_buffer_layers` (control_flow.py) iterates it to
+        # link `buffer_source`, deduplicate same-value buffers, assign
+        # `buffer_pass`, and mark buffer-write sinks; leaving it empty silently
+        # disables all of that (buffer_pass stays None, Module.buffer_layers comes
+        # back empty for every buffer-bearing module -- BatchNorm running stats,
+        # registered constants). Seed both from raw labels; Step 10
+        # `_rename_model_history_layer_names` (labeling.py) remaps these lists
+        # from raw to final labels exactly as it already does for input/output.
+        #
+        # Criteria mirror the authoritative per-Op flag normalization so the
+        # seeded lists stay bidirectionally consistent with the flags the
+        # invariant cross-checks: is_buffer <- layer_type == "buffer"
+        # (postprocess/labeling.py `_normalize_io_role_flags`); is_internal_source
+        # <- layer_type != "input" and no parents (postprocess/_materialize.py,
+        # capture/projections.py -- note buffers are ALSO internal-source ops, so
+        # they legitimately appear in both lists, matching exhaustive tl.trace()).
+        trace.buffer_layers = [
+            event.label_raw
+            for event in self._capture_events.op_events
+            if event.layer_type == "buffer"
+        ]
+        trace.internal_source_ops = [
+            event.label_raw
+            for event in self._capture_events.op_events
+            if event.layer_type != "input" and not event.parents
         ]
 
         # The live capture path (torchlens/capture/trace.py) sets
@@ -746,10 +819,61 @@ class Recording(CapturedRun):
             trace._layer_counter = max(event.raw_index for event in self._capture_events.op_events)
 
         trace._postprocess(
-            list(self._output_tensors),
-            list(self._output_tensor_addresses),
+            halt_output_tensors,
+            halt_output_addresses,
         )
         return trace
+
+    def _recover_halt_frontier(self) -> "tuple[str, torch.Tensor]":
+        """Recover the frontier (output-parent label, tensor) for a halted recording.
+
+        Mirrors ``_finalize_halted_trace``'s frontier recovery
+        (``torchlens/capture/trace.py``): prefer the halting op itself
+        (``self.halt_reason`` is the frontier op's raw label), otherwise fall
+        back to the last captured op that retained a raw activation payload.
+        The exhaustive path raises when no tensor frontier can be identified;
+        match that contract here rather than fabricating a placeholder tensor.
+
+        Returns
+        -------
+        tuple[str, torch.Tensor]
+            The frontier op's raw label and its retained raw activation tensor.
+
+        Raises
+        ------
+        RuntimeError
+            When no captured op retained a raw activation payload, so no honest
+            output frontier exists for the halted partial graph.
+        """
+
+        assert self._capture_events is not None  # guarded by to_trace() caller
+        payload_by_label_raw: dict[str, torch.Tensor] = {}
+        for record in self.records:
+            payload = record.ram_payload
+            if payload is None:
+                continue
+            label_raw = getattr(record.ctx, "label_raw", None) or getattr(record.ctx, "label", None)
+            if label_raw is not None and label_raw not in payload_by_label_raw:
+                payload_by_label_raw[label_raw] = payload
+
+        # Primary: the halt frontier op, when its activation was retained.
+        halt_label = self.halt_reason
+        if halt_label and halt_label in payload_by_label_raw:
+            return halt_label, payload_by_label_raw[halt_label]
+
+        # Fallback: last captured op with a retained raw activation.
+        for event in reversed(self._capture_events.op_events):
+            payload = payload_by_label_raw.get(event.label_raw)
+            if payload is not None:
+                return event.label_raw, payload
+
+        raise RuntimeError(
+            "Recording.to_trace() cannot materialize a halted Recording that retained no "
+            "raw activation payload: there is no tensor frontier to bind the halted graph's "
+            "output node to. Re-run record(...) with a save= predicate that captures at least "
+            "the halt frontier layer, or use tl.trace(model, x, halt=...) for the exhaustive "
+            "halted-capture path."
+        )
 
 
 def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:

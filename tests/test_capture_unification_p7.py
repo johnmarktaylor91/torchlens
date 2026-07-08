@@ -254,3 +254,206 @@ def test_record_save_matches_deprecated_keep_op_alias() -> None:
     assert [record.ctx.raw_label for record in save_recording] == [
         record.ctx.raw_label for record in alias_recording
     ]
+
+
+# ---------------------------------------------------------------------------
+# Round-8 (cert8-g1): Recording.to_trace() finalization COMPLETENESS.
+#
+# Rounds 6-7 found SIX separate producer gaps in Recording.to_trace() because
+# it never mirrored the full set of finalization steps tl.trace() performs.
+# The two round-7 gaps closed here:
+#   1. buffer_layers + internal_source_ops (2 of the 5 special-layer lists the
+#      special_layer_lists invariant checks) were never backfilled -- empty
+#      buffer_layers silently disabled postprocess Step 6 _fix_buffer_layers
+#      (no buffer_pass, empty Module.buffer_layers) for every buffer-bearing or
+#      internal-source model captured via record(...).to_trace().
+#   2. halted recordings yielded .halted == False and crashed with "No output
+#      layers found" -- the halt-frontier finalization (_finalize_halted_trace)
+#      was never mirrored.
+# The all-category acceptance model below exercises EVERY category in one shape.
+# ---------------------------------------------------------------------------
+
+
+class _Inner(nn.Module):
+    """Depth-2 leaf submodule (linear + relu)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.fc(x))
+
+
+class _Mid(nn.Module):
+    """Depth-1 submodule holding a nested submodule plus a buffer-bearing BN."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = _Inner()
+        self.bn = nn.BatchNorm1d(4)  # running_mean/running_var buffers
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.bn(self.inner(x))
+
+
+class AllCategory(nn.Module):
+    """One model exercising every special-layer-list category at once.
+
+    * BatchNorm buffers (running stats)   -> buffer_layers / is_buffer
+    * a registered constant buffer         -> buffer_layers / is_buffer
+    * an internal-source op (torch.zeros)  -> internal_source_ops
+    * nested submodules (>= 2 levels)      -> module_hierarchy
+    * a recurrent/repeated-call submodule  -> multi-pass labeling
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mid = _Mid()  # 2+ levels of nesting (mid.inner.fc)
+        self.shared = nn.Linear(4, 4)  # invoked repeatedly (recurrent)
+        self.register_buffer("bias_const", torch.ones(4))  # registered constant
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.mid(x)
+        z = torch.zeros(x.shape)  # internal-source op (no tensor ancestor)
+        h = self.shared(h)  # recurrent call 1
+        h = self.shared(h)  # recurrent call 2
+        return h + z + self.bias_const
+
+
+class _HaltNested(nn.Module):
+    """Nested model whose relu is a natural mid-forward halt frontier."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.l1 = nn.Linear(4, 4)
+        self.block = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+        self.l2 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.l2(self.block(self.l1(x)))
+
+
+def _buffer_read_addresses(trace: tl.Trace) -> list[str]:
+    """Return sorted addresses of buffer *read* (source) layers only.
+
+    Predicate/fastlog capture deliberately omits ``install_buffer_write_tracker``
+    (``backends/torch/model_prep.py`` installs it for ``capture_mode ==
+    'exhaustive'`` only), so buffer WRITE-back sinks/duplicates that exhaustive
+    ``tl.trace()`` records are legitimately absent from a ``record().to_trace()``
+    reconstruction. Buffer READS are captured by both paths and must match.
+    """
+
+    return sorted(
+        trace[label].address for label in trace.buffer_layers if not trace[label].is_internal_sink
+    )
+
+
+def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
+    """to_trace() backfills EVERY special-layer list, not just input/output.
+
+    Round-7 BLOCKER: ``Recording.to_trace()`` backfilled ``input_layers`` and
+    ``output_layers`` but not ``buffer_layers`` or ``internal_source_ops`` (2 of
+    the 5 ``_SPECIAL_LIST_FLAG_PAIRS`` the ``special_layer_lists`` invariant
+    checks). Empty ``buffer_layers`` silently disabled postprocess Step 6
+    ``_fix_buffer_layers`` -- ``buffer_pass`` stayed ``None``, ``buffer_source``
+    links never formed, and every ``Module.buffer_layers`` came back empty for
+    buffer-bearing modules -- silent corruption for any BatchNorm/registered-
+    constant model, not merely a raised invariant.
+
+    Asserts the FULL invariant chain plus the downstream postprocess effects the
+    backfill re-enables, and matches the reconstruction against an exhaustive
+    ``tl.trace()`` for module tree, input/output layers, and buffer reads.
+    """
+
+    model = AllCategory().eval()
+    x = torch.randn(2, 4)
+
+    cooked = tl.record(model, x, save=tl.func("relu"), random_seed=11).to_trace()
+    exhaustive = tl.trace(AllCategory().eval(), x, random_seed=11)
+
+    # FULL invariant chain -- both must be clean.
+    check_metadata_invariants(cooked)
+    check_metadata_invariants(exhaustive)
+
+    # All FIVE special lists must be bidirectionally consistent with per-op
+    # flags (the whole point of _check_special_layer_lists) -- exercised via the
+    # full chain above, asserted explicitly here for a second, focused datapoint.
+    _check_special_layer_lists(cooked)
+
+    # buffer_layers must be populated (not silently empty) and Step 6
+    # _fix_buffer_layers must have RUN -- proven by a real buffer_pass number.
+    assert cooked.buffer_layers, "buffer_layers must be backfilled, not empty"
+    for label in cooked.buffer_layers:
+        assert cooked[label].is_buffer
+        assert cooked[label].buffer_pass is not None, "Step 6 must assign buffer_pass"
+
+    # internal_source_ops must be populated (the torch.zeros op has no ancestor).
+    assert cooked.internal_source_ops, "internal_source_ops must be backfilled"
+    zeros_sources = [op for op in cooked.internal_source_ops if op.startswith("zeros")]
+    assert zeros_sources, "the torch.zeros internal-source op must be listed"
+
+    # Module.buffer_layers must come back NON-empty for the buffer-bearing
+    # module (mid.bn) -- the public field that silently emptied before the fix.
+    bn_modules = [m for m in cooked.modules if m.address == "mid.bn"]
+    assert bn_modules and bn_modules[0].buffer_layers, "Module.buffer_layers must be non-empty"
+
+    # Match exhaustive tl.trace() EXACTLY where predicate capture is complete:
+    # module address tree, input/output layers, and buffer READ addresses.
+    assert _module_tree(cooked) == _module_tree(exhaustive)
+    assert list(cooked.input_layers) == list(exhaustive.input_layers)
+    assert list(cooked.output_layers) == list(exhaustive.output_layers)
+    assert _buffer_read_addresses(cooked) == _buffer_read_addresses(exhaustive)
+
+
+def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
+    """A halted record().to_trace() yields a VALID halted Trace matching tl.trace().
+
+    Round-7 MAJOR: ``record(model, x, halt=...).to_trace()`` returned a Trace
+    with ``.halted == False`` (silently lying about the capture) and then crashed
+    in ``check_metadata_invariants`` with "No output layers found", because the
+    fastlog bridge never mirrored ``_finalize_halted_trace``'s frontier-output
+    recovery. The bridge now recovers the halt frontier and binds it as the
+    output parent, so the reconstruction matches an exhaustive halted capture.
+    """
+
+    x = torch.randn(2, 4)
+    halt = lambda ctx: getattr(ctx, "func_name", "") == "relu"  # noqa: E731
+
+    exhaustive = tl.trace(_HaltNested().eval(), x, halt=halt)
+    cooked = tl.record(
+        _HaltNested().eval(), x, save=tl.func("relu"), halt=halt, random_seed=9
+    ).to_trace()
+
+    # .halted must be TRUE (not silently False) and match exhaustive exactly.
+    assert cooked.halted is True
+    assert cooked.halted == exhaustive.halted
+    assert cooked.halt_reason == exhaustive.halt_reason
+    assert cooked.halt_frontier == exhaustive.halt_frontier
+    assert list(cooked.output_layers) == list(exhaustive.output_layers)
+
+    # And it must pass the FULL invariant chain rather than crashing.
+    check_metadata_invariants(cooked)
+
+
+def test_recording_to_trace_halted_without_payload_rejected() -> None:
+    """A halted recording with no retained payload is rejected with a clear error.
+
+    Full halt support requires a frontier tensor. Mirroring the exhaustive path's
+    "could not identify a tensor frontier" contract, a halted recording that
+    saved no raw activation (nothing to bind as the output node) must raise a
+    clear, actionable ``RuntimeError`` -- not silently mislabel or crash opaquely.
+    """
+
+    x = torch.randn(2, 4)
+    recording = tl.record(
+        _HaltNested().eval(),
+        x,
+        save=tl.func("this_function_name_never_matches"),
+        halt=lambda ctx: getattr(ctx, "func_name", "") == "relu",
+        random_seed=9,
+    )
+    assert recording.halted is True
+    assert len(recording.records) == 0
+    with pytest.raises(RuntimeError, match="halted Recording that retained no raw activation"):
+        recording.to_trace()
