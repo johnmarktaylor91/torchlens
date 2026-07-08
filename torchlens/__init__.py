@@ -501,7 +501,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
         resolved = trace[pattern]
     except (KeyError, ValueError):
         return []
-    label = getattr(resolved, "layer_label", getattr(resolved, "layer_label", pattern))
+    label = getattr(resolved, "layer_label", pattern)
     return [str(label)]
 
 

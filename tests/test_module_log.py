@@ -358,9 +358,50 @@ class TestSinglePassDelegation:
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        # forward_args should be accessible for single-pass, delegating to
-        # the single ModuleCall's own forward_args (mirrors test_layers_delegates).
-        assert ml.forward_args == ml.ops[0].forward_args
+        # GC-11 (torchlens/postprocess/finalization.py) unconditionally nulls
+        # ModuleCall.forward_args/forward_kwargs after Trace construction for
+        # the default "torch_module" identity mode -- the only modes GC-11
+        # exempts ("pytree_module"/"object_module") are JAX/TF/MLX/paddle/
+        # tinygrad-specific and the torch backend rejects them outright
+        # (BackendUnsupportedError), so asserting on forward_args itself for
+        # a torch-backend trace always compares None == None and can never
+        # discriminate a delegation regression (cert7 finding). forward_args
+        # and forward_args_summary delegate through the exact same
+        # ``Module._single_pass_or_error(field_name)`` mechanism, but
+        # forward_args_summary is computed *before* GC-11 nulls the raw
+        # payload and is never itself cleared, so it stays a real, non-empty
+        # value -- making this a genuinely discriminating exercise of the
+        # same delegation code path (mirrors test_layers_delegates, which
+        # discriminates via a real stored field for the same reason).
+        assert ml.forward_args is None
+        assert ml.ops[0].forward_args is None
+        assert ml.forward_args_summary == ml.ops[0].forward_args_summary
+        assert ml.forward_args_summary != ""
+
+    def test_forward_args_summary_delegation_is_discriminating(self, monkeypatch):
+        """Litmus for test_forward_args_delegates: prove the comparison it
+        relies on actually catches a field-swap regression in the shared
+        ``_single_pass_or_error`` delegation mechanism, rather than trivially
+        passing regardless of what the property returns.
+        """
+        from torchlens.data_classes.module import Module
+
+        def _swapped_forward_args_summary(self: Module) -> str:
+            """Wrong delegation: returns kwargs summary instead of args summary."""
+
+            return self._single_pass_or_error("forward_kwargs_summary")
+
+        monkeypatch.setattr(
+            Module,
+            "forward_args_summary",
+            property(_swapped_forward_args_summary),
+        )
+        log = trace_fn(_make_simple_model(), _simple_input())
+        ml = log.modules["0"]
+        # ops[0] is a ModuleCall (Op), not a Module -- its own
+        # forward_args_summary attribute is untouched by the monkeypatch, so
+        # a swapped Module-level delegation now visibly disagrees with it.
+        assert ml.forward_args_summary != ml.ops[0].forward_args_summary
 
 
 # ---------------------------------------------------------------------------

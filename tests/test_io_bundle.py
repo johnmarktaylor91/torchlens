@@ -856,6 +856,51 @@ def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_elem
     assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
 
 
+def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpicklable_element(
+    tmp_path: Path,
+) -> None:
+    """A structured/record ``numpy.ndarray`` with an object-dtype field holding a
+    live unpicklable element must still be probed and gracefully degraded.
+
+    Regression test for the cert7 MAJOR: the round-7 fix's own guard
+    (``value.dtype != np.dtype("object")``) is a top-level dtype-identity
+    check, so a structured/record dtype whose *field* is object-typed
+    (e.g. ``np.dtype([('a', object), ('b', 'i4')])``) is never itself equal
+    to ``np.dtype("object")`` and wrongly slips past the exemption even
+    though it genuinely embeds live object references in the ``'a'``
+    field's storage -- reintroducing the exact ``save()`` failure the
+    round-6/round-7 fixes were written to close, one door narrower. The fix
+    is ``not value.dtype.hasobject`` (numpy's recursive containment check,
+    a strict superset of the identity comparison it replaces).
+    """
+
+    def make_generator() -> Any:
+        yield 1
+
+    record_dtype = np.dtype([("a", object), ("b", "i4")])
+    structured_array = np.array([(make_generator(), 1)], dtype=record_dtype)
+    assert structured_array.dtype != np.dtype("object")
+    assert structured_array.dtype.hasobject
+
+    model = nn.Linear(3, 3)
+    raw_input = {"array": structured_array, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        transform=lambda d: d["x"],
+        save_raw_input=True,
+        random_seed=0,
+    )
+
+    bundle_path = tmp_path / "raw_input_structured_ndarray_bundle.tl"
+    # Must NOT raise -- the unpicklable field element degrades gracefully
+    # instead of reaching the real pickle.dump() over the full scrubbed state.
+    save(trace, bundle_path)
+
+    loaded = load(bundle_path)
+    assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
+
+
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
     """Bundle save should refuse symlinked target paths."""
 

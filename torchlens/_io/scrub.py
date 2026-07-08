@@ -873,20 +873,28 @@ def _is_safely_picklable(value: Any) -> bool:
     otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
     atomic-write/backup-restore contract).
 
-    ``torch.Tensor`` and non-object-dtype ``numpy.ndarray`` (numeric, bool,
-    string dtypes) are exempted from the probe: they always support the
-    standard pickle protocol via their own ``__reduce_ex__`` and hold no
-    live OS resources that could make pickling fail, so probing them would
-    only pay a full extra ``pickle.dumps()`` pass -- doubling CPU and
-    transiently doubling peak memory -- for a result that is always
-    ``True``. An ``object``-dtype ``numpy.ndarray``, however, is NOT
-    exempted: its elements are arbitrary live Python objects (an
-    object-dtype array can hold generators, locks, or other unpicklable
-    values just like a plain ``list`` or ``dict`` can), so exempting it
-    would reintroduce exactly the hard ``save()`` failure this probe
-    exists to prevent. Skipping the probe only for provably-safe types
-    keeps the live-resource detection intact for every value it actually
-    protects.
+    ``torch.Tensor`` and ``numpy.ndarray`` values whose dtype holds no
+    object references (numeric, bool, string, and structured dtypes with
+    no object-typed field) are exempted from the probe: they always
+    support the standard pickle protocol via their own ``__reduce_ex__``
+    and hold no live OS resources that could make pickling fail, so
+    probing them would only pay a full extra ``pickle.dumps()`` pass --
+    doubling CPU and transiently doubling peak memory -- for a result
+    that is always ``True``. Any ``numpy.ndarray`` whose dtype reports
+    ``hasobject`` (a plain ``object``-dtype array, or a structured/
+    compound/nested dtype with an object-typed field), however, is NOT
+    exempted: it may hold arbitrary live Python objects (generators,
+    locks, or other unpicklable values) in any of its fields, just like a
+    plain ``list`` or ``dict`` can, so exempting it would reintroduce
+    exactly the hard ``save()`` failure this probe exists to prevent.
+    ``dtype.hasobject`` is used rather than a top-level
+    ``dtype != np.dtype("object")`` identity check because the latter is
+    only true for a bare object dtype -- a structured dtype whose fields
+    include ``object`` is never itself equal to ``np.dtype("object")`` and
+    would wrongly slip through an identity comparison even though it
+    genuinely embeds live object references. Skipping the probe only for
+    provably-safe types keeps the live-resource detection intact for
+    every value it actually protects.
 
     Parameters
     ----------
@@ -901,7 +909,7 @@ def _is_safely_picklable(value: Any) -> bool:
 
     if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
         return True
-    if isinstance(value, np.ndarray) and value.dtype != np.dtype("object"):
+    if isinstance(value, np.ndarray) and not value.dtype.hasobject:
         return True
 
     try:

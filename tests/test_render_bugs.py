@@ -90,6 +90,15 @@ class _NestedTorchOpModel(nn.Module):
         return self.block(x).sum()
 
 
+class _SpecialCharDictOutputModel(nn.Module):
+    """Return a two-leaf dict output with an HTML-special-character key."""
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Run the model."""
+
+        return {"loss & aux": x + 1, "b": x + 2}
+
+
 class _LSTMCellSeq(nn.Module):
     """Loop over an LSTMCell whose call returns two tensors."""
 
@@ -557,6 +566,48 @@ def test_grad_edges_use_preserved_edge_cluster_key(
         trace.cleanup()
 
     assert modules_by_edge[("relu", "sigmoid")] == "block.inner:1"
+
+
+def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> None:
+    """Container edge labels HTML-escape special characters from dict keys.
+
+    Regression test for commit ee5c1bcc: ``_html_container_edge_label`` (and
+    sibling ``_html_edge_label``/``_html_combined_recurrence_label``)
+    previously interpolated raw container-path text into a Graphviz
+    HTML-like edge label. A ``DictKey``/``HFKey`` output-dict key containing
+    ``&``, ``<``, or ``>`` is a realistic shape -- container path components
+    render as ``str(component.key)`` (``_container_component_role`` in
+    ``_render_leaf.py``) -- and previously broke Graphviz's HTML-like label
+    parser, raising ``GraphvizRenderError`` on ``draw()``. Now the text is
+    escaped before interpolation. Renders to an actual SVG file (not just
+    the returned DOT source string) so the fix is verified end-to-end
+    through the real Graphviz binary, not just at the string-building layer.
+    """
+
+    trace = tl.trace(
+        _SpecialCharDictOutputModel(),
+        torch.ones(2),
+        capture_container_structure=True,
+    )
+    outpath = tmp_path / "container_edge_special_char"
+    try:
+        # Must NOT raise GraphvizRenderError -- the raw "&" in the dict key
+        # previously broke the HTML-like label parser mid-render.
+        dot = trace.draw(
+            show_containers="nodes",
+            vis_outpath=str(outpath),
+            vis_save_only=True,
+            vis_fileformat="svg",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    assert "loss &amp; aux" in dot
+    svg_path = outpath.with_suffix(".svg")
+    assert svg_path.exists()
+    svg_text = svg_path.read_text(encoding="utf-8")
+    assert "loss &amp; aux" in svg_text
 
 
 def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> None:
