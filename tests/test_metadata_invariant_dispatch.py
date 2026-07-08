@@ -10,6 +10,10 @@ import pytest
 from torchlens.validation import invariants
 
 
+# The pre-refactor sequences below are the dispatch-parity baseline. cert10
+# ADDED two checks (pass_count_consistency for torch and
+# backend_neutral_graph_topology for non-torch) without dropping or reordering
+# any pre-refactor check; the expected sequences include those additions.
 PRE_REFACTOR_TORCH_SEQUENCE = (
     "backend_identity_invariants",
     "trace_self_consistency",
@@ -32,6 +36,7 @@ PRE_REFACTOR_TORCH_SEQUENCE = (
     "equivalence_symmetry",
     "graph_ordering",
     "loop_detection_invariants",
+    "pass_count_consistency",
     "distance_invariants",
     "graph_connectivity",
     "module_containment_logic",
@@ -46,6 +51,7 @@ PRE_REFACTOR_NON_TORCH_SEQUENCE = (
     "non_torch_backward_inert",
     "backend_neutral_accessor_refs",
     "backend_neutral_module_mode_invariants",
+    "backend_neutral_graph_topology",
     "graph_ordering",
     "lookup_key_consistency",
 )
