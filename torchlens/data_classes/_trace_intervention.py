@@ -35,6 +35,46 @@ from .op import Op
 from ._state_adapter import state_items, state_new, state_restore
 
 
+def _deep_copy_fork_container(value: Any) -> Any:
+    """Deep-copy a container for a shallow fork, preserving tensor/callable identity.
+
+    Recurses through dict/list/set/tuple structures so that mutable nested
+    containers on the fork are independent of the parent, while tensors and
+    callables (the large immutable payloads the shallow-fork path exists to avoid
+    cloning) are still shared by reference.
+
+    Parameters
+    ----------
+    value:
+        Container (or leaf) value to copy.
+
+    Returns
+    -------
+    Any
+        A structurally independent copy sharing tensor/callable leaves.
+    """
+
+    if isinstance(value, torch.Tensor) or callable(value):
+        return value
+    if isinstance(value, dict):
+        return {key: _deep_copy_fork_container(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_deep_copy_fork_container(item) for item in value]
+    if isinstance(value, set):
+        return {_deep_copy_fork_container(item) for item in value}
+    if isinstance(value, tuple):
+        return tuple(_deep_copy_fork_container(item) for item in value)
+    if isinstance(value, (str, bytes, int, float, bool, type(None))):
+        return value
+    try:
+        return copy.deepcopy(value)
+    except Exception:
+        try:
+            return copy.copy(value)
+        except Exception:
+            return value
+
+
 class TraceInterventionMixin(_TraceMixinBase):
     def save_intervention(
         self: "Trace",
@@ -984,8 +1024,18 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if isinstance(value, torch.Tensor) or callable(value):
             return value
-        if isinstance(value, (str, bytes, int, float, bool, type(None), tuple)):
+        if isinstance(value, (str, bytes, int, float, bool, type(None))):
             return value
+        # Mutable nested containers (dicts/lists/sets, or tuples that hold them --
+        # e.g. an Op's `annotations` breadcrumb dict) must NOT be shared with the
+        # parent: a post-fork mutation on the fork (`fork.annotate(...)`) would
+        # otherwise land on the parent's Op too, silently corrupting it. `copy.copy`
+        # is shallow, so it only rebinds the outermost container and still aliases
+        # every nested value. Deep-copy the container structure instead, but keep
+        # tensor/callable identity so the perf intent of shallow fork -- not cloning
+        # large immutable payloads -- is preserved.
+        if isinstance(value, (dict, list, set, tuple)):
+            return _deep_copy_fork_container(value)
         try:
             return copy.copy(value)
         except Exception:

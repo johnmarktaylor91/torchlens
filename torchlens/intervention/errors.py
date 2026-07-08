@@ -134,6 +134,16 @@ class DirectWriteInExecutableSaveError(ConfigurationError, ValueError):
     """Raised when executable spec save sees direct out writes."""
 
 
+class UnserializableDictKeyError(ConfigurationError, TypeError):
+    """Raised when a spec dict key cannot be preserved through save/load.
+
+    TorchLens never silently stringifies dict keys during spec persistence
+    (mirroring ``annotate``'s reject-don't-coerce philosophy). A key that is not
+    ``str``/``int``/``float``/``bool``/``None`` or a tuple of such values raises
+    this rather than being lossily coerced to its ``str()`` form.
+    """
+
+
 class GraphShapeMismatchError(ValidationError, ValueError):
     """Raised when a saved spec's graph shape is incompatible with a target log."""
 
@@ -315,6 +325,7 @@ __all__ = [
     "MutateInPlaceWarning",
     "NoParentError",
     "OpaqueCallableInExecutableSaveError",
+    "UnserializableDictKeyError",
     "RecursiveTracingError",
     "ReplayPreconditionError",
     "Severity",

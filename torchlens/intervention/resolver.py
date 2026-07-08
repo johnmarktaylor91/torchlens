@@ -51,6 +51,16 @@ DIRECTION_AGNOSTIC_KINDS = frozenset(
         "regex",
         "predicate",
         "func_transform",
+        # These three describe a forward op's output/input container position and
+        # carry no direction of their own; the selector layer
+        # (``_classify_selector_direction``) already treats them as agnostic, so
+        # they must be listed here too. Otherwise a backward (GradFn) site never
+        # bridges to its paired forward op for these kinds and a validly-composed
+        # selector like ``output_at(0) & grad_input()`` silently resolves to 0
+        # sites instead of intersecting meaningfully.
+        "output",
+        "output_at",
+        "input_at",
     }
 )
 

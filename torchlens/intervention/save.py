@@ -29,6 +29,7 @@ from .errors import (
     OpaqueCallableInExecutableSaveError,
     ReplayPreconditionError,
     SiteResolutionError,
+    UnserializableDictKeyError,
 )
 from .helpers import HELPER_REGISTRY_VERSION, helper_from_serialized
 from .resolver import (
@@ -744,10 +745,52 @@ def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState)
     if isinstance(value, list):
         return [_serialize_value(item, save_level, state) for item in value]
     if isinstance(value, dict):
-        return {str(key): _serialize_value(item, save_level, state) for key, item in value.items()}
+        # All-``str`` keys round-trip losslessly as a plain JSON object (the common
+        # case, on-disk format unchanged). Any non-``str`` key (int/float/tuple/...)
+        # would be silently corrupted by ``str(key)`` -- JSON objects only allow
+        # string keys -- so those dicts are encoded as an explicit item list that
+        # preserves each key's type through load. TorchLens never silently
+        # stringifies keys (mirrors ``annotate``'s reject-don't-coerce rule).
+        if all(type(key) is str for key in value):
+            return {key: _serialize_value(item, save_level, state) for key, item in value.items()}
+        return {
+            "__dict_items__": [
+                [_serialize_dict_key(key), _serialize_value(item, save_level, state)]
+                for key, item in value.items()
+            ]
+        }
     if callable(value):
         return {"__callable__": _serialize_callable(value, save_level)}
     return _serialize_opaque(value, save_level)
+
+
+def _serialize_dict_key(key: Any) -> Any:
+    """Serialize a dict key preserving its type through a spec round-trip.
+
+    ``str``/``int``/``float``/``bool``/``None`` survive as native JSON scalars;
+    tuples are tagged so they reload as hashable tuples. Any other key type raises
+    rather than being silently stringified.
+
+    Parameters
+    ----------
+    key:
+        Runtime dict key.
+
+    Returns
+    -------
+    Any
+        JSON-safe, type-preserving key encoding.
+    """
+
+    if key is None or type(key) in (str, int, float, bool):
+        return key
+    if isinstance(key, tuple):
+        return {"__tuple_key__": [_serialize_dict_key(item) for item in key]}
+    raise UnserializableDictKeyError(
+        f"dict key {key!r} of type {type(key).__name__!r} cannot be preserved through a "
+        "spec save/load round-trip; TorchLens refuses to silently stringify it. Use "
+        "str/int/float/bool/None keys, or a tuple of those."
+    )
 
 
 def _serialize_output_path_component(
@@ -1029,11 +1072,35 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
         )
     if isinstance(value, dict) and "__output_path_component__" in value:
         return _deserialize_output_path_component(value, tensors)
+    if isinstance(value, dict) and "__dict_items__" in value:
+        return {
+            _deserialize_dict_key(key): _deserialize_value(item, tensors)
+            for key, item in value["__dict_items__"]
+        }
     if isinstance(value, list):
         return [_deserialize_value(item, tensors) for item in value]
     if isinstance(value, dict):
         return {key: _deserialize_value(item, tensors) for key, item in value.items()}
     return value
+
+
+def _deserialize_dict_key(key: Any) -> Any:
+    """Reconstruct a dict key encoded by :func:`_serialize_dict_key`.
+
+    Parameters
+    ----------
+    key:
+        JSON-decoded key encoding.
+
+    Returns
+    -------
+    Any
+        Runtime, hashable dict key with its original type restored.
+    """
+
+    if isinstance(key, dict) and "__tuple_key__" in key:
+        return tuple(_deserialize_dict_key(item) for item in key["__tuple_key__"])
+    return key
 
 
 def _deserialize_output_path_component(

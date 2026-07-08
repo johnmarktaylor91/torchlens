@@ -630,7 +630,17 @@ def _fork_policy_table(
     share = share or set()
     reconstruct = reconstruct or set()
     table: dict[str, ForkFieldPolicy] = {}
-    for field_name in field_order:
+    # Seed from the canonical field order plus any share/reconstruct names that
+    # live outside it (e.g. `_optimizer`, which is a real Trace attribute carried
+    # by the fork but is intentionally NOT a tabular display field in
+    # MODEL_LOG_FIELD_ORDER). Iterating field_order alone would silently drop
+    # those entries, letting the fork fall through to the deepcopy default and
+    # sever the shared reference the `share` set explicitly asked for.
+    seen: set[str] = set()
+    for field_name in [*field_order, *sorted(share | reconstruct)]:
+        if field_name in seen:
+            continue
+        seen.add(field_name)
         if field_name in reconstruct:
             table[field_name] = ForkFieldPolicy.FORK_RECONSTRUCT
         elif field_name in share:

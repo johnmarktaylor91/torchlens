@@ -572,7 +572,7 @@ class _TensorBearing:
                     continue
                 value = (
                     relative_l1_scalar(left, right)
-                    if is_scalar_like(left)
+                    if is_scalar_like(left) and is_scalar_like(right)
                     else metric_fn(left, right)
                 )
                 out[i, j] = float(value.detach().item())
@@ -608,7 +608,9 @@ class _TensorBearing:
             if idx == ref_idx:
                 continue
             value = (
-                relative_l1_scalar(ref, tensor) if is_scalar_like(ref) else metric_fn(ref, tensor)
+                relative_l1_scalar(ref, tensor)
+                if is_scalar_like(ref) and is_scalar_like(tensor)
+                else metric_fn(ref, tensor)
             )
             out[0, idx] = float(value.detach().item())
         return out

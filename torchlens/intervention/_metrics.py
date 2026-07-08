@@ -130,10 +130,18 @@ def relative_l1_scalar(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
     fa = _as_flat_float(a)
     fb = _as_flat_float(b)
-    # A scalar fallback is only well-defined for 1-element comparisons; clamp
-    # gracefully if the caller hands us a longer vector by reducing to
-    # element-wise absolute difference.
-    if fa.numel() == 0 or fb.numel() == 0:
+    # A scalar fallback is only well-defined when both operands hold the same
+    # number of elements. Silently reducing a longer vector to its first element
+    # (the previous behavior) discards the rest of the tensor and returns a
+    # meaningless distance, so validate matching numel and raise on mismatch --
+    # matching the numel guards on cosine_distance/relative_l2/pearson.
+    if fa.numel() != fb.numel():
+        raise ValueError(
+            f"relative_l1_scalar requires equal element counts, got "
+            f"{fa.numel()} vs {fb.numel()}; it is a scalar fallback and must not "
+            "silently truncate a longer vector to its first element"
+        )
+    if fa.numel() == 0:
         return torch.tensor(0.0, dtype=fa.dtype)
     a_val = fa.flatten()[0]
     b_val = fb.flatten()[0]
