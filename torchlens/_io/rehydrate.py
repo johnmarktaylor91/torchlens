@@ -100,14 +100,6 @@ def rehydrate_trace(
     _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 
-    if module_accessor_state is not None:
-        rebuild_trace_accessors(
-            trace,
-            module_accessor_state._dict,
-            module_accessor_state._list,
-            module_accessor_state._pass_dict,
-        )
-
     manifest_index = _build_manifest_index(manifest)
     audit_only_payloads = _manifest_uses_audit_only_payloads(manifest)
     payload_statuses: list[str] = []
@@ -125,6 +117,28 @@ def rehydrate_trace(
         payload_statuses=payload_statuses,
         seen=set(),
     )
+
+    # rebuild_trace_accessors() MUST run AFTER _rehydrate_object(), not before.
+    # accessor_rebuild.py bakes `trace._buffer_initial_values.get(address)`
+    # into each Buffer's `_initial_value` at construction time (Buffer.__init__
+    # stores it directly; `initial_value` is not a dynamically-recomputed
+    # property). `_buffer_initial_values` is a FieldPolicy.BLOB_RECURSIVE field
+    # that only _rehydrate_object() resolves from raw BlobRef placeholders into
+    # real tensors (for a default eager load; lazy=True/materialize_nested=False
+    # intentionally leaves it as BlobRef for the expert nested-materialization
+    # flow). Building accessors first captured the still-unresolved BlobRef
+    # permanently, so `Buffer.initial_value` returned a raw BlobRef forever
+    # after a plain `tl.load()` instead of a torch.Tensor. Nothing
+    # rebuild_trace_accessors() reads (trace.layer_list, module_accessor_state)
+    # depends on _rehydrate_object() having run first, so this reorder is safe.
+    if module_accessor_state is not None:
+        rebuild_trace_accessors(
+            trace,
+            module_accessor_state._dict,
+            module_accessor_state._list,
+            module_accessor_state._pass_dict,
+        )
+
     _set_payload_load_status(trace, manifest_index, payload_statuses)
     _restore_trace_state_order(trace, portable_key_order)
     return trace

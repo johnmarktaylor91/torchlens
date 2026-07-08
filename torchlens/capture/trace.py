@@ -895,6 +895,17 @@ def run_and_log_inputs_through_model(
     )
     backend.set_capture_producer_policy(self, self.capture_mode)
 
+    if getattr(self, "_source_model_ref", None) is None:
+        # Needed so unlabeled output tensors that are direct registered-buffer
+        # reads (e.g. ``forward`` returning ``self.running_mean`` untouched)
+        # can be identified during output extraction. The exhaustive
+        # ``tl.trace()`` entry point (user_funcs.py) sets this before calling
+        # into this function; predicate/fastlog callers (tl.record()) do not,
+        # so set it here once, idempotently, for every capture path.
+        from ..visualization.code_panel import make_weak_model_ref
+
+        self._source_model_ref = make_weak_model_ref(model)  # type: ignore[arg-type]
+
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
         self._grad_op_nums_to_save = []
@@ -1054,6 +1065,19 @@ def run_and_log_inputs_through_model(
         )
 
         if not postprocess:
+            # Extract/mark output tensors BEFORE cleanup, mirroring the
+            # postprocess=True branch below. cleanup_model_session() strips
+            # TorchLens tensor metadata from every model-owned tensor
+            # (buffers included, via _undecorate_model_tensors); extracting
+            # afterward would let output-attribution race against that wipe.
+            # Callers that skip postprocess (fastlog Recorder) read these
+            # scratch results back off the trace and pop them immediately.
+            output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
+                self, outputs
+            )
+            self._fastlog_output_tensors = list(output_tensors_any)
+            self._fastlog_output_tensor_addresses = output_tensor_addresses
+            self.__dict__.pop("_output_attribution_input_tensors", None)
             backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
             self.capture_end_time = time.time()
             self.__dict__.pop("_capture_producer_policy", None)

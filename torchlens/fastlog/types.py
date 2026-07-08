@@ -843,6 +843,16 @@ class Recording(CapturedRun):
             trace.forward_duration = runtime_trace.forward_duration
             trace.forward_peak_memory = runtime_trace.forward_peak_memory
             trace.forward_memory_backend = runtime_trace.forward_memory_backend
+            # Backfill the weak source-model reference the live predicate-mode
+            # primary pass set (capture/trace.py run_and_log_inputs_through_model).
+            # _postprocess() below (graph_traversal.py _resolve_output_parent_labels)
+            # needs it on THIS trace to late-log a registered buffer that was
+            # returned directly from forward() without ever being touched by a
+            # traced op -- otherwise a buffer-only-output model crashes here with
+            # "could not attribute a model output tensor to any traced op" even
+            # though the primary capture pass already identified it correctly.
+            if getattr(trace, "_source_model_ref", None) is None:
+                trace._source_model_ref = getattr(runtime_trace, "_source_model_ref", None)
             # The predicate-mode primary pass (capture/trace.py) genuinely seeds
             # and records the RNG seed on its runtime_trace (self.random_seed,
             # set even when the caller passed random_seed=None). random_seed is a
