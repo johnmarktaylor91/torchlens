@@ -611,6 +611,7 @@ PARAM_LOG_FIELD_ORDER = [
     "grad_shape",
     "grad_dtype",
     "gradient_memory",
+    "_derived_grad_record_path",
 ]
 
 # Per-buffer metadata exported by BufferAccessor (one row per buffer address).

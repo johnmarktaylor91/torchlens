@@ -749,3 +749,51 @@ class TestParamRefCleared:
         # Without this post-cleanup assertion the test passes even if cleanup() is a no-op.
         for pl in param_logs:
             assert pl._param_ref is None
+
+
+class TestDerivedGradRecordPathFieldOrder:
+    """cert9 MAJOR: ``_derived_grad_record_path`` must survive ``to_pandas()``.
+
+    ``Param._derived_grad_record_path`` is a real, populated ``FieldPolicy.KEEP``
+    field written unconditionally (no ``getattr``/``setdefault`` guard) by the
+    mlx, paddle, jax, and tinygrad backends on every derived-gradient capture
+    (``backends/mlx/backend.py``, ``backends/paddle/backend.py``,
+    ``backends/jax/backend.py``, ``backends/tinygrad/backend.py``), but it was
+    silently absent from ``PARAM_LOG_FIELD_ORDER`` -- the exact FIELD_ORDER /
+    ``to_pandas()`` desync class this bucket exists to close, just on a
+    surface (``Param``) not yet wired into the shared parametrized
+    ``test_field_order_has_no_keep_field_desync`` (that test is scoped away
+    from ``Param`` pending a dedicated alias-exclusion design for
+    ``_grad_memory``/``_derived_grad_payload``; this field is not one of
+    those documented aliases, so it needs its own litmus here rather than
+    waiting on that broader design).
+    """
+
+    def test_derived_grad_record_path_in_field_order(self) -> None:
+        """The field must be a real member of PARAM_LOG_FIELD_ORDER."""
+
+        from torchlens.constants import PARAM_LOG_FIELD_ORDER
+
+        assert "_derived_grad_record_path" in PARAM_LOG_FIELD_ORDER
+
+    def test_derived_grad_record_path_survives_to_pandas(self) -> None:
+        """A populated ``_derived_grad_record_path`` must appear as a column."""
+
+        param_log = Param(
+            module_address="self",
+            name="weight",
+            shape=(2, 2),
+            dtype=torch.float32,
+            num_params=4,
+            param_memory=16,
+            trainable=True,
+            address="weight",
+            barcode="b1",
+        )
+        param_log._derived_grad_payload = torch.zeros(2, 2)
+        param_log._derived_grad_record_path = "grad_records[3].payload"
+
+        df = param_log.to_pandas()
+
+        assert "_derived_grad_record_path" in df.columns
+        assert df["_derived_grad_record_path"].iloc[0] == "grad_records[3].payload"

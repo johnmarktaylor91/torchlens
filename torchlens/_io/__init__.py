@@ -180,6 +180,67 @@ def default_fill_state(state: dict[str, Any], *, defaults: dict[str, Any]) -> No
             state[field_name] = copy.deepcopy(default_value)
 
 
+_COERCIBLE_CONTAINER_TYPES = (list, dict, tuple, set)
+
+
+def coerce_container_typed_state(
+    state: dict[str, Any],
+    defaults: dict[str, Any],
+    *,
+    exclude: frozenset[str] | set[str] = frozenset(),
+) -> None:
+    """Coerce present-but-wrong-typed container fields to their declared type.
+
+    ``default_fill_state`` only fills keys that are *absent* from ``state``; by
+    design it never inspects the type of a key that is already present, so a
+    field restored from an older serialization that used a different
+    container type for the same name (e.g. a field that used to default to
+    ``{}`` and now defaults to ``[]``) survives unchanged with the wrong type.
+    That is silent today and crashes or misbehaves later, whenever code calls
+    a list-only method (``.append``) on the restored dict, or vice versa.
+
+    This closes that gap for fields whose declared type is unambiguous: a
+    field is only touched here if its entry in ``defaults`` is exactly a
+    ``list``, ``dict``, ``tuple``, or ``set`` literal. Fields defaulting to
+    ``None``, a scalar, or a non-builtin container (e.g. ``OrderedDict``,
+    a custom accessor class) are left untouched, since for those fields the
+    "declared type" is not a single unambiguous builtin and a naive coercion
+    could silently corrupt a legitimately-varying value (see ``exclude`` for
+    the one known case of this: a field typed ``List[int] | str``).
+
+    Parameters
+    ----------
+    state:
+        Mutable serialized state dict being restored. Expected to have
+        already been passed through ``default_fill_state`` with the same
+        ``defaults`` mapping (so every field in ``defaults`` is present).
+    defaults:
+        The same defaults mapping passed to ``default_fill_state``.
+    exclude:
+        Field names to skip even though their default value is a plain
+        container, for fields whose real declared type is a union with a
+        non-container alternative that must not be coerced away (e.g. a
+        legacy sentinel string like ``"all"``).
+    """
+
+    for field_name, default_value in defaults.items():
+        if field_name in exclude or field_name not in state:
+            continue
+        declared_type = type(default_value)
+        if declared_type not in _COERCIBLE_CONTAINER_TYPES:
+            continue
+        current_value = state[field_name]
+        if isinstance(current_value, declared_type):
+            continue
+        try:
+            coerced_value = (
+                declared_type() if current_value is None else declared_type(current_value)
+            )
+        except (TypeError, ValueError):
+            coerced_value = copy.deepcopy(default_value)
+        state[field_name] = coerced_value
+
+
 def rehydrate_nested(
     trace: Any,
     *,
