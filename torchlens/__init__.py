@@ -390,7 +390,7 @@ def __dir__() -> list[str]:
         Sorted eager globals plus lazy facade, moved-name, and legacy shim names.
     """
 
-    return sorted([*globals(), *_LAZY_ATTRS, *_MOVED_OBJECTS, *_LEGACY_API_SHIMS])
+    return sorted({*globals(), *_LAZY_ATTRS, *_MOVED_OBJECTS, *_LEGACY_API_SHIMS})
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:

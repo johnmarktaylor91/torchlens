@@ -358,8 +358,9 @@ class TestSinglePassDelegation:
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        # forward_args should be accessible for single-pass
-        _ = ml.forward_args  # should not raise
+        # forward_args should be accessible for single-pass, delegating to
+        # the single ModuleCall's own forward_args (mirrors test_layers_delegates).
+        assert ml.forward_args == ml.ops[0].forward_args
 
 
 # ---------------------------------------------------------------------------

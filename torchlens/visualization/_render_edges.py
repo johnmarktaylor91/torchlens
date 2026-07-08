@@ -4,6 +4,7 @@
 
 from ._render_common import *
 from ._render_leaf import *
+from ._render_utils import html_escape
 
 
 def _buffer_name_segment(address: str | None) -> str:
@@ -1275,7 +1276,7 @@ def _label_node_arguments_if_needed(
                 if parent_node.layer_label == arg_label:
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
-    arg_labels = "<br/>".join(arg_labels)  # type: ignore[assignment]
+    arg_labels = "<br/>".join(html_escape(label) for label in arg_labels)  # type: ignore[assignment]
     if not arg_labels:
         return
     arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_labels}</b></FONT>>"
@@ -1495,8 +1496,14 @@ def _html_edge_label(text: str) -> str:
     ``CELLPADDING`` gives it a small, even margin on every side -- enough to read
     as belonging to that endpoint without crowding it, and far less than the full
     blank text line a ``\\n`` pad would add.
+
+    ``text`` may originate from user-controlled data (e.g. a ``DictKey``/``HFKey``
+    container label pulled from a model's output dict), so it is HTML-escaped
+    before interpolation -- an unescaped ``<``, ``>``, or ``&`` breaks Graphviz's
+    HTML-like label parser and raises ``GraphvizRenderError``.
     """
 
+    text = html_escape(text)
     return (
         f'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="{_EDGE_LABEL_PAD}">'
         f'<TR><TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">{text}</FONT></TD></TR></TABLE>>'
@@ -1511,9 +1518,13 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     edge, and wide side spacer cells keep it clear of the node border and the
     edge line.  When ``bottom`` is ``None`` the label is a single line (a
     buffer edge may carry only one of ``In``/``Out``).
+
+    ``top``/``bottom`` are escaped individually (not after joining) so the
+    literal ``<BR/>`` line-break tag inserted between them is preserved.
     """
 
-    text = top if bottom is None else f"{top}<BR/>{bottom}"
+    top = html_escape(top)
+    text = top if bottom is None else f"{top}<BR/>{html_escape(bottom)}"
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
         f'<TR><TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD>'

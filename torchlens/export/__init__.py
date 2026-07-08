@@ -294,7 +294,7 @@ def xarray(log: Any) -> Any:
                 f"{label} has {flat.shape[0]}, expected {presentation_count}."
             )
         arrays.append(flat)
-        layer_name = str(getattr(layer, "layer_label", getattr(layer, "layer_label", "")))
+        layer_name = str(getattr(layer, "layer_label", ""))
         label = str(getattr(layer, "layer_label", layer_name))
         layer_coord.extend([layer_name] * flat.shape[1])
         layer_label_coord.extend([label] * flat.shape[1])

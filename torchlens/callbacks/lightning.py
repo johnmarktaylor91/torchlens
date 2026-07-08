@@ -223,17 +223,22 @@ class _LayerProfilerCallbackMixin:
             if was_training:
                 pl_module.train()
 
-        record = {
-            "stage": stage,
-            "batch_idx": batch_idx,
-            "global_step": getattr(trainer, "global_step", None),
-            "num_layers": len(getattr(log, "layer_list", [])),
-            "layer_labels": [str(layer.layer_label) for layer in getattr(log, "layer_list", [])],
-        }
-        self.records.append(record)
-        self.container_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.container_path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(record, sort_keys=True) + "\n")
+        try:
+            record = {
+                "stage": stage,
+                "batch_idx": batch_idx,
+                "global_step": getattr(trainer, "global_step", None),
+                "num_layers": len(getattr(log, "layer_list", [])),
+                "layer_labels": [
+                    str(layer.layer_label) for layer in getattr(log, "layer_list", [])
+                ],
+            }
+            self.records.append(record)
+            self.container_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.container_path.open("a", encoding="utf-8") as file:
+                file.write(json.dumps(record, sort_keys=True) + "\n")
+        finally:
+            log.cleanup()
 
     def _model_input(self, batch: Any) -> Any:
         """Extract the model input from a Lightning batch.

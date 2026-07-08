@@ -140,7 +140,6 @@ def test_mlx_emit_function_outputs_produces_topology_complete_events() -> None:
     assert len(emitted) == 1
     event = emitted[0]
     assert event.label_raw == reserved[0].label_raw
-    assert event.parents == event.parents
     assert [edge.parent_label_raw for edge in event.parents] == ["input.arg_0"]
     assert event.output.tensor.shape == (2, 2)
     assert event.output.tensor.dtype is not None
