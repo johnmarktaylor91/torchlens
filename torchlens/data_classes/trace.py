@@ -2164,7 +2164,7 @@ class Trace(
         state.pop("_container_ordinals_by_output_op_label", None)
         state.pop("_container_ordinals_by_input_func_call_id", None)
         state.pop("_build_state", None)
-        state["_backward_gradfn_refs"] = {}
+        state["_backward_gradfn_refs"] = []
         state["_tl_backward_hooked_tensor_keys"] = set()
         state["_pending_live_fire_records"] = []
         state["_last_hook_handle_ids"] = ()
