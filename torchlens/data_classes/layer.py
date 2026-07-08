@@ -677,9 +677,16 @@ class Layer:
         return self.source_trace
 
     def __getstate__(self) -> Dict[str, Any]:
-        """Return pickle state with weakrefs stripped."""
+        """Return pickle state with weakrefs and raw autograd handles stripped."""
         state = self.__dict__.copy()
         state["_source_trace_ref"] = None
+        # `grad_fn_handle` holds the live torch autograd `Node` (e.g.
+        # `AddmmBackward0`), which is not picklable. `Layer.FIELD_POLICY`
+        # declares it `FieldPolicy.DROP` for exactly this reason; enforce that
+        # here (mirroring `Op.__getstate__`) so plain `pickle.dumps(trace)` of
+        # any model with trainable params does not crash. `grad_fn` (a picklable
+        # `GradFn` record after a backward pass) is intentionally retained.
+        state["grad_fn_handle"] = None
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 

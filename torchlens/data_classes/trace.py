@@ -240,8 +240,76 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_replay_arg_version_data_complete": True,
     "_grad_fn_param_refs": {},
 }
+# Typed container defaults for every non-Optional container field in
+# `MODEL_LOG_FIELD_ORDER`. The blanket ``{field: None}`` base below is wrong for
+# these: an absent (legacy/partial-state) container field would restore as
+# ``None`` instead of its declared list/dict/set/tuple and then crash on first
+# touch (``.values()``/iteration), or -- for ``layer_list``/``layer_logs`` --
+# crash inside ``__setstate__`` itself. Plain builtin types are used
+# deliberately: they let ``coerce_container_typed_state`` also repair a
+# present-but-wrong-typed legacy value (e.g. ``None`` or a ``dict`` where a
+# ``list`` is now declared). Fields whose declared type is a genuine
+# ``OrderedDict``/``defaultdict`` at runtime restore correctly as a plain dict
+# for legacy states (still ``.values()``/``.items()``-usable); fresh captures
+# always carry the exact runtime container, so this only affects legacy fill.
+_MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "annotations": {},
+    "observer_spans": [],
+    "manual_tensor_connections": [],
+    "code_context": [],
+    "_out_identity_cache": {},
+    "_out_hash_cache": {},
+    "_code_context_cache": {},
+    "_grad_op_nums_to_save": [],
+    "input_annotations": {},
+    "_source_code_blob": {},
+    "state_history": [],
+    "append_history": [],
+    "_last_hook_handle_ids": (),
+    "relationship_evidence": {},
+    "replay_frontier": {},
+    "layer_list": [],
+    "layer_dict_main_keys": {},
+    "layer_dict_all_keys": {},
+    "layer_logs": {},
+    "layer_labels": [],
+    "op_labels": [],
+    "layer_num_calls": {},
+    "by_pass": {},
+    "_raw_to_final_layer_labels": {},
+    "_raw_to_final_parent_layer_labels": {},
+    "_raw_to_final_op_labels": {},
+    "_final_to_raw_layer_labels": {},
+    "_lookup_keys_to_layer_num_dict": {},
+    "_layer_num_to_lookup_keys_dict": {},
+    "_ambiguous_lookup_keys": {},
+    "input_layers": [],
+    "output_layers": [],
+    "buffer_layers": [],
+    "buffer_num_calls": {},
+    "internal_source_ops": [],
+    "internal_sink_ops": [],
+    "internally_terminated_bool_ops": [],
+    "conditional_branch_edges": [],
+    "conditional_records": [],
+    "conditional_arm_entry_edges": {},
+    "conditional_edge_call_indices": {},
+    "layers_with_params": {},
+    "op_equivalence_classes": {},
+    "_orphan_labels": [],
+    "_orphan_logs": (),
+    "orphan_records": [],
+    "_phase_timings": {},
+    "grad_fn_logs": {},
+    "grad_fn_order": [],
+    "backward_pass_logs": {},
+    "_grad_fn_param_refs": {},
+    "backward_root_grad_fn_object_ids": [],
+    "backward_durations": [],
+}
 _MODEL_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in MODEL_LOG_FIELD_ORDER},
+    **_MODEL_LOG_CONTAINER_DEFAULTS,
     **_MODEL_LOG_DEFAULT_FILL,
 }
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION

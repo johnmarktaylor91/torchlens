@@ -60,6 +60,7 @@ from .._io import (
     FieldPolicy,
     TLSPEC_VERSION,
     TorchLensIOError,
+    coerce_container_typed_state,
     default_fill_state,
     read_tlspec_version,
 )
@@ -147,8 +148,64 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_address_normalized": None,
     "_construction_done": True,
 }
+# Typed container defaults for every non-Optional container field in
+# `LAYER_PASS_LOG_FIELD_ORDER`. Same defect and fix as
+# `trace._MODEL_LOG_CONTAINER_DEFAULTS`: the blanket ``{field: None}`` base
+# below makes an absent (legacy/partial-state) container field restore as
+# ``None`` instead of its declared list/dict/set/tuple, which then crashes real
+# consumer code (membership/iteration in ``finalization.py``,
+# ``loop_detection.py``, ``invariants.py``). Plain builtin types are used so
+# ``coerce_container_typed_state`` (called from ``Op.__setstate__``) also
+# repairs a present-but-wrong-typed legacy value (e.g. a ``set`` where a
+# ``list`` is now declared).
+_LAYER_PASS_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "lookup_keys": [],
+    "annotations": {},
+    "shape": (),
+    "out_versions_by_child": {},
+    "code_context": [],
+    "func_rng_states": {},
+    "func_autocast_state": {},
+    "arg_names": (),
+    "non_tensor_pos_args": [],
+    "non_tensor_kwargs": {},
+    "func_non_tensor_args": [],
+    "transform_chain": (),
+    "transform_config": {},
+    "unattributed_tensor_args": (),
+    "parent_params": [],
+    "_param_barcodes": [],
+    "parent_param_ops": {},
+    "_param_logs": [],
+    "param_shapes": [],
+    "equivalent_ops": set(),
+    "recurrent_ops": [],
+    "parents": [],
+    "parent_arg_positions": {},
+    "root_ancestors": set(),
+    "children": [],
+    "input_ancestors": set(),
+    "output_descendants": set(),
+    "internal_source_parents": [],
+    "internal_source_ancestors": set(),
+    "in_conditionals": [],
+    "conditional_branch_stack": [],
+    "conditional_entry_children": [],
+    "conditional_then_children": [],
+    "conditional_elif_children": {},
+    "conditional_else_children": [],
+    "conditional_arm_children": {},
+    "modules": [],
+    "module_call_stack": [],
+    "input_to_module_calls": [],
+    "module_entry_arg_keys": {},
+    "output_of_modules": [],
+    "output_of_module_calls": [],
+    "func_config": {},
+}
 _LAYER_PASS_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in LAYER_PASS_LOG_FIELD_ORDER},
+    **_LAYER_PASS_LOG_CONTAINER_DEFAULTS,
     **_LAYER_PASS_LOG_DEFAULT_FILL,
 }
 _OP_PROPERTY_BACKED_FIELD_NAMES = frozenset(
@@ -2560,7 +2617,6 @@ class Op:
         state.pop("_facets_cache", None)
         state["func"] = None
         state["grad_fn_handle"] = None
-        state["grad_fn_handle"] = None
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 
@@ -2625,6 +2681,11 @@ class Op:
             state,
             defaults=self.DEFAULT_FILL_STATE,
         )
+        # Repair present-but-wrong-typed container fields from legacy states
+        # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
+        # declared). `default_fill_state` only fills absent keys; this closes
+        # the same gap `Trace.__setstate__` already closes for its own fields.
+        coerce_container_typed_state(state, self.DEFAULT_FILL_STATE)
         _clear_property_backed_state_fields(state)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = _dtype_ref_or_none(state.get("dtype"))

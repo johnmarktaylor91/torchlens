@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Dict, cast
 
 from .._errors import AmbiguousOpLookupError
-from .._io import FieldPolicy
+from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -98,6 +98,35 @@ class Buffer:
         self.versions = list(versions)
         self._initial_value = initial_value
         self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with the non-picklable weakref stripped.
+
+        ``_source_ref`` is a live ``weakref.ref`` to the owning ``Trace``
+        whenever a ``source_trace`` was supplied (the normal case), and
+        ``weakref`` objects cannot be pickled. Null it here, mirroring every
+        sibling record class (``Op``/``Layer``/``Param``/...), so standalone
+        ``pickle.dumps(buffer)`` does not crash.
+        """
+
+        state = self.__dict__.copy()
+        state["_source_ref"] = None
+        state["tlspec_version"] = TLSPEC_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state without reviving the source-trace weakref."""
+
+        read_tlspec_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={
+                "_source_ref": None,
+                "_initial_value": None,
+                "versions": [],
+            },
+        )
+        self.__dict__.update(state)
 
     @property
     def source_trace(self) -> "Trace | None":
