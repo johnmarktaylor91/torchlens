@@ -275,6 +275,20 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
     assert int(counts[2].item()) == 2
 
 
+def test_feature_map_node_spec_alpha_default_and_passthrough() -> None:
+    """Feature-map overlays should use the crisp default and honor overrides."""
+
+    default_hook = feature_map_node_spec()
+    custom_hook = feature_map_node_spec(alpha=0.55)
+
+    assert default_hook.__closure__ is not None
+    assert custom_hook.__closure__ is not None
+    default_values = [cell.cell_contents for cell in default_hook.__closure__]
+    custom_values = [cell.cell_contents for cell in custom_hook.__closure__]
+    assert 0.75 in default_values
+    assert 0.55 in custom_values
+
+
 def test_tlspec_roundtrip_preserves_maps_and_renders_after_load(tmp_path: Path) -> None:
     """Feature-map tensors should survive portable save/load and render after load."""
 
