@@ -2225,6 +2225,13 @@ def _emit_predicate_operation_events(
             # exception handler aborts disk storage before the raise reaches
             # the caller.
             raise
+        except Warning:
+            # A TorchLens warning escalated to an error by the caller's filter
+            # (e.g. warnings-as-errors on the reference-save-mode caveat) is not a
+            # user-predicate failure. Surface it directly with its true type instead
+            # of swallowing it into the predicate-failure pipeline, where it would
+            # resurface as a misleading PredicateError.
+            raise
         except Exception as exc:
             state.handle_predicate_exception(ctx, exc)
         finally:
