@@ -10,7 +10,13 @@ from typing import Any
 import pytest
 
 
-DOC_FILES = ("performance.md", "for-ai-agents.md")
+DOC_FILES = (
+    "performance.md",
+    "for-ai-agents.md",
+    "reference/debug.md",
+    "reference/export.md",
+    "reference/attribution.md",
+)
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 
 

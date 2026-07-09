@@ -456,6 +456,9 @@ works, and the recommended workaround for each context.
 | [docs/backward.md](docs/backward.md) | Backward capture details and limitations |
 | [docs/facets.md](docs/facets.md) | Facets, patching, and SDPA reconstruction |
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
+| [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
+| [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports |
+| [docs/reference/attribution.md](docs/reference/attribution.md) | Native input and layer attribution methods |
 
 
 ## Security
