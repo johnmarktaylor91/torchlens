@@ -1,6 +1,28 @@
 # CHANGELOG
 
 
+## v2.30.1 (2026-07-09)
+
+### Bug Fixes
+
+- **viz**: Support callable node_overlay instead of an opaque TypeError
+  ([`178752d`](https://github.com/johnmarktaylor91/torchlens/commit/178752d9044f4ccea7198250cc3d7791f0c20a17))
+
+A callable passed to draw(node_overlay=...) fell through to the mapping path (`candidate in scores`)
+  and died with "argument of type 'function' is not iterable". Route callables through
+  external_overlay_value: invoke `overlay(node)` to compute a per-node value, then format it like
+  any external score. Widen the public type to `str | Mapping | Callable[[Any], Any] | None` across
+  options + both draw signatures. Regression test asserts a callable overlay renders per node.
+
+### Documentation
+
+- **intervention**: Fix splice_module signature drift (input/output defaults)
+  ([`babc926`](https://github.com/johnmarktaylor91/torchlens/commit/babc9268c9b0af8a9c1c3a57e79b5597ef601be2))
+
+docs/intervention_api.md showed input="activation"/output="activation"; the real signature
+  (intervention/helpers.py:606) is input="in"/output="out".
+
+
 ## v2.30.0 (2026-07-09)
 
 ### Bug Fixes
