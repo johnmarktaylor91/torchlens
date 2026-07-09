@@ -82,23 +82,26 @@ def uses_default(x: Any, op: Any = tanh) -> Any:
     strict=True,
 )
 def test_from_import_closure_binding_before_wrap_escapes_capture() -> None:
-    """Document the conservative pre-wrap from-import binding escape."""
+    """Document pre-wrap closure and nested-container binding escapes."""
 
     unwrap_torch()
     clear_patch_detached_references_cache()
 
     def build_model() -> nn.Module:
-        """Build a model whose forward closes over a raw torch binding."""
+        """Build a model holding raw torch callables outside the module graph."""
 
         from torch import relu
+        from torch import sigmoid
+
+        callable_container = {"activation": [sigmoid]}
 
         class FromImportClosureModel(nn.Module):
-            """Use a closure-bound torch function inside ``forward``."""
+            """Use pre-wrap closure and nested-container functions inside ``forward``."""
 
             def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """Return a traced add fed by an untraced pre-bound relu."""
+                """Apply callables that the sys.modules crawl cannot reach."""
 
-                return x + relu(x)
+                return relu(x) + callable_container["activation"][0](x)
 
         return FromImportClosureModel()
 
@@ -106,7 +109,12 @@ def test_from_import_closure_binding_before_wrap_escapes_capture() -> None:
     wrap_torch()
     try:
         log = tl.trace(model, torch.randn(3))
+        # These references live in a closure cell and a nested dict/list created
+        # before wrapping. The current crawl cannot reach either location, so
+        # this strict xfail pins the documented boundary until escape detection
+        # can report such callables at runtime.
         assert any(op.func_name == "relu" for op in log.ops)
+        assert any(op.func_name == "sigmoid" for op in log.ops)
     finally:
         clear_patch_detached_references_cache()
         wrap_torch()
