@@ -32,7 +32,7 @@ from torch import nn
 
 from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._errors import TorchLensPostfuncError
-from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
+from .fastlog.exceptions import PredicateError
 from ._input_coerce import _coerce_input_args
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
@@ -50,7 +50,6 @@ from .backends._options import MLX_EXTRA_KWARG_POLICY, reject_extra_trace_kwargs
 from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
-from .fastlog.exceptions import PredicateError
 from .ir import ParentEdge, replace_op_event
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
@@ -85,6 +84,7 @@ from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
 from .intervention.resolver import _selector_resolution_direction
 from .intervention.resolver import resolve_sites
+from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .capture.stop import StopDirective
 from ._trace_state import TraceState
