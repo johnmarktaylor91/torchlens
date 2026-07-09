@@ -36,6 +36,8 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
 
+from torch import nn
+
 from ..backends import (
     BackendName,
     BackendUnsupportedError,
@@ -46,6 +48,7 @@ from ..backends import (
 from ..fastlog._halt import HaltSignal
 from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
+from .._capture_state_helpers import unwrap_compiled_submodules
 from .config import InternalCaptureConfig
 from .stop import StopDirective, evaluate_halt_stop
 
@@ -938,6 +941,13 @@ def run_and_log_inputs_through_model(
 
     self.capture_start_time = time.time()
     input_tensors: list[Any] = []
+    compiled_unwrap_exception: tuple[object, object, object] = (None, None, None)
+    compiled_unwrap_context = (
+        unwrap_compiled_submodules(model)
+        if isinstance(model, nn.Module)
+        else contextlib.nullcontext()
+    )
+    compiled_unwrap_context.__enter__()
 
     try:
         global _ACTIVE_CAPTURE_BACKEND
@@ -1096,6 +1106,7 @@ def run_and_log_inputs_through_model(
         return outputs
 
     except HaltSignal as halt_exc:
+        compiled_unwrap_exception = cast(tuple[object, object, object], sys.exc_info())
         options = getattr(self, "_predicate_save_options", None)
         if (
             options is not None
@@ -1119,6 +1130,7 @@ def run_and_log_inputs_through_model(
         raise
 
     except Exception as e:
+        compiled_unwrap_exception = cast(tuple[object, object, object], sys.exc_info())
         backend.cleanup_failed_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )
@@ -1126,7 +1138,10 @@ def run_and_log_inputs_through_model(
         raise e
 
     finally:
-        _clear_saved_activation_dedup_caches(self)
-        # Release input tensor references so GC can reclaim backend memory.
-        input_tensors = None  # type: ignore[assignment]
-        backend.cleanup_forward_memory(self)
+        try:
+            _clear_saved_activation_dedup_caches(self)
+            # Release input tensor references so GC can reclaim backend memory.
+            input_tensors = None  # type: ignore[assignment]
+            backend.cleanup_forward_memory(self)
+        finally:
+            compiled_unwrap_context.__exit__(*compiled_unwrap_exception)
