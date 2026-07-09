@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def _backward_dot_call_node_name(grad_fn_handle: "GradFn", call: Any) -> str:
@@ -897,34 +897,34 @@ def _collapse_address_for_node(
 
 def _run_fold_for_address(
     address_w_pass: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
-) -> "ModuleRunFold | None":
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
+) -> "ModuleRepeatFold | None":
     """Return the fold descriptor for a module address.
 
     Parameters
     ----------
     address_w_pass:
         Pass-qualified or pass-free module address.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
     -------
-    ModuleRunFold | None
+    ModuleRepeatFold | None
         Matching fold descriptor, or ``None``.
     """
 
-    if run_folds is None:
+    if repeat_folds is None:
         return None
-    return run_folds.get(address_w_pass.rsplit(":", 1)[0])
+    return repeat_folds.get(address_w_pass.rsplit(":", 1)[0])
 
 
 def _run_fold_graph_node_name(
     address_w_pass: str,
     vis_mode: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
 ) -> str:
-    """Return the Graphviz node name after run-fold remapping.
+    """Return the Graphviz node name after repeat-fold remapping.
 
     Parameters
     ----------
@@ -932,7 +932,7 @@ def _run_fold_graph_node_name(
         Pass-qualified or pass-free module address.
     vis_mode:
         ``"unrolled"`` or ``"rolled"`` visualization mode.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
@@ -941,7 +941,7 @@ def _run_fold_graph_node_name(
         Graphviz node identifier for the folded representative or original module.
     """
 
-    fold = _run_fold_for_address(address_w_pass, run_folds)
+    fold = _run_fold_for_address(address_w_pass, repeat_folds)
     if fold is None:
         module_tuple = address_w_pass.split(":")
     else:
@@ -952,24 +952,26 @@ def _run_fold_graph_node_name(
     return module_tuple[0]
 
 
-def _unique_run_folds(run_folds: Mapping[str, "ModuleRunFold"]) -> tuple["ModuleRunFold", ...]:
+def _unique_repeat_folds(
+    repeat_folds: Mapping[str, "ModuleRepeatFold"],
+) -> tuple["ModuleRepeatFold", ...]:
     """Return unique fold descriptors in deterministic representative order.
 
     Parameters
     ----------
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
     -------
-    tuple[ModuleRunFold, ...]
+    tuple[ModuleRepeatFold, ...]
         Unique folds sorted by representative address.
     """
 
     seen: set[str] = set()
-    unique: list[ModuleRunFold] = []
-    for address in sorted(run_folds):
-        fold = run_folds[address]
+    unique: list[ModuleRepeatFold] = []
+    for address in sorted(repeat_folds):
+        fold = repeat_folds[address]
         if fold.representative in seen:
             continue
         seen.add(fold.representative)
@@ -978,14 +980,14 @@ def _unique_run_folds(run_folds: Mapping[str, "ModuleRunFold"]) -> tuple["Module
 
 
 def _run_fold_representative_names(
-    run_folds: Mapping[str, "ModuleRunFold"],
+    repeat_folds: Mapping[str, "ModuleRepeatFold"],
     vis_mode: str,
 ) -> set[str]:
     """Return Graphviz node names for unique folded-run representatives.
 
     Parameters
     ----------
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
     vis_mode:
         ``"unrolled"`` or ``"rolled"`` visualization mode.
@@ -1002,7 +1004,7 @@ def _run_fold_representative_names(
             vis_mode,
             {fold.representative: fold},
         )
-        for fold in _unique_run_folds(run_folds)
+        for fold in _unique_repeat_folds(repeat_folds)
     }
 
 
@@ -2075,6 +2077,6 @@ __all__ = [
     "_shared_gradient_passes",
     "_should_collapse_module",
     "_single_op_module_should_keep_op_render",
-    "_unique_run_folds",
+    "_unique_repeat_folds",
     "_unwrap_focus_node",
 ]

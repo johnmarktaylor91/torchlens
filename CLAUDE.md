@@ -147,7 +147,7 @@ print(tl.compat.report(model, x).to_markdown())
   deferred like sibling preview gaps.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
-- `Trace.draw(collapse="none"|"auto"|"max"|t, fold_runs=None|True|False)` controls v2 smart
+- `Trace.draw(collapse="none"|"auto"|"max"|t, fold_repeats=None|True|False)` controls v2 smart
   collapse for rolled and unrolled graphs, where float `t` in `[0.0, 1.0]` follows the public
   monotone schedule (`0.0 == "none"`, `1.0 == "max"`). `auto` is the first schedule point whose
   visible count enters the readable band, but its implementation remains frozen for compatibility.

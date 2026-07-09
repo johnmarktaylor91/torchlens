@@ -40,7 +40,7 @@ def _normalize_buffer_visibility(
 if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def _get_hidden_parent_buffer_addresses(
@@ -363,7 +363,7 @@ def _add_node_to_graphviz(
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
     show_input_transform_summary: bool = False,
-    run_folds: Mapping[str, "ModuleRunFold"] | None = None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None = None,
     run_fold_ellipsis_nodes: set[str] | None = None,
     segments: Mapping[str, SegmentDescriptor] | None = None,
     emitted_segment_nodes: set[str] | None = None,
@@ -388,7 +388,7 @@ def _add_node_to_graphviz(
         collapse_fn=collapse_fn,
         max_module_depth=vis_call_depth,
     )
-    fold_ancestor_address = _run_fold_ancestor_for_node(node, run_folds)
+    fold_ancestor_address = _run_fold_ancestor_for_node(node, repeat_folds)
     if fold_ancestor_address is not None:
         collapse_address = fold_ancestor_address
     segment = _segment_for_node(node, segments)
@@ -402,8 +402,8 @@ def _add_node_to_graphviz(
     is_collapsed_module = collapse_address is not None
     is_hidden_run_member = (
         collapse_address is not None
-        and run_folds is not None
-        and not _is_run_fold_representative(collapse_address, run_folds)
+        and repeat_folds is not None
+        and not _is_run_fold_representative(collapse_address, repeat_folds)
     )
 
     if segment is not None:
@@ -422,7 +422,7 @@ def _add_node_to_graphviz(
             node_mode,
             collapsed_node_spec_fn,
             theme,
-            run_folds,
+            repeat_folds,
             collapse_fn,
         )
         node_color = "black"
@@ -466,7 +466,7 @@ def _add_node_to_graphviz(
         rankdir,
         show_containers,
         collapsed_container_nodes,
-        run_folds,
+        repeat_folds,
         run_fold_ellipsis_nodes,
         segments,
         segment,
@@ -1190,7 +1190,7 @@ def _build_collapsed_module_node(
     node_mode: VisNodeModeLiteral,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     theme: VisualizationTheme | None = None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None = None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None = None,
     collapse_fn: CollapseFn | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
@@ -1224,7 +1224,7 @@ def _build_collapsed_module_node(
     if module_output_fsize is None:
         module_output_fsize = "0 B"
     address, call_index = module_tuple
-    fold = _run_fold_for_address(address, run_folds)
+    fold = _run_fold_for_address(address, repeat_folds)
     if fold is not None:
         address = fold.representative
         address_w_pass = f"{address}:{call_index}" if vis_mode == "unrolled" else address

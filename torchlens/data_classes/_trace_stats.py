@@ -600,7 +600,7 @@ class TraceStatsMixin(_TraceMixinBase):
         CollapsePlan
             Renderer-faithful diagnostic plan. Node kinds are ``ModuleBox`` for
             collapsed module calls, ``RawOp`` for exposed operations,
-            ``RunFold`` for representative-plus-ellipsis repeated runs,
+            ``RepeatFold`` for representative-plus-ellipsis repeated runs,
             ``OpSegment`` and ``ChildSegment`` for condensed segment boxes, and
             ``Boundary`` for input/output or renderer boundary nodes.
 

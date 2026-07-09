@@ -25,7 +25,7 @@ from torchlens.visualization.auto_collapse import (
     _sibling_address_groups,
     analyze_collapse,
     resolve_collapse_fn,
-    resolve_run_folds,
+    resolve_repeat_folds,
 )
 from torchlens.visualization.collapse_optimizer import select_collapse_plan
 from torchlens.visualization.collapse_plan import (
@@ -975,7 +975,7 @@ def _draw_source(
     tmp_path: Path,
     name: str,
     collapse: str,
-    fold_runs: bool | None = None,
+    fold_repeats: bool | None = None,
 ) -> str:
     """Render a trace to SVG and return DOT source."""
 
@@ -986,7 +986,7 @@ def _draw_source(
             vis_fileformat="svg",
             vis_node_placement="dot",
             collapse=collapse,
-            fold_runs=fold_runs,
+            fold_repeats=fold_repeats,
         )
     )
 
@@ -1160,7 +1160,7 @@ def _assert_plan_svg_parity(
 
     context = RenderContext(vis_mode=vis_mode)  # type: ignore[arg-type]
     collapse_fn = resolve_collapse_fn(trace, mode, vis_mode, context=context)  # type: ignore[arg-type]
-    folds = resolve_run_folds(trace, collapse_fn, context=context)
+    folds = resolve_repeat_folds(trace, collapse_fn, context=context)
     v2_plan = getattr(collapse_fn, "_torchlens_v2_plan", None)
     plan_count = (
         count(v2_plan)
@@ -1262,19 +1262,19 @@ def _atomic_own_output_ops(trace: tl.Trace, address: str) -> tuple[Any, ...]:
 
 
 def _run_fold_ellipsis_name(address: str) -> str:
-    """Return the deterministic run-fold ellipsis node name for ``address``."""
+    """Return the deterministic repeat-fold ellipsis node name for ``address``."""
 
     return f"{address}pass1___runfoldellipsis"
 
 
 def _run_fold_ellipsis_count(source: str, multiplicity: int) -> int:
-    """Return count of run-fold ellipsis labels for ``multiplicity`` folded modules."""
+    """Return count of repeat-fold ellipsis labels for ``multiplicity`` folded modules."""
 
     return source.count(f"... +{multiplicity - 1} more ")
 
 
 def _has_run_fold_multiplicity_label(source: str, multiplicity: int) -> bool:
-    """Return whether DOT source contains the old run-fold ``xN`` label."""
+    """Return whether DOT source contains the old repeat-fold ``xN`` label."""
 
     return bool(re.search(rf"\bx{multiplicity}\b", source))
 
@@ -1606,7 +1606,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
     trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
     try:
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
-        folds = resolve_run_folds(trace, collapse_fn, fold_runs=True)
+        folds = resolve_repeat_folds(trace, collapse_fn, fold_repeats=True)
         fold = folds["blocks.0"]
         representative = trace.modules[fold.representative]
         source = _draw_source(
@@ -1614,7 +1614,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
             tmp_path,
             "run_fold_auto_rep_stats",
             "auto",
-            fold_runs=True,
+            fold_repeats=True,
         )
         rep_line = _collapsed_node_line(source, "blocks.0")
 
@@ -1664,7 +1664,7 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
 
     trace = _trace(ParallelRepeatedBranches(depth=40), torch.randn(1, 4, 16, 16))
     try:
-        folds = resolve_run_folds(trace, _select_branches_child)
+        folds = resolve_repeat_folds(trace, _select_branches_child)
         fold = folds["branches.0"]
         representative = trace.modules[fold.representative]
         source = str(
@@ -1693,12 +1693,12 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
 
 
 def test_auto_collapse_run_fold_splits_same_spatial_channel_steps(tmp_path: Path) -> None:
-    """Run-fold splits same-spatial channel changes into stage boundaries."""
+    """Repeat-fold splits same-spatial channel changes into stage boundaries."""
 
     trace = _trace(DimStepRun(depth=24, start_width=32), torch.randn(1, 32, 8, 8))
     try:
         auto_source = _draw_source(trace, tmp_path, "dim_step_stage_boundary_auto", "auto")
-        folds = resolve_run_folds(trace, _select_blocks_child)
+        folds = resolve_repeat_folds(trace, _select_blocks_child)
 
         assert _collapsed_exact_label_count(auto_source, "blocks.1") == 1
         assert "runfoldellipsis" not in auto_source
@@ -1714,7 +1714,7 @@ def test_auto_collapse_run_fold_folds_mobilenet_channel_plateaus() -> None:
 
     trace = _trace(MobileNetPlateauStack(), torch.randn(1, 3, 16, 16))
     try:
-        folds = resolve_run_folds(trace, _select_features_child)
+        folds = resolve_repeat_folds(trace, _select_features_child)
 
         assert folds["features.0"].addresses == ("features.0", "features.1", "features.2")
         assert folds["features.3"].addresses == (
@@ -1737,7 +1737,7 @@ def test_auto_collapse_run_fold_folds_residual_mix_without_digest_key() -> None:
 
     trace = _trace(MobileNetPlateauStack(), torch.randn(1, 3, 16, 16))
     try:
-        folds = resolve_run_folds(trace, _select_features_child)
+        folds = resolve_repeat_folds(trace, _select_features_child)
 
         assert folds["features.3"].addresses == (
             "features.3",
@@ -1750,12 +1750,12 @@ def test_auto_collapse_run_fold_folds_residual_mix_without_digest_key() -> None:
         trace.cleanup()
 
 
-def test_auto_collapse_fold_runs_true_splits_run_around_odd_hidden_member() -> None:
-    """``fold_runs=True`` folds the maximal legal sub-runs around an odd hidden member.
+def test_auto_collapse_fold_repeats_true_splits_run_around_odd_hidden_member() -> None:
+    """``fold_repeats=True`` folds the maximal legal sub-runs around an odd hidden member.
 
     Regression for the round-3 honesty gate's own adjacent gap: pre-fix,
     ``_iter_collapsible_runs`` (the "shared substrate" v1 grouper reachable
-    via ``fold_runs=True`` or a custom ``collapse_fn``, as opposed to the
+    via ``fold_repeats=True`` or a custom ``collapse_fn``, as opposed to the
     default v2 optimizer's ``_maximal_legal_runs``) yielded exactly one
     whole-run candidate per class/stem group with no backtracking, so
     ``_run_fold_hidden_members_uniform`` rejecting that single candidate
@@ -1768,7 +1768,7 @@ def test_auto_collapse_fold_runs_true_splits_run_around_odd_hidden_member() -> N
 
     trace = _trace(OddHiddenMemberStack(total=7, odd_index=3), torch.randn(2, 8))
     try:
-        folds = resolve_run_folds(trace, _select_blocks_child, fold_runs=True)
+        folds = resolve_repeat_folds(trace, _select_blocks_child, fold_repeats=True)
 
         assert folds["blocks.0"].addresses == ("blocks.0", "blocks.1", "blocks.2")
         assert folds["blocks.3"].addresses == (
@@ -1786,12 +1786,12 @@ def test_auto_collapse_fold_runs_true_splits_run_around_odd_hidden_member() -> N
 
 
 def test_auto_collapse_run_fold_keeps_different_depth_stages_separate(tmp_path: Path) -> None:
-    """Run-fold does not merge same-class sibling stages with different depths."""
+    """Repeat-fold does not merge same-class sibling stages with different depths."""
 
     trace = _trace(UnevenDepthStages(depths=(2, 3, 4) * 8), torch.randn(1, 4, 16, 16))
     try:
         auto_source = _draw_source(trace, tmp_path, "uneven_depth_stages_auto", "auto")
-        folds = resolve_run_folds(trace, _select_first_stage_unit)
+        folds = resolve_repeat_folds(trace, _select_first_stage_unit)
 
         assert _run_fold_ellipsis_count(auto_source, 3) == 0
         assert "stages.0" not in folds
@@ -1802,11 +1802,11 @@ def test_auto_collapse_run_fold_keeps_different_depth_stages_separate(tmp_path: 
 
 
 def test_auto_collapse_run_fold_rejects_spatial_span() -> None:
-    """Run-fold does not create a box across spatial-resolution changes."""
+    """Repeat-fold does not create a box across spatial-resolution changes."""
 
     trace = _trace(SpatialStepRun(), torch.randn(1, 4, 32, 32))
     try:
-        folds = resolve_run_folds(trace, _select_blocks_child)
+        folds = resolve_repeat_folds(trace, _select_blocks_child)
 
         assert "blocks.0" not in folds
         assert "blocks.1" not in folds
@@ -1864,12 +1864,12 @@ def test_auto_collapse_run_fold_skips_readable_stack(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Run-fold does not elide a stack whose collapsed render is readable."""
+    """Repeat-fold does not elide a stack whose collapsed render is readable."""
 
     trace = _trace(RepeatedResidual(depth=12), torch.randn(2, 8))
     try:
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
-        folds = resolve_run_folds(trace, collapse_fn)
+        folds = resolve_repeat_folds(trace, collapse_fn)
         auto_source = _draw_source(trace, tmp_path, "run_fold_readable_auto", "auto")
 
         assert folds == {}
@@ -1879,11 +1879,11 @@ def test_auto_collapse_run_fold_skips_readable_stack(
         trace.cleanup()
 
 
-def test_auto_collapse_fold_runs_false_disables_default_run_fold(
+def test_auto_collapse_fold_repeats_false_disables_default_run_fold(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Explicit ``fold_runs=False`` disables otherwise-default auto run folding."""
+    """Explicit ``fold_repeats=False`` disables otherwise-default auto run folding."""
 
     trace = _trace(RepeatedResidual(depth=24), torch.randn(2, 8))
     try:
@@ -1892,7 +1892,7 @@ def test_auto_collapse_fold_runs_false_disables_default_run_fold(
             tmp_path,
             "run_fold_disabled_auto",
             "auto",
-            fold_runs=False,
+            fold_repeats=False,
         )
 
         assert "runfoldellipsis" not in auto_source
@@ -1901,11 +1901,11 @@ def test_auto_collapse_fold_runs_false_disables_default_run_fold(
         trace.cleanup()
 
 
-def test_auto_collapse_fold_runs_true_folds_readable_stack(
+def test_auto_collapse_fold_repeats_true_folds_readable_stack(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Explicit ``fold_runs=True`` folds eligible runs even inside the readable band."""
+    """Explicit ``fold_repeats=True`` folds eligible runs even inside the readable band."""
 
     trace = _trace(RepeatedResidual(depth=12), torch.randn(2, 8))
     try:
@@ -1914,7 +1914,7 @@ def test_auto_collapse_fold_runs_true_folds_readable_stack(
             tmp_path,
             "run_fold_forced_auto",
             "auto",
-            fold_runs=True,
+            fold_repeats=True,
         )
 
         assert _run_fold_ellipsis_count(auto_source, 12) == 1
@@ -1924,7 +1924,7 @@ def test_auto_collapse_fold_runs_true_folds_readable_stack(
         trace.cleanup()
 
 
-def test_auto_collapse_fold_runs_true_standalone_keeps_parallel_junction(
+def test_auto_collapse_fold_repeats_true_standalone_keeps_parallel_junction(
     tmp_path: Path,
 ) -> None:
     """Standalone run folding works with ``collapse='none'`` and preserves junctions."""
@@ -1938,7 +1938,7 @@ def test_auto_collapse_fold_runs_true_standalone_keeps_parallel_junction(
                 vis_fileformat="svg",
                 vis_node_placement="dot",
                 collapse="none",
-                fold_runs=True,
+                fold_repeats=True,
             )
         )
         ellipsis_name = _run_fold_ellipsis_name("branches.0")
@@ -1951,19 +1951,38 @@ def test_auto_collapse_fold_runs_true_standalone_keeps_parallel_junction(
         trace.cleanup()
 
 
-def test_auto_collapse_fold_runs_rejects_invalid_value(tmp_path: Path) -> None:
-    """Run-fold policy validation rejects non-tristate values."""
+def test_auto_collapse_fold_repeats_rejects_invalid_value(tmp_path: Path) -> None:
+    """Repeat-fold policy validation rejects non-tristate values."""
 
     trace = _trace(RepeatedResidual(depth=4), torch.randn(2, 8))
     try:
-        with pytest.raises(ValueError, match="fold_runs must be None, True, or False"):
+        with pytest.raises(ValueError, match="fold_repeats must be None, True, or False"):
             trace.draw(
-                vis_outpath=str(tmp_path / "invalid_fold_runs"),
+                vis_outpath=str(tmp_path / "invalid_fold_repeats"),
                 vis_save_only=True,
                 vis_fileformat="svg",
                 vis_node_placement="dot",
                 collapse="auto",
-                fold_runs="yes",  # type: ignore[arg-type]
+                fold_repeats="yes",  # type: ignore[arg-type]
+            )
+    finally:
+        trace.cleanup()
+
+
+def test_draw_rejects_removed_fold_repeats_predecessor_kwarg(tmp_path: Path) -> None:
+    """The removed predecessor spelling is not silently swallowed."""
+
+    trace = _trace(RepeatedResidual(depth=4), torch.randn(2, 8))
+    removed_kwarg = "fold_" + "runs"
+    try:
+        with pytest.raises(TypeError, match=removed_kwarg):
+            trace.draw(
+                vis_outpath=str(tmp_path / "old_fold_repeats_predecessor"),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                collapse="auto",
+                **{removed_kwarg: True},
             )
     finally:
         trace.cleanup()

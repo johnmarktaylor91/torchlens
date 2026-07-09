@@ -25,7 +25,7 @@ def _view_rendered_file(filepath: str) -> None:
 if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def _strip_render_extension(vis_outpath: str) -> str:
@@ -153,7 +153,7 @@ def draw(
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
     collapse: CollapseLiteral = "none",
-    fold_runs: FoldRunsLiteral = None,
+    fold_repeats: FoldRepeatsLiteral = None,
     skip_fn: SkipFn | None = None,
     vis_edge_overrides: Optional[Dict[str, Any]] = None,
     vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -213,14 +213,14 @@ def draw(
             aggressively collapses eligible modules. The v2 engine supports
             rolled and unrolled rendering, may emit segment boxes in ``"max"``,
             and uses honest labels for ``(xN)`` collapsed calls, ellipsis
-            run-folds, and segment summaries. A float in ``[0.0, 1.0]`` selects
+            repeat-folds, and segment summaries. A float in ``[0.0, 1.0]`` selects
             the public monotone collapse schedule: ``0.0`` is equivalent to
             ``"none"``, ``1.0`` is equivalent to ``"max"``, and larger values
             never increase the visible node count or uncollapse a collapsed
             unit. ``"auto"`` is the schedule point where the visible count first
             enters the readable band; the existing ``"auto"`` implementation is
             unchanged for compatibility.
-        fold_runs: Run-fold policy. ``None`` preserves the collapse mode
+        fold_repeats: Repeat-fold policy. ``None`` preserves the collapse mode
             default: off for ``collapse="none"`` and band-pressure two-pass
             folding for ``"auto"``/``"max"``. ``True`` folds every eligible
             repeated run, including standalone run folding when
@@ -307,8 +307,8 @@ def draw(
             raise ValueError("collapse float level must be in [0.0, 1.0].")
     elif collapse not in {"none", "auto", "max"}:
         raise ValueError("collapse must be 'none', 'auto', 'max', or a float in [0.0, 1.0].")
-    if fold_runs not in {None, True, False}:
-        raise ValueError("fold_runs must be None, True, or False.")
+    if fold_repeats not in {None, True, False}:
+        raise ValueError("fold_repeats must be None, True, or False.")
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
     site_labels, _ = intervention_site_and_cone_labels(self, show_cone=vis_show_cone)
     intervention_node_spec_fn = make_intervention_node_spec_fn(
@@ -350,18 +350,18 @@ def draw(
         from .auto_collapse import resolve_collapse_fn
 
         collapse_fn = resolve_collapse_fn(self, collapse, vis_mode, context=render_context)
-    run_folds: dict[str, ModuleRunFold] = {}
+    repeat_folds: dict[str, ModuleRepeatFold] = {}
     collapse_uses_default_folds = collapse in {"auto", "max"} or (
         isinstance(collapse, float) and collapse > 0.0
     )
-    if fold_runs is not False and (fold_runs is True or collapse_uses_default_folds):
-        from .auto_collapse import resolve_run_folds
+    if fold_repeats is not False and (fold_repeats is True or collapse_uses_default_folds):
+        from .auto_collapse import resolve_repeat_folds
 
-        run_folds = resolve_run_folds(
+        repeat_folds = resolve_repeat_folds(
             self,
             collapse_fn,
             context=render_context,
-            fold_runs=fold_runs,
+            fold_repeats=fold_repeats,
         )
     segments: dict[str, SegmentDescriptor] = {}
     if collapse_fn is not None:
@@ -373,6 +373,7 @@ def draw(
         self, "_node_overlay_name", None
     ):
         node_overlay = getattr(self, "_node_overlay_scores", None)
+    resolved_node_overlay = cast("str | OverlayScores | None", node_overlay)
 
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(vis_graph_overrides),
@@ -575,7 +576,7 @@ def draw(
     forward_render_ir = build_render_ir(
         self,
         collapse_fn=collapse_fn,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         context=RenderContext(
             vis_mode=vis_mode,
             show_buffer_layers=show_buffer_layers,
@@ -618,14 +619,14 @@ def draw(
             vis_intervention_mode,
             site_labels,
             theme,
-            node_overlay,
+            resolved_node_overlay,
             node_label_fields,
             captured_forward_edges,
             rankdir,
             show_containers,
             collapsed_container_nodes,
             show_input_transform_summary,
-            run_folds,
+            repeat_folds,
             run_fold_ellipsis_nodes,
             segments,
             emitted_segment_nodes,
@@ -1309,29 +1310,29 @@ def _is_collapsed_module(
 
 def _run_fold_for_graph_node_name(
     graph_node_name: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     vis_mode: str,
-) -> "ModuleRunFold | None":
+) -> "ModuleRepeatFold | None":
     """Return the fold represented by ``graph_node_name``.
 
     Parameters
     ----------
     graph_node_name:
         Rendered Graphviz node identifier.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
     vis_mode:
         ``"unrolled"`` or ``"rolled"`` visualization mode.
 
     Returns
     -------
-    ModuleRunFold | None
+    ModuleRepeatFold | None
         Matching fold, or ``None`` when ``graph_node_name`` is not a folded representative.
     """
 
-    if not run_folds:
+    if not repeat_folds:
         return None
-    for fold in _unique_run_folds(run_folds):
+    for fold in _unique_repeat_folds(repeat_folds):
         representative_name = _run_fold_graph_node_name(
             f"{fold.representative}:1",
             vis_mode,

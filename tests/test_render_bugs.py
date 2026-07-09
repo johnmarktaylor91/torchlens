@@ -186,7 +186,7 @@ def test_skip_fn_omits_unrolled_skipped_node(tmp_path: Path) -> None:
     assert "relu_1_2" not in dot
 
 
-def test_render_ir_honors_skip_fn_without_run_folds() -> None:
+def test_render_ir_honors_skip_fn_without_repeat_folds() -> None:
     """Render IR node/edge topology follows skip-spliced drawing topology."""
 
     trace = tl.trace(_TinyRenderModel(), torch.randn(2, 3))
@@ -199,7 +199,7 @@ def test_render_ir_honors_skip_fn_without_run_folds() -> None:
     render_ir = build_render_ir(
         trace,
         collapse_fn=None,
-        run_folds=None,
+        repeat_folds=None,
         context=RenderContext(skip_fn=skip_relu),
     )
 
