@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
 
 
 class ViewModel(nn.Module):
@@ -211,12 +212,15 @@ def test_mixed_grad_model_slow() -> None:
     trace.cleanup()
 
 
-def test_compile_wrapped_model_rejected_cross_link() -> None:
-    """Edge-case cross-link: compiled models are rejected for train-mode capture."""
+def test_compile_wrapped_model_unwrapped_cross_link() -> None:
+    """Edge-case cross-link: compiled models trace through their eager source."""
 
-    with pytest.raises(RuntimeError, match="torch.compile"):
-        tl.trace(
+    reset_compiled_model_unwrap_warning_state()
+    with pytest.warns(UserWarning, match="compiled model detected"):
+        trace = tl.trace(
             _compile_model(nn.Linear(4, 2)),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
         )
+    assert trace.layer_list
+    trace.cleanup()
