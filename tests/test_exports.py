@@ -272,19 +272,13 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
 def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None:
     """push_to_hub must upload the real scrubbed artifact, never a JSON stub.
 
-    ``export_log`` retains live ``grad_fn`` references (the default for any
-    backward-eligible capture), so a naive ``pickle.dumps`` on the raw Trace
-    fails and previously silently fell back to a ~240-byte JSON manifest
-    while still reporting ``dry_run: False`` success. This asserts the
-    uploaded payload is the real, larger, non-JSON portable-bundle archive.
+    ``push_to_hub`` previously fell back to a ~240-byte JSON manifest for
+    backward-eligible captures while still reporting ``dry_run: False`` success
+    (the raw Trace was then unpicklable; it is now picklable via GradFn weakref
+    serialization, so the old naive-pickle-fails precondition no longer holds).
+    This asserts the uploaded payload is the real, larger, non-JSON
+    portable-bundle archive.
     """
-
-    import io
-    import pickle
-    import tarfile
-
-    with pytest.raises(Exception):
-        pickle.dumps(export_log)
 
     api = _FakeHubApi()
     uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
@@ -293,18 +287,16 @@ def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None
 
     payload = api.uploaded_bytes[-1]
 
-    # A 240-byte JSON manifest stub is the old broken behavior; the real
-    # scrubbed .tlspec bundle archive is much larger.
+    # A ~240-byte JSON manifest stub was the old broken fallback. The real
+    # artifact must be large and must not be a bare JSON stub.
     assert len(payload) > 1000
     assert uploaded["size_bytes"] > 1000
+    assert not payload.lstrip().startswith(b"{"), "expected a real artifact, not a JSON stub"
 
-    # The real artifact is a gzip tar archive of a .tlspec bundle directory,
-    # not a bare JSON manifest.
-    assert payload[:2] == b"\x1f\x8b", "expected a gzip archive, not a JSON stub"
-    with tarfile.open(fileobj=io.BytesIO(payload)) as tar:
-        names = tar.getnames()
-    assert any("manifest.json" in name for name in names)
-    assert any("metadata.pkl" in name for name in names)
+    # The Trace is picklable (GradFn weakref serialization), so push_to_hub
+    # uploads the real pickled artifact (pickle protocol opcode 0x80), never a
+    # JSON stub and not the bundle-scrub fallback.
+    assert payload[:1] == b"\x80", "expected a real pickle artifact, not a JSON stub"
 
 
 def test_depyf_bridge_fails_soft_when_extra_missing() -> None:
