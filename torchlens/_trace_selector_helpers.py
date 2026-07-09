@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any, cast
 
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+from .capture.arg_positions import _normalize_func_name
 from .fastlog.options import PredicateFn
 from .fastlog.types import RecordContext
 from .intervention.selectors import BaseSelector
@@ -92,7 +93,7 @@ def _label_save_candidates(ctx: RecordContext) -> set[str]:
                 candidates.add(f"{candidate}:{pass_index}")
     if ctx.func_name is not None:
         candidates.add(ctx.func_name)
-        candidates.add(ctx.func_name.lower().replace("_", ""))
+        candidates.add(_normalize_func_name(ctx.func_name))
     if ctx.address:
         candidates.add(ctx.address)
         if ctx.module_pass_index is not None:

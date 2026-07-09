@@ -356,3 +356,76 @@ def test_dynamic_fallback_cache_is_self_consistent_for_unlisted_schema() -> None
 
     assert spec is None
     assert dynamic_spec == ArgSpec(positions=(0,), tensor_kwargs=("right",))
+
+
+def test_no_binary_factory_argspec_key_collision() -> None:
+    """Binary-op and factory-func arg-spec tables must never share a normalized key.
+
+    They assign contradictory specs (tensor parents at positions 0,1 vs. NO tensor parents);
+    a shared key + dict last-writer-wins silently drops parents -- the historic
+    __rand__/torch.rand "rand" collision. arg_positions enforces this at import; assert it here.
+    """
+    from torchlens.capture.arg_positions import _BINARY_FUNCS, _FACTORY_FUNCS
+
+    assert set(_BINARY_FUNCS) & set(_FACTORY_FUNCS) == set()
+
+
+@pytest.mark.parametrize(
+    "dunder,forward",
+    [
+        ("__rand__", "and"),
+        ("__ror__", "or"),
+        ("__rxor__", "xor"),
+        ("__radd__", "add"),
+        ("__rmul__", "mul"),
+    ],
+)
+def test_commutative_reflected_dunders_normalize_to_forward_op(dunder: str, forward: str) -> None:
+    """COMMUTATIVE reflected dunders normalize to their forward op (swapped order is irrelevant).
+
+    (``__rand__`` -> ``and``, matching ``__and__``; the ``torch.rand`` factory keeps ``rand``.)
+    """
+    assert _normalize_func_name(dunder) == forward
+    assert _normalize_func_name("rand") == "rand"
+
+
+@pytest.mark.parametrize(
+    "dunder,expected",
+    [
+        ("__rsub__", "rsub"),
+        ("__rtruediv__", "rtruediv"),
+        ("__rfloordiv__", "rfloordiv"),
+        ("__rmod__", "rmod"),
+        ("__rpow__", "rpow"),
+        ("__rmatmul__", "rmatmul"),
+        ("__rlshift__", "rlshift"),
+        ("__rrshift__", "rrshift"),
+    ],
+)
+def test_noncommutative_reflected_dunders_keep_reflected_name(dunder: str, expected: str) -> None:
+    """NON-commutative reflected dunders keep their r-prefixed name (``other <op> self``: operands
+    are swapped, so the ``r`` is meaningful -- e.g. ``rsub`` matches the real ``torch.rsub``)."""
+    assert _normalize_func_name(dunder) == expected
+
+
+def test_reflected_bitwise_and_captures_tensor_parent() -> None:
+    """Regression: reflected ``int & tensor`` (Tensor.__rand__) captures its tensor parent and
+    is labeled by the forward op (``and``), not the ``rand`` factory that silently dropped it.
+    """
+    import torchlens as tl
+
+    class _Reflected(torch.nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            y = x.int() + 1  # traced int tensor
+            z = 5 & y  # reflected: y.__rand__(5) -- parent MUST be y
+            return z.float().sum()
+
+    trace = tl.trace(_Reflected(), torch.randint(0, 7, (4,)))
+    and_ops = [label for label in trace.layer_labels if label.startswith("and_")]
+    assert and_ops, "reflected & should produce an 'and_' op"
+    assert not [label for label in trace.layer_labels if label.startswith("rand_")], (
+        "reflected & must not be mislabeled as the 'rand' factory"
+    )
+    op = trace[and_ops[0]]
+    assert op.parents, "reflected & op must capture its tensor parent, not be orphaned"
+    assert op.is_internal_source is False

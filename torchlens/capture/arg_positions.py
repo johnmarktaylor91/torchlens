@@ -20,8 +20,40 @@ import torch
 from .. import _state
 
 
+# COMMUTATIVE reflected operator dunders (invoked when a non-tensor is on the LEFT, e.g.
+# ``int & tensor`` routes to ``tensor.__rand__(int)``). For a COMMUTATIVE op the swapped operand
+# order is irrelevant (``a & b == b & a``), so the reflected form is the SAME operation as its
+# forward form -- map it to the forward op's normalized name so it (a) labels as the real op
+# (``and``, not ``rand``), (b) picks up the forward binary arg-spec, (c) groups into the forward
+# op's equivalence class, and (d) does NOT collide with a same-spelled factory. Without this,
+# ``"__rand__".lower().replace("_","")`` yields ``"rand"`` -- mislabeling a bitwise-AND and
+# (fatally) colliding with the ``torch.rand`` factory arg-spec, silently dropping tensor parents.
+#
+# NON-commutative reflected dunders (``__rsub__``, ``__rtruediv__``, ``__rmatmul__``, ...) are
+# deliberately NOT mapped: they compute ``other <op> self`` (operands SWAPPED), so their
+# ``r``-prefixed normalized name honestly signals the reversed order -- and e.g. ``torch.rsub`` is
+# a real reverse-subtract function, so ``rsub`` is a correct, informative label. Collapsing them
+# to ``sub`` would erase the reversed-operand distinction. Their parents/arg-spec were already
+# correct (the binary (0,1) spec via their own ``r`` key); only ``__rand__`` was broken, by the
+# ``torch.rand`` factory collision.
+_COMMUTATIVE_REFLECTED_DUNDERS = {
+    "__radd__": "add",
+    "__rmul__": "mul",
+    "__rand__": "and",
+    "__ror__": "or",
+    "__rxor__": "xor",
+}
+
+
 def _normalize_func_name(func_name: str) -> str:
-    """Normalize a raw function name for lookup table keying."""
+    """Normalize a raw function name for lookup table keying.
+
+    Commutative reflected operator dunders are mapped to their forward operation (see
+    ``_COMMUTATIVE_REFLECTED_DUNDERS``); everything else is lowercased with underscores stripped.
+    """
+    forward = _COMMUTATIVE_REFLECTED_DUNDERS.get(func_name)
+    if forward is not None:
+        return forward
     return func_name.lower().replace("_", "")
 
 
@@ -750,7 +782,8 @@ _BINARY_FUNCS = [
     "iand",
     "ior",
     "ixor",
-    "rand",
+    # NOTE: no "rand" here -- reflected __rand__ normalizes to "and" (see
+    # _COMMUTATIVE_REFLECTED_DUNDERS); "rand" belongs to the torch.rand factory only.
     "ror",
     "rxor",
     "lshift",
@@ -890,6 +923,20 @@ _FACTORY_FUNCS = [
 
 for _name in _FACTORY_FUNCS:
     FUNC_ARG_SPECS[_name] = _NONE
+
+# Guardrail: a normalized name must not be claimed by BOTH the binary-op and factory-func
+# tables -- they assign conflicting arg-specs (tensor parents at positions 0,1 vs. NO tensor
+# parents), and dict last-writer-wins would silently corrupt whichever loses. A collision means
+# two different ops normalize to the same key (e.g. the historic __rand__/torch.rand "rand"
+# collision that dropped __rand__'s parents, now resolved by mapping reflected dunders to their
+# forward op in _COMMUTATIVE_REFLECTED_DUNDERS). Fail LOUDLY at import so this class of silent
+# dataflow corruption can never recur unnoticed.
+_BINARY_FACTORY_KEY_COLLISIONS = set(_BINARY_FUNCS) & set(_FACTORY_FUNCS)
+assert not _BINARY_FACTORY_KEY_COLLISIONS, (
+    "arg-spec key collision between binary-op and factory-func tables: "
+    f"{sorted(_BINARY_FACTORY_KEY_COLLISIONS)} -- these ops disagree on tensor-parent positions; "
+    "give them distinct normalized keys (see _COMMUTATIVE_REFLECTED_DUNDERS)."
+)
 
 # Factory-from-source functions inherit shape/dtype/device from a tensor source.
 # Record that source as a topology parent, matching view/reshape-style dependencies
