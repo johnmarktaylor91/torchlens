@@ -236,6 +236,12 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
 
 _KNOWN_UNSUPPORTED_ARG_SPECS = frozenset(_KNOWN_UNSUPPORTED_ARG_SPEC_REASONS)
 
+# Torch adds/removes internal/private helpers across releases, so a few known-unsupported
+# names are decorated on some torch versions and absent on others (e.g. "op" is absent on
+# torch 2.8). These are torch-version differences, not stale entries; keep them out of the
+# strict "every known entry is decorated on THIS torch" guard below.
+_TORCH_VERSION_VARYING_UNSUPPORTED = frozenset({"op"})
+
 _EXPECTED_KWARGS = {
     "addr": ("input", "vec1", "vec2"),
     "alignas": ("self", "other"),
@@ -297,7 +303,14 @@ def test_every_decorated_arg_spec_is_static_or_explicitly_unsupported() -> None:
     missing = decorated_names - static_names
 
     assert missing <= _KNOWN_UNSUPPORTED_ARG_SPECS
-    assert _KNOWN_UNSUPPORTED_ARG_SPECS <= decorated_names
+    # Known-unsupported entries not decorated on this torch version are torch-version
+    # differences (see _TORCH_VERSION_VARYING_UNSUPPORTED); anything else undecorated is a
+    # stale/typo entry and must be caught.
+    undecorated_known = _KNOWN_UNSUPPORTED_ARG_SPECS - decorated_names
+    assert undecorated_known <= _TORCH_VERSION_VARYING_UNSUPPORTED, (
+        "known-unsupported arg-spec entries are undecorated on this torch and not marked "
+        f"version-varying: {sorted(undecorated_known - _TORCH_VERSION_VARYING_UNSUPPORTED)}"
+    )
     assert not (_KNOWN_UNSUPPORTED_ARG_SPECS & static_names)
 
 

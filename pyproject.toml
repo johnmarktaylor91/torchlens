@@ -160,6 +160,9 @@ filterwarnings = [
     # them locally.
     "error::DeprecationWarning:torchlens(\\.|$)",
     "error::UserWarning:torchlens(\\.|$)",
+    # Expected graceful torch-capability degradations (e.g. functorch level API absent on
+    # torch 2.1) flip a HAS_* flag and warn once; visible-not-fatal across the torch matrix.
+    "default:TorchLens torch capability .* is unavailable;.*:UserWarning:torchlens(\\.|$)",
     "default:`.*` is deprecated; use `.*` instead\\..*:DeprecationWarning",
     "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:DeprecationWarning",
     # External: torchvision model init deprecations
