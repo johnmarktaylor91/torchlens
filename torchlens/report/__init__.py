@@ -6,6 +6,7 @@ from typing import Any
 
 from .. import _state
 from ._explain import explain
+from ._profile import TraceProfile, build_profile
 
 
 def log_value(name: str, value: Any) -> None:
@@ -30,4 +31,4 @@ def log_value(name: str, value: Any) -> None:
     trace.annotations.setdefault("logged_values", {})[str(name)] = value
 
 
-__all__ = ["explain", "log_value"]
+__all__ = ["TraceProfile", "build_profile", "explain", "log_value"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ._cost import hot_path
+from ._audit import AuditFinding, TraceAudit, audit_trace
 from ._graph import LineageResult, compare, dead_neurons, lineage
 from ._gradients import gradient_flow_audit
 from ._infer_input_shape import InferInputShapeResult, infer_input_shape
@@ -11,9 +12,12 @@ from ._recompute import recompute_candidates
 
 __all__ = [
     "BisectNanResult",
+    "AuditFinding",
     "FindNanResult",
     "InferInputShapeResult",
     "LineageResult",
+    "TraceAudit",
+    "audit_trace",
     "bisect_nan",
     "find_nan",
     "compare",
