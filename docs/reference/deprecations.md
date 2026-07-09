@@ -96,6 +96,7 @@ unless a narrower policy is later set.
 | `random_seed` | grouped capture options | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `save_grads` | backward capture options | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `vis_node_mode` | `node_style` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| `vis_opt` | `vis_mode` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | flat `CaptureOptions` fields | grouped option fields | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `mark_layer_depths` | `capture.compute_input_output_distances` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `num_context_lines` | `capture.source_context_lines` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
