@@ -305,7 +305,9 @@ class TorchBackend:
         else:
             model, input_tensors, input_objects = prepared_model, None, None
         uninstall_buffer_write_tracker(cast("Trace", session))
-        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors, input_objects)
+        _cleanup_model_session(
+            cast("Trace", session), cast(torch.nn.Module, model), input_tensors, input_objects
+        )
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch logging context manager."""

@@ -23,6 +23,7 @@ Step 20 (release_param_refs): Drops live parameter references after finalization
 
 import time
 from collections import defaultdict, deque
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Literal, NamedTuple, TYPE_CHECKING, Tuple, cast
 
@@ -43,6 +44,7 @@ from ..data_classes._module_role_hints import (
 from ..data_classes._state_adapter import state_items
 from ..data_classes._summary import format_call_arg
 from ..data_classes.module import Module, ModuleCall
+from ..data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
@@ -227,6 +229,9 @@ def _build_root_module_log(
         output_layers=list(self.output_layers),
         output_ops=list(self.output_layers),
         output_structure=_first_output_structure(self, list(self.output_layers)),
+        inputs_before_pre_hooks=_pre_hook_provenance_for_call(self, "self:1")[0],
+        inputs_after_pre_hooks=_pre_hook_provenance_for_call(self, "self:1")[1],
+        forward_pre_hook_effects=_pre_hook_provenance_for_call(self, "self:1")[2],
         call_parent=None,
         call_children=_root_call_children(mbd),
         all_addresses=root_meta.get("all_addresses", ["self"]),
@@ -244,6 +249,53 @@ def _build_root_module_log(
     pass_dict["self:1"] = root_pass
 
     return root_module
+
+
+def _pre_hook_provenance_for_call(
+    trace: "Trace", call_label: str
+) -> tuple[ModuleInputSnapshot | None, ModuleInputSnapshot | None, tuple[PreHookEffect, ...]]:
+    """Return provenance for one call with raw producer labels finalized.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose Step-8 raw-to-final operation map is available.
+    call_label:
+        Pass-qualified module call label.
+
+    Returns
+    -------
+    tuple[ModuleInputSnapshot | None, ModuleInputSnapshot | None, tuple[PreHookEffect, ...]]
+        Before snapshot, after snapshot, and ordered effects.
+    """
+
+    values = trace._module_build_data.get("module_pre_hook_provenance", {}).get(call_label)
+    if values is None:
+        return None, None, ()
+    before, after, effects = values
+    return (
+        _finalize_snapshot_source_labels(trace, before),
+        _finalize_snapshot_source_labels(trace, after),
+        tuple(effects),
+    )
+
+
+def _finalize_snapshot_source_labels(
+    trace: "Trace", snapshot: ModuleInputSnapshot | None
+) -> ModuleInputSnapshot | None:
+    """Replace raw tensor producer labels in one immutable snapshot."""
+
+    if snapshot is None:
+        return None
+    mapping = trace._raw_to_final_op_labels
+    observations = tuple(
+        replace(
+            observation,
+            source_op=mapping.get(observation.source_op, observation.source_op),
+        )
+        for observation in snapshot.tensor_observations
+    )
+    return replace(snapshot, tensor_observations=observations)
 
 
 def _root_call_children(mbd: dict[str, Any]) -> list[str]:
@@ -608,6 +660,9 @@ def _build_submodule_call_logs(
             output_paths=mbd.get("module_output_paths", {}).get(call_label, ()),
             forward_args=fwd_positional,
             forward_kwargs=fwd_kwargs,
+            inputs_before_pre_hooks=_pre_hook_provenance_for_call(self, call_label)[0],
+            inputs_after_pre_hooks=_pre_hook_provenance_for_call(self, call_label)[1],
+            forward_pre_hook_effects=_pre_hook_provenance_for_call(self, call_label)[2],
             forward_args_template=fwd_args_template,
             forward_kwargs_template=fwd_kwargs_template,
             forward_arg_names=[

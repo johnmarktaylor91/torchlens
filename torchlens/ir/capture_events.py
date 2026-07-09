@@ -20,6 +20,7 @@ from .events import (
     OpGradObserved,
     OpEvent,
     OutputVersionEvent,
+    PreHookProvenanceEvent,
 )
 from .live_index import LiveIndex
 from .predicate import RecordContext
@@ -40,6 +41,7 @@ class CaptureEvents:
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)
     module_enter_events: list[ModuleEnterEvent] = field(default_factory=list)
     module_exit_events: list[ModuleExitEvent] = field(default_factory=list)
+    pre_hook_events: list[PreHookProvenanceEvent] = field(default_factory=list)
     conditional_events: list[ConditionalEvent] = field(default_factory=list)
     output_version_events: list[OutputVersionEvent] = field(default_factory=list)
     backward_events: list[
@@ -97,6 +99,7 @@ class CaptureEvents:
             module_prep_events=list(self.module_prep_events),
             module_enter_events=list(self.module_enter_events),
             module_exit_events=list(self.module_exit_events),
+            pre_hook_events=list(self.pre_hook_events),
             conditional_events=list(self.conditional_events),
             output_version_events=list(self.output_version_events),
             backward_events=list(self.backward_events),
