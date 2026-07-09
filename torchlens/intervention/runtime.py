@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import time
 from collections.abc import Iterator
+from types import SimpleNamespace
 from typing import Any
 
 import torch
@@ -12,7 +13,9 @@ import torch
 from .. import _state
 from .._state import pause_logging
 from ..backends.torch._tl import copy_replacement_meta
+from ..capture.arg_positions import _normalize_func_name
 from ..ir.intervention import FireResult
+from ..utils.arg_handling import copy_arg_tree
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
     HookContext,
@@ -257,6 +260,7 @@ def _apply_live_hooks(
     container_path: tuple[Any, ...] = (),
     call_args: tuple[Any, ...] = (),
     call_kwargs: dict[str, Any] | None = None,
+    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
 ) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
     """Apply active live post-hooks to one capture-time output tensor.
 
@@ -272,6 +276,10 @@ def _apply_live_hooks(
         Original positional call inputs for input-routed helpers.
     call_kwargs:
         Original keyword call inputs for input-routed helpers.
+    call_input_snapshots:
+        Optional pre-execution positional and keyword input snapshots for
+        in-place ops whose post-hook input route would otherwise observe
+        already-mutated live tensors.
 
     Returns
     -------
@@ -309,6 +317,7 @@ def _apply_live_hooks(
             site=site,
             call_args=call_args,
             call_kwargs=call_kwargs,
+            call_input_snapshots=call_input_snapshots,
         )
         hook_context = make_hook_context(
             name=_hook_display_name(normalized_entry),
@@ -555,6 +564,7 @@ def _hook_call_inputs_for_site(
     site: Any,
     call_args: tuple[Any, ...],
     call_kwargs: dict[str, Any] | None,
+    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Return the positional and keyword inputs for one hook fire.
 
@@ -568,6 +578,8 @@ def _hook_call_inputs_for_site(
         Captured positional inputs.
     call_kwargs:
         Captured keyword inputs.
+    call_input_snapshots:
+        Optional pre-execution input snapshots captured for in-place ops.
 
     Returns
     -------
@@ -575,11 +587,217 @@ def _hook_call_inputs_for_site(
         Hook positional and keyword inputs.
     """
 
-    if _input_splice_module_scope(entry.site_target, entry) is None:
+    if not _helper_routes_inputs(entry.helper_spec):
         return call_args, dict(call_kwargs or {})
     if not getattr(site, "_tl_module_boundary", False):
+        if bool(getattr(site, "is_inplace", False)) and call_input_snapshots is not None:
+            return call_input_snapshots
         return call_args, dict(call_kwargs or {})
     return call_args, dict(call_kwargs or {})
+
+
+def snapshot_call_inputs_for_inplace_intervention_site(
+    *,
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    trace: Any,
+    func_call_id: int,
+) -> tuple[tuple[Any, ...], dict[str, Any]] | None:
+    """Snapshot call inputs when an in-place op has a matching input-routed hook.
+
+    Parameters
+    ----------
+    func_name:
+        Decorated torch function name about to execute.
+    args:
+        Positional call inputs before execution.
+    kwargs:
+        Keyword call inputs before execution.
+    trace:
+        Active trace, used for predicate-intervention options.
+    func_call_id:
+        Function-call id allocated by the torch wrapper.
+
+    Returns
+    -------
+    tuple[tuple[Any, ...], dict[str, Any]] | None
+        Recursive tensor clones of the call inputs when a post-execution hook
+        may read an in-place op's semantic inputs, otherwise ``None``.
+    """
+
+    if not _is_inplace_style_func_name(func_name):
+        return None
+    if not _has_matching_input_routed_intervention(
+        func_name=func_name,
+        trace=trace,
+        func_call_id=func_call_id,
+    ):
+        return None
+    with pause_logging():
+        return tuple(copy_arg_tree(arg) for arg in args), {
+            key: copy_arg_tree(value) for key, value in kwargs.items()
+        }
+
+
+def _is_inplace_style_func_name(func_name: str) -> bool:
+    """Return whether ``func_name`` follows TorchLens' in-place op naming rules.
+
+    Parameters
+    ----------
+    func_name:
+        Decorated torch function name.
+
+    Returns
+    -------
+    bool
+        Whether the function is a candidate in-place op before execution.
+    """
+
+    return (
+        func_name.endswith("_")
+        or func_name.startswith("__i")
+        or func_name in {"__setitem__", "__delitem__", "zero_"}
+    )
+
+
+def _has_matching_input_routed_intervention(
+    *,
+    func_name: str,
+    trace: Any,
+    func_call_id: int,
+) -> bool:
+    """Return whether the current in-place op needs pre-execution input snapshots.
+
+    Parameters
+    ----------
+    func_name:
+        Decorated torch function name.
+    trace:
+        Active trace.
+    func_call_id:
+        Function-call id allocated by the torch wrapper.
+
+    Returns
+    -------
+    bool
+        Whether any active post-hook or ``tl.when`` predicate hook routes the
+        current op's inputs through the post-hook execution path.
+    """
+
+    site = _provisional_inplace_site(func_name, trace, func_call_id)
+    hook_plan = _state._active_hook_plan
+    if hook_plan:
+        for entry in hook_plan:
+            normalized_entry = _coerce_hook_entry(entry)
+            if _entry_needs_input_snapshot(normalized_entry, site):
+                return True
+
+    options = getattr(trace, "_predicate_save_options", None)
+    intervene = None if options is None else getattr(options, "intervene", None)
+    if intervene is None:
+        return False
+    selector = getattr(intervene, "selector", None)
+    decision = getattr(intervene, "decision", None)
+    hook = None if decision is None else getattr(decision, "hook", None)
+    if selector is None or hook is None:
+        return False
+    if not _helper_routes_inputs(hook):
+        return False
+    if getattr(decision, "direction", "forward") not in {"forward", "both"}:
+        return False
+    return live_selector_matches_site(selector, site)
+
+
+def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
+    """Return whether an active hook entry needs an in-place input snapshot.
+
+    Parameters
+    ----------
+    entry:
+        Normalized hook entry.
+    site:
+        Provisional current-op site.
+
+    Returns
+    -------
+    bool
+        Whether the entry is a matching post-forward input-routed hook.
+    """
+
+    if entry.metadata.get("direction", "forward") != "forward":
+        return False
+    if entry.metadata.get("timing", "post") != "post":
+        return False
+    if not _helper_routes_inputs(entry.helper_spec):
+        return False
+    return live_selector_matches_site(entry.site_target, site)
+
+
+def _helper_routes_inputs(helper: Any | None) -> bool:
+    """Return whether a helper consumes call inputs from ``hook.args``.
+
+    Parameters
+    ----------
+    helper:
+        Helper spec-like object.
+
+    Returns
+    -------
+    bool
+        Whether the helper is ``splice_module(input='in')``.
+    """
+
+    if helper is None or getattr(helper, "name", None) != "splice_module":
+        return False
+    metadata = dict(getattr(helper, "metadata", ()))
+    return metadata.get("input") == "in"
+
+
+def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
+    """Build a selector-matchable site for a not-yet-executed in-place op.
+
+    Parameters
+    ----------
+    func_name:
+        Decorated torch function name.
+    trace:
+        Active trace.
+    func_call_id:
+        Function-call id allocated by the torch wrapper.
+
+    Returns
+    -------
+    Any
+        Minimal live-site proxy for pre-execution selector matching.
+    """
+
+    layer_type = _normalize_func_name(func_name)
+    raw_index = int(getattr(trace, "_layer_counter", 0)) + 1
+    type_index = int(getattr(trace, "_raw_layer_type_counter", {}).get(layer_type, 0)) + 1
+    raw_label = f"{layer_type}_{type_index}_{raw_index}_raw"
+    return SimpleNamespace(
+        layer_label=raw_label,
+        _layer_label_raw=raw_label,
+        _label_raw=raw_label,
+        raw_index=raw_index,
+        layer_type=layer_type,
+        func_name=func_name,
+        func_call_id=func_call_id,
+        container_path=(),
+        module=None,
+        modules=(),
+        output_of_module_calls=(),
+        output_of_modules=(),
+        _tl_module_boundary=False,
+        is_transform=False,
+        transform_kind=None,
+        transform_chain=(),
+        transform_config={},
+        is_inplace=True,
+        call_index=1,
+        lookup_keys=[],
+    )
 
 
 def _input_splice_module_scope(site_target: Any, entry: NormalizedHookEntry) -> str | None:

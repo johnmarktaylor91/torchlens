@@ -17,6 +17,7 @@ from torchlens.intervention.errors import (
     SpliceModuleDtypeError,
 )
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
+from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.runtime import _execute_hook
 from torchlens.intervention.sites import sites
 from torchlens.intervention.types import HelperSpec
@@ -574,3 +575,162 @@ def test_splice_module_input_preserves_common_op_arg_orders() -> None:
     assert any(torch.equal(out, torch.tensor([[15.0, 13.0]])) for out in outputs)
     assert any(torch.equal(out, torch.tensor([[16.0, 18.0]])) for out in outputs)
     assert any(torch.equal(out, torch.tensor([[2.0, 3.0, 5.0, 7.0]])) for out in outputs)
+
+
+def test_intervene_input_splice_on_inplace_relu_receives_pre_mutation_values() -> None:
+    """Input-routed post-hook intervention on ``relu_`` receives semantic inputs."""
+
+    class _DoubleAndRecord(torch.nn.Module):
+        """Replacement module that records the input values it receives."""
+
+        def __init__(self) -> None:
+            """Initialize the recorder."""
+
+            super().__init__()
+            self.seen: list[torch.Tensor] = []
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Record and double ``x``."""
+
+            self.seen.append(x.detach().clone())
+            return x * 2
+
+    class _InplaceReluModel(torch.nn.Module):
+        """Model with a downstream consumer after an in-place relu."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run an in-place relu and consume its replacement."""
+
+            y = x * 1
+            y = torch.relu_(y)
+            return y + 1
+
+    replacement = _DoubleAndRecord()
+    x = torch.tensor([[-2.0, 3.0]])
+
+    log = tl.trace(
+        _InplaceReluModel().eval(),
+        x,
+        intervene=tl.when(tl.func("relu_"), tl.splice_module(replacement)),
+    )
+
+    assert len(replacement.seen) == 1
+    assert torch.equal(replacement.seen[0], x)
+    assert torch.equal(log[log.output_layers[0]].out, x * 2 + 1)
+
+
+def test_intervene_input_splice_on_relu_matches_inplace_semantics() -> None:
+    """Input-routed post-hook intervention on ``relu`` matches ``relu_`` semantics."""
+
+    class _DoubleAndRecord(torch.nn.Module):
+        """Replacement module that records the input values it receives."""
+
+        def __init__(self) -> None:
+            """Initialize the recorder."""
+
+            super().__init__()
+            self.seen: list[torch.Tensor] = []
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Record and double ``x``."""
+
+            self.seen.append(x.detach().clone())
+            return x * 2
+
+    class _ReluModel(torch.nn.Module):
+        """Model with a downstream consumer after an out-of-place relu."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run an out-of-place relu and consume its replacement."""
+
+            y = x * 1
+            y = torch.relu(y)
+            return y + 1
+
+    replacement = _DoubleAndRecord()
+    x = torch.tensor([[-2.0, 3.0]])
+
+    log = tl.trace(
+        _ReluModel().eval(),
+        x,
+        intervene=tl.when(tl.func("relu"), tl.splice_module(replacement)),
+    )
+
+    assert len(replacement.seen) == 1
+    assert torch.equal(replacement.seen[0], x)
+    assert torch.equal(log[log.output_layers[0]].out, x * 2 + 1)
+
+
+def test_plain_trace_of_inplace_relu_does_not_snapshot_intervention_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Plain traces of in-place ops do not clone intervention input snapshots."""
+
+    class _InplaceReluModel(torch.nn.Module):
+        """Model with an in-place relu."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run an in-place relu."""
+
+            y = x * 1
+            return torch.relu_(y)
+
+    calls = 0
+    original = intervention_runtime.copy_arg_tree
+
+    def _counting_copy_arg_tree(arg: Any) -> Any:
+        """Count intervention snapshot clones."""
+
+        nonlocal calls
+        calls += 1
+        return original(arg)
+
+    monkeypatch.setattr(intervention_runtime, "copy_arg_tree", _counting_copy_arg_tree)
+
+    tl.trace(_InplaceReluModel().eval(), torch.tensor([[-2.0, 3.0]]))
+
+    assert calls == 0
+
+
+def test_intervention_on_different_op_does_not_snapshot_inplace_relu_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Input-routed intervention on another op leaves in-place relu unsnapshotted."""
+
+    class _Double(torch.nn.Module):
+        """Replacement module that doubles its input."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Double ``x``."""
+
+            return x * 2
+
+    class _InplaceReluThenSigmoidModel(torch.nn.Module):
+        """Model with an in-place op and a separately targeted op."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run relu_ followed by sigmoid."""
+
+            y = x * 1
+            y = torch.relu_(y)
+            return torch.sigmoid(y)
+
+    calls = 0
+    original = intervention_runtime.copy_arg_tree
+
+    def _counting_copy_arg_tree(arg: Any) -> Any:
+        """Count intervention snapshot clones."""
+
+        nonlocal calls
+        calls += 1
+        return original(arg)
+
+    monkeypatch.setattr(intervention_runtime, "copy_arg_tree", _counting_copy_arg_tree)
+
+    tl.trace(
+        _InplaceReluThenSigmoidModel().eval(),
+        torch.tensor([[-2.0, 3.0]]),
+        intervene=tl.when(tl.func("sigmoid"), tl.splice_module(_Double())),
+    )
+
+    assert calls == 0

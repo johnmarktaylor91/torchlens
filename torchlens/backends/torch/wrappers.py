@@ -920,6 +920,15 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             func_call_id=func_call_id,
             event_index=func_call_id,
         )
+        from ...intervention.runtime import snapshot_call_inputs_for_inplace_intervention_site
+
+        call_input_snapshots = snapshot_call_inputs_for_inplace_intervention_site(
+            func_name=func_name,
+            args=args,
+            kwargs=kwargs,
+            trace=trace,
+            func_call_id=func_call_id,
+        )
         nvtx_pushed = (
             _nvtx_range_push(f"torchlens::{func_name}")
             if getattr(trace, "emit_nvtx", False)
@@ -977,6 +986,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             exec_ctx,
             is_bottom_level_func,
             func_call_id,
+            call_input_snapshots,
         )
 
         # Log all output tensors (excluding Parameters, which are source tensors).
