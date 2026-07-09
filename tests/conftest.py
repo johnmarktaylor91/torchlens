@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 from os.path import join as opj
@@ -10,6 +11,15 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from torchlens import _state  # noqa: E402
+
+# Menagerie tests exercise the menagerie/ build subsystem, which carries its own
+# dependency stack (pydantic, ...) outside torchlens's core install. On lean envs
+# (e.g. CI smoke) where those deps are absent, skip collecting them so the menagerie
+# import chain can't abort collection of the core suite. They still run wherever the
+# menagerie deps are installed (local / full test env).
+collect_ignore_glob = []
+if importlib.util.find_spec("pydantic") is None:
+    collect_ignore_glob.append("test_menagerie_*.py")
 
 # Deterministic seeding
 torch.manual_seed(0)
