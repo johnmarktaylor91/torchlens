@@ -16,6 +16,7 @@ DOC_FILES = (
     "reference/debug.md",
     "reference/export.md",
     "reference/attribution.md",
+    "reference/collapse.md",
 )
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 
@@ -84,3 +85,15 @@ def test_p2_doc_python_block_runs(
         "DOCS_TMPDIR": str(tmp_path),
     }
     exec(compile(code, synthetic_filename, "exec"), namespace)
+
+
+def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
+    """Keep visual-reference links and the render-script manifest aligned."""
+
+    from scripts.render_collapse_reference import DEFAULT_OUT_DIR, IMAGE_NAMES
+
+    page = (_docs_dir() / "reference" / "collapse.md").read_text(encoding="utf-8")
+    linked_names = tuple(re.findall(r"\.\./images/collapse/([^)]*\.svg)", page))
+    assert linked_names == IMAGE_NAMES
+    missing = [name for name in IMAGE_NAMES if not (DEFAULT_OUT_DIR / name).is_file()]
+    assert not missing, f"Regenerate with scripts/render_collapse_reference.py: {missing}"
