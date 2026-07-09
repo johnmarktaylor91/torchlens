@@ -247,10 +247,9 @@ def unwrap_compiled_submodules(model: nn.Module) -> Iterator[None]:
             swap.parent._modules[swap.name] = swap.compiled_module
         raise
 
-    if swaps:
-        _warn_compiled_model_unwrapped_once()
-
     try:
+        if swaps:
+            _warn_compiled_model_unwrapped_once()
         yield
     finally:
         for swap in reversed(swaps):
