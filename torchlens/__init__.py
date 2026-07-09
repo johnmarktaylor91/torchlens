@@ -11,123 +11,122 @@ from __future__ import annotations
 
 import functools as _functools
 import importlib as _importlib
+import inspect as _inspect
+import sys as _sys
+import types as _types
 from collections.abc import Callable as _Callable, Iterable as _Iterable, Mapping as _Mapping
 from pathlib import Path as _Path
 import warnings as _warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch as _torch
 from torch import nn as _nn
 
 __version__ = "2.30.1"
 
-from . import fastlog
 from .captured_run import ActivationLookup, CapturedRun
-from .data_classes.layer import Layer
-from .data_classes.container import Container
-from .data_classes.op import Op
 from ._errors import AmbiguousOpLookupError
 from ._state import ReentrantTraceError
-from .data_classes.trace import Trace
-from .fastlog import Recording, record
-from .intervention import (  # type: ignore[no-redef]
-    Bundle,
-    add,
-    bwd_hook,
-    clamp,
-    contains,
-    do,
-    facet,
-    func,
-    func_transform,
-    followed_by,
-    grad_clamp,
-    grad_clip,
-    grad_fn,
-    grad_input,
-    head,
-    input_at,
-    grad_output,
-    grad_noise,
-    grad_scale,
-    grad_zero,
-    in_backward_pass,
-    in_module,
-    intervening,
-    label,
-    mean_ablate,
-    module,
-    noise,
-    output,
-    output_at,
-    preceded_by,
-    project_off,
-    project_onto,
-    push,
-    push_from,
-    regex,
-    replace_with,
-    replay,
-    replay_from,
-    rerun,
-    resample_ablate,
-    run,
-    scale,
-    splice_module,
-    steer,
-    swap_with,
-    where,
-    when,
-    without_op,
-    zero_ablate,
-)
-from .intervention.sweep import sweep
 from .ir.container import register_container
-from .user_funcs import (
-    decide_recording_of_batch,
-    trace as _trace,
-    record_kpi_in_graph,
-    register_tensor_connection,
-    draw_backward as _moved_draw_backward,
-    draw_combined as _moved_draw_combined,
-    show_bundle_graph,
-    show_model_graph as _moved_show_model_graph,
-    summary as _moved_summary,
-    validate_backward_pass as _moved_validate_backward_pass,
-    validate_forward_pass as _moved_validate_forward_pass,
-    validate_saved_outs as _moved_validate_saved_outs,
-)
-from .backends import BackendName
 from .observers import record_span, span, tap
 from . import options
 from .options import CaptureOptions as _CaptureOptions
 from .options import to_disk
-from .intervention import load_intervention_spec as _moved_load_intervention_spec
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
+
+if TYPE_CHECKING:
+    from .backends import BackendName
+    from .data_classes.trace import Trace
+    from .intervention import Bundle
 
 _REMOVED_IN = "a future 2.x release"
 
 _LAZY_ATTRS = {
+    "Bundle": ("torchlens.intervention", "Bundle"),
+    "Container": ("torchlens.data_classes.container", "Container"),
     "JaxPayloadLoadHint": ("torchlens._io", "JaxPayloadLoadHint"),
+    "Layer": ("torchlens.data_classes.layer", "Layer"),
+    "Op": ("torchlens.data_classes.op", "Op"),
     "PayloadLoadHints": ("torchlens._io", "PayloadLoadHints"),
+    "Recording": ("torchlens.fastlog", "Recording"),
+    "Trace": ("torchlens.data_classes.trace", "Trace"),
+    "add": ("torchlens.intervention", "add"),
     "aggregate": ("torchlens.stats", "aggregate"),
     "attribution": ("torchlens.attribution", None),
+    "bwd_hook": ("torchlens.intervention", "bwd_hook"),
+    "clamp": ("torchlens.intervention", "clamp"),
     "compat": ("torchlens.compat", None),
+    "contains": ("torchlens.intervention", "contains"),
+    "decide_recording_of_batch": ("torchlens.user_funcs", "decide_recording_of_batch"),
     "debug": ("torchlens.debug", None),
+    "data_classes": ("torchlens.data_classes", None),
+    "do": ("torchlens.intervention", "do"),
     "examples": ("torchlens.examples", None),
     "experimental": ("torchlens.experimental", None),
     "export": ("torchlens.export", None),
     "facets": ("torchlens.semantic", "facets"),
+    "fastlog": ("torchlens.fastlog", None),
+    "facet": ("torchlens.intervention", "facet"),
+    "followed_by": ("torchlens.intervention", "followed_by"),
+    "func": ("torchlens.intervention", "func"),
+    "func_transform": ("torchlens.intervention", "func_transform"),
+    "grad_clamp": ("torchlens.intervention", "grad_clamp"),
+    "grad_clip": ("torchlens.intervention", "grad_clip"),
+    "grad_fn": ("torchlens.intervention", "grad_fn"),
+    "grad_input": ("torchlens.intervention", "grad_input"),
+    "grad_noise": ("torchlens.intervention", "grad_noise"),
+    "grad_output": ("torchlens.intervention", "grad_output"),
+    "grad_scale": ("torchlens.intervention", "grad_scale"),
+    "grad_zero": ("torchlens.intervention", "grad_zero"),
+    "head": ("torchlens.intervention", "head"),
+    "in_backward_pass": ("torchlens.intervention", "in_backward_pass"),
+    "in_module": ("torchlens.intervention", "in_module"),
+    "input_at": ("torchlens.intervention", "input_at"),
+    "intervening": ("torchlens.intervention", "intervening"),
+    "intervention": ("torchlens.intervention", None),
     "io": ("torchlens.io", None),
     "load": ("torchlens._io.bundle", "load"),
+    "label": ("torchlens.intervention", "label"),
+    "mean_ablate": ("torchlens.intervention", "mean_ablate"),
+    "module": ("torchlens.intervention", "module"),
+    "noise": ("torchlens.intervention", "noise"),
+    "output": ("torchlens.intervention", "output"),
+    "output_at": ("torchlens.intervention", "output_at"),
     "partial": ("torchlens.partial", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
+    "preceded_by": ("torchlens.intervention", "preceded_by"),
+    "project_off": ("torchlens.intervention", "project_off"),
+    "project_onto": ("torchlens.intervention", "project_onto"),
+    "push": ("torchlens.intervention", "push"),
+    "push_from": ("torchlens.intervention", "push_from"),
+    "record": ("torchlens.fastlog", "record"),
+    "record_kpi_in_graph": ("torchlens.user_funcs", "record_kpi_in_graph"),
+    "regex": ("torchlens.intervention", "regex"),
+    "register_tensor_connection": ("torchlens.user_funcs", "register_tensor_connection"),
+    "replace_with": ("torchlens.intervention", "replace_with"),
+    "replay": ("torchlens.intervention", "replay"),
+    "replay_from": ("torchlens.intervention", "replay_from"),
+    "rerun": ("torchlens.intervention", "rerun"),
+    "resample_ablate": ("torchlens.intervention", "resample_ablate"),
+    "run": ("torchlens.intervention", "run"),
     "save": ("torchlens._io.bundle", "save"),
+    "scale": ("torchlens.intervention", "scale"),
+    "show_bundle_graph": ("torchlens.user_funcs", "show_bundle_graph"),
+    "splice_module": ("torchlens.intervention", "splice_module"),
     "stats": ("torchlens.stats", None),
+    "steer": ("torchlens.intervention", "steer"),
+    "sweep": ("torchlens.intervention.sweep", "sweep"),
+    "swap_with": ("torchlens.intervention", "swap_with"),
+    "trace": ("torchlens.user_funcs", "trace"),
+    "user_funcs": ("torchlens.user_funcs", None),
     "validate": ("torchlens.validation.consolidated", "validate"),
     "validation": ("torchlens.validation", None),
     "viz": ("torchlens.viz", None),
+    "when": ("torchlens.intervention", "when"),
+    "where": ("torchlens.intervention", "where"),
+    "without_op": ("torchlens.intervention", "without_op"),
+    "zero_ablate": ("torchlens.intervention", "zero_ablate"),
 }
 
 _MOVED_OBJECTS = {
@@ -217,6 +216,42 @@ def _resolve_top_level(name: str) -> Any:
     if name in globals():
         return globals()[name]
     return __getattr__(name)
+
+
+def _user_func(name: str) -> Any:
+    """Return a user-facing function without importing it during package initialization.
+
+    Parameters
+    ----------
+    name:
+        Attribute to retrieve from :mod:`torchlens.user_funcs`.
+
+    Returns
+    -------
+    Any
+        Requested user-facing callable.
+    """
+
+    return getattr(_importlib.import_module("torchlens.user_funcs"), name)
+
+
+def _moved_load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
+    """Lazily delegate the deprecated intervention-spec loader.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Arguments forwarded to :func:`torchlens.io.load_intervention_spec`.
+
+    Returns
+    -------
+    Any
+        Loaded intervention specification.
+    """
+
+    return getattr(_importlib.import_module("torchlens.io"), "load_intervention_spec")(
+        *args, **kwargs
+    )
 
 
 def _sync_validation_wrapper_metadata(validation_module: Any) -> None:
@@ -318,16 +353,16 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
             kwargs.setdefault("scope", "saved")
             return _resolve_top_level("validate")(*args, **kwargs)
         if name in {"render_graph", "render_model_graph", "draw_model_graph"}:
-            if args and isinstance(args[0], Trace):
+            if args and isinstance(args[0], _resolve_top_level("Trace")):
                 return args[0].draw(*args[1:], **kwargs)
-            return _moved_show_model_graph(*args, **kwargs)
+            return _user_func("show_model_graph")(*args, **kwargs)
         if name in {"get_model_structure", "show_model_structure"}:
             kwargs.setdefault("layers_to_save", None)
-            structure_trace = _trace(*args, **kwargs)
+            structure_trace = _resolve_top_level("trace")(*args, **kwargs)
             return structure_trace.modules
         if name == "get_model_activations":
             return extract(*args, **kwargs)
-        return _trace(*args, **kwargs)
+        return _resolve_top_level("trace")(*args, **kwargs)
 
     _shim.__name__ = name
     _shim.__qualname__ = name
@@ -368,7 +403,7 @@ def __getattr__(name: str) -> Any:
         replacement, shim_kind = _LEGACY_API_SHIMS[name]
         _warn_legacy_api_name(name, replacement)
         if shim_kind == "class":
-            return Trace
+            return _resolve_top_level("Trace")
         return _legacy_trace_alias(name, replacement)
     if name in _MOVED_OBJECTS:
         new_module_path, new_attr = _MOVED_OBJECTS[name]
@@ -532,7 +567,7 @@ def pluck(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) 
     from .experimental import _active_stop_after_site
 
     _ = stop_after if stop_after is not None else _active_stop_after_site()
-    trace = _trace(
+    trace = _resolve_top_level("trace")(
         model,
         x,
         capture=_CaptureOptions(layers_to_save=[layer]),
@@ -584,7 +619,7 @@ def extract(
     """
 
     layer_plan = _normalize_extract_layers(layers)
-    trace = _trace(
+    trace = _resolve_top_level("trace")(
         model,
         x,
         capture=_CaptureOptions(
@@ -828,7 +863,6 @@ def batched_extract(
     )
 
 
-@_functools.wraps(_moved_validate_forward_pass)
 def validate_forward_pass(
     model: _nn.Module,
     input_args: Any,
@@ -864,7 +898,6 @@ def validate_forward_pass(
     )
 
 
-@_functools.wraps(_moved_validate_backward_pass)
 def validate_backward_pass(
     model: _nn.Module,
     input_args: Any,
@@ -911,7 +944,6 @@ def validate_backward_pass(
     )
 
 
-@_functools.wraps(_moved_validate_saved_outs)
 def validate_saved_outs(
     model: _nn.Module,
     input_args: Any,
@@ -944,7 +976,6 @@ def validate_saved_outs(
     )
 
 
-@_functools.wraps(_moved_summary)
 def summary(*args: Any, **kwargs: Any) -> Any:
     """Deprecated top-level wrapper for ``torchlens.visualization.summary``.
 
@@ -955,10 +986,9 @@ def summary(*args: Any, **kwargs: Any) -> Any:
     """
 
     _warn_moved_name("summary", "torchlens.visualization", "summary")
-    return _moved_summary(*args, **kwargs)
+    return _user_func("summary")(*args, **kwargs)
 
 
-@_functools.wraps(_moved_show_model_graph)
 def show_model_graph(*args: Any, **kwargs: Any) -> Any:
     """Deprecated top-level wrapper for ``torchlens.visualization.show_model_graph``.
 
@@ -969,10 +999,9 @@ def show_model_graph(*args: Any, **kwargs: Any) -> Any:
     """
 
     _warn_moved_name("show_model_graph", "torchlens.visualization", "show_model_graph")
-    return _moved_show_model_graph(*args, **kwargs)
+    return _user_func("show_model_graph")(*args, **kwargs)
 
 
-@_functools.wraps(_moved_draw_backward)
 def draw_backward(*args: Any, **kwargs: Any) -> Any:
     """Deprecated top-level wrapper for ``torchlens.visualization.draw_backward``.
 
@@ -983,10 +1012,9 @@ def draw_backward(*args: Any, **kwargs: Any) -> Any:
     """
 
     _warn_moved_name("draw_backward", "torchlens.visualization", "draw_backward")
-    return _moved_draw_backward(*args, **kwargs)
+    return _user_func("draw_backward")(*args, **kwargs)
 
 
-@_functools.wraps(_moved_draw_combined)
 def draw_combined(*args: Any, **kwargs: Any) -> Any:
     """Deprecated top-level wrapper for ``torchlens.visualization.draw_combined``.
 
@@ -997,7 +1025,7 @@ def draw_combined(*args: Any, **kwargs: Any) -> Any:
     """
 
     _warn_moved_name("draw_combined", "torchlens.visualization", "draw_combined")
-    return _moved_draw_combined(*args, **kwargs)
+    return _user_func("draw_combined")(*args, **kwargs)
 
 
 def bundle(*args: Any, **kwargs: Any) -> Bundle:
@@ -1014,10 +1042,36 @@ def bundle(*args: Any, **kwargs: Any) -> Bundle:
         Constructed Bundle.
     """
 
-    return Bundle(*args, **kwargs)
+    return _resolve_top_level("Bundle")(*args, **kwargs)
 
 
-@_functools.wraps(_moved_load_intervention_spec)
+class _TorchLensModule(_types.ModuleType):
+    """Protect top-level callables whose names collide with submodules."""
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Keep the public ``bundle`` constructor after its package is imported.
+
+        Parameters
+        ----------
+        name:
+            Attribute name being assigned by Python's import machinery or a caller.
+        value:
+            Value being assigned.
+        """
+
+        if (
+            name == "bundle"
+            and isinstance(value, _types.ModuleType)
+            and value.__name__ == "torchlens.bundle"
+            and callable(self.__dict__.get(name))
+        ):
+            return
+        super().__setattr__(name, value)
+
+
+_sys.modules[__name__].__class__ = _TorchLensModule
+
+
 def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
     """Deprecated top-level wrapper for ``torchlens.io.load_intervention_spec``.
 
@@ -1031,7 +1085,30 @@ def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
     return _moved_load_intervention_spec(*args, **kwargs)
 
 
-trace = _trace
+def _set_variadic_wrapper_signature(wrapper: _Callable[..., Any], return_annotation: Any) -> None:
+    """Set the public signature for a lazily delegated variadic wrapper.
+
+    Parameters
+    ----------
+    wrapper:
+        Wrapper whose canonical target is intentionally deferred.
+    return_annotation:
+        Return annotation from the canonical target.
+    """
+
+    wrapper.__signature__ = _inspect.Signature(
+        parameters=(
+            _inspect.Parameter("args", _inspect.Parameter.VAR_POSITIONAL, annotation=Any),
+            _inspect.Parameter("kwargs", _inspect.Parameter.VAR_KEYWORD, annotation=Any),
+        ),
+        return_annotation=return_annotation,
+    )
+
+
+_set_variadic_wrapper_signature(summary, None)
+_set_variadic_wrapper_signature(show_model_graph, None)
+_set_variadic_wrapper_signature(draw_backward, str)
+_set_variadic_wrapper_signature(draw_combined, str)
 
 
 __all__ = [

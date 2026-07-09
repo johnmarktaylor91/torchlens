@@ -3,11 +3,74 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import torch
+
+
+_LAZY_MODULE_CASES = (
+    ("fastlog", "record"),
+    ("intervention", "func"),
+    ("user_funcs", "trace"),
+    ("data_classes", "Buffer"),
+)
+
+
+def _run_import_script(script: str) -> None:
+    """Run an import assertion against this checkout in a fresh interpreter.
+
+    Parameters
+    ----------
+    script:
+        Python source containing assertions for one import pattern.
+    """
+
+    project_root = Path(__file__).resolve().parents[1]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(project_root)
+    subprocess.run([sys.executable, "-c", script], check=True, env=environment)
+
+
+@pytest.mark.parametrize(("module_name", "member_name"), _LAZY_MODULE_CASES)
+def test_lazified_module_top_level_access_patterns(module_name: str, member_name: str) -> None:
+    """Top-level attributes and from-imports should load each deferred module."""
+
+    _run_import_script(
+        "import torchlens as tl; "
+        f"module = tl.{module_name}; "
+        f"from torchlens import {module_name} as imported_module; "
+        "assert module is imported_module; "
+        f"assert hasattr(module, {member_name!r})"
+    )
+
+
+@pytest.mark.parametrize(("module_name", "member_name"), _LAZY_MODULE_CASES)
+def test_lazified_module_direct_import_patterns(module_name: str, member_name: str) -> None:
+    """Direct submodule and member imports should work from a bare package import."""
+
+    _run_import_script(
+        "import importlib; "
+        "import torchlens; "
+        f"module = importlib.import_module('torchlens.{module_name}'); "
+        f"from torchlens.{module_name} import {member_name}; "
+        f"assert getattr(module, {member_name!r}) is {member_name}"
+    )
+
+
+def test_bare_import_defers_lazified_feature_modules() -> None:
+    """Bare imports must not eagerly initialize the deferred feature islands."""
+
+    _run_import_script(
+        "import sys; import torchlens; "
+        "blocked = ('torchlens.fastlog', 'torchlens.intervention', "
+        "'torchlens.user_funcs', 'torchlens.data_classes'); "
+        "assert not any(name == prefix or name.startswith(prefix + '.') "
+        "for prefix in blocked for name in sys.modules)"
+    )
 
 
 def test_import_torchlens_does_not_import_torchvision_when_installed() -> None:
