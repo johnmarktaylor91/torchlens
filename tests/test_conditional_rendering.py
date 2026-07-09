@@ -272,6 +272,33 @@ def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
             trace.cleanup()
 
 
+def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
+    """Condition-entry edges label the first test ``IF`` and each later test ``ELIF``.
+
+    Distinct from the arm-entry labels (THEN/ELIF N/ELSE): these are the edges entering each
+    branch *test*. Historically every one was hardcoded ``IF``; an if/elif ladder must show
+    ``IF`` for the leading test and ``ELIF`` for every subsequent one.
+    """
+    dot_source, trace = _render_dot_source(ElifLadderModel(), torch.tensor([[0.25]]))
+    try:
+        # bool_layers is ordered [if_bool, elif_1_bool, elif_2_bool]; the mean feeding each
+        # bool is that test's condition-entry child.
+        bool_layers = trace.conditional_records[0].bool_layers
+        expected_by_bool = {bl: ("IF" if i == 0 else "ELIF") for i, bl in enumerate(bool_layers)}
+        # map each condition-entry child (mean_N) to its downstream bool via the single child
+        for parent_label, child_label in trace.conditional_branch_edges:
+            downstream = trace[child_label].children[0]
+            expected = expected_by_bool[downstream]
+            edge_line = _find_edge_line(dot_source, parent_label, child_label)
+            assert expected in edge_line, f"{child_label} -> expected {expected}, line: {edge_line}"
+        # sanity: exactly one IF, and at least one ELIF (it is a ladder)
+        kinds = [expected_by_bool[trace[c].children[0]] for _, c in trace.conditional_branch_edges]
+        assert kinds.count("IF") == 1
+        assert kinds.count("ELIF") == len(kinds) - 1
+    finally:
+        trace.cleanup()
+
+
 def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
     """Ternary rendering uses THEN/ELSE labels for ``ifexp`` arms."""
     positive_dot, positive_log = _render_dot_source(BasicTernaryModel(), torch.ones(2, 2))

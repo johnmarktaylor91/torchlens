@@ -2,7 +2,13 @@
 
 # ruff: noqa: F403, F405
 
+from collections import deque
+
 from ._render_common import *
+
+# Bound the forward walk that maps a branch-entry edge to its condition bool, so a
+# malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
+_BRANCH_KIND_SEARCH_LIMIT = 256
 
 
 def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
@@ -1374,7 +1380,7 @@ def _compute_edge_label(
         return _format_branch_edge_label_html(arm_label)
 
     if _edge_is_conditional_branch(parent_node, child_node, trace, vis_mode):
-        return _format_branch_edge_label_html("IF")
+        return _format_branch_edge_label_html(_conditional_branch_edge_kind(child_node, trace))
 
     return None
 
@@ -1709,6 +1715,59 @@ def _branch_kind_sort_key(branch_kind: str) -> int:
     if branch_kind == "else":
         return 10**6
     return 10**9
+
+
+def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trace") -> str:
+    """Return the branch-test kind (``IF`` or ``ELIF``) for a branch-entry edge.
+
+    ``conditional_branch_edges`` records the edges that enter each condition test but carries
+    no kind, so a naive renderer labels every test ``IF`` -- wrong for an if/elif ladder where
+    only the first test is the ``if`` and the rest are ``elif``. The authoritative order lives
+    on ``conditional_records[*].bool_layers`` (``[if_bool, elif_1_bool, ...]``; ``else`` has no
+    test). Map the edge's child (the condition-subgraph entry op) to the nearest downstream
+    branch bool via a bounded forward walk, then read its position: index 0 -> ``IF``, any
+    later index -> ``ELIF``.
+
+    Parameters
+    ----------
+    child_node:
+        Destination node of the branch-entry edge (the condition-subgraph entry).
+    trace:
+        Owning trace with ``conditional_records`` metadata.
+
+    Returns
+    -------
+    str
+        ``"IF"`` or ``"ELIF"`` (falls back to ``"IF"`` if no bool is reachable).
+    """
+    bool_kind: dict[str, str] = {}
+    for event in getattr(trace, "conditional_records", ()) or ():
+        for position, bool_label in enumerate(getattr(event, "bool_layers", ()) or ()):
+            bool_kind.setdefault(bool_label.split(":", 1)[0], "IF" if position == 0 else "ELIF")
+    if not bool_kind:
+        return "IF"
+
+    start = child_node.layer_label.split(":", 1)[0]
+    seen: set[str] = {start}
+    frontier = deque([start])
+    steps = 0
+    while frontier and steps < _BRANCH_KIND_SEARCH_LIMIT:
+        steps += 1
+        current = frontier.popleft()
+        if current in bool_kind:
+            return bool_kind[current]
+        # ``label in trace`` disagrees with ``trace[label]`` for some intermediate
+        # condition ops, so resolve by indexing and treat a miss as a dead end.
+        try:
+            node = trace[current]
+        except (KeyError, ValueError):
+            continue
+        for child_label in getattr(node, "children", ()):
+            base = child_label.split(":", 1)[0]
+            if base not in seen:
+                seen.add(base)
+                frontier.append(base)
+    return "IF"
 
 
 def _edge_is_conditional_branch(
