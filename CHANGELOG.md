@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v2.29.1 (2026-07-09)
+
+### Bug Fixes
+
+- **menagerie,tests**: Egnn F507 format bugs + guard torchvision imports for lean CI
+  ([`6d676df`](https://github.com/johnmarktaylor91/torchlens/commit/6d676df2e330b4feb76d56ff78365a90955eb0a0))
+
+Post-merge CI parity: (1) fix 4 identical F507 `%`-format bugs in the EGNN classics (rs_L642_2_enqa,
+  rs_L643_2_fabind, rs_L643_3_fabflex, rs_L648_1_mean) -- `"Wrong coords_agg parameter" %
+  self.coords_agg` had no placeholder and would TypeError if hit; (2) guard the module-level
+  torchvision imports in test_auto_collapse_metrics, test_collapse_optimizer, and
+  test_s5_render_identity_harness with pytest.importorskip (matching the repo's lean-CI +
+  importorskip convention for mlx/paddle/pandas/transformers), so smoke collection no longer aborts
+  where torchvision (an optional vision-shims extra) is absent.
+
+### Code Style
+
+- Auto-format with ruff
+  ([`754cc14`](https://github.com/johnmarktaylor91/torchlens/commit/754cc1430e63e3ffc72e29f4529f22b62ef9e599))
+
+
 ## v2.29.0 (2026-07-09)
 
 ### Bug Fixes
