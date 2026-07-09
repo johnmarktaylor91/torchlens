@@ -69,7 +69,7 @@ Forward helpers return `HelperSpec` objects that can be passed to `set`,
 | `tl.project_onto` | `project_onto(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
 | `tl.project_off` | `project_off(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
 | `tl.swap_with` | `swap_with(other_label, *, force_shape_change=False)` | Tensor and Op-like (`.out`) sources work in memory; **string labels are not supported and raise `HookValueError` immediately** -- no execution path resolves a bare label to another site's tensor today. |
-| `tl.splice_module` | `splice_module(module, *, input="activation", output="activation", force_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
+| `tl.splice_module` | `splice_module(module, *, input="in", output="out", force_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 ## Backward Helpers
 
