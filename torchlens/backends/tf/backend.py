@@ -213,10 +213,8 @@ class TFBackend:
                 output_transform(static_result.output) if callable(output_transform) else None
             )
             trace.capture_events = static_result.events
-            trace._tf_source_records = static_result.source_records
             trace._tf_unresolved_producers = static_result.unresolved_producers
             trace._tf_init_op_labels = static_result.init_op_labels
-            trace._tf_op_type_counts = static_result.op_type_counts
             trace._tf_op_captures = static_result.op_captures
             trace._tf_static_region_labels = static_result.region_captures
             trace._tf_static_fallback_error = static_result.fallback_error
@@ -287,10 +285,8 @@ class TFBackend:
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
         trace.raw_output = output_transform(result.output) if callable(output_transform) else None
         trace.capture_events = result.events
-        trace._tf_source_records = result.source_records
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
-        trace._tf_op_type_counts = result.op_type_counts
         trace._tf_op_captures = result.op_captures
         _mark_outputs(trace, result.output, session.producer_by_ref)
         _reject_collapsed_graph_capture(result.op_type_counts)

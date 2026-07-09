@@ -879,7 +879,6 @@
       "_lookup_keys_to_layer_num_dict",
       "_mlx_capture_depth",
       "_mlx_saved_payloads",
-      "_mlx_type_counts",
       "_mod_call_index",
       "_mod_call_labels",
       "_mod_entered",
@@ -909,8 +908,6 @@
       "_phase_timings",
       "_postprocessing_active",
       "_pre_forward_rng_states",
-      "_predicate_all_contexts",
-      "_predicate_contexts_by_label",
       "_predicate_current_contexts",
       "_predicate_history",
       "_predicate_history_size",
@@ -935,8 +932,6 @@
       "_stop_directive",
       "_tf_init_op_labels",
       "_tf_op_captures",
-      "_tf_op_type_counts",
-      "_tf_source_records",
       "_tf_unresolved_producers",
       "_tf_validation_result",
       "_tl_backward_hooked_tensor_keys",
@@ -1106,13 +1101,13 @@
     ]
   },
   "sha256_chunks": [
-    "2c0184b0",
-    "86a7467c",
-    "a000c850",
-    "c7dae22d",
-    "2a860f86",
-    "e51800d0",
-    "1a10a6ab",
-    "4033f8be"
+    "3beb51bf",
+    "84d0ef63",
+    "3e86d140",
+    "224f2430",
+    "0553afeb",
+    "ff6f4196",
+    "d98d3c34",
+    "999e4a86"
   ]
 }

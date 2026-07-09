@@ -4234,11 +4234,6 @@ def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
         Mutates trace-owned predicate runtime state.
     """
 
-    all_contexts = getattr(trace, "_predicate_all_contexts", None)
-    if all_contexts is None:
-        all_contexts = []
-        trace._predicate_all_contexts = all_contexts
-    all_contexts.append(ctx)
     history_size = int(getattr(trace, "_predicate_history_size", 8))
     if history_size == 0:
         return
