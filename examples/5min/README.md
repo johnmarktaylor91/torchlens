@@ -2,7 +2,7 @@
 
 Read these in this order if you are new to TorchLens:
 
-1. [`peek.ipynb`](peek.ipynb) - Peek your first out in three lines.
+1. [`pluck.ipynb`](pluck.ipynb) - Pluck your first out in three lines.
 2. [`find_first_nan.ipynb`](find_first_nan.ipynb) - Find the first NaN or Inf-producing operation in two lines.
 3. [`visualize.ipynb`](visualize.ipynb) - Render a model graph and learn the layer labels.
 4. [`extract_outs.ipynb`](extract_outs.ipynb) - Extract several layers into a dict of tensors.
