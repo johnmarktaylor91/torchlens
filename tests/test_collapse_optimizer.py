@@ -48,6 +48,7 @@ from torchlens.visualization.collapse_plan import (
     count,
     plan_from_v1,
 )
+from torchlens.visualization._render_common import format_collapsed_module_contents
 
 tvm = pytest.importorskip("torchvision.models")
 
@@ -851,13 +852,25 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         aggregate_params = sum(
             int(getattr(trace.modules[address], "num_params", 0) or 0) for address in fold.addresses
         )
+        representative_label = format_collapsed_module_contents(
+            representative.num_layers,
+            sum(trace[label].is_buffer for label in representative.layer_labels),
+        )
+        aggregate_label = format_collapsed_module_contents(
+            aggregate_layers,
+            sum(
+                trace[label].is_buffer
+                for address in fold.addresses
+                for label in trace.modules[address].layer_labels
+            ),
+        )
 
         assert aggregate_layers != representative.num_layers
         assert aggregate_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
-        assert f"{representative.num_layers} layers total" in source
+        assert representative_label in source
         assert f"{representative.num_params} params (all trainable)" in source
-        assert f"{aggregate_layers} layers total" not in source
+        assert aggregate_label not in source
         assert f"{aggregate_params} params (all trainable)" not in source
     finally:
         trace.cleanup()

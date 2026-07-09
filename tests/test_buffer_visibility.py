@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,52 @@ class _BatchNormWithArchitecturalBuffer(nn.Module):
         return self.bn(x) + self.causal_mask
 
 
+class _PureOpBlock(nn.Module):
+    """Small module that contains operations but no buffers."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply two tensor operations.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Activated tensor.
+        """
+
+        return torch.sigmoid(torch.relu(x))
+
+
+class _PureOpModel(nn.Module):
+    """Root model that exposes a collapsible pure-operation child module."""
+
+    def __init__(self) -> None:
+        """Initialize the pure-operation child module."""
+
+        super().__init__()
+        self.block = _PureOpBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the pure-operation child module.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Child-module output.
+        """
+
+        return self.block(x)
+
+
 def _log_model(model: nn.Module) -> Trace:
     """Return a metadata-only Trace for a small deterministic input.
 
@@ -113,6 +160,74 @@ def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> s
         show_buffer_layers=show_buffer_layers,
         vis_node_placement="dot",
     )
+
+
+def _render_collapsed_module(
+    log: Trace,
+    tmp_path: Path,
+    node_placement: str = "dot",
+) -> str:
+    """Render the BatchNorm child as a collapsed module.
+
+    Parameters
+    ----------
+    log:
+        Trace to render.
+    tmp_path:
+        Directory for the generated visualization.
+    node_placement:
+        Requested layout backend.
+
+    Returns
+    -------
+    str
+        Rendered DOT source.
+    """
+
+    return log.draw(
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_outpath=str(tmp_path / f"collapsed_{node_placement}"),
+        collapse_fn=_collapse_batchnorm,
+        vis_node_placement=node_placement,
+    )
+
+
+def _collapse_batchnorm(module: object) -> bool:
+    """Select the BatchNorm child module for collapsed rendering.
+
+    Parameters
+    ----------
+    module:
+        Module metadata object supplied by the rendering callback.
+
+    Returns
+    -------
+    bool
+        Whether the module is the BatchNorm child.
+    """
+
+    return getattr(module, "address", None) == "bn"
+
+
+def _collapse_module_at_address(module: object, address: str) -> bool:
+    """Select a module address for collapsed rendering.
+
+    Parameters
+    ----------
+    module:
+        Module metadata object supplied by the rendering callback.
+
+    address:
+        Module address to select.
+
+    Returns
+    -------
+    bool
+        Whether the module has the requested address.
+    """
+
+    return getattr(module, "address", None) == address
 
 
 def _node_line(dot_source: str, graph_node_label: str) -> str:
@@ -279,3 +394,47 @@ def test_legacy_false_matches_never(tmp_path: Path) -> None:
         log.cleanup()
 
     assert legacy_dot == tri_state_dot
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("training", "expected"),
+    [(False, "1 op + 4 buffers"), (True, "2 ops + 6 buffers")],
+)
+def test_collapsed_batchnorm_labels_ops_and_buffers(
+    tmp_path: Path,
+    training: bool,
+    expected: str,
+) -> None:
+    """Collapsed BatchNorm labels separate operations from buffer versions."""
+
+    model = _BatchNormOnly()
+    model.train(training)
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+    try:
+        dot_source = _render_collapsed_module(log, tmp_path)
+    finally:
+        log.cleanup()
+
+    assert expected in dot_source
+    assert "layers total" not in dot_source
+
+
+@pytest.mark.smoke
+def test_collapsed_pure_op_module_omits_buffer_clause(tmp_path: Path) -> None:
+    """Collapsed modules without buffers render only their operation count."""
+
+    log = tl.trace(_PureOpModel(), torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+    try:
+        dot_source = log.draw(
+            vis_save_only=True,
+            vis_fileformat="svg",
+            vis_outpath=str(tmp_path / "pure_ops"),
+            collapse_fn=partial(_collapse_module_at_address, address="block"),
+            vis_node_placement="dot",
+        )
+    finally:
+        log.cleanup()
+
+    assert "2 ops" in dot_source
+    assert "buffer" not in dot_source

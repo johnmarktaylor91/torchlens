@@ -37,6 +37,7 @@ from torchlens.visualization.collapse_plan import (
     plan_from_v1,
 )
 from torchlens.visualization._render_edges import _collapsed_module_should_show_remainder
+from torchlens.visualization._render_common import format_collapsed_module_contents
 
 tvm = pytest.importorskip("torchvision.models")
 tvs = pytest.importorskip("torchvision.models.segmentation")
@@ -1081,8 +1082,30 @@ def _svg_node_count(path: Path) -> int:
     return len(SVG_NODE_RE.findall(path.read_text(encoding="utf-8")))
 
 
-def _svg_collapsed_box_layer_labels(path: Path) -> list[str]:
-    """Return collapsed-box layer-count labels from a Graphviz SVG.
+def _module_contents_label(trace: tl.Trace, module: Any) -> str:
+    """Return the collapsed-module operation and buffer label.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the module metadata.
+    module:
+        Module metadata with its layer labels.
+
+    Returns
+    -------
+    str
+        The collapsed-module operation and buffer count label.
+    """
+
+    return format_collapsed_module_contents(
+        module.num_layers,
+        sum(trace[label].is_buffer for label in module.layer_labels),
+    )
+
+
+def _svg_collapsed_box_contents_labels(path: Path) -> list[str]:
+    """Return collapsed-box operation/buffer labels from a Graphviz SVG.
 
     Parameters
     ----------
@@ -1092,11 +1115,13 @@ def _svg_collapsed_box_layer_labels(path: Path) -> list[str]:
     Returns
     -------
     list[str]
-        Labels such as ``"20 layers total"`` in SVG order.
+        Labels such as ``"20 ops"`` in SVG order.
     """
 
     text = path.read_text(encoding="utf-8")
-    return re.findall(r">([0-9]+ layers total)<", text)
+    return re.findall(
+        r">([0-9]+ (?:op|ops|buffer|buffers)(?: \+ [0-9]+ (?:buffer|buffers))?)<", text
+    )
 
 
 def _draw_svg_layer_labels(
@@ -1132,7 +1157,7 @@ def _draw_svg_layer_labels(
         vis_node_placement="dot",
         collapse=collapse,
     )
-    return _svg_collapsed_box_layer_labels(out.with_suffix(".svg"))
+    return _svg_collapsed_box_contents_labels(out.with_suffix(".svg"))
 
 
 def _assert_plan_svg_parity(
@@ -1621,9 +1646,9 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         assert fold.num_layers != representative.num_layers
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
-        assert f"{representative.num_layers} layers total" in rep_line
+        assert _module_contents_label(trace, representative) in rep_line
         assert f"{representative.num_params} params (all trainable)" in rep_line
-        assert f"{fold.num_layers} layers total" not in rep_line
+        assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
         assert f"{trace.num_tensors} tensors total" in source
         assert f"{trace.num_params} params" in source
@@ -1682,9 +1707,9 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         assert fold.num_layers != representative.num_layers
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
-        assert f"{representative.num_layers} layers total" in rep_line
+        assert _module_contents_label(trace, representative) in rep_line
         assert f"{representative.num_params} params (all trainable)" in rep_line
-        assert f"{fold.num_layers} layers total" not in rep_line
+        assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
         assert f"{trace.num_tensors} tensors total" in source
         assert f"{trace.num_params} params" in source
@@ -2062,13 +2087,16 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         surfaced_ops = _atomic_own_output_ops(trace, "block")
         surfaced_params = sum(int(getattr(op, "num_params", 0) or 0) for op in surfaced_ops)
         remainder_layers = module.num_layers - len(surfaced_ops)
+        remainder_buffers = sum(trace[label].is_buffer for label in module.layer_labels) - sum(
+            op.is_buffer for op in surfaced_ops
+        )
         remainder_params = module.num_params - surfaced_params
         block_line = _collapsed_node_line(source, "block")
 
         assert len(surfaced_ops) == 1
         assert _has_visible_node(source, op_prefix)
-        assert f"{remainder_layers} layers total" in block_line
-        assert f"{module.num_layers} layers total" not in block_line
+        assert format_collapsed_module_contents(remainder_layers, remainder_buffers) in block_line
+        assert _module_contents_label(trace, module) not in block_line
         assert f"{remainder_params} params" in block_line
         assert remainder_layers + len(surfaced_ops) == module.num_layers
         assert remainder_params + surfaced_params == module.num_params
@@ -2120,8 +2148,8 @@ def test_equivalent_max_plans_render_same_collapsed_box_layer_labels(tmp_path: P
 
         assert max_plan == level_plan
         assert max_labels == level_labels
-        assert "20 layers total" in max_labels
-        assert "21 layers total" not in level_labels
+        assert max_labels
+        assert all("layers total" not in label for label in max_labels)
     finally:
         trace.cleanup()
 
