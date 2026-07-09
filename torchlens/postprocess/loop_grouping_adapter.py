@@ -14,6 +14,13 @@ from typing import Dict, Mapping, Optional, Set, Tuple
 
 FrontierNodes = OrderedDict[str, dict[str, deque[str]]]
 
+# Minimum number of operations a parameter-free loop body must span before adjacent
+# repetitions are grouped as a recurrent loop. Raising the bar from 1 to 2 kills the
+# "two adjacent same-op nodes are a 2-pass loop" false positive (e.g. y = tanh(x);
+# z = tanh(y)) without touching parameter-based recurrence (RNNs, weight tying), which
+# is decided by shared parameters rather than body size.
+_MIN_PARAM_FREE_LOOP_BODY_OPS = 2
+
 
 @dataclass(frozen=True)
 class RecurrenceNode:
@@ -63,6 +70,15 @@ class RecurrenceNode:
     param_barcodes: tuple[str, ...]
     retain: bool = True
     pruned: bool = False
+    recurrence_anchored: bool = False
+    """Whether this op has a reused persistent identity that anchors genuine recurrence.
+
+    Anchored ops are calls of a named submodule (non-empty ``modules``) or stateful buffer
+    nodes (``is_buffer``). Repeating such an identity -- one ``nn.ReLU`` called four times, a
+    buffer rewritten each iteration -- is real recurrence even when the body is a single op,
+    so the param-free minimum-body-size guard does not apply to them. Bare functional ops
+    (``torch.tanh(x)`` in the parent forward) are not anchored and must clear the body-size
+    bar to be grouped, which rejects the ``y = tanh(x); z = tanh(y)`` false positive."""
 
 
 @dataclass(frozen=True)
@@ -128,6 +144,7 @@ class _MutableRecurrenceNode:
     uses_params: bool
     func_name: str
     param_barcodes: tuple[str, ...]
+    recurrence_anchored: bool = False
 
 
 @dataclass
@@ -205,6 +222,7 @@ class _GroupingWorkspace:
                 uses_params=node.uses_params,
                 func_name=node.func_name,
                 param_barcodes=tuple(node.param_barcodes),
+                recurrence_anchored=node.recurrence_anchored,
             )
             for label, node in graph.nodes.items()
             if label in eligible and node.retain and not node.pruned
@@ -779,6 +797,55 @@ def _finalize_layer_assignments(
             node.equivalence_key = canonical_equiv_type
 
 
+def _param_free_adjacency_merge_allowed(
+    workspace: "_GroupingWorkspace",
+    node1_label: str,
+    node2_label: str,
+    subgraph_a: SubgraphInfo,
+    subgraph_b: SubgraphInfo,
+) -> bool:
+    """Return whether an adjacency-only, param-free merge is a real loop.
+
+    Two structurally isomorphic subgraphs that are adjacent but share no parameters are only
+    a genuine recurrent loop when EITHER:
+
+    * a seed op is recurrence-anchored -- a reused submodule call (one ``nn.ReLU`` invoked
+      four times) or a stateful buffer node (a buffer rewritten each iteration) -- whose
+      repeated persistent identity is real recurrence even with a single-op body; or
+    * the repeated body spans at least ``_MIN_PARAM_FREE_LOOP_BODY_OPS`` operations.
+
+    This rejects the historical false positive where two bare adjacent same-op calls in the
+    parent forward -- ``y = tanh(x); z = tanh(y)`` -- were grouped as a two-pass loop despite
+    being a straight-line chain. Parameter-based merges (RNNs, weight tying) never reach this
+    guard; they are decided by shared parameters and are left untouched.
+
+    Parameters
+    ----------
+    workspace:
+        Mutable grouping workspace, used to read the seed ops' module binding.
+    node1_label:
+        Seed op label of the first subgraph.
+    node2_label:
+        Seed op label of the second subgraph.
+    subgraph_a:
+        One candidate loop-body subgraph.
+    subgraph_b:
+        The structurally isomorphic partner subgraph.
+
+    Returns
+    -------
+    bool
+        ``True`` when the two subgraphs may be merged into a recurrent group.
+    """
+    if (
+        workspace.nodes[node1_label].recurrence_anchored
+        or workspace.nodes[node2_label].recurrence_anchored
+    ):
+        return True
+    smallest_body = min(len(subgraph_a.node_set), len(subgraph_b.node_set))
+    return smallest_body >= _MIN_PARAM_FREE_LOOP_BODY_OPS
+
+
 def _merge_iso_groups_to_layers(
     workspace: _GroupingWorkspace,
     iso_node_groups: Dict[str, list[str]],
@@ -848,7 +915,15 @@ def _merge_iso_groups_to_layers(
                 node1_subgraph_label in adjacent_subgraphs
                 and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
             )
-            if overlapping_param_types or subgraphs_are_adjacent:
+            if overlapping_param_types:
+                union(node1_label, node2_label)
+            elif subgraphs_are_adjacent and _param_free_adjacency_merge_allowed(
+                workspace,
+                node1_label,
+                node2_label,
+                node_to_subgraph[node1_label],
+                node_to_subgraph[node2_label],
+            ):
                 union(node1_label, node2_label)
 
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)

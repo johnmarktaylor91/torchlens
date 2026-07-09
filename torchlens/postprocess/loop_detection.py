@@ -227,6 +227,9 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             param_barcodes=tuple(node._param_barcodes),
             retain=retain,
             pruned=is_pruned,
+            recurrence_anchored=(
+                bool(getattr(node, "modules", None)) or bool(getattr(node, "is_buffer", False))
+            ),
         )
 
     return RecurrenceGroupingGraph(

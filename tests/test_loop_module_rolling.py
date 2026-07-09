@@ -525,6 +525,43 @@ class StackFanoutForDeepArgMutation(nn.Module):
         return torch.stack([self.lin(x), self.lin(x)])
 
 
+class BareFunctionalTanhChain(nn.Module):
+    """Two adjacent bare functional tanh calls with no reused module or buffer."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ``torch.tanh`` twice in a straight-line chain."""
+
+        return torch.tanh(torch.tanh(x))
+
+
+def test_bare_functional_op_chain_is_not_a_loop() -> None:
+    """Two adjacent bare functional ops are a chain, not a param-free two-pass loop.
+
+    A parameter-free adjacency merge with a single-op body and no reused persistent identity
+    (no submodule call, no buffer) is the historical false positive. Each ``tanh`` must stay
+    its own single-pass layer instead of collapsing into a spurious ``tanh (x2)`` loop.
+    """
+
+    trace = _trace(BareFunctionalTanhChain())
+    tanh_layers = [label for label in trace.layer_labels if label.startswith("tanh")]
+    assert len(tanh_layers) == 2
+    for label in tanh_layers:
+        assert trace[label].num_passes == 1
+
+
+def test_reused_single_op_module_stays_a_loop() -> None:
+    """A reused single-op module is still grouped as recurrence despite the >=2-op guard.
+
+    Its ops are recurrence-anchored (module-bound), so the parameter-free body-size guard
+    does not apply -- the four ``self.relu`` calls remain one four-pass layer.
+    """
+
+    trace = _trace(ReusedReluLoop())
+    relu_layers = [label for label in trace.layer_labels if label.startswith("relu")]
+    assert len(relu_layers) == 1
+    assert trace[relu_layers[0]].num_passes == 4
+
+
 def _trace(model: nn.Module) -> tl.Trace:
     """Trace a demo model deterministically."""
 
