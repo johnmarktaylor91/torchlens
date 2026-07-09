@@ -254,7 +254,8 @@ def render_lineplot(
     draw = ImageDraw.Draw(canvas)
     margin_left = 38 * _DRAW_SCALE
     margin_right = 12 * _DRAW_SCALE
-    margin_top = 12 * _DRAW_SCALE
+    legend_height = _legend_height(labels, palette) if show_legend and labels is not None else 0
+    margin_top = (12 * _DRAW_SCALE) + legend_height
     margin_bottom = (30 if x_label is not None else 22) * _DRAW_SCALE
     plot_left = margin_left
     plot_top = margin_top
@@ -321,7 +322,14 @@ def render_lineplot(
             draw, (4 * _DRAW_SCALE, 4 * _DRAW_SCALE), y_label, fill=_TEXT_COLOR, scale=_DRAW_SCALE
         )
     if show_legend and labels is not None:
-        _draw_legend(draw, labels=labels, colors=palette, plot_right=plot_right, plot_top=plot_top)
+        _draw_legend(
+            draw,
+            labels=labels,
+            colors=palette,
+            plot_left=plot_left,
+            plot_right=plot_right,
+            legend_top=12 * _DRAW_SCALE,
+        )
     return canvas.resize((width, height), Image.Resampling.LANCZOS)
 
 
@@ -1242,8 +1250,9 @@ def _draw_legend(
     *,
     labels: Sequence[Any],
     colors: Sequence[RGBColor],
+    plot_left: int,
     plot_right: int,
-    plot_top: int,
+    legend_top: int,
 ) -> None:
     """Draw a compact line-plot legend.
 
@@ -1255,23 +1264,111 @@ def _draw_legend(
         Series labels.
     colors:
         Series colors.
+    plot_left:
+        Plot area left coordinate.
     plot_right:
         Plot area right coordinate.
-    plot_top:
-        Plot area top coordinate.
+    legend_top:
+        Top coordinate of the reserved legend band.
     """
 
+    if (
+        _legend_bbox(
+            draw,
+            labels=labels,
+            colors=colors,
+            plot_left=plot_left,
+            plot_right=plot_right,
+            legend_top=legend_top,
+        )
+        is None
+    ):
+        return
     for index, label in enumerate(labels[: len(colors)]):
         text = str(label)
         text_width, text_height = _measure_text(draw, text, scale=_DRAW_SCALE)
-        x0 = plot_right - text_width - 28 * _DRAW_SCALE
-        y0 = plot_top + 5 * _DRAW_SCALE + index * (text_height + 5 * _DRAW_SCALE)
+        x0 = max(plot_left, plot_right - text_width - 28 * _DRAW_SCALE)
+        y0 = legend_top + index * (text_height + 5 * _DRAW_SCALE)
         draw.line(
             [(x0, y0 + text_height / 2.0), (x0 + 18 * _DRAW_SCALE, y0 + text_height / 2.0)],
             fill=colors[index],
             width=2 * _DRAW_SCALE,
         )
         _draw_text(draw, (x0 + 22 * _DRAW_SCALE, y0), text, fill=_TEXT_COLOR, scale=_DRAW_SCALE)
+
+
+def _legend_height(labels: Sequence[Any], colors: Sequence[RGBColor]) -> int:
+    """Return the scaled height needed for a vertically stacked legend.
+
+    Parameters
+    ----------
+    labels:
+        Series labels.
+    colors:
+        Series colors.
+
+    Returns
+    -------
+    int
+        Height in supersampled pixels, including the gap below the legend.
+    """
+
+    if not labels or not colors:
+        return 0
+    draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    text_heights = [
+        _measure_text(draw, str(label), scale=_DRAW_SCALE)[1] for label in labels[: len(colors)]
+    ]
+    row_height = max(text_heights) + 5 * _DRAW_SCALE
+    return len(text_heights) * row_height + 4 * _DRAW_SCALE
+
+
+def _legend_bbox(
+    draw: ImageDraw.ImageDraw,
+    *,
+    labels: Sequence[Any],
+    colors: Sequence[RGBColor],
+    plot_left: int,
+    plot_right: int,
+    legend_top: int,
+) -> tuple[int, int, int, int] | None:
+    """Return the pixel bounds of a compact stacked legend.
+
+    Parameters
+    ----------
+    draw:
+        PIL drawing context used to measure legend labels.
+    labels:
+        Series labels.
+    colors:
+        Series colors.
+    plot_left:
+        Plot area left coordinate.
+    plot_right:
+        Plot area right coordinate.
+    legend_top:
+        Top coordinate of the reserved legend band.
+
+    Returns
+    -------
+    tuple[int, int, int, int] | None
+        ``(left, top, right, bottom)`` bounds, or ``None`` for no entries.
+    """
+
+    entries = labels[: len(colors)]
+    if not entries:
+        return None
+    bounds: list[tuple[int, int, int, int]] = []
+    for index, label in enumerate(entries):
+        text_width, text_height = _measure_text(draw, str(label), scale=_DRAW_SCALE)
+        x0 = max(plot_left, plot_right - text_width - 28 * _DRAW_SCALE)
+        y0 = legend_top + index * (text_height + 5 * _DRAW_SCALE)
+        bounds.append((x0, y0, x0 + text_width + 22 * _DRAW_SCALE, y0 + text_height))
+    left = min(bound[0] for bound in bounds)
+    top = min(bound[1] for bound in bounds)
+    right = max(bound[2] for bound in bounds)
+    bottom = max(bound[3] for bound in bounds)
+    return left, top, right, bottom
 
 
 def _coords_to_pixel_centers(

@@ -12,11 +12,13 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from PIL import Image, ImageDraw
 from torch import nn
 
 import torchlens as tl
 from torchlens import repgeom
 from torchlens.visualization.node_spec import NodeSpec
+from torchlens.viz.node_plots import _DRAW_SCALE, _legend_bbox, _legend_height
 
 
 ANALYTIC_POINTS = np.array(
@@ -553,6 +555,26 @@ def test_scree_node_spec_sets_one_draw_time_image_for_annotated_layer() -> None:
     assert result.tooltip is not None
     assert "Scree plot" in result.tooltip
     assert "rank" in result.tooltip
+
+
+def test_scree_legend_band_does_not_intersect_plot_axes() -> None:
+    """Scree legends should occupy the reserved band above the plot axes."""
+
+    labels = ("variance", "cumulative", "threshold")
+    colors = ((48, 93, 170), (32, 128, 90), (160, 72, 72))
+    draw = ImageDraw.Draw(Image.new("RGB", (320 * _DRAW_SCALE, 180 * _DRAW_SCALE)))
+    bbox = _legend_bbox(
+        draw,
+        labels=labels,
+        colors=colors,
+        plot_left=38 * _DRAW_SCALE,
+        plot_right=(320 - 12) * _DRAW_SCALE,
+        legend_top=12 * _DRAW_SCALE,
+    )
+    assert bbox is not None
+    plot_top = 12 * _DRAW_SCALE + _legend_height(labels, colors)
+
+    assert bbox[3] <= plot_top
 
 
 def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: Path) -> None:
