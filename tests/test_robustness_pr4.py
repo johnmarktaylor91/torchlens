@@ -10,14 +10,21 @@ Covers:
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Generator
 from pathlib import Path
+import warnings
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture_state_helpers import (
+    reset_compiled_model_unwrap_warning_state,
+)
 from torchlens.user_funcs import _reject_opaque_wrappers
+from torchlens.utils._torch_compat import get_dynamo_optimized_module_type
 
 
 class _Tiny(nn.Module):
@@ -32,37 +39,124 @@ class _Tiny(nn.Module):
         return self.b(torch.relu(self.a(x)))
 
 
+class _ParentWithChild(nn.Module):
+    """Parent module that delegates part of forward to a child module."""
+
+    def __init__(self, child: nn.Module) -> None:
+        super().__init__()
+        self.child = child
+        self.out = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.out(torch.relu(self.child(x)))
+
+
 # ---------------------------------------------------------------------------
 # torch.compile
 # ---------------------------------------------------------------------------
 
 
 def _torch_compile_available() -> bool:
-    try:
-        from torch._dynamo.eval_frame import OptimizedModule  # noqa: F401
-    except ImportError:
-        return False
-    return hasattr(torch, "compile")
+    """Return whether this torch runtime can create Dynamo OptimizedModule wrappers."""
+
+    return get_dynamo_optimized_module_type() is not None and hasattr(torch, "compile")
+
+
+@pytest.fixture(autouse=True)
+def _reset_dynamo_after_test() -> Generator[None, None, None]:
+    """Reset Dynamo and TorchLens unwrap warning state around each test."""
+
+    reset_compiled_model_unwrap_warning_state()
+    yield
+    reset_compiled_model_unwrap_warning_state()
+    dynamo = getattr(torch, "_dynamo", None)
+    reset = getattr(dynamo, "reset", None)
+    if callable(reset):
+        reset()
 
 
 @pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_torch_compile_raises_at_entry() -> None:
-    """A ``torch.compile``'d model must raise, not produce an empty log."""
+def test_torch_compile_top_level_unwrap_matches_eager_trace() -> None:
+    """A top-level ``torch.compile`` wrapper should trace like its eager source."""
     model = _Tiny()
-    compiled = torch.compile(model)
+    eager_twin = copy.deepcopy(model)
+    compiled = torch.compile(model, backend="eager")
+    input_tensor = torch.randn(2, 4)
 
-    with pytest.raises(RuntimeError, match="torch.compile"):
-        tl.trace(compiled, torch.randn(2, 4), layers_to_save="none")
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        compiled_trace = tl.trace(compiled, input_tensor, layers_to_save="none")
+    eager_trace = tl.trace(eager_twin, input_tensor, layers_to_save="none")
+
+    assert [op.layer_label for op in compiled_trace.layer_list] == [
+        op.layer_label for op in eager_trace.layer_list
+    ]
+    assert len(compiled_trace.modules) == len(eager_trace.modules)
 
 
 @pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_torch_compile_unwrap_suggestion_matches_reality() -> None:
-    """Message recommends logging the un-compiled model; verify that works."""
-    model = _Tiny()
-    _ = torch.compile(model)  # must not poison the original
-    # Logging the original still works.
-    log = tl.trace(model, torch.randn(2, 4), layers_to_save="none")
-    assert len(log.layer_logs) > 0
+def test_torch_compile_unwrap_note_emits_once_across_two_traces() -> None:
+    """Compiled-model eager unwrapping should emit one process-local note."""
+    first = torch.compile(_Tiny(), backend="eager")
+    second = torch.compile(_Tiny(), backend="eager")
+    input_tensor = torch.randn(2, 4)
+
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tl.trace(first, input_tensor, layers_to_save="none")
+        tl.trace(second, input_tensor, layers_to_save="none")
+
+    unwrap_warnings = [
+        warning
+        for warning in caught
+        if "compiled model detected; tracing the eager source module" in str(warning.message)
+    ]
+    assert len(unwrap_warnings) == 1
+
+
+@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
+def test_torch_compile_top_level_wrapper_remains_callable_after_trace() -> None:
+    """Tracing a compiled root should leave the user's wrapper object in place."""
+    compiled = torch.compile(_Tiny(), backend="eager")
+    optimized_module_type = get_dynamo_optimized_module_type()
+    input_tensor = torch.randn(2, 4)
+
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        tl.trace(compiled, input_tensor, layers_to_save="none")
+
+    assert optimized_module_type is not None
+    assert isinstance(compiled, optimized_module_type)
+    assert compiled(input_tensor).shape == (2, 4)
+
+
+@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
+def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
+    """A compiled child should trace through its eager source and be restored afterward."""
+    child = torch.compile(nn.Linear(4, 4), backend="eager")
+    parent = _ParentWithChild(child)
+    eager_parent = _ParentWithChild(copy.deepcopy(child._orig_mod))
+    eager_parent.out.load_state_dict(parent.out.state_dict())
+    optimized_module_type = get_dynamo_optimized_module_type()
+    input_tensor = torch.randn(2, 4)
+
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        nested_trace = tl.trace(parent, input_tensor, layers_to_save="none")
+    eager_trace = tl.trace(eager_parent, input_tensor, layers_to_save="none")
+
+    assert optimized_module_type is not None
+    assert parent.child is child
+    assert isinstance(parent.child, optimized_module_type)
+    assert parent(input_tensor).shape == (2, 4)
+    assert [op.layer_label for op in nested_trace.layer_list] == [
+        op.layer_label for op in eager_trace.layer_list
+    ]
+    assert len(nested_trace.modules) == len(eager_trace.modules)
 
 
 # ---------------------------------------------------------------------------

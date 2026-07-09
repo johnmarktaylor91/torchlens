@@ -103,6 +103,7 @@ from ._capture_state_helpers import (
     _qualname_for_model,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
+    unwrap_compiled_model,
 )
 from ._chunked_capture_helpers import (
     _append_chunk_trace_state,
@@ -1760,6 +1761,7 @@ def _trace_torch_model(
     _reject_opaque_wrappers(model)
     if not isinstance(model, nn.Module):
         raise ValueError("Unsupported model type for capture")
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if reconstruction_ready is not MISSING and reconstruction_ready:
         save_arg_values = True

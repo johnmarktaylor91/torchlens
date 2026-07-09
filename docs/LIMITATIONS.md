@@ -77,7 +77,7 @@ If you hit a case we haven't listed, please
 | Context | What TorchLens does today | Workaround |
 |---|---|---|
 | **Nested `trace`** (hook/postfunc calls log again) | `RuntimeError` at inner entry | Use `pause_logging()` before the inner call, or run the inner log afterwards on the outer's sub-model |
-| **`torch.compile(model)`** | `RuntimeError` with pointer to this page | Log the un-compiled model |
+| **`torch.compile(model)`** | Unwraps to the eager source module and emits one note per process | Use a profiler/compiler tool to inspect fused compiled execution |
 | **`torch.jit.script` / `torch.jit.trace`** | `RuntimeError` at entry | Log the un-scripted / un-traced Python module |
 | **`torch.export.ExportedProgram`** | `RuntimeError` at entry | Log the source `nn.Module` before exporting |
 | **`FullyShardedDataParallel` (FSDP)** | `RuntimeError` at entry | Log a rank-local unsharded copy of the inner module |
@@ -113,16 +113,19 @@ interpretability package:
 - Use `torch.profiler` for kernel-level performance work. TorchLens records operation provenance,
   graph topology, activations, gradients, memory, and approximate FLOPs; it is not a profiler UI.
 
-### `torch.compile` — not supported (raises)
+### `torch.compile` — unwrapped to eager source
 
 ``torch.compile(model)`` returns a ``torch._dynamo.eval_frame.OptimizedModule``
-that replaces the Python ``forward`` with a compiled graph. Depending on the
-dynamo backend, our Python-level function wrappers are either inlined out of
-existence (inductor) or called on flattened IR tensors whose metadata won't
-match the user-visible graph.
+that wraps the original eager ``nn.Module`` at ``._orig_mod``. TorchLens is an
+eager-capture tool, so it does not trace the compiled graph, generated kernels,
+or fusion decisions.
 
-``trace`` detects ``OptimizedModule`` up front and raises a clear
-error. **Workaround**: log the model before applying ``torch.compile``.
+``trace`` detects ``OptimizedModule`` and transparently traces the eager source
+module it wraps. If a compiled wrapper appears as a submodule, TorchLens
+temporarily routes that child slot to ``._orig_mod`` for the capture and restores
+the user's module tree afterward. The first such unwrap in a process emits a
+one-time note. The resulting trace reflects eager Python semantics, not
+``torch.compile`` semantics such as fusion or backend-specific lowering.
 
 ### `torch.jit.script` / `torch.jit.trace` — not supported (raises)
 
