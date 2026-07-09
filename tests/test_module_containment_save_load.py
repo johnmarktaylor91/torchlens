@@ -35,10 +35,31 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
     return model, torch.randn(2, 8)
 
 
-def test_io_format_version_is_five() -> None:
-    """Backend-neutral object-state fields bump ``TLSPEC_VERSION`` to 5."""
+def test_io_format_version_is_six() -> None:
+    """Forward-pre-hook provenance bumps ``TLSPEC_VERSION`` to 6."""
 
-    assert TLSPEC_VERSION == 5
+    assert TLSPEC_VERSION == 6
+
+
+def test_v5_module_call_state_gets_neutral_pre_hook_defaults() -> None:
+    """A v5 ModuleCall state loads with neutral pre-hook provenance fields."""
+
+    model, x = _simple_model_and_input()
+    trace = tl.trace(model, x)
+    call = trace.module_calls["0:1"]
+    state = call.__getstate__()
+    state["tlspec_version"] = 5
+    state.pop("inputs_before_pre_hooks", None)
+    state.pop("inputs_after_pre_hooks", None)
+    state.pop("forward_pre_hook_effects", None)
+
+    restored = type(call).__new__(type(call))
+    restored.__setstate__(state)
+
+    assert restored.inputs_before_pre_hooks is None
+    assert restored.inputs_after_pre_hooks is None
+    assert restored.forward_pre_hook_effects == ()
+    assert restored.had_pre_hook_input_change is False
 
 
 def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> None:

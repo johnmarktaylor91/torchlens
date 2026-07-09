@@ -52,7 +52,7 @@
         "storage_backend": null
       }
     ],
-    "tlspec_version": 5,
+    "tlspec_version": 6,
     "torch_version_present": true
   },
   "sha256_chunks": [

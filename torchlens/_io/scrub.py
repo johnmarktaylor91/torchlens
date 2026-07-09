@@ -945,6 +945,11 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "rng_state"
     if field_name in {"forward_args", "forward_kwargs"}:
         return "module_arg"
+    if field_name in {"_args", "_kwargs", "payload"} and type(owner).__name__ in {
+        "ModuleInputSnapshot",
+        "TensorInputObservation",
+    }:
+        return "pre_hook_input"
     if field_name == "func_config":
         return "func_config"
     if field_name == "custom_attributes":

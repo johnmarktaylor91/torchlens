@@ -308,7 +308,7 @@ def test_fresh_unified_save_reports_current_version_with_no_deprecation_warning(
     merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
     so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
     every same-runtime load raised a false "Bundle tlspec_version=1 is older
-    than runtime tlspec_version=5" ``DeprecationWarning``.
+    than the runtime ``tlspec_version``" ``DeprecationWarning``.
     """
 
     log = _captured_log()

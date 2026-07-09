@@ -23,9 +23,8 @@ import torch
 
 from ..errors._base import CompatibilityError
 
-# v5 adds backend-neutral object-state fields for the backend substrate
-# (`module_identity_mode`, `param_source`, and neutral dtype/device/address refs).
-TLSPEC_VERSION = 5
+# v6 adds persisted ModuleCall forward-pre-hook provenance value objects.
+TLSPEC_VERSION = 6
 _LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
 
 
