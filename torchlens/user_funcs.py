@@ -673,7 +673,7 @@ def _run_model_and_save_specified_outs(
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None,
     layers_to_save: str | list[int | str] | None = "all",
-    keep_orphans: bool = True,
+    keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
     activation_transform: ActivationPostfunc | None = None,
     grad_transform: GradientPostfunc | None = None,
@@ -1407,10 +1407,11 @@ def trace(
         save_raw_output: Raw output save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
         layers_to_save: Which layers to save outs for (see above).
-        keep_orphans: If True (the default), retain island ops -- computations
-            unreachable from both the model inputs and outputs -- in raw metadata and
-            expose them via ``trace.orphans`` instead of silently dropping them. They do
-            not enter ``layer_list``/summaries. Set False to prune islands.
+        keep_orphans: If True, retain island ops -- computations unreachable from both
+            the model inputs and outputs -- in raw metadata and expose them via
+            ``trace.orphans`` instead of silently dropping them. They do not enter
+            ``layer_list``/summaries. Default False (islands pruned) until the validation
+            invariants account for retained islands.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
         activation_transform: Optional function applied to each out before saving. The
             raw out remains in ``layer.tensor``/``layer.out`` by default, and

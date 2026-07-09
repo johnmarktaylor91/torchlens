@@ -26,10 +26,10 @@ class WithOrphanIsland(nn.Module):
 
 
 def _orphan_trace() -> tl.Trace:
-    """Trace the island model with orphans retained (the default)."""
+    """Trace the island model with orphans retained (opt-in)."""
 
     torch.manual_seed(0)
-    return tl.trace(WithOrphanIsland(), torch.ones(1, 4))
+    return tl.trace(WithOrphanIsland(), torch.ones(1, 4), keep_orphans=True)
 
 
 def test_show_orphans_renders_island_cluster() -> None:

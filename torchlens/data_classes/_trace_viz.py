@@ -148,7 +148,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             ``show_orphans=True`` renders orphan (island) ops -- captured but unreachable
             from both inputs and outputs -- as a dashed, greyed cluster of edgeless nodes,
             instead of omitting them. Orphans must have been retained at capture time
-            (``keep_orphans=True``, the default).
+            (capture with ``keep_orphans=True``).
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
             Graphviz renderer.

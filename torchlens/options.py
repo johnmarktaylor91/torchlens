@@ -659,9 +659,11 @@ class CaptureOptions:
     keep_orphans:
         Whether island ops (computations unreachable from both the model inputs and
         outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
-        to ``True`` so islands are surfaced rather than silently dropped; set ``False`` to
-        prune them. Retained orphans do not enter ``layer_list``/summaries; they live only
-        on the ``trace.orphans`` accessor.
+        to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
+        enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
+        NOTE: retaining orphans changes ``num_ops`` and currently trips the trace
+        self-consistency invariant, so the default stays opt-in until the validation
+        invariants account for retained islands.
     output_device:
         Device placement for saved tensors.
     save_arg_values:
@@ -750,7 +752,7 @@ class CaptureOptions:
     save_raw_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
-    keep_orphans: bool = True
+    keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
     save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
@@ -896,7 +898,7 @@ class CaptureOptions:
                 "save_visualizations", save_visualizations, False, specified_fields
             ),
             "keep_orphans": _resolve_option_value(
-                "keep_orphans", keep_orphans, True, specified_fields
+                "keep_orphans", keep_orphans, False, specified_fields
             ),
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields
