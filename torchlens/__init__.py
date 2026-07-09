@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import functools as _functools
 import importlib as _importlib
-import sys as _sys
 from collections.abc import Callable as _Callable, Iterable as _Iterable, Mapping as _Mapping
 from pathlib import Path as _Path
 import warnings as _warnings
@@ -105,8 +104,6 @@ from .options import CaptureOptions as _CaptureOptions
 from .options import to_disk
 from .intervention import load_intervention_spec as _moved_load_intervention_spec
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
-
-_sys.modules.setdefault(__name__ + ".facets", _importlib.import_module("torchlens.semantic.facets"))
 
 _REMOVED_IN = "a future 2.x release"
 
