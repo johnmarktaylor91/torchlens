@@ -115,7 +115,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `control_flow:branch` | tensor-driven if/else taken-arm rendering | p29, p59, p60 |
 | `topology:parallel` | parallel branch / merge topology | p5, p11, p66 |
 | `topology:transformer` | transformer / attention block topology | p65 |
-| `scale:real_model` | real torchvision-scale architecture | p32, p34, p37, p64 |
+| `scale:real_model` | real torchvision-scale architecture | p32, p37, p64 |
 | `degenerate` | degenerate graphs (single op, no modules, scalar out) | p68 |
 | `regression:large_bbox` | large-graph bbox non-blank regression | p12 |
 | `artifact:apparent_cycle` | interleaved repeat-fold apparent-cycle artifact (known) | p39 |
@@ -153,7 +153,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 11 | B | `b2_order_siblings` | order_siblings: execution order vs raw dot order | `mini_inception` | 2 |
 | 12 | B | `b3_large_chain` | REGRESSION: deep-chain bounding box | `large_chain` | 1 |
 | 13 | B | `b4_placement` | vis_node_placement: 'dot' vs 'rank' | `large_chain` | 2 |
-| 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes (and the cluster fallback) | `dict_input`, `dict_output`, `mid_graph_container`, `tuple_output` | 5 |
+| 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes (and the cluster fallback) | `dict_input`, `dict_output`, `nested_containers`, `tuple_output` | 5 |
 | 16 | C | `c2_container_max_inline` | container_max_inline: when 'auto' stops inlining | `tuple_output` | 2 |
 | 17 | C | `c3_module_focus` | module=: focus on one submodule | `demo_model` | 1 |
 | 18 | C | `c4_call_depth` | vis_call_depth: limiting module-box nesting | `demo_model` | 2 |
@@ -170,7 +170,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 30 | D | `d7_back_edge_midpoint` | REGRESSION: back-edge midpoint placement | `rnn_cell_loop` | 1 |
 | 32 | E | `e1_collapse_modes` | collapse: 'none' vs 'auto' vs 'max' on ResNet-18 | `resnet18` | 3 |
 | 33 | E | `e2_float_filmstrip` | Float collapse slider: t = 0.0 to 1.0 filmstrip | `resnet18` | 5 |
-| 34 | E | `e3_fold_repeats` | fold_repeats: None / True / False on MobileNetV2 | `mobilenet_v2` | 3 |
+| 34 | E | `e3_fold_repeats` | fold_repeats: None / True / False on a repeated block stack | `block_stack` | 3 |
 | 35 | E | `e4_standalone_fold` | Standalone folding: fold_repeats=True with collapse='none' | `block_stack` | 2 |
 | 36 | E | `e5_ellipsis_grammar` | The '+N more' ellipsis, up close | `block_stack` | 1 |
 | 37 | E | `e6_segments` | Segment boxes: max-mode condensed ranges | `resnet50` | 1 |
