@@ -419,6 +419,20 @@ A sample across families is shown below.
 | <img src="images/menagerie/decision_transformer.jpg" height="200"> | <img src="images/menagerie/qml.png" height="200"> | <img src="images/menagerie/large_graph_3k.jpg" height="200"> |
 
 
+## Pin your architecture in CI
+
+Use the provisional address-free structural hash to catch an unintended graph change without
+pinning model weights or module names:
+
+```python
+import torchlens as tl
+
+pinned = tl.assert_unchanged(model, example_input, expected=None)  # prints and returns a hash
+tl.assert_unchanged(model, example_input, pinned)  # raises if the architecture changes
+```
+
+See [`tl.hash`](docs/reference/hash.md) for trace-level hashing and its structural scope.
+
 ## Compatibility
 
 Before filing a bug for a model-specific failure, run the runtime compatibility
@@ -458,6 +472,7 @@ works, and the recommended workaround for each context.
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
 | [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
 | [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports |
+| [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |
 | [docs/reference/attribution.md](docs/reference/attribution.md) | Native input and layer attribution methods |
 
 
