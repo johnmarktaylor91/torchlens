@@ -640,7 +640,7 @@ def test_per_operation_oracle_deferred_per_ad_50() -> None:
     ]
     for identifier in deleted_identifiers:
         result = subprocess.run(
-            ["rg", "-w", identifier, "torchlens", "tests"],
+            ["git", "grep", "-w", identifier, "--", "torchlens", "tests"],
             cwd=repo,
             check=False,
             capture_output=True,
@@ -648,7 +648,7 @@ def test_per_operation_oracle_deferred_per_ad_50() -> None:
         )
         assert result.returncode == 1, result.stdout
     stock_side_result = subprocess.run(
-        ["rg", "-w", "_normalize" + "_func_name", "torchlens/validation"],
+        ["git", "grep", "-w", "_normalize" + "_func_name", "--", "torchlens/validation"],
         cwd=repo,
         check=False,
         capture_output=True,

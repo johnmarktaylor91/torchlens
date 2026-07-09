@@ -35,7 +35,7 @@ def _grep_for_pattern(pattern: str, paths: list[str]) -> list[str]:
     """
 
     result = subprocess.run(
-        ["rg", "--line-number", pattern, *paths],
+        ["git", "grep", "-E", "--line-number", pattern, "--", *paths],
         cwd=_repo_root(),
         check=False,
         capture_output=True,
