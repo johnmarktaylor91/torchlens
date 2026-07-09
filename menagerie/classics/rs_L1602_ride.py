@@ -146,8 +146,10 @@ class MinigridStateEmbeddingNet(nn.Module):
         init_ = lambda m: init(
             m,
             nn.init.orthogonal_,
-            lambda x: nn.init.  # noqa: E731
-            constant_(x, 0),
+            lambda x: (
+                nn.init.  # noqa: E731
+                constant_(x, 0)
+            ),
             nn.init.calculate_gain("relu"),
         )
 
@@ -199,8 +201,10 @@ class MinigridInverseDynamicsNet(nn.Module):
         init_ = lambda m: init(
             m,
             nn.init.orthogonal_,
-            lambda x: nn.init.  # noqa: E731
-            constant_(x, 0),
+            lambda x: (
+                nn.init.  # noqa: E731
+                constant_(x, 0)
+            ),
             nn.init.calculate_gain("relu"),
         )
         self.inverse_dynamics = nn.Sequential(
@@ -229,8 +233,10 @@ class MinigridForwardDynamicsNet(nn.Module):
         init_ = lambda m: init(
             m,
             nn.init.orthogonal_,
-            lambda x: nn.init.  # noqa: E731
-            constant_(x, 0),
+            lambda x: (
+                nn.init.  # noqa: E731
+                constant_(x, 0)
+            ),
             nn.init.calculate_gain("relu"),
         )
 

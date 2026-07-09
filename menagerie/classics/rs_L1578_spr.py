@@ -47,21 +47,27 @@ def init(module, weight_init, bias_init, gain=1):
 init_small = lambda m: init(
     m,
     nn.init.orthogonal_,
-    lambda x: nn.init.  # noqa: E731
-    constant_(x, 0),
+    lambda x: (
+        nn.init.  # noqa: E731
+        constant_(x, 0)
+    ),
     gain=0.01,
 )
 init_0 = lambda m: init(
     m,
     nn.init.orthogonal_,
-    lambda x: nn.init.  # noqa: E731
-    constant_(x, 0),
+    lambda x: (
+        nn.init.  # noqa: E731
+        constant_(x, 0)
+    ),
 )
 init_relu = lambda m: init(
     m,
     nn.init.orthogonal_,
-    lambda x: nn.init.  # noqa: E731
-    constant_(x, 0),
+    lambda x: (
+        nn.init.  # noqa: E731
+        constant_(x, 0)
+    ),
     nn.init.calculate_gain("relu"),
 )
 
