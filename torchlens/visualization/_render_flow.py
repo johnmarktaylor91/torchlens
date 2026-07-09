@@ -1683,9 +1683,10 @@ def _build_sibling_order_chains(
     chains: list[SiblingOrderChain] = []
     for (source_label, source_name), source_edges in sorted(by_source.items()):
         distinct_targets: dict[str, CapturedForwardEdge] = {}
-        source_node = source_edges[0].source_node
-        if _has_conditional_fanout(source_node):
-            continue
+        # Conditional fanouts are ordered too: the by-execution-step ordering below places
+        # the (earlier) branch test on the left and the (later) taken arm on the right, i.e.
+        # the "if left / then right" reading. This used to be skipped, leaving conditional
+        # branch layout arbitrary.
         for edge in source_edges:
             distinct_targets.setdefault(edge.head_name, edge)
         if len(distinct_targets) < 2:
@@ -1718,21 +1719,6 @@ def _has_rendered_fanout(captured_edges: list[CapturedForwardEdge]) -> bool:
         key = (edge.source_label, edge.tail_name)
         children_by_source[key].add(edge.head_name)
         if len(children_by_source[key]) >= 2:
-            return True
-    return False
-
-
-def _has_conditional_fanout(node: GraphNode) -> bool:
-    """Return whether a fanout source has conditional branch-child metadata."""
-
-    for field_name in (
-        "conditional_entry_children",
-        "conditional_then_children",
-        "conditional_elif_children",
-        "conditional_else_children",
-        "conditional_arm_children",
-    ):
-        if getattr(node, field_name, None):
             return True
     return False
 
@@ -1996,7 +1982,6 @@ __all__ = [
     "_format_backward_filter_caption",
     "_get_max_call_depth",
     "_get_or_create_boundary_node",
-    "_has_conditional_fanout",
     "_has_rendered_fanout",
     "_inject_sibling_rank_groups",
     "_insert_before_final_brace",
