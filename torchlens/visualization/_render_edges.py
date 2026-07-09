@@ -28,7 +28,7 @@ def _buffer_name_segment(address: str | None) -> str:
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def _is_noise_buffer(node: GraphNode) -> bool:
@@ -207,7 +207,7 @@ def _segment_for_node(
 
 def _is_run_fold_representative(
     address_w_pass: str,
-    run_folds: Mapping[str, "ModuleRunFold"],
+    repeat_folds: Mapping[str, "ModuleRepeatFold"],
 ) -> bool:
     """Return whether ``address_w_pass`` is the representative for its fold.
 
@@ -215,7 +215,7 @@ def _is_run_fold_representative(
     ----------
     address_w_pass:
         Pass-qualified or pass-free module address.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
@@ -225,13 +225,13 @@ def _is_run_fold_representative(
     """
 
     address = address_w_pass.rsplit(":", 1)[0]
-    fold = run_folds.get(address)
+    fold = repeat_folds.get(address)
     return fold is None or address == fold.representative
 
 
 def _run_fold_ancestor_for_node(
     node: GraphNode,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
 ) -> str | None:
     """Return the pass-qualified folded ancestor that should absorb ``node``.
 
@@ -239,7 +239,7 @@ def _run_fold_ancestor_for_node(
     ----------
     node:
         Rendered graph node.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
@@ -248,10 +248,10 @@ def _run_fold_ancestor_for_node(
         Pass-qualified folded ancestor address, or ``None``.
     """
 
-    if not run_folds:
+    if not repeat_folds:
         return None
     for address_w_pass in getattr(node, "modules", ()) or ():
-        if _run_fold_for_address(str(address_w_pass), run_folds) is not None:
+        if _run_fold_for_address(str(address_w_pass), repeat_folds) is not None:
             return str(address_w_pass)
     return None
 
@@ -273,7 +273,7 @@ def _run_fold_ellipsis_node_name(representative_name: str) -> str:
     return f"{representative_name}___runfoldellipsis"
 
 
-def _run_fold_ellipsis_label(fold: "ModuleRunFold") -> str:
+def _run_fold_ellipsis_label(fold: "ModuleRepeatFold") -> str:
     """Return the in-flow elision label for ``fold``.
 
     Parameters
@@ -292,27 +292,31 @@ def _run_fold_ellipsis_label(fold: "ModuleRunFold") -> str:
 
 def _run_fold_hidden_endpoint(
     address_w_pass: str | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
-) -> "ModuleRunFold | None":
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
+) -> "ModuleRepeatFold | None":
     """Return the run fold when ``address_w_pass`` is a hidden run member.
 
     Parameters
     ----------
     address_w_pass:
         Pass-qualified or pass-free module address for one rendered endpoint.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
     -------
-    ModuleRunFold | None
+    ModuleRepeatFold | None
         Fold descriptor when the address belongs to ``members[1:]``.
     """
 
     if address_w_pass is None:
         return None
-    fold = _run_fold_for_address(address_w_pass, run_folds)
-    if run_folds is None or fold is None or _is_run_fold_representative(address_w_pass, run_folds):
+    fold = _run_fold_for_address(address_w_pass, repeat_folds)
+    if (
+        repeat_folds is None
+        or fold is None
+        or _is_run_fold_representative(address_w_pass, repeat_folds)
+    ):
         return None
     return fold
 
@@ -320,7 +324,7 @@ def _run_fold_hidden_endpoint(
 def _edge_touches_run_fold(
     tail_name: str,
     head_name: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     vis_mode: str,
 ) -> bool:
     """Return whether either rendered edge endpoint is a folded-run box.
@@ -331,7 +335,7 @@ def _edge_touches_run_fold(
         Rendered edge tail node name.
     head_name:
         Rendered edge head node name.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
     vis_mode:
         ``"unrolled"`` or ``"rolled"`` visualization mode.
@@ -339,12 +343,12 @@ def _edge_touches_run_fold(
     Returns
     -------
     bool
-        True when either endpoint is a run-fold representative.
+        True when either endpoint is a repeat-fold representative.
     """
 
-    if not run_folds:
+    if not repeat_folds:
         return False
-    representative_names = _run_fold_representative_names(run_folds, vis_mode)
+    representative_names = _run_fold_representative_names(repeat_folds, vis_mode)
     return tail_name in representative_names or head_name in representative_names
 
 
@@ -662,10 +666,10 @@ def _collapsed_module_owner_key(
 
 def _run_fold_ellipsis_owner_key(
     trace: "Trace",
-    fold: "ModuleRunFold",
+    fold: "ModuleRepeatFold",
     vis_mode: str,
 ) -> str | None:
-    """Return the module cluster that owns a run-fold ellipsis node.
+    """Return the module cluster that owns a repeat-fold ellipsis node.
 
     Parameters
     ----------
@@ -692,7 +696,7 @@ def _queue_run_fold_ellipsis_node(
     emitted_ellipsis_nodes: set[str],
     *,
     representative_name: str,
-    fold: "ModuleRunFold",
+    fold: "ModuleRepeatFold",
     module_key: str | int,
 ) -> str:
     """Queue the in-flow ellipsis node for ``fold`` and return its node name.
@@ -756,7 +760,7 @@ def _add_edges_for_node(
     rankdir: str = "BT",
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None = None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None = None,
     run_fold_ellipsis_nodes: set[str] | None = None,
     segments: Mapping[str, SegmentDescriptor] | None = None,
     parent_segment: SegmentDescriptor | None = None,
@@ -835,12 +839,12 @@ def _add_edges_for_node(
                 collapse_fn=collapse_fn,
                 max_module_depth=vis_call_depth,
             )
-            parent_fold_ancestor = _run_fold_ancestor_for_node(parent_node, run_folds)
+            parent_fold_ancestor = _run_fold_ancestor_for_node(parent_node, repeat_folds)
             if parent_fold_ancestor is not None:
                 parent_module_name_w_pass = parent_fold_ancestor
             if parent_module_name_w_pass is None:
                 continue
-            tail_name = _run_fold_graph_node_name(parent_module_name_w_pass, vis_mode, run_folds)
+            tail_name = _run_fold_graph_node_name(parent_module_name_w_pass, vis_mode, repeat_folds)
         else:
             tail_name = _render_node_label(parent_node, vis_mode).replace(":", "pass")
 
@@ -851,7 +855,7 @@ def _add_edges_for_node(
             collapse_fn=collapse_fn,
             max_module_depth=vis_call_depth,
         )
-        child_fold_ancestor = _run_fold_ancestor_for_node(child_node, run_folds)
+        child_fold_ancestor = _run_fold_ancestor_for_node(child_node, repeat_folds)
         if child_fold_ancestor is not None:
             child_module_name_w_pass = child_fold_ancestor
         child_segment = _segment_for_node(child_node, segments)
@@ -863,7 +867,7 @@ def _add_edges_for_node(
         elif child_is_collapsed_module:
             if child_module_name_w_pass is None:
                 continue
-            head_name = _run_fold_graph_node_name(child_module_name_w_pass, vis_mode, run_folds)
+            head_name = _run_fold_graph_node_name(child_module_name_w_pass, vis_mode, repeat_folds)
         else:
             head_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
         if collapsed_head_name is not None:
@@ -943,8 +947,8 @@ def _add_edges_for_node(
         # to a common cluster (always falling back to top-level emission).
         edge_module_key: str | int = module
 
-        parent_hidden_fold = _run_fold_hidden_endpoint(parent_module_name_w_pass, run_folds)
-        child_hidden_fold = _run_fold_hidden_endpoint(child_module_name_w_pass, run_folds)
+        parent_hidden_fold = _run_fold_hidden_endpoint(parent_module_name_w_pass, repeat_folds)
+        child_hidden_fold = _run_fold_hidden_endpoint(child_module_name_w_pass, repeat_folds)
         if parent_hidden_fold is not None and child_hidden_fold is parent_hidden_fold:
             continue
 
@@ -979,7 +983,7 @@ def _add_edges_for_node(
         edge_is_self_loop = tail_name == head_name
         if edge_is_self_loop and (parent_segment is not None or child_segment is not None):
             continue
-        edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, run_folds, vis_mode)
+        edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, repeat_folds, vis_mode)
         if edge_is_self_loop and edge_touches_run_fold and ellipsis_fold is None:
             continue
         if (

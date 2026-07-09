@@ -36,7 +36,7 @@ from PIL import Image
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
-    FoldRunsLiteral,
+    FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -108,7 +108,7 @@ from ._render_utils import (
 if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
     from ..data_classes.module import Module
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 BaseGraphNode = Union["Op", "Layer"]
 ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"]
@@ -429,7 +429,7 @@ class RenderedNodeEmission:
     Parameters
     ----------
     name:
-        Graphviz node name after collapse and run-fold remapping.
+        Graphviz node name after collapse and repeat-fold remapping.
     kind:
         Diagnostic node kind.
     node:
@@ -443,7 +443,7 @@ class RenderedNodeEmission:
     boundary_kind:
         Boundary kind for synthetic focus boundary nodes.
     fold:
-        Run-fold represented or touched by this node.
+        Repeat-fold represented or touched by this node.
     """
 
     name: str
@@ -453,7 +453,7 @@ class RenderedNodeEmission:
     module_address: str | None = None
     call: str | None = None
     boundary_kind: str | None = None
-    fold: "ModuleRunFold | None" = None
+    fold: "ModuleRepeatFold | None" = None
 
 
 @dataclass(frozen=True)
@@ -652,7 +652,7 @@ __all__ = [
     "Duration",
     "FROZEN_PARAMS_BG_COLOR",
     "FocusNode",
-    "FoldRunsLiteral",
+    "FoldRepeatsLiteral",
     "ForwardDotCall",
     "ForwardDotIR",
     "GRADIENT_ARROW_COLOR",

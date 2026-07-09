@@ -19,7 +19,7 @@ from .._deprecations import MISSING, MissingType
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
-    FoldRunsLiteral,
+    FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -104,7 +104,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
         collapse_fn: Optional[Callable[..., Any]] = None,
         collapse: CollapseLiteral = "none",
-        fold_runs: FoldRunsLiteral = None,
+        fold_repeats: FoldRepeatsLiteral = None,
         skip_fn: Optional[Callable[..., Any]] = None,
         vis_edge_overrides: Optional[Dict[str, Any]] = None,
         vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -162,8 +162,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
             or uncollapse a collapsed unit. ``"auto"`` is the first schedule
             point whose visible count enters the readable band, while its
             current implementation remains unchanged for compatibility.
-        fold_runs:
-            Run-fold policy. ``None`` preserves the default policy: off for
+        fold_repeats:
+            Repeat-fold policy. ``None`` preserves the default policy: off for
             ``collapse="none"`` and band-pressure two-pass folding for
             ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
             including standalone folding with ``collapse="none"``. ``False``
@@ -208,7 +208,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             collapse_fn=collapse_fn,
             collapse=collapse,
-            fold_runs=fold_runs,
+            fold_repeats=fold_repeats,
             skip_fn=skip_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_grad_edge_overrides=vis_grad_edge_overrides,

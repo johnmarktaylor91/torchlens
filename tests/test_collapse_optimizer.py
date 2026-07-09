@@ -15,7 +15,7 @@ import torchlens as tl
 from torchlens.visualization.auto_collapse import (
     analyze_collapse,
     resolve_collapse_fn,
-    resolve_run_folds,
+    resolve_repeat_folds,
 )
 from torchlens.visualization.collapse_optimizer import (
     K_CAP,
@@ -43,7 +43,7 @@ from torchlens.visualization.collapse_plan import (
     CollapsePlan,
     ModuleBox,
     RenderContext,
-    RunFold,
+    RepeatFold,
     SegmentDescriptor,
     count,
     plan_from_v1,
@@ -559,7 +559,7 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
         context = RenderContext(vis_mode="rolled")
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
-        rendered_plan = plan_from_v1(trace, collapse_fn, result.run_folds, context)
+        rendered_plan = plan_from_v1(trace, collapse_fn, result.repeat_folds, context)
 
         assert not result.declined
         assert trace.modules["short"].num_calls == 3
@@ -697,7 +697,7 @@ def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None
     try:
         context = RenderContext()
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=context)
-        folds = resolve_run_folds(trace, collapse_fn, context=context)
+        folds = resolve_repeat_folds(trace, collapse_fn, context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
         rendered_plan = plan_from_v1(trace, collapse_fn, folds, context)
         second = select_collapse_plan(trace, context)
@@ -819,7 +819,7 @@ def test_max_salience_floor_fires_on_synthetic_unique_wide_fan() -> None:
         assert _max_box_salience_score("head", signal, state) == MAX_SALIENCE_FLOOR
         assert not _eligible_module_box(state, "head", signal)
         assert "head" not in result.selected
-        assert any(isinstance(node, RunFold) for node in result.plan.nodes)
+        assert any(isinstance(node, RepeatFold) for node in result.plan.nodes)
         assert any("head.branches" in repr(node) for node in result.plan.nodes)
     finally:
         trace.cleanup()
@@ -842,8 +842,8 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
                 collapse="max",
             )
         )
-        run_fold = next(node for node in result.plan.nodes if isinstance(node, RunFold))
-        fold = result.run_folds[run_fold.rep.call.rsplit(":", 1)[0]]
+        run_fold = next(node for node in result.plan.nodes if isinstance(node, RepeatFold))
+        fold = result.repeat_folds[run_fold.rep.call.rsplit(":", 1)[0]]
         representative = trace.modules[fold.representative]
         aggregate_layers = sum(
             int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in fold.addresses

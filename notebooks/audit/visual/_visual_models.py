@@ -3,7 +3,7 @@
 These extend the shared ``notebooks/audit/_models.py`` ZOO with architectures
 needed to exercise the full TorchLens visual language: genuinely recurrent
 models (cell-based loops that roll, fused RNN kernels that do not), deep
-same-class stacks for ellipsis/run-fold demos, branching topologies,
+same-class stacks for ellipsis/repeat-fold demos, branching topologies,
 a small transformer, multi-input/multi-output models, and degenerate cases.
 
 Each factory returns ``(model, example_input_or_tuple)`` ready for
@@ -154,7 +154,7 @@ class SmallResBlock(nn.Module):
 
 
 class BlockStack(nn.Module):
-    """Stem + 8 SmallResBlocks + head: minimal run-fold / ellipsis demo."""
+    """Stem + 8 SmallResBlocks + head: minimal repeat-fold / ellipsis demo."""
 
     def __init__(self, depth: int = 8) -> None:
         super().__init__()

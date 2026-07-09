@@ -223,7 +223,7 @@ def render_backward_graph(
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def render_combined_graph(
@@ -407,7 +407,7 @@ def rendered_node_universe_from_v1(
     trace: "Trace",
     *,
     collapse_fn: CollapseFn | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     context: RenderContext | None = None,
     vis_call_depth: int = 1000,
 ) -> tuple[RenderedNodeEmission, ...]:
@@ -419,8 +419,8 @@ def rendered_node_universe_from_v1(
         Trace whose forward graph is being inspected.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
-        Active run-fold descriptors keyed by module address.
+    repeat_folds:
+        Active repeat-fold descriptors keyed by module address.
     context:
         Render context. Defaults to the S7 parity matrix.
     vis_call_depth:
@@ -437,7 +437,7 @@ def rendered_node_universe_from_v1(
     entries_to_plot = _entries_to_plot_for_context(trace, resolved_context.vis_mode)
     skipped_labels: set[str] = set()
     edge_map: dict[str, list[RenderEdge]] = {}
-    if run_folds or resolved_context.skip_fn is not None:
+    if repeat_folds or resolved_context.skip_fn is not None:
         edge_map, skipped_labels = _build_skip_filtered_edge_map(
             trace,
             entries_to_plot,
@@ -461,7 +461,7 @@ def rendered_node_universe_from_v1(
         vis_call_depth=vis_call_depth,
         show_buffer_layers=show_buffer_layers,
         collapse_fn=collapse_fn,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         show_containers=resolved_context.show_containers,
         collapsed_container_nodes=collapsed_container_nodes,
     )
@@ -474,7 +474,7 @@ def rendered_node_universe_from_v1(
         vis_call_depth=vis_call_depth,
         show_buffer_layers=show_buffer_layers,
         collapse_fn=collapse_fn,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         collapsed_container_nodes=collapsed_container_nodes,
     )
     return (*emissions, *ellipsis_emissions)

@@ -346,10 +346,10 @@ AXES: dict[str, str] = {
     "collapse:auto": "collapse='auto' (readability-targeted engine)",
     "collapse:max": "collapse='max' (aggressive condensation + segments)",
     "collapse:float": "collapse=t float slider in [0,1], monotone schedule",
-    "fold_runs:none": "fold_runs=None default policy (off for collapse='none')",
-    "fold_runs:true": "fold_runs=True (fold every legal run)",
-    "fold_runs:false": "fold_runs=False (folding disabled)",
-    "fold_runs:standalone": "fold_runs=True with collapse='none' (fold-only mode)",
+    "fold_repeats:none": "fold_repeats=None default policy (off for collapse='none')",
+    "fold_repeats:true": "fold_repeats=True (fold every legal run)",
+    "fold_repeats:false": "fold_repeats=False (folding disabled)",
+    "fold_repeats:standalone": "fold_repeats=True with collapse='none' (fold-only mode)",
     "direction:bottomup": "direction='bottomup' (default)",
     "direction:topdown": "direction='topdown'",
     "direction:leftright": "direction='leftright'",
@@ -424,7 +424,7 @@ AXES: dict[str, str] = {
     "node:module_box": "nested module cluster box",
     "node:atomic_module": "atomic module box",
     "node:collapsed_module": "collapsed module representative box",
-    "node:ellipsis": "run-fold ellipsis node ('+N more Class')",
+    "node:ellipsis": "repeat-fold ellipsis node ('+N more Class')",
     "node:segment": "segment box (max-mode condensed range)",
     "node:container": "container nodes (dict/tuple outputs)",
     "node:boundary_stub": "module-focus boundary stubs",
@@ -452,7 +452,7 @@ AXES: dict[str, str] = {
     "scale:real_model": "real torchvision-scale architecture",
     "degenerate": "degenerate graphs (single op, no modules, scalar out)",
     "regression:large_bbox": "large-graph bbox non-blank regression",
-    "artifact:apparent_cycle": "interleaved run-fold apparent-cycle artifact (known)",
+    "artifact:apparent_cycle": "interleaved repeat-fold apparent-cycle artifact (known)",
     "diag:collapse_plan": "Trace.collapse_plan() diagnostic",
     "diag:collapse_schedule": "Trace.collapse_schedule() diagnostic",
 }
@@ -1201,11 +1201,11 @@ SECTIONS: list[Section] = [
                 ncols=5,
             ),
             Page(
-                label="e3_fold_runs",
-                title="fold_runs: None / True / False on MobileNetV2",
+                label="e3_fold_repeats",
+                title="fold_repeats: None / True / False on MobileNetV2",
                 caption=(
                     "Run folding elides REPEATED runs of same-class blocks into a representative plus an "
-                    "ellipsis node. fold_runs=None is the default policy (folding active under "
+                    "ellipsis node. fold_repeats=None is the default policy (folding active under "
                     "collapse='auto'/'max'); True folds every legal run; False disables folding entirely. "
                     "On this model the default policy already folds every legal run, so the None and True "
                     "panels are identical here -- the mode where True differs is collapse='none' "
@@ -1216,55 +1216,60 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "collapse='auto', fold_runs=None (default policy)",
+                        "collapse='auto', fold_repeats=None (default policy)",
                         "mobilenet_v2",
-                        kwargs={"collapse": "auto", "fold_runs": None},
+                        kwargs={"collapse": "auto", "fold_repeats": None},
                     ),
                     Panel(
-                        "collapse='auto', fold_runs=True",
+                        "collapse='auto', fold_repeats=True",
                         "mobilenet_v2",
-                        kwargs={"collapse": "auto", "fold_runs": True},
+                        kwargs={"collapse": "auto", "fold_repeats": True},
                     ),
                     Panel(
-                        "collapse='auto', fold_runs=False",
+                        "collapse='auto', fold_repeats=False",
                         "mobilenet_v2",
-                        kwargs={"collapse": "auto", "fold_runs": False},
+                        kwargs={"collapse": "auto", "fold_repeats": False},
                     ),
                 ],
-                covers=["fold_runs:none", "fold_runs:true", "fold_runs:false", "scale:real_model"],
+                covers=[
+                    "fold_repeats:none",
+                    "fold_repeats:true",
+                    "fold_repeats:false",
+                    "scale:real_model",
+                ],
             ),
             Page(
                 label="e4_standalone_fold",
-                title="Standalone folding: fold_runs=True with collapse='none'",
+                title="Standalone folding: fold_repeats=True with collapse='none'",
                 caption=(
-                    "fold_runs=True works WITHOUT collapse: the full graph is kept except that boring "
+                    "fold_repeats=True works WITHOUT collapse: the full graph is kept except that boring "
                     "repeated stacks fold away ('full graph minus boring stacks' mode). LEFT: plain "
-                    "collapse='none'. RIGHT: same graph with fold_runs=True.\n"
+                    "collapse='none'. RIGHT: same graph with fold_repeats=True.\n"
                     "CHECK: on the right, the run of identical residual blocks folds to representative + "
                     "ellipsis while everything else (stem, head) stays at full detail."
                 ),
                 panels=[
                     Panel(
-                        "collapse='none', fold_runs=None",
+                        "collapse='none', fold_repeats=None",
                         "block_stack",
                         kwargs={"collapse": "none"},
                     ),
                     Panel(
-                        "collapse='none', fold_runs=True",
+                        "collapse='none', fold_repeats=True",
                         "block_stack",
-                        kwargs={"collapse": "none", "fold_runs": True},
+                        kwargs={"collapse": "none", "fold_repeats": True},
                     ),
                 ],
-                covers=["fold_runs:standalone"],
+                covers=["fold_repeats:standalone"],
             ),
             Page(
                 label="e5_ellipsis_grammar",
                 title="The '+N more' ellipsis, up close",
                 caption=(
                     "An 8-block stack of SAME-CLASS but DIFFERENT-PARAMETER residual blocks under "
-                    "collapse='auto', fold_runs=True. The run folds to ONE representative box (showing the "
+                    "collapse='auto', fold_repeats=True. The run folds to ONE representative box (showing the "
                     "stats of a single instance) plus an ellipsis node carrying the multiplicity. (Without "
-                    "fold_runs=True, auto keeps all 8 boxes here: the graph is already inside the readable "
+                    "fold_repeats=True, auto keeps all 8 boxes here: the graph is already inside the readable "
                     "band, so the default policy applies no fold pressure.)\n"
                     "GRAMMAR (memorize this): '+N more Class' = N distinct same-type instances with their "
                     "own parameters (an ellipsis of siblings). '(xN)' = TRUE recurrence, the same parameters "
@@ -1274,9 +1279,9 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "block_stack -- collapse='auto', fold_runs=True",
+                        "block_stack -- collapse='auto', fold_repeats=True",
                         "block_stack",
-                        kwargs={"collapse": "auto", "fold_runs": True},
+                        kwargs={"collapse": "auto", "fold_repeats": True},
                     ),
                 ],
                 covers=["node:ellipsis", "label:plusN"],
@@ -1326,9 +1331,9 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="e8_interleaved_artifact",
-                title="KNOWN ARTIFACT: interleaved run-folds can look like a cycle",
+                title="KNOWN ARTIFACT: interleaved repeat-folds can look like a cycle",
                 caption=(
-                    "An A/B/A/B/A/B alternating stack with fold_runs=True. Folding the A-run and the B-run "
+                    "An A/B/A/B/A/B alternating stack with fold_repeats=True. Folding the A-run and the B-run "
                     "separately leaves edges that appear to run A -> B -> A: an APPARENT CYCLE. The "
                     "underlying graph is acyclic -- this is a rendering artifact of folding two interleaved "
                     "runs, currently accepted and documented (known nit N2).\n"
@@ -1337,11 +1342,11 @@ SECTIONS: list[Section] = [
                     "distinction from Section D: real recurrence would say '(xN)'."
                 ),
                 panels=[
-                    Panel("fold_runs=None -- true structure", "interleaved_stack"),
+                    Panel("fold_repeats=None -- true structure", "interleaved_stack"),
                     Panel(
-                        "fold_runs=True -- apparent cycle artifact",
+                        "fold_repeats=True -- apparent cycle artifact",
                         "interleaved_stack",
-                        kwargs={"fold_runs": True},
+                        kwargs={"fold_repeats": True},
                     ),
                 ],
                 covers=["artifact:apparent_cycle"],

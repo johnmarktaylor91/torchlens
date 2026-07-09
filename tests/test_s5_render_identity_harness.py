@@ -162,12 +162,12 @@ def _snapshot_case(trace: tl.Trace, tmp_path: Path, case_name: str) -> dict[str,
 
     items: dict[str, dict[str, Any]] = {}
     for collapse in ("none", "auto", "max"):
-        for fold_runs in (None, True, False):
-            if collapse == "none" and fold_runs is None:
+        for fold_repeats in (None, True, False):
+            if collapse == "none" and fold_repeats is None:
                 key = "none_default"
             elif collapse == "none":
-                key = f"none_fold_{fold_runs}"
-            elif fold_runs is None:
+                key = f"none_fold_{fold_repeats}"
+            elif fold_repeats is None:
                 key = collapse
             else:
                 continue
@@ -178,7 +178,7 @@ def _snapshot_case(trace: tl.Trace, tmp_path: Path, case_name: str) -> dict[str,
                     vis_fileformat="svg",
                     vis_node_placement="dot",
                     collapse=collapse,
-                    fold_runs=fold_runs,
+                    fold_repeats=fold_repeats,
                     order_siblings=False,
                 )
             )
@@ -196,7 +196,7 @@ def _assert_ir_shape(trace: tl.Trace) -> None:
     render_ir = build_render_ir(
         trace,
         collapse_fn=None,
-        run_folds=None,
+        repeat_folds=None,
         context=RenderContext(),
     )
 

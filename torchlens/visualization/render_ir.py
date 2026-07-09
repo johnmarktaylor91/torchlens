@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
     from .rendering import RenderedNodeEmission
 
 
@@ -49,9 +49,9 @@ class RenderIREdge:
     Parameters
     ----------
     source_unit:
-        Rendered source endpoint after collapse/run-fold projection.
+        Rendered source endpoint after collapse/repeat-fold projection.
     target_unit:
-        Rendered target endpoint after collapse/run-fold projection.
+        Rendered target endpoint after collapse/repeat-fold projection.
     source_originals:
         Original TorchLens source labels represented by the edge.
     target_originals:
@@ -150,7 +150,7 @@ def build_render_ir(
     trace: "Trace",
     *,
     collapse_fn: "Callable[[Module], bool] | None",
-    run_folds: "Mapping[str, ModuleRunFold] | None",
+    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
     context: RenderContext | None = None,
 ) -> RenderIR:
     """Build the first render-IR slice from current renderer-faithful emissions.
@@ -161,8 +161,8 @@ def build_render_ir(
         Trace being rendered.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
-        Active run-fold descriptors.
+    repeat_folds:
+        Active repeat-fold descriptors.
     context:
         Render context. Defaults to :class:`RenderContext`.
 
@@ -178,11 +178,11 @@ def build_render_ir(
     emissions = rendered_node_universe_from_v1(
         trace,
         collapse_fn=collapse_fn,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         context=resolved_context,
     )
     nodes = tuple(_node_from_emission(trace, emission, resolved_context) for emission in emissions)
-    edges = _build_forward_edges(trace, collapse_fn, run_folds, resolved_context)
+    edges = _build_forward_edges(trace, collapse_fn, repeat_folds, resolved_context)
     clusters = _build_clusters(nodes, edges)
     return RenderIR(
         context=resolved_context,
@@ -231,7 +231,7 @@ def _node_from_emission(
 def _build_forward_edges(
     trace: "Trace",
     collapse_fn: "Callable[[Module], bool] | None",
-    run_folds: "Mapping[str, ModuleRunFold] | None",
+    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
     context: RenderContext,
 ) -> tuple[RenderIREdge, ...]:
     """Build renderer-faithful forward edge records for the IR slice.
@@ -242,8 +242,8 @@ def _build_forward_edges(
         Trace being rendered.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
-        Active run-fold descriptors.
+    repeat_folds:
+        Active repeat-fold descriptors.
     context:
         Render context that controls visibility and endpoint projection.
 
@@ -274,7 +274,7 @@ def _build_forward_edges(
     entries_to_plot = _entries_to_plot_for_context(trace, context.vis_mode)
     skipped_labels: set[str] = set()
     edge_map: dict[str, list[LegacyRenderEdge]] = {}
-    if run_folds or context.skip_fn is not None:
+    if repeat_folds or context.skip_fn is not None:
         edge_map, skipped_labels = _build_skip_filtered_edge_map(
             trace,
             entries_to_plot,
@@ -317,7 +317,7 @@ def _build_forward_edges(
                 parent_node,
                 context,
                 collapse_fn,
-                run_folds,
+                repeat_folds,
                 collapsed_container_nodes,
             )
             target_unit = _projected_endpoint(
@@ -325,7 +325,7 @@ def _build_forward_edges(
                 child_node,
                 context,
                 collapse_fn,
-                run_folds,
+                repeat_folds,
                 collapsed_container_nodes,
             )
             source_fold = _run_fold_hidden_endpoint(
@@ -335,9 +335,9 @@ def _build_forward_edges(
                     vis_mode=context.vis_mode,
                     vis_call_depth=1000,
                     collapse_fn=collapse_fn,
-                    run_folds=run_folds,
+                    repeat_folds=repeat_folds,
                 ),
-                run_folds,
+                repeat_folds,
             )
             target_fold = _run_fold_hidden_endpoint(
                 _collapsed_endpoint_for_emission(
@@ -346,9 +346,9 @@ def _build_forward_edges(
                     vis_mode=context.vis_mode,
                     vis_call_depth=1000,
                     collapse_fn=collapse_fn,
-                    run_folds=run_folds,
+                    repeat_folds=repeat_folds,
                 ),
-                run_folds,
+                repeat_folds,
             )
             if source_fold is not None and target_fold is source_fold:
                 continue
@@ -378,7 +378,7 @@ def _build_forward_edges(
                     target_unit = ellipsis_name
                 projection_reason = "run_fold_ellipsis"
             if source_unit == target_unit and not _edge_touches_run_fold(
-                source_unit, target_unit, run_folds, context.vis_mode
+                source_unit, target_unit, repeat_folds, context.vis_mode
             ):
                 continue
             dedupe_key = (source_unit, target_unit, render_edge.occurrence_key)
@@ -413,7 +413,7 @@ def _projected_endpoint(
     node: Any,
     context: RenderContext,
     collapse_fn: "Callable[[Module], bool] | None",
-    run_folds: "Mapping[str, ModuleRunFold] | None",
+    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
     collapsed_container_nodes: "Mapping[str, str]",
 ) -> str:
     """Return the non-ellipsis projected endpoint name for one node.
@@ -428,8 +428,8 @@ def _projected_endpoint(
         Render context that controls visibility.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
-        Active run-fold descriptors.
+    repeat_folds:
+        Active repeat-fold descriptors.
     collapsed_container_nodes:
         Mapping from container leaf node names to collapsed container nodes.
 
@@ -452,10 +452,10 @@ def _projected_endpoint(
         vis_mode=context.vis_mode,
         vis_call_depth=1000,
         collapse_fn=collapse_fn,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
     )
     if endpoint is not None:
-        return _run_fold_graph_node_name(endpoint, context.vis_mode, run_folds)
+        return _run_fold_graph_node_name(endpoint, context.vis_mode, repeat_folds)
     return collapsed_container_nodes.get(render_name, render_name)
 
 
@@ -481,7 +481,7 @@ def _projection_reason(
     Returns
     -------
     Literal["direct", "source_projected", "target_projected", "both_projected"]
-        Projection reason before run-fold ellipsis projection is applied.
+        Projection reason before repeat-fold ellipsis projection is applied.
     """
 
     source_projected = source_unit != source_name

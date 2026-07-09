@@ -23,7 +23,7 @@ from ._literals import (
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
-    FoldRunsLiteral,
+    FoldRepeatsLiteral,
 )
 from ._capture_state_helpers import (
     _clone_state_dict_with_metadata,
@@ -172,7 +172,7 @@ def show_model_graph(
     vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     collapse: CollapseLiteral | MissingType = MISSING,
-    fold_runs: FoldRunsLiteral | MissingType = MISSING,
+    fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
@@ -253,8 +253,8 @@ def show_model_graph(
         Smart module-collapse mode: ``"none"``, ``"auto"``, ``"max"``, or a
         float in ``[0.0, 1.0]``. Float levels follow the public monotone
         schedule.
-    fold_runs:
-        Run-fold policy. ``None`` preserves the default policy. ``True`` folds
+    fold_repeats:
+        Repeat-fold policy. ``None`` preserves the default policy. ``True`` folds
         every eligible repeated run. ``False`` disables run folding.
     random_seed:
         Fixed RNG seed for stochastic models.
@@ -299,7 +299,7 @@ def show_model_graph(
         vis_graph_overrides=vis_graph_overrides,
         vis_node_mode=vis_node_mode,
         collapse=collapse,
-        fold_runs=fold_runs,
+        fold_repeats=fold_repeats,
         vis_edge_overrides=vis_edge_overrides,
         vis_grad_edge_overrides=vis_grad_edge_overrides,
         vis_module_overrides=vis_module_overrides,

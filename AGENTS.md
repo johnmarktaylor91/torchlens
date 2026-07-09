@@ -43,7 +43,7 @@ Key entry points:
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases
 - Visualization: `Trace.draw(order_siblings=True)` applies a Graphviz-only verified
   sibling-ordering post-pass for forward unrolled graphs under the node cap.
-  `Trace.draw(collapse="none"|"auto"|"max"|t, fold_runs=None|True|False)` controls v2 smart
+  `Trace.draw(collapse="none"|"auto"|"max"|t, fold_repeats=None|True|False)` controls v2 smart
   collapse for rolled and unrolled graphs, where float `t` in `[0.0, 1.0]` follows the public
   monotone schedule (`0.0 == "none"`, `1.0 == "max"`). `auto` is the first schedule point whose
   visible count enters the readable band, but its implementation remains frozen for compatibility.

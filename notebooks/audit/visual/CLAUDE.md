@@ -44,7 +44,7 @@ Single render-then-staple script (a locked design decision):
 | B | Layout & direction: direction, order_siblings, large-graph regression, dot vs rank |
 | C | Containers, module focus, call depth, skip_fn/collapse_fn/node_spec_fn hooks, override dicts |
 | D | Loop rolling & recurrence: unrolled-vs-rolled, back-edges, pass-count sweep, fused-kernel contrast, loops with branching |
-| E | Collapse & run folding: none/auto/max, float-t filmstrip, fold_runs, ellipsis grammar, segments, remainder labels, known artifacts, plan/schedule diagnostics |
+| E | Collapse & run folding: none/auto/max, float-t filmstrip, fold_repeats, ellipsis grammar, segments, remainder labels, known artifacts, plan/schedule diagnostics |
 | F | Node content: node_mode presets, overlays (incl. the NaN debugger), label fields, code panel, typography, raw I/O thumbnails, input-transform summary |
 | G | Themes (all five presets) |
 | H | Backward & combined graphs |

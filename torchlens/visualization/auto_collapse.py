@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from .._literals import CollapseLiteral, FoldRunsLiteral, VisModeLiteral
+from .._literals import CollapseLiteral, FoldRepeatsLiteral, VisModeLiteral
 from .collapse_plan import RenderContext, count, plan_from_v1
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ RUN_FOLD_MIN_LENGTH = 3
 
 
 @dataclass(frozen=True)
-class ModuleRunFold:
+class ModuleRepeatFold:
     """Consecutive structurally-identical module run selected for render folding.
 
     Parameters
@@ -396,7 +396,7 @@ def resolve_collapse_fn(
 
                 return module.address in result.selected
 
-            setattr(v2_collapse_fn, "_torchlens_v2_run_folds", result.run_folds)
+            setattr(v2_collapse_fn, "_torchlens_v2_repeat_folds", result.repeat_folds)
             setattr(v2_collapse_fn, "_torchlens_v2_segments", result.segments or {})
             setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
             setattr(v2_collapse_fn, "_torchlens_v2_result", result)
@@ -417,7 +417,7 @@ def resolve_collapse_fn(
 
                 return module.address in result.selected
 
-            setattr(v2_collapse_fn, "_torchlens_v2_run_folds", result.run_folds)
+            setattr(v2_collapse_fn, "_torchlens_v2_repeat_folds", result.repeat_folds)
             setattr(v2_collapse_fn, "_torchlens_v2_segments", result.segments or {})
             setattr(v2_collapse_fn, "_torchlens_v2_plan", result.plan)
             setattr(v2_collapse_fn, "_torchlens_v2_result", result)
@@ -426,12 +426,12 @@ def resolve_collapse_fn(
     return None
 
 
-def resolve_run_folds(
+def resolve_repeat_folds(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,
     context: RenderContext | None = None,
-    fold_runs: FoldRunsLiteral = None,
-) -> dict[str, ModuleRunFold]:
+    fold_repeats: FoldRepeatsLiteral = None,
+) -> dict[str, ModuleRepeatFold]:
     """Return render-time folds for consecutive collapsed sibling runs.
 
     Parameters
@@ -442,31 +442,31 @@ def resolve_run_folds(
         Active collapse predicate. ``None`` disables run folding.
     context:
         Render context for v2 instrumentation. Defaults preserve v1 behavior.
-    fold_runs:
-        Run-fold policy override. ``None`` preserves the current band-gated
+    fold_repeats:
+        Repeat-fold policy override. ``None`` preserves the current band-gated
         policy, ``True`` folds every eligible repeated run, and ``False``
         disables run folding.
 
     Returns
     -------
-    dict[str, ModuleRunFold]
+    dict[str, ModuleRepeatFold]
         Mapping from each folded module address to its run descriptor.
     """
 
     resolved_context = RenderContext() if context is None else context
-    if fold_runs not in {None, True, False}:
-        raise ValueError("fold_runs must be None, True, or False.")
-    if fold_runs is False:
+    if fold_repeats not in {None, True, False}:
+        raise ValueError("fold_repeats must be None, True, or False.")
+    if fold_repeats is False:
         return {}
-    if collapse_fn is None and fold_runs is not True:
+    if collapse_fn is None and fold_repeats is not True:
         return {}
     eligibility_collapse_fn = collapse_fn if collapse_fn is not None else _always_collapse_module
     render_collapse_fn = collapse_fn
-    v2_run_folds = getattr(collapse_fn, "_torchlens_v2_run_folds", None)
-    if fold_runs is None and v2_run_folds is not None:
-        return dict(v2_run_folds)
+    v2_repeat_folds = getattr(collapse_fn, "_torchlens_v2_repeat_folds", None)
+    if fold_repeats is None and v2_repeat_folds is not None:
+        return dict(v2_repeat_folds)
     projected_count = count(plan_from_v1(trace, render_collapse_fn, None, resolved_context))
-    if fold_runs is None and projected_count <= _readable_band_high(trace):
+    if fold_repeats is None and projected_count <= _readable_band_high(trace):
         _assert_plan_count(
             trace,
             render_collapse_fn,
@@ -481,7 +481,7 @@ def resolve_run_folds(
         resolved_context,
     )
     analysis = analyze_collapse(trace)
-    candidate_folds: list[ModuleRunFold] = []
+    candidate_folds: list[ModuleRepeatFold] = []
     candidate_addresses: set[str] = set()
     for parent_address, child_addresses in _sibling_address_groups(trace).items():
         graph = _flow_graph_for_sibling_group(
@@ -535,16 +535,16 @@ def resolve_run_folds(
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
             candidate_addresses.update(run)
-    folds_by_address: dict[str, ModuleRunFold] = {}
+    folds_by_address: dict[str, ModuleRepeatFold] = {}
     for fold in sorted(candidate_folds, key=lambda item: (-item.multiplicity, item.representative)):
         if any(address in folds_by_address for address in fold.addresses):
             continue
         for address in fold.addresses:
             folds_by_address[address] = fold
         projected_count += _run_fold_delta(fold, hidden_member_contributions)
-        if fold_runs is None and projected_count <= _readable_band_high(trace):
+        if fold_repeats is None and projected_count <= _readable_band_high(trace):
             break
-    if fold_runs is True:
+    if fold_repeats is True:
         projected_count = count(
             plan_from_v1(trace, render_collapse_fn, folds_by_address, resolved_context)
         )
@@ -559,7 +559,7 @@ def resolve_run_folds(
 
 
 def _always_collapse_module(module: "Module") -> bool:
-    """Return ``True`` for standalone run-fold eligibility checks.
+    """Return ``True`` for standalone repeat-fold eligibility checks.
 
     Parameters
     ----------
@@ -839,7 +839,7 @@ def _module_structural_signature(module: "Module") -> tuple[int, int, int, int]:
     """Return a per-module structural fingerprint for fold-honesty checks.
 
     Two modules are only considered structurally interchangeable for the
-    "+N more" run-fold ellipsis when this fingerprint matches exactly. It is
+    "+N more" repeat-fold ellipsis when this fingerprint matches exactly. It is
     used to require that the *hidden* members of a fold (every member except
     the visible representative) share one structure, so a same-class,
     same-output-shape sibling with genuinely different internals (extra
@@ -1434,7 +1434,7 @@ def _selected_descendants(
     )
 
 
-def _make_run_fold(trace: "Trace", addresses: tuple[str, ...]) -> ModuleRunFold:
+def _make_run_fold(trace: "Trace", addresses: tuple[str, ...]) -> ModuleRepeatFold:
     """Build aggregate metadata for one folded run.
 
     Parameters
@@ -1446,12 +1446,12 @@ def _make_run_fold(trace: "Trace", addresses: tuple[str, ...]) -> ModuleRunFold:
 
     Returns
     -------
-    ModuleRunFold
-        Aggregate run-fold descriptor.
+    ModuleRepeatFold
+        Aggregate repeat-fold descriptor.
     """
 
     modules = [cast("Module", trace.modules[address]) for address in addresses]
-    return ModuleRunFold(
+    return ModuleRepeatFold(
         representative=addresses[0],
         addresses=addresses,
         class_name=str(getattr(modules[0], "class_name", "") or "blocks"),
@@ -2610,7 +2610,7 @@ def _rendered_module_hidden_counts(trace: "Trace", context: RenderContext) -> di
 def _assert_plan_count(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,
-    run_folds: Mapping[str, ModuleRunFold] | None,
+    repeat_folds: Mapping[str, ModuleRepeatFold] | None,
     context: RenderContext,
     running_count: int,
 ) -> None:
@@ -2622,15 +2622,15 @@ def _assert_plan_count(
         Trace being rendered.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
-        Active run-fold mapping.
+    repeat_folds:
+        Active repeat-fold mapping.
     context:
         Render context used for planning.
     running_count:
         Incrementally maintained rendered node count.
     """
 
-    planned_count = count(plan_from_v1(trace, collapse_fn, run_folds, context))
+    planned_count = count(plan_from_v1(trace, collapse_fn, repeat_folds, context))
     if running_count == planned_count:
         return
     message = (
@@ -2704,7 +2704,7 @@ def _run_fold_hidden_member_contributions(
     emissions = rendered_node_universe_from_v1(
         trace,
         collapse_fn=collapse_fn,
-        run_folds=None,
+        repeat_folds=None,
         context=context,
     )
     for emission in emissions:
@@ -2740,7 +2740,7 @@ def _emission_module_ancestors(emission: Any) -> tuple[str, ...]:
     return tuple(dict.fromkeys(addresses))
 
 
-def _run_fold_delta(fold: ModuleRunFold, hidden_member_contributions: Mapping[str, int]) -> int:
+def _run_fold_delta(fold: ModuleRepeatFold, hidden_member_contributions: Mapping[str, int]) -> int:
     """Return rendered-node delta for accepting ``fold``.
 
     Parameters
