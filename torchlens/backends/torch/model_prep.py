@@ -1929,9 +1929,7 @@ def module_forward_decorator(
             frame = _mstack.push_frame(trace, state.module_stack, module)
             from .prehook_provenance import bind_invocation
 
-            bind_invocation(
-                trace, module, frame.address, frame.pass_index, tuple(args), dict(kwargs)
-            )
+            bind_invocation(trace, module, frame.address, frame.pass_index, args, kwargs)
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
@@ -2055,7 +2053,7 @@ def module_forward_decorator(
         frame = _mstack.push_frame(trace, trace._exhaustive_module_stack, module)
         from .prehook_provenance import bind_invocation
 
-        bind_invocation(trace, module, frame.address, frame.pass_index, tuple(args), dict(kwargs))
+        bind_invocation(trace, module, frame.address, frame.pass_index, args, kwargs)
         try:
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs

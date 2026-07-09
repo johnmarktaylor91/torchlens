@@ -234,7 +234,13 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   Arbitrary mutations inside non-tensor user objects and compiled module-call
   dispatch remain out of scope. Registry insertion that bypasses PyTorch's public
   registration APIs is detected at runtime when observable and downgraded to
-  attribution-incomplete provenance.
+  attribution-incomplete provenance. During an active trace, code that scans
+  ``_forward_pre_hooks`` sees TorchLens wrapper objects; inspect each wrapper's
+  ``__wrapped__`` attribute to recover the user callable. If TorchLens detects a
+  private registry-registration bypass, the affected module (or all modules for
+  a global bypass) stays marked attribution-incomplete for the rest of that
+  capture. This sticky flag is intentionally conservative because later private
+  registry edits cannot prove that no hook execution was missed.
 
   <!-- TODO(pre-hook-glossary-finishing-phase): Add glossary entries for the
   provisional ModuleCall fields `inputs_before_pre_hooks`,

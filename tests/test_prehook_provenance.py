@@ -343,6 +343,52 @@ def test_spectral_norm_module_state_hook_is_not_input_change() -> None:
     assert effect.change_kinds == ()
 
 
+def test_hookless_trace_skips_registration_refresh_hot_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hookless module calls do not scan registries or all prepared modules."""
+
+    refresh_calls = 0
+    original = provenance.refresh_registration_bypasses
+
+    def count_refreshes(trace: tl.Trace, module: nn.Module | None = None) -> None:
+        """Count registration refreshes while preserving their behavior."""
+
+        nonlocal refresh_calls
+        refresh_calls += 1
+        original(trace, module)
+
+    monkeypatch.setattr(provenance, "refresh_registration_bypasses", count_refreshes)
+    tl.trace(nn.Sequential(*[nn.ReLU() for _ in range(20)]), torch.ones(1))
+
+    assert refresh_calls == 0
+
+
+def test_global_hook_refreshes_observers_once_per_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stable global hook does not trigger an all-module refresh per call."""
+
+    refresh_calls = 0
+    original = provenance._refresh_observers
+
+    def count_refreshes(ledger: provenance.PreHookProvenanceLedger) -> None:
+        """Count full observer refreshes while preserving their behavior."""
+
+        nonlocal refresh_calls
+        refresh_calls += 1
+        original(ledger)
+
+    monkeypatch.setattr(provenance, "_refresh_observers", count_refreshes)
+    handle = torch_module.register_module_forward_pre_hook(lambda _module, _args: None)
+    try:
+        tl.trace(nn.Sequential(*[nn.ReLU() for _ in range(20)]), torch.ones(1))
+    finally:
+        handle.remove()
+
+    assert refresh_calls == 1
+
+
 def test_root_pre_hook_populates_self_call() -> None:
     """Matrix 11: root provenance binds to ``self:1``."""
 

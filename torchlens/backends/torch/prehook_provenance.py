@@ -109,6 +109,8 @@ class PreHookProvenanceLedger:
     attribute_replacements: list[_InstanceAttributeReplacement] = field(default_factory=list)
     invocation_stacks: dict[int, list[_InvocationToken]] = field(default_factory=dict)
     known_wrappers: set[int] = field(default_factory=set)
+    # Bypass evidence is intentionally sticky: once registry interposition was
+    # evaded, later private edits cannot prove that every executed hook was seen.
     bypassed_modules: set[int] = field(default_factory=set)
     global_bypass_seen: bool = False
     active: bool = True
@@ -334,10 +336,17 @@ def _wrap_registry_hooks(
     module: nn.Module | None,
     scope: Literal["global", "module"],
     bypass: bool = False,
-) -> None:
-    """Replace unrecognized hook values in place at their existing IDs."""
+) -> bool:
+    """Replace unrecognized hook values in place at their existing IDs.
+
+    Returns
+    -------
+    bool
+        Whether at least one unrecognized hook was wrapped.
+    """
 
     with_kwargs_registry = getattr(module, "_forward_pre_hooks_with_kwargs", {}) if module else {}
+    wrapped_any = False
     for hook_id, hook in list(registry.items()):
         if id(hook) in ledger.known_wrappers:
             continue
@@ -353,11 +362,13 @@ def _wrap_registry_hooks(
             _RegistryReplacement(registry, int(hook_id), hook, wrapped)
         )
         ledger.known_wrappers.add(id(wrapped))
+        wrapped_any = True
         if bypass:
             if module is None:
                 ledger.global_bypass_seen = True
             else:
                 ledger.bypassed_modules.add(id(module))
+    return wrapped_any
 
 
 def _wrap_existing_forward_hooks(
@@ -401,7 +412,7 @@ def refresh_registration_bypasses(trace: "Trace", module: nn.Module | None = Non
     ledger = getattr(trace, "_prehook_provenance_ledger", None)
     if not isinstance(ledger, PreHookProvenanceLedger) or not ledger.active:
         return
-    _wrap_registry_hooks(
+    global_wrapped = _wrap_registry_hooks(
         ledger,
         torch_module._global_forward_pre_hooks,
         module=None,
@@ -409,15 +420,22 @@ def refresh_registration_bypasses(trace: "Trace", module: nn.Module | None = Non
         bypass=True,
     )
     targets = ledger.modules if module is None else (module,)
+    local_wrapped = False
     for target in targets:
-        _wrap_registry_hooks(
-            ledger,
-            target._forward_pre_hooks,
-            module=target,
-            scope="module",
-            bypass=True,
+        local_wrapped = (
+            _wrap_registry_hooks(
+                ledger,
+                target._forward_pre_hooks,
+                module=target,
+                scope="module",
+                bypass=True,
+            )
+            or local_wrapped
         )
-    _refresh_observers(ledger)
+    if module is None or global_wrapped:
+        _refresh_observers(ledger)
+    elif local_wrapped:
+        _ensure_observer(ledger, module)
 
 
 def _ensure_observer(ledger: PreHookProvenanceLedger, module: nn.Module) -> None:
@@ -447,18 +465,18 @@ def _ensure_observer(ledger: PreHookProvenanceLedger, module: nn.Module) -> None
             return prior_call_impl(*args, **kwargs)
         refresh_registration_bypasses(ledger.trace, module)
         with _paused_logging():
-            before_observation = _observe_state(tuple(args), dict(kwargs))
+            before_observation = _observe_state(args, kwargs)
             before_snapshot = _snapshot_state(
-                tuple(args),
-                dict(kwargs),
+                args,
+                kwargs,
                 before_observation,
                 trace=ledger.trace,
                 reuse_source_payload=True,
             )
         token = _InvocationToken(
             module=module,
-            args=tuple(args),
-            kwargs=dict(kwargs),
+            args=args,
+            kwargs=kwargs,
             before_snapshot=before_snapshot,
             before_observation=before_observation,
         )
@@ -508,7 +526,7 @@ def _ensure_root_forward_binder(ledger: PreHookProvenanceLedger) -> None:
     def root_forward(*args: Any, **kwargs: Any) -> Any:
         """Bind the current root token before the real forward body starts."""
 
-        bind_invocation(ledger.trace, model, "self", 1, tuple(args), dict(kwargs))
+        bind_invocation(ledger.trace, model, "self", 1, args, kwargs)
         return prior_forward(*args, **kwargs)
 
     model.forward = root_forward
@@ -532,6 +550,13 @@ def bind_invocation(
         return
     token = ledger.current_token(module)
     if token is None:
+        if (
+            not module._forward_pre_hooks
+            and not torch_module._global_forward_pre_hooks
+            and not ledger.global_bypass_seen
+            and id(module) not in ledger.bypassed_modules
+        ):
+            return
         refresh_registration_bypasses(trace, module)
         bypassed = ledger.global_bypass_seen or id(module) in ledger.bypassed_modules
         if bypassed and args is not None and kwargs is not None:
