@@ -20,6 +20,62 @@ _LAZY_MODULE_CASES = (
 )
 
 
+def _lazy_facade_fidelity_script() -> str:
+    """Build a fresh-interpreter check for every root lazy facade.
+
+    Returns
+    -------
+    str
+        Python source that compares root facade objects with direct imports.
+    """
+
+    return """
+import importlib
+import pkgutil
+import torchlens as tl
+
+facades = {
+    name: module_path
+    for name, (module_path, attr_name) in tl._LAZY_ATTRS.items()
+    if attr_name is None
+}
+collisions = {}
+for facade_name, module_path in facades.items():
+    eager_module = importlib.import_module(module_path)
+    facade_module = getattr(tl, facade_name)
+    assert facade_module is eager_module
+    public_names = getattr(eager_module, "__all__", ())
+    child_modules = {
+        child.name.rsplit(".", 1)[-1]
+        for child in getattr(eager_module, "__path__", ())
+        and pkgutil.iter_modules(eager_module.__path__, eager_module.__name__ + ".")
+    }
+    collisions[facade_name] = sorted(set(public_names) & child_modules)
+    expected_exports = {}
+    if facade_name == "fastlog":
+        for public_name in collisions[facade_name]:
+            child_module = importlib.import_module(f"{module_path}.{public_name}")
+            assert vars(eager_module)[public_name] is child_module
+            source_module, source_name = eager_module._LAZY_ATTRS[public_name]
+            expected_exports[public_name] = getattr(
+                importlib.import_module(source_module), source_name
+            )
+    for public_name in public_names:
+        expected = expected_exports.get(public_name, getattr(eager_module, public_name))
+        assert getattr(facade_module, public_name) is expected
+
+assert collisions == {
+    "attribution": [], "compat": ["lovely", "torchextractor", "torchshow"],
+    "data_classes": [], "debug": [], "examples": [],
+    "experimental": ["dagua", "node_styles"], "export": [],
+    "fastlog": ["dry_run", "recover"], "intervention": ["replay", "rerun", "sites"],
+    "hash": [], "io": [], "partial": [], "report": [], "repgeom": [], "stats": [],
+    "user_funcs": [], "validation": [], "viz": [],
+}
+
+"""
+
+
 def _run_import_script(script: str) -> None:
     """Run an import assertion against this checkout in a fresh interpreter.
 
@@ -33,6 +89,12 @@ def _run_import_script(script: str) -> None:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(project_root)
     subprocess.run([sys.executable, "-c", script], check=True, env=environment)
+
+
+def test_all_lazy_facades_match_direct_import_public_names() -> None:
+    """Pin public-name fidelity and audit child-module collisions for every facade."""
+
+    _run_import_script(_lazy_facade_fidelity_script())
 
 
 @pytest.mark.parametrize(("module_name", "member_name"), _LAZY_MODULE_CASES)
