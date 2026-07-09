@@ -30,6 +30,8 @@ import pathlib
 import shutil
 import sys
 import traceback
+from dataclasses import dataclass
+from typing import Any, Callable
 
 _VISUAL_DIR = pathlib.Path(__file__).resolve().parent
 _AUDIT_DIR = _VISUAL_DIR.parent  # notebooks/audit/
@@ -64,6 +66,7 @@ MODELS: dict = {**ZOO, **VZOO}
 _PAGES_DIR = _VISUAL_DIR / "_pages"
 _OUT_PDF = _VISUAL_DIR / "visual_audit.pdf"
 _MATRIX_MD = _VISUAL_DIR / "coverage_matrix.md"
+_REVIEW_RENDERS_DIR = pathlib.Path("/tmp/vizpack_renders")
 
 torch.manual_seed(1234)
 
@@ -241,6 +244,43 @@ def _structure_trace(model_key: str):
     return _build
 
 
+@dataclass(frozen=True)
+class VacuousDemoGuard:
+    """One required visual contrast for an option axis in the audit pack.
+
+    Parameters
+    ----------
+    axis:
+        Human-readable option axis covered by the contrast.
+    model_key:
+        Registry key for a purpose-built demo model.
+    off_kwargs:
+        Draw arguments for the baseline presentation.
+    on_kwargs:
+        Draw arguments for the changed presentation.
+    trace_variant:
+        Cache namespace for traces made by ``trace_builder``.
+    trace_builder:
+        Optional specialized trace factory needed by container, transform, or
+        intervention demonstrations.
+    on_trace_builder:
+        Optional trace factory for the changed side when capture-time options,
+        such as raw input storage, cannot be supplied to ``Trace.draw``.
+    file_bytes:
+        Compare PNG bytes instead of DOT source. This is reserved for raster
+        density, whose DOT structure deliberately does not change.
+    """
+
+    axis: str
+    model_key: str
+    off_kwargs: dict[str, Any]
+    on_kwargs: dict[str, Any]
+    trace_variant: str = "plain"
+    trace_builder: Callable[[], Any] | None = None
+    on_trace_builder: Callable[[], Any] | None = None
+    file_bytes: bool = False
+
+
 # ---------------------------------------------------------------------------
 # Custom hooks used by demo pages
 # ---------------------------------------------------------------------------
@@ -277,6 +317,205 @@ def _custom_overlay_kwargs(trace) -> dict:
     """Custom node_overlay mapping: score = op position in the graph."""
     labels = [layer.layer_label for layer in trace.layer_list]
     return {"node_overlay": {lab: float(i) for i, lab in enumerate(labels)}}
+
+
+VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
+    VacuousDemoGuard("collapse", "block_stack", {"collapse": "none"}, {"collapse": "max"}),
+    VacuousDemoGuard(
+        "fold_repeats",
+        "block_stack",
+        {"collapse": "none"},
+        {"collapse": "none", "fold_repeats": True},
+    ),
+    VacuousDemoGuard(
+        "direction", "tiny_mlp", {"direction": "bottomup"}, {"direction": "leftright"}
+    ),
+    VacuousDemoGuard("node_mode:profiling", "tiny_mlp", {}, {"node_mode": "profiling"}),
+    VacuousDemoGuard("node_mode:vision", "mini_inception", {}, {"node_mode": "vision"}),
+    VacuousDemoGuard("node_mode:attention", "tiny_transformer", {}, {"node_mode": "attention"}),
+    VacuousDemoGuard("vis_theme", "tiny_mlp", {}, {"vis_theme": "dark"}),
+    VacuousDemoGuard("show_legend", "tiny_mlp", {}, {"show_legend": True}),
+    VacuousDemoGuard(
+        "show_buffer_layers",
+        "mixed_buffers",
+        {"show_buffer_layers": "never"},
+        {"show_buffer_layers": "always"},
+    ),
+    VacuousDemoGuard(
+        "show_containers:labels",
+        "nested_containers",
+        {},
+        {"show_containers": "labels"},
+        "nested-container",
+        _container_trace("nested_containers"),
+    ),
+    VacuousDemoGuard(
+        "show_containers:collapsed",
+        "tuple_output",
+        {"show_containers": "labels"},
+        {"show_containers": "collapsed", "container_max_inline": 2},
+        "tuple-container",
+        _container_trace("tuple_output"),
+    ),
+    VacuousDemoGuard(
+        "show_containers:cluster",
+        "nested_containers",
+        {},
+        {"show_containers": "cluster"},
+        "nested-cluster",
+        _container_trace("nested_containers"),
+    ),
+    VacuousDemoGuard(
+        "show_containers:nodes",
+        "nested_containers",
+        {},
+        {"show_containers": "nodes"},
+        "nested-structure",
+        _structure_trace("nested_containers"),
+    ),
+    VacuousDemoGuard(
+        "container_max_inline",
+        "tuple_output",
+        {"show_containers": "auto", "container_max_inline": 12},
+        {"show_containers": "auto", "container_max_inline": 2},
+        "tuple-inline",
+        _container_trace("tuple_output"),
+    ),
+    VacuousDemoGuard("module", "demo_model", {}, {"module": "inner_module"}),
+    VacuousDemoGuard("vis_call_depth", "demo_model", {}, {"vis_call_depth": 1}),
+    VacuousDemoGuard("skip_fn", "tiny_mlp", {}, {"skip_fn": _skip_relus}),
+    VacuousDemoGuard("collapse_fn", "block_stack", {}, {"collapse_fn": _collapse_res_blocks}),
+    VacuousDemoGuard("node_spec_fn", "tiny_mlp", {}, {"node_spec_fn": _spec_highlight_relu}),
+    VacuousDemoGuard(
+        "collapsed_node_spec_fn",
+        "block_stack",
+        {"collapse_fn": _collapse_res_blocks},
+        {
+            "collapse_fn": _collapse_res_blocks,
+            "collapsed_node_spec_fn": _collapsed_spec_tag,
+        },
+    ),
+    VacuousDemoGuard("node_overlay", "tiny_mlp", {}, {"node_overlay": "flops"}),
+    VacuousDemoGuard("node_label_fields", "tiny_mlp", {}, {"node_label_fields": ["name", "shape"]}),
+    VacuousDemoGuard("code_panel", "demo_model", {}, {"code_panel": True}),
+    VacuousDemoGuard("font_size", "tiny_mlp", {}, {"font_size": 16}),
+    VacuousDemoGuard("dpi", "tiny_mlp", {"dpi": 100}, {"dpi": 200}, file_bytes=True),
+    VacuousDemoGuard("for_paper", "tiny_mlp", {}, {"for_paper": True}),
+    VacuousDemoGuard(
+        "order_siblings", "mini_inception", {"order_siblings": False}, {"order_siblings": True}
+    ),
+    VacuousDemoGuard(
+        "vis_node_placement",
+        "large_chain",
+        {"vis_node_placement": "dot"},
+        {"vis_node_placement": "rank"},
+    ),
+    VacuousDemoGuard(
+        "vis_graph_overrides", "tiny_mlp", {}, {"vis_graph_overrides": {"bgcolor": "#FFFBE6"}}
+    ),
+    VacuousDemoGuard(
+        "vis_edge_overrides",
+        "tiny_mlp",
+        {},
+        {"vis_edge_overrides": {"color": "red", "penwidth": "2"}},
+    ),
+    VacuousDemoGuard(
+        "vis_module_overrides",
+        "demo_model",
+        {},
+        {"vis_module_overrides": {"color": "blue", "style": "dashed"}},
+    ),
+    VacuousDemoGuard(
+        "vis_intervention_mode",
+        "tiny_mlp",
+        {"vis_intervention_mode": "node_mark"},
+        {"vis_intervention_mode": "as_node"},
+        "planned-intervention",
+        _intervened_trace("tiny_mlp"),
+    ),
+    VacuousDemoGuard(
+        "vis_show_cone",
+        "tiny_mlp",
+        {"vis_show_cone": False},
+        {"vis_show_cone": True},
+        "planned-cone",
+        _intervened_trace("tiny_mlp"),
+    ),
+    VacuousDemoGuard(
+        "show_input_transform_summary",
+        "small_conv",
+        {},
+        {"show_input_transform_summary": True},
+        "preprocessed",
+        _preprocessed_trace("small_conv"),
+    ),
+    VacuousDemoGuard(
+        "raw_io_render",
+        "small_conv",
+        {},
+        {},
+        on_trace_builder=_raw_input_trace("small_conv"),
+    ),
+    VacuousDemoGuard(
+        "batch_render",
+        "small_conv",
+        {},
+        {},
+        "raw-input-batch",
+        _raw_input_trace("small_conv"),
+        _raw_input_first_trace("small_conv"),
+    ),
+    VacuousDemoGuard(
+        "raw_output_render",
+        "small_conv",
+        {},
+        {},
+        on_trace_builder=_decoded_output_trace("small_conv"),
+    ),
+)
+
+
+def _guard_render_value(guard: VacuousDemoGuard, side: str, kwargs: dict[str, Any]) -> bytes | str:
+    """Return the DOT source or PNG bytes for one side of a guard contrast."""
+    trace_builder = (
+        guard.on_trace_builder
+        if side == "on" and guard.on_trace_builder is not None
+        else guard.trace_builder
+    )
+    trace_variant = (
+        f"{guard.trace_variant}:{side}" if trace_builder is not None else guard.trace_variant
+    )
+    trace = get_trace(guard.model_key, trace_variant, trace_builder)
+    stem = _PAGES_DIR / "_vacuous_demo_guards" / f"{guard.axis}_{side}"
+    fileformat = "png" if guard.file_bytes else "dot"
+    source = trace.draw(
+        vis_outpath=str(stem), vis_fileformat=fileformat, vis_save_only=True, **kwargs
+    )
+    if guard.file_bytes:
+        rendered = pathlib.Path(f"{stem}.png")
+        if not rendered.exists():
+            raise FileNotFoundError(f"guard render missing: {rendered}")
+        return rendered.read_bytes()
+    return source
+
+
+def _run_vacuous_demo_guards() -> None:
+    """Fail generation when a declared option demo has no visible contrast."""
+    guard_dir = _PAGES_DIR / "_vacuous_demo_guards"
+    guard_dir.mkdir(parents=True, exist_ok=True)
+    failures: list[str] = []
+    print(f"Checking {len(VACUOUS_DEMO_GUARDS)} visual option contrasts ...")
+    for guard in VACUOUS_DEMO_GUARDS:
+        off_value = _guard_render_value(guard, "off", guard.off_kwargs)
+        on_value = _guard_render_value(guard, "on", guard.on_kwargs)
+        if off_value == on_value:
+            failures.append(f"{guard.axis} ({guard.model_key})")
+            print(f"  VACUOUS: {guard.axis} [{guard.model_key}]")
+        else:
+            print(f"  OK: {guard.axis} [{guard.model_key}]")
+    if failures:
+        joined = ", ".join(failures)
+        raise RuntimeError(f"Vacuous visual-audit demos: {joined}")
 
 
 def _plan_subtitle(t: float):
@@ -752,11 +991,11 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "dict output -- 'labels' (edge key labels a/b)",
-                        "dict_output",
+                        "nested output -- 'labels' (dict keys and tuple indices)",
+                        "nested_containers",
                         kwargs={"show_containers": "labels"},
                         trace_variant="container",
-                        trace_builder=_container_trace("dict_output"),
+                        trace_builder=_container_trace("nested_containers"),
                     ),
                     Panel(
                         "tuple output -- 'collapsed', container_max_inline=2 (merged 'tuple x4')",
@@ -773,11 +1012,11 @@ SECTIONS: list[Section] = [
                         trace_builder=_structure_trace("dict_input"),
                     ),
                     Panel(
-                        "mid-graph dict -- 'nodes' (call-output container + member ties)",
-                        "mid_graph_container",
+                        "nested output -- 'nodes' (nested container overlay ties)",
+                        "nested_containers",
                         kwargs={"show_containers": "nodes"},
                         trace_variant="structure",
-                        trace_builder=_structure_trace("mid_graph_container"),
+                        trace_builder=_structure_trace("nested_containers"),
                     ),
                     Panel(
                         "dict output -- 'cluster' (falls back to labels)",
@@ -1202,14 +1441,13 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="e3_fold_repeats",
-                title="fold_repeats: None / True / False on MobileNetV2",
+                title="fold_repeats: None / True / False on a repeated block stack",
                 caption=(
                     "Run folding elides REPEATED runs of same-class blocks into a representative plus an "
                     "ellipsis node. fold_repeats=None is the default policy (folding active under "
                     "collapse='auto'/'max'); True folds every legal run; False disables folding entirely. "
-                    "On this model the default policy already folds every legal run, so the None and True "
-                    "panels are identical here -- the mode where True differs is collapse='none' "
-                    "(next page).\n"
+                    "This purpose-built stack is deliberately small enough to be readable without collapse, "
+                    "so None preserves its eight blocks while True visibly folds them.\n"
                     "CHECK: folded panels show one representative block plus a '+N more ...' ellipsis per "
                     "run; the False panel shows every block explicitly; block counts add up between the "
                     "versions."
@@ -1217,17 +1455,17 @@ SECTIONS: list[Section] = [
                 panels=[
                     Panel(
                         "collapse='auto', fold_repeats=None (default policy)",
-                        "mobilenet_v2",
+                        "block_stack",
                         kwargs={"collapse": "auto", "fold_repeats": None},
                     ),
                     Panel(
                         "collapse='auto', fold_repeats=True",
-                        "mobilenet_v2",
+                        "block_stack",
                         kwargs={"collapse": "auto", "fold_repeats": True},
                     ),
                     Panel(
                         "collapse='auto', fold_repeats=False",
-                        "mobilenet_v2",
+                        "block_stack",
                         kwargs={"collapse": "auto", "fold_repeats": False},
                     ),
                 ],
@@ -1235,7 +1473,6 @@ SECTIONS: list[Section] = [
                     "fold_repeats:none",
                     "fold_repeats:true",
                     "fold_repeats:false",
-                    "scale:real_model",
                 ],
             ),
             Page(
@@ -2129,6 +2366,9 @@ def main() -> None:
     print(f"Planned pages: {total}")
     print()
 
+    _run_vacuous_demo_guards()
+    print()
+
     page_pdfs: list[pathlib.Path] = []
     errors: list[str] = []
 
@@ -2210,6 +2450,8 @@ def main() -> None:
         writer.write(fh)
     print(f"Done. {_OUT_PDF} ({_OUT_PDF.stat().st_size // 1024} KB, {len(writer.pages)} pages)")
 
+    _copy_review_renders()
+
     # --- coverage matrix ---
     _write_coverage_matrix(plan)
 
@@ -2220,6 +2462,19 @@ def main() -> None:
             print(f"  * {e}")
     else:
         print("All pages rendered successfully -- no GAPs.")
+
+
+def _copy_review_renders() -> None:
+    """Copy generated panel PNGs to the flat orchestrator review directory."""
+    if _REVIEW_RENDERS_DIR.exists():
+        shutil.rmtree(_REVIEW_RENDERS_DIR)
+    _REVIEW_RENDERS_DIR.mkdir(parents=True)
+    renders = sorted(
+        path for path in _PAGES_DIR.glob("*.png") if "_vacuous_demo_guards" not in path.parts
+    )
+    for render in renders:
+        shutil.copy2(render, _REVIEW_RENDERS_DIR / render.name)
+    print(f"Review renders: {_REVIEW_RENDERS_DIR} ({len(renders)} PNGs)")
 
 
 def _write_coverage_matrix(plan: list[tuple[str, object]]) -> None:
