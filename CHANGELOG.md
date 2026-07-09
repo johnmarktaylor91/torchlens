@@ -1,6 +1,4624 @@
 # CHANGELOG
 
 
+## v2.29.0 (2026-07-09)
+
+### Bug Fixes
+
+- **api**: Resolve 15 UX audit findings
+  ([`e3bc042`](https://github.com/johnmarktaylor91/torchlens/commit/e3bc0429c706cced0934298d2e2498b5c2e54e9a))
+
+trace[layer_label] returns Layer deterministically for exact no-pass labels (pass-qualified labels
+  return Op) — the silent Op-vs-Layer type instability dies, with internal call sites migrated to
+  explicit op dictionaries; summary(level=compute/cost) no longer crashes on multi-pass models;
+  AmbiguousOpLookupError is now the genuinely-raised public collision type; grouped-option misuse
+  raises clear TypeErrors instead of AttributeError; tl.output_at string paths normalize; without_op
+  repr spelling; facets module alias registered with curated __all__; viz __all__ lists callables;
+  collapse plan gains total/__len__; FuncCallLocation repr is plain text; bundle-diff captions
+  derive from members. 11 findings noted (API-taste) for the maintainer, with reasons in the results
+  file.
+
+- **api**: Type-contract blast-radius cleanup — 4 internal consumers + test migrations
+  ([`3c20cfb`](https://github.com/johnmarktaylor91/torchlens/commit/3c20cfb74f602938f5357ffdbb059482b05c9194))
+
+The deterministic trace[label] contract exposed four internal product bugs where torchlens itself
+  consumed ambiguous lookups as ops: validation replay/BFS traversal (now resolves exact Op records
+  via layer_dict_all_keys with an exact-op queue), auto-collapse shape comparison and collapsed-node
+  rendering (module-call labels now resolve through module_calls -> output_ops explicitly), and
+  Layer.is_in_conditional_body masking aggregate conditional state. Tests written against the old
+  ambiguous return migrate to explicit accessors; multi-exit tests assert the new contract
+  (ambiguous alias raises, exact lookups stay available).
+
+- **audit-viz**: Honest overlay caption, skip_fn orphan nit (F9), dark-theme param contrast (F6b),
+  raw-IO polish
+  ([`6377d4b`](https://github.com/johnmarktaylor91/torchlens/commit/6377d4b2e58e7470a50d7dac5ab25abca864a6f5))
+
+- **audit-viz**: Import guard for checkout-under-audit, multi-input trace, skip_fn polarity
+  ([`701eaa1`](https://github.com/johnmarktaylor91/torchlens/commit/701eaa1aecce17da098471dcae071fdb4e5d225e))
+
+- sys.path repo-root injection + hard guard: refuse to render a pip -e torchlens from a different
+  checkout (round-1 silently rendered stale code) - tl.trace multi-input models via input_args list
+  - skip_fn is a skip-predicate (True = hide); fix demo + caption All 68 pages now render with zero
+  GAPs.
+
+- **audit-viz**: Round-2 fixes from opus F-K review + section A-E self-review
+  ([`9ef8d32`](https://github.com/johnmarktaylor91/torchlens/commit/9ef8d3281bf3163893e7673b27c6ee2981133857))
+
+- interventions: visualize PLANNED sites (intervention_ready + trace.set), which is what
+  node_mark/as_node/cone styling reads (live fire records render unmarked -- FINDINGS F8) - raw-IO
+  page: thumbnails require trace(model, raw, transform=...) pairing - input-transform summary:
+  inject demo ResolvedPreprocessing record (bridge- only population documented) - containers:
+  intervention_ready / capture_container_structure traces; labels/collapsed/nodes modes shown,
+  cluster fallback documented (F3, F4) - buffers page: MixedBuffers model makes
+  never/meaningful/always all differ; orphan buffer-update op captioned (F2); block_stack eval() to
+  stop orphan noise leaking onto collapse pages - collapse_fn predicate uses Module.class_name; e5
+  uses fold_runs=True for a real ellipsis; e7 shows auto remainder boxes + max segments - filmstrip
+  subtitles use len(plan.nodes); pagekit clips subtitles to panel width; dark-theme header artifact
+  captioned (F6); elif label nit (F7); smaller transformer for readable attention pages; dpi bumps
+  on H pages
+
+- **backends**: Attribute jax function_root params to consuming ops, not input echoes (cert9 F4)
+  ([`18ff476`](https://github.com/johnmarktaylor91/torchlens/commit/18ff476d3dc3f845c08f4485025d1ec5b3c53a15))
+
+jax_container_path is only set on the input-SOURCE event where a param first enters the trace
+  (_emit_arg_sources) -- it is never set on the downstream ops that actually consume the param in a
+  computation. The param-attach loop in _finish_trace (function_root mode, the default and tested
+  "plain params-tree" capture path) matched directly on that annotation, so it attached params to
+  the input-echo op instead of the op that genuinely uses them. This left
+  trace.num_layers_with_params at 0 and pointed op.uses_params / param.used_by_ops / used_by_layers
+  at "input" ops rather than the real matmul/conv/etc consumers.
+
+Mirror the existing (correct) _attach_pytree_op_params pattern used for pytree-module traces:
+  resolve each param's source-event label, then attach the param to every op whose graph parents
+  include that source label -- i.e. the op that actually took the param value as a computational
+  operand. Also recompute the trace-level aggregate param counters (num_layers_with_params,
+  num_param_tensors, num_params, num_params_trainable/frozen) from the corrected per-op attribution,
+  deduplicating by layer_label the same way check_metadata_invariants' trace_self_consistency check
+  independently recomputes them -- these were previously set once, early, to the total count of ALL
+  param-pytree leaves regardless of actual usage, which both over-reported unused params and failed
+  that invariant once unused params stopped being (incorrectly) attributed.
+
+Scoped to module_tree is None (function_root mode only) so pytree-module traces, which already
+  attribute correctly via _attach_pytree_op_params, are untouched. The invariants.py param_xrefs
+  skip for function_root traces is left exactly as-is -- this fixes the producer bug it was working
+  around, not the exemption itself.
+
+Verified live against an installed jax 0.10.2 runtime: before the fix, num_layers_with_params was 0
+  and all three params (w1, b1, w2) attached to "input" ops; after the fix it is 3, with w1/w2
+  attached to their dot_general ops and b1 to its broadcast_in_dim op, and
+  param.used_by_ops/used_by_layers pointing at those same ops.
+
+Added a regression test asserting correct function_root param attribution, and confirmed the
+  existing jax backend/hardening/modules test files (80 tests) still pass.
+
+- **backends**: Flip per-op _tracing_finished + Bytes-typed param_memory in shared preview finalizer
+  (cert10)
+  ([`d2bfca0`](https://github.com/johnmarktaylor91/torchlens/commit/d2bfca034a73f3208ca6c156174c7de5a92a4bce))
+
+- **backends**: Never let a broken TF/Keras install crash the autorouter (cert9 F4)
+  ([`6b5e5ec`](https://github.com/johnmarktaylor91/torchlens/commit/6b5e5ec2cb99e93776d86c308612b304bc07f123))
+
+_tf_can_handle (the "can this backend handle this input" probe used by tl.trace()'s backend
+  autorouting) wrapped `import keras` / `import tensorflow` in a try/except ImportError only. A
+  TF/Keras install that is present but broken (e.g. a numpy/protobuf ABI mismatch -- confirmed
+  reproducible in this environment's own installed TF/protobuf/numpy combination) can raise
+  TypeError, AttributeError, RuntimeError, etc., either from the import statements themselves or
+  from any keras/tf attribute access used afterward to determine handleability
+  (_tf_runtime_supported, keras.backend.backend(), isinstance checks against tf.Module, ...).
+
+Those exceptions previously propagated uncaught out of the probe, up through resolve_backend_spec's
+  `[... for spec in registered_backend_specs() if spec.can_handle(...)]` list comprehension,
+  crashing the entire autorouter -- and thus ANY capture attempt (torch, mlx, whatever), regardless
+  of which backend the caller actually wanted -- any time TF happens to be installed-but-broken.
+
+Wrap the whole probe body in try/except: BackendMismatchError still propagates (a genuinely
+  mismatched Keras backend setting, e.g. Keras configured for torch/jax while backend='tf' was
+  explicitly requested, is real actionable signal, not a crash); ImportError still returns False
+  (TF/Keras simply not installed); and a broad except Exception now also returns False for anything
+  else, since this function must never do more than report "cannot handle."
+
+Verified against this environment's own broken TF install: importing torchlens.backends.tf directly
+  still reproduces the original TypeError/AttributeError chain (a separate, unrelated pre-existing
+  import-time issue in that package, out of scope here), but _tf_can_handle -- which only imports
+  keras/tensorflow lazily inside the function body -- now returns False instead of raising,
+  confirmed via a standalone repro and via the new regression tests below (reverting the fix
+  reproduces the crash).
+
+Added two regression tests to tests/test_backend_registry.py: one monkeypatching builtins.__import__
+  to raise RuntimeError for tensorflow/keras and asserting _tf_can_handle returns False without
+  raising and that resolve_backend_spec / tl.trace still autoroute a plain torch nn.Module to the
+  torch backend; and one confirming the broadened except Exception guard does not swallow a genuine
+  BackendMismatchError.
+
+- **backends**: Reject unsupported mlx options
+  ([`70fc29a`](https://github.com/johnmarktaylor91/torchlens/commit/70fc29a6dba7d65a3d93d64400341cb3810d7ae0))
+
+- **backends**: Remove paddle capture adapter
+  ([`d8d257b`](https://github.com/johnmarktaylor91/torchlens/commit/d8d257bbd1da566396a699abaefa65c8e51777b4))
+
+- **backends,tests**: Guard preview-backend getsourcefile, retire tautological alias test, add
+  self-deprecation tripwire
+  ([`51b57a0`](https://github.com/johnmarktaylor91/torchlens/commit/51b57a0b320c2e8b8691e26b5998f655b1b2448c))
+
+- mlx/tinygrad/jax `_module_source_metadata` called inspect.getsourcefile() unguarded despite each
+  docstring's "best-effort" promise, crashing capture with an unhandled TypeError on non-file-backed
+  module classes (e.g. exec'd from a string). Add a `_safe_source_file` helper mirroring the
+  existing torch/tf try/except (OSError, TypeError) pattern in all three backends.
+
+- tests/test_layer_log.py::test_layer_label_no_pass_alias asserted `layer_label == layer_label`, a
+  tautology left behind when a blanket rename (b83e9e38) clobbered its original `layer_label_no_pass
+  == layer_label` comparison; `layer_label_no_pass` no longer exists. Replace it with a real
+  assertion of the property the name still implies: `Op.layer_label` never carries a `:pass_index`
+  suffix, and `Op.label` is always `f"{layer_label}:{pass_index}"`, checked across a recurrent
+  layer's passes.
+
+- The internal-self-deprecation bug class (torchlens code calling its own deprecated public
+  aliases), fixed at ~6 sites across rounds 3-5, had no regression tripwire: pyproject.toml's
+  filterwarnings unconditionally downgrades any warning matching the alias message pattern back to
+  non-fatal, so it can't distinguish deliberate user/test alias use from torchlens tripping over its
+  own alias. Add tests/test_no_internal_self_deprecation.py, which runs a representative
+  trace/record/semantic-patch/dagua-audit/save-load slice under warnings.catch_warnings and flags
+  any DeprecationWarning/UserWarning matching warn_deprecated_alias's message shape or originating
+  from torchlens/. Confirmed live that a reintroduced regression in either the dagua
+  deprecated-field skip-list or semantic/patching.py's Trace.run()-not-rerun() fix is caught by this
+  test (and that a naive "except this test file" exemption would mask it, due to
+  warn_deprecated_alias's fixed stacklevel misattributing the warning's origin at some call depths).
+
+- **buffers**: Repoint dangling buffer_source on buffer dedup
+  ([`1582f6c`](https://github.com/johnmarktaylor91/torchlens/commit/1582f6c55608e0702dcbde9bcaed45472d993268))
+
+When _fix_buffer_layers dedups value-identical buffers, _merge_buffer_entries rewired
+  parents/children/ancestors of the survivor but never rewrote the scalar buffer_source field on
+  OTHER ops pointing at the removed buffer. buffer_source is also absent from the raw->final rename
+  + scrub field lists, so it could not recover -> a dangling reference that trips the [buffer_xrefs]
+  metadata invariant.
+
+In the existing 'for layer in self' loop, repoint any op whose buffer_source (and its arg-0 mirror
+  in parent_arg_positions) names the removed buffer to the value-identical survivor. The
+  buffer-merge analogue of the campaign's 'scrub removed buffer graph references' fix; the invariant
+  is untouched and the graph is repaired to the terminal survivor.
+
+Verified: speechbrain CRDNN (LiGRU per-forward drop_mask_te.to(device) reassign buffers) now
+  validates True; pre-fix it raised [buffer_xrefs] unresolved buffer_source.
+
+- **capture**: Allow a module to be traced as root after prior use as non-root submodule --
+  role-aware re-prep, invariants preserved (cert10)
+  ([`562779a`](https://github.com/johnmarktaylor91/torchlens/commit/562779addf7022551e6541ef272691a82ecd2a7a))
+
+- **capture**: Clear callable global tensor labels
+  ([`311dec7`](https://github.com/johnmarktaylor91/torchlens/commit/311dec7da3fa36ade5afab9b515275771c64ce21))
+
+- **capture**: Count only resolved parameter refs
+  ([`091e56b`](https://github.com/johnmarktaylor91/torchlens/commit/091e56b3bc2fd3bfc3331d24306ab776e1250354))
+
+- **capture**: Drop side-effecting unlabeled-buffer scan on storage-key miss
+  ([`09f950f`](https://github.com/johnmarktaylor91/torchlens/commit/09f950fa13cba124d52a838b815740bbe98a336f))
+
+_resolve_buffer_address ran log_unlabeled_registered_buffers_for_legacy_scan for any non-buffer
+  tensor that missed the storage-key table, attributing every still-unlabeled registered buffer to
+  the CURRENT module stack — the first active BatchNorm block absorbed all sibling BN buffers
+  ([13,5,5,5] ownership instead of [7,7,7,7]) and the tiny_resnet_block containment snapshot
+  drifted. Address resolution must not perform global side-effect scans; removing the scan restores
+  correct ownership and the snapshot heals without rebaselining.
+
+- **capture**: Dunder ops are not in-place-style in fast-path counter rollback; rerun retains output
+  parents
+  ([`ccda66b`](https://github.com/johnmarktaylor91/torchlens/commit/ccda66b9b3e6efb32226ae30478d3b9c5ed39049))
+
+Two residual full-tier failures from the absorption: the fast-replay counter rollback treated dunder
+  ops (__setitem__ etc.) as in-place-style names (endswith underscore), misaligning labels on rerun
+  of selective traces; and rerun's capture spec did not carry the output-parent retention flag, so a
+  rerun dropped the selective subset's output payloads. Both paths now match main's behavior;
+  covered by the existing rerun-subset and train-mode graph-mismatch tests.
+
+- **capture**: Handle int-dtype Parameters and Storage args without crashing
+  ([`90c3be3`](https://github.com/johnmarktaylor91/torchlens/commit/90c3be34291e41a9c6569d45a4d0e20e498fd802))
+
+Two capture-robustness bugs surfaced by real models during menagerie expansion:
+
+1. Capture prep force-set requires_grad=True on every Parameter, which raises for
+  non-floating/complex dtypes. A fixed lookup buffer declared as nn.Parameter(torch.arange(n),
+  requires_grad=False) (int64, legal PyTorch, never gradient-capable) crashed the trace. Now gated
+  on torch.is_floating_point(param) or torch.is_complex(param). (real model: D-SCRIPT)
+
+2. Hashing a torch.Storage op-arg via str() walks every element through the wrapped __getitem__,
+  re-entering logging -> runaway recursion. Storages are now summarized by size/dtype only,
+  mirroring the torch.Tensor fast path.
+
+Adds tests/test_capture_int_param_and_storage.py (2 regression tests). Full smoke suite green (276
+  passed).
+
+- **capture**: Handle non-iterable opaque model outputs
+  ([`6f5bb17`](https://github.com/johnmarktaylor91/torchlens/commit/6f5bb17652335941869e17165fd1951d1911de6f))
+
+- **capture**: Keep output container_spec None when capture_container_structure is off
+  ([`addb9d0`](https://github.com/johnmarktaylor91/torchlens/commit/addb9d0d6c82d900e5116b56a60928c3e67c1e91))
+
+Breaking commit: 51ea16d7 (fix(validation): preserve output container paths) moved population of
+  _output_container_specs_by_raw_label to run unconditionally for every output entry, so output
+  layers got a populated container_spec even with the default capture_container_structure=False.
+  That regressed test_containers::...default_off_preserves_output_shape_metadata.
+
+Root cause: the validation fix needed the container *path* preserved on output layers for
+  multi-output replay slicing, but it also persisted the container *spec* regardless of the opt-in
+  flag. Gate the spec on intervention_ready/_capture_container_structure while still always
+  recording the path (None spec => path-only view). reconstruct_output() now treats a path-only
+  final-output view as non-reconstructable and falls through to the informative
+  'capture_container_structure=True' error instead of the opaque path-only error.
+
+Preserves the 51ea16d7 validation fix (tuple/dict typed-path replay tests still pass).
+
+- **capture**: Measure and record forward_peak_memory (was always 0)
+  ([`45537c6`](https://github.com/johnmarktaylor91/torchlens/commit/45537c6eafb12a064b06db088f12113a4fd837a4))
+
+forward_peak_memory was declared, serialized, and surfaced (menagerie summary, csv export) but never
+  written, so it was hard-zero on every trace while the sibling backward_peak_memory was measured.
+  The probe was simply absent from the forward path.
+
+Bracket the model forward call in run_and_log_inputs_through_model with a peak-memory measurement
+  (both forward call sites: predicate and normal). CUDA records the true device peak via
+  max_memory_allocated after reset_peak_memory_stats; CPU/MPS use the larger of a process RSS delta
+  (captures torch C++ tensor buffers for sizeable models) and the stdlib tracemalloc peak (reliably
+  positive for small models where RSS granularity rounds to zero). Only the exhaustive/predicate
+  primary pass records; the fast second pass must not clobber it. Adds forward_memory_backend
+  (mirrors backward_memory_backend) and a gate asserting forward_peak_memory > 0. The resnet18
+  menagerie-summary determinism test now compares structural fields only, since peak memory is a
+  genuine runtime measurement.
+
+- **capture**: Pause logging during buffer-address resolver probes
+  ([`9a946fe`](https://github.com/johnmarktaylor91/torchlens/commit/9a946fe363b776a59ec27ee026580a43d0b9e663))
+
+- **capture**: Preserve distinct output paths for opaque container fallback leaves
+  ([`b68b6de`](https://github.com/johnmarktaylor91/torchlens/commit/b68b6de50afee14962caf2a2a01cf3b323be022a))
+
+The opaque nested-output BFS fallback (DynamicCache and friends) yielded every tensor leaf at the
+  same container path; extract_and_mark_outputs deduplicates by display address, so all but the
+  first cache tensor were silently dropped from trace outputs (composition regression from the
+  menagerie output-container port; GPT-2 lost 3 of 5 output leaves and its auto-collapse plan pin
+  broke). Append the fallback BFS address as typed output-path components so each leaf keeps a
+  distinct, replay-meaningful path.
+
+- **capture**: Preserve param cross-reference metadata across save_new_outs
+  ([`86c821f`](https://github.com/johnmarktaylor91/torchlens/commit/86c821fe28ea240697fb85f656380ef63211ebcd))
+
+Breaking commit: fccd8e51 (feat(validation): param deep cross-reference invariant) added the param
+  xref invariant that exposed a pre-existing latent bug (also on origin/main): after save_new_outs
+  (fast second pass), every Param.used_by_layers / used_by_ops was empty while
+  trace.layers_with_params still listed the layers, and trace.param_logs held BRAND-NEW Param
+  objects distinct from the ones the Ops still referenced via _param_logs.
+
+Root cause: _create_session_param_logs runs on every model prep, including the fast save_new_outs
+  re-run, and unconditionally allocated fresh Param objects + replaced trace.param_logs. The
+  exhaustive pass populates used_by_ops/used_by_layers via _finalize_param_logs, but
+  postprocess_fast (correctly) does not re-run it, so the freshly-built params stayed empty -- and
+  desynced from Op._param_logs, which still pointed at the exhaustive-pass objects.
+
+Fix: in fast mode, _retag_existing_session_param_logs re-tags the live tensors (force requires_grad,
+  set _tl meta with the existing barcode/address, refresh _param_ref, rebuild _param_log_by_pid)
+  while REUSING the existing Param log objects, mirroring the 'module logs aren't rebuilt in fast
+  mode' precedent. The cross-reference metadata survives and stays identity-consistent with the
+  layers.
+
+All save_new_outs / two-pass / param tests pass; the xref invariant now holds.
+
+- **capture**: Propagate op label/grad to live tensor for no-op same-object returns
+  ([`12f79c0`](https://github.com/johnmarktaylor91/torchlens/commit/12f79c0e873552ce160971866488670228d407cd))
+
+Breaking commit: 055af048 (fix(torch): preserve same-object returns during capture) -- follow-on to
+  the identity/in-place fix in 64a37b54. The previous commit only repaired the IN-PLACE same-object
+  case; pure NO-OP same-object returns (e.g. an eval-mode nn.Dropout, x.contiguous() on contiguous
+  input) were still broken: the op is logged against a safe_copy carrying the new label, but the
+  wrapper hands back the LIVE input object which still has its OLD label, so the op silently drops
+  out of the forward graph and the model output traces straight back to the input.
+
+Concrete failure (test_sibling_ordering googlenet 10 vs 9 chains): GoogLeNet eval-mode classifier
+  dropout became a no-op same-object return, so dropout fell out of the graph; the module-exit
+  boundary then synthesized a spurious _decorated_identity node (identity_1_197) to patch the
+  missing boundary, inflating the captured graph by one extra node and one extra sibling chain.
+
+Fix: generalize the in-place live-tensor repair to ALL same-object returns that hand back the live
+  tensor. Propagate the op label onto the live tensor and register its grad hook, so both forward
+  edges and backward grads stay attached for in-place AND no-op same-object ops. GoogLeNet is back
+  to 9 chains; the dropout->linear graph matches origin/main with no spurious identity node;
+  same-object identity, identity-skip, resnet50, and gpt2 oracle all pass.
+
+- **capture**: Propagate root container spec through opaque BFS-fallback output walk
+  ([`6ab9b5d`](https://github.com/johnmarktaylor91/torchlens/commit/6ab9b5d1490bf75f9223b655a40e98491c3ac49e))
+
+The structured output walk's BFS fallback for unrecognized nested containers (detectron2 Instances
+  inside a list, HF DynamicCache, etc.) yielded the outer container spec as None instead of
+  root_spec. When the first output tensor came from this fallback, the module-call output_structure
+  was left unset and later back-filled from an unrelated output layer, whose leaf paths disagreed
+  with the real per-op container_path output_paths. The module_hierarchy metadata invariant
+  correctly flagged this as malformed (menagerie m4024/m4025, detectron2 mask_rcnn_R_50_C4 1x/3x).
+
+Fix: yield root_spec from the BFS fallback like every other walk branch, so output_structure and
+  output_paths describe the same container depth. Output tensor discovery is unchanged. Adds a
+  reduced-repro gate that asserts the module_hierarchy invariant holds for an opaque-object-in-list
+  module output.
+
+- **capture**: Recover output tensors from unsupported nested containers
+  ([`75e9cf4`](https://github.com/johnmarktaylor91/torchlens/commit/75e9cf4e0622cd1d4a6dfe8129747cb5dd448913))
+
+Breaking commit: 51ea16d7 (fix(validation): preserve output container paths) made
+  _walk_output_tensors_with_paths the UNCONDITIONAL output-discovery path (it previously only ran
+  under intervention_ready / capture_container_structure, with a search_depth=5 BFS fallback
+  otherwise). _walk_supported_output_container has no fallback for container types it does not
+  recognize, so it silently yields nothing for them -- e.g. transformers' DynamicCache nested inside
+  an HF ModelOutput. That shrank GPT-2's captured outputs from 3 tensors to 1 (last_hidden_state
+  only; past_key_values dropped), breaking test_oracle_gpt2_small_forward_backward (reconstructed
+  candidate output was a bare Tensor lacking .last_hidden_state).
+
+Fix: when the walker reaches a container type it cannot structurally traverse, fall back to a BFS
+  (search_depth=5, matching the legacy whole-output fallback) that yields the contained tensors with
+  the accumulated path and a None spec. Output tensors are no longer dropped; GPT-2 again captures
+  its full output set.
+
+Verified test_containers / test_multi_output_modules / test_validation still pass.
+
+- **capture**: Register round-3 runtime fields; restore log_model_metadata kwarg parity
+  ([`caec322`](https://github.com/johnmarktaylor91/torchlens/commit/caec322682448ebfff3491e544b607e55bc6b145))
+
+_capture_config and _stop_directive join PORTABLE_STATE_SPEC (DROP) and the user-facing allowlist;
+  the parity golden regen diff is exactly those two fields. log_model_metadata() again forwards
+  compute_input_output_distances=True (main parity, restored with docstring).
+
+- **capture**: Resolve dual-lab adversarial + full-tier findings on the absorbed spine
+  ([`131c8c4`](https://github.com/johnmarktaylor91/torchlens/commit/131c8c49686e6a09fcd760c9c0f38ec75488afa2))
+
+Eight fixes: absorbed selective layers_to_save retains legacy output-parent payloads (issue #46
+  class; its regression test strengthened so the selector is not the output parent); label
+  candidates resolve with the legacy semantics (final/short/raw/pass-qualified spellings all match);
+  integer selectors route through legacy two-pass resolution (exact main parity); chunked capture
+  passes the combined predicate into per-chunk calls (public layers_to_save no longer degrades to
+  full-save); intervene=/halt= selectors get followed_by capability validation at capture start;
+  fast replay advances counters across exhaustive-only BatchNorm buffer-write rows, restoring
+  dropout two-pass RNG alignment without reseeding; runtime-only policy/cache fields stay out of the
+  portable schema and dataframe surfaces (parity golden unchanged rather than rebaselined). Every
+  review repro is a permanent regression test; perf still beats the clean-main baseline on all rows.
+
+- **capture**: Restore identity-node minting and in-place grad attribution
+  ([`64a37b5`](https://github.com/johnmarktaylor91/torchlens/commit/64a37b54d000df3eeb67a83d2ac5a4f45a3402c6))
+
+Breaking commit: 055af048 (fix(torch): preserve same-object returns during capture). That change
+  made the wrapper return the original same-object tensor (return_value) instead of the distinct
+  safe_copy whenever no hook modified the output -- correct for user-visible no-ops (x.contiguous()
+  etc.) but it broke two internal contracts that depend on a DISTINCT logged tensor:
+
+1. Identity-node minting (test_identity_output_modules_are_skipped): the internal
+  _state._decorated_identity decorator (func_name='identity') exists to MINT a fresh logged tensor
+  at nn.Identity / pass-through module boundaries. Returning the input object instead meant the
+  module exit re-read the input's label and the boundary node (e.g. identity_1_2) never attached to
+  the module's output_ops -> module reported skipped_no_first_leaf. Fix: force the distinct return
+  for func_name == 'identity'.
+
+2. In-place grad attribution (test_oracle_resnet50_eval and the residual-block case): in-place ops
+  log against a safe_copy whose grad_fn is a dead-end CloneBackward node. With identity preserved,
+  downstream ops consume the LIVE tensor, so the real gradient flows through it -- but only the dead
+  copy was grad-hooked, so any module whose output descends from an in-place op (ResNet 'out +=
+  identity') silently lost grad (has_grad False) and the oracle reported skipped_no_grad. Fix: also
+  register the backward grad hook on the live in-place tensor (idempotent, dedup by (label, id)) so
+  the real gradient is captured.
+
+Both the same-object-identity test and the grad/identity tests now pass.
+
+- **capture**: Restore tied-parameter notation from all_addresses
+  ([`b674d85`](https://github.com/johnmarktaylor91/torchlens/commit/b674d8578fac08c8be187a835e45ea7bea4eeff1))
+
+Commit 1144aa4b moved tied/shared-parameter alias tracking out of co_parent_params into
+  all_addresses/all_module_addresses (semantically correct: tied params are the same tensor, not
+  co-occurring siblings), but left the tied_parameter_notation annotation builder in
+  _build_layer_logs still reading the now-empty co_parent_params. Tied-parameter detection therefore
+  returned nothing, regressing test_capture_targets.py::test_tied_parameter_notation_smoke.
+
+Read tied aliases from all_addresses (the post-1144aa4b source of truth) instead, emitting primary
+  -> alias for each additional aliasing address. co_parent_params now exclusively tracks distinct
+  tensors co-occurring in one op, which is not tying.
+
+- **capture**: Scrub removed buffer graph references
+  ([`a5e025e`](https://github.com/johnmarktaylor91/torchlens/commit/a5e025e622cf3066b23a2d4bc6c6b9153cf3c3c8))
+
+- **capture**: Six real-model-surfaced capture-robustness fixes
+  ([`f142d00`](https://github.com/johnmarktaylor91/torchlens/commit/f142d005bee0d1291b05721924953cf9c141401b))
+
+Genuine torchlens bugs exposed by real models during the menagerie sweep; all in best-effort
+  metadata / input-handling paths (no validation weakened). Smoke 277/0.
+
+- user_funcs + autoroute/_builtin_output: guard getattr(model,'config') / 'default_cfg' in
+  try/except -- a model whose .config is a property that RAISES (not just absent) previously aborted
+  capture (NASViT). - _input_coerce + backends/torch/backend: preserve NamedTuple input containers
+  (GNN batch types e.g. orb-models AtomGraphs) instead of degrading to plain tuple; handle immutable
+  NamedTuple fields via _replace; only list-roundtrip EXACT tuples. -
+  user_funcs._move_tensors_to_device: reconstruct NamedTuple via type(*items). -
+  postprocess/_materialize: reject non-class nn.init/nn.functional name matches before issubclass
+  (user module class named 'init'). - utils/tensor_utils._safe_get_memory_format: check
+  contiguous_format BEFORE channels_last -- a size-1 channel dim makes channels_last degenerately
+  True and forced a stride rewrite that silently corrupted downstream .view() (BC-ResNet).
+
+- **capture**: Structural exemptions for the fail-loud output boundary
+  ([`98c071f`](https://github.com/johnmarktaylor91/torchlens/commit/98c071fdc11fe08c3d209b43f0de3ce1f1d39fde))
+
+Two provable classes join the boundary's exemptions: outputs that ARE model inputs (object identity
+  or exact storage/view metadata match against the marked inputs — identity-passthrough models;
+  foreign passthroughs still fail, with a negative test), and captures where the raw pre-wrap
+  functorch escape was explicitly detected and warned (the detection site sets a trace-scoped flag;
+  flagged captures keep the historical warn-and-degrade contract; the flag provably does not leak
+  across captures). Everything else still raises. Flag registered runtime-only via the field-policy
+  table.
+
+- **capture**: Transpose positional calls expose salient dim0/dim1
+  ([`368e6b5`](https://github.com/johnmarktaylor91/torchlens/commit/368e6b5c7f80846949240c44e21a33a1204f6c3d))
+
+torch.transpose(x, 0, 1) called positionally produced no salient-arg entries when runtime signature
+  scraping had no arg-name record; a narrow _ARG_NAME_FALLBACKS entry restores
+  func_config={'dim0','dim1'}. With regression test.
+
+- **capture**: Treat uninspectable args as opaque
+  ([`08ffb5a`](https://github.com/johnmarktaylor91/torchlens/commit/08ffb5a1e33bd88e855545a9cd35e0fbd4e5bb24))
+
+- **capture**: Typed null options for to_trace(); O(1) replace_op_event
+  ([`88715b1`](https://github.com/johnmarktaylor91/torchlens/commit/88715b1b392ab91c81d55f1a4e05156d27c7d939))
+
+Recording.to_trace() no longer plants a fake object() sentinel as _predicate_save_options (typed
+  RecordingOptions null object); replace_op_event uses the label index for O(1) replacement with a
+  compatibility fallback.
+
+- **capture,fastlog**: Stop phantom peak-memory readings and rehydrate reloaded fastlog payloads
+  ([`8f991d3`](https://github.com/johnmarktaylor91/torchlens/commit/8f991d3a5b863aadd4ccbc287ae1cc00c0f857cc))
+
+forward_peak_memory (capture/trace.py CPU/MPS bracket) reported a stale, unrelated high-water mark
+  whenever tracemalloc was already tracing on entry (external tooling, a leftover
+  tracemalloc.start() elsewhere in the process): get_traced_memory() returned the peak since
+  tracemalloc's original start, not this forward pass. Fix resets the peak on entry when already
+  tracing and now also subtracts an entry-time baseline from the post-yield peak, since reset_peak()
+  alone cannot lower "current" traced memory that is already live at bracket entry (e.g. this same
+  trace() call's own model-preparation work that ran moments before the bracket).
+
+torchlens.fastlog.load()/recover() returned every record with
+  ram_payload/disk_payload/transformed_*_payload set to None even though the underlying blobs were
+  written and hash-verified as .safetensors -- only structural metadata survived a reload. Rehydrate
+  disk_payload and transformed_disk_payload from their persisted blobs after _blob_is_recoverable
+  confirms the blob is present and hash-valid; a materialization failure past that point is treated
+  like the existing missing-blob/hash-mismatch cases (skip + recovery warning) rather than raising
+  out of load()/recover().
+
+Adds regression tests for both: an externally-pre-traced tracemalloc session no longer produces an
+  inflated forward_peak_memory, and a persisted fastlog bundle's blob contents round-trip through
+  both load() and recover().
+
+- **cert**: Reconcile the four merged fix rounds (3 code + 5 test-contract)
+  ([`77bd490`](https://github.com/johnmarktaylor91/torchlens/commit/77bd490943cb7a79bc4a0a740b4e7ac2b6e42c64))
+
+Cross-round integration: the chunked path no longer re-threads default JAX-only options as explicit
+  torch options (g3's stricter capability rejection was misfiring on defaults-in-recursion; explicit
+  jax_control_flow on backend=torch is still rejected, now tested); hook-plan-to-spec conversion
+  preserves existing TargetSpec selector kinds; the conditional bool-event invariant expands
+  per-pass ops without probing a multi-pass aggregate field that now correctly raises (invariant NOT
+  weakened); _out_identity_cache annotation matches the version-aware 4-tuple. Five stale tests
+  updated to the documented contracts the fixes established (multi-pass __getattr__ -> ValueError,
+  ambiguous short name -> AmbiguousOpLookupError, version-aware identity cache, torch-supported
+  cache-key options, TF topology gated on the backend's TF>=2.16/Keras>=3 support window).
+
+- **cert**: Round-1 findings for backends bucket (16 verified)
+  ([`8844e76`](https://github.com/johnmarktaylor91/torchlens/commit/8844e765261cfbfd905a130c89028e42b206c6a2))
+
+Capture-correctness: Op identity dedup keys on tensor identity PLUS _version, so in-place mutation
+  (_foreach_add_, out=) of a same-object tensor yields fresh saved payloads instead of stale ones;
+  torch alias detection recurses into list/tuple/mapping args (the 178 foreach fns no longer claim
+  unknown_aliasing=False blindly); storage-aliased buffer views keep their first-read snapshot
+  instead of being clobbered by a later alias write; out= buffer mutations now snapshot. Capability
+  honesty: MLX/Paddle/tinygrad gain extra-kwarg rejection
+  (storage/stop_after/profile/cache/raise_on_nan no longer silently inert); the TF foreign-tensor
+  guard covers mlx/tinygrad so mixed input can't misroute; random_seed and
+  module_identity_mode/payload_policy are honored-or-rejected; the registry "inert metadata"
+  docstring lie corrected.
+
+- **cert**: Round-1 findings for capture + structure buckets (21 verified)
+  ([`420eb06`](https://github.com/johnmarktaylor91/torchlens/commit/420eb0676323ababa3e82628034f0f796938bfb4))
+
+Absorbed layers_to_save honors documented SUBSTRING matching (was exact-match, diverging from the
+  legacy engine; tests now use genuine substrings incl. pass-qualified). torch._dynamo/eval_frame no
+  longer imported at `import torchlens` (lazy HAS_DYNAMO_OPTIMIZED_MODULE); import-hygiene test
+  extended to guard heavy torch submodules broadly, not just torchvision. Dead discarded
+  StopDirective disposition call removed from the failed-forward spine. Repeated raw-label payloads
+  retain every pass instead of overwriting. _user_public_impls drops globals()-flooding. Doc
+  truthfulness: migration table, README limitations link, compat docstring, TODO, appliance roadmap,
+  and the literal "v2.NN" warning text all corrected to match runtime. NOTE: cold import still ~4.3s
+  after the dynamo fix — criterion 10 stays open (broader lazy-facade work, separate).
+
+- **cert**: Round-1 findings for data-model + validation buckets (26 verified)
+  ([`e4e9a09`](https://github.com/johnmarktaylor91/torchlens/commit/e4e9a095b032657f5e11adfe5d37e53491ab8fc9))
+
+Accessor contracts made uniform and honest: Layer.ops[bare_label] and the Layer.__getattr__ fallback
+  raise AmbiguousOpLookupError / documented ValueError with .ops[N] guidance for ALL per-pass fields
+  (was bare AttributeError for ~80); __contains__ is True iff indexing would succeed across every
+  accessor; the shared mutable class-level Param.co_parent_params is replaced with per-instance
+  lists (legacy restores default-filled) — no more cross-object corruption. to_pandas() routes
+  through the canonical Op.grad accessor and raises on multi-backward ambiguity instead of silent
+  grad=None. BackwardPass joins the FIELD_POLICY architecture; LAYER_LOG_FIELD_ORDER regains ~7 real
+  fields. cleanup single-entry path iterates the canonical list; dead op_equivalence_classes scrub
+  removed. Validation tripwires strengthened: the unsound all-zero/one/empty setitem exemption is
+  gone (whole-destination-cover proof only); the tautological perturb_saved_grads backward check now
+  deprecates loudly instead of returning an inert False; torchvision C++ ops record real names
+  (nms/roi_align/...) so tl.func() selection works and the perturbation-skip registry stays narrow.
+
+- **cert**: Round-1 findings for intervention + viz + tests/CI (24 verified)
+  ([`b5216c3`](https://github.com/johnmarktaylor91/torchlens/commit/b5216c3625c0a2b187f29e82aba4ce9448e195e4))
+
+Intervention audit-trail parity: forward FireRecords now append to spec.records (was backward-only;
+  predicate contexts wrote to a stale global None); contradictory helper direction= is rejected at
+  attach; live output_at/input_at/regex/func_transform selectors resolve; attach_hooks() returns a
+  scoped removable HookHandle (was self); bundle module_calls/ grad_fn_calls accessors query the
+  right log; sites(pred, ops=) keeps the caller predicate; container-output FireRecords serialize at
+  the default level; the tautological error catalog is narrowed to real production paths. Viz:
+  short-label lookup restored in node_spec/overlays/fastlog_preview (deleted by a WIP commit);
+  auto-mode remainder honesty driven by plan structure not just max-mode; skip_fn threaded through
+  the render IR; extension stripping unified and case-insensitive. Tests/CI: the nightly
+  preview-backends job selects the real jax/tinygrad/paddle tests (was the TF-only dir — 178 tests
+  now run); coverage/docs point at generated_outputs/; pytest-timeout declared; the two dead 256KB
+  golden dirs and their permanently-skipped test removed.
+
+- **cert2**: Backends round-2 findings (5 verified)
+  ([`365ec97`](https://github.com/johnmarktaylor91/torchlens/commit/365ec97391f5ab938b48e275221d0ac8ba082fd8))
+
+Foreign-tensor rejection now covers ALL preview backends, not just TF:
+  _mlx/_jax/_tinygrad/_paddle_can_handle reject mixed cross-backend input via a shared
+  _contains_other_backend_tensor / _tensor_backend_family check (was silently dropping the foreign
+  tensor from the graph). The four dead required CaptureBackend Protocol methods (snapshot_autocast
+  / detect_in_place_isolation_required / mark_same_object_candidates / isolate_same_object_returns)
+  — validated present at registration but never called anywhere — are removed from the protocol, the
+  registration tripwire, and every implementation (torch autocast capture stays live in wrappers,
+  not via the dead hook). MLX extra-kwarg policy expanded to the formerly-omitted public kwargs; jax
+  random_seed docstring corrected to unsupported.
+
+- **cert2**: Capture + structure round-2 findings (11 verified)
+  ([`e663b23`](https://github.com/johnmarktaylor91/torchlens/commit/e663b2314b038a6efb3414a8e9db6bac068206f2))
+
+Content-hash cache keys for absorbed layers_to_save predicates (and predicate unions) no longer
+  embed a function repr memory address, so identical requests hash equal and cache hits work;
+  selective cache serialization reads raw payload slots and drops runtime-only predicate config
+  before pickle (was crashing / losing storage policy); _normalize_capture_decision(True) inherits
+  the CaptureSpec.save_mode instead of silently downgrading. Structure: stale migration-doc +
+  appliance-stub docstrings corrected. NOTE: import stays ~4.3s (criterion 10 open — a separate
+  lazy-facade project, not chased here).
+
+- **cert2**: Data-model + validation round-2 findings (16 verified)
+  ([`0684717`](https://github.com/johnmarktaylor91/torchlens/commit/0684717e69134f3349871a6399c8e1f965700a3e))
+
+Completeness of the round-1 accessor-contract fix: Layer.__getattr__ raises the documented
+  ValueError-with-.ops[N]-guidance for ALL real per-pass fields including out_ref/grad_ref (the
+  __dict__ fallback was dead under __slots__ — now enumerates the true per-pass field set);
+  OpAccessor/BufferAccessor __contains__ catch ValueError/AmbiguousOpLookupError and return bool
+  (the regression round-1's ambiguity-raise introduced). Doc fossils corrected (constants.py
+  FIELD_ORDER "complete set" line, postprocess step count, to_pandas ValueError). Validation round-2
+  blockers fixed at true cause under tripwire discipline (no check weakened to pass).
+
+- **cert2**: Intervention + testsuite round-2 findings (8 verified)
+  ([`c991946`](https://github.com/johnmarktaylor91/torchlens/commit/c99194626ec929f1c5759c2467f6262eb8a4d1e3))
+
+Restored test coverage for the 4 error names round-1's catalog fix wrongly deleted
+  (GraphShapeMismatchError, InterventionReadyConflictError, SpliceModuleDeviceError,
+  DirectWriteInExecutableSaveError — all raised in production, each now triggered via public API in
+  a test). tl.where predicate save is save-level-gated: portable/default save rejects (or warns for
+  audit) an unserializable lambda predicate at SAVE time instead of embedding a dead repr string
+  that only fails confusingly on reload. input_at as a live hook is made honest (fires or raises a
+  clear capability error, no longer a silent no-op claimed as working). Testsuite round-2 blockers
+  fixed at true cause.
+
+- **cert2**: Restore public-alias deprecation exceptions in the warnings-as-errors filter
+  ([`ea31db8`](https://github.com/johnmarktaylor91/torchlens/commit/ea31db83475d89fb09f81e31914d91c34bac6709))
+
+cf2-d's warning-filter tightening put the broad error::DeprecationWarning: torchlens rule AFTER the
+  message-specific default: exceptions. pytest applies filterwarnings bottom-to-top priority, so the
+  broad error overrode the public-alias exception, promoting the intentional layers_to_save= (etc.)
+  backcompat deprecation to a hard error and failing 139 legacy/round-trip tests that use the old
+  public spelling. Reorder so the broad error rules precede the message-specific exceptions,
+  restoring W5A's intent: every torchlens self-warning errors EXCEPT the public compatibility
+  aliases and older-bundle-version loads, which stay visible-not-fatal and are asserted locally by
+  their own tests.
+
+- **cert2**: Visualization round-2 findings (9 verified)
+  ([`3dd7544`](https://github.com/johnmarktaylor91/torchlens/commit/3dd75447a986871c94b7124f475fdb1b90a7df05))
+
+render_dot_to_file (and rank-layout neato) delete the DOT source only after a SUCCESSFUL render, so
+  timeout/failure warnings no longer point at a removed file. bundle_diff renders EACH cluster's own
+  delta from the selected baseline (was hardcoding the right member for both — the left/"clean"
+  column showed the wrong trace's deviation whenever baseline!=left); intended visual diff flagged
+  for a judge. _entry_name uses Layer.num_passes (was a nonexistent num_calls, so the recurrence
+  "xN" badge never rendered). show_tensor handles 0-channel 3D tensors (public Layer.show/Op.show
+  path no longer crashes); render_lineplot sorts inverted y-bounds. Short-label fix completed:
+  node_spec matches real call_labels (dead synthetic branch removed), fastlog_preview reads the keys
+  _build_preview_nodes actually writes.
+
+- **cert3**: Close registration tripwire gap, force dynamo capability probe, drop dead code
+  ([`566f213`](https://github.com/johnmarktaylor91/torchlens/commit/566f213c117bd950870d21e2887f0c2fc79297ec))
+
+- registry: add start_session to _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES so a capture_backend factory
+  missing that Protocol method fails registration - _torch_compat: force HAS_DYNAMO_OPTIMIZED_MODULE
+  probe in get_torch_capability_snapshot so tl.compat.report/doctor stop reporting a false
+  graceful-degradation for a capability that genuinely exists - default_specs: remove dead
+  _contains_foreign_tensor/_is_foreign_tensor_leaf (superseded by _contains_other_backend_tensor);
+  retarget the one test - _deprecations: remove unused resolve_renamed_kwarg helper (0 call sites) -
+  errors: add __dir__ so lazily-resolved legacy exception names are discoverable
+
+- **cert3**: Guard silent facet-write no-op, fork facets-cache recursion, deprecation stragglers
+  ([`f244968`](https://github.com/johnmarktaylor91/torchlens/commit/f24496868c6196869112c3efdb81357e96a3f24d))
+
+- facets.scatter_update: raise RuntimeError (mirroring write_mask) when the transform chain's
+  reshape/heads primitive silently copies a non-contiguous tensor instead of returning a view, so a
+  facet intervention can never silently no-op. - FacetView.__getattr__: reject dunder names
+  immediately, closing the infinite recursion when a half-initialized FacetView shell is walked by
+  copy/deepcopy. - intervention/types: add _facets_cache -> FORK_RECONSTRUCT to the Op fork-policy
+  table so Trace.fork()/Bundle.fork()/push(differentiable=True) no longer RecursionError when
+  Op.facets was read pre-fork. - semantic/patching._run_patch: call Trace.run() instead of
+  deprecated Trace.rerun(). - experimental/dagua/_bridge._list_public_fields: skip deprecated
+  conditional_{then,elif,else}_entry_edges during dir()/getattr() enumeration.
+
+- **classics**: Add functional weather generator
+  ([`bf15ea7`](https://github.com/johnmarktaylor91/torchlens/commit/bf15ea7ac17a6fe1c5e8ea78b539be5de4c1754b))
+
+- **classics**: Add htc semantic mask cascade
+  ([`1a2adcf`](https://github.com/johnmarktaylor91/torchlens/commit/1a2adcf3e4dd14984ea7d6388c638e164248323d))
+
+- **classics**: Add pi0.5 planner path
+  ([`d4dfb34`](https://github.com/johnmarktaylor91/torchlens/commit/d4dfb3429b9b3e463cbe2c7ad7533714a16e565e))
+
+- **classics**: Add yolo nas dfl projection
+  ([`a2be4fc`](https://github.com/johnmarktaylor91/torchlens/commit/a2be4fce99e7378cc79be495795c79a85fa9716b))
+
+- **cluster**: Require terminal sacct state per submitted job ID
+  ([`7666847`](https://github.com/johnmarktaylor91/torchlens/commit/7666847a65680ccadbfe81c2c38d1419f33f7f6c))
+
+F3 [HIGH]: poll_cluster_terminal returned True whenever sacct returned ANY non-empty set of states
+  and all were terminal, without requiring one terminal state PER submitted job ID. With async
+  multi-tier dispatch (multiple sbatch_job_ids), a partial sacct view (job A COMPLETED while job B
+  is still running / not yet visible in the accounting DB) read as fully terminal -> collect stamped
+  job B's still-running tasks failed:cluster_task_failed. An empty sbatch_job_ids also returned True
+  immediately.
+
+Replace _sacct_states with _sacct_states_by_job (groups observed states by submitted job ID, folding
+  array-task JobIDs <id>_<n> onto their base). Require an observed terminal state for EVERY
+  submitted job ID -- a job absent from accounting is non-terminal (stay pending). Empty
+  sbatch_job_ids is now non-terminal so missing artifacts are left pending, not failed.
+
+GATES: terminal for only one of two job IDs (job B absent OR running) -> stays pending; flips True
+  only when every submitted ID is observed+terminal; empty job-ID set -> not terminal (sacct never
+  consulted).
+
+- **collapse**: Allow guarded auto op segments
+  ([`604fda7`](https://github.com/johnmarktaylor91/torchlens/commit/604fda70405cff6463e1ecccab7e3658713a2d11))
+
+- **collapse**: Bound frontier-empty fallback renders
+  ([`af3fe48`](https://github.com/johnmarktaylor91/torchlens/commit/af3fe483f0af0de1b2a776f9cc88790a5951f637))
+
+- **collapse**: Fold representative shows single-instance stats
+  ([`74d6139`](https://github.com/johnmarktaylor91/torchlens/commit/74d61399e71f22c71b2446f9834a7ef15f2d1e05))
+
+- **collapse**: Guarantee non-empty optimizer plans
+  ([`57e51b1`](https://github.com/johnmarktaylor91/torchlens/commit/57e51b16a51841eb87e45640b948fabef48d7cf9))
+
+- **collapse**: Keep landmark modules visible
+  ([`2c6ea55`](https://github.com/johnmarktaylor91/torchlens/commit/2c6ea555ef2118380d963809cf87e8145b9d96ca))
+
+- **collapse**: Scope landmark protection to boundary-crossing junctions
+  ([`763f1b3`](https://github.com/johnmarktaylor91/torchlens/commit/763f1b367891186b087033212ee8dc93c77b52f2))
+
+- **collapse**: Soften production count parity gaps
+  ([`6761283`](https://github.com/johnmarktaylor91/torchlens/commit/67612832b80a5d7ee3e1455f2a7b294ba6568c13))
+
+- **data-classes**: _backward_gradfn_refs must be a list in __getstate__
+  ([`f706512`](https://github.com/johnmarktaylor91/torchlens/commit/f7065122a330b347adb707b48f50da4c37b14a08))
+
+Trace.__getstate__ seeded _backward_gradfn_refs as {} (dict), but the runtime backward walk
+  (backends/torch/backward.py) does __dict__.setdefault('_backward_gradfn_refs', []).append(...) --
+  expecting a list. After any in-memory __getstate__/__setstate__ round-trip the attribute was a
+  dict, so the next log_backward() raised AttributeError: 'dict' object has no attribute 'append'.
+  Seed it as [] to match the list contract (found via the cert8 datamodel field-order sweep).
+
+- **data-classes**: Buffer.to_pandas() silently dropped initial_value (cert7 F4)
+  ([`012433c`](https://github.com/johnmarktaylor91/torchlens/commit/012433c9733fd84d39a86093e7451c0581dcfee5))
+
+Buffer.initial_value is a real, populated field (FieldPolicy.KEEP, backed by a public @property) but
+  was absent from BUFFER_LOG_FIELD_ORDER, so it never reached Buffer.to_pandas() /
+  BufferAccessor.to_pandas() (trace.buffers.to_pandas()). Add initial_value to
+  BUFFER_LOG_FIELD_ORDER. Also move versions into BUFFER_LOG_FIELD_ORDER with a documented
+  _TO_PANDAS_EXCLUDED_BUFFER_FIELDS exclusion (list of child Op records, not a scalar cell),
+  mirroring the Module/BackwardPass pattern -- this closes the KEEP-field desync class for Buffer
+  cleanly instead of leaving versions structurally unaccounted for.
+
+Buffer was never added to test_to_pandas_field_coverage.py's desync parametrize list despite the
+  file's own regression-gate purpose, so this exact bug class (cert3/cert4) recurred undetected. Add
+  Buffer to the parametrize list, add a dedicated Buffer.to_pandas() field-coverage test, and update
+  the schema-equality assertions in test_io_pandas.py / test_record_export.py that previously
+  compared to_pandas() output directly against BUFFER_LOG_FIELD_ORDER (a self-consistency check
+  blind to gaps in the constant itself).
+
+- **data-classes**: Coerce present-but-wrong-typed Trace state on restore
+  ([`a664857`](https://github.com/johnmarktaylor91/torchlens/commit/a6648578cc75047355f83b7fa7a9c7aaae338b4a))
+
+Trace.__setstate__'s default-fill only filled ABSENT keys, never coerced present-but-wrong-typed
+  ones. Two blockers and a major fell out of that gap:
+
+- _backward_gradfn_refs: __getstate__ now always emits a list, but any .tlspec bundle or plain
+  pickle serialized by older code still has this field baked in as a dict. __setstate__ left it
+  untouched (key present), so the first log_backward() on a restored legacy trace crashed with
+  AttributeError: 'dict' object has no attribute 'append'. - total_backward_memory was missing from
+  the explicit Bytes-coercion tuple in __setstate__, so a Trace restored from a state dict
+  missing/mistyping it came back as a plain int instead of Bytes, breaking isinstance checks and
+  Bytes format specs. - Param._derived_grad_record_path (real data, written unconditionally by the
+  mlx/paddle/jax/tinygrad backends) was absent from PARAM_LOG_FIELD_ORDER, silently dropped from
+  Param.to_pandas().
+
+Add coerce_container_typed_state() next to default_fill_state() in torchlens/_io/__init__.py: for
+  every field whose declared default is an unambiguous plain list/dict/tuple/set, coerce a
+  present-but-wrong-typed value to the declared type (falling back to a fresh default on a genuinely
+  unconvertible value), instead of only filling absence. Wire it into Trace.__setstate__ right after
+  default_fill_state, with an explicit exclude for _grad_op_nums_to_save (typed List[int] | str,
+  where a bare string sentinel is legitimate, not a type-mismatch bug). This closes the whole class,
+  not just the two instances this round found.
+
+Add regression coverage: legacy on-disk _backward_gradfn_refs dict shape survives log_backward();
+  getstate/setstate roundtrip keeps it a list; total_backward_memory restores as Bytes when missing
+  or wrong-typed; representative list/dict/tuple container fields get coerced; the
+  _grad_op_nums_to_save string sentinel is never corrupted; and a Param field-order litmus
+  confirming _derived_grad_record_path now survives to_pandas().
+
+- **data-classes**: Remove leaking module-call accessor cache; robust repr after cleanup
+  ([`3912389`](https://github.com/johnmarktaylor91/torchlens/commit/3912389d4a21b083657938c54e7edeb70d1acad8))
+
+The global module-call accessor cache introduced with the trace mixin split held ModuleCall objects
+  whose _source_trace_strong pointed back at the Trace, so no Trace was ever garbage-collected (with
+  or without cleanup()). Rebuild the lightweight accessor on access instead. Also: format_model_repr
+  now tolerates fields deleted by cleanup() (repr raised AttributeError on _tracing_finished), and
+  the private pandas-exclusion constant keeps a compatibility re-export in trace.py at its old
+  location.
+
+- **data-classes**: Trace._grad_fn_param_refs crash on legacy state load (cert8 BLOCKER-1)
+  ([`551b464`](https://github.com/johnmarktaylor91/torchlens/commit/551b4646e24a87ec2feb8c3c62d0b3864392055a))
+
+Trace._grad_fn_param_refs is a real, populated FieldPolicy.KEEP field written unconditionally by
+  backends/torch/backward.py's backward-graph walk, but was absent from MODEL_LOG_FIELD_ORDER and
+  therefore from _MODEL_LOG_DEFAULT_FILL. Loading a state dict that predates the field (an
+  explicitly supported path -- read_tlspec_version only rejects newer versions) left the restored
+  Trace without the attribute, crashing log_backward() mid-walk with AttributeError.
+
+Add _grad_fn_param_refs, plus the two safe-but-desynced siblings _phase_timings and
+  _replay_arg_version_data_complete, to MODEL_LOG_FIELD_ORDER and _MODEL_LOG_DEFAULT_FILL with their
+  correct init-matching defaults.
+
+Extend test_field_order_has_no_keep_field_desync to cover Trace (previously only
+  Layer/Module/BackwardPass/Op/Buffer), with a documented per-class exclusion set for the one
+  legitimate non-bug case (Trace.ops_with_params, a computed property with no stored state). Add a
+  regression test exercising the real __setstate__ -> log_backward() crash path. Regenerate the
+  backend_parity field-order golden (diff confined to the three new MODEL_LOG_FIELD_ORDER entries).
+
+- **data-model**: Add forward_memory_backend to MODEL_LOG_FIELD_ORDER
+  ([`1db2925`](https://github.com/johnmarktaylor91/torchlens/commit/1db29255cd679b065f937183363b092dafb11016))
+
+The forward-memory measurement work added forward_memory_backend (assigned in Trace.__init__, marked
+  FieldPolicy.KEEP) but only registered its sibling forward_peak_memory in MODEL_LOG_FIELD_ORDER,
+  tripping the field-order-sync invariant. Add the field to the order and regenerate the
+  backend-parity golden (only forward_memory_backend + digest change).
+
+- **data_classes**: Comprehensive state-serialization hardening across record types (cert10 g1)
+  ([`241bc17`](https://github.com/johnmarktaylor91/torchlens/commit/241bc170c96c1dc25a11b655070d806baf827647))
+
+Close the state-serialization defect class comprehensively (round-9 found it spans every record
+  type, not just Trace). Four findings + minors:
+
+- BLOCKER-1: Layer.__getstate__ never nulled grad_fn_handle (a raw torch autograd Node, e.g.
+  AddmmBackward0), so plain pickle.dumps() of ANY Trace of a model with trainable params crashed.
+  Enforce the FieldPolicy.DROP that Layer already declares, mirroring Op.__getstate__. - BLOCKER-2 +
+  MAJOR-1: Trace.__setstate__ restored 29 container FIELD_ORDER fields as None (blanket {field:
+  None} base), crashing inside __setstate__ for layer_list/layer_logs and on first touch for the
+  rest. Add typed container defaults (_MODEL_LOG_CONTAINER_DEFAULTS) for every non-Optional
+  container field. - MAJOR-2: Op/LayerPassLog had the same absent-field-None defect (44 fields,
+  crashes real consumer code in finalization/loop_detection/invariants) AND never called
+  coerce_container_typed_state. Add typed container defaults (_LAYER_PASS_LOG_CONTAINER_DEFAULTS)
+  and a coerce call in Op.__setstate__. - MINOR-1: remove duplicate grad_fn_handle=None line in
+  Op.__getstate__. - MINOR-2: Buffer had no __getstate__/__setstate__; its live _source_ref weakref
+  made standalone pickle crash. Add the weakref-strip pair.
+
+Plain builtin (list/dict/set/tuple) defaults are used so coerce_container_typed_state repairs
+  present-but-wrong-typed legacy values too. Regression tests use models WITH parameters (the prior
+  fixture had none, which is why this survived), plus a drift guard asserting every container
+  FIELD_ORDER field restores typed when absent.
+
+- **data_classes**: Guard Layer.to_pandas surfaces against multi-pass ValueError
+  ([`a955478`](https://github.com/johnmarktaylor91/torchlens/commit/a955478e394419b22631d8b21210f7406e252031))
+
+Layer.to_pandas(), LayerAccessor.to_pandas() (trace.layers.to_pandas()), and Module.to_pandas()
+  (trace.modules["addr"].to_pandas()) all built their row dict by iterating LAYER_LOG_FIELD_ORDER
+  unguarded. That field order includes transformed_out/transformed_grad, which delegate to
+  Layer._single_pass_or_error() and raise ValueError for any recurrent/ multi-pass layer -- the same
+  bug class hotfix2 already fixed one level up for ModuleCall aggregates via
+  _MULTI_CALL_PER_PASS_MODULE_FIELDS, just not applied at the Layer surface.
+
+Add _MULTI_PASS_PER_CALL_LAYER_FIELDS + a shared _layer_log_to_row() row builder in layer.py that
+  reports transformed_out/transformed_grad as None for multi-pass layers (mirroring the Module-level
+  precedent), and route all three to_pandas call sites through it. Module.to_pandas now genuinely
+  delegates to the same row-building logic its docstring already claimed to use.
+
+Extend test_recurrent_to_pandas_and_root_aggregates to exercise all three previously-uncovered
+  surfaces on the project's canonical recurrence fixture (RecurrentParamsSimple), asserting
+  multi-pass fields are None while single-pass fields keep their real values.
+
+- **datamodel**: Class-complete state serialization -- GradFn/Accessor weakref pickle, 7-record
+  coerce, and coerce no longer masks corruption (cert10)
+  ([`177dc2c`](https://github.com/johnmarktaylor91/torchlens/commit/177dc2c9144c2134dd9d586a206f02fc40c88389))
+
+Round-9 (241bc170) hardened Trace/Op/Layer/Buffer state serialization but the fix was instance-deep,
+  not class-deep. This closes the whole defect class:
+
+BLOCKER: GradFn.__getstate__ never nulled its live _source_trace_ref weakref, so pickle.dumps(trace)
+  crashed for any trace with a captured backward pass. Its sibling GradFnCall already nulled this
+  correctly; mirrored the fix.
+
+MAJOR: the base Accessor class had no __getstate__/__setstate__, so pickle.dumps(trace.buffers) /
+  pickle.dumps(trace.layers) crashed the same weakref way for every accessor subclass that sets a
+  live _source_ref (BufferAccessor, LayerAccessor, GradFnCallAccessor, ...). Fixed once at the
+  shared base class.
+
+MAJOR: 7 of 11 record classes (Layer, ModuleCall, Module, Param, GradFn, GradFnCall, BackwardPass)
+  never called coerce_container_typed_state in __setstate__, so present-but-wrong-typed legacy
+  container fields silently kept the wrong type (verified on Param.co_parent_params). Added typed
+  container-default maps and the coerce call to each, mirroring Trace/Op. GradFn's `calls` field is
+  excluded from coercion (always a GradFnCallAccessor at runtime, not a plain dict, once
+  __post_init__ has run -- same class of field as Module.ops/Module.params).
+
+BLOCKER: coerce_container_typed_state silently substituted an empty typed container whenever a
+  present field's value could not be converted to its declared type, turning genuine corruption into
+  silent, undetectable data loss (e.g. a corrupted layer_dict_main_keys quietly coming back as an
+  empty dict) -- defeating the validation-is-a-tripwire principle. Absent-equivalent None still
+  converts losslessly to an empty container (unchanged), but a present value that fails conversion
+  now raises TorchLensIOError instead of being swallowed. Legacy container-type migrations (e.g. a
+  set stored where a list is now declared) still convert silently, since that conversion always
+  succeeds and is lossless.
+
+coerce_container_typed_state's only implementation lives in torchlens/_io/__init__.py (already the
+  module Trace.__setstate__ and Op.__setstate__ both call into), not under data_classes/ or
+  constants.py; fixing it there -- rather than duplicating the coercion logic -- was necessary to
+  close the FIX-4 gap without introducing a second, drifting copy of the same function.
+
+Added tests/test_state_serialization_cert10.py: pickle round-trip with a real backward pass, pickle
+  of trace.buffers/trace.layers, absent- and present-but-wrong-typed container field restoration for
+  each of the 7 newly-covered classes, and a tripwire guard asserting a corrupted
+  layer_dict_main_keys raises instead of coming back as a silently-empty dict. 12 of 15 tests fail
+  before this fix and pass after (verified via git stash); the remaining 3 are supplementary
+  consistency checks for already-correct behavior this change deliberately left unchanged.
+
+- **datamodel**: Close remaining FIELD_ORDER/to_pandas desync gaps
+  ([`2a90616`](https://github.com/johnmarktaylor91/torchlens/commit/2a90616e3ee91d2ec4e147b44031104bbb2c6b4f))
+
+Round-5 fix wave for the field-order desync class (round 3 fixed 2 instances, round 4 found 3 more):
+
+- constants.py: add is_in_conditional_body to LAYER_LOG_FIELD_ORDER (matches its Op-level position;
+  was populated on Layer but invisible in Layer.to_pandas()) and module_address to
+  BUFFER_LOG_FIELD_ORDER (populated KEEP field absent from Buffer.to_pandas()). -
+  LayerAccessor.to_pandas(): delegate to LAYER_LOG_FIELD_ORDER per layer instead of a hand-rolled
+  12-field subset. - Module.to_pandas(): delegate to LAYER_LOG_FIELD_ORDER per layer (plus a
+  trailing num_ops convenience column) instead of a hand-rolled 6-field subset. -
+  ModuleAccessor.to_pandas(): derive columns from MODULE_LOG_FIELD_ORDER minus a new, documented
+  _TO_PANDAS_EXCLUDED_MODULE_FIELDS set (live accessors/hooks/templates -- not scalar table cells)
+  instead of a hand-rolled 7-field subset. - BackwardPass.to_pandas(): derive columns from
+  BACKWARD_PASS_FIELD_ORDER minus a new _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS set (grad_fn_calls,
+  summarized as num_grad_fn_calls) instead of a hand-rolled 12-field subset that silently dropped
+  root_grad_fn_ids/root_meta/root_grad_arguments/ inputs_subset/engine_flags/save_grads_policy. -
+  tests/test_to_pandas_field_coverage.py: new anti-recurrence coverage for Layer, LayerAccessor,
+  Module, ModuleAccessor, BackwardPass, and Op. Checks both desync directions: (1) FIELD_POLICY
+  entries marked FieldPolicy.KEEP but absent from FIELD_ORDER (the constants.py incompleteness
+  class), and (2) to_pandas() columns vs FIELD_ORDER minus documented exclusions (the
+  hand-rolled-subset class). Verified this test fails hard when either fix is reverted.
+
+Skipped: removing the dead-looking FUNC_CALL_LOCATION_FIELD_ORDER constant -- it is still referenced
+  by tests/test_internals.py (owned by a different agent this wave), so it is not actually 0-use
+  right now.
+
+- **datamodel,viz**: Expose dropped Layer/Param field-order columns; make run-fold ellipsis honest
+  ([`ef9a29a`](https://github.com/johnmarktaylor91/torchlens/commit/ef9a29a5b9b8ffcd87cd338059d93d55fb8eeaac))
+
+Cert round 3 fixes:
+
+1. LAYER_LOG_FIELD_ORDER was missing three buffer-audit columns (buffer_value_changed,
+  buffer_replay_validated, buffer_source_func_name) that Layer.__init__ populates and Op.to_pandas
+  exposes but Layer.to_pandas silently dropped. Add them next to buffer_write_kind, matching
+  LAYER_PASS_LOG_FIELD_ORDER ordering.
+
+2. PARAM_LOG_FIELD_ORDER was missing weight-tying metadata (all_addresses, all_module_addresses,
+  has_multiple_addresses) that Param populates and Module already exposes, so Param.to_pandas /
+  ParamAccessor.to_pandas could never surface parameter sharing. Add them near module_cls, mirroring
+  MODULE_LOG_FIELD_ORDER.
+
+3. Run-fold "+N more" ellipsis could silently hide a structurally different sibling (same class +
+  output shape but extra layers/params). Gate folds on hidden-member structural uniformity: every
+  elided member (addresses[1:]) must share one signature of (num_layers, num_params,
+  num_params_trainable, num_params_frozen). The visible representative may still differ (its stats
+  are shown), which preserves intended MobileNetV2-style plateau folding where the first block
+  changes width before a plateau of identical residual blocks, while preventing a genuinely
+  different block from being buried in the count.
+
+- **display**: Backend-generic tensor stats summary -- no crash on non-torch saved activations
+  (cert10 follow-on)
+  ([`332ee73`](https://github.com/johnmarktaylor91/torchlens/commit/332ee7302cfbc5e8bf6b5ed142414655b3b6d7d2))
+
+- **fastlog**: Complete Recording.to_trace() finalization (cert8-g1)
+  ([`38fae24`](https://github.com/johnmarktaylor91/torchlens/commit/38fae24f85551adaef689dac4ba3fabb9cb42418))
+
+Round-8 completeness pass for Recording.to_trace(), closing the two round-7 gaps and making the
+  bridge reconstruct a fully-valid Trace for every model shape rather than patching symptoms one at
+  a time.
+
+Special-layer-list backfill (round-7 BLOCKER): to_trace() backfilled input_layers/output_layers but
+  dropped buffer_layers and internal_source_ops -- 2 of the 5 (list <-> per-Op-flag) pairs the
+  special_layer_lists invariant checks. Empty buffer_layers silently disabled postprocess Step 6
+  _fix_buffer_layers, so buffer_pass stayed None, buffer_source links never formed, and every
+  Module.buffer_layers came back empty for buffer-bearing models (BatchNorm, registered constants).
+  Now seeds both from raw labels (criteria mirror the authoritative per-Op flag normalization); Step
+  10 remaps them to final labels exactly as it already does for input/output. internal_sink_ops
+  self-heals once buffer_layers is populated.
+
+Halt-finalization parity (round-7 MAJOR): a halted recording yielded .halted == False and crashed
+  with 'No output layers found' because to_trace() never mirrored _finalize_halted_trace
+  frontier-output recovery. Now recovers the halt frontier from the recording's retained raw
+  activation (preferring the halt op itself, else the last saved op), binds it as the output parent,
+  and sets halted/halt_reason/halt_frontier so a halted record().to_trace() produces a valid halted
+  Trace matching the exhaustive tl.trace(halt=...) path. A halted recording with no retained payload
+  is rejected with a clear RuntimeError, mirroring the exhaustive path frontier-not-found contract.
+
+Adds an all-category acceptance model (BatchNorm buffers + registered constant + torch.zeros
+  internal source + 2-level nesting + recurrent submodule) plus a halt model, asserting the FULL
+  check_metadata_invariants chain and exhaustive-parity for module tree, input/output layers, and
+  buffer reads.
+
+- **fastlog**: Make record().to_trace() pass the full metadata-invariant chain
+  ([`4c8f8d0`](https://github.com/johnmarktaylor91/torchlens/commit/4c8f8d0885d89e20d1e96918365b8570a12ee9f7))
+
+Round-7 cert prep: close both producer gaps that kept record(model, x, save=...).to_trace() failing
+  check_metadata_invariants() for every real model (round-6 tests only checked two named invariants
+  and missed both).
+
+1. graph_ordering (raw_index collision, fails even on a flat submodule-free model): to_trace() built
+  a fresh Trace but never seeded _layer_counter from the replayed event stream, so postprocess Step
+  1 stamped the synthetic output node raw_index=1, colliding with input_1. Seed trace._layer_counter
+  from the event-stream high-water mark before _postprocess(), matching the live-capture path.
+
+2. module_hierarchy (fails on any model with a submodule): - The fastlog Recorder extended only
+  op_events into its long-lived CaptureEvents and reassigned trace.capture_events away, orphaning
+  the real ModulePrepEvents emitted at prep time. to_trace() thus had empty _module_metadata and the
+  root Module came back with empty address_children. Carry the real prep (and, symmetrically,
+  enter/exit) events across in the recorder, dedup-guarded for multi-pass recordings. - Predicate
+  capture emits no typed ModuleEnterEvents, so module_call_stacks stayed empty and every
+  ModuleCall.module_call_stack was [] (call-tree-link check failed). Reconstruct module_call_stacks
+  from each op's captured module_stack in materialize, reproducing the exhaustive stack[:-1] value.
+
+Reconstructed module tree + call stacks now match an exhaustive tl.trace() exactly for flat,
+  2-level, 3-level, and repeated-call models. Validation is untouched (no invariant weakened);
+  _replay_arg_version_data_complete stays an honest capability flag, so forward-replay remains
+  legitimately unavailable on sparse predicate captures.
+
+Regression tests assert the FULL check_metadata_invariants() chain plus raw_index
+  uniqueness/monotonicity and exhaustive module-tree parity for both a flat and a nested model.
+
+- **fastlog**: Restore output-tensor labels across repeat to_trace() calls
+  ([`8135ffe`](https://github.com/johnmarktaylor91/torchlens/commit/8135ffe170de2a191e2bb765b4e0ab54fcc803ad))
+
+cert9 BLOCKER-1: Recording.to_trace() retains the model's real output tensor OBJECTS by reference
+  across every call (never copied, for cost reasons), but postprocess Step 12
+  (_undecorate_all_saved_tensors) strips their private ._tl metadata, including label_raw. The cert8
+  fix protected the frozen Recording's CaptureEvents/LiveIndex containers via copy_for_replay(), but
+  that sibling tensor side-channel was left exposed: whenever the retained output-tensor count
+  doesn't equal the attributed output-label count (e.g. a model returning the same tensor twice, or
+  a multi-pass Recorder with colliding raw labels), graph_traversal.py falls off its fast path and
+  re-reads label_raw, finding it already cleared by a prior to_trace() call, and raises "could not
+  attribute a model output tensor to any traced op" on the second call.
+
+to_trace() now snapshots each retained output tensor's label before handing it to _postprocess(),
+  and restores it afterward if Step 12 cleared it, so repeat to_trace() calls stay safe regardless
+  of output-tensor/output-label count parity.
+
+Adds a regression test (DuplicateTensorOutput, forward() returning the same tensor twice) confirming
+  two and three consecutive to_trace() calls succeed, agree, and pass check_metadata_invariants.
+
+- **fastlog**: Stop Recording.to_trace() corrupting frozen recording; normalize halt labels; honest
+  buffer fields
+  ([`5b8781d`](https://github.com/johnmarktaylor91/torchlens/commit/5b8781d1ea592d6a302e79e7a1954c95f871abc4))
+
+cert8 round-9-prep fixes for Recording.to_trace():
+
+BLOCKER (validation): to_trace() aliased the frozen Recording's own _capture_events into the new
+  Trace, and _postprocess() destructively drains those containers. A second to_trace() then crashed
+  and recording_trace/records read after to_trace() memoized empty/wrong data (silent corruption of
+  a frozen=True object's read-only API). Hand postprocess a structural copy via new
+  CaptureEvents.copy_for_replay() + LiveIndex.copy() (frozen events/tensors shared by reference;
+  only containers duplicated).
+
+MAJOR (capture): halt_reason/halt_frontier stored raw capture-time labels that diverge across
+  capture modes (exhaustive counts buffer ops predicate mode skips). Remap them to FINAL labels in
+  postprocess Step 10, consistently for both the exhaustive tl.trace(halt=...) and cooked to_trace()
+  paths, so halt provenance matches exactly wherever the graphs are structurally identical
+  (eval-mode buffer models included). Synthetic non-op reasons ("linear:exit:1", "") pass through
+  untouched. Updated the b10 characterization golden (raw -> final).
+
+MAJOR (buffers): predicate mode does not track buffer WRITES, so cooked buffer metadata
+  (buffer_write_kind=None) could read as "read-only" on a provably mutated buffer. A value-sentinel
+  is unsafe here -- `buffer_write_kind is None` is the read/write discriminator across ~10 sites and
+  two validation predicates (_is_buffer_version_parent), which must not be weakened. Chose the
+  honest-doc path: prominent limitation notes on Recording.to_trace and Trace.buffer_write_ops (None
+  means "not tracked", not "read-only"; train-mode buffer-writing models may diverge from exhaustive
+  labels).
+
+MINOR: backfill Trace.random_seed from the runtime trace's real seed.
+
+Tests: reuse-does-not-corrupt, halt-labels-match-across-buffer, buffer-writes-honestly-unavailable,
+  random_seed backfill. Full check_metadata_invariants passes on all-category, halt, and buffer
+  models.
+
+- **fastlog**: Typed followed_by errors; Recording access + buffer materialization fixes
+  ([`5598e38`](https://github.com/johnmarktaylor91/torchlens/commit/5598e387ca56d62bfc002c7b4b55b694e8b6a0b4))
+
+record(save=followed_by(...)) and invalid followed_by compositions now raise typed
+  capability/selector errors instead of silently evaluating wrong (the negated-followed_by
+  always-True bug dies). Recording.op_events/event_stream work on the frozen dataclass (no more
+  unhashable-type TypeError), and Recording.to_trace() materializes CNN/buffer traces correctly —
+  the trace golden now checks full recording projection parity on non-recurrent surfaces.
+
+- **fastlog,validation**: Back-fill to_trace() timing/input_layers + fix label-resolution bug
+  ([`442111c`](https://github.com/johnmarktaylor91/torchlens/commit/442111c61ef50f90d6c9063d95d687f9f33bb3bd))
+
+Recording.to_trace() built a fresh Trace and replayed capture events into _postprocess() without
+  ever running the live-dispatch setup every real capture backend performs before postprocessing:
+  capture_start_time stayed at the dataclass default of 0, and only output_layers (not input_layers)
+  was back-filled from the captured events. Two consequences: (1) _log_time_elapsed computed
+  cleanup_duration as `time.time() - 0 - 0 - 0`, a multi-decade-off Duration, and
+  forward_duration/forward_peak_memory/ forward_memory_backend silently stayed at their unmeasured
+  defaults even though the fastlog Recorder's internal runtime_trace genuinely measured them; (2)
+  check_metadata_invariants unconditionally raised on every record().to_trace() output because
+  input_layers was empty while individual Ops still carried is_input=True.
+
+Fix: symmetrically back-fill input_layers (matching the per-op is_input
+
+criterion labeling.py actually normalizes against: layer_type == "input", since fastlog's
+  predicate-capture OpEvent.kind uses "input"/"buffer" rather than the "source" convention other
+  call sites check), seed capture_start_time from the Recording's own measured pass-start time, and
+  copy setup_duration/forward_duration/forward_peak_memory/ forward_memory_backend from the
+  Recorder's runtime_trace when reachable. Fields that were never measured stay at their honest
+  defaults.
+
+Unmasking the input_layers failure surfaced a second, independent bug in _resolve_trace_label
+  (torchlens/validation/invariants.py): when a label has no raw-to-final mapping (the common case
+  for an already-final label), `.get()` correctly returns None, but the resolver's `if final_label
+  in all_keys` short-circuit could match that None against a literal `None` lookup key some traces
+  legitimately register in layer_dict_all_keys, incorrectly treating "unresolved" as "resolved to
+  None" and short-circuiting before the correct `label in all_keys` fallback ran. This made every
+  valid already-final parent reference report as "missing". Fixed with a `final_label is not None`
+  guard.
+
+A third, deeper, unrelated gap remains and is out of scope here: the module_hierarchy invariant
+  still fails deterministically for record().to_trace() output on any model with a nested submodule
+  (address_parent/address_children mismatch), previously masked by the first two bugs always raising
+  earlier. Needs its own investigation.
+
+- **imports**: Lazy lightning callbacks
+  ([`efb167e`](https://github.com/johnmarktaylor91/torchlens/commit/efb167e1cd32ec53c70f1a8f8e31a804cd909e49))
+
+- **intervention**: Cert6 round-6 -- fork/spec/selector/diff silent-corruption fixes
+  ([`b00d5b8`](https://github.com/johnmarktaylor91/torchlens/commit/b00d5b86e0ac790191a5fc4bedddd8c48512e758))
+
+BLOCKER-1: differentiable-replay shallow fork aliased nested annotation dicts, so annotating the
+  fork silently mutated the parent trace. Deep-copy nested mutable containers in the shallow-fork
+  path (preserving tensor/callable identity so the perf intent of shallow fork is kept).
+
+MAJOR-1: Trace._optimizer was in the fork `share` set but absent from MODEL_LOG_FIELD_ORDER, so
+  _fork_policy_table dropped it and it was deep-copied. Seed the policy table from field_order |
+  share | reconstruct so the fork shares _optimizer (aliasing live params) without surfacing it as a
+  display field.
+
+MAJOR-2: intervention-spec save/load silently stringified non-string dict keys. Preserve
+  int/float/bool/None/tuple keys via a __dict_items__/__tuple_key__ encoding; raise
+  UnserializableDictKeyError for keys that genuinely cannot round-trip instead of coercing.
+  All-string dicts keep the plain on-disk format.
+
+MAJOR-3: DIRECTION_AGNOSTIC_KINDS omitted output/output_at/input_at, so a valid `output_at(0) &
+  grad_input()` selector resolved to 0 sites. Add the three kinds so backward sites bridge to their
+  paired forward op.
+
+MAJOR-4: SuperOp.diff_pair silently truncated a vector member to element[0] when compared against a
+  scalar member. Gate the scalar fallback on both operands being scalar-like and add a
+  numel-equality guard to relative_l1_scalar (matching its sibling metrics), so a scalar-vs-vector
+  diff fails loudly.
+
+Adds regression tests for each of the five fixes.
+
+- **intervention**: Cert7 -- sentinel-key collision, asymmetric scalar guard, dup fork policy
+  ([`4af2c2e`](https://github.com/johnmarktaylor91/torchlens/commit/4af2c2e55951818fe4c8349e1b01a0e00b137793))
+
+- save.py: escape any dict carrying a reserved wrapper key (the __dunder__ namespace, incl. all six
+  deserialize sentinels + __tuple_key__) through the general __dict_items__ item-list encoding so a
+  user dict keyed by e.g. __opaque_audit__ can never be silently reconstructed as a HelperSpec.
+  Plain all-string dicts keep the unescaped on-disk object format. - bundle: apply the symmetric
+  is_scalar_like(a) and is_scalar_like(b) routing guard in both Bundle.most_changed and the sibling
+  _distance_value helper, so a scalar baseline vs a vector member routes to the intended vector
+  metric instead of the scalar fallback (matching _diff_row/_diff_matrix). - types.py: drop dead
+  'source_trace' from the op-log fork SHARE set (RECONSTRUCT wins by check order;
+  _rebind_fork_owner_refs overwrites it regardless). - tests: cert7 regression suite (sentinel
+  round-trip for all 6+ keys, scalar-vs -vector routing, most_changed happy path, source_trace
+  policy).
+
+- **intervention**: Contains() does not match synthetic module-boundary proxies
+  ([`d05b566`](https://github.com/johnmarktaylor91/torchlens/commit/d05b5664a560085ec7868c9ffc9d95086ee78132))
+
+The module-boundary splice dispatch introduced synthetic proxy sites that live tl.contains(...)
+  selectors also matched, double-firing observers (the op site and the boundary site). Live
+  substring matching now targets real op sites only; module-boundary targeting stays the province of
+  module selectors, consistent with postprocessed resolution.
+
+- **intervention**: Dual-lab review fixes — lazy loads, structured payloads, module-boundary splice
+  ([`abcce09`](https://github.com/johnmarktaylor91/torchlens/commit/abcce09ee0310af4f3dd63a82de5fbf42fee89d8))
+
+load_intervention_spec never imports: callable import-refs are lazy and resolve only at
+  attach/execution (sentinel repro proves no load-time side effects). Selector dict/list/tuple
+  payloads serialize as structured JSON — the repr-string round-trip crash dies, with
+  reload-then-execute regressions in both directions. splice_module(input="in") passes the full
+  captured signature (multi-input replacements work), dispatches at the module-call boundary for
+  module-scoped selectors (one application per call — the compounding bug dies), and raises an
+  actionable error for ambiguous module-scoped op-granularity wiring. Backward recipes save before
+  any backward pass (unresolved_backward manifest entries; strict resolution at execution). Forward
+  helpers on backward-only selectors warn loudly. Mount validation takes the backward early-return
+  before direction resolution.
+
+- **intervention**: Gradient-action family live via direction= routing; splice input semantics; spec
+  persistence
+  ([`3b1877b`](https://github.com/johnmarktaylor91/torchlens/commit/3b1877b216b5a4db654a2af66b7d24b16c27bd72))
+
+Implements the pulled-forward direction=-routing design: grad_zero/grad_scale/
+  grad_clamp/grad_clip/grad_noise/bwd_hook and grad_transform now actually fire (backward direction
+  normalized end-to-end; tl.when(tl.grad_fn(...)) predicates convert to sticky backward hook specs
+  before log_backward; forward selectors match paired backward nodes). splice_module defaults to the
+  documented INPUT-splice semantics (audit probe: 100*x, not 100*fc(x)) with input="out" preserved
+  as the legacy route. Predicate interventions persist as executable hook specs so .tlspec
+  round-trips carry targets, not just fire records. activation_transform/grad_transform covered via
+  transformed_out/ transformed_grad regressions. Legacy helper names stay as aliases; all parked
+  renames untouched. Every audit repro is a permanent regression test.
+
+- **intervention**: Guard 4th scalar-truncation site + reconcile helper arg decoder (cert8)
+  ([`983b03f`](https://github.com/johnmarktaylor91/torchlens/commit/983b03f513d499c991146216723524c715bd54c2))
+
+BLOCKER-1 (scalar-vs-vector truncation, 3rd occurrence): Bundle._diff_members (backing
+  Bundle.diff_pair(member_a, member_b)) called relative_l1_scalar unconditionally, silently
+  returning a first-element-only score for every multi-element activation. Apply the same symmetric
+  is_scalar_like(a) and is_scalar_like(b) guard used by
+  _diff_row/_diff_matrix/most_changed/_distance_value, routing non-scalar pairs through the default
+  cosine metric (consistent with node-level diff_pair). All five relative_l1_scalar call sites in
+  the intervention/bundle/_super scope are now guarded; a source-level tripwire test fails on any
+  future unguarded sibling.
+
+BLOCKER-2 (dual out-of-sync decoders): helpers.py::_decode_jsonish was a strictly narrower decoder
+  than save.py::_serialize_value's encoder -- it understood only __tensor_ref__, so a builtin
+  helper's callable/opaque argument round-tripped as a raw wrapper dict. This broke tl.bwd_hook(fn)
+  save/load at the DEFAULT level (misleading HookSignatureError at load) and let an audit-level
+  tl.splice_module(...) spec load a corrupted arg that crashed later with a masked TypeError. Route
+  helper args/kwargs through the SAME full codec via a value_decoder passed from _deserialize_value,
+  and gate on the executable=False flag: a decoded opaque_audit (non-executable) argument now yields
+  an explicit non-executable placeholder that raises the new NonExecutableSpecError loudly at fire
+  time instead of silently loading a corrupt callable.
+
+Regression tests: Bundle.diff_pair multi-element (no truncation) + every call site guarded +
+  numel-mismatch rejection; bwd_hook callable arg round-trips at default save level (codec +
+  end-to-end); audit-level opaque spec fails loudly.
+
+- **intervention**: Honestly gate string-label swap_with (cert10)
+  ([`aa396af`](https://github.com/johnmarktaylor91/torchlens/commit/aa396af72fb427a6b9c333f08e946e1c56e109da))
+
+swap_with(<string label>) was documented as working but was dead code: _resolve_swap_value depended
+  on hook.run_ctx["swap_sources"], a dict that no live/replay/rerun execution path ever populated.
+  Route A (implementing real resolution) needs a fire-time label->tensor lookup populated as the
+  forward pass progresses, which is a runtime.py/replay.py concern outside this file's scope, so
+  this takes the honesty route: swap_with now raises HookValueError immediately when given a string,
+  and docs/intervention_api.md no longer implies label resolution works.
+
+- **intervention**: Resolve dual-lab adversarial review findings
+  ([`16c68f8`](https://github.com/johnmarktaylor91/torchlens/commit/16c68f8a828048c0e73fe213e14c3aaf976555e5))
+
+Seven fixes from the cross-lab review of the backward-intervention audit work: composite selectors
+  reconstruct recursively for live backward hooks (was a first-callback SiteResolutionError); live
+  in_backward_pass(n) now matches (GradFnCall stamped with the active pass index) with strict
+  same-pass semantics unified across live and materialized paths; matching helpers emit FireRecords
+  regardless of return value (None-return/in-place mutation records replaced=False — previously the
+  audit trail was silently empty); AccumulateGrad pending-record queue drains at pass teardown
+  (assignment per pairing, no cross-pass leak); intervention .tlspec format version bumps 1->2 so
+  old loaders reject loudly instead of silently dropping the records ledger (new loader accepts
+  both); helper callables serialize structurally (scrubbed HelperSpec, no executable factories)
+  everywhere; ledger dedup keys on structural identity instead of timestamps. Every review repro is
+  a permanent regression test.
+
+- **intervention**: Stop tensor-carrying hook repr from orphaning raw ops (cert10)
+  ([`9ac23ad`](https://github.com/johnmarktaylor91/torchlens/commit/9ac23adbfb9db83f1e8578c78048488dc16469e6))
+
+_record_predicate_intervention_spec built its dedup key from repr(decision.hook). When the fired
+  helper carries a live torch.Tensor (tl.steer, mean_ablate, resample_ablate,
+  project_onto/project_off, swap_with), that repr() reprs the tensor field, routing through
+  TorchLens's own intercepted Tensor.__repr__ (print_override). That interception had its own bug:
+  it paused logging only around .cpu() and called .detach() after pause_logging exited, so .detach()
+  ran as a real logged op -- consuming a raw-op-counter slot and leaving a graph orphan that staled
+  the just-recorded target label relative to the op's real final raw label. save_intervention() then
+  crashed with an unhandled SiteResolutionError on ordinary intervene= + save_intervention usage.
+
+Two fixes: - ops.py: compute the dedup key's repr(decision.hook) inside pause_logging() so the
+  bookkeeping repr can't perturb capture. - tensor_utils.py: keep print_override's .detach() inside
+  its own pause_logging() block, closing the root cause so any tensor repr/str during active logging
+  is safe -- this also fixes plain (non- intervention) traces of multi-output ops like torch.max,
+  whose torch.return_types repr was leaking detach_*_raw orphans and skipping raw indices.
+
+Adds tests/test_intervention_hardening_cert10.py: steer + save_intervention round-trip, multiple
+  firing sites, plain torch.max orphan-free trace, and a direct print_override regression guard.
+
+- **intervention,semantic**: Require value_decoder + resolve input facet via op graph (cert9)
+  ([`1995e15`](https://github.com/johnmarktaylor91/torchlens/commit/1995e150d2ae87eb856aa6d62212f6fd8aaf1b93))
+
+- helper_from_serialized (intervention/helpers.py) no longer defaults value_decoder to the narrow
+  _decode_jsonish fallback. Omitting it now fails loudly with a TypeError instead of silently
+  building a corrupted, non-opaque HelperSpec from an undecoded wrapper dict (cert8 intervention
+  MAJOR-1). _decode_jsonish is quarantined with a docstring marking it dead-on-maintained-path,
+  retained only for its pinning test (MINOR-1). - first_input_spec (semantic/recipes/_helpers.py)
+  falls back to the op-graph resolution module_input_op_spec already uses when
+  ModuleCall.forward_args is nulled by finalization's GC-11 pass for the default torch_module
+  identity mode. Fixes the "input"/"indices" facet falsely reporting "not captured" on
+  norm/mlp/attention/embedding recipes even when save_arg_values=True was passed and the value was
+  captured and readable (cert8 peripheral MAJOR). - Dedupe _parquet_cell/_tracker_cell onto a shared
+  _scalarize_cell body (export/__init__.py). - Drop the unreachable getattr(type(self), "severity",
+  self.default_severity) fallback in TorchLensError/TorchLensWarning.__init__ (errors/_base.py);
+  severity is always a class attribute so the getattr default could never fire.
+
+- **intervention,structure,tests**: Point run() error at canonical API, drop dead lazy-attr entries,
+  harden effect-blind cleanup/save_new_outs tests
+  ([`b593748`](https://github.com/johnmarktaylor91/torchlens/commit/b59374815e879fb537d2c0a214ae89ad44d3f3f5))
+
+- intervention/rerun.py: _preflight's ValueError previously told callers to fix a missing x by
+  calling the deprecated log.rerun(model, x) alias (which itself fires a DeprecationWarning). Point
+  it at the canonical log.run(model, x) instead. - torchlens/__init__.py: remove bridge/semantic
+  entries from _LAZY_ATTRS and the autoroute special-case in __getattr__/__dir__. All three names
+  are already bound eagerly via transitive imports (user_funcs.py importing .bridge and .autoroute,
+  and the facets sys.modules shim importing torchlens.semantic) before __getattr__ is ever
+  consulted, so the lazy entries never fired and dir(torchlens) carried duplicate names. -
+  torchlens/compat/__init__.py: same pattern for torchextractor -- it is imported eagerly at module
+  load (`from .torchextractor import Extractor`) so the _COMPAT_MODULES lazy entry was dead; remove
+  it. - tests/test_internals.py: TestBufferDuplicate::test_shared_buffer_fast_path and
+  TestCleanupReleasesReferences::test_cleanup_no_crash asserted nothing about
+  save_new_outs/cleanup's actual effects, so they would pass even if either method were a no-op.
+  Rewrite both to assert the discriminating effect (saved outs actually refresh to match a fresh
+  forward pass; cleanup actually releases cached Param references and clears per-Op state) and
+  verify by hand that patching either method to a no-op fails the corresponding test.
+
+- **io**: Add BaseException safety net to streaming bundle writer (cert9 major)
+  ([`4b0f85e`](https://github.com/johnmarktaylor91/torchlens/commit/4b0f85e87f2e6a8c2fa47965b3d24ef3f1a2361d))
+
+BundleStreamWriter.finalize()/write_blob() never received the round-8 F3 BaseException catch-all
+  that bundle.py's save() got. A KeyboardInterrupt/ SystemExit/GeneratorExit raised mid-write (e.g.
+  during finalize()'s pickle.dump(), or write_blob()'s safetensors.torch.save_file() call) was not
+  caught by the narrow (OSError, TypeError, ValueError, PickleError)/ OSError tuples, nor by
+  user_funcs.py's outer except Exception guard, so it propagated out of tl.trace() correctly but
+  without ever calling abort() -- leaving the .tmp bundle dir without a PARTIAL sentinel,
+  un-sweepable by default cleanup_tmp(). No data-loss risk (streaming never overwrites an existing
+  bundle), just an orphaned .tmp dir.
+
+Mirror bundle.py's pattern in both finalize() and write_blob(): mark the .tmp dir PARTIAL via
+  abort() for any exception, re-raise non-Exception BaseExceptions unwrapped, wrap ordinary
+  Exceptions into TorchLensIOError.
+
+Added regression tests exercising both write sites via the public storage=tl.to_disk(...) entry
+  point; confirmed both fail against the pre-fix code (unmarked, un-swept .tmp dir) and pass with
+  the fix.
+
+- **io**: Catch TypeError in bundle save/load, stringify unpicklable raw values, enforce tlspec
+  schema properties
+  ([`ddd9440`](https://github.com/johnmarktaylor91/torchlens/commit/ddd9440fb661489e782589f60c04ddc0f4aef600))
+
+BLOCKER: bundle.py save()'s exception handler caught (ImportError, OSError, ValueError,
+  pickle.PickleError) but not the bare TypeError pickle.dump() raises for live-resource objects
+  (generators, locks, file handles, ...). A save(overwrite=True) that hit this propagated the raw
+  TypeError past every handler, skipping both the PARTIAL sentinel (leaving the .tmp dir
+  un-sweepable) and the pre-overwrite backup restore -- permanently losing the original bundle under
+  an undocumented .bak.<uuid> directory. Added TypeError to that catch tuple (and the load-side
+  handler at bundle.py, and streaming.py's finalize() handler for consistency).
+
+Root cause: scrub.py's _scrub_raw_value_for_save routed save_raw_input/ save_raw_output=True through
+  the unsafe _scrub_value() passthrough, which returns unrecognized live objects unchanged.
+  _scrub_value now accepts a stringify_unknown flag; when set, an unspecced leaf is probed with
+  pickle.dumps() and stringified via _stringify_value() only if that probe fails, so tensors (and
+  anything else genuinely picklable) are still fully retained while generators/locks/handles degrade
+  to a bounded placeholder before ever reaching the real pickle.dump() over the full scrubbed state.
+
+MAJOR: validate_tlspec() read only schema["required"] from the shipped .tlspec JSON schemas, never
+  schema["properties"], so a prior "const -> minimum" schema edit was cosmetic and the JSON files
+  were decorative beyond required-field presence. Added a small recursive JSON-Schema-subset walker
+  (type/enum/const/minimum/minLength/pattern/uniqueItems/items/ properties/nested required) so the
+  shipped schema's properties block is now a real, load-bearing contract instead of documentation
+  the parallel hand-written Python checks happened to agree with.
+
+Adds regression tests for the data-loss repro (save over an existing bundle with a poisoned
+  pickle.dump raising TypeError -- original bundle survives, TorchLensIOError raised, tmp dir
+  sweepable), the raw-input stringify behavior (unmocked generator-in-raw-input repro), and a
+  validate_tlspec case a hand-written check alone would have missed (python_version pattern) to
+  prove schema properties enforcement is real.
+
+- **io**: Close legacy-bundle TypeError gap, schema-v2 python_version pattern, tensor pickle-probe
+  cost
+  ([`08ef49e`](https://github.com/johnmarktaylor91/torchlens/commit/08ef49e4f8abc3f87700615891ce95eb26ae632f))
+
+Three round-6 fixes for _io residuals surfaced by cert round 5:
+
+- bundle.py _load_unified_bundle(): add TypeError to the legacy multi-trace Bundle pickle-load
+  except tuple (a fourth sibling of the three sites round 5 already fixed) and switch to
+  _RenameAwareUnpickler for rename-compat parity with the modern trace-load path. -
+  schemas/tlspec_manifest_v2.json: add the python_version pattern constraint that v1 already
+  declares, so validate_tlspec's schema-properties enforcement covers non-torch backends
+  (tf/mlx/paddle/tinygrad/...) too. - scrub.py _is_safely_picklable(): skip the pickle.dumps() probe
+  for torch.Tensor/numpy.ndarray, which are always picklable via their own __reduce_ex__ and hold no
+  live OS resources -- removing a full extra serialization pass (2x CPU, transient 2x peak memory)
+  for every tensor kept via save_raw_input/save_raw_output's True policy.
+
+Also folds the round-5 minor: cleanup_tmp() now sweeps orphaned .bak.<uuid> backup dirs left behind
+  when a save(overwrite=True) failure's best-effort restore also fails. A .bak dir next to an
+  existing bundle_path is provably redundant and removed; one next to a missing bundle_path holds
+  the only surviving copy of the pre-overwrite bundle, so it is restored onto bundle_path instead of
+  deleted.
+
+Adds regression tests for all four fixes.
+
+- **io**: Reject complex128 bundle saves + close backup-restore exception class
+  ([`48eb0f0`](https://github.com/johnmarktaylor91/torchlens/commit/48eb0f0a3145610b680d22ebaf6031858b6e5e87))
+
+torch.complex128 was listed in tensor_policy._SUPPORTED_DTYPES even though
+  safetensors.torch.save_file() (0.8.0) has no dtype-size-table entry for it, so a complex128 tensor
+  sailed past the allow-list tripwire and crashed with a raw KeyError. On save(path, overwrite=True)
+  this KeyError escaped after the pre-overwrite backup rename but before the restore step (KeyError
+  was never in the caught exception tuple), leaving the live bundle path missing with only an
+  unrestored .bak.<uuid> copy surviving.
+
+Drop complex128 from _SUPPORTED_DTYPES (complex64 still round-trips) and reject it at the
+  numpy/non-torch path too (_unsupported_array_dtype_reason now distinguishes complex64/complex128
+  by itemsize, not just dtype kind).
+
+Close the underlying bug class rather than just this one dtype: save()'s overwrite path now has a
+  BaseException catch-all after the specific except branches, so the backup-restore +
+  PARTIAL-sentinel recovery fires for any exception type -- known or not yet discovered -- instead
+  of requiring every future third-party failure mode to be hand-enumerated in an except tuple.
+
+Also clarifies cleanup_tmp()'s docstring: it takes the bundle path itself, not its parent directory.
+
+- **io**: Stop cleanup_tmp() destroying distinct .bak orphans, tighten ndarray pickle-probe
+  exemption
+  ([`9427108`](https://github.com/johnmarktaylor91/torchlens/commit/9427108f023fc2d3d845bd11c4485d83a1718626))
+
+Two round-6 H4 over-reach regressions found by cert6 io audit:
+
+- bundle.py cleanup_tmp(): the .bak.* orphan sweep inferred "redundant" purely from
+  bundle_path.exists() becoming true mid-loop (after an earlier iteration restored a sibling
+  backup), with no content check and no force gate -- silently shutil.rmtree()'ing a genuinely
+  distinct second orphaned backup. Now a candidate is only auto-deleted when it is byte-identical to
+  the live bundle (via sha256_of_file over every relative path); otherwise it is left in place with
+  a warning unless force=True is passed, matching the .tmp.* loop's existing discipline.
+  Restore-when-bundle-missing (H4's original intent) is unchanged.
+
+- scrub.py _is_safely_picklable(): the "always picklable" fast-path exempted every numpy.ndarray
+  from the pickle probe, but an object-dtype ndarray can hold live unpicklable elements (generators,
+  locks) just like a list/dict can. Narrowed the exemption to torch.Tensor and non-object-dtype
+  ndarrays; object-dtype arrays now run the real probe and degrade gracefully to a stringified
+  placeholder instead of blowing up save().
+
+Adds regression tests for both, including the exact two-orphan-backup and object-dtype-ndarray
+  scenarios from the cert6 report.
+
+- **io**: Unify TLSPEC_VERSION source of truth, validate streaming bundles
+  ([`fd68d6d`](https://github.com/johnmarktaylor91/torchlens/commit/fd68d6d96c61736891a1076c94205910aa19cab5))
+
+- Remove the duplicate TLSPEC_VERSION=1 constant in _io/tlspec.py that collided with the real
+  _io.TLSPEC_VERSION=5 under the same on-disk "tlspec_version" manifest key.
+  _TlSpecWriter.write_trace_manifest's dict.update() was letting the stale constant win, so every
+  unified .tlspec bundle reported tlspec_version=1 on disk and every same-runtime load raised a
+  false "older than runtime" DeprecationWarning, defeating the manifest-level forward-compat
+  hard-fail gate. tlspec.py now imports the single constant from _io/__init__.py (the value the
+  loader's enforce_version_policy already treats as current runtime) instead of redefining it, and
+  write_trace_manifest explicitly drops the duplicate key before merging instead of relying on
+  incidental dict.update order. - Update the two shipped JSON schemas and the Python schema
+  validator to check tlspec_version >= 1 instead of hardcoding the buggy const/expected value of 1,
+  mirroring how schema_version is already validated in v1. - Re-derive the 5 test files/goldens that
+  had enshrined the bug (asserting tlspec_version == 1 and expecting the false deprecation warning
+  on fresh saves); add regression tests proving a fresh save reports the correct version with no
+  warning, and that a genuinely newer on-disk version still hard-fails. - Fix
+  BundleStreamWriter.finalize() (trace(..., save_outs_to=...)) to write the same unified manifest as
+  Trace.save()/tl.save() via _TlSpecWriter.write_trace_manifest instead of a bare legacy Manifest,
+  so streaming bundles are detected as "v2.0_unified" and go through validate_tlspec() schema
+  validation instead of being silently skipped. - Fix the Manifest.bundle_format docstring to
+  document "fastlog-directory" alongside "directory", and drop internal sprint codenames (Fork
+  K/L/M/F, S4, Phase 11) from shipped docstrings in _io/__init__.py, _io/manifest.py, _io/tlspec.py,
+  and _io/bundle.py.
+
+- **io,capture**: Buffers surfaced correctly -- resolve initial_value BlobRef on load + tl.record()
+  buffer-output extraction (cert10)
+  ([`3122314`](https://github.com/johnmarktaylor91/torchlens/commit/3122314e4755d52b0798ec41865c91a99a8aec1f))
+
+- **ir**: Make ModuleExitEvent.output_paths optional with empty-tuple default
+  ([`a286e61`](https://github.com/johnmarktaylor91/torchlens/commit/a286e61b995e61f0033edc798d94aba426708403))
+
+Breaking commit: 156683b6 (fix(modules): preserve module output paths) added output_paths as a
+  required positional field inserted before has_user_forward_hooks on the frozen ModuleExitEvent
+  dataclass. That broke tests/test_ir_basic.py's IR-constructor smoke tests (5 tests), which build a
+  representative ModuleExitEvent and did not supply the new field: TypeError missing 'output_paths'.
+
+Root cause: a new public IR field was added mid-struct without a default. All consumers already
+  guard on a falsy value (_materialize.py: 'if event.output_paths', finalization via .get(..., ())),
+  and the production capture call passes it by keyword, so making it a trailing field with an
+  empty-tuple default (matching the sibling output_names default) is fully behavior-preserving and
+  keeps the IR construction surface stable.
+
+- **ledger**: Verified_count tracks the catalog current recipe_revision (no stale-certify)
+  ([`d3f2a65`](https://github.com/johnmarktaylor91/torchlens/commit/d3f2a6590817d58a50accfb97d9e8048a08622ac))
+
+- **menagerie**: Adapt validation jobs + memory budget to saturate box without OOM
+  ([`b4aceb0`](https://github.com/johnmarktaylor91/torchlens/commit/b4aceb0d599773ddd6f1f16da016c36b351a57c3))
+
+Two coupled scheduler fixes so a full --force-full sweep auto-saturates a many-core host without
+  kernel OOM-killing big models:
+
+- --jobs auto-scaling: default_validation_jobs() scales to cpu_count-2 (no cap-8 clamp). Validation
+  workers are single-thread-pinned for replay determinism, so ~nproc workers fit CPU-wise and the
+  small-model bulk now saturates every core (20-core box: 8 -> 18). --jobs stays overridable.
+
+- Memory budgeter estimates from measured ledger peaks and caps big-model concurrency: - ledger
+  peak_rss_mb is scaled by 1.3x headroom (both first-pass and same-run refresh), so a 59GB model is
+  budgeted ~77GB instead of the 4GB default -> the budgeter admits few concurrently; - big models
+  (estimate > 40GB) are concurrency-capped at 1 regardless of aggregate budget, with deadlock-safe
+  first-job admission so a lone big model never wedges; - auto budget (70% of available RAM) is
+  additionally capped to 88% of total RAM, leaving OOM-killer headroom below physical memory.
+
+Net effect: effective concurrency adapts -- high (~nproc) for small models, throttled for big ones
+  -- saturating the box safely. Operational only; validation comparison/tolerance/replay untouched
+  (result-neutral).
+
+- **menagerie**: Attribute cluster array results per-model, not by batch returncode
+  ([`8e9dd38`](https://github.com/johnmarktaylor91/torchlens/commit/8e9dd38694f95f5cc1675c8df00f68489b9e61ed))
+
+A SLURM array `sbatch --wait` returns non-zero if ANY single task fails, so a PARTIAL array failure
+  (some tasks validated, some failed) cascaded the batch-level returncode onto EVERY dispatched
+  model. Concrete evidence: array job 6014456 had 82 tasks validate + 30 fail, yet all ~290 models
+  were written status=failed with the generic "cluster job failed; sbatch --wait returncode=1;
+  Submitted batch job 6014456" -- the ~73% that actually validated were mislabeled.
+
+Root cause: result handling attributed at BATCH granularity (the dispatch-level ClusterJobFailed)
+  instead of per-model from each task's own result artifact.
+
+Fix: attribute cluster results PER-MODEL by each task's OWN outcome, never the array-job return
+  code. Whether `sbatch --wait` returns zero OR non-zero, the same unified path now runs: -
+  collect_cluster_results_partial(): collect whatever per-task result artifacts came back (tolerant
+  of partial failures), verifying each present artifact against its own manifest; a
+  present-but-corrupt artifact is treated as missing. - a model whose task wrote a valid result ->
+  its real merged status (validated, or its honest per-model failed:*); a genuine validation failure
+  still surfaces. - a model whose task produced no result -> honest failed:cluster_task_failed
+  carrying that task's OWN giant_<jobid>_<taskidx>.err tail, not the batch line. -
+  cluster_unavailable is reserved for genuine transport/submit failures (no job id / zero results
+  returned), never a submitted+run array.
+
+Idempotent reruns now Just Work: a partial array attributes correctly per-model, and the
+  ledger-keyed resume re-dispatches only the genuinely-failed/missing ones.
+
+Verified on live axon: a mixed 2-task array (one model validated -> kept passed; one task crashed
+  with no result -> honest failed:cluster_task_failed with its own .err) attributed correctly
+  per-model, zero blanket cascade, zero cluster_unavailable. Unit tests cover the mixed-outcome
+  split, corrupt-artifact rejection, and the end-to-end ClusterJobFailed attribution path.
+
+- **menagerie**: Base-env-only incremental-skip resolves identity from env vars (no yaml import)
+  ([`3c66c1b`](https://github.com/johnmarktaylor91/torchlens/commit/3c66c1b1f4e10e909e017a9bbf27566c862865f1))
+
+- **menagerie**: Bind importable attribute-root modules in recipe namespace
+  ([`a5e213d`](https://github.com/johnmarktaylor91/torchlens/commit/a5e213dc60ebc731f52927baccf12b211d034f76))
+
+Recipes that call a model via a dotted attribute path with no explicit import statement (e.g.
+  torchaudio.models.DeepSpeech(...), monai.networks.nets.AHNet(...), torchsr.models.carn(...),
+  cornet.cornet_r(...)) raised NameError at instantiation even though the package was installed,
+  because import_namespace only bound modules detected from real import statements (required_modules
+  deliberately ignores bare attribute roots for dependency-cluster gating). Add
+  _importable_attr_module_roots so attribute roots that importlib can actually resolve to an
+  installed top-level module are bound in the eval namespace. Namespace-building only -- dependency
+  gating is unchanged, and no module is invented (only roots with a real importlib spec are added).
+  Recovers the whole module.Class(...)-with-no-import class of recipes.
+
+- **menagerie**: Block cluster attribution on a still-running array; no false task failures
+  ([`d8d6482`](https://github.com/johnmarktaylor91/torchlens/commit/d8d648278727aab73c6895ae6edfffc07a424c49))
+
+C1-1 (REVIEW_scheduling.md, HIGH): collect_cluster_async polled poll_cluster_terminal but attributed
+  UNCONDITIONALLY. When the local lane drained and the poll timed out with the array still RUNNING,
+  every row without an artifact yet was stamped failed:cluster_task_failed -- masking a 4-hour giant
+  still executing on axon as a hard failure (the later-completing result is lost behind a false
+  failed row). A false failure that looks like a real capture failure is exactly what the tripwire
+  must not book.
+
+FIX: thread attribute_missing_as_failed=terminal into _attribute_cluster_results_per_model. When the
+  array is NOT confirmed terminal, present rows still get their real merged status, but in-progress
+  (missing) rows are LEFT PENDING (logged cluster_tasks_pending, no ledger/manifest write) for a
+  later collect -- never stamped failed. The zero-artifact-not-terminal path is also left pending
+  instead of env_unavailable. A missing artifact is attributed failed ONLY once sacct confirms a
+  terminal state.
+
+GATES: * test_running_array_at_deadline_does_not_stamp_in_progress_rows_failed -- real partial
+  array, poll=False: finished row keeps status, running row absent from ledger/manifest (pending),
+  never failed. * test_terminal_array_still_attributes_missing_task_failed -- poll=True + no
+  artifact still surfaces failed:cluster_task_failed (tripwire stays armed; the carve-out is narrow
+  to still-running tasks only).
+
+Tripwire intact: no validation comparison/tolerance/replay touched; statuses remain honest appends.
+
+- **menagerie**: Classify forward_peak_memory as per-capture measurement in equivalence audit
+  ([`77b6416`](https://github.com/johnmarktaylor91/torchlens/commit/77b641664476260dd8465a745f718217722996d6))
+
+- **menagerie**: Close cluster and cuda routing gaps
+  ([`fd0e07e`](https://github.com/johnmarktaylor91/torchlens/commit/fd0e07e602ddcd1524aeae937928d1d14ff28899))
+
+- **menagerie**: Completeness audit ranks runs by recency, not the forward-preferring ledger view
+  ([`d3f58c9`](https://github.com/johnmarktaylor91/torchlens/commit/d3f58c9a917f64e8e29173dd6f91e29549b94960))
+
+- **menagerie**: Consistent per-row device provenance + real A/B identity gate
+  ([`8d2b635`](https://github.com/johnmarktaylor91/torchlens/commit/8d2b635962a0d18d124939dd63e7e226f3e658de))
+
+R1-1 (REVIEW_scheduling.md, MED): device provenance was split -- the worker and local ledger used
+  route.device but the cluster failure-rows / cluster target identity used the blunt global
+  args.device. If the route diverges (a requires_cuda row, or a user --device cuda) the cluster
+  target's device_requested would not match the worker's ledger row, breaking completed-row dedup;
+  and an explicit user --device was silently discarded by the local-first route.
+
+* _resolve_row_device: the route is the single source of a row's device. The local-first default
+  (--device cpu/auto) defers to the route; an explicit --device that CONFLICTS with the route is
+  rejected loudly (honor-or-error). * One resolved device per row threaded through worker + local
+  ledger, the cluster target identity (_verification_targets_for_rows device_by_id +
+  _cluster_device_by_id), both cluster failure-row writers, and the dependency-unavailable append
+  (_cluster_row_device).
+
+TEST-1 (MED): the A/B identity test now RUNS a real validation old-vs-new scheduling on a small
+  traceable model and asserts status + n_ops + graph_shape_hash IDENTICAL (was sort-membership +
+  route-table only).
+
+GATES: test_resolve_row_device_is_route_owned_and_honors_or_errors_explicit_device;
+  test_old_vs_new_scheduling_run_yields_byte_identical_validation_result.
+
+Tripwire intact: device is a placement bound; the validation body is unchanged and proven
+  byte-identical across the A/B.
+
+- **menagerie**: Content-fingerprint production-isolation gate (kill WAL false positive)
+  ([`bca98cf`](https://github.com/johnmarktaylor91/torchlens/commit/bca98cf799353275d9b0468fe01ab891cd062b02))
+
+The smoke gate's production-isolation check compared the production verification.db's FILE
+  fingerprint (sha256/mtime_ns/size) as a proxy for "the smoke did not pollute production". The
+  smoke only READS that ledger, but SQLite WAL-mode checkpoints rewrite the file bytes (and
+  mtime/size) with no logical content change, so the byte fingerprint drifted intermittently and
+  tripped a false "production verification.db changed | key=sha256" (a recurring flake; the
+  magic-constant-proxy-fails-flaky pattern).
+
+Replace the byte fingerprint with a CONTENT fingerprint of verification_runs (COUNT(*), MAX(rowid),
+  and a full-row hash), computed by a single canonical helper (snapshot_verification_content) shared
+  by producer and gate. Because the ledger is append-only (UPDATE/DELETE triggers RAISE(ABORT)), the
+  only permitted mutation is an append, which strictly raises both COUNT(*) and MAX(rowid); an
+  unchanged count+max-rowid therefore PROVABLY means no row was added, modified, or removed. The
+  full-row hash is defense-in-depth so the check no longer relies on trusting the triggers. The
+  original zero-fresh-smoke-rows witness is kept. This is a correctness STRENGTHENING, not a
+  loosening: the fingerprint is invariant under WAL churn yet still changes on any real row
+  mutation.
+
+Regression tests cover both directions: a WAL checkpoint + mtime bump (identical content) PASSES,
+  and an injected production row FAILS.
+
+- **menagerie**: Correct audit-flagged mislabeled classics
+  ([`8dca763`](https://github.com/johnmarktaylor91/torchlens/commit/8dca76319b0f1f751dae8e6a223fa26f5700f37d))
+
+- **menagerie**: Correct audit-flagged mislabeled classics
+  ([`fa6b7f6`](https://github.com/johnmarktaylor91/torchlens/commit/fa6b7f63b9089fb77e4ec44cf4c72587ac57b5bc))
+
+- **menagerie**: Correct mislabeled classics entries
+  ([`5288006`](https://github.com/johnmarktaylor91/torchlens/commit/528800677c44c94f29b43f406ada7d7dba8ead73))
+
+- **menagerie**: Csv exporter faithfulness -- stale-trace provenance gate, no fabricated fields,
+  version-trust fail-closed, side-table dictionary + op_taxonomy_version
+  ([`7b071fd`](https://github.com/johnmarktaylor91/torchlens/commit/7b071fd9724fed3ab62899460ebdce7ce6686551))
+
+- **menagerie**: Distinguish OpenMMLab ViT variants
+  ([`01238d4`](https://github.com/johnmarktaylor91/torchlens/commit/01238d46bf6bcb9211f39faf2a3bb4b6d9099c26))
+
+- **menagerie**: Drain worker stdout/stderr concurrently; no false timeout on chatty workers
+  ([`ba26b62`](https://github.com/johnmarktaylor91/torchlens/commit/ba26b62191b4e5d23ea8c76727e90927befaf06d))
+
+W3a-1 (REVIEW_scheduling.md, HIGH): the Popen+poll loop in validate_with_timeout never read the
+  worker pipes until exit. A chatty worker (torch/torchlens emit warnings on stderr) that wrote past
+  the ~64KB OS pipe buffer BLOCKED on write(), never finished, and the loop escaped only via the
+  timeout branch -- a false failed:timeout for a model that would have PASSED (a PASS->fail flip
+  arrived at operationally, the spirit of the tripwire).
+
+FIX: reader threads drain stdout AND stderr to EOF concurrently while the loop polls RSS + timeout
+  (restores subprocess.run(capture_output=True)'s drain). On exit the readers are joined so every
+  byte is captured; on a genuine kill they exit at EOF.
+
+GATE: test_validate_with_timeout_drains_chatty_stderr_without_false_timeout drives the REAL chatty
+  path (a genuine subprocess floods ~256KB to stderr then emits a passing worker_result on stdout,
+  exits 0) and records PASS; verified the old un-drained loop false-times-out on the same input.
+  peak-RSS-on-timeout test updated to drainable fake pipes.
+
+Tripwire intact: no validation comparison/tolerance/replay touched.
+
+- **menagerie**: Empty placeholder lock -> honest env_unavailable skip
+  ([`d0d9e85`](https://github.com/johnmarktaylor91/torchlens/commit/d0d9e85d54afbca4dfb2c52e864bd5d0223b1f04))
+
+- **menagerie**: Faithful callable input for m3397 WideDeep-TabMlp
+  ([`c3832c9`](https://github.com/johnmarktaylor91/torchlens/commit/c3832c920b8e7a3c76cc3224023ca54628dc1224))
+
+The catalog entry paired TabMlp (cat_embed_input=[('cat0',10,4),('cat1',20,4)], 4 structured
+  columns) with a generic [1,13] float32 input spec. Random floats cast to long embedding indices
+  exceed the table sizes (10/20) -> IndexError in the ground-truth forward before TorchLens even
+  ran.
+
+Switch the input builder to kind=callable with an expr that produces a (1,4) float32 tensor: col 0
+  randint in [0,10), col 1 randint in [0,20), cols 2-3 randn for the two continuous columns. The
+  StatementRecipe code contains no arbitrary exec so recipe.quarantine normalises to False.
+
+Gate: test_widedeep_tabmlp_callable_input_is_in_range in test_menagerie_schema.py asserts
+  kind=callable, shape==(1,4), not-quarantined, and per-column index bounds. All 7 schema tests +
+  276 smoke tests pass.
+
+- **menagerie**: Generous hang-catcher timeouts; never re-kill a slow-but-finishing model
+  ([`7277322`](https://github.com/johnmarktaylor91/torchlens/commit/7277322f5778939d27c38931b5ba000b8df1e540))
+
+JMT timeout directive (TIMEOUT_POLICY.md): a timeout must NEVER kill a model that plausibly would
+  finish. The committed W3a scaled 1.5x a prior duration with an 1800s ceiling and a flat default
+  for unmeasured rows -- but a TIMED-OUT prior records the truncated cap as its duration, so 1.5x
+  re-killed it (the 'rerun some after' trap).
+
+* _case_timeout: only a real-PASS prior anchors a scaled timeout (scale >= 3.0); a timed-out
+  (truncated) or unmeasured prior routes to the GENEROUS lane (>= 3600s), never 1.5x a truncated
+  value. Documented as a HANG-CATCHER. * latest_passed_duration_estimates: PASS-only ledger
+  durations feed the timeout; the all-durations map still feeds the LPT scheduling sort only. *
+  resolve_timeout_ceiling_sec: ceiling >= max(14400, 3x corpus-max-passed), never below the 3hr
+  floor; an explicit lower ceiling is clamped UP. * corpus_max_passed_duration_sec ignores truncated
+  timeout durations. * CLI: generous defaults forwarded to island/cluster workers and run_all.
+
+GATES: test_no_plausibly_finishing_model_is_killed; resolve-ceiling generosity; PASS-only-durations
+  exclude truncated caps.
+
+Tripwire intact: no validation comparison/tolerance/replay/pass-fail touched.
+
+- **menagerie**: Include psutil in island runtime deps
+  ([`a96e415`](https://github.com/johnmarktaylor91/torchlens/commit/a96e4157cf6c871907dee6e819faceb30a73cc0c))
+
+- **menagerie**: Island assignment driven by the empirical dep-skip set (~589, not 5212)
+  ([`26deba1`](https://github.com/johnmarktaylor91/torchlens/commit/26deba1cc02e071f1b9754f1e9f2c080f722abce))
+
+- **menagerie**: Key render/validate resume + manifests on stable_id (end name-masking)
+  ([`34d93e6`](https://github.com/johnmarktaylor91/torchlens/commit/34d93e6759fb328f9cf04c6eee5fa3877fa4b5cf))
+
+- **menagerie**: Longcat_flash recipe -> single-node (num_layers=1, was building an 80GB monster)
+  ([`6b2fe03`](https://github.com/johnmarktaylor91/torchlens/commit/6b2fe036d4af8ded83d45c6fc209a950d049a53a))
+
+- **menagerie**: Make CLASSICS registry the sole classics source
+  ([`46ec581`](https://github.com/johnmarktaylor91/torchlens/commit/46ec5818cdd7192c6f20eada4f142fb991415b40))
+
+- **menagerie**: Make cluster routing strictly local-first
+  ([`fe0b340`](https://github.com/johnmarktaylor91/torchlens/commit/fe0b340a09b54de0b4126cdb4f7e003ae3b636af))
+
+The shared axon SLURM cluster was over-routed by an opt-OUT policy: is_giant() sent any UNMEASURED
+  model to the cluster whenever its name/param-count/input-shape matched a "looks giant" heuristic
+  (_matches_first_contact_heuristic), plus 13 GIANT_REGISTRY entries with force_cluster=True that
+  actually fit locally. Over the full catalog + the current production ledger this routed 295 models
+  to the cluster when only 4 genuinely need it (measured peak >=128 GiB); 278 of the 295 routed via
+  the no-measured-data heuristic alone.
+
+Make routing opt-IN / local-first. A model now routes to the cluster ONLY with HARD measured nonfit
+  evidence: - its MEASURED peak RSS (max over history, any host -- a cluster-measured 228 GiB peak
+  is genuine proof it cannot fit in 125 GiB local RAM) is at/above the usable local-RAM threshold
+  (115 GiB; 10 GiB OS headroom under the 125 GiB total), OR - it RAM-FAILED on a prior LOCAL
+  attempt: an oom/killed status, or a failed:memory_cap kill at a worker cap NEAR full local RAM
+  (>=105 GiB). A memory_cap kill at a small early-sweep protective cap is NOT evidence and must not
+  escalate (that was the original over-route trap).
+
+Everything else -- unmeasured/unknown-size models, measured peaks below threshold, and anything
+  merely large-LOOKING by name/params/FLOPs/shape -- routes LOCAL. Size ESTIMATES are no longer a
+  routing signal; only measured RAM evidence counts. An unmeasured model that OOMs locally is
+  recorded in the ledger and escalates on a later run (the intended escalation path). A bare
+  native_crash stays local (often a code/wrapper bug, not RAM); only oom/killed/near-full-RAM
+  memory_cap escalate.
+
+GIANT_REGISTRY: force_cluster kept only for the 4 measured giants (m4246/m4525/ m4526/m4527, all
+  >=128 GiB on axon); the other 13 fittable seeds flip to force_cluster=False (retained for
+  tier-sizing metadata, peaks corrected). The _matches_first_contact_heuristic family is removed
+  from the routing DECISION and retained only as a conservative tier-sizing input for already-routed
+  models.
+
+Impact (read-only over the live production ledger): cluster-routed drops 295 -> 4, all four the
+  genuine measured giants; the tripwire is intact (the 4 still route).
+
+Unit tests prove: unmeasured -> local; measured peak <115 GiB -> local; measured peak >=115 GiB
+  (incl. cluster-measured) -> cluster; prior local OOM / near-full-RAM memory_cap -> cluster;
+  small-cap or remote-host memory_cap -> local; native_crash -> local; and force_cluster is
+  restricted to the 4 genuine giants.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- **menagerie**: Make giant models actually validate on the axon SLURM cluster
+  ([`4b44a90`](https://github.com/johnmarktaylor91/torchlens/commit/4b44a90a648ce1b0d60753cd9e78b783af478480))
+
+The cluster smoke caught 4 real cluster-runner bugs plus a chain of axon-userland blockers that
+  prevented giants from ever validating remotely. All fixed and verified end-to-end against live
+  axon (jobs submitted, ran, validated, merged).
+
+BUG 1 (instant job failure): #SBATCH --output/--error used a literal '~', which SLURM does not
+  expand, so the job died before running (exit 1, 0s, no .err). Resolve the absolute remote home
+  once per dispatch (ssh <host> 'echo $HOME') and emit absolute log paths.
+  (cluster_runner.render_sbatch_script / resolve_remote_home)
+
+BUG 2 (worker ledger path): the worker wrote its ledger to a path that does not exist on the node --
+  a /tmp smoke ledger (absent on axon) or the LOCAL repo absolute path (wrong on axon). Re-root a
+  repo-relative ledger under the REMOTE repo and redirect an off-repo (smoke) ledger to a node-local
+  worker_ledger/ path; results rsync back and merge regardless, preserving smoke-ledger isolation.
+
+BUG 3 (tripwire -- masking real failures): a job that was SUBMITTED + RAN + exited non-zero was
+  classified as cluster_unreachable -> skipped:cluster_unavailable, masking a real failure behind a
+  benign skip. Distinguish a genuine transport/submit failure (no job id) from a job that ran and
+  failed (job id printed) via ClusterJobFailed; surface the honest giant status (failed:* / merged
+  real rows), never cluster_unavailable. Per the LOCKED validation-tripwire principle.
+
+BUG 4 (pixi-island wrongly cluster-routed): a RAM-giant assigned to a pixi island (m7069 ->
+  mmlab_core) was cluster-routed, but island deps are not on the cluster. Exclude non-base-env rows
+  from cluster candidates so island giants validate in their island env locally; base-env giants
+  still route to the cluster.
+
+Axon-userland blockers found while verifying live: - lock-hash ran a bare remote `python` before the
+  pixi env existed; the node ships only Python 2.7 (no python3) -> SyntaxError. Bake the lock hash
+  in at render time from the committed lock files. - pixi is not on the node PATH -> stage a
+  cluster-compatible pixi binary by absolute path. The workstation glibc/OpenSSL-3 build fails on
+  the node (libssl.so.3); use the static musl release (TORCHLENS_CLUSTER_PIXI_BIN /
+  /tmp/tlpixi-cluster). - the cluster $HOME is on NFS where flock fails (ENOLCK); point the pixi env
+  prefix and PIXI_CACHE_DIR at node-local /tmp. - the cluster giant env (misc) lock was empty and
+  carried wrong deps. Add a dedicated cluster_giants pixi env (cpu torch + timm + transformers +
+  torchlens runtime deps), glibc-2.17-capped so wheels load on the node. - the worker re-routed the
+  giant back to the cluster (nested dispatch -> env_unavailable); force --runner local
+  --base-env-only so it validates in place. - base-env-only subprocesses (islands/worker) no longer
+  do cluster routing, which had started importing the env registry (yaml) inside minimal island
+  envs. - smoke manifest: beit_large_patch16_512 has a fixed 512 input; input_scale 0.25 fails the
+  size guard. Use input_scale 1.0 (render/metadata off, like the other giant).
+
+Live-axon verification: PIXI_BIN=... python -m menagerie smoke-test --jobs 4 -> smoke gate PASSED.
+  m3635 passed on ax17, m5651 passed on ax25 (remote runner_host, cluster_result_imports=2), m7069
+  passed locally in mmlab_core, m10226 passed locally in snn; production verification.db untouched
+  (0 fresh smoke rows). 34 cluster/smoke unit tests pass; ruff clean; no new mypy errors.
+
+- **menagerie**: Narrow quarantine to arbitrary-exec recipes; report code-exec count separately
+  ([`1aeec87`](https://github.com/johnmarktaylor91/torchlens/commit/1aeec8762a2a672fe52b0cb8247169ddb9cf5c7e))
+
+- **menagerie**: Preserve codec fields (T1) + unify worker killpg driver (T2) + extend
+  graph_shape_hash determinism harness (T3)
+  ([`c148284`](https://github.com/johnmarktaylor91/torchlens/commit/c148284176383b5df8e4ba33468746ae9364311f))
+
+- **menagerie**: Re-pin routing_manifest checksum to committed file
+  ([`93b257c`](https://github.com/johnmarktaylor91/torchlens/commit/93b257c550931edcf8bea81690075a160c3a752b))
+
+Pre-commit normalization changed routing_manifest.tsv's sha256 after the pin was computed, so the
+  committed pin no longer matched the committed file and the empirical-manifest checksum guard
+  failed at smoke/full preflight. Re-pin to the committed file; routing verified unchanged (island
+  reps still route to their islands).
+
+- **menagerie**: Re-zoo 617 unregistered classics-pytorch rows for migration (no drops)
+  ([`fbee5a3`](https://github.com/johnmarktaylor91/torchlens/commit/fbee5a3c98bab4042c5c26acdbe7c2010760e4ee))
+
+- **menagerie**: Recover final straggler recipes
+  ([`32634a7`](https://github.com/johnmarktaylor91/torchlens/commit/32634a7cc1cfe49d0262846880a15a187b3663a7))
+
+- **menagerie**: Recover structured deferred recipes
+  ([`e5e5c17`](https://github.com/johnmarktaylor91/torchlens/commit/e5e5c17a3d6da29f6769ed43a06be00a4cdb661c))
+
+- **menagerie**: Recover validated effdet input shapes
+  ([`f42aa59`](https://github.com/johnmarktaylor91/torchlens/commit/f42aa59d249826f113801cecb5ee0ad855b47a84))
+
+- **menagerie**: Reimplement SpeechBrain enhancement routes
+  ([`271a2d0`](https://github.com/johnmarktaylor91/torchlens/commit/271a2d0319d261ba752fb1d2360ae27e5a20a1b6))
+
+- **menagerie**: Rename IEMOCAP classic to DialogueRNN (correct architecture name)
+  ([`a8e597c`](https://github.com/johnmarktaylor91/torchlens/commit/a8e597c9151f10e0c8a7a12a6b2be8f3f46bb3ff))
+
+Codex faithfulness audit caught that the wave-2 entry named 'IEMOCAP' (a dataset, not an
+  architecture) actually implements DialogueRNN (build_dialoguernn). Rename the canonical_name to
+  the real architecture. GAR/GODEL flagged as thin T5-family wrappers (honest, low architectural
+  distinctiveness) + several weak entries noted for the refinement backlog.
+
+- **menagerie**: Repair 117 recipe-bug models
+  ([`c1da4b6`](https://github.com/johnmarktaylor91/torchlens/commit/c1da4b68084d7a2380485f602efad43ddf7f45b2))
+
+- **menagerie**: Repair monai bare-name, DimeNet, and FCN-family recipes
+  ([`abd10e7`](https://github.com/johnmarktaylor91/torchlens/commit/abd10e75be85eb29805e5ace37372b4909377693))
+
+- monai (29 recipes): bare class-name calls like AutoEncoder(...)/UNet(...) raised NameError because
+  the class was never imported and the recipe lacked the monai.networks.nets prefix. Qualify each
+  with monai.networks.nets.<Class> (all classes verified present in monai.networks.nets) and declare
+  the monai import. Confirmed validating:
+  AutoEncoder/UNet/UNETR/ViT/VQVAE/VNet/SegResNet/DenseNet121/FlexibleUNet/...
+
+- DimeNet, DimeNetPlusPlus: statement recipe built the model but never assigned it to a
+  model/net/module variable (raised 'statement recipe did not assign a model'). Add the model=
+  assignment. - FCN-original, IMPALA_ResNet, HRNet-pose, EEND: dynamic-class recipes had one extra
+  closing paren in the forward lambda (SyntaxError). Remove the stray paren; all four now
+  instantiate the intended FCN/IMPALA/HRNet/EEND architectures.
+
+- **menagerie**: Restore combine_notes legacy re-export; skip mmdet sample row without mmcv
+  ([`e58ca0f`](https://github.com/johnmarktaylor91/torchlens/commit/e58ca0fec4452d000ba99385c6b08a76c391fd06))
+
+- **menagerie**: Route CUDA-required models to the gpu_tail cuda env
+  ([`1a4ae67`](https://github.com/johnmarktaylor91/torchlens/commit/1a4ae6798238b768d94c975affd1f755a7950430))
+
+Add a direct stable_id->island override (direct_envs) so the 10 CUDA-required rows (m4034 detectron2
+  keypoint, m4921/m4922/m4928/m4932 fla, m5624/m5625/m5626/ m11955/m11956 lightweight_gan) assign to
+  gpu_tail (expected_device=cuda) and run on the local GPU instead of asserting no-CUDA on CPU. Also
+  add detectron2 and lightweight-gan to gpu_tail zoo_patterns. direct_envs validates unknown-island
+  and conflicting-mapping. effdet dependency mapping already correct (stale skip resolves on
+  re-run).
+
+- **menagerie**: Route SpeechBrain speech builders faithfully
+  ([`6e22909`](https://github.com/johnmarktaylor91/torchlens/commit/6e229090c514dc71e88cca8cc2090ca7c40b93dd))
+
+- **menagerie**: Scheduler gates on actual free memory, not just estimates
+  ([`de7e976`](https://github.com/johnmarktaylor91/torchlens/commit/de7e976c104d9cb1b04fa9b597aae69ac88a2ecf))
+
+- **menagerie**: Seed giant registry + ladder local-OOM escalation
+  ([`15d67ee`](https://github.com/johnmarktaylor91/torchlens/commit/15d67ee3257a8d3d67f0d54ccffbdd1c29250234))
+
+WS1.A/C1/C4: add m9024/m9025/m4598 to the static giant registry (axon-measured tier 250/250/500),
+  route the 7 known giants/effdet (m4246,m4525,m4526,m4527, m4598,m9024,m9025) to the cluster giant
+  lane, and ladder local-OOM escalation one node-tier per repeat OOM instead of jumping straight to
+  the largest tier. Refresh the audio/forecast_tab/mmlab_core/snn island locks.
+
+- **menagerie**: Size cluster OOM escalations
+  ([`3beb60a`](https://github.com/johnmarktaylor91/torchlens/commit/3beb60af89bc3ff5eacebb60e4212ad1f3fbfbb5))
+
+- **menagerie**: Smoke cluster-routed expectation follows force_cluster routing, not stale manifest
+  tag
+  ([`ebe1d85`](https://github.com/johnmarktaylor91/torchlens/commit/ebe1d85991cadc652fa09dc0a2a3e59cda09a32e))
+
+- **menagerie**: Tsv_to_jsonl defaults to .candidate output (no source clobber)
+  ([`95917ed`](https://github.com/johnmarktaylor91/torchlens/commit/95917ed9748a7b353e209168c503792493e0c319))
+
+- **menagerie**: Use validating compact hf recipes
+  ([`9aa9e00`](https://github.com/johnmarktaylor91/torchlens/commit/9aa9e00ab2c498f43bf152a246187055cec13db8))
+
+- **menagerie**: Verified_count tracks the catalog's current recipe revision (no stale-certify)
+  ([`b0af21a`](https://github.com/johnmarktaylor91/torchlens/commit/b0af21a72c161134ffe06a93e6e20d51571a2919))
+
+- **menagerie**: Warm up spectral norm before BigGAN capture
+  ([`6b6ad7e`](https://github.com/johnmarktaylor91/torchlens/commit/6b6ad7e7c5d716384b188f08125f2ce12c1679b8))
+
+Random-init BigGAN-deep generators explode numerically: activations reach ~6e22 by layer 13 and
+  overflow float32 (Inf/NaN) by layer 23, because the spectral-norm power-iteration buffers
+  (weight_u/weight_v) start random, so sigma is wrong and the weights are never actually normalized.
+  Forward-replay validation then fails (NaN != NaN; extreme-magnitude finite values don't reproduce)
+  -- not a capture bug, a degenerate untrained model.
+
+Warm up the spectral norm (3 train-mode forward passes) before capture so the power iteration
+  converges and the model emits finite (~0.026) output, giving a meaningful non-vacuous replay
+  check. Applied to all 6 pytorch-pretrained-biggan recipes via legacy.constructor_call (the field
+  that overrides recipe.code per catalog.py:679).
+
+- **menagerie**: Wave-1 dual-review fixes -- latest-row verified count, narrow completeness-terminal
+  set, identity-preserving migration, OOM/signal classification, backward-FLOPs NULL-vs-0
+  ([`2653ea4`](https://github.com/johnmarktaylor91/torchlens/commit/2653ea475e9cb7e16dc72dd3cbce7d8da3b10ff7))
+
+- **menagerie**: Wire smoke-test selection, island runner, and per-case visuals
+  ([`74a3e45`](https://github.com/johnmarktaylor91/torchlens/commit/74a3e45be8bc725831064caa9fd9fe549dd81f69))
+
+Land the menagerie smoke-test pipeline (menagerie smoke-test -> run_all --smoke -> smoke_gate) and
+  fix the bugs that made its first local --no-cluster run fail:
+
+- run_all forwarded --stable-ids to the validator via repeated "--stable-ids X --stable-ids Y"
+  pairs, but the validator arg is nargs="+" (no append), so argparse kept only the LAST id and just
+  one model ran. Emit --stable-ids once with all ids. - trace_summary/render re-instantiate models
+  in the base env, so synthetic status-case rows (constructor "smoke_synthetic") and island rows
+  (deps absent from base) crashed metadata/render. run_all now excludes synthetic and non-base-env
+  rows from the render + metadata steps; their in-island / status-path validation is the coverage. -
+  island validation children defaulted to --runner auto, routing RAM-giant island rows (m7069) to
+  the cluster even under --no-cluster. Forward the parent --runner into the island child so local
+  stays local. - render applied one global --vis-option to every model; add per-stable-id vis_option
+  forwarding from the smoke manifest so e.g. the recurrent case renders rolled and the gate's
+  per-case visual-mode assertion holds. - smoke manifest: m467 (misc, empty island lock) is
+  env-unavailable not validated; island reps are validated-only (render/metadata false); drop
+  collapse vis_options (not a Trace.draw kwarg on this branch); keep the valid view=rolled case.
+
+smoke-test --no-cluster --jobs 4 now runs all 28 local cases + synthetics, validates + renders +
+  exports metadata/CSV cleanly, and the gate passes (22 validated, 2 skipped:dependency_unavailable,
+  1 failed:timeout, 1 failed:exception, 1 failed:native_crash, 1 failed:memory_cap). Production
+  verification.db / public CSV untouched.
+
+- **module**: Make ModuleCall aggregates robust to recurrent layer labels
+  ([`32c3781`](https://github.com/johnmarktaylor91/torchlens/commit/32c3781d89096a7cb0ab3b3ba9b36d8f1e311935))
+
+The root self:1 ModuleCall stores bare Layer labels (per the function-root-module invariant), and a
+  recurrent (multi-pass) Layer label resolves to multiple Ops. Aggregate ModuleCall properties that
+  iterated trace.ops[label] raised AmbiguousOpLookupError on such labels, crashing the
+  field-order-driven Module.to_pandas table (test_generate_aesthetic_report).
+
+Fix the CONSUMERS, keeping root ops == layer_labels intact: - Add
+  TraceOpAccessor.resolve_all(label): pass-qualified/single-pass label -> one Op; bare multi-pass
+  Layer label -> all pass Ops; never raises. - Route func_calls_duration, autograd_memory,
+  _ops_by_output_role, _edge_counts_for_scope, and _is_atomic_module_call through it so root
+  aggregates span every pass (no double-count, no miss) while submodule calls (pass-qualified
+  labels) keep single-op behavior. - _module_log_to_row: report the four
+  _single_pass_or_error-backed per-pass columns as None for multi-call Modules (mirroring
+  output_structure) so the table never raises nor drops a column; total_* carry the aggregate.
+
+Root-call ops population and the invariant are untouched; module_containment snapshots and
+  backend/validation invariant tests are unchanged.
+
+- **modules**: Populate root self:1 call_children and MLX num_layers_with_params
+  ([`d67fc5e`](https://github.com/johnmarktaylor91/torchlens/commit/d67fc5e39a7d80af3574681f7b54cf01843d01cb))
+
+Breaking commit: fccd8e51 (feat(validation): param deep cross-reference invariant) added
+  module-hierarchy + param cross-reference invariants that exposed two pre-existing latent capture
+  defects (both also reproduce on origin/main; the invariants are the tripwire working, not
+  over-strict):
+
+1. module_hierarchy: the root self:1 ModuleCall.call_children was built solely from
+  mbd["top_level_module_ops"] (minus self:1). For object-module / explicit- self traces (e.g. MLX
+  object_module mode) the ops carry [self:1, child:1, ...] stacks, so top_level_module_ops collapses
+  to [self:1] and the real direct children live in module_pass_children["self:1"]. The root call
+  then listed NO children while children still pointed back to self:1 -- an asymmetric call tree the
+  new bidirectional-link invariant flags. Fix: _root_call_children() unions top_level_module_ops
+  with module_pass_children["self:1"], correct for both the function-root and explicit-self shapes.
+
+2. param_xrefs: the MLX backend never set trace.num_layers_with_params (left at its init default 0)
+  even though num_params was non-zero, so the param-aggregate dedup invariant flagged
+  layers_with_params 1 != num_layers_with_params 0. Fix: tally distinct param-bearing layer_labels
+  during MLX _finish_trace, mirroring the torch labeling-pass count.
+
+All 49 MLX tests pass; module-hierarchy and param invariants now hold for MLX.
+
+- **modules**: Preserve module output paths
+  ([`156683b`](https://github.com/johnmarktaylor91/torchlens/commit/156683b612cc2238311bbd90ff441b5e6869347a))
+
+- **modules**: Preserve root static address children
+  ([`2611ef8`](https://github.com/johnmarktaylor91/torchlens/commit/2611ef8e9e8181ba99bd329518c5525d6855d5ca))
+
+- **packaging**: Include tlspec schemas in wheels
+  ([`c723baa`](https://github.com/johnmarktaylor91/torchlens/commit/c723baa0ed15eb1e32e5e8016c946050a984d44c))
+
+- **periphery**: Stop torchlens self-warnings, real hub uploads, batch text decode, real
+  streamed_ops
+  ([`53fac23`](https://github.com/johnmarktaylor91/torchlens/commit/53fac23c65d886c838193f04f4195ad5a1893e93))
+
+Four verified cert3 peripheral-package findings:
+
+- B1: remove torchlens' own internal use of deprecated flat capture kwargs
+  (layers_to_save=/save_arg_values=/save_grads=) in callbacks/lightning.py, semantic/patching.py,
+  and a third previously-unreported site in stats/__init__.py::aggregate; all now build
+  capture=CaptureOptions(...) so these internal paths never trigger torchlens' own
+  DeprecationWarning. - B2: bridge/huggingface.py push_to_hub() no longer silently uploads a
+  ~240-byte JSON stub when a Trace's live grad_fn references can't pickle. It now routes through the
+  real .tlspec portable-bundle scrub path (the same one tl.save()/Bundle.save() use) and uploads
+  that as a gzip tar archive, or raises TorchLensIOError -- never a silent stub. - B7:
+  autoroute/_builtin_output.py::_decode_hf_text no longer flattens all batch items into one token
+  sequence via reshape(-1); each batch item's own token sequence is now decoded independently. - B8:
+  report/_explain.py::_operational_status_line no longer hardcodes streamed_ops=1; it now counts
+  layers with a live out_ref/grad_ref (real streamed-bundle state).
+
+Regression tests added for all four; ruff/mypy clean; affected test files and the smoke tier pass.
+
+- **postprocess**: Materialize op events in raw-index order
+  ([`c79820f`](https://github.com/johnmarktaylor91/torchlens/commit/c79820fdc62bbb432e3f663b16f5ab95c7b58b83))
+
+Buffer write-version events could be appended out of raw-index order during capture; materializing
+  in append order broke the graph_ordering invariant on BatchNorm buffer-overwrite models
+  (composition regression between the menagerie-core buffer fixes and 9a946fe3; passes on both
+  parents, failed on the merged base). Sort op events by their reserved raw_index at materialization
+  so layer_list honors the invariant contract.
+
+- **postprocess**: Refresh saved module call counts
+  ([`c6bf623`](https://github.com/johnmarktaylor91/torchlens/commit/c6bf623d2642a8526382c4419d015392754109e6))
+
+- **semantic,io,tests**: Close patching.py trace leak, tighten object-dtype pickle guard, fix
+  effect-blind forward_args test
+  ([`5cbf157`](https://github.com/johnmarktaylor91/torchlens/commit/5cbf15767b3acfd354420fdb8ba0c21ff0c2e5df))
+
+- semantic/patching.py: every public activation/attribution-patch helper
+  (activation_patch_residual_stream, activation_patch_attention_output,
+  activation_patch_attention_heads, activation_patch_mlp_output, attribution_patch_attention_heads)
+  now wraps its baseline clean/corrupted Traces, and
+  _activation_patch_by_module/_activation_patch_heads/the residual-stream inline loop wrap each
+  forked patched_log, in try/finally: log.cleanup() -- the same class of fix already shipped for
+  callbacks/lightning.py (F5). Swept stats/, attribution/, repgeom/, bridge/, report/, quantities/,
+  callbacks/, experimental/, autoroute/, export/, neuro/, notebook/ for other
+  repeated-trace-without-cleanup call sites: stats/__init__.py::aggregate already wraps its
+  per-batch trace in try/finally; bridge/hf.py's three tl.trace() sites each return the log to the
+  caller (single-call, non-leaking ownership contract, same as tl.trace() itself);
+  experimental/Session/auto_capture's log accumulation is a documented return-to-caller contract,
+  not a silent discard, and is out of scope. patching.py was the only unfixed site.
+
+- _io/scrub.py: _is_safely_picklable's ndarray exemption used a top-level dtype-identity check
+  (dtype != np.dtype("object")), which is only true for a bare object dtype -- a structured/record
+  dtype whose FIELD is object-typed is never itself equal to np.dtype("object") and wrongly slipped
+  through, reintroducing the save() failure the object-dtype guard exists to prevent. Fixed to
+  dtype.hasobject, numpy's recursive containment check (a strict superset). Added a regression test
+  with a structured dtype carrying a live unpicklable generator in an object field.
+
+- tests/test_module_log.py::test_forward_args_delegates: was comparing None == None (GC-11
+  unconditionally nulls ModuleCall.forward_args for the torch backend's only supported
+  module_identity_mode), so it could never catch a delegation regression. Torch backend rejects the
+  pytree_module/object_module modes that would keep forward_args populated (verified directly --
+  BackendUnsupportedError), so switched the assertion to forward_args_summary, which delegates
+  through the same Module._single_pass_or_error mechanism but is computed before GC-11 nulls the raw
+  payload and is never itself cleared. Added a monkeypatch litmus test proving the comparison now
+  actually catches a field-swap regression.
+
+- tests/test_render_bugs.py: added an end-to-end regression test for the HTML edge-label escaping
+  fix (commit ee5c1bcc) -- a dict-output model with an "&" key, rendered to a real SVG via the
+  Graphviz binary. Verified it fails with the pre-fix GraphvizRenderError when the escape call is
+  removed.
+
+- torchlens/__init__.py, torchlens/utils/__init__.py: drop two more self-redundant getattr(x, k,
+  getattr(x, k, default)) fallbacks (same dead-code class commit ee5c1bcc already cleaned up
+  elsewhere).
+
+- **test**: Torch floor invariant is >=2.1
+  ([`2e68749`](https://github.com/johnmarktaylor91/torchlens/commit/2e68749747041c5ed31662d58a7da3b4cfcceada))
+
+- **tests**: Assert torch 2.1 floor
+  ([`583d6c3`](https://github.com/johnmarktaylor91/torchlens/commit/583d6c35c12bb5437d963ddb0f970366624e3331))
+
+- **tests**: Warnings-as-errors policy applied across the tier
+  ([`19c06ef`](https://github.com/johnmarktaylor91/torchlens/commit/19c06ef17fa2803820728818b04bfdc1abfc7b12))
+
+Tests that intentionally exercise torchlens warning paths now assert them locally (pytest.warns)
+  instead of leaking suite-level warnings; repgeom evolution helpers no longer emit internal
+  MultiMatchWarnings on their happy path (the policy catching real sloppiness); the stale 79-name
+  __all__ budget test now pins the explicit current 90-name list (public-surface growth flagged for
+  the glossary review).
+
+- **torch**: Clear stale tensor labels after capture
+  ([`5254f94`](https://github.com/johnmarktaylor91/torchlens/commit/5254f94d607639b3011546d8abfe43b4cf7a29ad))
+
+- **torch**: Ignore opaque callable defaults
+  ([`092c84b`](https://github.com/johnmarktaylor91/torchlens/commit/092c84bc028117835c26c43dc2b8914069edaac8))
+
+- **torch**: Ignore stale tensor labels during capture
+  ([`8ecea0d`](https://github.com/johnmarktaylor91/torchlens/commit/8ecea0d5bfe576b0985a1d3c456cf0164c7655d3))
+
+- **torch**: Preserve same-object returns during capture
+  ([`055af04`](https://github.com/johnmarktaylor91/torchlens/commit/055af048fbeca86fd58f4f8cd3d846008236115a))
+
+- **torch**: Preserve tied parameter aliases
+  ([`1144aa4`](https://github.com/johnmarktaylor91/torchlens/commit/1144aa4b8c9c7706e4993c1abd547666ee0cc485))
+
+- **types**: Annotate Param|None lookup to clear mypy 2.1.0 gate
+  ([`b927d5f`](https://github.com/johnmarktaylor91/torchlens/commit/b927d5f03d1af81fc7f7b14fc679ab20a12c35f6))
+
+F4 [MED]: mypy 2.1.0 (== CI's version) flagged model_prep.py:643 "Incompatible types in assignment
+  (Param | None into Param)". The loop variable param_log is bound non-optional in the
+  existing_by_address iteration above, then reused for the existing_by_address.get(...) Param|None
+  result -- a variable-reuse narrowing artifact (runtime-correct via the `if param_log is None:
+  continue` guard). Use a distinct local (existing_param_log) for the optional lookup, narrow it,
+  then rebind param_log as a provable Param. `mypy torchlens/` is now clean (273 files). Runtime
+  UNCHANGED (same control flow, renamed intermediate).
+
+- **utils**: Make graph hashing referentially transparent; add address-free variant
+  ([`17748f4`](https://github.com/johnmarktaylor91/torchlens/commit/17748f4dd1be8c3eacc593ee1b589cf6fafca09e))
+
+compute_graph_shape_hash no longer mutates layer._address_normalized while hashing (postprocess now
+  populates it explicitly); documented hash-family contracts in the module docstring; new
+  include_module_address=False keyword gives an address-insensitive topology hash; determinism +
+  transparency tests.
+
+- **utils**: Unify unit formatting on the quantities implementations
+  ([`6553534`](https://github.com/johnmarktaylor91/torchlens/commit/65535348bcfa7530efebf3ce0c56227a9413f02c))
+
+format_size/human_readable_size/format_flops now delegate to Bytes/Flops so the same value renders
+  identically everywhere (visualization previously used an independent rounding); quantities is
+  canonical (field types with the larger golden/test footprint).
+
+- **validation**: Accept managed parametrized tensor attrs
+  ([`eb4329b`](https://github.com/johnmarktaylor91/torchlens/commit/eb4329bfeff9a1fb1adaf6ea4fb43a0079b8d66a))
+
+- **validation**: Add index_put destination-overwrite perturbation exemption
+  ([`658a701`](https://github.com/johnmarktaylor91/torchlens/commit/658a7011d2f4b0aac98ae833990a34453900d1f2))
+
+index_put/index_put_ was absent from every perturbation-exemption registry while the
+  structurally-identical __setitem__, scatter, and masked_fill were handled, producing a
+  false-negative: perturbing an all-zeros destination of a non-accumulating index_put has no effect
+  (the indexed positions are fully overwritten) yet validation flagged the missing sensitivity.
+
+Add _check_index_put_exempt as the exact analogue of _check_setitem_exempt Case 4: exempt ONLY when
+  the perturbed parent is the destination (args[0]), the call is non-accumulating, and the indexed
+  region covers the ENTIRE destination with unique indices (so no surviving prior value influences
+  the output). It never exempts a perturbed value/index parent, the accumulating case, or a partial
+  overwrite -- the tripwire stays armed.
+
+- **validation**: Add narrow mask branch tripwire exemptions
+  ([`db501b0`](https://github.com/johnmarktaylor91/torchlens/commit/db501b0017fc425381d5176fc60f0dc22951b959))
+
+- **validation**: Compare module output tensor paths
+  ([`111c999`](https://github.com/johnmarktaylor91/torchlens/commit/111c99962aecf824cdafd92e725ef5b217be9405))
+
+- **validation**: Deterministic-algorithms stabilizer in forward validation
+  ([`89287ab`](https://github.com/johnmarktaylor91/torchlens/commit/89287ab0dd0c9a1ae806c10fc3cbd967f49b4d5e))
+
+Wrap the capture + replay + perturbation region of _validate_forward_pass_torch in
+  torch.use_deterministic_algorithms(True, warn_only=True), saving and restoring the prior (enabled
+  + warn_only) setting in try/finally.
+
+The replay-validation drift between an op captured inline in the full forward and the value
+  recomputed by isolated per-op replay is, for most ops, float-reduction-ORDER non-determinism in
+  parallel CPU kernels -- not randomness (RNG is already seeded). Forcing deterministic algorithms
+  makes ground-truth, capture, and replay share a reduction order, which removes the
+  nondeterministic in-place-scatter PERTURBATION flake (the GNN/molecular 'regression' class: a
+  wrong value injected into a scatter destination sometimes produced an output indistinguishable
+  from the original under a thread race, spuriously failing the sensitivity check).
+
+warn_only=True so no op raises if it lacks a deterministic impl (CPU scatter_add IS deterministic in
+  torch 2.8). Deliberately does NOT force set_num_threads(1) -- a real throughput cost on large
+  CNNs, and the determinism probe confirmed deterministic-algorithms alone removes the flake. It
+  does NOT make deep CPU conv replay bit-exact (the residual is oneDNN inline-vs-isolated kernel
+  selection, not threading) -- that residual is what the band-C reduction-depth tolerance covers;
+  the two changes are complementary.
+
+Tests: a scatter-aggregation (index_add_) model validates stably True across repeated runs; the
+  prior deterministic-algorithms setting (enabled + warn_only) is restored exactly. No tripwire
+  relaxed -- the perturbation check is made reproducible, not weakened.
+
+- **validation**: Exempt locally invariant remainder divisors
+  ([`d1dffd2`](https://github.com/johnmarktaylor91/torchlens/commit/d1dffd28eb64829c0e6db5f994304507cfb440db))
+
+- **validation**: Exempt one-arg torch.where(condition) index form from perturbation check
+  ([`2ae1847`](https://github.com/johnmarktaylor91/torchlens/commit/2ae1847483e5f8a3c2cc2882e2a77e62eeb31425))
+
+One-arg torch.where(condition) is torch's alias for nonzero(condition, as_tuple=True): its output is
+  a discrete integer INDEX set, not a value select, so small value-perturbation legitimately cannot
+  change it -- the same category as the existing topk/sort/max/min index exemption. This was firing
+  FAILED:replay on qwen2_moe (m8529) and longcat_flash (m5651) whose MoE routing uses the one-arg
+  form.
+
+NARROW + tripwire-safe (dual-lab reviewed, Claude+Codex converged): the discriminator asserts NO
+  branch appears in args OR kwargs, so the mixed value-select form torch.where(cond, input=a,
+  other=b) -- which TorchLens records as len(saved_args)==1 with input/other in saved_kwargs and
+  integer output when branches are integer -- does NOT match and stays fully armed. The kwarg guard
+  is load-bearing; arg-count + int-dtype alone are insufficient. Replay still runs, so a
+  mis-attributed parent still fails. Regression tests cover both one-arg forms (positional +
+  keyword), the mixed-kwarg counterexample, 3-arg positional, and float output.
+
+- **validation**: Exempt overwritten setitem destinations
+  ([`61c6aec`](https://github.com/johnmarktaylor91/torchlens/commit/61c6aecd2d9f4b8a5942c58a817f2ff5a737b896))
+
+- **validation**: Faithful perturbation check for uninitialized in-place-write dest
+  ([`fedeba6`](https://github.com/johnmarktaylor91/torchlens/commit/fedeba6be07775eb9039ce0cd87d5629c8b254bc))
+
+B2 root-cause: the dominant menagerie failed:replay class (diffusers video transformers
+  Wan*/SanaVideo/SkyReels/ChronoEdit/Helios; normflows/zuko coupling flows; torch_geometric
+  NeuralFingerprint) was the PERTURBATION sub-check firing on a benign idiom -- partition-writing
+  into uninitialized memory:
+
+out = torch.empty_like(x) # or x.new_empty(...) / out.index_copy_(...) out[..., 0::2] = a #
+  strided/partial in-place write out[..., 1::2] = b
+
+The unwritten positions of the destination are uninitialized garbage overwritten by a
+  sibling/subsequent write and never meaningfully consumed, so perturbing them shows no output
+  change. TorchLens captured the graph faithfully; the check was over-strict for this case.
+
+Fix (tripwire-safe, NARROW): exempt the perturbation ONLY when the perturbed parent occupies the
+  in-place-write DESTINATION slot (args[0]) AND its value traces -- transitively through chained
+  in-place writes -- back to an uninitialized-memory source (empty/empty_like/new_empty). A real
+  data tensor feeding the destination does NOT trace to an uninitialized source and stays strict;
+  the forward-replay value check is untouched, so a genuine replay/value mismatch still fails
+  (adversarial test included).
+
+Also wires perturbation-insensitivity into the B1 diagnostics side-channel (CHECK_PERTURBATION) and
+  adds a golden regression gate.
+
+- **validation**: Floor scaled real-PASS timeout at the generous minimum
+  ([`7682c24`](https://github.com/johnmarktaylor91/torchlens/commit/7682c2479d8c87c8cbf0ff9f509c10a133182d0c))
+
+F1 [HIGH]: the scaled real-PASS timeout was floored at default_timeout (240s), not the generous
+  lane, so a model that passed fast in a prior run (e.g. 30s) got max(240, min(3*30, ceiling)) =
+  240s. After the single-thread validation pin, cold cache, GC, and tracemalloc overhead can make
+  the same forward several-x slower, killing a finisher at 4 min -- a throughput limiter disguised
+  as a hang catcher, violating the "never kill a model that would finish" directive.
+
+Floor the scaled real-PASS branch at the generous minimum (>= 3600s), matching the docstring's
+  stated intent. A fast model finishing in 30s is unaffected (the timeout is only a ceiling). Fix
+  the locking test test_case_timeout_scales_real_pass_priors (it cemented the thin 240s floor) and
+  extend test_no_plausibly_finishing_model_is_killed with the small-real-pass-prior case.
+
+- **validation**: Force re-validation must bypass the prior manifest-resume filter
+  ([`9f1cd35`](https://github.com/johnmarktaylor91/torchlens/commit/9f1cd358f8025b7be00a98e37b956c0638d2b2af))
+
+F2 [CRITICAL/HIGH]: --force-full / --force ran AFTER the manifest-resume filter
+  (completed_stable_ids), so a model recorded in a REUSED out-dir's PRIOR manifest was dropped
+  BEFORE the force override -> falsely skipped even under --force-full, defeating the headline
+  "rerun --force-full to finish 100%" acceptance semantics and hiding a changed-identity capture
+  regression.
+
+completed_stable_ids now honors force: a PRIOR/stale manifest no longer drops rows (force
+  re-validates ALL selected). Resume-WITHIN-the-current-force-run is preserved via a write-once
+  baseline sidecar (.force_baseline.json) recording the append-only manifest's data-row count when
+  the force run begins -- rows the current run appends ABOVE that cursor stay skippable on a
+  crash-resume, while prior rows (at/below it) keep re-validating. The sidecar is dropped on
+  successful completion so a future separate force run snapshots fresh.
+
+GATES: prior manifest row + --force-full -> reaches validation again (not skipped); same for --force
+  --stable-ids; plus a crash-resume gate proving the current run's own progress is not redone.
+
+- **validation**: Four-way decision taxonomy; close both adversarial CRITICALs
+  ([`aa22e28`](https://github.com/johnmarktaylor91/torchlens/commit/aa22e284e699cd407d7d674315ac3c1d7611cbad))
+
+Implements the locked ruling from the dual-lab review: decisions are validated / failed / exempted
+  (provable-by-design, with per-op justification strings — the skip-validation registry moves here,
+  so uninitialized-alloc ops like empty_like/new_empty contribute pass again instead of falsy
+  unverified, resolving the would-be menagerie mass-false-fail) / unverified (genuinely missing
+  data, falsy, rare under full save — asserted zero for a fully-saved vanilla model). The
+  functionless-source exemption is now scoped to provable source/boundary/intervention evidence, so
+  a computational op with a lost func (capture bug / synthesized placeholder in plain capture) FAILS
+  loudly — restoring the 2026-06-02 tripwire. Missing parent payloads no longer skip the replay that
+  is still possible from saved args; missing-saved-args and parent-payload crashes become
+  reason-coded unverified decisions. Cached validation status invalidates on rerun, state
+  replacement, and fork. Golden zoo expanded so every decision category appears (the empty-diff
+  guarantee is no longer vacuous); backward layer-grad validation runs before the zero-param-grad
+  return. Every review repro is a permanent regression test.
+
+- **validation**: Gate deep-numeric replay on reduction depth not graph position
+  ([`cf73817`](https://github.com/johnmarktaylor91/torchlens/commit/cf738173d85b8bfac8e0b7b11a69676032d6f87d))
+
+The deep-numeric replay tolerance was gated on `step_index >= 100`, a graph-position proxy that
+  wrongly rejected physically-deep early ops (e.g. BiT ResNet-v2 weight-standardized wide convs that
+  accumulate hundreds of products per output at op #87). Replace it with a faithful per-output
+  reduction-depth gate read from the op's weight/operand shapes. Acceptance tolerances are
+  unchanged, so a genuinely wrong replay still fails; only the qualification predicate is now the
+  true depth measure.
+
+Also consult `saved_kwargs` when reading the contraction operand: a conv/matmul called with
+  `weight=`/`other=` by keyword leaves the positional slot empty, which would drop the depth to 0
+  and wrongly withhold the band (a fresh false-negative).
+
+Verified: resnetv2_50x3_bit now validates True.
+
+- **validation**: Give intervention_replacement branch full ancestor module stack
+  ([`9a86ac7`](https://github.com/johnmarktaylor91/torchlens/commit/9a86ac7dcb98d86949f5c040f920d9bf1e9ff4c4))
+
+_ensure_module_output_tensor_logged built the intervention_replacement synthetic op's module stack
+  from a single frame while the internal_source branch already used the full exhaustive ancestor
+  chain. A raw register_forward_hook fires after the hooked module's own frame has been popped off
+  trace._exhaustive_module_stack, so for any hooked module nested 2+ address levels deep the
+  truncated stack wired the synthetic replacement op as a direct child of root while the module's
+  real ops wired the same call label under its true parent, tripping the [module_hierarchy]
+  MetadataInvariantError. Append the hooked module's own (address, module_call_index) to the
+  exhaustive-stack snapshot so both branches build a consistent module stack.
+
+Add depth>=2 nested-hook regression tests (round-3's own test only covered depth 1) covering both
+  required properties: a genuine raw-hook untraceable replacement validates cleanly, and a
+  plain-capture gap plus a no-op observer hook at the same depth still trips the producer-side
+  tripwire honestly.
+
+Also remove ModuleExitEvent.has_user_forward_hooks, a write-only dead field left behind by the prior
+  fix that dropped its only consumer.
+
+- **validation**: Grouped conv_transpose depth + esmfold synthesized-op module stack
+  ([`aa8c481`](https://github.com/johnmarktaylor91/torchlens/commit/aa8c481206061dc628c804644635421f801c8af1))
+
+- core.py _op_reduction_depth: grouped conv_transpose* now divides by groups (in_channels/groups *
+  prod(kernel); groups read from positional arg 6 / kwarg). Previously omitted the divisor,
+  over-reporting a grouped transpose's reduction depth so a depth-1 grouped ConvTranspose falsely
+  earned band C and could mask a ~5e-5 replay error. Non-dividing/unreadable groups -> 0
+  (fail-toward-strict); ungrouped + forward conv unchanged. (Found by the tolerance-sweep
+  re-review.)
+
+- model_prep.py _ensure_module_output_tensor_logged: synthesized internal-source ops now carry the
+  full exhaustive module stack (like every real op) instead of just the innermost frame. The
+  truncated stack mis-parented a deeply-nested internal source (esmfold's
+  trunk.structure_module.ipa) to the root, breaking the [module_hierarchy] bidirectionality
+  invariant. Scoped to internal_source; the intervention-replacement path is unchanged.
+
+Regression: 167 validation + 275 smoke pass; grouped-transpose depth 128 -> 1 verified,
+  ungrouped/forward conv unchanged.
+
+- **validation**: Handle complex constant outputs
+  ([`31694e1`](https://github.com/johnmarktaylor91/torchlens/commit/31694e142e51f48656c4b8f8ce35b1d928946bdd))
+
+- **validation**: Handle replay precondition edge cases
+  ([`a0f457f`](https://github.com/johnmarktaylor91/torchlens/commit/a0f457fc9995e5f92682c7fbf77c0faa189765ea))
+
+- **validation**: Handle structural gather and scatter parents
+  ([`9d88ef6`](https://github.com/johnmarktaylor91/torchlens/commit/9d88ef6952d3f97111bc86c2dc7f4d8bed1f2af9))
+
+- **validation**: Honest intervention_replacement classification + scoped func_call_id exemption
+  ([`075350d`](https://github.com/johnmarktaylor91/torchlens/commit/075350db7704382c769c81d2499baa32703d0a0e))
+
+Cert-round-3 coupled validation-tripwire fix. Three producer sites used a "module has
+  _forward_hooks" PROXY to mark an untagged / module-exit tensor as an intervention replacement --
+  but that proxy runs BEFORE PyTorch invokes the hooks (exit metadata) or during plain postprocess,
+  with no proof a substitution occurred. A genuine plain-capture gap (untraceable raw-ATen output)
+  plus a harmless no-op observer hook was therefore mislabeled as a functionless intervention
+  placeholder -- the exact 2026-06-02 vmap tripwire class.
+
+- backends/torch/model_prep.py: _record_module_exit_metadata now logs an untagged module output as
+  internal_source (matching the module-ENTRY path), never intervention_replacement, and no longer
+  force-marks intervention_replaced from _forward_hooks. Genuine raw-hook replacements are still
+  tagged with proof by _make_user_forward_hook_wrapper, which alone runs after the hook. -
+  postprocess/_materialize.py: drop the same has_user_forward_hooks proxy that overrode the
+  authoritative event.intervention_replaced; it mislabeled every module output of a hooked module
+  (incl. no-op observers) and even marked the PRE-replacement tensor for genuine hooks. -
+  validation/invariants.py: _is_func_call_id_exempt now exempts a GENUINE functionless replacement
+  (func_name==intervention_replacement AND intervention_replaced AND NOT is_internal_source --
+  mirroring op_log_fields), fixing the crash on legitimate raw-hook interventions. Safe only because
+  the producer no longer mislabels plain-capture gaps with this shape. - validation/exemptions.py:
+  remove dead _check_if_arg_is_special_val (0 callers; its all-ones logic would be an overbroad
+  exemption if wired) + unused Union import. - tests: add genuine-intervention, plain-gap tripwire,
+  and exemption-scoping regression tests; regenerate two module-containment snapshots
+  (pre-replacement relu output is now honestly intervention_replaced=false; the true replacement op
+  stays true).
+
+- **validation**: Int64-overflow-safe randint bounds in perturbation helper
+  ([`62ce419`](https://github.com/johnmarktaylor91/torchlens/commit/62ce4199e1034408e7810ab1431f53d8fa6edd9b))
+
+The integer branch of _perturb_layer_outs computed the randint exclusive high bound as
+  parent_outs.max() + 1. A legitimately captured int64 tensor holding INT64_MAX (common as PyG
+  sentinel/cluster index values) wrapped that to INT64_MIN, making torch.randint raise 'random_
+  expects from to be less than to' on a successfully-captured trace -- a validation-machinery crash
+  that masked 21 PyG graph/temporal-graph models (SAGPooling, ClusterPooling, GPSConv, DCRNN, TGT-*,
+  ...) as failed:exception.
+
+Clamp the exclusive high bound with torch.iinfo(dtype).max so max+1 can never overflow, mirroring
+  the float branch's torch.finfo handling; widen a saturated range to the full valid dtype range so
+  the perturbation stays non-vacuous (still genuinely perturbs, never degrades to a no-op). Only the
+  sampling bound is touched -- the retry-until-different loop and every
+  comparison/tolerance/replay/invariant remain unchanged. Re-arms the tripwire rather than weakening
+  it.
+
+Gates: unit tests on int64/uint8 parents at dtype max (no raise, genuinely perturbed, dtype/shape
+  preserved) + a SAGPooling end-to-end gate that validates green (the tripwire runs to a real pass
+  with no crash).
+
+- **validation**: Narrow exemptions for out= destinations, new_* factory templates, scatter_add_
+  index, and integer-cast quantization
+  ([`468d1cb`](https://github.com/johnmarktaylor91/torchlens/commit/468d1cbe867e131f1cc5c3f2c5fc3d30cf634fef))
+
+- **validation**: Pin single intra-op thread around forward-validation forwards
+  ([`c68bbe7`](https://github.com/johnmarktaylor91/torchlens/commit/c68bbe7054bf53649bbd74515d98bb0501179d65))
+
+Pin torch.set_num_threads(1) (save/restore, scoped to the validation harness) around the
+  ground-truth + capture forwards in _validate_forward_pass_torch, in addition to the existing
+  deterministic-algorithms region.
+
+Multi-threaded float reduction-ORDER is non-deterministic ACROSS RUNS even with deterministic
+  algorithms enabled: two clean forwards of the same nn.Module can disagree by ~3e-7 at the output,
+  straddling the strict phase-0 ground-truth bar (GROUND_TRUTH_OUTPUT_RTOL=1e-6). That made the
+  spectral-GCN family (MSTGCN / TGT-MSTGCN Chebyshev sparse aggregation) flaky, and the same thread
+  non-determinism in MoE masked-gate routing (minimax / nllb-moe) made the perturbation sensitivity
+  check flaky. Pinning one thread makes both bit-exact, so the strict bar becomes DETERMINISTIC.
+
+The prior comment claimed deterministic-algorithms alone sufficed and avoided the pin over a
+  throughput concern; the determinism probe had missed the ground-truth/MoE inter-run drift. The
+  throughput concern is addressed by scoping the pin to the validation harness only (not user
+  capture); the forward-validation timeout policy is generous, so single-threaded validation
+  forwards are acceptable.
+
+LOAD-BEARING: pinning at process start does not reliably fix the path (the capture forward
+  re-parallelizes); the pin must wrap the forwards inside the harness.
+
+NO tolerance loosened -- GROUND_TRUTH_OUTPUT_RTOL stays 1e-6. The fix removes inter-run thread
+  non-determinism the bar was never meant to police.
+
+Gates (all green across N>=5 repeated runs): -
+  test_validation_pins_single_thread_inside_harness_and_restores: host-independent mechanism gate --
+  threads==1 observed inside both forwards, restored after. -
+  test_validation_spectral_gcn_ground_truth_determinism: spectral-GCN class. -
+  test_validation_moe_masked_gate_perturbation_determinism: MoE masked-gate class. -
+  test_validation_restores_prior_deterministic_algorithms_setting: extended to cover thread-count
+  restore via the mechanism gate.
+
+- **validation**: Preserve output container paths
+  ([`51ea16d`](https://github.com/johnmarktaylor91/torchlens/commit/51ea16d73158da67a87613168bf0b97098dee74c))
+
+- **validation**: Preserve typed output order
+  ([`efa9b39`](https://github.com/johnmarktaylor91/torchlens/commit/efa9b39c0d75958b74ec2170068c67378ecaf4e0))
+
+- **validation**: Probe demoted to diagnostic; structural proofs + boundary-crossing perturbations
+  ([`2f016e8`](https://github.com/johnmarktaylor91/torchlens/commit/2f016e8f68196b6f84aeaaa469e2cc4b2eb1e92d))
+
+Resolves the dual-lab review's opposing findings without losing detection power in either direction.
+  The generic double-perturbation probe can no longer grant exemptions (it only annotates failure
+  diagnostics) — a corrupted replay callable or dropped parent edge fails loudly again. Legitimate
+  invariances that used to ride the sampling probe get STRUCTURAL proofs instead (zero annihilators,
+  zero-weight matmul/linear/conv, BN training running-stat buffers, packed-sequence/unique metadata
+  outputs, all-NaN/all-inf local constancy proved from the saved non-perturbed operand and op
+  semantics), each with a wrong-edge negative test. Piecewise-constant and saturated ops
+  (sign/ceil/floor/round/clamp/exp overflow) are validated via boundary-crossing perturbation
+  candidates rather than exempted; clamp leaves SKIP_PERTURBATION_ENTIRELY. The ULP swamped-add
+  predicate stays with a proven firing case and now honors alpha. TF-preview smoke exercises the
+  backend-neutral topology invariant. Golden diff: exactly one intended reclassification
+  (multiply-by-zero moves from probe-based to multiplicative_zero_annihilator with structural
+  justification).
+
+- **validation**: Re-apply index_put exemption + buffer_source dedup repoint
+  ([`c39d33b`](https://github.com/johnmarktaylor91/torchlens/commit/c39d33bd4bfcd7f44aea442f52483ce14f417ab7))
+
+Re-applies the two non-depth-gate fixes reverted in 2f7a8a4b (cherry-pick of 658a7011 + 1582f6c5);
+  only the reduction-depth band-C gate was actually flagged for the empirical sweep. Both are
+  narrow, correct-by-design, and previously reviewed:
+
+- index_put/index_put_ destination-overwrite perturbation exemption (the exact analogue of
+  _check_setitem_exempt Case 4): fires ONLY when the perturbed parent is the destination,
+  non-accumulating, and fully overwritten. Closes a false-negative on keypoint R-CNN. -
+  _merge_buffer_entries now repoints a dangling scalar buffer_source (and its arg-0 mirror) to the
+  value-identical survivor on buffer dedup, fixing the [buffer_xrefs] invariant trip on speechbrain
+  CRDNN LiGRU reassign buffers.
+
+Tripwire untouched; both repair the graph / complete an op family.
+
+- **validation**: Reduction-depth band-C eligibility over all reductions
+  ([`6508408`](https://github.com/johnmarktaylor91/torchlens/commit/65084088b86632aeeb5b0045b91551907c3bdb87))
+
+Replace the band-C (deep-numeric replay tolerance) eligibility predicate with the faithful
+  per-output reduction depth, applied to ALL reduction categories, not a graph-position proxy or a
+  conv/matmul func allowlist.
+
+Old gate (two ways to mis-gate): func_name in DEEP_NUMERIC_REPLAY_FUNCS (conv/matmul only) AND
+  step_index >= 100 -> withheld band C from physically-deep EARLY convs (the resnetv2_50x3_bit
+  false-negative), AND lent band C to shallow LATE ops (a bug-masking hole).
+
+New gate: an op is band-C-eligible iff it is a REDUCTION whose per-output accumulation depth >= 64
+  (DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH). _op_reduction_depth computes depth per category,
+  reading saved_args AND saved_kwargs (kwargs-aware, so conv2d(x, weight=w) / matmul(a, other=b) /
+  scatter_add(out, dim, index=idx, src=s) are measured correctly): - conv*/conv_transpose*:
+  in_channels/groups * prod(kernel) = weight.numel()/weight.shape[0] -
+  mm/matmul/linear/addmm/bmm/baddbmm: contracted dimension K -
+  scatter*/scatter_add*/scatter_reduce*/segment_reduce/index_add: max duplicate-index fan-in -
+  sum/mean/prod/norm/var/std + other dim reductions: numel of reduced dims -
+  elementwise/copy/view/structural: 1; undeterminable: 0 (-> ineligible, fail-toward-strict)
+
+No band widened: rtol/atol/outlier-fraction/scaled-diff caps are byte-identical. Depth is added to
+  the replay-failure diagnostic. A depth-2 scatter stays strict (NO scatter-category arm); a deep
+  eligible op with a gross error still fails via band C's numeric caps.
+
+Tests are the LOAD-BEARING gate (false-positive battery): shallow scatter depth-2 + 5e-5, shallow
+  linear depth-16 + 5e-5, deep eligible scatter depth-1024 + gross +10, and deep eligible conv
+  depth-1536 + gross +10 ALL fail (the bug is caught, never masked); the legit deep-conv
+  cancellation drifter (sub-1e-4) passes. Plus kwargs-aware depth + all-category +
+  fail-toward-strict-on-depth-0 unit tests. Supersedes the reverted conv/matmul-only point-fix.
+
+Tripwire strengthened, not relaxed.
+
+- **validation**: Repair depth-0 KeyError for raw hooks on the root model
+  ([`3b35718`](https://github.com/johnmarktaylor91/torchlens/commit/3b3571863e833fd46fa034e3f4aaccbe850091e3))
+
+register_forward_hook on the TOP-LEVEL model crashed with an uninterpretable KeyError at
+  trace._mod_call_index[id(module)] in _ensure_module_output_tensor_logged: the root model's forward
+  is deliberately left undecorated (module_forward_decorator never wraps it), so push_frame -- the
+  sole incrementer of _mod_call_index -- never runs for it, and the root is never registered in the
+  dict at all. The round-5 fix only covered hook depths 1/2/3, all of which ARE registered at prep
+  time.
+
+Default the lookup to 1 via .get(id(module), 1), matching the codebase's fixed "self:1" convention
+  for the root's single canonical call. This default is provably inert for the
+  module-stack/equivalence-class machinery below it (gated on `if address`, and the root's address
+  is always ""), so it cannot silently paper over a wrong index there.
+
+Also fix a real, independently-discovered bug in the same function: the synthesized op's "module"
+  field was unconditionally set to (address, module_call_index), which for the root produces ("", N)
+  -- finalizing into a bogus ":N" module-call label instead of the correct `None` (the established
+  convention for ops with no owning submodule, matching sources.py's `modules[-1] if modules else
+  None`). Gate it on `if address` too.
+
+Adds a depth-0 regression test mirroring the existing depth-1/depth-2 raw-hook tests, asserting the
+  placeholder op's module field is exactly None.
+
+- **validation**: Replay ops with unchanged live parameters
+  ([`af875fc`](https://github.com/johnmarktaylor91/torchlens/commit/af875fccd6f07f838f65881d7a50ae225b153027))
+
+- **validation**: Scale perturbations for huge float outputs
+  ([`b96b2a3`](https://github.com/johnmarktaylor91/torchlens/commit/b96b2a35b84db636621edf1f501d7ef83d4f95e8))
+
+- **validation**: Scope payload metadata checks to live payloads
+  ([`e7e960f`](https://github.com/johnmarktaylor91/torchlens/commit/e7e960f5ee8d45ca2afb030016f93400b3f90ddb))
+
+- **validation**: Selective-save opt-outs are by-design exemptions, not unverified
+  ([`30a6183`](https://github.com/johnmarktaylor91/torchlens/commit/30a6183f796d37759d67476997c17963612ec6d0))
+
+Migrates the legacy region validation path onto the four-way taxonomy: replay surfaces the user
+  provably excluded via selective-save predicates classify as exempted:not_saved_by_user
+  (justification carries the save-config evidence), so a selective trace whose checkable surface
+  fully passes is passed/True again instead of an unverified status that raised TypeError on bare
+  assert. Detection preserved: a checkable mismatch in a selective trace still fails (regression
+  test), and full-save missing-args remains reason-coded unverified. Packed-sequence lengths join
+  the structural perturbation exemptions. Golden zoo gains a selective-save case covering the new
+  category.
+
+- **validation**: Structural proofs for norm running stats and scalar masked_fill_
+  ([`e783172`](https://github.com/johnmarktaylor91/torchlens/commit/e7831729ce86cdb45bbd03a38aed2e77234d77a3))
+
+Two proof gaps surfaced by the full tier: training-mode InstanceNorm (and the BatchNorm proof
+  generalized to cover it) treats running mean/var as mutated update targets, not value operands,
+  when the saved use_input_stats arg is True — perturbing them is provably output-invariant; and
+  masked_fill_ selectedness proofs now accept Python-scalar fill values (StyleTTS), where a fully
+  selected saved mask makes the destination value provably irrelevant. Both carry saved-operand
+  justifications and regression tests; neither is a sampling-based exemption.
+
+- **validation**: Tighten band-C reduction-depth eligibility
+  ([`0d2928f`](https://github.com/johnmarktaylor91/torchlens/commit/0d2928f64b984b91537172fccfd9f901fad874f2))
+
+The deep-numeric replay band-C eligibility (DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH) was UNSOUND:
+  _op_reduction_depth was too broad, granting band C to genuinely shallow ops and masking the
+  near-zero ~5e-5 capture-error class. Five eligibility fixes (band-C tolerance constants
+  unchanged):
+
+1. scatter fan-in counted PER destination COORDINATE, not per raw index value. A row-/feature-wise
+  scatter with many independent depth-2 destinations all at index 0 was miscounted as one huge
+  global fan-in. Now rebuilds the full destination tuple (indexed coord along the scatter dim +
+  source position on the other dims) and counts max duplicate destination-tuples. 2. conv_transpose*
+  handled separately: transposed weight is [in_channels, out_channels/groups, *kernel], so the
+  forward formula weight.numel()//weight.shape[0] over-reported. True depth is in_channels *
+  prod(kernel); ConvTranspose2d(1,128,1) is now shallow (depth 1). 3. _SCATTER_REDUCE_FUNCS
+  restricted to ADDITIVE accumulators. Plain overwrite scatter/scatter_ (no FP accumulation) and
+  scatter_reduce max/min/amax/amin/prod (no summation-order drift) stay strict; scatter_reduce
+  sum/mean stay eligible. 4. index_put exemption requires the perturbed parent to BE the destination
+  by ARG POSITION (parent_arg_positions[args][0]), not solely by torch.equal content match -- a
+  value-parent whose contents equal the destination is no longer falsely exempted (mirrors
+  __setitem__ destination identification). 5. _reduced_numel_over_dims dim=() behavior
+  runtime-verified: for the gated reduce family dim=() reduces over ALL dims (scalar output), NOT
+  identity, so reduce-all depth is correct (documented; behavior unchanged).
+
+Adds 5 load-bearing regression tests covering each false-positive case.
+
+- **validation**: Tighten perturbation exemptions to provable predicates
+  ([`766f24c`](https://github.com/johnmarktaylor91/torchlens/commit/766f24ca34dd3e9b3092da2e0dc3ec0f7ee76aad))
+
+Structural-arg matching now uses parent-arg-position identity instead of value equality; __setitem__
+  overwrite exemptions narrowed to destination parents; the name-only binary min/max exemption
+  becomes an elementwise dominance predicate; the magnitude-ratio>100 shortcut is REMOVED (stricter;
+  a dtype-aware ULP predicate is staged follow-up); "full" dropped from in-place RNG handling
+  (deterministic op); stale audit TODO cleared. Each change carries a non-vacuous negative test
+  proving it cannot mask.
+
+- **validation**: Tighten uninitialized-dest exemption to direct allocations only
+  ([`cf3b404`](https://github.com/johnmarktaylor91/torchlens/commit/cf3b4042697d5690ce4e9295017f80cbe9e89396))
+
+B1 adversarial review (Codex) returned VERDICT: too-broad. The perturbation-insensitivity exemption
+  for the partition-write-into-uninitialized-memory idiom followed the in-place destination-write
+  chain (_uninitialized_value_origin) back to empty/empty_like/new_empty, then treated EVERY later
+  destination in that chain as uninitialized. A chained write such as
+
+out = empty_like(x) out.index_copy_(2, idx1, ...) # writes real live data out.index_copy_(2, idx0,
+  ...) # destination parent now holds live data
+
+has a second-write destination parent that already contains real written values flowing to the
+  output. Labeling it uninitialized masked a real dropped-destination-dependency capture bug: a
+  wrong replay that ignores the destination parent passed the perturbation check only because of the
+  exemption.
+
+Fix (option a, most-correct): _uninitialized_value_origin now returns True ONLY for a DIRECT
+  allocation source (SKIP_VALIDATION_ENTIRELY). It no longer recurses through in-place writes -- an
+  in-place write produces a tensor with real data and is never uninitialized-as-a-whole. The benign
+  idioms still validate clean (the perturbed parent there is the bare empty_like/new_empty
+  allocation, a direct source); the chained-live-data case is now strict.
+
+Regression guard: test_chained_index_copy_dropped_dest_dependency_still_fails reproduces the exact
+  Codex masking case (TwoIndexCopyDim2 with a corrupted second index_copy_ replay) and asserts it
+  FAILS with a perturbation diagnostic.
+  test_uninitialized_origin_does_not_follow_inplace_write_chain locks the helper-level strictness.
+  Both benign tests (empty_like + strided setitem; chained index_copy_ into new_empty) still pass.
+
+- **validation**: Treat new_tensor source as structural
+  ([`d0b5466`](https://github.com/johnmarktaylor91/torchlens/commit/d0b5466179ea22486bc4dc6f7052fa35c28e863e))
+
+- **validation**: Zero expected parameter grads is unverified, not a vacuous pass
+  ([`2c1e24c`](https://github.com/johnmarktaylor91/torchlens/commit/2c1e24cbc81c283bc155f2f7d4ccc04310931f5e))
+
+- **visualization**: Escape module-address text in cluster titles (cert9 F4)
+  ([`bfe7159`](https://github.com/johnmarktaylor91/torchlens/commit/bfe71593001b47785512bcaf977381bd7f68c9d1))
+
+Both render engines built module-cluster titles from module-address text without HTML-escaping it,
+  crashing draw() whenever a module address contains an nn.ModuleDict key (or other component) with
+  "<", ">", or "&".
+
+- _render_dot.py: _setup_subgraphs_recurse passed title_already_escaped=True on the false assumption
+  that Trace subgraph titles never contain HTML specials. Module-address-derived titles can contain
+  arbitrary user text, so let make_module_cluster_attrs escape it like any other user string. -
+  _rank_layout_internal/layout.py: _write_cluster built cluster_label directly from the module
+  address and class name with zero escaping. Now both are run through the existing html_escape
+  helper.
+
+Re-swept both render engines for other unescaped cluster/subgraph/node labels; found none (node
+  labels already go through render_lines_to_html / html.escape, the model-class-name caption is
+  already escaped, and the bundle-cluster and container-cluster call sites already default to
+  escaped titles).
+
+Added a regression test that captures a model with an nn.ModuleDict keyed by a string containing "&"
+  and calls draw() on the default (dot) render engine with default settings, rendering to a real SVG
+  via the actual graphviz binary.
+
+- **visualization**: Quote rank-engine cluster subgraph identifier (cert9 F4 gap)
+  ([`3f07497`](https://github.com/johnmarktaylor91/torchlens/commit/3f074971380ef5527b976e7ad6eb8f2e193020be))
+
+_write_cluster() in the rank-layout DOT builder escaped the HTML cluster label (bfe71593) but
+  spliced the raw subgraph identifier straight into DOT text with only ':'/'.' substituted, unlike
+  every other raw-DOT identifier in the file (node/edge names via _dot_id()). An nn.ModuleDict key
+  mixing '<', '>', '&' produces an unquoted subgraph name that neato rejects with a syntax error,
+  reachable whenever "auto" placement promotes to the rank engine. Route the identifier through
+  _dot_id() so it is quoted like every other identifier; quoting preserves the "cluster" prefix
+  neato keys off.
+
+Swept the rest of visualization/ (both render engines) for other raw DOT identifier construction:
+  the dot-engine path builds subgraphs via the graphviz library's own .subgraph(name=...) API
+  (auto-quotes regardless of content), and _render_flow.py's _insert_into_cluster() only searches
+  already-rendered text for either quoted or unquoted markers -- no other unguarded raw-identifier
+  sink found.
+
+- **visualization,backends**: Escape rank-engine arg labels, populate paddle/tf
+  num_layers_with_params
+  ([`54b37a9`](https://github.com/johnmarktaylor91/torchlens/commit/54b37a9e36a5736ff3ce01741bb10d153938f127))
+
+- _rank_layout_internal/layout.py: _add_arg_label (the vis_node_placement="rank" engine's
+  argument-position labeler, silently selected by "auto" mode above the layout_cost=20_000
+  threshold) built its Graphviz HTML-like edge label without escaping. edge_uses[].arg_path /
+  parent_arg_positions locations can carry container-key text (DictKey/HFKey component text, or any
+  raw location string) containing "<", ">", or "&", which previously raised a real neato parse
+  failure ("not well-formed (invalid token)") on draw(). Mirrors the html_escape() fix already
+  applied to the dot engine's _label_node_arguments_if_needed. - _render_dot.py /
+  _render_entrypoints.py: escape model_class_name at the three remaining unescaped graph-caption
+  interpolation sites (forward, backward, combined captions) for defense-in-depth, matching the
+  round-7 MINOR finding. Swept the rest of torchlens/visualization/ for HTML-like-label
+  interpolation of user-derived text; all other sites already escape (node_spec.py, fastlog_live.py,
+  bundle_diff.py, code_panel.py, _render_edges.py's own
+  _html_edge_label/_html_container_edge_label/_html_combined_recurrence_label). - paddle/backend.py:
+  _finish_trace's finalize_single_pass_trace call now passes count_layers_with_attached_params=True,
+  matching the sibling MLX call site. Without it, trace.num_layers_with_params stayed at 0 for every
+  parameterized Paddle model, tripping the [param_xrefs] metadata invariant
+  (_check_layer_param_aggregate_dedup) on any object-module-mode trace with attached params. -
+  tf/backend.py: same sibling gap, same fix -- TF's _finish_trace wired attach_op_params but never
+  set count_layers_with_attached_params either, and no other TF code path populates
+  num_layers_with_params. Confirmed via code read of the shared _finalize.py helper (the counter
+  only depends on attach_op_params + count_layers_with_attached_params, independent of TF's
+  update_param_usage=False). Untestable live here (TF backend self-gates off on this environment's
+  legacy Keras 2.13); test added gated on the existing tf_backend skip marker so it activates
+  automatically once TF/Keras 3 is available in CI.
+
+Regression tests: rank-engine draw() with a mutated edge_uses[].arg_path containing "<"/">"/"&" now
+  renders cleanly via the real neato binary (verified crashing pre-fix, passing post-fix);
+  model_class_name with HTML specials renders cleanly; paddle/tf single-Linear parameterized models
+  now report the correct num_layers_with_params and pass check_metadata_invariants (tf test skips on
+  legacy Keras, matching the existing tf_backend gating).
+
+- **visualization,callbacks**: Escape HTML edge labels, close lightning trace leak
+  ([`ee5c1bc`](https://github.com/johnmarktaylor91/torchlens/commit/ee5c1bcc47fa7377acf9a8f0745c6672f48a904e))
+
+- _render_edges.py: HTML-escape all text interpolated into Graphviz HTML-like edge labels
+  (_html_edge_label, _html_container_edge_label, _html_combined_recurrence_label, argument-position
+  labels). Container edge labels can carry arbitrary user text via DictKey/HFKey output-dict keys
+  (e.g. "loss & aux"), which previously broke the HTML-like label parser and raised
+  GraphvizRenderError on draw(). - callbacks/lightning.py: wrap
+  LayerProfilerCallback._maybe_profile's record build/write in try/finally: log.cleanup(), matching
+  every other repeated-use trace() call site. Without it, cleanup() (backward-registry purge, CUDA
+  empty_cache, per-op attribute teardown) never ran, so each profiled batch's activation tensors
+  stayed alive past the callback return. - __init__.py: __dir__ now unions names via a set literal
+  instead of list-concat, so accessing a lazy attribute no longer duplicates it. -
+  bridge/brain_score.py, export/__init__.py: drop self-redundant getattr(x, k, getattr(x, k,
+  default)) fallbacks. - tests: remove a dead tautological assert and a value-discarding assert in
+  test_capture_unification_p8.py / test_module_log.py.
+
+- **viz**: Dedupe collapsed render edges
+  ([`a20088f`](https://github.com/johnmarktaylor91/torchlens/commit/a20088f00de7fa13af7157ac48d5c7526d400e04))
+
+- **viz**: Drive collapsed-box remainder off plan structure not public mode
+  ([`836c67c`](https://github.com/johnmarktaylor91/torchlens/commit/836c67c5be4e0010dd1492482b8b4cf8b6e15914))
+
+- **viz**: Escape embedded quotes/backslashes in rank-engine _dot_id, case-insensitive keyword guard
+  (cert10)
+  ([`78602de`](https://github.com/johnmarktaylor91/torchlens/commit/78602de205cc96cb6ce0e9473bbc10f8dda425fc))
+
+- **viz**: Exclude surfaced own-output ops from collapsed box remainder count
+  ([`342ae0f`](https://github.com/johnmarktaylor91/torchlens/commit/342ae0f0466d181b657b9b2fc3d9e978032a3a1c))
+
+- **viz**: Fold legal sub-runs when a run has a non-uniform hidden member
+  ([`8ec95b0`](https://github.com/johnmarktaylor91/torchlens/commit/8ec95b03eef9fc985b2b7cbff27fea2c062340b3))
+
+Round-4 finding: the v1 grouper _iter_collapsible_runs rejected an entire eligible run wholesale the
+  moment one hidden member differed in structural signature, instead of retrying the legal sub-runs
+  like the v2 engine (_maximal_legal_runs) does -- reachable via draw(collapse_fn=) and
+  draw(collapse='auto', fold_runs=True), contradicting fold_runs' 'folds every eligible repeated
+  run' contract (safe direction: under-collapse, never mislabel). Add
+  _split_run_by_hidden_uniformity (maximal hidden-uniform sub-run retry, mirroring v2) and apply it
+  at all three run-emit sites; the structurally-odd member becomes the visible representative of its
+  own sub-run, never buried in a '+N more'. Also harden _module_structural_signature to read attrs
+  directly so a field rename fails loudly instead of silently reading 0.
+
+- **viz**: Fold representatives show single-instance stats in all modes
+  ([`b9dd010`](https://github.com/johnmarktaylor91/torchlens/commit/b9dd010095d3ae214ded3dad63ca4cc6104756bb))
+
+- **viz**: Globally rank collapsed dot layouts
+  ([`f65ac5b`](https://github.com/johnmarktaylor91/torchlens/commit/f65ac5b4af2942cd49b0a4c4e9e6b108f0e21bba))
+
+- **viz**: Grad-edge cluster clobber, combined-render DOT retention, scratch state off Trace
+  ([`78c8ffd`](https://github.com/johnmarktaylor91/torchlens/commit/78c8ffdfb4446813261aef3b963960afcbdddf80))
+
+_add_edges_for_node passed a shadowed module variable into _add_grad_edge, misfiling gradient edges
+  into the wrong cluster; render_combined_graph's finally-cleanup deleted the DOT source even on
+  failure; collapsed-container scratch state now lives in the render builder instead of mutating
+  Trace. Byte-identical on the render harness.
+
+- **viz**: Keep collapsed children in parent clusters
+  ([`5843e6e`](https://github.com/johnmarktaylor91/torchlens/commit/5843e6e7e86657d819af4f2159defb621ad04b27))
+
+- **viz**: Preserve argument edge multiplicity
+  ([`b1602d1`](https://github.com/johnmarktaylor91/torchlens/commit/b1602d11719a7631e90c9f05ab9a612784d65109))
+
+- **viz**: Resolve 13 of 15 visual-audit findings
+  ([`12797ed`](https://github.com/johnmarktaylor91/torchlens/commit/12797edcbee1726855e6047d79ad01b06d580a56))
+
+Registered node-overlay names resolve in draw(); hidden-buffer-only update ops (BN
+  num_batches_tracked) no longer render as orphan nodes; dark theme themes captions and parameter
+  fills; skip_fn no longer emits detached skipped nodes; legend swatches derive from real NodeSpec
+  shapes/colors; rolled multi-output module ops show the module-call count instead of the
+  output-tensor count (the LSTMCell (x8) double-count); bundle-diff captions and aria labels derive
+  from actual members; raw-image montage nodes get stable image dimensions; code_panel survives rank
+  layout; plus type/docs corrections (show_containers="nodes" annotation, buffer-visibility docs,
+  intervention-viz semantics). Each mechanism fix carries a regression test; before/after panels
+  rendered for visual judgment. Noted, not fixed (need non-renderer decisions): F3 container cluster
+  ownership; F7 elif-ladder branch-kind metadata.
+
+- **viz**: Route run-fold ellipsis edges
+  ([`c624142`](https://github.com/johnmarktaylor91/torchlens/commit/c624142ebdc0356881c72d9c80334cdb345216a5))
+
+- **viz**: Run-fold ellipsis nodes owned by the fold representative's cluster
+  ([`97a49de`](https://github.com/johnmarktaylor91/torchlens/commit/97a49ded22bdbfb8b826f654f23cac8d622fca60))
+
+Ellipsis nodes were queued under the current edge's LCA module key, which could place them outside
+  the parent cluster border (mobilenets). Own them by the fold representative's cluster instead.
+  Intended visual diff: exactly one manifest key rebaselined (repeated_residual none/fold_runs);
+  before/after gallery rendered for visual judgment. Secrets baseline refreshed for the new manifest
+  digest.
+
+### Chores
+
+- Delete dead private modules
+  ([`84b5122`](https://github.com/johnmarktaylor91/torchlens/commit/84b512263069c44951f2cc95dd278363cb9f0de9))
+
+- Ignore .codex working artifact (file or dir)
+  ([`256643c`](https://github.com/johnmarktaylor91/torchlens/commit/256643cc8c74547c17e2709eaaf00545a2310b0b))
+
+- Remove empty stub packages
+  ([`1332430`](https://github.com/johnmarktaylor91/torchlens/commit/13324302e69857b25e7e3fdad9f11f4b93a0a659))
+
+- Remove unused grad package
+  ([`4e2b341`](https://github.com/johnmarktaylor91/torchlens/commit/4e2b341012d9360d6691af305a2b248fe7fd586a))
+
+- **api**: Document deprecation ledger
+  ([`9fc2e73`](https://github.com/johnmarktaylor91/torchlens/commit/9fc2e73fd070258be255a81e6602c611fefa1914))
+
+- **bench**: Refresh capture-overhead results for round 3
+  ([`b601798`](https://github.com/johnmarktaylor91/torchlens/commit/b6017985abbb01063ff964748d5a54611d492c94))
+
+- **core**: Sync main with menagerie-redesign torchlens core fixes (hardening-megasprint Wave 0
+  base)
+  ([`aab80a8`](https://github.com/johnmarktaylor91/torchlens/commit/aab80a8e9cb4dd9661a8bbfeb83942f120a72c11))
+
+Applies the 74 split-brained torchlens/ capture + validation-robustness fixes from
+  menagerie-redesign onto main (core-only, no menagerie/ additions), via a 3-way merge on top of
+  main's collapse-v2 + core commits. One import-union conflict in backends/torch/ops.py resolved.
+  Gives the parallel hardening refactor worktrees a current core base without waiting for the
+  menagerie build.
+
+- **harness**: Add dual count instrumentation notes
+  ([`46675d8`](https://github.com/johnmarktaylor91/torchlens/commit/46675d8e3d7d6e755cb7a7e5f9ec6a4b3a0c1c2f))
+
+- **hygiene**: Gitignore generated-output dirs; route script/benchmark outputs accordingly
+  ([`50343f6`](https://github.com/johnmarktaylor91/torchlens/commit/50343f651537e77ce131a65270feb55d9ad4544a))
+
+- **menagerie**: Add run health observability
+  ([`32056e0`](https://github.com/johnmarktaylor91/torchlens/commit/32056e0478b08708b356b2622715e79d8c5f8e84))
+
+- **menagerie**: Bump stale catalog-count snapshot to 11712/3283; ignore generated trace_summary.db
+  + .codex
+  ([`16babe6`](https://github.com/johnmarktaylor91/torchlens/commit/16babe65d126a4f558ef4c0bac58faf7ee93bb93))
+
+- **menagerie**: Island-phase funnel
+  ([`21eb9eb`](https://github.com/johnmarktaylor91/torchlens/commit/21eb9eb4d5e8effc17b048d43b452b222368a2da))
+
+- **menagerie**: Keep expected smoke failures health-neutral
+  ([`44a0142`](https://github.com/johnmarktaylor91/torchlens/commit/44a0142b690cec99889107d52c5ac79af7448186))
+
+- **menagerie**: Mmlab_core pixi lock from env-island pilot build
+  ([`2cb5858`](https://github.com/johnmarktaylor91/torchlens/commit/2cb58588512638988dc5ff40484ec2192dfdde3b))
+
+- **menagerie**: P3 island funnel and gates
+  ([`93868c6`](https://github.com/johnmarktaylor91/torchlens/commit/93868c63045f45f8d8edb3863e6578655ab4d381))
+
+- **menagerie**: Persist 4 stable-id assignments
+  ([`54de3eb`](https://github.com/johnmarktaylor91/torchlens/commit/54de3ebfcaf4fa9002f1cf97f3e6303500f422f3))
+
+- **menagerie**: Phase-2c gates green; migration validated
+  ([`314828f`](https://github.com/johnmarktaylor91/torchlens/commit/314828feffeb9534b8d8e3df88d240b3a61544ed))
+
+- **menagerie**: Record unbuildable island reimplementation candidates
+  ([`6251a7e`](https://github.com/johnmarktaylor91/torchlens/commit/6251a7e9c1539fa2dd02abfe653189b980d01443))
+
+- **menagerie**: Tail-recovery funnel
+  ([`42a88a2`](https://github.com/johnmarktaylor91/torchlens/commit/42a88a20e488dd79d40ef75288f242b782f4bcd3))
+
+- **schema**: Register _raw_transform_escape_detected in the runtime allowlist and parity golden
+  ([`353631f`](https://github.com/johnmarktaylor91/torchlens/commit/353631f24fec740aab5492af19ed258d73c0a144))
+
+The golden regen diff is exactly the new runtime-only field.
+
+- **schema**: Register forward_memory_backend; update census test expectations
+  ([`7b3fca1`](https://github.com/johnmarktaylor91/torchlens/commit/7b3fca1dad8601cdcd29ffe85666e5f9b5622364))
+
+Register the Trace.forward_memory_backend field (added with the core sync) in MODEL_LOG_FIELD_ORDER
+  and rebaseline the parity golden (diff is exactly the new field). Census test updates:
+  compat-report row-set assertion instead of a count, MRO-aware anti-shim guard (mixin defs are
+  explicit defs; rebinding shims still rejected), pandas exclusion-constant import from its new
+  home, report-namespace test derives from tl.__all__ instead of a hardcoded 89.
+
+- **tooling**: Xfail_strict; re-enable F401/E721; torchlens warnings-as-errors; serial marker
+  ([`4f082d6`](https://github.com/johnmarktaylor91/torchlens/commit/4f082d6e06642f9b5ec3c712d5f45bdc1faa6477))
+
+xfail_strict=true (both live xfails verified genuinely failing); the F401 and E721 blanket ignores
+  are gone (violations fixed repo-wide); torchlens-originated warnings now error in the suite, with
+  narrow visible-not-fatal exceptions for public compatibility aliases and legacy tlspec version
+  warnings (deprecation tests still assert them locally); serial marker registered; CI workflows
+  parse.
+
+- **typing**: Check_untyped_defs=true; typed receivers replace mixin ignore-errors
+  ([`687c378`](https://github.com/johnmarktaylor91/torchlens/commit/687c378926e9df349f052fa6e9a23b8f7782e6d1))
+
+The five trace-mixin modules drop their blanket mypy ignore pragmas (debt from the mechanical
+  split): every mixin method types its receiver as the concrete Trace via a typing-only base alias.
+  The tree-wide mypy config ratchets to check_untyped_defs=true, clean with zero per-module
+  overrides.
+
+- **viz**: Mark v1-only collapse crutches
+  ([`f98af48`](https://github.com/johnmarktaylor91/torchlens/commit/f98af48fda3c87a1499fa36a89da479777aac96e))
+
+### Code Style
+
+- **tests**: Restore blank lines lost in union merge resolution
+  ([`eebcf7f`](https://github.com/johnmarktaylor91/torchlens/commit/eebcf7fa2ef960e899de9408264d53864a3cc39e))
+
+- **viz**: Remove unused imports in decomposed render modules under re-enabled F401
+  ([`9fd6b71`](https://github.com/johnmarktaylor91/torchlens/commit/9fd6b7185a38773426ecf65ea5ca83edbf92e913))
+
+### Continuous Integration
+
+- Add real test tiers
+  ([`3f61bc5`](https://github.com/johnmarktaylor91/torchlens/commit/3f61bc52edff925116cf5268595e4d52cd284885))
+
+- **compat**: Torch version matrix and capability snapshot gate
+  ([`80cfeb8`](https://github.com/johnmarktaylor91/torchlens/commit/80cfeb8daff52f087442b983e3d229bc17389ba9))
+
+### Documentation
+
+- Document package layout policy
+  ([`b5cdf65`](https://github.com/johnmarktaylor91/torchlens/commit/b5cdf65a165455da455738897d203874a4cc8fc5))
+
+- Spotless round 4 — docstring completion across utils/compat/semantic/dagua-bridge
+  ([`3b2b3f6`](https://github.com/johnmarktaylor91/torchlens/commit/3b2b3f62f8bc338c6328150ef90d655a9ba227dd))
+
+- **audit**: Add attribution + compat/bridges notebooks; rewrite README and recipe
+  ([`f7223e8`](https://github.com/johnmarktaylor91/torchlens/commit/f7223e8a216f00d5307b7f88db1b3bedb1191581))
+
+- 15_attribution: the explain-a-prediction workflow -- all 8 torchlens.attribution methods,
+  AttributionResult/AttributionError surfaces, target specs, viz heatmap tie-in. -
+  16_compat_and_bridges: the coming-from-another-tool workflow -- tl.compat.report/CompatReport,
+  from_fx/from_ilg/from_torchextractor and guarded from_timm/from_huggingface, lovely/torchshow
+  shims, full tl.bridge 16-adapter roster with gating UX, captum + profiler bridges end-to-end. -
+  README: coverage matrix re-derived from the live 79-name __all__ and every submodule family;
+  per-notebook rough edges re-verified; fixed -since-June ledger. - CLAUDE.md: import-pinning
+  rationale + PYTHONPATH recipe, derived-not -asserted coverage check, GAP re-verification
+  procedure, timing expectations, cell-id/pre-commit traps.
+
+- **audit**: Collapse-v2, full debug family, full export roster (11-13)
+  ([`b22a98c`](https://github.com/johnmarktaylor91/torchlens/commit/b22a98c2926b455df162007942b3fe62efb24b1a))
+
+- _models.py: DeepBlockNet zoo entry (6 residual blocks; gives collapse-v2 a real multi-step
+  schedule). - 11: collapse= string modes + continuous float slider with monotonicity check,
+  Trace.collapse_plan()/collapse_schedule() diagnostics, fold_runs matrix incl. standalone none+fold
+  mode; render_lineplot / render_image_scatter / feature_map_evolution; batch_summary
+  module-in-__all__ GAP; inline embeds for the collapse sequence. - 12: tl.report.log_value
+  (in-forward logging -> trace.annotations); tl.debug
+  lineage/compare/dead_neurons/recompute_candidates/ gradient_flow_audit/infer_input_shape with
+  result-class reprs. - 13: all 12 dep-free export formats executed with artifact peeks; tracker
+  formats enumerated with writer-object GAP; stale not-in-__all__ note corrected.
+
+- **audit**: Fix nb16 error cells; exhibit compat.report first-call noise honestly
+  ([`e4c0b8d`](https://github.com/johnmarktaylor91/torchlens/commit/e4c0b8d19b0864582bcb2b5367e8054e85df9a17))
+
+- **audit**: Nb11 numbering + nb15 attribution repr GAP; strip-before-commit step
+  ([`6e0f76c`](https://github.com/johnmarktaylor91/torchlens/commit/6e0f76c784fe78bdf81aae4a01e6326d4806d794))
+
+- Full strict in-place run of all 17 notebooks passes (fail=0, ~6.5 min); 17 HTML exports
+  regenerated as the review surface. - AttributionResult full-tensor repr recorded as GAP;
+  AttributionError message quality noted as a positive finding. - CLAUDE.md:
+  nbstripout-the-working-tree step added to the recipe -- detect-secrets scans disk files, so
+  executed notebooks with inline images cannot be committed unstripped.
+
+- **audit**: Node_spec_fn return-contract GAP (dict rejected deep in rendering)
+  ([`c92b775`](https://github.com/johnmarktaylor91/torchlens/commit/c92b77583dc4d813b5d946b6fe23f661f246f266))
+
+- **audit**: Pin notebooks to their own checkout; refresh 00-06 for live surface
+  ([`be1060d`](https://github.com/johnmarktaylor91/torchlens/commit/be1060d05b2f644ab4993bb765fedbf1a3e127e6))
+
+- Every setup cell now pins sys.path to the repo root and asserts torchlens resolves from this
+  checkout (editable install elsewhere silently won the import before). - 00: programmatic
+  tl.__all__ enumeration (79 names) replaces the stale hard-coded list; new ReentrantTraceError
+  error-surface section. - 01: demonstrate that tl.AmbiguousOpLookupError is exported but the
+  ambiguous-lookup site still raises plain ValueError (dead export). - 02: Quantity classes imported
+  from tl.*; repr-now-has-units verified. - 03: repair corrupted GAP markdown cell (leaked JSON
+  escapes). - 04: op.container public accessor replaces private container_from_op path; no-flag
+  degenerate-Container demo. - 05: new torchlens.io section (inspect_tlspec, detect_tlspec_format,
+  get_model_metadata, list_logs). - 06: draw/draw_backward return types now consistent (both DOT
+  source). - GAP cells re-verified against live code; fixed-since-June items marked.
+
+- **audit**: Refresh 07-10 against live surface
+  ([`114dd3e`](https://github.com/johnmarktaylor91/torchlens/commit/114dd3ece3d4bb6095973326c3ac8d71743db38f))
+
+- 07: tl.regex selector; bwd_hook dead-path matrix (0 fires under all three wirings); splice_module
+  discriminating demo proving output-not-input semantics vs docstring; project_onto batched +
+  explicit feature_axis (June batch-collapse bug fixed). - 08: Bundle repr fixed note;
+  tl.viz.bundle_diff text table demo. - 09: n_records counting fix reflected; Recording repr flood
+  kept as GAP. - 10: facets namespace hygiene cells (import-path failure, missing __all__, dir()
+  leak); Facet/MissingGradient repr fixes noted; FacetView.has demo.
+
+- **audit**: Round-1 adversarial fixes -- gradient-family verdict, getitem rule, coverage additions
+  ([`e1a94ce`](https://github.com/johnmarktaylor91/torchlens/commit/e1a94ceb8245b3fdddd8ad6c2b1636356cafa971))
+
+UX critic (fresh-eyes) + coverage critic round 1, every finding hand-verified: - 07: gradient-action
+  family proven INERT; capture-time hooks=/attach_hooks. - 00/01/03: pass-count-dependent
+  __getitem__ rule taught once, correctly; doubled-unit prints fixed; Buffer value-tracking;
+  show_call_tree/find_layers. - 05: opaque-overwrite-error demo; outs-less silent None;
+  storage=tl.to_disk; intervention-spec persistence; log_model_metadata; streaming crash recorded. -
+  08: SAME_OBJECT reality; bundle_diff stale-caption tripwire; compare_at/ joint_metric/supergraph.
+  09: event-stream silent-drain tripwire. - 10: head(0) payload-count fix; facets.register +
+  per-trace recipes=. - 11: byte-identical render tripwires; customization callbacks; presentation
+  knobs; annotate. 12: summary compute/cost crash GAP; intervention validate. - 02/04/06/16: capture
+  kwargs, layers_to_save over-save GAP, grad_transform smoke, from_sentence_transformers invoked. -
+  README: families recounted honestly; adversarial-review status section.
+
+- **audit**: Round-2 critique folded back
+  ([`b4d4aa8`](https://github.com/johnmarktaylor91/torchlens/commit/b4d4aa896e4f3df130871722ec5ae1a89f2467e4))
+
+- **audit-viz**: Bundle_diff embedded-caption nit (F12) captioned
+  ([`1a6c1ec`](https://github.com/johnmarktaylor91/torchlens/commit/1a6c1ec4ac7cf4b56defbf31109ae9270fcce735))
+
+- **audit-viz**: Final verification fixes -- fused-LSTM 3-output reality (F15), rank code-panel drop
+  is a bug page (F14)
+  ([`8d3dc9f`](https://github.com/johnmarktaylor91/torchlens/commit/8d3dc9fa1941691b4fb631aba71df3862a7ea6de))
+
+- **audit-viz**: J2 caption teaches fused SDPA kernel reality
+  ([`98dc302`](https://github.com/johnmarktaylor91/torchlens/commit/98dc302a431019e2ec177006ec17168ac9f201a6))
+
+- **audit-viz**: Known-trap notes -- import guard, feature preconditions, BN noise
+  ([`35906db`](https://github.com/johnmarktaylor91/torchlens/commit/35906dbb81c3b37e8de46862b662e3cabba6cdaa))
+
+- **backends**: Fix stale once-this-lands docstrings for shipped capture phases
+  ([`635e221`](https://github.com/johnmarktaylor91/torchlens/commit/635e2218555c23ba04561f1a639991c3ab3f5464))
+
+- **backends**: Spotless round 1 — torch backend docstring truth + dead aliases
+  ([`c3363ad`](https://github.com/johnmarktaylor91/torchlens/commit/c3363addd1975bf41093ddcd8a3e5b58076079f6))
+
+Module docstrings across the torch backend now state each file's CURRENT contract
+  (operation/event/payload, provenance/hooks/equivalence, persistent-wrapper/transform-boundary,
+  source logging, module stack); stale pre-refactor wording fixed; nested hook/wrapper helpers get
+  docstrings; four dead private aliases removed (prepare_model, cleanup_model,
+  undecorate_all_globally, redecorate_all_globally — grep-clean). No renames: the sweep found no
+  internal name in scope clearly misleading (certification wave re-checks with fresh eyes).
+
+- **compat**: Binding-escape limitation + doctor WARN row; fact-only doc drift fixes
+  ([`c4f005a`](https://github.com/johnmarktaylor91/torchlens/commit/c4f005a6c662726ed2f2323b256a7eedf75957c5))
+
+The pre-wrap `from torch import ...` closure-binding capture escape is now a documented limitation
+  with a strict-xfail repro and a warning-only doctor() row comparing torch namespace attrs against
+  the wrapper registry (the sys.setprofile detector stays parked). README torch floor corrected to
+  2.1+; stale public-name counts and the removed `sites` entry fixed; sae-lens extra unpinned from
+  the dead v4 line.
+
+- **core**: Spotless round 2 — docstring completion across
+  data_classes/postprocess/capture/ir/fastlog
+  ([`d36cc13`](https://github.com/johnmarktaylor91/torchlens/commit/d36cc133e6330e41a775592f87a28b4560e00c10))
+
+- **menagerie**: Add BUILD_PROCEDURE + harden integrate add-pipeline; recover AWNet vendor
+  ([`7a1ead1`](https://github.com/johnmarktaylor91/torchlens/commit/7a1ead1a256d7a099b18ba9031ad5a0a88a5810d))
+
+- **menagerie**: Clarify distinctness = unique computational graph (resnet18/34/50 distinct;
+  resolution not)
+  ([`51367c5`](https://github.com/johnmarktaylor91/torchlens/commit/51367c57fa8b00a34bc7cd75e4c26c18ab848ea1))
+
+- **menagerie**: Lock the add-model build-bridge methodology into the agent guide
+  ([`41f9bde`](https://github.com/johnmarktaylor91/torchlens/commit/41f9bde381ba77cceb0b928da50cfe145e47d1b7))
+
+Add an explicit 'To ADD/BUILD found models' section: READ menagerie/METHODOLOGY.md +
+  UPDATE_RECIPE.md + HARVEST_SOURCES.md first; harvest the REAL constructor into a 9-col source row
+  -> tsv_to_jsonl -> validate in grouped fat envs; USE REAL SOURCE, never write from-scratch
+  approximations (slop); the 5-rung ladder (real class / real repo code / faithful port / faithful
+  reimpl from detailed description / skip+document); classics only for no-code. Prevents the
+  2026-07-01 mass-reimplementation mistake from recurring.
+
+- **menagerie**: Rewrite UPDATE_RECIPE for JSONL+classics; README/METHODOLOGY lockstep; retire TSV
+  ([`d5a7b96`](https://github.com/johnmarktaylor91/torchlens/commit/d5a7b9680480283aa03a68a1d5c65a83ccad68e6))
+
+- **menagerie**: Validation pipeline + procedure documentation
+  ([`1dcf6ed`](https://github.com/johnmarktaylor91/torchlens/commit/1dcf6ed8b2be9a9bbc6f9c637e0da5cc7a1fe660))
+
+- **readme**: Add validation campaign section
+  ([`a7059d3`](https://github.com/johnmarktaylor91/torchlens/commit/a7059d38fc77ccd808adb692f145adb2cbe1dfc0))
+
+- **readme**: Menagerie validation at 100% -- all 11,670 architectures algorithmically verified
+  ([`d9d2421`](https://github.com/johnmarktaylor91/torchlens/commit/d9d2421d1b6ef1e8f7c50d2e1bd4c7c1d4fd7ae9))
+
+- **readme**: Point Model Menagerie links to modelmenagerie.ai (custom domain live)
+  ([`7438409`](https://github.com/johnmarktaylor91/torchlens/commit/743840955bbb03c583945c61341015a6fd0d5e03))
+
+- **validation,intervention**: Spotless round 3 — seam coherence after the taxonomy and fire-record
+  reworks
+  ([`eb85e86`](https://github.com/johnmarktaylor91/torchlens/commit/eb85e865a6cd2f029a1b729038f6a34b4690ed05))
+
+### Features
+
+- **audit-viz**: Completeness + fresh-eyes round -- Section L, wide-panel rows, systemic fixes
+  ([`a1db14c`](https://github.com/johnmarktaylor91/torchlens/commit/a1db14c1b4211bc99138e50cad1be767afb961cc))
+
+Completeness critic: - NEW Section L: preview_fastlog predicate coloring + bundle_diff paired delta
+  render (two adjacent Graphviz surfaces the pack missed) - f8 extended: batch_render policy panel +
+  decoded-output label-score rows - draw_combined backward_node_spec_fn panel; code_panel
+  rank-engine fallback - overlay:intervention page (live fire records) next to nan; NA rationales
+  corrected (show/html_repr/animate_ops/code_panel callable)
+
+Fresh-eyes critic (A-E): - pagekit: wide renders get full-width rows (were shrunk to illegible
+  thumbnails); section-header blurbs wrap instead of clipping - b2 order_siblings now uses
+  asymmetric inception branches (parallel_fanout rendered identically either way); c4 caption
+  matches depth-collapse reality; c8 module override on a model WITH module boxes; a2/a5/c1/TOC
+  vocabulary + commutative-label fixes - legend drift captioned (FINDINGS F10); LSTMCell (x8)
+  double-count captioned (FINDINGS F11)
+
+- **audit-viz**: Visual audit pack v2 skeleton -- sectioned montage generator
+  ([`e97ef93`](https://github.com/johnmarktaylor91/torchlens/commit/e97ef930e765203461832c5715a7f15c002fa9a7))
+
+- generate_visual_pack.py: 68-page sectioned montage (TOC, 11 sections, composed caption+panel
+  pages), auto-generated coverage matrix from AXES x covers tags - _pagekit.py: page composition
+  helpers (native-res PNG embedding) - _visual_models.py: recurrent cells, weight-tied loops, block
+  stacks, mini transformer/inception, degenerate + torchvision factories - CLAUDE.md: regeneration,
+  extension checklist, visual-grammar cheat sheet
+
+Known GAPs in this checkpoint: collapse= panels fail (kwarg routing to investigate),
+  multi_io/skip_fn panels fail; fixes follow.
+
+- **backends**: Registry capabilities are the single source of truth
+  ([`958960a`](https://github.com/johnmarktaylor91/torchlens/commit/958960a847080c534f2c396bcb677293ba15c69c))
+
+Per-backend capabilities.py modules become registry-backed compatibility shims, so contradictory
+  capability declarations are impossible; MLX's supports_compile_capture (not in
+  BackendCapabilities, no consumers) is dropped. register_backend_spec() now runs a conformance
+  check on supplied capture_backend factories (bootstrap-time partial-import skips excepted); the
+  test-only "fake" backend literal is documented.
+
+- **capture**: One producer spine; absorb two-pass layers_to_save; lazy predicate context
+  ([`febbfc2`](https://github.com/johnmarktaylor91/torchlens/commit/febbfc27f2ca3d839c3bea499e171155363ac7bc))
+
+Producer emission unifies behind the cached CaptureProducerPolicy (legacy producer entry points are
+  compatibility shims). Predicate-mode capture no longer performs backend alias/semantics work
+  before knowing whether the op saves — the round-1 perf anomaly (predicate-False slower than
+  exhaustive) is gone; all benchmark rows beat the clean-main baseline by 24-42%. Selective
+  positive/string layers_to_save is absorbed into save= predicate routing, so streaming, live hooks,
+  intervention, halt, and predicate unions share one spine; the old capability fences die (tests now
+  assert the supported combinations). Genuinely two-pass semantics (output-layer requests, negative
+  indices, identity pass-through synthetic targets, selective gradient capture) stay on the legacy
+  resolver by design.
+
+- **collapse**: First-class max-mode segment DP transitions
+  ([`80ead5d`](https://github.com/johnmarktaylor91/torchlens/commit/80ead5d5b7c9ac96f346c4f2d2cb5e63d59cb393))
+
+- **collapse**: Route max through v2 segments
+  ([`9fdbd58`](https://github.com/johnmarktaylor91/torchlens/commit/9fdbd58d0ed8a125dae4a8d38625da58d27bb30c))
+
+- **collapse**: Salience floor keeps max-mode head fingerprints
+  ([`713e757`](https://github.com/johnmarktaylor91/torchlens/commit/713e7574efc8169ca4c2cb22f1b640bf68f46faa))
+
+- **compat**: Doctor() and compat.report() surface all runtime capability flags
+  ([`8810d0b`](https://github.com/johnmarktaylor91/torchlens/commit/8810d0bc5186074b38ef361a6412ee20a95c06fc))
+
+Both diagnostics now enumerate every HAS_* capability (previously zero were surfaced, violating the
+  locked compat contract); a lockstep test asserts the surfaced set equals the defined set so new
+  flags cannot be forgotten. Also consolidates the duplicate tensor-tree walkers onto
+  _robustness._iter_tensors (shared-tensor dedupe + cyclic-container handling preserved, tested).
+
+- **compat**: Guard _VF and functorch private API reaches
+  ([`ce2075d`](https://github.com/johnmarktaylor91/torchlens/commit/ce2075d55523cb52d7f6868c1ef46817f28416b0))
+
+- **compat**: Observable torch capability snapshot
+  ([`a68fc37`](https://github.com/johnmarktaylor91/torchlens/commit/a68fc37c0383593d42753c70cce0c088820127ca))
+
+- **compat**: Route fragile private-API probes through capability flags
+  ([`92c4af6`](https://github.com/johnmarktaylor91/torchlens/commit/92c4af6f1bfe2abf2e1e25a27497e9ed1ecdc746))
+
+Move the ctypes PyTypeObject tensor sequence-slot hack into _torch_compat behind
+  HAS_TENSOR_SEQUENCE_SLOT_FIX (feature-detected, degraded path documented + tested); add
+  HAS_DYNAMO_OPTIMIZED_MODULE for torch.compile detection; add backends/tf/_tf_compat.py with
+  HAS_TF_OP_CALLBACKS for the TensorFlow eager op-callback import. Absence-simulation tests prove
+  every degraded path.
+
+- **data-classes**: One FIELD_POLICY table per record class derives all registries
+  ([`c6a8c43`](https://github.com/johnmarktaylor91/torchlens/commit/c6a8c43f8287a77cb26a520c6bcc2bcdfa2dc015))
+
+Every record class (Trace/Op/Layer/Param/Buffer/GradFn/GradFnCall/ModuleCall/ Module) now declares a
+  single declarative field-policy table from which FIELD_ORDER, PORTABLE_STATE_SPEC,
+  FIELD_FORK_POLICY, and DEFAULT_FILL_STATE are generated views — a new field is declared once and
+  every registry follows by construction (the forgot-a-registry class that fired three times this
+  megasprint is now structurally impossible). Parametrized lockstep tests cover all nine classes.
+  Shared .handle resolution and repr-formatting helpers replace the 4x/2x duplicated implementations
+  (output strings unchanged).
+
+- **intervention**: Durable backward fire records incl. AccumulateGrad prehooks
+  ([`8702bbb`](https://github.com/johnmarktaylor91/torchlens/commit/8702bbbd81293039c3a7d0d303b1d059d1cd06b9))
+
+Backward post-hooks and AccumulateGrad prehooks now return fire records; the torch backend attaches
+  them to the live GradFnCall and emitted GradFnFired and materializes
+  GradFnCall.intervention_fire_ref (previously hardcoded None — backward interventions mutated
+  gradients with no audit trail). FireRecord gains backward audit fields (backward_pass_index,
+  call_index, grad_kind, tuple_index, replaced); AccumulateGrad prehook records pair to their
+  post-hook event via a trace-local pending queue; higher-order terminal scanning now inspects
+  post-intervention grad inputs. Tests: single fire, call-index multi-fire, double-backward
+  registration.
+
+- **intervention**: Persist the intervention audit trail through .tlspec
+  ([`1a995a8`](https://github.com/johnmarktaylor91/torchlens/commit/1a995a81290fb4e34255b4700e7d28ee1eb0a072))
+
+Op.interventions moves DROP -> KEEP in portable state; save-time ledger merges spec.records,
+  Op.interventions, and backward fire refs into InterventionSpec.records (now the canonical saved
+  ledger) with callable-safe FireRecord serialization. Additive optional fields; old specs still
+  load (backcompat fixtures green). Round-trip tests for forward live, backward live, and full
+  save/load.
+
+- **intervention**: Resolve grad_input/grad_output/in_backward_pass selectors
+  ([`93e7464`](https://github.com/johnmarktaylor91/torchlens/commit/93e746494539bc144dd00632ca966fa20f7c3009))
+
+The three public backward selector constructors previously never matched in the resolver; implement
+  live-context and materialized-trace resolution (grad-kind matching, active/global backward pass,
+  call-index targeting via TargetSpec metadata). last_run_records now includes backward fire
+  records. Plus fresh-tensor replacement stress tests at nested-module boundary and model output
+  (existing tl_-metadata repair paths held).
+
+- **ledger**: Install_failed/env_unavailable statuses + populated base env_hash
+  ([`d79938d`](https://github.com/johnmarktaylor91/torchlens/commit/d79938dc9853c34ffc237b600d3072ce6dd94a55))
+
+- **menagerie**: Add --input-scale flag for too-large model validation
+  ([`596066a`](https://github.com/johnmarktaylor91/torchlens/commit/596066a28ac3c9f55d3748021f693e44538a51b8))
+
+Add --input-scale FLOAT (default 1.0, range (0, 1]) to the validator. When < 1.0 the built example
+  input is spatially down-scaled before validation: a 4D (N,C,H,W) image scales H,W; higher-rank
+  inputs scale every dim from index 2 onward (the spatial axes), keeping batch/channel. Each scaled
+  dim is rounded and clamped to a minimum of 32, and never grows. Nested tuple/list/dict input trees
+  are scaled element-wise.
+
+The factor is threaded through the worker subprocess (--input-scale) and recorded in the run
+  metadata (validation_run_start log event) and the per-row manifest note (input_scale=...), so
+  reduced-input validations are auditable. The recipe/identity is untouched -- input is excluded
+  from recipe_revision_sha256.
+
+- **menagerie**: Add 121 vision + 3D-perception architecture classics (build wave 3)
+  ([`8ff742b`](https://github.com/johnmarktaylor91/torchlens/commit/8ff742bfb5b2565b8ff2bac2766ee80f91fa629e))
+
+Faithful compact reimplementations of 121 more uncataloged families: style transfer / sketch /
+  colorization / inpainting (StyTr2, WCT, Paint Transformer, RePaint, Palette, SketchFormer,
+  VectorFusion, ...) and a large autonomous-driving / 3D-perception cluster (Lift-Splat-Shoot,
+  BEVDet/4D, PETRv2, StreamPETR, CenterPoint, PointPainting, MonoDETR, OccFormer, SurroundOcc,
+  Sparse4D, FUTR3D, ...). All 121 trace under TorchLens; no dups. 23 skipped (documented: dedups +
+  not-traceable frozen-model loops). Codex audit pipelined.
+
+- **menagerie**: Add 125 protein/RNA/molecular/physics architecture classics (build wave 7)
+  ([`83f3c19`](https://github.com/johnmarktaylor91/torchlens/commit/83f3c19eb907796e4524f63c6bf9277261952d0b))
+
+Faithful compact reimplementations of 125 more uncataloged families: protein structure /design
+  (RoseTTAFold-AA, trRosetta, ProteinBERT, PiFold, ThermoMPNN, ModelAngelo, EvoDiff, FoldFlow,
+  FrameFlow, GearNet), RNA (Enformer, RibonanzaNet, RNAformer, RNA-MSM, RiboDiffusion, MXfold2),
+  molecular ML / retrosynthesis (Chemformer, Junction Tree VAE, MEGAN, G2Retro, MolFormer,
+  MassFormer), and physics/science NNs (Deep Potential MD, Fermionic NN, Hamiltonian NN, Neural
+  Quantum States, FuXi weather). All 125 import + register cleanly; no dups. 19 skipped (documented
+  dedups). Prior audit-flag remediation landed in fa6b7f63.
+
+- **menagerie**: Add 128 molecular/materials/chemistry architecture classics (build wave 8)
+  ([`5588c32`](https://github.com/johnmarktaylor91/torchlens/commit/5588c323edb69d6528f8117cca2e9f0b908c7ff9))
+
+Faithful compact reimplementations of 128 more uncataloged families: equivariant / geometric GNNs
+  and neural force fields (GemNet, eSCN, eSEN, PhysNet, SchNOrb, SO3krates, ViSNet, FAENet,
+  Allegro-likes, DPA-1/2, MACE-adjacent), molecular generation / diffusion (EDM, GeoDiff, GeoLDM,
+  DiGress, GraphAF/DF/NVP, JT-VAE, GCPN, DecompDiff), retrosynthesis (CMPNN, GROVER, Graph2Edits),
+  materials / DFT (DeepH/-2/-E3, DeepDFT, Charge3Net, CrystalFormer, HamGNN), and science operators
+  (UNO neural operator, Stormer/weather, TF-Net turbulence). All import+register cleanly. 15 skipped
+  (documented dedups incl. TorchANI/ANI family, DiffSBDD, PET-MAD, SE3-Transformer).
+
+- **menagerie**: Add 129 genomics/proteomics/single-cell architecture classics (build wave 5)
+  ([`3b58eae`](https://github.com/johnmarktaylor91/torchlens/commit/3b58eaec0de826a45d91e70f1a3def320b5d2fe6))
+
+Faithful compact reimplementations of 129 more uncataloged families across computational biology:
+  protein structure/design (RoseTTAFold2, RFdiffusion-AA, ProtenixFold, IPA, ProteinMPNN-family),
+  single-cell (scGPT, scPoli, cell2location, CellPLM), genomics/CRISPR (DeepCpG, Basenji, Beluga,
+  Xpresso, DeepCRISPR, DeepHF), variant calling (DeepVariant-style, Clair3), Hi-C (DeepHiC,
+  C.Origami), TCR/immuno (DeepTCR, TCR-BERT, MHCflurry), RNA (EternaFold, SPOT-RNA), ... All 129
+  trace under TorchLens; no dups. 9 skipped (documented dedups + HelixRNA non-existent). Includes
+  stable-id assignments for new classics.
+
+- **menagerie**: Add 133 genomics/protein/single-cell architecture classics (build wave 6)
+  ([`681dc8f`](https://github.com/johnmarktaylor91/torchlens/commit/681dc8f879309ae85550379abb05309ee34aa746))
+
+Faithful compact reimplementations of 133 more uncataloged families: DNA/genomics language models
+  (DNABERT, GENA-LM, GeneMamba, Nucleotide-transformer-likes), single-cell (scGLUE, scGNN, scFormer,
+  scArches/trVAE, scVAE, SAUCIE, Tangram), chromatin/Hi-C (HiCARN, HiCNN, EPCOT, Epiphany), protein
+  structure/antibody/docking (AlphaFlow, Chroma, DeepFRI, DeepAb, ABodyBuilder2, DiffAb,
+  DiffDock-PP, dyMEAN, DynamicBind), splicing (MMSplice, Splam, SpliceBERT), ... All 133 import +
+  register cleanly; no dups. 5 skipped (documented dedups + SpaOTsc non-neural). Agent smoke-trace
+  gate + final sweep validate; per-wave full-trace skipped for speed.
+
+- **menagerie**: Add 137 molecular-gen/networking/climate architecture classics (build wave 9)
+  ([`6c250bc`](https://github.com/johnmarktaylor91/torchlens/commit/6c250bc361533176dc7629ad0ad222955fb3960f))
+
+Faithful compact reimplementations of 137 more uncataloged families: molecular generation /
+  retrosynthesis (MolGAN, MoFlow, JT/PS/SD-VAE, MolGPT, MolT5, Molecular Transformer, REINVENT,
+  TargetDiff, Torsional Diffusion, Pocket2Mol, LocalRetro, RXNMapper, Uni-Mol2), networking /
+  systems / finance / security ML (Aurora CC, Deep Packet, Pensieve, DeepDow, FinGAT, VulDeePecker,
+  Devign, RouteNet), and climate / weather / earth-science (ACE, ArchesWeather, AtmoRep, ClimODE,
+  IceNet, Graph WaveNet-AQ, CorrDiff, DYffusion, seismic EQ nets). All import+register cleanly. 7
+  skipped (documented dedups + DeepWeeds stock-ResNet).
+
+- **menagerie**: Add 29 real-source autonomous-driving/3D-detection classics (wave 4)
+  ([`b07ecbd`](https://github.com/johnmarktaylor91/torchlens/commit/b07ecbd688e7a8b9c9d6fab126a86353f95b5feb))
+
+Vendored real repo code + faithful ports (TF1.x-only MV3D) for the AV/3D perception cluster: GUPNet,
+  InstaGraM, LaneAF, LSTR, RESA, LaserNet, M3D-RPN, MonoDETR, MonoDLE, MonoFlex, MonoScene, MV3D,
+  OccNeRF, Occupancy-Flow, PINet, PIXOR, PolyLaneNet, RangeNet++, RADDet, RangeDet, RCBEVDet, RTM3D,
+  SMOKE, TPVFormer, Ultra-Fast-Lane-v2, VoxelNet, YOLOP, AD-MLP, AgentFormer. Each traces before
+  staging; registry loads clean (3454 classics, 0 errors).
+
+- **menagerie**: Add 32 NLP/dialogue architecture classics (build wave 1)
+  ([`baaabff`](https://github.com/johnmarktaylor91/torchlens/commit/baaabffa95d697966614702689998417aa24ac11))
+
+Faithful compact reimplementations of 32 previously-uncataloged NLP/dialogue architecture families
+  (AGIF, Atlas, AuGPT, Capsule-NLU, Co-Interactive Transformer, ConveRT, CR-Walker, CRSLab-KBRD,
+  DAMD, DialoFlow, DialoGPT, DialogWAE, DMN/DMN+, DSI, DSTBERT, DSTC-NBT, DSTQA, EmotionIC,
+  EmpathyEar, EmpDG, FiD, FoCus, ...), each a self-contained nn.Module registered via
+  MENAGERIE_ENTRIES. All 32 trace under TorchLens; sample forward-replay validation 11/11.
+
+Adversarial faithfulness audit + targeted remediation: CR-Walker (sequential tree walk), ConveRT
+  (single-head + shared-encoder weight tying), AGIF (per-step adaptive graph), UniMSE (real T5
+  encoder-decoder + wired contrastive) rebuilt to capture their distinctive mechanisms. 0 stubs, 0
+  wrong; DialogWAE (GMM prior) + EmotionIC (SkipCRF) noted weak for later refinement. Legit skips:
+  MemN2N (already in catalog), CVAE-CO (dedup), DMN+ dup, FLARE (inference-time retrieval loop, no
+  nn.Module).
+
+- **menagerie**: Add 33 real-source classics from harvest wave (vendored/ported real repo code)
+  ([`e9b1173`](https://github.com/johnmarktaylor91/torchlens/commit/e9b11736545e46495041c9660c250635ef680226))
+
+Vendored real repo code (DialoFlow, DCA-Net, ConveRT, UniMSE w/ real T5 fusion-adapter, CR-Walker,
+  KBRD, DAMD, DensePhrases, DialogWAE, DMN/DMN+, EmotionIC, EmpDG, FiD, MemN2N, GALAXY, GL-GIN,
+  HDSA, KEMP, KETOD, KGSF, KV-MemNN, JointBERT, LaRL, LABES, LABAN, BERT-DST) + faithful ports of
+  TF1.x (CVAE/kgCVAE, NBT, DialogueRNN). Each cites # SOURCE: repo@ref, traces under TorchLens,
+  zoo=vendored-pytorch/ported-pytorch. Registry tolerant of MENAGERIE_ENTRIES with callable
+  build/example.
+
+- **menagerie**: Add 43 real-source molecular/chemistry/physics-ML classics (wave 13)
+  ([`9ee38da`](https://github.com/johnmarktaylor91/torchlens/commit/9ee38daa6d41ce6ed3b9c86cddc7d7b1a7a0ccc5))
+
+Vendored real repo code + faithful ports across molecular property/structure and physics ML (rows
+  777-848): Geoformer, GP-MolFormer (multi-file HF vendor), GT-NMR, Hamiltonian-NN, HEPTrkX,
+  HGPflow, HiGNN, iComFormer (fixed an upstream undefined-super() bug, zero arch change), iShiftML,
+  KA-GNN, MassFormer, and more. 1 recipe + 42 modules. Adds E711 to classics vendored-source lint
+  exemption. 5 quarantined: 3 e3nn/equivariant models hit TorchScript has_torch_function_variadic
+  (recurring class w/ DiffDock-PP/EigenFold -> dedicated pass); 2 were GP-MolFormer helper files now
+  placed as underscore siblings. Registry 3890, 0 load errors.
+
+- **menagerie**: Add 44 real-source efficient/quant/NAS/VLM classics (wave 31)
+  ([`7ed13f0`](https://github.com/johnmarktaylor91/torchlens/commit/7ed13f0fc74e9005c2988e812756352b1047714f))
+
+Rows 2073-2144: MogaNet, Moondream, NASViT, PACT, PC-DARTS, Phi-1/1.5, PokeBNN, RandFormer,
+  ReActNet, Real-to-Binary, ScarletNAS, Shuffle-Transformer, and more. 2 recipes + 42 modules. 4
+  quarantined (AGIF/CGNet dups, CRFIQA/DECA shape). 5 split-file/pkg-dependent modules
+  (OFA/OpenELM/NetAdapt/NASViT/TinyTL) pulled to quarantine -> fix on resume. Registry 4883, 0
+  errors. 3 harvest agents lost to parallel-Fable rate-limiting (rows ~2129-2144 gap -> refill
+  later).
+
+- **menagerie**: Add 44 real-source materials/DFT/molecular-GNN classics (wave 14)
+  ([`8014829`](https://github.com/johnmarktaylor91/torchlens/commit/8014829d67646efaf0dbf712712d4ba2606c7efa))
+
+Vendored real repo code + faithful ports across materials/DFT ML and molecular GNNs (rows 849-920):
+  ComENet, DeepDFT, DeepH, DeepH-E3, DeePKS, EANN, and more Hamiltonian/energy-prediction graph
+  nets. 46 modules integrated, 2 held out (SCN/eSCN need an external precomputed Wigner-D .pt asset
+  -> not self-contained). 3 quarantined (DeepH/SE3-Transformer/orb_v2 dups). Registry 3934, 0 load
+  errors.
+
+- **menagerie**: Add 46 real-source speech/comms/compressed-sensing classics (wave 23)
+  ([`7f149b4`](https://github.com/johnmarktaylor91/torchlens/commit/7f149b48f3482905929b653f5345e17c0b7266eb))
+
+Vendored real repo code + faithful ports across speech separation/enhancement, MIMO detection,
+  compressed sensing, MRI recon, and neural vocoding (rows 1497-1568): TF-Locoformer, TISTA,
+  TransCS, Uformer-SE, USRNet, ViterbiNet, AST, VS-Net, WaveNet-SE, Wavesplit, YourTTS, and more. 46
+  modules, 0 quarantined (higher dedup/skip rate as the signal-processing cluster saturates).
+  Registry 4432 classics, 0 load errors.
+
+- **menagerie**: Add 47 real-source motion-forecasting/driving-policy classics (wave 6)
+  ([`5396908`](https://github.com/johnmarktaylor91/torchlens/commit/53969080ed363268091a306caccbf3a6b3df2a24))
+
+First real advance past rows 273-344. Vendored real repo code + faithful ports across the
+  trajectory-prediction + end-to-end-driving canon: AutoBot, CIDNN, CIL, CILRS, ConvSocialPooling,
+  CS-LSTM, CoverNet, DIPP, DenseTNT, Drive-JEPA, DriveDreamer-2, DriveSceneGen, DrivingDiffusion,
+  EigenTrajectory, GameFormer, GATraj, GRIP, GroupNet, InterFuser, LAV-BEVPlanner, LBC, LMDrive,
+  mmTransformer, MID, MagicDrive, MultiPath++, OccWorld, NPSN, PECNet, PlanT, PilotNet, QCNet,
+  Roach, PRECOG, DriveArena, SGNet, SIMPL, SMART, DriveGAN, Social-GAN/LSTM/STGCNN, Sophie, TCP,
+  STGAT, TrafficBots, Trajectron++, TRAPHIC, TUTR, UrbanDriver. Adds E712 to classics
+  vendored-source lint exemption. 3 quarantined (HiVT/HPNet/HPTR module-load KeyError -> later fix).
+  3512 classics, 0 errors.
+
+- **menagerie**: Add 47 real-source protein-design/folding classics (wave 12)
+  ([`7d3c804`](https://github.com/johnmarktaylor91/torchlens/commit/7d3c804edaa56e9dd85f0ebede09589a83c12979))
+
+Vendored real repo code + faithful ports across the protein-design / structure / PPI canon (rows
+  705-776): NanoNet, PepFlow, PepMLM, PiFold, PIPR, PocketMiner, ProDESIGN-LE, ProFOLD/ProSPr,
+  ProNet, ProSST, ProstT5, ProteinBERT, ProteinSGM, and more. 3 recipes + 44 modules. 4 quarantined
+  (PiFold/AGIF/SPOT-RNA/DTNN dups). Registry 3843 classics, 0 load errors.
+
+- **menagerie**: Add 48 real-source protein-structure/folding classics (wave 11)
+  ([`cf04a8e`](https://github.com/johnmarktaylor91/torchlens/commit/cf04a8e82f3e265f34bf709d6b3285eb5edf5378))
+
+Vendored real repo code + faithful ports across the protein-structure / inverse-folding / cryo-EM
+  canon (rows 633-704): AntiFold, Borzoi, ByProt, CandyCrunch, CLEAN, ConPLex, CryoREAD, D-SCRIPT,
+  DAQ, DeepAb, DeepAccNet, DeepDist, DeepDock, DeepEMhancer, DeepFoldRNA, and more. 1 recipe + 47
+  modules. Excluded ModelAngelo (needs external stereo_chemical_props.txt, not self-contained).
+  allowlist-secret pragmas on 2 vendored ESM-IF1 MD5 checksums. 2 quarantined (DiffDock-PP/EigenFold
+  TorchScript has_torch_function_variadic). Registry 3798, 0 errors.
+
+- **menagerie**: Add 49 real-source climate/earth-science/remote-sensing classics (wave 16)
+  ([`1e280ab`](https://github.com/johnmarktaylor91/torchlens/commit/1e280ab16851009d6935cc807ff24043ecf8ed5c))
+
+Vendored real repo code + faithful ports (MXNet/MindSpore/TF -> torch) across climate, weather,
+  remote-sensing, hydrology, and seismology ML (rows 993-1064): ClimODE, KARINA, MAResU-Net,
+  MC-LSTM, MMST-ViT, MorphFormer, msGFM, PaPs, PhaseNO, PM2.5-GNN, RED-PAN, ResUNet-a, RingMo,
+  RootNav, SATLAS, and more. 2 recipes + 47 modules. Targeted F821 noqa for a pre-existing upstream
+  SATLAS unreachable-branch bug. 4 quarantined (3 knowledge-tracing incomplete example-inputs; 1
+  non-leaf-param edge case). Registry 4035 classics, 0 load errors.
+
+- **menagerie**: Add 49 real-source computational-biology/genomics classics (wave 7)
+  ([`189c922`](https://github.com/johnmarktaylor91/torchlens/commit/189c922180dc0b40bd64b12a01c0308a52594305))
+
+Vendored real repo code + faithful ports (Julia/JAX/TF-only sources ported to torch) across the
+  comp-bio canon: Akita, AlphaPeptDeep, CE-Net, CellBender, CellBox, Chiron, cNODE, Cobolt, COMEBin,
+  CONCH, VectorNet, WIMP, Vista, WoVoGen, Y-Net, and more genomics/single-cell/pathology models. 3
+  quarantined (GEARS dup, DeepSignalP unhashable-slice, GraphSite module-load KeyError -> later).
+  Registry 3569 classics, 0 load errors.
+
+- **menagerie**: Add 49 real-source DNA-LM/variant-caller/omics classics (wave 10)
+  ([`cceee4d`](https://github.com/johnmarktaylor91/torchlens/commit/cceee4db718ad4a3c1c815f594ffeb66407b5fa9))
+
+Vendored real repo code + faithful ports across DNA language models, variant callers, and
+  drug-response omics (rows 561-632): JanusDNA, LangCell, MetagenBERT, MethylBERT, MOLI, NanoCaller,
+  NeuSomatic, PaccMann, PARM, PEPPER, PlasFlow, Portal, PrismNet, PROTRAIT, Saluki, LINGER, and
+  more. 3 recipes + 46 modules. Adds E402 to classics vendored-source lint exemption (concatenated
+  HF config+model source files); one targeted F821 noqa for a latent upstream JanusDNA MoE-branch
+  bug (unreached at trace). 1 quarantined (PEPPER dup). Registry 3751 classics, 0 load errors.
+
+- **menagerie**: Add 50 real-source molecular-generation/diffusion classics (wave 15)
+  ([`c716fdf`](https://github.com/johnmarktaylor91/torchlens/commit/c716fdf7bda74689c916e3fa2c97693c334b0da6))
+
+Vendored real repo code + faithful ports across molecular generation, graph diffusion, and
+  retrosynthesis (rows 921-992): Chemformer dual-BART, E-NF, EDM, EEGSDE, ELECTRO, FLAG, GCPN, GDSS,
+  GeoLDM, GIMLET, GrammarVAE, Graph2Edits, and more. 1 recipe + 49 modules. (11 agent direct-writes
+  were routed back through the staging validation gate before integration.) 2 quarantined (AGIF dup;
+  torsional-diffusion TorchScript has_torch_function_variadic -> e3nn class). Registry 3987
+  classics, 0 load errors.
+
+- **menagerie**: Add 52 real-source signal/comms/MRI-reconstruction classics (wave 20)
+  ([`fb7bc67`](https://github.com/johnmarktaylor91/torchlens/commit/fb7bc6777765a2da43f9f893c43368f3c45f0009))
+
+Vendored real repo code + faithful ports across speech enhancement, diffusion restoration, MRI
+  reconstruction, wireless comms, and DOA/frequency estimation (rows 1281-1352): DANSE, DCCRN, DDRM,
+  DAIN, DC-CNN, ChannelNet, Deep Decoder, Deep-MRI-Reconstruction, DeepFreq, DeepIM, DeepJSCC, and
+  more. 52 modules, 0 quarantined. Registry 4267 classics, 0 load errors.
+
+- **menagerie**: Add 54 real-source clinical/medical-ML classics (wave 28)
+  ([`e20c544`](https://github.com/johnmarktaylor91/torchlens/commit/e20c544fef8b78df325a459bb53200a330eafe91))
+
+Vendored real repo code + faithful ports across clinical prediction, EHR sequence models, medical
+  imaging segmentation, drug design, and toxicity (rows 1857-1928): DeepNote-GNN, DeepPatient,
+  DeepSeeNet, DeepTox (rung-4 reimpl from paper spec), DenseVNet, Diff-UNet, DMNC, DoctorAI,
+  DR-CAML, DrugEx-GraphTransformer, HiLAT, and more. 7 recipes + 47 modules, 0 quarantined. Targeted
+  F821 noqa for vendored HiLAT dead code. Registry 4720, 0 load errors.
+
+- **menagerie**: Add 54 real-source graphics/animation/NeRF/motion classics (wave 25)
+  ([`0d77e24`](https://github.com/johnmarktaylor91/torchlens/commit/0d77e247f76762c519da4ad37dafb6b2475a12f4))
+
+Vendored real repo code + faithful ports (TF/JAX -> torch) across neural rendering, avatars,
+  character animation, motion synthesis, and material generation (rows 1641-1712): FTW, GAMMA,
+  GANimator, GaussianAvatar, Go-Explore, HumanNeRF, HyperNeRF, InterGen, KiloNeRF,
+  Learned-Motion-Matching, LMP, MANN, MarioGPT, MaterialGAN, Matformer, MatFuse, and more. 54
+  modules, 0 quarantined. Registry 4561 classics, 0 load errors.
+
+- **menagerie**: Add 54 real-source proteomics/immunology/cryo-EM classics (wave 8)
+  ([`266f650`](https://github.com/johnmarktaylor91/torchlens/commit/266f6500d0e86ffb22d33f7cca4f37a965204a81))
+
+Vendored real repo code + faithful ports across the structural-bio / immunology / mass-spec canon:
+  HeteroTCR, ImRex, InstaNovo, Invariant Point Attention, KimiaNet, DiffSBDD-EGNN, cryoDRGN, MetaNN,
+  MetaPheno, and more (rows 417-488). 2 recipes + 52 modules. 2 quarantined (Pangolin/AGIF dups).
+  Registry 3631 classics, 0 errors.
+
+- **menagerie**: Add 54 real-source speech/comms/compressed-sensing classics (wave 21)
+  ([`97e0276`](https://github.com/johnmarktaylor91/torchlens/commit/97e0276680a210621d4227bcd139962b1930245c))
+
+Vendored real repo code + faithful ports (heavy TF1/Keras/MATLAB -> torch) across speech
+  enhancement/separation, wireless comms, LDPC/precoding unrolling, and compressed sensing (rows
+  1353-1424): GaGNet, GALR, GCRN, GLISTA, GNN-LDPC, CayleyNet, GSP-KalmanNet, HierSpeech++,
+  HTDemucs, HUMUS-Net, IRCNN, ISTA-Net, JSCCformer, and more. 54 modules, 3 quarantined (dups).
+  Registry 4321, 0 errors.
+
+- **menagerie**: Add 56 real-source denoising/speech/radar/MRI classics (wave 22)
+  ([`1acb7e3`](https://github.com/johnmarktaylor91/torchlens/commit/1acb7e34bde59bf5e22285b705829a6dc1db52ec))
+
+Vendored real repo code + faithful ports across acoustic echo cancellation, self-supervised image
+  denoising, speech enhancement, radar HAR, MRI recon, and comms detection (rows 1425-1496):
+  NKF-AEC, Deep-NMF, Noise2Fast, Noise2Noise, Noise2Void, NuWave2, CG-OAMP-Net, OPINE-Net,
+  PercepNet, PET-CGDNN, PHASEN, PointPillars-Radar, PromptMR, RadHAR, and more. 56 modules, 1
+  quarantined (dup). Registry 4379 classics, 0 load errors.
+
+- **menagerie**: Add 56 real-source education/NLP/signal/aerospace classics (wave 17)
+  ([`da4200c`](https://github.com/johnmarktaylor91/torchlens/commit/da4200cebf0e6ecf52e55467c8f151999033d8a7))
+
+Vendored real repo code + faithful ports across knowledge-tracing, question generation, essay
+  grading, PINN/optimization, audio, SAR, and aerospace ML (rows 1065-1136): NeuralCD, NQG, ORCDF,
+  PIE, QG-Net, SEEP, SemQG, SKVMN, T5-GEC, A-ConvNets, DC3 AC-OPF, AdaFortiTran, ADL-MVDR, AeroGPT,
+  BA-Net, and more. 2 recipes + 54 modules, 0 quarantined. Registry 4093 classics, 0 load errors.
+
+- **menagerie**: Add 57 real-source legal-NLP/fraud/entity-matching classics (wave 27)
+  ([`f2d5482`](https://github.com/johnmarktaylor91/torchlens/commit/f2d5482c68a8a56b871d0a77cd1761d24be72870))
+
+Vendored real repo code + faithful ports across legal judgment prediction, legal LMs, fraud/AML
+  graph detection, entity matching, and hierarchical document classification (rows 1785-1856):
+  CaseLink, ContractNLI, D-LADAN, AGIF, Ditto, FraudGCN, FraudGT, FRAUDRE, HARNN, HAT, K-BERT,
+  LADAN, Lawformer, Legal-BERT, LexLM, ML-LJP, MPBFN, NeurJudge, and more. 5 recipes + 52 modules, 2
+  quarantined (AGIF/DCRNN dups). Registry 4672 classics, 0 load errors.
+
+- **menagerie**: Add 57 real-source robotics/RL/signal/physics-informed classics (wave 18)
+  ([`84f8ede`](https://github.com/johnmarktaylor91/torchlens/commit/84f8ede4e67eadc28540acada675decdca5f820c))
+
+Vendored real repo code + faithful ports across MRI reconstruction, imitation/RL, inertial+LiDAR
+  odometry, physical-system GNNs, and signal processing (rows 1137-1208): HQS-Net, IBC, IMUNet,
+  Interaction Networks, DeepKoopman, LcgNet, LDAM, EfficientLO-Net, LSTM-SOC, PGD,
+  Port-Hamiltonian-NN, RAD, Radio-Transformer, RemixIT, and more. 57 modules, 1 quarantined (AGIF
+  dup). Registry 4152, 0 errors.
+
+- **menagerie**: Add 58 real library-model recipe rows (Codex fast-path)
+  ([`2acc4d6`](https://github.com/johnmarktaylor91/torchlens/commit/2acc4d6f6dee9214c07d9a96b4c2d63a0c38fad4))
+
+Codex fast-path over the 263 library-hint candidates: real unmodified-library-model constructor rows
+  (transformers/timm/torchvision/etc.), conservatively deferring any modified/bespoke to Sonnet.
+  Each built via tsv_to_jsonl._record_from_row + build_from_record+trace validated. 0 failures.
+
+- **menagerie**: Add 58 real-source anomaly-detection/time-series/survival classics (wave 26)
+  ([`15e519e`](https://github.com/johnmarktaylor91/torchlens/commit/15e519e96e6b9e3b0028d28dbe5bdf2a88255b7a))
+
+Vendored real repo code + faithful ports across time-series anomaly detection, predictive
+  maintenance, survival analysis, and intrusion detection (rows 1713-1784): AnomalyBERT, BeatGAN,
+  CA-Net, DCdetector, DBN, Deep-Cox-Mixtures, Deep-Weibull, DeepAnT, DeepFed, DeepHit, DeepIDS,
+  DeepLog, DGHL, DTAAD, E-GraphSAGE, EncDec-AD, FEDformer, and more. 58 modules, 1 quarantined
+  (DCdetector hardcoded-device mismatch). Registry 4620 classics, 0 load errors.
+
+- **menagerie**: Add 58 real-source robotics/world-model/spiking/SELD classics (wave 19)
+  ([`3de663c`](https://github.com/johnmarktaylor91/torchlens/commit/3de663c95399d2784294be706d2126b96629bd0b))
+
+Vendored real repo code + faithful ports across power-grid GNNs, physical propagation nets, robot
+  locomotion/world-models, spiking RL, visual odometry, and sound-event localization (rows
+  1209-1280): PowerGraph, PropNet, DRSN, RMA, RWM, S4G, MAE-SHM, PopSAN, SVG, SPTM, TBNN, VINet,
+  VISK, Visual Interaction Networks, WKN, ACCDOA, and more. 58 modules, 0 quarantined. Registry
+  4210, 0 errors.
+
+- **menagerie**: Add 60 real-source efficient-vision classics (wave 32)
+  ([`ebc49cb`](https://github.com/johnmarktaylor91/torchlens/commit/ebc49cb1b3e5f2758e02ef87e9c59898096a4332))
+
+Rows 2145-2216: FastDepth, FastestDet, FCHarDNet, FSA-Net, iTracker, GFM, GFPGAN, GuideNet, HopeNet,
+  IMDN, KeypointNet, KPN, KWT, L2CS-Net, LapSRN, Light-Head-RCNN, Lightweight-OpenPose, Lite-Mono,
+  LitePose, LiteSeg, and more (depth/pose/gaze/ face-restoration/super-res/lightweight-seg). 60
+  modules, 1 quarantined (MGMatting multi-arg forward). Registry 4950, 0 errors.
+
+- **menagerie**: Add 61 real-source model-compression/binary-net/NAS classics (wave 30)
+  ([`d61384b`](https://github.com/johnmarktaylor91/torchlens/commit/d61384b0659d1600dbd7f393440842fdd924e123))
+
+Vendored real repo code + faithful ports (Theano/Lasagne/Lua/MindSpore -> torch) across
+  binarized/quantized networks, neural architecture search, and efficient models (rows 2001-2072):
+  AWQ, BERT-of-Theseus, Bi-Real-Net, BigNAS, BinaryConnect, BinaryNet, BiMLP, BinaryDuo, BK-SDM,
+  BNext, and more. 7 recipes + 54 modules, 0 quarantined. Registry 4840 classics, 0 load errors.
+
+- **menagerie**: Add 62 real-source medical-imaging/drug/clinical classics (wave 29)
+  ([`172b268`](https://github.com/johnmarktaylor91/torchlens/commit/172b268ae61b17d7ee5728f401641f9545c26de2))
+
+Vendored real repo code + faithful ports across medical imaging segmentation, compound-protein
+  interaction, ICD coding, cancer risk, and clinical prediction (rows 1929-2000): MiCaM, MICRON,
+  MINA, MIRACLE, Mirai, Models-Genesis, MolBERT, MONN, MortalityRNN, MSMN, MultiResCNN, NetTCR,
+  OCTA-Net, Oral-3D, Orca, Pafnucy, Pathomic-Fusion, and more. 2 recipes + 60 modules, 1 quarantined
+  (dup). Registry 4780 classics, 0 load errors.
+
+- **menagerie**: Add 62 real-source RL/game-playing-agent classics (wave 24)
+  ([`019c738`](https://github.com/johnmarktaylor91/torchlens/commit/019c738c117e30457d90e6e84e1cfe95cbfc4314))
+
+Vendored real repo code + faithful ports across deep RL, multi-agent RL, model-based RL, and
+  game-playing agents (rows 1569-1640): IMPALA, I2A, ICM, IQL, JueWu, KataGo, Leela Chess Zero,
+  Leela Zero, LEXA, MADDPG, Maia-2, MAPPO, MAVEN, MCTSNet, MuZero, NLE-NetHackNet, NFSP, Neural-MMO,
+  OpenSpiel RCFR, and more. 62 modules, 0 quarantined. Targeted F821 noqa for an unused vendored
+  KataGo debug helper. Registry 4500 classics, 0 load errors.
+
+- **menagerie**: Add 62 real-source single-cell/genomics classics (wave 9)
+  ([`371436c`](https://github.com/johnmarktaylor91/torchlens/commit/371436c872c30e526f375cac10d470e83fe8834f))
+
+Vendored real repo code + faithful ports (heavy MindSpore/Keras/TF1 -> torch) across the
+  single-cell-foundation + genomics-variant-calling canon: Beluga, C.Origami, Cell-BLAST, CellFM,
+  CellLM, CellPLM, CellVQ, Clair3, Clairvoyante, CRISPR-Net, CRISPR-M, CrisprDNT, DeepARG, and more
+  (rows 489-560). 62 modules, 0 quarantined (cleanest wave). Registry 3699 classics, 0 load errors.
+
+- **menagerie**: Add 8 real-source AV/lane/occupancy classics (wave 5 net-new)
+  ([`79828e1`](https://github.com/johnmarktaylor91/torchlens/commit/79828e1b05348d7ae97f21c1e0255d483c3eda37))
+
+Net-new real repo code after dedup against wave 4: LaneAF-DLA34 (DLA-34 + torchvision deform_conv
+  variant, distinct from wave-4 resnet LaneAF), LaneTCA, RESA-ResNet18-real (real-source, distinct
+  from prior reimpl), MonoCon, OccupancyFlow, PersFormer (wave-4 conv2d-tuple bug fixed),
+  PointAugmenting, PolarNet. 19 name-collisions from a start-row re-run were auto-quarantined.
+  Registry 3462 classics, 0 load errors.
+
+- **menagerie**: Add 82 dialogue/NLP architecture classics (build wave 2)
+  ([`f49387d`](https://github.com/johnmarktaylor91/torchlens/commit/f49387d66c3593848fe60659ad8fa1c5b06aae93))
+
+Faithful compact reimplementations of 82 more previously-uncataloged NLP/dialogue architecture
+  families (GALAXY, GENRE, GL-GIN, HDSA, MTTOD, NCI PAWA-decoder, PAML pointer-generator, Pangu-Bot
+  top-query, PAQ/RePAQ, SlotRefine, SOLOIST, SOM-DST, Stack-Propagation, STAR, JointBERT,
+  DialogueRNN, InstructDial, KETOD, ...), each a self-contained nn.Module via MENAGERIE_ENTRIES. All
+  82 trace under TorchLens.
+
+Adversarial faithfulness audit: 0 stubs, 0 wrong; a few weak (GAR/GODEL bare T5 wrappers whose
+  distinctiveness is training-data not architecture; KEMP graph simplified). No dups within-wave, vs
+  catalog, or vs wave 1.
+
+- **menagerie**: Add first real-source models via the established build-bridge
+  ([`e3d8441`](https://github.com/johnmarktaylor91/torchlens/commit/e3d84411eb34e89803bcb1abd2be96bc7e3ecdaf))
+
+CORRECTED approach (real source, not reimplementation). 4 real library-model catalog rows
+  (AuGPT/CDial-GPT=real GPT2LMHeadModel, BERT-Ranker=BertForSequenceClassification, BERT-SLU/
+  TOD-BERT=BertModel -- unmodified archs; constructor_call recipes built via tsv_to_jsonl's
+  _record_from_row, each build_from_record+trace validated). 3 real-code classics: AGIF + Bi-model
+  RNN SLU VENDORED verbatim from real repos, Capsule-NLU FAITHFUL PORT of TF1.x capsule-routing
+  code. All trace under TorchLens. Established pipeline (harvest real constructor -> record ->
+  validate in grouped envs); classics only for vendor/port.
+
+- **menagerie**: Add real library-model recipe rows from harvest (constructor_call rows)
+  ([`144ce78`](https://github.com/johnmarktaylor91/torchlens/commit/144ce788a76d91252b3bfc30107c7b6fdb697119))
+
+Real unmodified-library-model catalog rows harvested via the ladder rung-1 + Codex fast-path
+  (DialoGPT/CoS-E/PersonaGPT/SimpleTOD/SOLOIST/Toolformer/Self-RAG = real GPT2/GPT-family
+  constructors), built via tsv_to_jsonl._record_from_row, each build_from_record+trace validated.
+  Multi-input seq2seq library models (RAG/GODEL/T5-based) route to the classic path instead of a
+  single-tensor recipe.
+
+- **menagerie**: Add ~56 real-source classics from harvest wave 2 (vendored/ported real repo code)
+  ([`f9e93a5`](https://github.com/johnmarktaylor91/torchlens/commit/f9e93a57c293a0697f3b8f4c3de954adc30bef1a))
+
+Vendored real repo code (Memformer, MinTL dual-decoder T5, MoEL, MrRNN, MTTOD, NCI prefix-aware
+  decoder, PLATO-2, PAQ 2D-span head, DeepVecFont-v2 + more dialogue/MoE/memory/RL/generative
+  architectures) + faithful ports of JAX/Flax + TF1.x (LMRL-Gym GPT2-value-RL, NBT, PAML). Each
+  cites # SOURCE: repo@ref, traces under TorchLens, provenance zoo=vendored/ported/reimpl-pytorch.
+  Ladder: Memorizing-Transformer->needs_env(faiss), Pangu-Bot->skip(empty repo). Extend classics
+  lint exemption to E731 (lambda-assignment factory idiom common in vendored source).
+
+- **menagerie**: Append-only verification ledger (ledger.py + verification.db)
+  ([`dc698e2`](https://github.com/johnmarktaylor91/torchlens/commit/dc698e2bf0cc0b4032e6915eafe0934f159b3c30))
+
+- **menagerie**: Audio env unavailable (40 models, lock 9320d3bc)
+  ([`77a6eea`](https://github.com/johnmarktaylor91/torchlens/commit/77a6eeaa2bc45ef3a7b1b8cf4ce00039b303d59c))
+
+- **menagerie**: Carry input_is_real/verification_expectation/quarantine on models table
+  ([`8caedb3`](https://github.com/johnmarktaylor91/torchlens/commit/8caedb35f6cc4a3a1d157ca7cbb47791fcfde244))
+
+- **menagerie**: Cascade-suppression honesty view + golden-chaos gate (B0)
+  ([`241b8ba`](https://github.com/johnmarktaylor91/torchlens/commit/241b8bab9dc342aeb1067f81566383550a488d71))
+
+Add a cascade-aware 'current' view so frozen pre-fix batch-cascade artifact rows do not depress the
+  headline while their real per-model outcome is being re-derived. A SLURM-array partial failure
+  once stamped ~290 models with a blanket failed:cluster_job_failed (job 6014456); the de-cascade
+  fix (8e9dd386) removed every code path that writes that error_class, so any such row is by
+  definition a frozen synthesized artifact.
+
+ledger.py: - CASCADE_ARTIFACT_ERROR_CLASS + CASCADE_ARTIFACT_PREDICATE: the marker plus the full
+  synthesized signature (status=failed, zero duration, started==finished, NULL
+  n_ops/graph_shape_hash) as defense-in-depth so suppression can never reach a genuine failure (a
+  structure-only key would over-match 2123 real rows). - current_verification_real view: ranks rows
+  identically to current_verification but excludes cascade artifacts before selecting the current
+  row, so a model's real prior outcome surfaces (or it falls out entirely). NEVER promotes anything
+  to passed; honest-denominator fix only. - cascade_suppressed_stable_ids() /
+  cascade_suppressed_count(): observability for how many models are currently masked by a cascade
+  artifact.
+
+Golden-chaos regression gate (test_menagerie_cluster_cascade_gate.py): drives a chaotic partial
+  array (pass / honest-fail / crash / corrupt-artifact) end-to-end through the real
+  collect_cluster_results_partial into a real ledger, asserting per-model attribution,
+  corrupt-as-missing, the merge-conflict mid-collect residual edge, and that
+  failed:cluster_job_failed is NEVER written.
+
+Append-only ledger and its no-update/no-delete triggers are untouched.
+
+- **menagerie**: Cluster runner -- giant auto-routing in run-all (--runner auto) + 5 review fixes
+  (ledger-keyed resume, mode=ro worker, fail-loud merge, cluster-down honest rows)
+  ([`c078062`](https://github.com/johnmarktaylor91/torchlens/commit/c07806228fd7a1455892b2a764a53b30a23202b7))
+
+- **menagerie**: Cont-reimpl slice C batch (16 recovered)
+  ([`d2c335b`](https://github.com/johnmarktaylor91/torchlens/commit/d2c335bb467c559a8d827b739f5630c9fbb1bdeb))
+
+- **menagerie**: Cont-reimpl slice C batch (4 recovered)
+  ([`44410fe`](https://github.com/johnmarktaylor91/torchlens/commit/44410fed229049e8394c9cedaed997b08deb4c05))
+
+- **menagerie**: Cont-reimpl slice D batch (31 recovered)
+  ([`ee7ce19`](https://github.com/johnmarktaylor91/torchlens/commit/ee7ce19dbfda6fc8a042858a1609de4babc4bd87))
+
+- **menagerie**: Distinct-architecture count over graph_shape_hash (folds dedup_report)
+  ([`54cd907`](https://github.com/johnmarktaylor91/torchlens/commit/54cd907b80a554223e561a0f06c42d5d33e178f4))
+
+- **menagerie**: Forecast_tab env built+validated (36 models, lock c96c455d)
+  ([`2bea443`](https://github.com/johnmarktaylor91/torchlens/commit/2bea44381023b079c098b6ebb487bdf6cc3e05fd))
+
+- **menagerie**: Forecast_tab proof island built+smoked through the env-manager
+  ([`9bb60f3`](https://github.com/johnmarktaylor91/torchlens/commit/9bb60f32a8ba80452c33e51ae9fb7351810b670e))
+
+- **menagerie**: Forecast_tab re-validated with fixed torchlens (1 recovered)
+  ([`3870682`](https://github.com/johnmarktaylor91/torchlens/commit/3870682eb32192d6bf40a7d697c72be23395fd76))
+
+- **menagerie**: Geom_sci env unavailable (6 models, lock 111e3330)
+  ([`6b9c7e5`](https://github.com/johnmarktaylor91/torchlens/commit/6b9c7e514a70670baf500d8b3a4440f6cb76669e))
+
+- **menagerie**: Gpu_tail env unavailable (4 models, lock 5f9aef8a)
+  ([`9f29433`](https://github.com/johnmarktaylor91/torchlens/commit/9f29433ec1aaa98b7278a21de9dd7105df9876ba))
+
+- **menagerie**: Hard-reimpl slice A batch (10 recovered)
+  ([`eed1095`](https://github.com/johnmarktaylor91/torchlens/commit/eed10958759498565bd2b4c7b2237112504f5aa8))
+
+- **menagerie**: Hard-reimpl slice A batch (10 recovered)
+  ([`d317544`](https://github.com/johnmarktaylor91/torchlens/commit/d317544df29ebc700aa8f96546b728c04c14e27e))
+
+- **menagerie**: Hard-reimpl slice A batch (16 recovered)
+  ([`29dffc1`](https://github.com/johnmarktaylor91/torchlens/commit/29dffc1d0aa739f51e1d3bf997a2502ec7599c4b))
+
+- **menagerie**: Hard-reimpl slice A batch (19 recovered)
+  ([`8841ea3`](https://github.com/johnmarktaylor91/torchlens/commit/8841ea3f124b991e8d7b92c9f80f7d78f73ec10b))
+
+- **menagerie**: Hard-reimpl slice A batch (44 recovered)
+  ([`61d90bf`](https://github.com/johnmarktaylor91/torchlens/commit/61d90bf937a03a13abf25da12e2a159081d7b559))
+
+- **menagerie**: Hard-reimpl slice A batch (47 recovered)
+  ([`a506a18`](https://github.com/johnmarktaylor91/torchlens/commit/a506a18b3721c55d78f8604781ce057c8f0bb7cb))
+
+- **menagerie**: Hard-reimpl slice B batch (12 recovered)
+  ([`05efa39`](https://github.com/johnmarktaylor91/torchlens/commit/05efa3964f5d2b656d226cbc3d5941886357f96d))
+
+- **menagerie**: Hard-reimpl slice B batch (12 recovered)
+  ([`94e26b6`](https://github.com/johnmarktaylor91/torchlens/commit/94e26b6c34dfbf5868b7c28288e820b7c10d9a37))
+
+- **menagerie**: Hard-reimpl slice B batch (12 recovered)
+  ([`85ac9af`](https://github.com/johnmarktaylor91/torchlens/commit/85ac9af50a64953886f52d5bafca30e056d7299b))
+
+- **menagerie**: Hard-reimpl slice B batch (2 recovered)
+  ([`452aa0b`](https://github.com/johnmarktaylor91/torchlens/commit/452aa0b1c12fc040ac8b79dda3a5872e9fa246e3))
+
+- **menagerie**: Hard-reimpl slice B batch (8 recovered)
+  ([`b4a9518`](https://github.com/johnmarktaylor91/torchlens/commit/b4a95184cd3cd8a633a25aba0ed9e5b6ef9a34c6))
+
+- **menagerie**: Hard-reimpl slice B batch (9 recovered)
+  ([`9f25a88`](https://github.com/johnmarktaylor91/torchlens/commit/9f25a889980f861644dbbe5a2d0f0fb8d18e7830))
+
+- **menagerie**: Incremental-skip default + --force-full + targeted --force
+  ([`1af0e11`](https://github.com/johnmarktaylor91/torchlens/commit/1af0e11a21e8395e8141203dc9db41c0bdb27c74))
+
+Sprint bucket D (FINAL_PLAN D4/D5). Validation now skips a model whose CURRENT identity tuple
+  matches a genuine current-identity passed row, and adds two explicit ledger-override flags for the
+  acceptance/timing run and targeted reruns.
+
+Incremental skip (the new default): - ledger.incremental_skip_stable_ids resolves skip-eligibility
+  through the cascade-aware current_verification_real view (B0), so a suppressed batch-cascade
+  artifact never counts as passed. Matches the full identity tuple EXACTLY --
+  recipe_revision_sha256, torchlens_source_hash, env_hash, lock_hash, device_requested, scope,
+  input_scale, torchlens_version -- with the same honesty predicate as verified_count
+  (status=passed, forward_pass=1, metadata_ok=1, non-null n_ops/graph_shape_hash, non-legacy
+  source/lock). - input_scale degraded guard: a NULL stored scale (the 48 degraded rows) or a None
+  current target never matches a concrete scale -> never skipped. -
+  validate_menagerie._incremental_skip_stable_ids computes the per-row identity the SAME way
+  validation records it (per-island env_hash/lock_hash via envs.current_env_hash, resolved route
+  device, _case_input_scale), reusing the existing building blocks rather than forking identity.
+  Skipped models are recorded validated from their real current_verification_real ledger row
+  (cluster_runner.current_real_verification_run_for_stable_id) so render/metadata still process
+  them. - Logs per model: incremental_skip (identity-match+passed) or incremental_validate.
+
+Force overrides: - --force-full: re-validate ALL selected models regardless of the ledger. -
+  --force: re-validate ONLY the selected models (composable with --stable-ids/--family/selection).
+  Both wired through run_all.py and validate_menagerie.py; run_all --force-full also reruns every
+  phase.
+
+Tripwire: a false skip would hide a capture regression, so the match is exact and conservative --
+  changed identity, degraded, non-passed, and cascade-suppressed models are always validated.
+  Documented in menagerie/README.md and docs/menagerie-validation.md.
+
+Gates in tests/test_menagerie_incremental_skip.py (29 tests): (a) match+pass -> skipped; (b) changed
+  source/env/lock/recipe/device/scope/legacy -> not skipped; (c) degraded input_scale -> not
+  skipped; (d) failed/timeout/install_failed/cascade -> not skipped (retried); (e)/(f)
+  force-full/force flag wiring + forwarding; integration of the validator skip seam;
+  cascade-suppressed pass still skip-eligible with the manifest row drawn from the real pass not the
+  cascade.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- **menagerie**: Integrate 13 reimpl A/B-audited models (reimpl-salvage winners)
+  ([`fe7e464`](https://github.com/johnmarktaylor91/torchlens/commit/fe7e4644b35cb51858ac8b9cda5edc6adb9ffbee))
+
+- **menagerie**: Integrate CV10 vendored models
+  ([`9ae3a77`](https://github.com/johnmarktaylor91/torchlens/commit/9ae3a77619be246db62d04c395f7893d1f3a1261))
+
+- **menagerie**: Integrate CV11 vendored models
+  ([`a2cffa2`](https://github.com/johnmarktaylor91/torchlens/commit/a2cffa2d60bd576c4406089061c630c29b9d7920))
+
+- **menagerie**: Integrate CV12 vendored models
+  ([`bbf7b0d`](https://github.com/johnmarktaylor91/torchlens/commit/bbf7b0dc7d876fe90677adf4d4624e776998b09b))
+
+- **menagerie**: Integrate CV13 vendored models
+  ([`a62fc71`](https://github.com/johnmarktaylor91/torchlens/commit/a62fc719241af0bb4b6b9f49da07e9320414a8f7))
+
+- **menagerie**: Integrate CV14 vendored models
+  ([`1240bdb`](https://github.com/johnmarktaylor91/torchlens/commit/1240bdba182f80254c5220545593ad247a84211d))
+
+- **menagerie**: Integrate CV15 vendored models
+  ([`579ee2e`](https://github.com/johnmarktaylor91/torchlens/commit/579ee2ef3fcf5aadd54e6a2103f20c78a86b9866))
+
+- **menagerie**: Integrate CV16/CV17 vendored models (pre-pause)
+  ([`c72ce99`](https://github.com/johnmarktaylor91/torchlens/commit/c72ce9921e250e5a0a3d79781a3062f21d38f3e0))
+
+- **menagerie**: Integrate CV18 vendored models (pre-standby)
+  ([`f303182`](https://github.com/johnmarktaylor91/torchlens/commit/f30318225d71b2a86cf3cab79f40abcc719fddaa))
+
+- **menagerie**: Integrate CV7 vendored models
+  ([`e295abc`](https://github.com/johnmarktaylor91/torchlens/commit/e295abc7e89ea5504335a658fb97c5b22d875e6a))
+
+- **menagerie**: Integrate CV8 vendored models
+  ([`4727bb6`](https://github.com/johnmarktaylor91/torchlens/commit/4727bb64d615219adc58c742f6111b1410a2316f))
+
+- **menagerie**: Integrate CV9 vendored models
+  ([`b986c55`](https://github.com/johnmarktaylor91/torchlens/commit/b986c55ccf2a6869ef3c6dde085ca447ddb41394))
+
+- **menagerie**: Integrate wave (3 audited reimpls + vendored)
+  ([`e4c8139`](https://github.com/johnmarktaylor91/torchlens/commit/e4c81397e94ecf7917b7818f7c527a1df17920f7))
+
+- **menagerie**: Integrate wave (6 audited reimpls + 7 vendored)
+  ([`6fa8a70`](https://github.com/johnmarktaylor91/torchlens/commit/6fa8a7007efa51ea5684124f075e442d9cd3d484))
+
+- **menagerie**: Machine/hardware metadata in verification record + N1 pending surfacing
+  ([`1d45433`](https://github.com/johnmarktaylor91/torchlens/commit/1d45433f3e1a26d06f1684f50f0715a0bd0840c2))
+
+Bucket C: stamp each verification row with a best-effort, cached-per-process machine/hardware
+  fingerprint for cross-runner timing normalization -- CPU model, physical+logical cores, total RAM
+  (GB), GPU model(s)+count (via a throwaway nvidia-smi subprocess, never torch.cuda --
+  fork-after-CUDA hazard), platform string, and torch.get_num_threads() (the per-test timing
+  bottleneck). Eight nullable machine_* columns added to verification_runs with an append-only,
+  backward-compatible migration: old rows read NULL, the append-only UPDATE/DELETE triggers are
+  preserved, and the status-constraint table-rebuild carries the new columns. Machine metadata is
+  METADATA ONLY -- not in the identity tuple, never in the incremental-skip join: a model validated
+  on machine A still skips on machine B unchanged.
+
+N1 (REVIEW_scheduling_fix.md): the run-all summary now surfaces cluster_tasks_pending -- tasks left
+  pending because their SLURM array was still running at the collect deadline (correctly NOT stamped
+  failed, so absent from the manifest). A sidecar records them beside the manifest; write_reports
+  lifts them into validation_summary.json + the markdown with a resume hint; run-all exposes them in
+  the combined report + printed summary. Resume path: a re-run picks them up via incremental-skip
+  (pending != passed -> re-validated; --force-full not needed).
+
+Gates: (a) machine fields populated in a fresh row + real probe cached/best-effort; (b) migration
+  leaves old rows readable (NULL machine fields) + triggers intact on both the ADD-COLUMN and
+  status-rebuild paths; (c) a machine-metadata difference does NOT prevent an incremental skip; (d)
+  cluster_tasks_pending surfaces in the summary when an array is still running at the deadline.
+  Tripwire intact: zero torchlens/ or validation/ files touched; no comparison/replay/result change.
+
+- **menagerie**: Master_catalog.jsonl becomes the non-classics source of truth (+ deferred.jsonl)
+  ([`d141359`](https://github.com/johnmarktaylor91/torchlens/commit/d1413597834cac9f96ecb3119e4292f943ec0a69))
+
+- **menagerie**: Memory-budget-aware validation scheduler
+  ([`12b42db`](https://github.com/johnmarktaylor91/torchlens/commit/12b42db71c4f27223fa75473aae2dc3965d5ccfa))
+
+- **menagerie**: Misc env unavailable (6 models, lock 01c377e4)
+  ([`983e5f3`](https://github.com/johnmarktaylor91/torchlens/commit/983e5f3bc04c607b68b0727bac43f7ce6a04021d))
+
+- **menagerie**: Mmlab_core env built+validated (480 models, lock fe22ecda)
+  ([`a04fc12`](https://github.com/johnmarktaylor91/torchlens/commit/a04fc1255f20ecf38836d72c47677dfe77f7405f))
+
+- **menagerie**: Mmlab_core re-validated with fixed torchlens (70 recovered)
+  ([`2ab59d5`](https://github.com/johnmarktaylor91/torchlens/commit/2ab59d56c6b0274c7616c899be45c371b1486cbc))
+
+- **menagerie**: Mmocr env unavailable (6 models, lock 94556380)
+  ([`06cf72f`](https://github.com/johnmarktaylor91/torchlens/commit/06cf72f776c7bd5ccfa4f20460bc47e1a35de45b))
+
+- **menagerie**: Op-taxonomy classifier for the metadata schema
+  ([`d23b732`](https://github.com/johnmarktaylor91/torchlens/commit/d23b732b9a111f3c2e4b4427dfe7085f8b519147))
+
+- **menagerie**: Opaque stable ids + frozen recipe fingerprint
+  ([`bef113c`](https://github.com/johnmarktaylor91/torchlens/commit/bef113c724ef2fada2cea59bc63ad82f47c986d5))
+
+- **menagerie**: Per-worker memory cap (ported onto memreduce main)
+  ([`c498d6c`](https://github.com/johnmarktaylor91/torchlens/commit/c498d6ce08ffcbdefc070b823664525a72cd0812))
+
+- **menagerie**: Persist per-model tlspecs and bundle artifacts for download
+  ([`f103bd1`](https://github.com/johnmarktaylor91/torchlens/commit/f103bd1a50ecacc4aa6200b805514df1aeb750c8))
+
+Save an audit-level (structure-only, no activation tensors) .tlspec per validated model under
+  tlspecs/, record its relative path + sha256 in the ledger, and populate the previously-stubbed
+  tlspec_path CSV column.
+
+Add menagerie/bundle.py: a deterministic packaging step producing per-type zips (tlspecs, visuals,
+  csv, catalog) plus an optional combined full zip and a MANIFEST.json with per-bundle counts,
+  sizes, and sha256s, so the menagerie is distributable in a download-once format. Wire a final
+  bundle phase into run_all.py.
+
+The tlspec save is side-effect-only and never alters a validation verdict; a save error leaves the
+  path fields empty and the verdict authoritative.
+
+- **menagerie**: Pixi env-manager (assign/lock/build/smoke/run_validate + disk-LRU)
+  ([`af6ada9`](https://github.com/johnmarktaylor91/torchlens/commit/af6ada94bcf757e6fb305c7211c66ad3f16b3025))
+
+- **menagerie**: Prove-tranche wave -- 14 real-source models + search-provenance doc
+  ([`b8f61bd`](https://github.com/johnmarktaylor91/torchlens/commit/b8f61bd022316aec42a6e3b3c30282a0e1d21411))
+
+- **menagerie**: Provenance zoo for self-contained classics (vendored/ported/reimpl vs historical)
+  ([`5f83bda`](https://github.com/johnmarktaylor91/torchlens/commit/5f83bdaa0e69e7ce26ed071388f5f7100671d397))
+
+The classics/ dir now holds historical reimplementations AND vendored real repo code + faithful
+  ports + reimpls-from-description -- 'classics-pytorch' zoo was dishonest for the non-historical
+  ones. Add a per-module MENAGERIE_ZOO override (default classics-pytorch) read by _load_classics;
+  _classics_source_rows uses it and stamps an honest source= note (historical-reimplementation /
+  vendored-real-repo-code / faithful-port-of-real-code /
+  faithful-reimplementation-from-description). is_classics_row is unaffected (name-in-CLASSICS +
+  menagerie.classics. constructor branch is zoo-independent). Stamp AGIF/Bi-model=vendored-pytorch,
+  Capsule-NLU=ported-pytorch. Folder rename deferred to post-launch. 3283 historical classics keep
+  classics-pytorch.
+
+- **menagerie**: Record per-model peak RSS in the ledger
+  ([`03d4ba2`](https://github.com/johnmarktaylor91/torchlens/commit/03d4ba2d38ec4749e0757b40acc46f0162add03a))
+
+- **menagerie**: Recover audio island env -- drop conflicting nemo, espnet/speechbrain/demucs
+  solve+build
+  ([`d7354c1`](https://github.com/johnmarktaylor91/torchlens/commit/d7354c10d28ea6d1b1f7223d9a9b534184501208))
+
+- **menagerie**: Reimpl-as-classic islands (11 architectures, trace-verified)
+  ([`b77a13d`](https://github.com/johnmarktaylor91/torchlens/commit/b77a13d03874700c082f614f45980ed5d17aab7f))
+
+- **menagerie**: Reimpl-as-classic text-conditioned gans (3, trace-verified)
+  ([`7aaef42`](https://github.com/johnmarktaylor91/torchlens/commit/7aaef426590773d57b8a503706b3c8b71b85e95a))
+
+- **menagerie**: Rescue 4 false-quarantined real-source classics (HiVT/HPNet/HPTR/GraphSite)
+  ([`0485946`](https://github.com/johnmarktaylor91/torchlens/commit/04859466648e5d7961ac4634b825cf6ae55c9a1f))
+
+These trajectory-prediction + protein-binding-site models traced fine in the real classics registry
+  but were wrongly quarantined by the integrate validator, which exec'd staged modules without
+  registering them in sys.modules -- so @dataclass / get_type_hints annotation resolution
+  KeyError'd. Fixed the validator; recovered all 4. Registry 3573 classics, 0 load errors.
+
+- **menagerie**: Resid-reimpl slice E batch (121 recovered)
+  ([`27a8843`](https://github.com/johnmarktaylor91/torchlens/commit/27a88434e13f148497b2e18b6d51e593a55b1236))
+
+- **menagerie**: Resid-reimpl slice F batch (54 recovered)
+  ([`3219cc6`](https://github.com/johnmarktaylor91/torchlens/commit/3219cc67f62dc78b948b379a44e7e989fe9bfeef))
+
+- **menagerie**: Resource-routing + explicit per-row device + nvidia-smi VRAM probe (R1)
+  ([`53d872f`](https://github.com/johnmarktaylor91/torchlens/commit/53d872f6927b5bbfb43aefafb5b8b8273e6f0439))
+
+- **menagerie**: Runtime builds input via typed InputBuilder; delete prose input parser
+  ([`8c7692f`](https://github.com/johnmarktaylor91/torchlens/commit/8c7692f3161d843f8205015a8d84134e2df7deef))
+
+- **menagerie**: Scale build wave 1 -- 11 real-source models
+  ([`295b976`](https://github.com/johnmarktaylor91/torchlens/commit/295b976fb10a3e83a9c84eb350a3fa5519cc241a))
+
+- **menagerie**: Scale build wave 2 -- 20 real-source models
+  ([`ed79010`](https://github.com/johnmarktaylor91/torchlens/commit/ed790105c9dc891cb1d4e7ddba51ed616f364257))
+
+- **menagerie**: Scale build wave 3 real-source models
+  ([`9c5d33c`](https://github.com/johnmarktaylor91/torchlens/commit/9c5d33c41f90b5c42a24ad5af3864d763cfcd61a))
+
+- **menagerie**: Snn env built+validated (1 model, lock 29bf7dde)
+  ([`cd3e5b6`](https://github.com/johnmarktaylor91/torchlens/commit/cd3e5b61869564690c2ef380fff50ab6c3ef0e0b))
+
+- **menagerie**: Snn re-validated with fixed torchlens (0 recovered)
+  ([`1716594`](https://github.com/johnmarktaylor91/torchlens/commit/17165947069281297c618aa5a1ad5447bd76eecd))
+
+- **menagerie**: Status --completeness (catalog snapshot + terminal-status audit)
+  ([`ae820a2`](https://github.com/johnmarktaylor91/torchlens/commit/ae820a2475177e5c980b073352704e72140df744))
+
+- **menagerie**: Status funnel command (honest tiers + distinct-arch + verified count)
+  ([`28e77b5`](https://github.com/johnmarktaylor91/torchlens/commit/28e77b510088bc5364141e0635fb73f2d70d907b))
+
+- **menagerie**: Structural_digest.py (shape-aware migration fingerprint + distinctness hash)
+  ([`d02df38`](https://github.com/johnmarktaylor91/torchlens/commit/d02df388bf213b735c6bff2d36bc4dc4c1bee8ef))
+
+- **menagerie**: Sweep_provenance table + fold historical crawl/harvest logs
+  ([`80bcf0e`](https://github.com/johnmarktaylor91/torchlens/commit/80bcf0ea67745c9d5a9a11dbac8474e3e095eb26))
+
+- **menagerie**: Tail-recovery slice A batch (3 recovered)
+  ([`288541f`](https://github.com/johnmarktaylor91/torchlens/commit/288541f9a4ed6962cf5bc9f7c4880c5adc5f667f))
+
+- **menagerie**: Tail-recovery slice A batch (4 recovered)
+  ([`6661b9d`](https://github.com/johnmarktaylor91/torchlens/commit/6661b9d4fe22ed4412478551f5dce5a071f3bd5c))
+
+- **menagerie**: Tail-recovery slice A batch (4 recovered)
+  ([`a447f71`](https://github.com/johnmarktaylor91/torchlens/commit/a447f714dd37ca828942912f29e3af87bedc57cf))
+
+- **menagerie**: Tail-recovery slice A batch (5 recovered)
+  ([`9b901ca`](https://github.com/johnmarktaylor91/torchlens/commit/9b901ca8d9eb75123f3e51fc593e9a6ea3c944d1))
+
+- **menagerie**: Tail-recovery slice A batch (5 recovered)
+  ([`325529f`](https://github.com/johnmarktaylor91/torchlens/commit/325529f640a29a397b880be4932def1aa7b3ef79))
+
+- **menagerie**: Tail-recovery slice A batch (8 recovered)
+  ([`2daefa5`](https://github.com/johnmarktaylor91/torchlens/commit/2daefa52f8181a57c1ce3ccacefa3ad18312d4df))
+
+- **menagerie**: Tail-recovery slice A batch (9 recovered)
+  ([`e350f7a`](https://github.com/johnmarktaylor91/torchlens/commit/e350f7ab9a47619fd8a34d3081d4ee64393f4342))
+
+- **menagerie**: Tail-recovery slice B batch (5 recovered)
+  ([`4449828`](https://github.com/johnmarktaylor91/torchlens/commit/44498287f475c08300f2f3e98cdee02cc45dce71))
+
+- **menagerie**: Tail-recovery slice B batch (7 recovered)
+  ([`952540b`](https://github.com/johnmarktaylor91/torchlens/commit/952540ba22a9f8f8ec7af4185e3d712006623bdd))
+
+- **menagerie**: Tail-recovery slice B batch (8 recovered)
+  ([`ea2e038`](https://github.com/johnmarktaylor91/torchlens/commit/ea2e03804f1ea6facd8aac7b523f8295bdb20dec))
+
+- **menagerie**: Thread memory cap + jobs through env-manager run_validate
+  ([`6140c4f`](https://github.com/johnmarktaylor91/torchlens/commit/6140c4f500132592dec6ed8234774e20a19342a5))
+
+- **menagerie**: Trace-summary exporter for retrace-required metadata columns
+  ([`68f4b5a`](https://github.com/johnmarktaylor91/torchlens/commit/68f4b5aa95ba41797102222aae9f450993fbcf84))
+
+- **menagerie**: Tsv_to_jsonl migration tool
+  ([`30869a1`](https://github.com/johnmarktaylor91/torchlens/commit/30869a1097ea6b7cbdea6827c867227f84af613f))
+
+- **menagerie**: Typed catalog/recipe/input schema
+  ([`f90ef89`](https://github.com/johnmarktaylor91/torchlens/commit/f90ef892a2aaf8af6a0de87c8fdbd75fb9002d24))
+
+- **menagerie**: Validation honesty core -- identity-tuple verified count, dep-skip-not-terminal,
+  signal-based OOM (PLAN_v2 P0-2)
+  ([`1ede069`](https://github.com/johnmarktaylor91/torchlens/commit/1ede069d425d23260b3e4320e30e65f41ee1eaa3))
+
+- **menagerie**: Validation_envs.yml island registry + pixi install
+  ([`6003824`](https://github.com/johnmarktaylor91/torchlens/commit/60038249e14e6b5b1a19b26d8c29b195d8d82f66))
+
+- **menagerie**: Wave-2 pipeline modules -- one-command run-all orchestrator, cluster runner (Phase
+  4), CSV + data-dictionary export
+  ([`73b6b4e`](https://github.com/johnmarktaylor91/torchlens/commit/73b6b4ee9517a120e2e5cc00ed4c0cef0532a04b))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`9e97c0a`](https://github.com/johnmarktaylor91/torchlens/commit/9e97c0aa8053b80d3f3ba8ad674c3a97cbe95e40))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`c430bce`](https://github.com/johnmarktaylor91/torchlens/commit/c430bcebbf5bcaa7c8680946d9fd97497c2f030b))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`fa238ed`](https://github.com/johnmarktaylor91/torchlens/commit/fa238ed19d401782e8261c2266ab377e73e07607))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`0a6ce0d`](https://github.com/johnmarktaylor91/torchlens/commit/0a6ce0dba54e2cd603825fd7115c52a44f878449))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`dce8a28`](https://github.com/johnmarktaylor91/torchlens/commit/dce8a285147833889e69f26f3347c5b99b4492f1))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`0b93bba`](https://github.com/johnmarktaylor91/torchlens/commit/0b93bba397c3722e15ef5a1527235895fc57df51))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`9642f16`](https://github.com/johnmarktaylor91/torchlens/commit/9642f164c9daad41a9d0753fe9481c3055b4381e))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`0311f9a`](https://github.com/johnmarktaylor91/torchlens/commit/0311f9adf8a613ae2af0f6f49f09ffa70d07204b))
+
+- **menagerie**: Wave-a reimpl batch (11 recovered)
+  ([`a50afc3`](https://github.com/johnmarktaylor91/torchlens/commit/a50afc3ce20742c68b4aae5f555175262a9a79cd))
+
+- **menagerie**: Wave-b reimpl batch (84 recovered)
+  ([`fd22824`](https://github.com/johnmarktaylor91/torchlens/commit/fd228241db7a008fffc27074267f66e51c3904bf))
+
+- **menagerie**: Wave-c reimpl batch (83 recovered)
+  ([`3f23f3b`](https://github.com/johnmarktaylor91/torchlens/commit/3f23f3b78927e11e5fde0b3527bd3911525799a5))
+
+- **menagerie**: Wave-d exception fix batch (56 recovered)
+  ([`be9c2ec`](https://github.com/johnmarktaylor91/torchlens/commit/be9c2ec829ffd7c70e36e8cd61006075fa28570a))
+
+- **menagerie**: Write verification-ledger rows from render/validate; n_ops NULL on fail
+  ([`88a61e6`](https://github.com/johnmarktaylor91/torchlens/commit/88a61e6e5996c45de531361522a820f434293940))
+
+- **menagerie**: Yolox_sg env unavailable (10 models, lock 4876b150)
+  ([`b81f46f`](https://github.com/johnmarktaylor91/torchlens/commit/b81f46fb62db285c4eed18575c7b3b54bc956573))
+
+- **postprocess**: Explicit step contracts + debug assertions; explicit lookup collision policy
+  ([`82108cb`](https://github.com/johnmarktaylor91/torchlens/commit/82108cb00c2962b25aac176de3b7ac27c44a8a92))
+
+Each postprocess step declares a PostprocessStepContract (consumes/produces/ mutation mode) with
+  env-gated boundary assertions (TORCHLENS_POSTPROCESS_ASSERTIONS; zero impact when off, exercised
+  once in tests). Lookup alias collisions are now explicit: exact raw/op labels stay unambiguous
+  with prior behavior; colliding alias keys are tracked and raise the ambiguity error when no exact
+  resolution exists, instead of silent first-wins/overwrite (multi-exit #9 class).
+
+- **validation**: Backend-identity invariants on torch (domain + param_source coherence)
+  ([`fc05d94`](https://github.com/johnmarktaylor91/torchlens/commit/fc05d941ef95185b32cadc985e377dce6ac32633))
+
+- **validation**: Backend-neutral accessor structural/domain checks on all backends
+  ([`6833a6c`](https://github.com/johnmarktaylor91/torchlens/commit/6833a6c32803add183cea591b4ba6e1a6a4994b9))
+
+- **validation**: Buffer integrity invariants (static/write/replay-validated, scoped)
+  ([`453d3fe`](https://github.com/johnmarktaylor91/torchlens/commit/453d3fec23f89acf2156c6ec84dba7a15d300392))
+
+- **validation**: Buffer semantic-ownership, backend-neutral topology, pass-count invariants
+  ([`af7a8a2`](https://github.com/johnmarktaylor91/torchlens/commit/af7a8a201ca2510f021446ff3edb5d75721af9e2))
+
+New invariants: a buffer source layer's module stack must be the owning module or an active consumer
+  (the 2026-07-03 BN class, superseding the weaker address-ancestor check); reciprocal parent/child
+  topology checks run on non-torch traces where fields exist; pass-count consistency across
+  multi-pass records. Also splits _check_backward_graph_invariants by concern and
+  _check_conditional_invariants by invariant number (pure restructure).
+
+- **validation**: Edge-use/parent-arg domain+resolution invariant (inverted, scoped)
+  ([`8370c29`](https://github.com/johnmarktaylor91/torchlens/commit/8370c291a154a23e52a744d442f4b66ed9519aae))
+
+- **validation**: Fail loudly on unattributable final outputs; reduction-depth kwarg coverage
+  ([`b5ab59a`](https://github.com/johnmarktaylor91/torchlens/commit/b5ab59ac65de66e260c6a00ad9e635f65f127606))
+
+An output tensor with no traced producer label now raises at capture-output extraction instead of
+  silently skipping (the synthesized-placeholder/capture -gap class), with the three legitimate
+  unlabeled classes — genuine intervention replacements, raw forward-hook outputs, internal_source —
+  preserved via structural evidence, plus a narrow direct-registered-buffer late-log exemption
+  (postprocess logs those with evidence). Reduction-depth lenience now reads conv/matmul KWARG
+  operands and withholds unearned shallow-late lenience; policy direction pinned by unit tests and a
+  multi-threshold sweep (zero decision flips on the golden zoo).
+
+- **validation**: Func_call_id group coherence in plain capture (func_name/container_spec)
+  ([`19fd2f0`](https://github.com/johnmarktaylor91/torchlens/commit/19fd2f003182f937275d74d4ff7be60e3446ed1d))
+
+- **validation**: Gradfn bidirectionality backward pass domain invariants
+  ([`202b16c`](https://github.com/johnmarktaylor91/torchlens/commit/202b16c76c229171f0df296866b41b115d4b8136))
+
+- **validation**: Modulecall boundary call-tree invariant
+  ([`3eac4fe`](https://github.com/johnmarktaylor91/torchlens/commit/3eac4fe4b3b115781a57537575b990ff5899805e))
+
+- **validation**: Param deep cross-reference invariant
+  ([`fccd8e5`](https://github.com/johnmarktaylor91/torchlens/commit/fccd8e51ab7415796135f1dc9c53f115fcc0aa38))
+
+- **validation**: Saved transformed payload metadata invariant
+  ([`8cd6289`](https://github.com/johnmarktaylor91/torchlens/commit/8cd62891ab099861ddbea01bde60c9255f1d646b))
+
+- **validation**: Structured replay-failure diagnostics for menagerie ledger
+  ([`64600be`](https://github.com/johnmarktaylor91/torchlens/commit/64600be8a4fb8c56998a3b800bbddbbb5691dde1))
+
+B1: forward-replay validation returned a bare bool, so on mismatch only repr(False)="False" reached
+  the menagerie manifest. Add an ADD-ONLY diagnostics side-channel: on the first surfaced mismatch
+  the validation core records a ValidationFailure (divergent op label, func, saved-vs-recomputed
+  shapes/dtypes, max abs/rel diff, nan/inf-pattern mismatch, reduction depth, and which check fired)
+  on the live Trace. The menagerie worker lifts it in the pre-cleanup observer and records the real
+  mismatch as the failed:replay error.
+
+Tripwire-safe: the bool return contract and every allclose/tolerance/equality check in core.py are
+  byte-identical; recording is best-effort and never raises or alters a decision. Adds a unit-test
+  suite + regression gate that a wrong replay still FAILS and now carries the actual mismatch, not
+  "False".
+
+- **validation**: Torch replay reports ValidationReplayStatus with per-op decisions
+  ([`da60a76`](https://github.com/johnmarktaylor91/torchlens/commit/da60a76e9f597163b25208cd60a94a51aa665879))
+
+Torch forward validation no longer coerces could-not-verify to PASS: missing saved args, missing
+  parent payloads, skipped registry entries, and perturbation exceptions become reason-coded
+  unverified decisions surfaced via trace.validation_replay_status (validated/unverified/exempted
+  coverage accounting, additive fields on ValidationReplayStatus). Legacy bool callers: completed
+  pass/fail unwrap as before; unverified is falsy through the top-level API. Discrete one_hot
+  indices are perturbed within the valid class domain instead of exempted. Permanent golden decision
+  harness over a fixed model zoo ships in tests/validation_goldens/ (decision diff empty across the
+  migration).
+
+- **validation**: Ulp swamped-add predicate, generic effect probe, domain-aware perturbations
+  ([`b4a3e43`](https://github.com/johnmarktaylor91/torchlens/commit/b4a3e4377c29595b7b3c63d298d31e2daa2f5476))
+
+The removed magnitude-ratio shortcut gets its principled replacement: an additive-op exemption that
+  fires only when every broadcasted rebuilt-parent delta is strictly below the output's
+  representable spacing (nextafter-based, dtype-aware). A generic double-perturbation invariance
+  probe covers cases with no discrete/structural proof. Perturbation candidates become domain-aware
+  (log/pow/relu thresholds, selection ops forced to change the selected output, finite candidates
+  for non-finite parents) so validation tests real influence instead of relying on no-op random
+  candidates.
+
+- **viz**: Add child-condensed flow graph artifact
+  ([`4fb4dfd`](https://github.com/johnmarktaylor91/torchlens/commit/4fb4dfd8f4810e70f79ea362728801a49797e7b3))
+
+- **viz**: Add collapse plan instrumentation
+  ([`a833426`](https://github.com/johnmarktaylor91/torchlens/commit/a833426ba6ffed1dd2f0515ca3f1dc2ca1707e0c))
+
+- **viz**: Add v2 collapse optimizer
+  ([`e747dfa`](https://github.com/johnmarktaylor91/torchlens/commit/e747dfa02ad20256244bc5e74d03b9a8e1a53705))
+
+- **viz**: Default auto collapse to v2
+  ([`9c45ff7`](https://github.com/johnmarktaylor91/torchlens/commit/9c45ff72c4d34be8dbe591e475a0b71694bc4091))
+
+- **viz**: Expose collapse run-fold controls
+  ([`93ba490`](https://github.com/johnmarktaylor91/torchlens/commit/93ba490e42f2f22dde4c13e024976635d81d03a6))
+
+- **viz**: Extend collapse optimizer to rolled mode
+  ([`7febf8b`](https://github.com/johnmarktaylor91/torchlens/commit/7febf8b4bee31a95c09eacb80ae61f5c19c00d9d))
+
+- **viz**: Projected anti-parallel endpoint detection on the render IR
+  ([`bfb30b4`](https://github.com/johnmarktaylor91/torchlens/commit/bfb30b463186a739e2d1725cf8c84a3694461f6c))
+
+projection_reason-driven detection of anti-parallel edge pairs created by fold/segment endpoint
+  projection (direct edges and self-pairs ignored), with an IR-level unit test proving detection
+  requires projected edges.
+
+- **viz**: Public float collapse level
+  ([`7e364f3`](https://github.com/johnmarktaylor91/torchlens/commit/7e364f3399f419b477c1b2a21500c7168cf221d8))
+
+Expose a public float collapse slider over the v2 collapse schedule and add Trace.collapse_schedule
+  metadata. Keep string collapse modes on their existing paths and document the t-slider semantics.
+
+- **viz**: Recalibrate collapse band and fold gates to faithful plan counts
+  ([`3bfe50c`](https://github.com/johnmarktaylor91/torchlens/commit/3bfe50c1aa3302e389abe5dcc10e8aedfcead675))
+
+- **viz**: Reshape v2 objective to coarsest-salient (small-k, salience, two-pass folds)
+  ([`aba0a48`](https://github.com/johnmarktaylor91/torchlens/commit/aba0a48e8c9c686366fc5887bbf4d7fc0eee3bb0))
+
+- **viz**: Rework run-fold eligibility around flow order and shape plateaus
+  ([`30fa5a9`](https://github.com/johnmarktaylor91/torchlens/commit/30fa5a98b3de032919c850e5d51d141005e548bc))
+
+- **viz**: Style projected anti-parallel edges; forward DOT emission via recorded IR
+  ([`4c0239a`](https://github.com/johnmarktaylor91/torchlens/commit/4c0239ad5d474dbba64df13af921d1520f26c690))
+
+Projected anti-parallel pairs render dashed-orange with constraint=false and an explanatory tooltip
+  (explicit artifact marking rather than suppression, preserving folded-boundary dataflow). The
+  forward Graphviz path now records node/edge/subgraph calls into ForwardDotIR and replays them into
+  the real Digraph — the final emission stage is isolated behind data (byte-identical on the render
+  manifest); backward/combined renderers remain legacy.
+
+- **viz**: Thread render context
+  ([`bcb92d6`](https://github.com/johnmarktaylor91/torchlens/commit/bcb92d659a6a8d1903f324be69ca5c4e7e22959f))
+
+### Performance Improvements
+
+- **capture**: Cached producer-policy routing on the hot path
+  ([`3222596`](https://github.com/johnmarktaylor91/torchlens/commit/3222596499b500cbe2e10376ef0ab5dfbf1c2e12))
+
+log_function_output_tensors routes through a precomputed CaptureProducerPolicy attached at capture
+  start instead of per-op string comparisons; producer bodies unchanged this round
+  (golden-identical). Policy is runtime-only (portable-state DROP).
+
+- **capture**: Index buffer storage keys; collapse O(ops x buffers) buffer-write scan
+  ([`64bfeea`](https://github.com/johnmarktaylor91/torchlens/commit/64bfeeaa702e6c8e1fe6294935f70d54b77dfe69))
+
+- **collapse**: Speed up DP frontier merge and expansion
+  ([`1951621`](https://github.com/johnmarktaylor91/torchlens/commit/19516210e7106e8acb0d22b3dae0d6596d326643))
+
+- **imports**: Defer torchvision probe
+  ([`c4f02ee`](https://github.com/johnmarktaylor91/torchlens/commit/c4f02ee941ca51bfcaa373edeafd6a2a498e6482))
+
+- **imports**: Lazy top-level facade
+  ([`0c61461`](https://github.com/johnmarktaylor91/torchlens/commit/0c61461a512e9c1dd18020fa8fb9db06e6bbaf6a))
+
+- **menagerie**: Async cluster dispatch + concurrent local + sacct-verified collect (C1)
+  ([`0585e92`](https://github.com/johnmarktaylor91/torchlens/commit/0585e92cb606ee2b6906fcaaf13dcc7356ca5618))
+
+- **menagerie**: Lpt longest-first admission ordering (W3b)
+  ([`5fb8667`](https://github.com/johnmarktaylor91/torchlens/commit/5fb866754c43e75fcace47293c75c7a0095fb3cb))
+
+- **menagerie**: Single-trace metadata summary + equivalence audit (bucket A)
+  ([`fec342d`](https://github.com/johnmarktaylor91/torchlens/commit/fec342df9fd11674c10a9111f035bdce6b75df24))
+
+Kill the two extra identity-hash re-traces in the metadata phase: trace_summary now derives the full
+  summary row -- including graph_shape_hash and structural_fingerprint_hash -- from ONE trace via
+  the new summarize_trace(), so summarize_model traces 1x instead of 3x. Byte-identical to the old
+  compute_identity_hashes=True path and to the public-entry-point re-traced hashes for deterministic
+  models; for instance-varying graphs (e.g. DGCNN dynamic kNN) it fixes a latent cross-trace
+  inconsistency where the row mixed three different graphs.
+
+Add menagerie/trace_equivalence_audit.py: the reusable field-equivalence gate between the
+  validation-config trace (inference_only=False, mark_layer_depths=False) and the metadata-config
+  trace (inference_only=True). The audit RAN and found that sourcing metadata from the validation
+  trace is NOT a free change for ~20% of the corpus: under no_grad PyTorch uses the fused SDPA
+  kernel (captured as one op) while the grad-kept validation trace decomposes attention, so op
+  counts/hashes/FLOPs diverge for the attention/transformer class. Full observer-sourcing is
+  therefore deferred (would silently mutate published metadata); only the safe 3->1 retrace kill
+  ships now.
+
+Regression gate tests/test_menagerie_trace_equivalence.py pins: 3->1 trace count, hash
+  byte-identity, single-trace self-consistency, CNN equivalence (distance fields only), and
+  attention inference_only-sensitivity.
+
+- **menagerie**: Single-trace validation (drop redundant n_ops/hash trace)
+  ([`01c3611`](https://github.com/johnmarktaylor91/torchlens/commit/01c36116e2c9d31156ab62f75b227e72449aba45))
+
+- **menagerie**: Size-tiered timeouts + capture peak RSS on timeout kill (W3a)
+  ([`741e662`](https://github.com/johnmarktaylor91/torchlens/commit/741e662a47dd413e12cd3eb45727b244908e0b57))
+
+- **menagerie**: Tune validation worker throughput
+  ([`8955fd5`](https://github.com/johnmarktaylor91/torchlens/commit/8955fd536fecaf91d3885bb13c180c0694b952e9))
+
+- **validation**: Make thread pin opt-in
+  ([`68981c8`](https://github.com/johnmarktaylor91/torchlens/commit/68981c864dc7056bd3625f10ad4ebcb39ad255e3))
+
+- **viz**: Cache salience and fast-path no-fold planning
+  ([`312bce0`](https://github.com/johnmarktaylor91/torchlens/commit/312bce0100051d94d127754ee8c89e1558fdcb05))
+
+- **viz**: Enforce max collapse dominance caps
+  ([`02143f6`](https://github.com/johnmarktaylor91/torchlens/commit/02143f60dfbea0d235164fde14715ece31cc0fc2))
+
+- **viz**: Reduce v2 collapse selection latency
+  ([`b9fee67`](https://github.com/johnmarktaylor91/torchlens/commit/b9fee67623db8807232a180510e878e8df979e7a))
+
+### Refactoring
+
+- **backends**: Shared preview-trace finalization helpers
+  ([`2663a54`](https://github.com/johnmarktaylor91/torchlens/commit/2663a54d5120125fb3a92b21e6478db5fed60225))
+
+TF/MLX/Paddle/tinygrad reimplemented near-identical single-pass trace finalization and module
+  build-data loops; extract them into backends/_finalize.py with small hooks for the genuine
+  per-backend deltas (param attachment, dtype/device extras). Behavior-preserving; ~200 net lines
+  removed.
+
+- **bundle**: Relocate Bundle out of intervention/ to torchlens.bundle
+  ([`e957e4f`](https://github.com/johnmarktaylor91/torchlens/commit/e957e4fad92aa66086b800a3a3269677037e5b94))
+
+The multi-trace Bundle god-class moves to its own package home; torchlens.intervention.bundle
+  remains a compatibility shim. Pure motion.
+
+- **capture**: De-torch the shared orchestrator; document the backend author contract
+  ([`fcfe89e`](https://github.com/johnmarktaylor91/torchlens/commit/fcfe89e77e6464fc136335b53840d014bec6c45d))
+
+RNG seed/snapshot/restore, inference context, producer-policy setup, and memory cleanup move behind
+  CaptureBackend hooks so the shared eager orchestrator no longer imports torch at module scope (one
+  local optional import remains in memory measurement); a torch-specific validation branch routes
+  through the resolved spec. backends/AGENTS.md documents the two-tier author contract (standalone
+  backend object vs shared CaptureBackend protocol). Torch behavior byte-identical on the trace
+  goldens and parity gates.
+
+- **capture**: Decompose user_funcs; thread an internal capture config
+  ([`2d7e3d3`](https://github.com/johnmarktaylor91/torchlens/commit/2d7e3d3eca583a8b139ea86cd10345c0a389956a))
+
+user_funcs.py (6.1k lines post-absorption) splits into capture-state, chunked-capture,
+  selector-resolution, and public-impl modules (public functions stay defined in
+  torchlens.user_funcs; wrappers keep monkeypatch-sensitive globals fresh so existing test patching
+  works). An InternalCaptureConfig is constructed at the entry boundary and attached to trace
+  sessions as runtime-only state (scrubbed from portable surfaces); public flat kwargs unchanged.
+
+- **capture**: Unify early-stop behind an internal StopDirective
+  ([`cfee7c3`](https://github.com/johnmarktaylor91/torchlens/commit/cfee7c359b75483b58a3678f91ec02a03b479d4e))
+
+halt= (HaltSignal), raise_on_nan (structured CaptureError), and fastlog on_forward_error now compile
+  into one StopDirective evaluated at the unified producer-spine op boundary and the forward
+  try/except; the cheap disabled fast path stays. Public semantics unchanged per surface (partial
+  Trace via halt, attach/return/raise partial Recording, error types and metadata).
+
+- **data-classes**: Extract trace export mixin
+  ([`65d5f5f`](https://github.com/johnmarktaylor91/torchlens/commit/65d5f5fbc6e23401a09e94b917bd5b6fa72ae42a))
+
+- **data-classes**: Extract trace intervention mixin
+  ([`bb7218f`](https://github.com/johnmarktaylor91/torchlens/commit/bb7218fe280a08eb8e5194837287578dafd4d212))
+
+- **data-classes**: Extract trace stats mixin
+  ([`9980940`](https://github.com/johnmarktaylor91/torchlens/commit/998094007e1b7dd012a9171ed3db200e5042ef19))
+
+- **data-classes**: Extract trace validation mixin
+  ([`f016862`](https://github.com/johnmarktaylor91/torchlens/commit/f01686245fa1a5154eda247b0cc5b3ac3d6b4f7f))
+
+- **data-classes**: Extract trace visualization mixin
+  ([`2432427`](https://github.com/johnmarktaylor91/torchlens/commit/2432427864f6ecf5c1a1368d2f30c3896d471e80))
+
+- **debug**: Split the debug god-file into per-tool modules
+  ([`edb9bde`](https://github.com/johnmarktaylor91/torchlens/commit/edb9bded02d36120d91c645b6cb2621323c7284c))
+
+debug/__init__.py (2,745 lines) becomes a 24-line re-export facade over
+  _common/_cost/_gradients/_graph/_infer_input_shape/_nan/_recompute. Pure motion; public surface
+  unchanged. The eight brittle torch-error-text regexes are centralized in _EXCEPTION_PARSE_PATTERNS
+  with a brittleness note (slated for removal by the infer_input_shape redesign).
+
+- **ir**: Separate event schema from mutable build state; rename buffer module
+  ([`e0178cc`](https://github.com/johnmarktaylor91/torchlens/commit/e0178cca28433089478750b5b61361026ce91a23))
+
+CaptureEvents moves to ir/capture_events.py and TraceBuildState to ir/trace_build_state.py;
+  ir/events.py is schema-only with compatibility shims; ir/buffer.py (which held CaptureEvents,
+  nothing buffer-related) becomes an import shim. Backend imports updated.
+
+- **menagerie**: Catalog reads master_catalog.jsonl + registry (retire TSV source)
+  ([`7702cc0`](https://github.com/johnmarktaylor91/torchlens/commit/7702cc018d2725187bded33f343e8b80ae4edcee))
+
+- **menagerie**: Extract impure runtime.py (deps/device/cache/subprocess)
+  ([`512bf6f`](https://github.com/johnmarktaylor91/torchlens/commit/512bf6f6c575066c93987a3d3f5d5a244e763862))
+
+- **menagerie**: Extract pure recipe.py (row -> model+input)
+  ([`3e3ec41`](https://github.com/johnmarktaylor91/torchlens/commit/3e3ec4184aae34af715750e898147a002668ef7b))
+
+- **menagerie**: Repoint imports to recipe/runtime; keep back-compat re-exports
+  ([`665b253`](https://github.com/johnmarktaylor91/torchlens/commit/665b2531c53f18574fb4437d967d5206c46e0fdb))
+
+- **validation**: Classify metadata invariants by current backend applicability
+  ([`e349f19`](https://github.com/johnmarktaylor91/torchlens/commit/e349f19521fa762a578a1917fd91810d46a47db9))
+
+- **validation**: Per-check backend contract for metadata invariants (mechanism)
+  ([`194570d`](https://github.com/johnmarktaylor91/torchlens/commit/194570d7a048c4c32b7478b39ffc87d8123cfc6b))
+
+- **validation**: Split posthoc_perturb_check into structured decision predicates
+  ([`74318b5`](https://github.com/johnmarktaylor91/torchlens/commit/74318b5dcaab25931019e39d4940391b26186f35))
+
+Named predicates returning PosthocPerturbDecision replace the 190-line cascade; the broad
+  constant-output/all-NaN/all-inf/special-value carve-outs are REMOVED in favor of replay-level
+  probes (stricter, not looser); STRUCTURAL_ARG_POSITIONS gains kwarg aliases.
+
+- **viz**: Decompose rendering.py into region modules behind a thin facade
+  ([`4a042b5`](https://github.com/johnmarktaylor91/torchlens/commit/4a042b5051b3ba73986ec733c0902a2151ad9f60))
+
+Pure-motion split of the 10,275-line renderer along the SCC-verified region boundaries
+  (_render_common / _render_dot / _render_edges / _render_flow / _render_leaf / _render_nodes /
+  _render_entrypoints); rendering.py becomes a 38-line public facade re-exporting the entry points
+  and compatibility names. Tarjan analysis found no multi-region cycle beyond one mutually-recursive
+  label-line pair (kept together); every extraction step held the byte-identity render manifest at
+  zero diff. All modules are now under the 2,500-line ceiling.
+
+- **viz**: Delete mixed-stage collapse crutch
+  ([`f2256e0`](https://github.com/johnmarktaylor91/torchlens/commit/f2256e0580eab0573697cb40cc420f955db8239b))
+
+- **viz**: Delete stem-conv collapse crutch
+  ([`297f13d`](https://github.com/johnmarktaylor91/torchlens/commit/297f13de1dacde1987a3d304732f5a45b6a453ee))
+
+- **viz**: First render-IR slice; collapse planner consumes the IR adapter
+  ([`4de13cd`](https://github.com/johnmarktaylor91/torchlens/commit/4de13cdc19ae1f01379da90697aaaf7eb38b0752))
+
+RenderIR/RenderIRNode + build_render_ir wrap the rendered-node-universe enumeration as an explicit
+  IR boundary; plan_from_v1 now consumes it (name kept as adapter during migration). Byte-identical
+  on the render harness.
+
+- **viz**: Render-ir edge and cluster slices (diagnostic)
+  ([`b2d742b`](https://github.com/johnmarktaylor91/torchlens/commit/b2d742b001cf215e9871c302b83c4b7444deb4ff))
+
+RenderIREdge (source/target units, originals, owner_cluster, occurrence key, projection_reason) and
+  RenderIRCluster join the IR; build_render_ir populates nodes/edges/clusters together; harness
+  gains IR-level assertions. DOT emission still consumes the legacy path (thin-emission is a later
+  slice); byte-identical on the render manifest.
+
+- **viz**: Retire the v1 collapse selection engine
+  ([`9111b2c`](https://github.com/johnmarktaylor91/torchlens/commit/9111b2ccd80bebfee08abe1627a32831de2e5b35))
+
+Remove the v1 greedy selector, engine switch/env override, scoring weights, and lexical crutches
+  plus their pinned tests; the shared analysis/run-fold substrate stays. Public
+  collapse_score/module_collapse_order now report v2-selection diagnostics with the same shape
+  (values differ by design; glossary note pending). Byte-identical on the render harness.
+
+### Testing
+
+- **backends**: Table-driven backend x trace-option honesty gate
+  ([`c9f05ac`](https://github.com/johnmarktaylor91/torchlens/commit/c9f05ac51577f974363e2fcdd71abe2f778c537d))
+
+One parametrized test over every registered backend x every public trace option: each either works
+  per declared capability or raises the typed unsupported error. TF's bespoke option/extra-kwarg
+  rejection is unified onto the central _options.py policies. This permanently prevents the
+  silent-option-degradation class the MLX audit found.
+
+- **capture**: Opaque-in-list output paths follow cert10 distinct BFS-leaf semantics
+  ([`8bad0fd`](https://github.com/johnmarktaylor91/torchlens/commit/8bad0fd23142e8ab3e378fbf6656ea3992a4888a))
+
+- **capture**: Trace-golden harness across all four capture surfaces + perf benchmark
+  ([`3ad04aa`](https://github.com/johnmarktaylor91/torchlens/commit/3ad04aa246a7ecdf0687f397d67e5684c2ca5fcd))
+
+Golden projection harness (MLP, CNN+in-place+buffer, recurrent, multi-output container, intervention
+  trace) comparing exhaustive trace, predicate save=, two-pass layers_to_save, and tl.record;
+  Recording comparison scoped to the event-stream op projection (a to_trace() buffer-materialization
+  seam exists and is deliberately not masked). Plus the capture-overhead benchmark script for the
+  spine-unification perf gate.
+
+- **collapse**: Rebaseline BERT/DistilBERT auto-collapse pins for typed HF output paths
+  ([`3d86362`](https://github.com/johnmarktaylor91/torchlens/commit/3d863628e4373b563cc6866761409a740ab0be69))
+
+Typed per-leaf HF output paths (more faithful capture) legitimately change the auto plan: BERT folds
+  per-layer attention/output submodules (visible 23->29, surfacing the post-attention residual edge
+  and FFN ops the opaque BertLayer boxes hid), DistilBERT surfaces the position_ids buffer input
+  (18->19, same selected modules). Visually reviewed reference-vs-current renders before re-pinning;
+  no rendering defects; within the readable band.
+
+- **collapse**: Rebaseline buffer-mass expectations
+  ([`03f32af`](https://github.com/johnmarktaylor91/torchlens/commit/03f32afe17a1e8c3f0e0424c1bd1e7db6d4405a4))
+
+- **compat**: Capability snapshot tests and torch 2.0 guard proof
+  ([`1db3cc8`](https://github.com/johnmarktaylor91/torchlens/commit/1db3cc80ad9aeb50f4de19a008ba7e3f71cc15d1))
+
+- **contract**: Reconcile field-order documented sets with cert10 field promotions
+  ([`9bdd48b`](https://github.com/johnmarktaylor91/torchlens/commit/9bdd48b19195fdd7fcdab8c0929433d34ef2d905))
+
+- **hashing**: Determinism + dimension-sensitivity tests for graph/raw-event hashes
+  ([`daea91e`](https://github.com/johnmarktaylor91/torchlens/commit/daea91e6fc0fe04a77a245a7b066ccf54a9af705))
+
+- **hygiene**: Route generated outputs to ignored dirs; MLX platform guard; load-immune timing
+  budgets
+  ([`f9fc3b9`](https://github.com/johnmarktaylor91/torchlens/commit/f9fc3b96e7067b51ee6ed0de483afc3086859117))
+
+Test runs no longer dirty the repo: generated artifacts go to ignored tests/generated_outputs/
+  (aesthetic artifacts keep a stable ignored home); the three tracked regenerated artifacts under
+  tests/test_outputs/ are untracked (verified not real goldens). MLX exec-level tests hard-skip on
+  non-Darwin unless TORCHLENS_RUN_UNSTABLE_MLX_TESTS=1 (they segfault the process on this platform).
+  Timing-budget probes scale by TORCHLENS_TIMING_BUDGET_FACTOR and carry the serial marker (real
+  regressions still fail). dry_run no longer triggers its own deprecation warnings; validator
+  internals avoid direct-write warnings. Smoke-runtime finding: the tier is dominated by the 239s
+  aesthetic-report test, not collection.
+
+- **internals**: Make effect-blind tests discriminate real behavior
+  ([`491ca3c`](https://github.com/johnmarktaylor91/torchlens/commit/491ca3cf217961ecd633a5da2bc3e8cd202c58ad))
+
+Cert round 3 testsuite findings: 4 tests asserted mechanics but would pass even if the code under
+  test were a no-op. - test_nested_tuple_independence: replace 'assert found_args or True' tautology
+  with a real torch.stack nested-list model asserting saved_args are independent deep copies
+  (identity + bidirectional mutation-isolation). - test_empty_model try/except-pass: assert the
+  trace succeeds so a real crash fails. - test_display_no_oom: track every Tensor.clone() during
+  str(op) and assert none exceeds the 8x8 preview (#73 slice-then-clone), instead of a too-small
+  fixture. - test_large_graphs: fix skip reason to reference the real run mechanism (no nonexistent
+  --no-skip flag).
+
+- **intervention**: Reset deprecation-warning dedup per test
+  ([`d18b760`](https://github.com/johnmarktaylor91/torchlens/commit/d18b760d0d1309326cbc5892d9fa126fde02ceb2))
+
+test_axis_a_public_verbs_success_paths asserts pytest.warns(DeprecationWarning,
+  match='Trace.replay'), but the process-global _WARNED_DEPRECATIONS dedup in
+  _deprecations.warn_deprecated_alias suppresses the warning if an earlier test (e.g.
+  test_field_lifecycle_matrix) already tripped the same alias -> order-dependent 'DID NOT WARN'
+  failure in the full suite. Add an autouse fixture clearing the dedup set before each test:
+  restores per-test isolation without changing the shipped once-per-process user behavior.
+
+- **menagerie**: Add integrity regression gates
+  ([`8c55786`](https://github.com/johnmarktaylor91/torchlens/commit/8c55786a411e96a9b65cde0629d95c7241aaf9d1))
+
+- **menagerie**: Cover worker memory cap
+  ([`3ca2fd6`](https://github.com/johnmarktaylor91/torchlens/commit/3ca2fd69215720f579a63d7aebc67a7154cb3a16))
+
+- **menagerie**: Env-manager assignment/lock/LRU tests; P2 gates
+  ([`171a438`](https://github.com/johnmarktaylor91/torchlens/commit/171a438b6f02f6f7f946ecd1b6b8c09b68f49474))
+
+- **menagerie**: Give real-worker memory-cap test a machine-safe timeout budget + slow mark
+  ([`cd83cca`](https://github.com/johnmarktaylor91/torchlens/commit/cd83ccac2226b98a0f41055d003df4c8928dac1c))
+
+- **menagerie**: Harden smoke gates
+  ([`759120c`](https://github.com/johnmarktaylor91/torchlens/commit/759120c886ba52b445ed468f74c5870b73a1d1d3))
+
+- **menagerie**: Keep the real-trace A/B identity test hermetic (no CUDA-init leak)
+  ([`ef97062`](https://github.com/johnmarktaylor91/torchlens/commit/ef9706242803b0603430a1d774a446e3d30687e9))
+
+The new TEST-1 A/B test runs a real torchlens trace, which initializes a process-wide CUDA context.
+  That polluted the cross-test global state asserted by
+  test_resource_routing_does_not_initialize_torch_cuda (it checks torch.cuda.is_initialized() is
+  False), causing an order-dependent failure when the A/B test ran first. Forbid CUDA in the A/B
+  test via monkeypatch.setenv( CUDA_VISIBLE_DEVICES, '') -- scoped and auto-restored (unlike a raw
+  os.environ write it does not leak, per the menagerie CUDA-leak lesson). The trace still runs on
+  CPU and proves status+n_ops+graph_shape_hash identical; route_resources still never inits CUDA.
+
+- **menagerie**: Ledger + name-masking-gone tests; phase-1b gates
+  ([`5136fe9`](https://github.com/johnmarktaylor91/torchlens/commit/5136fe932aa4644ea87a4b94abdf67dbadb86394))
+
+- **menagerie**: Module-split parity + import-surface tests
+  ([`8244d04`](https://github.com/johnmarktaylor91/torchlens/commit/8244d0461ee20b2f904727d74274389ca7a7a000))
+
+- **menagerie**: P1 ledger/completeness tests; gates
+  ([`0a4d6e8`](https://github.com/johnmarktaylor91/torchlens/commit/0a4d6e83b42b6f8a12e7965656ba9da39ac596cb))
+
+- **menagerie**: Phase-1a parity check + identity golden tests
+  ([`688cab1`](https://github.com/johnmarktaylor91/torchlens/commit/688cab1ba1ba7e53fdb2a550e4af06b3c35de335))
+
+- **menagerie**: Phase-2d catalog-validate + typed-path parity; gates green
+  ([`5477e66`](https://github.com/johnmarktaylor91/torchlens/commit/5477e66376e0f43588c1ab3e3528dfb8755b4f35))
+
+- **menagerie**: Phase-3b gates; provenance + hardening tests
+  ([`ecb97ea`](https://github.com/johnmarktaylor91/torchlens/commit/ecb97ea36c5cc43311d12be008ef9dff5eef73ab))
+
+- **menagerie**: Sample parity check for typed recipes
+  ([`146190c`](https://github.com/johnmarktaylor91/torchlens/commit/146190cb230d910c7ff9d5623545113f341a97df))
+
+- **menagerie**: Status funnel + distinct + current-revision count tests; phase-3a gates
+  ([`1be18bf`](https://github.com/johnmarktaylor91/torchlens/commit/1be18bf4a6bdadfedf17a816a59e8bc0ffefd638))
+
+- **menagerie**: Structural-digest fidelity + distinctness tests; phase-2b gates
+  ([`2e6b50b`](https://github.com/johnmarktaylor91/torchlens/commit/2e6b50b51d659b03347afff5a5ab13a2e568a536))
+
+- **menagerie**: Update memory-cap worker tests for the drained-pipe Popen path
+  ([`eb47e66`](https://github.com/johnmarktaylor91/torchlens/commit/eb47e66306fc4e1f52c50d81f6da41bcf8a5266e))
+
+The memory-cap worker tests still monkeypatched subprocess.run with a CompletedProcess fake, but
+  validate_with_timeout switched to subprocess.Popen (committed W3a) and now drains stdout/stderr on
+  reader threads (W3a-1 fix). These 11 tests were failing on the pre-fix baseline (fec342df) --
+  stale fakes, not a regression. Replace the fake with a _FakePopen exposing readable stdout/stderr
+  pipes + poll/wait/returncode so they exercise the REAL drained path. The dropped Popen
+  timeout-kwarg assertion no longer applies (the timeout is a manual poll loop, not a Popen kwarg);
+  the command-capture and signal-classification assertions are unchanged.
+
+Not in scope but adjacent to the W3a-1 fix; strengthens its coverage. (The unrelated
+  module_split[298] mmcv ModuleNotFoundError is a missing optional dep, left as-is.)
+
+- **param**: Assert param refs cleared after cleanup (was effect-blind)
+  ([`d80d25a`](https://github.com/johnmarktaylor91/torchlens/commit/d80d25ab4ac235419ac70b0e8dba724058fc3987))
+
+test_param_ref_cleared_after_cleanup (GC-1) asserted _param_ref is not None BEFORE cleanup() but had
+  no post-cleanup assertion -- it passed even if cleanup() were a no-op. Capture the ParamLog
+  objects before cleanup (iterating mh.param_logs rehydrates _param_ref) and assert every captured
+  _param_ref is None after cleanup. Same effect-blind class fixed elsewhere this wave; no-op litmus
+  confirmed (gutted cleanup -> test fails).
+
+- **param**: Assert param refs cleared after cleanup (was effect-blind)
+  ([`caacc91`](https://github.com/johnmarktaylor91/torchlens/commit/caacc912cbf653e49c538eddb010ab6155bf2878))
+
+test_param_ref_cleared_after_cleanup (GC-1) asserted _param_ref is not None BEFORE cleanup() but had
+  no post-cleanup assertion -- it passed even if cleanup() were a no-op. Add the discriminating
+  check that every param_log's _param_ref is None after cleanup, matching the test's own
+  docstring/name. Same effect-blind class fixed elsewhere this wave.
+
+- **validation**: Behavior-parity proof for metadata-invariant dispatch refactor
+  ([`7b6ce16`](https://github.com/johnmarktaylor91/torchlens/commit/7b6ce169366bc88dbd1defb925323cfed075aba6))
+
+- **validation**: Cover menagerie tail fixes
+  ([`1d60efa`](https://github.com/johnmarktaylor91/torchlens/commit/1d60efaa910a143116018c7ce728065eb1181d89))
+
+- **validation**: Dispatch-parity sequences include cert10 additive invariant checks
+  ([`82b50a2`](https://github.com/johnmarktaylor91/torchlens/commit/82b50a26e7f7318cdbcf11f636f44b5da5291acb))
+
+- **validation**: Field_order<->fieldpolicy<->portable-spec completeness contract
+  ([`29830f2`](https://github.com/johnmarktaylor91/torchlens/commit/29830f251388e11eaa0de1f74da1f135f9953b82))
+
+- **validation**: Golden + firing coverage for S1b predicates and invariants
+  ([`dab976e`](https://github.com/johnmarktaylor91/torchlens/commit/dab976eabfc382459eb354b63df734a28ef86922))
+
+- **validation**: Guard perturbation exemptions
+  ([`06c9a68`](https://github.com/johnmarktaylor91/torchlens/commit/06c9a6873a3a083ff5ddc6180db7385dd7192383))
+
+- **validation**: Modernize posthoc-decision, strict-accessor, and placeholder-tripwire assertions
+  to cert10 APIs
+  ([`604c751`](https://github.com/johnmarktaylor91/torchlens/commit/604c7514e98ed4847e48429954ef0757a6052710))
+
+- **validation**: Modernize replay-status assertions to ValidationReplayStatus API
+  ([`b19af43`](https://github.com/johnmarktaylor91/torchlens/commit/b19af436d0236906fbfaea494751138d58c86022))
+
+- **validation**: Phase-b battle-test + drift fix; gates green
+  ([`cf70c2a`](https://github.com/johnmarktaylor91/torchlens/commit/cf70c2a28ef1f0b56581602e97d65c7e186930cc))
+
+- **validation**: Phase-c battle-test + gates
+  ([`6a3a440`](https://github.com/johnmarktaylor91/torchlens/commit/6a3a4406f5c3bd978f5dbf7080c7cd1b9d2dbfb4))
+
+- **validation**: Phase-d battle-test + gates
+  ([`ca0522c`](https://github.com/johnmarktaylor91/torchlens/commit/ca0522c8c4c236e85c04c1b5896924b80aea2523))
+
+- **viz**: Add byte-identity render harness + golden manifest
+  ([`bc9e487`](https://github.com/johnmarktaylor91/torchlens/commit/bc9e4874ff81f644c33f5afd81c3bd8c14d727bd))
+
+Deterministic DOT-source and collapse-plan hash tripwire over four reference models across collapse
+  modes; the render-IR migration gates every slice on a zero diff against this manifest. Baseline
+  updated: the manifest's SHA digests are detect-secrets false positives.
+
+- **viz**: Add collapse plan parity tripwire
+  ([`0a800c9`](https://github.com/johnmarktaylor91/torchlens/commit/0a800c921a785879d1d6673f62ad22b386498c56))
+
+- **viz**: Add rolled-mode collapse optimizer coverage
+  ([`b005cce`](https://github.com/johnmarktaylor91/torchlens/commit/b005cceeb45acb2e90d1235c4631c7f65b107b5d))
+
+- **viz**: Cover flow graph and R2 run folds
+  ([`71a2146`](https://github.com/johnmarktaylor91/torchlens/commit/71a2146fae164183a363fa5ca75c276fe2a15b8b))
+
+- **viz**: Cover max collapse dominance guard
+  ([`28332c0`](https://github.com/johnmarktaylor91/torchlens/commit/28332c00b2c24381f94c1a5854bbe7717fd7987a))
+
+- **viz**: Grad-edge capture patches the caller module post-decomposition
+  ([`552f1d1`](https://github.com/johnmarktaylor91/torchlens/commit/552f1d115cf371e49aad49e50fcfb44b1a40f9cb))
+
+The regression test monkeypatched the rendering facade's re-export of _add_grad_edge; after the
+  module split the caller (_render_edges) binds the name in its own namespace, so the patch never
+  intercepted. Patch the caller's binding (render output itself is unchanged — the byte-identity
+  harness held).
+
+- **viz**: Pin legacy collapse policy cases to v1
+  ([`1f9b7b0`](https://github.com/johnmarktaylor91/torchlens/commit/1f9b7b067bccbf97b8b506af6e4d45e47c41bca7))
+
+- **viz**: Re-baseline collapse string references after approved label fix
+  ([`a32964c`](https://github.com/johnmarktaylor91/torchlens/commit/a32964c7c807eb21efb10c8b38a4252d8989fd1d))
+
+Approved label re-baseline for auto renders: googlenet, inception_v3, mobilenet_v2,
+  mobilenet_v3_large. No tracked string reference files were present; audit artifacts are under
+  .research/collapse-v2/autofix/.
+
+- **viz**: Restore grad mode in collapse optimizer tests
+  ([`cb54006`](https://github.com/johnmarktaylor91/torchlens/commit/cb540065b2dcae08a389b592dbfc772b4b48267c))
+
+
 ## v2.28.0 (2026-06-24)
 
 ### Bug Fixes

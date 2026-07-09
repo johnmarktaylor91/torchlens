@@ -20,7 +20,7 @@ from typing import Any
 import torch as _torch
 from torch import nn as _nn
 
-__version__ = "2.28.0"
+__version__ = "2.29.0"
 
 from . import fastlog
 from .captured_run import ActivationLookup, CapturedRun
