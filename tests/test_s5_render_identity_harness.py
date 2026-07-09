@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 import torch
-import torchvision.models as tvm
 from torch import nn
 
 import torchlens as tl
@@ -22,6 +21,8 @@ from torchlens.visualization.render_ir import (
     build_render_ir,
     projected_antiparallel_endpoint_pairs,
 )
+
+tvm = pytest.importorskip("torchvision.models")
 
 _MANIFEST_PATH = Path(__file__).parent / "fixtures" / "s5_render_golden_manifest.json"
 

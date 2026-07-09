@@ -12,8 +12,6 @@ from typing import Any
 
 import pytest
 import torch
-import torchvision.models as tvm
-import torchvision.models.segmentation as tvs
 
 import torchlens as tl
 import torchlens.visualization.auto_collapse as auto_collapse
@@ -39,6 +37,9 @@ from torchlens.visualization.collapse_plan import (
     plan_from_v1,
 )
 from torchlens.visualization._render_edges import _collapsed_module_should_show_remainder
+
+tvm = pytest.importorskip("torchvision.models")
+tvs = pytest.importorskip("torchvision.models.segmentation")
 
 
 SVG_NODE_RE = re.compile(r'class="node"')

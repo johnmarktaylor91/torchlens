@@ -10,7 +10,6 @@ from types import ModuleType
 
 import pytest
 import torch
-import torchvision.models as tvm
 
 import torchlens as tl
 from torchlens.visualization.auto_collapse import (
@@ -49,6 +48,8 @@ from torchlens.visualization.collapse_plan import (
     count,
     plan_from_v1,
 )
+
+tvm = pytest.importorskip("torchvision.models")
 
 
 class TinyBlock(torch.nn.Module):

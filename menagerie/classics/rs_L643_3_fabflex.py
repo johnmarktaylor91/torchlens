@@ -562,7 +562,7 @@ class MC_E_GCL(nn.Module):
         elif self.coords_agg == "mean":
             agg = unsorted_segment_mean(trans, row, num_segments=coord.size(0))
         else:
-            raise Exception("Wrong coords_agg parameter" % self.coords_agg)
+            raise Exception("Wrong coords_agg parameter: %s" % self.coords_agg)
         coord = coord + agg.clamp(-self.coord_change_maximum, self.coord_change_maximum)
         return coord
 
