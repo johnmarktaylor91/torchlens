@@ -2372,7 +2372,6 @@ def _run_backward_with_capture(
     _state._active_intervention_spec = getattr(trace, "_intervention_spec", None)
     _state._active_hook_plan = [
         *normalize_hooks_from_spec(_state._active_intervention_spec),
-        *getattr(trace, "_initial_hook_plan", ()),
     ]
     pass_index = int(getattr(trace, "num_backward_passes", 0)) + 1
     events = _ensure_backward_event_stream(trace)

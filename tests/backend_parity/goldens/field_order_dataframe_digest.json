@@ -868,7 +868,6 @@
       "_has_direct_writes",
       "_implicit_backward_pass_open",
       "_in_exhaustive_pass",
-      "_initial_hook_plan",
       "_intervention_spec",
       "_keep_outs_in_memory",
       "_last_hook_handle_ids",
@@ -1107,13 +1106,13 @@
     ]
   },
   "sha256_chunks": [
-    "7dfd7092",
-    "9f40970d",
-    "e8b1b6f8",
-    "bed6da31",
-    "b4e77b8d",
-    "f6521a6c",
-    "a4a94be9",
-    "c478ca12"
+    "2c0184b0",
+    "86a7467c",
+    "a000c850",
+    "c7dae22d",
+    "2a860f86",
+    "e51800d0",
+    "1a10a6ab",
+    "4033f8be"
   ]
 }

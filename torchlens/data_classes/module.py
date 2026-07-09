@@ -1284,7 +1284,6 @@ class Module:
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
         "param_memory": FieldPolicy.KEEP,
-        "_direct_param_memory": FieldPolicy.DROP,
         "buffer_layers": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
         "training": FieldPolicy.KEEP,
@@ -1539,7 +1538,6 @@ class Module:
         self.num_params = num_params
         self.num_params_trainable = num_params_trainable
         self.num_params_frozen = num_params_frozen
-        self._direct_param_memory = param_memory
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
         self._buffer_accessor: Any = None  # populated by _build_module_logs
 

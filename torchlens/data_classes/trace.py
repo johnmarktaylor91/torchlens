@@ -1010,7 +1010,6 @@ class Trace(
         "_out_recipe_revision": FieldPolicy.KEEP,
         "_append_sequence_id": FieldPolicy.KEEP,
         "_last_hook_handle_ids": FieldPolicy.DROP,
-        "_initial_hook_plan": FieldPolicy.DROP,
         "_predicate_save_options": FieldPolicy.DROP,
         "_predicate_history_size": FieldPolicy.DROP,
         "_predicate_history": FieldPolicy.DROP,
