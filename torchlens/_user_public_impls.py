@@ -37,6 +37,7 @@ from ._capture_state_helpers import (
 )
 from .backends import BackendName, resolve_backend_spec
 from .data_classes.trace import Trace
+from .errors import TraceNotReproducibleWarning
 from .options import (
     VisualizationOptions,
     merge_visualization_options,
@@ -989,11 +990,14 @@ def _warn_if_validation_trace_not_reproducible(
 
     second_trace: Trace | None = None
     try:
+        # Buffer-source identity is assigned during postprocessing only when the
+        # relevant activations are saved. Match the validation trace's "all"
+        # selection so the structural comparison does not compare two capture modes.
         second_trace = _run_model_and_save_specified_outs(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
-            layers_to_save=None,
+            layers_to_save="all",
             activation_transform=None,
             mark_layer_depths=False,
             detach_saved_activations=False,
@@ -1011,8 +1015,9 @@ def _warn_if_validation_trace_not_reproducible(
         warnings.warn(
             "TorchLens validation detected a stateful/non-reproducible model: "
             "fresh re-trace produced a structurally different graph. The trace "
-            f"may represent a one-time execution{hint_suffix}.",
-            RuntimeWarning,
+            "may represent a one-time execution. Re-run from fresh model state or "
+            f"make the forward path state-independent{hint_suffix}.",
+            TraceNotReproducibleWarning,
             stacklevel=2,
         )
     except Exception as exc:
@@ -1241,13 +1246,14 @@ def _validate_forward_pass_torch(
             random_seed=random_seed,
             save_rng_states=True,
         )
-        _warn_if_validation_trace_not_reproducible(
-            trace,
-            validation_model,
-            reproducibility_input_args,
-            reproducibility_input_kwargs,
-            random_seed,
-        )
+        if _validation_model_copied:
+            _warn_if_validation_trace_not_reproducible(
+                trace,
+                validation_model,
+                reproducibility_input_args,
+                reproducibility_input_kwargs,
+                random_seed,
+            )
         _restore_validation_replay_state(
             validation_model,
             validation_state_dict,

@@ -585,7 +585,9 @@ def _model_for_ground_truth_validation(
     """
 
     try:
-        return copy.deepcopy(model), None
+        copied_model = copy.deepcopy(model)
+        _strip_copied_forward_decorations(copied_model)
+        return copied_model, None
     except Exception:
         model_type = type(model)
         if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
@@ -600,6 +602,13 @@ def _model_for_ground_truth_validation(
         try:
             return model, _ModuleTreePlainAttrSnapshot(model)
         except RuntimeError:
+            warnings.warn(
+                "TorchLens validate_forward_pass could not snapshot non-registered mutable "
+                "state after deepcopy failed; falling back to live model state without "
+                "plain-attribute restoration.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
             return model, None
 
 
