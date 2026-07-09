@@ -510,6 +510,7 @@ class Recorder:
             self._capture_events.module_enter_events.extend(source.module_enter_events)
         if not self._capture_events.module_exit_events:
             self._capture_events.module_exit_events.extend(source.module_exit_events)
+        self._capture_events.pre_hook_events.extend(source.pre_hook_events)
 
     def _mark_halted_pass(self, pass_index: int, halt_exc: HaltSignal) -> None:
         """Persist halt state for the given pass."""
@@ -547,8 +548,13 @@ class Recorder:
             )
         combined_events = CaptureEvents()
         combined_events.extend(self._capture_events.op_events)
+        combined_events.module_prep_events.extend(self._capture_events.module_prep_events)
+        combined_events.module_enter_events.extend(self._capture_events.module_enter_events)
+        combined_events.module_exit_events.extend(self._capture_events.module_exit_events)
+        combined_events.pre_hook_events.extend(self._capture_events.pre_hook_events)
         if failed_events is not self._capture_events:
             combined_events.extend(failed_events.op_events)
+            combined_events.pre_hook_events.extend(failed_events.pre_hook_events)
         self._capture_events = combined_events
         trace.capture_events = combined_events
         trace._capture_events = combined_events
