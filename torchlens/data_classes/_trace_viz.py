@@ -132,6 +132,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False,
         container_max_inline: int = 12,
         show_input_transform_summary: bool = False,
+        show_orphans: bool = False,
     ) -> Any:
         """Render the computational graph for this model log.
 
@@ -142,8 +143,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
         vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
-        container_max_inline, show_input_transform_summary:
+        container_max_inline, show_input_transform_summary, show_orphans:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.draw`.
+            ``show_orphans=True`` renders orphan (island) ops -- captured but unreachable
+            from both inputs and outputs -- as a dashed, greyed cluster of edgeless nodes,
+            instead of omitting them. Orphans must have been retained at capture time
+            (``keep_orphans=True``, the default).
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
             Graphviz renderer.
@@ -229,6 +234,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             show_containers=show_containers,
             container_max_inline=container_max_inline,
             show_input_transform_summary=show_input_transform_summary,
+            show_orphans=show_orphans,
         )
 
     def add_node_overlay(

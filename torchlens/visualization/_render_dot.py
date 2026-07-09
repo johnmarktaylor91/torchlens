@@ -179,6 +179,7 @@ def draw(
     show_containers: ShowContainersLiteral = False,
     container_max_inline: int = 12,
     show_input_transform_summary: bool = False,
+    show_orphans: bool = False,
 ) -> Any:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -714,6 +715,8 @@ def draw(
             head_name=overlay_edge.head_name,
             **overlay_edge.attrs,
         )
+    if show_orphans:
+        _add_orphan_island_nodes(self, dot, vis_mode, theme)
     if show_legend:
         _add_legend_to_graphviz(dot, theme)
     # A code panel is composed side by side (separate render) when the output
@@ -805,6 +808,65 @@ def draw(
     if return_graph:
         return dot
     return final_source
+
+
+def _add_orphan_island_nodes(
+    self: "Trace",
+    dot: graphviz.Digraph,
+    vis_mode: str,
+    theme: Any,
+) -> None:
+    """Render orphan (island) ops as a dashed cluster of disconnected nodes.
+
+    Orphans are ops unreachable from both the model inputs and outputs; they are pruned
+    from the main graph and live only on ``trace.orphans`` (retained when
+    ``keep_orphans=True``, the default). ``draw(show_orphans=True)`` surfaces them as a
+    labelled, dashed cluster of edgeless nodes so a user can SEE the dead-end computation
+    without it polluting the connected graph. This is a prototype rendering: nodes carry the
+    op label, function, and tensor shape, and are intentionally styled distinctly (dashed,
+    greyed) to read as "captured but unreachable".
+
+    Parameters
+    ----------
+    self:
+        Trace whose ``_orphan_logs`` are rendered.
+    dot:
+        Graphviz graph receiving the orphan cluster.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` (orphans render identically -- they are raw ops with
+        no layer aggregation, having been pruned before labelling).
+    theme:
+        Active visualization theme (currently unused; reserved for themed orphan styling).
+    """
+    orphan_logs = getattr(self, "_orphan_logs", ())
+    if not orphan_logs:
+        return
+
+    with dot.subgraph(name="cluster_orphans") as orphan_cluster:
+        orphan_cluster.attr(
+            label="orphans (unreachable from inputs & outputs)",
+            style="dashed",
+            color="gray70",
+            fontcolor="gray50",
+            fontsize="10",
+        )
+        for op in orphan_logs:
+            base_label = str(getattr(op, "label", "") or getattr(op, "_label_raw", "")).split(
+                ":", 1
+            )[0]
+            if not base_label:
+                continue
+            shape = getattr(op, "tensor_shape", None)
+            shape_text = f"\n{tuple(shape)}" if shape is not None else ""
+            orphan_cluster.node(
+                f"orphan__{base_label}",
+                label=f"{base_label}{shape_text}",
+                shape="box",
+                style="dashed,filled",
+                color="gray60",
+                fillcolor="gray95",
+                fontcolor="gray40",
+            )
 
 
 def _replay_forward_dot_calls(dot: graphviz.Digraph, calls: Sequence[ForwardDotCall]) -> None:
