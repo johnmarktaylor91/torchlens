@@ -475,6 +475,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
         "module_meta",
         "orphan_payload",
         "out",
+        "pre_hook_input",
         "rng_state",
         "transformed_grad",
         "transformed_out",
