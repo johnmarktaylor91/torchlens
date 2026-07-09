@@ -12,6 +12,8 @@ from __future__ import annotations
 import functools as _functools
 import importlib as _importlib
 import inspect as _inspect
+import sys as _sys
+import types as _types
 from collections.abc import Callable as _Callable, Iterable as _Iterable, Mapping as _Mapping
 from pathlib import Path as _Path
 import warnings as _warnings
@@ -1041,6 +1043,33 @@ def bundle(*args: Any, **kwargs: Any) -> Bundle:
     """
 
     return _resolve_top_level("Bundle")(*args, **kwargs)
+
+
+class _TorchLensModule(_types.ModuleType):
+    """Protect top-level callables whose names collide with submodules."""
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Keep the public ``bundle`` constructor after its package is imported.
+
+        Parameters
+        ----------
+        name:
+            Attribute name being assigned by Python's import machinery or a caller.
+        value:
+            Value being assigned.
+        """
+
+        if (
+            name == "bundle"
+            and isinstance(value, _types.ModuleType)
+            and value.__name__ == "torchlens.bundle"
+            and callable(self.__dict__.get(name))
+        ):
+            return
+        super().__setattr__(name, value)
+
+
+_sys.modules[__name__].__class__ = _TorchLensModule
 
 
 def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
