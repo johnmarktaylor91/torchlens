@@ -3,6 +3,7 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
 import torch
 
 from torchlens import trace as trace_fn
@@ -46,6 +47,7 @@ finally:
 
 
 def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
+    pytest.importorskip("dagua")
     model = example_models.AestheticFrozenMix().eval()
     log = trace_fn(model, torch.rand(1, 8), layers_to_save=None)
     try:
@@ -60,6 +62,7 @@ def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
 
 
 def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
+    pytest.importorskip("dagua")
     model = example_models.ResidualBlockModel().eval()
     log = trace_fn(model, torch.rand(1, 16, 16, 16), layers_to_save=None)
     out = tmp_path / "residual.svg"
@@ -80,6 +83,7 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
 
 
 def test_render_audit_exposes_unused_fields() -> None:
+    pytest.importorskip("dagua")
     model = example_models.SimpleFF().eval()
     log = trace_fn(model, torch.rand(5, 5), layers_to_save=None)
     try:

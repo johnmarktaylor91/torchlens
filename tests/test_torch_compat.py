@@ -21,6 +21,15 @@ import torch
 from torchlens.utils import _torch_compat as tc
 from torchlens.utils.rng import log_current_autocast_state
 
+# The functorch transform-level API (torch._C._functorch.maybe_current_level) is a
+# torch-2.4+ addition, genuinely absent on the supported 2.1-2.3 range. Probe torch
+# directly (independent of torchlens' own capability flag) so the capability expectations
+# below stay correct across the whole supported torch matrix.
+_HAS_FUNCTORCH_LEVEL_API = (
+    getattr(getattr(getattr(torch, "_C", None), "_functorch", None), "maybe_current_level", None)
+    is not None
+)
+
 pytestmark = pytest.mark.smoke
 
 
@@ -252,7 +261,9 @@ def test_private_torch_capability_flags_present_on_supported_range() -> None:
     }
 
     assert required_present <= set(snapshot)
-    missing = sorted(name for name in required_present if not snapshot[name])
+    # HAS_FUNCTORCH_LEVEL_API is torch-2.4+ only; do not require its value on 2.1-2.3.
+    version_gated = set() if _HAS_FUNCTORCH_LEVEL_API else {"HAS_FUNCTORCH_LEVEL_API"}
+    missing = sorted(name for name in required_present - version_gated if not snapshot[name])
     assert missing == []
 
 
@@ -279,7 +290,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TORCH_VF": True,
         "HAS_TORCH_FUNC": True,
         "HAS_FUNCTORCH_APIS": True,
-        "HAS_FUNCTORCH_LEVEL_API": True,
+        "HAS_FUNCTORCH_LEVEL_API": _HAS_FUNCTORCH_LEVEL_API,
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API": True,
         "HAS_JIT_BUILTIN_TABLE": True,
         "HAS_DEVICE_CONTEXT_DISPATCH": True,

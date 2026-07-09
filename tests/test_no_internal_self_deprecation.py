@@ -62,6 +62,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
@@ -248,6 +249,7 @@ def test_dagua_render_audit_no_internal_self_deprecation() -> None:
     ``conditional_{then,elif,else}_entry_edges`` properties rather than
     accessing them and triggering their own deprecation warning.
     """
+    pytest.importorskip("dagua")
 
     model = example_models.SimpleFF().eval()
     log = tl.trace(model, torch.rand(5, 5), capture=CaptureOptions(layers_to_save=None))

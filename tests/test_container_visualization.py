@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
@@ -227,6 +228,7 @@ def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> Non
 
 def test_dagua_graph_carries_container_semantic_attrs() -> None:
     """Dagua bridge carries portable semantic container metadata."""
+    pytest.importorskip("dagua")
 
     trace = _trace(DictOutputModel())
     graph = dagua.trace_to_dagua_graph(trace)
