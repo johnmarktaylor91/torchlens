@@ -227,6 +227,12 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   at model-prep time. Ordering with user hooks depends on registration
   order; in particular, user pre-hooks that mutate inputs are seen by
   TorchLens as the new mutated input, not the pre-hook input.
+- **Input-routed interventions on in-place operations**: `splice_module(...,
+  input="in")` snapshots semantic inputs for recognized in-place calls, but raw
+  callable hooks that read `ctx.args` still receive live references. `out=`
+  aliasing (for example, `torch.add(a, b, out=a)`) is not pre-snapshotted and
+  may expose post-mutation inputs; TorchLens emits a warning when it detects
+  that case at hook fire time.
 - **Pre-bound local `from torch import ...` aliases**: TorchLens patches
   many module-level torch aliases when wrappers are installed, but it cannot
   rewrite arbitrary closure or local variables that captured raw torch

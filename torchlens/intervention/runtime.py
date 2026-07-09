@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import time
+import warnings
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
@@ -590,8 +591,16 @@ def _hook_call_inputs_for_site(
     if not _helper_routes_inputs(entry.helper_spec):
         return call_args, dict(call_kwargs or {})
     if not getattr(site, "_tl_module_boundary", False):
-        if bool(getattr(site, "is_inplace", False)) and call_input_snapshots is not None:
+        if bool(getattr(site, "_tl_input_snapshot", False)) and call_input_snapshots is not None:
             return call_input_snapshots
+        if bool(getattr(site, "is_inplace", False)):
+            warnings.warn(
+                "An input-routed intervention fired on an in-place operation without a "
+                "pre-mutation input snapshot; the intervention may be seeing post-mutation "
+                "inputs. This can occur with out= aliasing or a conservative pre-gate miss.",
+                UserWarning,
+                stacklevel=3,
+            )
         return call_args, dict(call_kwargs or {})
     return call_args, dict(call_kwargs or {})
 
@@ -655,9 +664,9 @@ def _is_inplace_style_func_name(func_name: str) -> bool:
     """
 
     return (
-        func_name.endswith("_")
+        (func_name.endswith("_") and not func_name.startswith("__"))
         or func_name.startswith("__i")
-        or func_name in {"__setitem__", "__delitem__", "zero_"}
+        or func_name in {"__setitem__", "__delitem__"}
     )
 
 
@@ -706,7 +715,7 @@ def _has_matching_input_routed_intervention(
         return False
     if getattr(decision, "direction", "forward") not in {"forward", "both"}:
         return False
-    return live_selector_matches_site(selector, site)
+    return _selector_may_match_provisional_site(selector, site)
 
 
 def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
@@ -731,7 +740,66 @@ def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
         return False
     if not _helper_routes_inputs(entry.helper_spec):
         return False
-    return live_selector_matches_site(entry.site_target, site)
+    return _selector_may_match_provisional_site(entry.site_target, site)
+
+
+def _selector_may_match_provisional_site(selector: Any, site: Any) -> bool:
+    """Return a conservative selector result for a pre-execution site.
+
+    The provisional site intentionally lacks output-dependent metadata.  A
+    failed predicate or a selector that depends on unavailable raw-label data
+    therefore means "may match", so input snapshots are never skipped on a
+    false negative.
+
+    Parameters
+    ----------
+    selector:
+        Selector-like target to evaluate.
+    site:
+        Provisional pre-execution live site.
+
+    Returns
+    -------
+    bool
+        Whether the selector may match once the operation has executed.
+    """
+
+    try:
+        matched = live_selector_matches_site(selector, site)
+    except Exception:
+        return True
+    if matched:
+        return True
+    return not _selector_uses_only_provisional_fields(selector)
+
+
+def _selector_uses_only_provisional_fields(selector: Any) -> bool:
+    """Return whether a selector can be faithfully evaluated before execution.
+
+    Parameters
+    ----------
+    selector:
+        Selector-like target to inspect.
+
+    Returns
+    -------
+    bool
+        Whether a false pre-execution match result is definitive.
+    """
+
+    try:
+        normalized = getattr(selector, "selector_kind", None)
+        if normalized in {"func", "module", "in_module"}:
+            return True
+        if normalized in {"and", "or"}:
+            return all(
+                _selector_uses_only_provisional_fields(child) for child in selector.selectors
+            )
+        if normalized == "not":
+            return _selector_uses_only_provisional_fields(selector.selector)
+    except Exception:
+        return False
+    return False
 
 
 def _helper_routes_inputs(helper: Any | None) -> bool:
@@ -772,7 +840,10 @@ def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> 
         Minimal live-site proxy for pre-execution selector matching.
     """
 
+    from ..backends.torch.ops import _snapshot_exhaustive_module_stack
+
     layer_type = _normalize_func_name(func_name)
+    modules = tuple(_snapshot_exhaustive_module_stack(trace))
     raw_index = int(getattr(trace, "_layer_counter", 0)) + 1
     type_index = int(getattr(trace, "_raw_layer_type_counter", {}).get(layer_type, 0)) + 1
     raw_label = f"{layer_type}_{type_index}_{raw_index}_raw"
@@ -785,8 +856,8 @@ def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> 
         func_name=func_name,
         func_call_id=func_call_id,
         container_path=(),
-        module=None,
-        modules=(),
+        module=modules[-1] if modules else None,
+        modules=modules,
         output_of_module_calls=(),
         output_of_modules=(),
         _tl_module_boundary=False,
@@ -795,6 +866,7 @@ def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> 
         transform_chain=(),
         transform_config={},
         is_inplace=True,
+        _tl_input_snapshot=False,
         call_index=1,
         lookup_keys=[],
     )

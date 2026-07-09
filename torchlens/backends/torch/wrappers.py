@@ -953,6 +953,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])
+        record_is_inplace = get_tensor_label(out_orig) is not None
         # True in-place ops (add_, mul_, etc.) modify the tensor and return self.
         # No-op functions (to(same_dtype), contiguous() on contiguous tensor)
         # also return self but don't modify anything.
@@ -987,6 +988,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             is_bottom_level_func,
             func_call_id,
             call_input_snapshots,
+            record_is_inplace,
         )
 
         # Log all output tensors (excluding Parameters, which are source tensors).
