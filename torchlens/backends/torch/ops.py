@@ -1508,6 +1508,8 @@ def apply_live_hooks_to_outputs(
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
     func_call_id: int,
+    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
+    record_is_inplace: bool = False,
 ) -> Any:
     """Apply live hooks to function outputs before output logging.
 
@@ -1531,6 +1533,14 @@ def apply_live_hooks_to_outputs(
         Whether the wrapper call is a bottom-level operation.
     func_call_id
         Function-call id allocated before calling ``func``.
+    call_input_snapshots
+        Optional pre-execution call-input snapshots for matching in-place
+        input-routed interventions. Raw callable hooks that read ``ctx.args``
+        still receive live references; ``out=`` aliasing is also not covered by
+        this snapshot pre-gate.
+    record_is_inplace
+        Whether record-level in-place detection identified this output as an
+        alias of an existing traced tensor.
 
     Returns
     -------
@@ -1559,6 +1569,8 @@ def apply_live_hooks_to_outputs(
             out_orig=out_orig,
             is_bottom_level_func=is_bottom_level_func,
             func_call_id=func_call_id,
+            call_input_snapshots=call_input_snapshots,
+            record_is_inplace=record_is_inplace,
         )
 
     from ...intervention.runtime import _apply_live_hooks
@@ -1586,6 +1598,8 @@ def apply_live_hooks_to_outputs(
         site_fields["pass_index"] = 1
         site_fields["step_index"] = None
         site_fields["container_path"] = container_path
+        site_fields["is_inplace"] = record_is_inplace
+        site_fields["_tl_input_snapshot"] = bool(call_input_snapshots is not None)
         site = make_live_site_proxy(
             _layer_label_raw=raw_label,
             func_name=func_name,
@@ -1604,6 +1618,7 @@ def apply_live_hooks_to_outputs(
                 container_path=container_path,
                 call_args=args,
                 call_kwargs=kwargs,
+                call_input_snapshots=call_input_snapshots,
             )
             all_fire_results.extend(fire_results)
         if predicate_intervene_active:
@@ -1619,6 +1634,7 @@ def apply_live_hooks_to_outputs(
                 container_path=container_path,
                 args=args,
                 kwargs=kwargs,
+                call_input_snapshots=call_input_snapshots,
             )
             all_fire_results.extend(fire_results)
         fire_results = tuple(all_fire_results)
@@ -1643,6 +1659,8 @@ def _apply_predicate_mode_interventions_to_outputs(
     out_orig: Any,
     is_bottom_level_func: bool,
     func_call_id: int,
+    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
+    record_is_inplace: bool = False,
 ) -> Any:
     """Apply predicate interventions in fastlog predicate mode."""
 
@@ -1705,6 +1723,8 @@ def _apply_predicate_mode_interventions_to_outputs(
                 "_layer_label_raw": raw_label,
                 "raw_index": raw_index,
                 "type_index": type_index,
+                "is_inplace": record_is_inplace,
+                "_tl_input_snapshot": bool(call_input_snapshots is not None),
             },
         )
         hook_entries = normalize_hook_plan(
@@ -1724,6 +1744,7 @@ def _apply_predicate_mode_interventions_to_outputs(
                 container_path=container_path,
                 call_args=args,
                 call_kwargs=kwargs,
+                call_input_snapshots=call_input_snapshots,
             )
         if fire_results:
             _set_tensor_live_fire_results(hooked, fire_results)
@@ -1839,6 +1860,7 @@ def _apply_predicate_intervention(
     container_path: tuple[OutputPathComponent, ...],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
+    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
 ) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
     """Evaluate and apply a current-op predicate intervention."""
 
@@ -1875,6 +1897,7 @@ def _apply_predicate_intervention(
             container_path=container_path,
             call_args=args,
             call_kwargs=kwargs,
+            call_input_snapshots=call_input_snapshots,
         )
 
 

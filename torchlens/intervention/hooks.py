@@ -1625,6 +1625,8 @@ def make_live_site_proxy(
         output_of_module_calls=fields.get("output_of_module_calls", []),
         output_of_modules=fields.get("output_of_modules", []),
         _tl_module_boundary=bool(fields.get("_tl_module_boundary", False)),
+        _tl_input_snapshot=bool(fields.get("_tl_input_snapshot", False)),
+        is_inplace=bool(fields.get("is_inplace", False)),
         is_transform=bool(fields.get("is_transform", False)),
         transform_kind=fields.get("transform_kind"),
         transform_chain=tuple(fields.get("transform_chain", ())),
