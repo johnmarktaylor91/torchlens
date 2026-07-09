@@ -6,6 +6,8 @@ deep clone helpers, and integration tests through specific exemption paths.
 
 from collections import namedtuple
 from dataclasses import replace
+import threading
+import warnings
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -14,6 +16,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass
 import torchlens.user_funcs as user_funcs
@@ -999,6 +1002,77 @@ def test_validate_forward_pass_plain_attribute_mutable_state_isolated() -> None:
     assert validate_forward_pass(PlainMutableState(), torch.randn(3)) is True
 
 
+def test_validate_forward_pass_restores_pristine_state_before_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validation replay starts from the validation model's pre-capture state."""
+
+    class CounterBuffer(nn.Module):
+        """Model whose traced validation forward mutates a registered buffer."""
+
+        def __init__(self) -> None:
+            """Initialize the mutable buffer."""
+
+            super().__init__()
+            self.register_buffer("step", torch.zeros(()))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Increment state and return a simple tensor output."""
+
+            step = cast(torch.Tensor, self.step)
+            step.add_(1)
+            return x + 1
+
+    replay_entry_steps: list[float] = []
+
+    def observe_replay_entry(trace: Trace) -> None:
+        """Record the validation model state visible at replay completion."""
+
+        source_ref = getattr(trace, "_source_model_ref")
+        source_model = source_ref()
+        assert source_model is not None
+        replay_entry_steps.append(float(cast(torch.Tensor, source_model.step).item()))
+
+    with pytest.warns(RuntimeWarning, match="stateful/non-reproducible"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                CounterBuffer(),
+                torch.randn(3),
+                validate_metadata=False,
+                _trace_observer=observe_replay_entry,
+            )
+            is True
+        )
+    assert replay_entry_steps == [0.0]
+
+    original_restore = user_public_impls._restore_validation_replay_state
+
+    def skip_restore(
+        model: nn.Module,
+        state_dict: dict[str, torch.Tensor],
+        plain_attr_snapshot: object | None,
+    ) -> None:
+        """Simulate the old validation behavior that replayed post-pass state."""
+
+        del model, state_dict, plain_attr_snapshot
+
+    replay_entry_steps.clear()
+    monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", skip_restore)
+
+    with pytest.warns(RuntimeWarning, match="stateful/non-reproducible"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                CounterBuffer(),
+                torch.randn(3),
+                validate_metadata=False,
+                _trace_observer=observe_replay_entry,
+            )
+            is True
+        )
+    assert replay_entry_steps == [2.0]
+    monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", original_restore)
+
+
 def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() -> None:
     """Un-deepcopyable models fall back to state_dict restore with warning."""
 
@@ -1019,6 +1093,76 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_replay_copy_fallback_warns_for_lock_attr() -> None:
+    """Replay copy failure falls back to live state with an explicit warning."""
+
+    class LockBackedModel(nn.Module):
+        """Model holding an uncopyable external resource."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and a simple registered buffer."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.register_buffer("bias", torch.ones(3))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Use registered tensor state without mutating the lock."""
+
+            return x + cast(torch.Tensor, self.bias)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="validation replay against live model state; model could not be copied",
+    ):
+        assert validate_forward_pass(LockBackedModel(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
+    """Validation warns when a second trace has a different structure."""
+
+    class ToggleBranch(nn.Module):
+        """Model that changes control flow after one forward pass."""
+
+        def __init__(self) -> None:
+            """Initialize branch state."""
+
+            super().__init__()
+            self.use_mul = False
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a different branch after the first pass."""
+
+            if self.use_mul:
+                out = x * 2
+            else:
+                out = x + 1
+            self.use_mul = True
+            return out
+
+    with pytest.warns(RuntimeWarning, match="stateful/non-reproducible"):
+        assert validate_forward_pass(ToggleBranch(), torch.randn(2, 3)) is True
+
+
+def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
+    """Validation does not warn for a stateless repeated trace."""
+
+    class StatelessToy(nn.Module):
+        """Small stateless model with stable graph structure."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a deterministic stateless tensor computation."""
+
+            return torch.relu(x + 1)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(StatelessToy(), torch.randn(2, 3)) is True
+
+    messages = [str(warning.message) for warning in caught]
+    assert not any("stateful/non-reproducible" in message for message in messages)
 
 
 def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
