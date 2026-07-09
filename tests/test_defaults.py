@@ -307,12 +307,15 @@ def test_validate_forward_pass_uses_validation_overrides(
         )
 
     assert result is True
-    assert captured_calls[-1]["layers_to_save"] == "all"
-    assert captured_calls[-1]["activation_transform"] is None
-    assert captured_calls[-1]["mark_layer_depths"] is False
-    assert captured_calls[-1]["detach_saved_activations"] is False
-    assert captured_calls[-1]["save_grads"] is False
-    assert captured_calls[-1]["save_arg_values"] is True
-    assert captured_calls[-1]["save_rng_states"] is True
-    assert dummy_logs[-1].validate_calls[-1]["validate_metadata"] is False
-    assert dummy_logs[-1].cleanup_calls == 1
+    replay_call, reproducibility_call = captured_calls[-2:]
+    assert replay_call["layers_to_save"] == "all"
+    assert replay_call["activation_transform"] is None
+    assert replay_call["mark_layer_depths"] is False
+    assert replay_call["detach_saved_activations"] is False
+    assert replay_call["save_grads"] is False
+    assert replay_call["save_arg_values"] is True
+    assert replay_call["save_rng_states"] is True
+    assert reproducibility_call["save_arg_values"] is False
+    assert reproducibility_call["save_rng_states"] is False
+    assert dummy_logs[-2].validate_calls[-1]["validate_metadata"] is False
+    assert dummy_logs[-2].cleanup_calls == 1
