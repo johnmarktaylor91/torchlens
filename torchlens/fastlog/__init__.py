@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib as _importlib
+import sys as _sys
+from types import ModuleType as _ModuleType
 from typing import Any
 
 
@@ -66,6 +68,41 @@ __all__ = [
 ]
 
 
+class _FastlogFacadeModule(_ModuleType):
+    """Keep lazy public exports ahead of equally named child modules.
+
+    Importing ``torchlens.fastlog.recover`` installs the child module as
+    ``torchlens.fastlog.recover`` before this facade can resolve the exported
+    ``recover`` function.  Eager package initialization imported the function
+    afterwards, so the function won.  Restore that ordering whenever an
+    attribute is read from the lazy facade.
+    """
+
+    def __getattribute__(self, name: str) -> Any:
+        """Return lazy public exports instead of shadowing child modules.
+
+        Parameters
+        ----------
+        name:
+            Attribute requested from the fastlog package.
+
+        Returns
+        -------
+        Any
+            The requested package attribute.
+        """
+
+        lazy_attrs = super().__getattribute__("_LAZY_ATTRS")
+        if name in lazy_attrs:
+            module_path, attr_name = lazy_attrs[name]
+            value = vars(self).get(name)
+            if attr_name is not None and isinstance(value, _ModuleType):
+                value = getattr(_importlib.import_module(module_path), attr_name)
+                vars(self)[name] = value
+                return value
+        return super().__getattribute__(name)
+
+
 def __getattr__(name: str) -> Any:
     """Resolve public fastlog attributes only when they are requested.
 
@@ -95,3 +132,6 @@ def __getattr__(name: str) -> Any:
         globals()[name] = value
         return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+_sys.modules[__name__].__class__ = _FastlogFacadeModule

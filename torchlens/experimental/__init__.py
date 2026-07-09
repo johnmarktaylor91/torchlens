@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import re
 import os
 from contextlib import contextmanager
@@ -12,6 +13,33 @@ from torch import nn
 
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
+_LAZY_SUBMODULE_EXPORTS = {"dagua", "node_styles"}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve explicitly exported experimental child modules on demand.
+
+    Parameters
+    ----------
+    name:
+        Public experimental attribute to resolve.
+
+    Returns
+    -------
+    Any
+        Requested experimental child module.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an exported experimental child module.
+    """
+
+    if name in _LAZY_SUBMODULE_EXPORTS:
+        module = importlib.import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def attribute_walk(model: nn.Module, address: str) -> Any:
