@@ -121,6 +121,7 @@ _LAZY_ATTRS = {
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "swap_with": ("torchlens.intervention", "swap_with"),
     "trace": ("torchlens.user_funcs", "trace"),
+    "_trace": ("torchlens.user_funcs", "trace"),
     "user_funcs": ("torchlens.user_funcs", None),
     "validate": ("torchlens.validation.consolidated", "validate"),
     "validation": ("torchlens.validation", None),
@@ -288,6 +289,30 @@ def _sync_io_wrapper_metadata(io_module: Any) -> None:
     )
 
 
+def _sync_deprecated_wrapper_metadata(name: str) -> None:
+    """Synchronize one deprecated wrapper when it is first accessed.
+
+    Parameters
+    ----------
+    name:
+        Deprecated top-level wrapper name.
+
+    Returns
+    -------
+    None
+        Updates the wrapper's metadata in place.
+    """
+
+    if name == "load_intervention_spec":
+        target = getattr(_importlib.import_module("torchlens.io"), name)
+    else:
+        target = getattr(_importlib.import_module("torchlens.user_funcs"), name)
+    wrapper = globals()[name]
+    _functools.update_wrapper(wrapper, target)
+    if hasattr(wrapper, "__signature__"):
+        del wrapper.__signature__
+
+
 def _warn_moved_name(name: str, new_module_path: str, new_attr: str) -> None:
     """Emit the standard top-level API move deprecation warning.
 
@@ -305,7 +330,7 @@ def _warn_moved_name(name: str, new_module_path: str, new_attr: str) -> None:
         f"torchlens.{name} is deprecated; use {new_module_path}.{new_attr} instead. "
         f"Removed in {_REMOVED_IN}.",
         DeprecationWarning,
-        stacklevel=3,
+        stacklevel=4,
     )
 
 
@@ -360,11 +385,11 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
             return _user_func("show_model_graph")(*args, **kwargs)
         if name in {"get_model_structure", "show_model_structure"}:
             kwargs.setdefault("layers_to_save", None)
-            structure_trace = _resolve_top_level("trace")(*args, **kwargs)
+            structure_trace = _resolve_top_level("_trace")(*args, **kwargs)
             return structure_trace.modules
         if name == "get_model_activations":
             return extract(*args, **kwargs)
-        return _resolve_top_level("trace")(*args, **kwargs)
+        return _resolve_top_level("_trace")(*args, **kwargs)
 
     _shim.__name__ = name
     _shim.__qualname__ = name
@@ -1069,6 +1094,32 @@ class _TorchLensModule(_types.ModuleType):
         ):
             return
         super().__setattr__(name, value)
+
+    def __getattribute__(self, name: str) -> Any:
+        """Resolve deprecated wrapper signatures only when the wrapper is used.
+
+        Parameters
+        ----------
+        name:
+            Attribute requested from the root facade.
+
+        Returns
+        -------
+        Any
+            Requested root-facade attribute.
+        """
+
+        if name in {
+            "summary",
+            "show_model_graph",
+            "draw_backward",
+            "validate_forward_pass",
+            "validate_backward_pass",
+            "validate_saved_outs",
+            "load_intervention_spec",
+        }:
+            _sync_deprecated_wrapper_metadata(name)
+        return super().__getattribute__(name)
 
 
 _sys.modules[__name__].__class__ = _TorchLensModule
