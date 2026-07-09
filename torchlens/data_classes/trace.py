@@ -761,6 +761,24 @@ class Trace(
     integer index, layer label, module address, or substring.
     """
 
+    def find_nan(self) -> Any:
+        """Return the first NaN or Inf among saved outputs in execution order.
+
+        Selectively saved traces identify this as the first finding among
+        saved tensors and report unsaved ancestor operations as an uncertainty
+        zone rather than claiming the true birth operation.
+
+        Returns
+        -------
+        FindNanResult
+            Structured non-finite diagnostic. Source locations are surfaced
+            from the operation's existing recorded code context when available.
+        """
+
+        from ..debug._nan import find_nan_in_trace
+
+        return find_nan_in_trace(self)
+
     def _ensure_build_state(self) -> TraceBuildState:
         """Return the transient capture/postprocess build state.
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import traceback
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..errors import CaptureError
@@ -14,6 +16,25 @@ if TYPE_CHECKING:
     from ..fastlog.types import RecordContext
 
 ForwardStopDisposition = Literal["raise", "attach_partial", "return_partial"]
+
+
+def _live_user_location() -> tuple[str | None, int | None]:
+    """Return the nearest non-TorchLens, non-PyTorch stack location.
+
+    Returns
+    -------
+    tuple[str | None, int | None]
+        User file path and line number, or ``(None, None)`` when no user
+        frame can be identified.
+    """
+
+    for frame in reversed(traceback.extract_stack()[:-1]):
+        path = Path(frame.filename)
+        path_parts = path.parts
+        if "torchlens" in path_parts or "torch" in path_parts:
+            continue
+        return str(path), frame.lineno
+    return None, None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +132,11 @@ class StopDirective:
             "TorchLens capture stopped at first non-finite tensor: "
             f"op={func_name!r}, layer={raw_label!r}, shape={shape}, dtype={dtype}."
         )
+        file_path, line_no = _live_user_location()
         raise CaptureError(
             message,
+            file_path=file_path,
+            line_no=line_no,
             affected_sites=[raw_label],
             op=func_name,
             layer=raw_label,
