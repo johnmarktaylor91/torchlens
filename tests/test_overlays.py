@@ -87,6 +87,19 @@ def test_external_node_overlay_mapping_renders(tmp_path: Path) -> None:
     assert "overlay: 0.75" in dot
 
 
+def test_callable_node_overlay_renders_per_node(tmp_path: Path) -> None:
+    """A callable ``node_overlay`` is invoked per node instead of raising an opaque error."""
+
+    model = nn.Linear(4, 2)
+    log = tl.trace(model, torch.randn(1, 4))
+
+    # Previously a callable fell through to the mapping path and raised a confusing
+    # ``argument of type 'function' is not iterable`` TypeError.
+    dot = _render_dot(log, tmp_path, node_overlay=lambda node: 0.42)
+
+    assert "overlay: 0.42" in dot
+
+
 def test_registered_node_overlay_name_renders(tmp_path: Path) -> None:
     """Registered overlay names should resolve to their stored score mapping."""
 

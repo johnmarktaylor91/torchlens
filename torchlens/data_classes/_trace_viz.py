@@ -121,7 +121,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
         vis_show_cone: bool = True,
         code_panel: "CodePanelOption" = False,
-        node_overlay: str | Mapping[str, Any] | None = None,
+        node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
         node_label_fields: list[str] | None = None,
         show_legend: bool = False,
         font_size: int | None = None,

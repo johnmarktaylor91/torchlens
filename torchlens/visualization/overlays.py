@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Callable
 
 import torch
 
@@ -56,7 +56,7 @@ def normalize_overlay_name(name: str) -> str:
     return normalized
 
 
-def external_overlay_value(node: Any, scores: OverlayScores) -> Any:
+def external_overlay_value(node: Any, scores: "OverlayScores | Callable[[Any], Any]") -> Any:
     """Return an externally supplied overlay value for ``node``.
 
     Parameters
@@ -64,13 +64,17 @@ def external_overlay_value(node: Any, scores: OverlayScores) -> Any:
     node:
         Layer log or layer-pass log.
     scores:
-        Mapping from node labels to overlay values.
+        Either a mapping from node labels to overlay values, or a callable invoked as
+        ``scores(node)`` to compute the value per node.
 
     Returns
     -------
     Any
         Overlay value, or ``None`` when no matching key is present.
     """
+
+    if callable(scores):
+        return scores(node)
 
     candidates = (
         getattr(node, "layer_label", None),
@@ -154,7 +158,9 @@ def format_overlay_value(name: str, value: Any) -> str:
     return f"{display_name}: {value}"
 
 
-def overlay_line(node: Any, overlay: str | OverlayScores | None) -> str | None:
+def overlay_line(
+    node: Any, overlay: "str | OverlayScores | Callable[[Any], Any] | None"
+) -> str | None:
     """Return a rendered overlay line for ``node``.
 
     Parameters
@@ -179,7 +185,9 @@ def overlay_line(node: Any, overlay: str | OverlayScores | None) -> str | None:
     return format_overlay_value("overlay", value)
 
 
-def overlay_border_attrs(node: Any, overlay: str | OverlayScores | None) -> dict[str, str]:
+def overlay_border_attrs(
+    node: Any, overlay: "str | OverlayScores | Callable[[Any], Any] | None"
+) -> dict[str, str]:
     """Return graph node attributes implied by an overlay.
 
     Parameters
