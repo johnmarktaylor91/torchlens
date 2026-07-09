@@ -31,6 +31,7 @@ from ._capture_state_helpers import (
     _move_tensors_to_device,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
+    unwrap_compiled_model,
 )
 from .backends import BackendName, resolve_backend_spec
 from .data_classes.trace import Trace
@@ -79,6 +80,7 @@ def log_model_metadata(
     Trace
         Trace with full metadata but no saved outs.
     """
+    model = unwrap_compiled_model(model)
     model_trace = trace(
         model,
         input_args,
@@ -125,6 +127,7 @@ def summary(
         Rendered summary text.
     """
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if input_kwargs is None:
         input_kwargs = {}
@@ -272,6 +275,7 @@ def show_model_graph(
         The graph is rendered for side effects.
     """
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
@@ -953,6 +957,7 @@ def _validate_forward_pass_torch(
     """
     warn_parallel()
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)

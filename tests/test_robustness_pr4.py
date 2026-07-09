@@ -22,6 +22,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture_state_helpers import (
     reset_compiled_model_unwrap_warning_state,
+    unwrap_compiled_submodules,
 )
 from torchlens.user_funcs import _reject_opaque_wrappers
 from torchlens.utils._torch_compat import get_dynamo_optimized_module_type
@@ -49,6 +50,43 @@ class _ParentWithChild(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.out(torch.relu(self.child(x)))
+
+
+class _ParentRaisesAfterChild(nn.Module):
+    """Parent that raises after invoking its compiled child."""
+
+    def __init__(self, child: nn.Module) -> None:
+        super().__init__()
+        self.child = child
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _ = self.child(x)
+        raise RuntimeError("parent forward failure")
+
+
+class _ChildRaises(nn.Module):
+    """Child module that always raises during forward."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        del x
+        raise RuntimeError("child forward failure")
+
+
+class _WrapperWithOriginal(nn.Module):
+    """Minimal compiled-wrapper stand-in used to test traversal restoration."""
+
+    def __init__(self, original: nn.Module) -> None:
+        super().__init__()
+        self._orig_mod = original
+
+
+class _WrapperWithBrokenOriginalProbe(nn.Module):
+    """Wrapper stand-in that fails while TorchLens probes ``_orig_mod``."""
+
+    def __getattr__(self, name: str) -> object:
+        if name == "_orig_mod":
+            raise RuntimeError("broken _orig_mod probe")
+        return super().__getattr__(name)
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +195,100 @@ def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
         op.layer_label for op in eager_trace.layer_list
     ]
     assert len(nested_trace.modules) == len(eager_trace.modules)
+
+
+@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
+def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> None:
+    """Public eager-capture entry points unwrap compiled root models consistently."""
+    input_tensor = torch.randn(2, 4)
+
+    def assert_single_note(caught: list[warnings.WarningMessage]) -> None:
+        """Assert exactly one eager-source compiled-model note was emitted."""
+        notes = [
+            warning
+            for warning in caught
+            if "compiled model detected; tracing the eager source module" in str(warning.message)
+        ]
+        assert len(notes) == 1
+
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        metadata = tl.get_model_metadata(torch.compile(_Tiny(), backend="eager"), input_tensor)
+    assert "_orig_mod" not in {module.address for module in metadata.modules.values()}
+    assert_single_note(caught)
+
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        rendered_summary = tl.summary(torch.compile(_Tiny(), backend="eager"), input_tensor)
+    assert "_orig_mod" not in rendered_summary
+    assert_single_note(caught)
+
+    reset_compiled_model_unwrap_warning_state()
+    graph_path = tmp_path / "compiled_graph"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tl.show_model_graph(
+            torch.compile(_Tiny(), backend="eager"),
+            input_tensor,
+            vis_outpath=str(graph_path),
+            vis_save_only=True,
+            vis_fileformat="svg",
+        )
+    assert "_orig_mod" not in graph_path.with_suffix(".svg").read_text()
+    assert_single_note(caught)
+
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert tl.validate_forward_pass(torch.compile(_Tiny(), backend="eager"), input_tensor)
+    assert_single_note(caught)
+
+    log = tl.trace(_Tiny(), input_tensor, layers_to_save="none")
+    reset_compiled_model_unwrap_warning_state()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        log.run(torch.compile(_Tiny(), backend="eager"), input_tensor)
+    assert "_orig_mod" not in {module.address for module in log.modules.values()}
+    assert_single_note(caught)
+
+
+def test_compiled_submodule_traversal_failure_restores_earlier_swaps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed compiled-child probe restores all prior traversal swaps."""
+    import torchlens._capture_state_helpers as helpers
+
+    good_wrapper = _WrapperWithOriginal(nn.Linear(4, 4))
+    parent = nn.Module()
+    parent.good = good_wrapper
+    parent.bad = _WrapperWithBrokenOriginalProbe()
+    monkeypatch.setattr(helpers, "get_dynamo_optimized_module_type", lambda: nn.Module)
+
+    with pytest.raises(RuntimeError, match="broken _orig_mod probe"):
+        with unwrap_compiled_submodules(parent):
+            pass
+
+    assert parent.good is good_wrapper
+
+
+@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
+@pytest.mark.parametrize("parent_raises", [False, True])
+def test_compiled_submodule_restored_after_forward_exception(parent_raises: bool) -> None:
+    """Compiled child identity survives child- and parent-originated forward failures."""
+    child_source: nn.Module = nn.Linear(4, 4) if parent_raises else _ChildRaises()
+    compiled_child = torch.compile(child_source, backend="eager")
+    model: nn.Module
+    if parent_raises:
+        model = _ParentRaisesAfterChild(compiled_child)
+    else:
+        model = _ParentWithChild(compiled_child)
+
+    with pytest.raises(RuntimeError, match="forward failure"):
+        tl.trace(model, torch.randn(2, 4), layers_to_save="none")
+
+    assert model.child is compiled_child
 
 
 # ---------------------------------------------------------------------------

@@ -126,6 +126,10 @@ temporarily routes that child slot to ``._orig_mod`` for the capture and restore
 the user's module tree afterward. The first such unwrap in a process emits a
 one-time note. The resulting trace reflects eager Python semantics, not
 ``torch.compile`` semantics such as fusion or backend-specific lowering.
+This eager-source behavior applies to ``trace``, metadata and summary helpers,
+graph display, forward/backward validation, and ``Trace.run``. ``record`` keeps
+an intentional hard rejection for compiled models because it is the torch-only
+fast capture lane.
 
 ### `torch.jit.script` / `torch.jit.trace` — not supported (raises)
 

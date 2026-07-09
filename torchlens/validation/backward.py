@@ -10,6 +10,7 @@ import warnings
 import torch
 from torch import nn
 
+from .._capture_state_helpers import unwrap_compiled_model
 from .._input_coerce import _coerce_input_args
 from ..options import CaptureOptions
 from .._robustness import check_model_and_input_variants
@@ -329,6 +330,7 @@ def validate_backward_pass(
 
     warn_parallel()
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)

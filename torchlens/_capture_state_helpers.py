@@ -217,30 +217,35 @@ def unwrap_compiled_submodules(model: nn.Module) -> Iterator[None]:
     """
 
     swaps: list[_CompiledSubmoduleSwap] = []
-    traversal_queue: list[nn.Module] = [model]
-    seen_module_ids: set[int] = set()
-    while traversal_queue:
-        parent = traversal_queue.pop()
-        parent_id = id(parent)
-        if parent_id in seen_module_ids:
-            continue
-        seen_module_ids.add(parent_id)
-        for child_name, child_module in list(parent._modules.items()):
-            if child_module is None:
+    try:
+        traversal_queue: list[nn.Module] = [model]
+        seen_module_ids: set[int] = set()
+        while traversal_queue:
+            parent = traversal_queue.pop()
+            parent_id = id(parent)
+            if parent_id in seen_module_ids:
                 continue
-            orig_mod = _compiled_model_orig_module(child_module)
-            if orig_mod is None:
-                traversal_queue.append(child_module)
-                continue
-            swaps.append(
-                _CompiledSubmoduleSwap(
-                    parent=parent,
-                    name=child_name,
-                    compiled_module=child_module,
+            seen_module_ids.add(parent_id)
+            for child_name, child_module in list(parent._modules.items()):
+                if child_module is None:
+                    continue
+                orig_mod = _compiled_model_orig_module(child_module)
+                if orig_mod is None:
+                    traversal_queue.append(child_module)
+                    continue
+                swaps.append(
+                    _CompiledSubmoduleSwap(
+                        parent=parent,
+                        name=child_name,
+                        compiled_module=child_module,
+                    )
                 )
-            )
-            parent._modules[child_name] = orig_mod
-            traversal_queue.append(orig_mod)
+                parent._modules[child_name] = orig_mod
+                traversal_queue.append(orig_mod)
+    except BaseException:
+        for swap in reversed(swaps):
+            swap.parent._modules[swap.name] = swap.compiled_module
+        raise
 
     if swaps:
         _warn_compiled_model_unwrapped_once()
