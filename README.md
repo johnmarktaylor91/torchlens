@@ -477,6 +477,7 @@ references when wrappers are installed, with documented boundaries for pre-wrap 
 | [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports |
 | [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |
 | [docs/reference/attribution.md](docs/reference/attribution.md) | Native input and layer attribution methods |
+| [docs/reference/collapse.md](docs/reference/collapse.md) | Smart-collapse visual reference and label contract |
 
 
 ## Security
