@@ -309,6 +309,31 @@ class BatchNormModel(nn.Module):
 # ZOO registry
 # ---------------------------------------------------------------------------
 
+
+class DeepBlockNet(nn.Module):
+    """Six identical residual blocks under a Sequential -- deep enough that the
+    collapse-v2 slider produces a real multi-step schedule (used by notebook 11)."""
+
+    class Block(nn.Module):
+        def __init__(self, d: int) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(d, d)
+            self.fc2 = nn.Linear(d, d)
+            self.norm = nn.LayerNorm(d)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.norm(torch.relu(self.fc2(torch.relu(self.fc1(x)))) + x)
+
+    def __init__(self, d: int = 8, n_blocks: int = 6) -> None:
+        super().__init__()
+        self.stem = nn.Linear(d, d)
+        self.blocks = nn.Sequential(*[self.Block(d) for _ in range(n_blocks)])
+        self.head = nn.Linear(d, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.blocks(self.stem(x)))
+
+
 ZOO: dict[str, "callable[[], tuple[nn.Module, torch.Tensor]]"] = {
     "tiny_mlp": lambda: (TinyMLP(), torch.randn(2, 8)),
     # exercises: linear chain, relu, module accessors, intervention
@@ -346,6 +371,8 @@ ZOO: dict[str, "callable[[], tuple[nn.Module, torch.Tensor]]"] = {
     # exercises: sibling ordering (order_siblings), shared proj stacked 4x
     "batch_norm": lambda: (BatchNormModel(), torch.randn(4, 8)),
     # exercises: BatchNorm buffers (running_mean, running_var, num_batches_tracked)
+    "deep_blocks": lambda: (DeepBlockNet(), torch.randn(2, 8)),
+    # exercises: collapse-v2 slider (multi-step schedule over 6 repeated blocks)
 }
 
 
