@@ -90,6 +90,7 @@ def test_to_pandas_missing_pandas_mentions_tabular_extra() -> None:
 
 def test_repr_html_succeeds_when_notebook_extra_is_available() -> None:
     """Trace._repr_html_ returns the Phase 3 HTML card when IPython is installed."""
+    pytest.importorskip("IPython")
 
     log = _make_log()
     html = log._repr_html_()
