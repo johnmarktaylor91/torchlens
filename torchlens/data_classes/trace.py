@@ -53,6 +53,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    from ..debug._audit import TraceAudit
     from .._io.streaming import BundleStreamWriter
     from .func_call_location import FuncCallLocation
 
@@ -778,6 +779,23 @@ class Trace(
         from ..debug._nan import find_nan_in_trace
 
         return find_nan_in_trace(self)
+
+    def audit(self) -> "TraceAudit":
+        """Return an honest one-call health report for this completed trace.
+
+        Payload-dependent and gradient-dependent diagnostics are listed as
+        skipped when this capture cannot support them, rather than being used
+        to claim a clean result.
+
+        Returns
+        -------
+        torchlens.debug.TraceAudit
+            Prioritized findings plus checks run and skipped-check reasons.
+        """
+
+        from ..debug._audit import audit_trace
+
+        return audit_trace(self)
 
     def _ensure_build_state(self) -> TraceBuildState:
         """Return the transient capture/postprocess build state.
