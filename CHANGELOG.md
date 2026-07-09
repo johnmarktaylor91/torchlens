@@ -1,6 +1,311 @@
 # CHANGELOG
 
 
+## v2.30.0 (2026-07-09)
+
+### Bug Fixes
+
+- **capture**: Commutative reflected dunders normalize to forward op (fixes __rand__ parent drop)
+  ([`e925e9d`](https://github.com/johnmarktaylor91/torchlens/commit/e925e9d5e38538452bc32ff114353a785ffcbaec))
+
+Tensor.__rand__ (reflected `int & tensor`) and torch.rand both flattened to key "rand"; the
+  torch.rand factory spec (no tensor parents) clobbered __rand__'s binary spec via dict
+  last-writer-wins, so reflected bitwise-AND captured ZERO parents and was misclassified as an
+  orphan (silent dataflow corruption) and mislabeled "rand".
+
+Fix: map COMMUTATIVE reflected operator dunders (__radd__/__rmul__/__rand__/__ror__/ __rxor__) to
+  their forward op's normalized name (add/mul/and/or/xor) in _normalize_func_name; route the ops.py
+  layer_type sites + selector-candidate helper through it. For a commutative op the swapped operand
+  order is irrelevant, so the reflected form IS the forward op: correct label ("and_N_M"), forward
+  binary (0,1) arg-spec (real parents), shared equivalence with the forward op. Drop the dead binary
+  "rand" key so torch.rand keeps it uniquely.
+
+NON-commutative reflected dunders (__rsub__/__rtruediv__/__rmatmul__/...) are left UNMAPPED on
+  purpose: they compute `other <op> self` (operands swapped), so the r-prefixed name honestly
+  signals the reversed order and matches real functions like torch.rsub; their parents/spec were
+  already correct.
+
+Add an import-time guard that binary-op and factory-func name sets never share a key (loud failure
+  for the whole collision class). Regression tests: commutative reflected -> forward;
+  non-commutative reflected keep their r-name; no binary/factory collision; reflected `int & tensor`
+  captures its parent + labels "and".
+
+- **capture**: Keep orphan retention opt-in (default keep_orphans=False)
+  ([`d3771f9`](https://github.com/johnmarktaylor91/torchlens/commit/d3771f9b7ce58bbd9f48a60c2b7535a7f0a5b36e))
+
+The a6572b21 default flip to keep_orphans=True regressed the trace self-consistency validation
+  invariant: retained island ops inflate num_ops past the computational-layer count (e.g. num_ops=8
+  != expected 3), and the mid-tier sweep caught ~11 failures across toy models,
+  functionless-replacement tripwires, and buffer-datamodel validation.
+
+Revert the default to False so islands are pruned unless explicitly requested. The orphan DATA
+  capability (trace.orphans) and the show_orphans render option remain, now opt-in via
+  keep_orphans=True. Defaulting orphan retention needs the validation invariants to first account
+  for retained islands (num_ops == computational_layers + orphan_count, and a check that a retained
+  orphan is a genuine dead-end, not a functionless-replacement capture gap) -- deferred to the
+  validation-hardening work. Do NOT weaken the invariant to force the default.
+
+- **fastlog**: Don't miscategorize warning-as-error as a predicate failure
+  ([`2ecbc18`](https://github.com/johnmarktaylor91/torchlens/commit/2ecbc189b090342eac0c573ab1d009e4cdb169ef))
+
+When a caller runs with warnings-as-errors, the informational reference-save-mode UserWarning
+  (emitted during payload storage) was escalated to an exception, caught by the broad `except
+  Exception` in the op-recording loop, and swallowed into the predicate-failure pipeline --
+  resurfacing as a misleading `PredicateError: fastlog predicate failed` with no hint of the real
+  cause. A predicate failure is about the user's predicate raising, not a TorchLens-internal
+  warning.
+
+Re-raise `Warning`-typed escalations directly (mirroring the existing TorchLensPostfuncError/
+  TrainingModeConfigError passthrough) so they surface with their true type and message.
+
+Also classify the reference save-mode caveat as visible-not-fatal in the test filterwarnings group
+  (alongside the capability-degradation warning), since it fires whenever save_mode= 'reference' is
+  used and is informational, not a bug signal -- fixes an order-dependent test failure (the
+  once-per-process warning made test_true_predicate_inherits_default_save_mode pass only when a
+  sibling reference-mode test ran first and tripped the flag).
+
+- **import**: Restore torchlens.facets module importability via lazy alias stub
+  ([`487ef2e`](https://github.com/johnmarktaylor91/torchlens/commit/487ef2efcc9cc0b8ecdeacfe3ea87f9f1deb5c27))
+
+7edabcb7 dropped the eager sys.modules["torchlens.facets"] alias to keep facets lazy, but that alias
+  was also what made `import torchlens.facets` / import_module("torchlens.facets") resolve to (and
+  be identity-equal to) torchlens.semantic.facets -- test_phase_b_exports asserts that identity. The
+  _LAZY_ATTRS entry only covers the ATTRIBUTE torchlens.facets, not the module import path.
+
+Add a self-replacing stub module torchlens/facets.py that, when (and only when) someone imports
+  torchlens.facets, resolves torchlens.semantic.facets and swaps itself out in sys.modules for it.
+  Preserves laziness (facets is NOT imported at `import torchlens`) while restoring `import
+  torchlens.facets is torchlens.semantic.facets`.
+
+- **loop-detection**: Require >=2-op body for unanchored param-free loops
+  ([`fe7acea`](https://github.com/johnmarktaylor91/torchlens/commit/fe7acea9162e9226c98eb089c963ee073f1e9d09))
+
+The recurrence grouper flagged a param-free loop from just two adjacent ops sharing a structural
+  fingerprint, with no minimum body size -- so `y = tanh(x); z = tanh(y)` false-positived as a
+  two-pass loop despite being a straight-line chain.
+
+Guard param-free adjacency-only merges: they now require either a recurrence-anchored seed op (a
+  reused submodule call or a stateful buffer node -- genuine repetition of a persistent identity,
+  real even with a single-op body) or a body of at least _MIN_PARAM_FREE_LOOP_BODY_OPS (2)
+  operations. Parameter-based merges (RNNs, weight tying) are decided by shared parameters and never
+  reach the guard, so they are untouched; reused single-op modules (one nn.ReLU called 4x) and
+  buffer-rewrite loops (state:1-6) stay grouped via the anchor exemption.
+
+Thread a `recurrence_anchored` flag from the torch finisher (op.modules non-empty or op.is_buffer)
+  through RecurrenceNode into the grouper. Regression tests: a bare functional tanh chain stays two
+  single-pass layers; a reused single-op module stays one 4-pass layer.
+
+- **viz**: Label elif condition-entry edges ELIF instead of a blanket IF
+  ([`8a4f4ea`](https://github.com/johnmarktaylor91/torchlens/commit/8a4f4ea92da8fff01c53157a12b80a8eb84855fa))
+
+conditional_branch_edges records the edges entering each branch TEST but carries no kind, so the
+  renderer hardcoded "IF" on every one -- an if/elif/elif ladder drew "IF" three times. Derive the
+  real kind per edge: conditional_records[*].bool_layers is the authoritative ordered test list
+  ([if_bool, elif_1_bool, ...]; else has no test), so map each edge's child (the condition-subgraph
+  entry op) to its nearest downstream branch bool via a bounded forward walk and read the position
+  -- index 0 -> IF, later -> ELIF. Arm-entry labels (THEN/ELIF N/ ELSE) are unaffected; this is the
+  separate condition-entry family. Bounded to _BRANCH_KIND_SEARCH_LIMIT so a malformed conditional
+  can't turn labelling into a hot loop. Regression test asserts IF + ELIF + ELIF on the ladder's
+  condition-entry edges.
+
+- **viz**: Order conditional branches if-left / then-right instead of arbitrarily
+  ([`df76300`](https://github.com/johnmarktaylor91/torchlens/commit/df76300b3551d9bc0268cf200644a883dbb3e573))
+
+The sibling-ordering pass explicitly skipped conditional-fanout sources, leaving the left-to-right
+  placement of a branch's children arbitrary. Drop the skip so conditional fanouts get the same
+  by-execution-step ordering as any other fanout: the earlier-evaluated branch test lands on the
+  left and the later taken arm on the right, and an if/elif/elif ladder reads IF, ELIF, ELIF, arm
+  left-to-right at a single rank. Remove the now-unused _has_conditional_fanout helper (only the
+  skip referenced it). Validated across the conditional-rendering, step5, integration,
+  sibling-ordering, output-aesthetics, and container-visualization suites (44 passed).
+
+### Documentation
+
+- **examples**: Migrate vis_opt= -> vis_mode= (15 files) + ledger the alias
+  ([`7263e88`](https://github.com/johnmarktaylor91/torchlens/commit/7263e8840ce63f0fe311d9c320043132b86be9de))
+
+All 15 shipped example notebooks used the legacy vis_opt= kwarg; 0 used the canonical vis_mode=.
+  Migrate them to vis_mode= (same values) and add the vis_opt -> vis_mode row to
+  docs/reference/deprecations.md, which was missing it.
+
+- **examples**: Rename 5min peek notebook to pluck + retire the peek alias in prose
+  ([`8ce9d97`](https://github.com/johnmarktaylor91/torchlens/commit/8ce9d9720e757e2a27f4a8d34add503322b269a1))
+
+`peek` is the deprecated alias for `pluck`; the 5-minute quickstart still led with it. git mv
+  examples/5min/peek.ipynb -> pluck.ipynb, switch its cells to `tl.pluck`, and update the README
+  index link + the "labels used by pluck/extract" prose in visualize.ipynb. No remaining peek
+  references under examples/.
+
+### Features
+
+- **capture**: Retain orphan islands by default (keep_orphans=True)
+  ([`a6572b2`](https://github.com/johnmarktaylor91/torchlens/commit/a6572b2134d928499e9460c5f0ed559119700ebe))
+
+Island ops -- computations unreachable from both the model inputs and outputs -- were silently
+  pruned by default; surfacing them is more honest for introspection. Flip the
+  CaptureOptions.keep_orphans default to True so islands are retained in raw metadata and exposed
+  via the trace.orphans accessor.
+
+This does NOT change layer_list, summaries, module logs, or the rendered graph: retained orphans
+  live only on trace.orphans, so well-behaved models (no islands) are byte-identical and the
+  field-order golden + io round-trips are unaffected. Set keep_orphans=False to restore pruning. The
+  visualization side (rendering islands in draw) stays opt-in pending a separate orphan-in-draw
+  pass.
+
+- **viz**: Draw(show_orphans=true) renders orphan islands as a dashed cluster
+  ([`4ad3bdd`](https://github.com/johnmarktaylor91/torchlens/commit/4ad3bdd32d0686bb4dc4ef65745e71b4a05032e1))
+
+Orphan (island) ops -- captured but unreachable from both inputs and outputs -- are now retained by
+  default (keep_orphans=True) but omitted from the connected graph. Add a `show_orphans` opt-in to
+  Trace.draw that surfaces them as a labelled, dashed, greyed cluster of edgeless nodes ("orphans
+  (unreachable from inputs & outputs)"), so a user can SEE dead-end computation without it polluting
+  the main graph. Default False -> the rendered graph is unchanged unless opted in. Prototype
+  styling pending review before any default flip of the visualization side.
+
+### Refactoring
+
+- **data**: Drop five dead private Trace fields (deeper private-attr sweep)
+  ([`502c204`](https://github.com/johnmarktaylor91/torchlens/commit/502c2042acfd519299d6e7101f4dc397ac12fdaf))
+
+Second, deeper pass over the ~143 private fields across the core data classes (Op/Layer/
+  Module/Param/Buffer/GradFn all came back clean -- every private field there has live readers).
+  Five dead fields removed from Trace, all confirmed by whole-repo grep:
+
+* _mlx_type_counts, _predicate_contexts_by_label -- orphaned FieldPolicy entries with ZERO writes
+  and ZERO reads anywhere (planned-but-never-implemented mirrors of _tf_op_type_counts / the
+  predicate family). * _tf_op_type_counts, _tf_source_records -- write-only: assigned during TF
+  capture (backends/tf/backend.py) but never read back off the Trace (the local op_type_counts is
+  consumed directly). Drop the writes + policy entries. * _predicate_all_contexts -- write-only
+  unbounded accumulator in the torch predicate hot path (_append_trace_predicate_context) with no
+  consumer; the bounded _predicate_history sibling does the real followed_by/lookback work. Removing
+  it also fixes a latent per-capture memory-growth smell.
+
+Kept (investigated, load-bearing): _grad_fn_strong_refs (legacy pre-v4 .tlspec rehydration compat)
+  and _paddle_alias_annotations (paddle-backend alias-capture test surface).
+
+Regenerate the field-order golden: diff is exactly the five removed names + recomputed digest
+  chunks, nothing else.
+
+- **data**: Drop two dead private fields (_direct_param_memory, _initial_hook_plan)
+  ([`8f1cd18`](https://github.com/johnmarktaylor91/torchlens/commit/8f1cd18a46c213233cf49ffbed0e3ec1a9081a83))
+
+Both confirmed dead by whole-repo grep:
+
+* Module._direct_param_memory -- written in __init__ but never read; the public `param_memory`
+  @property recomputes from `self.params`, so the stored value was inert. Remove the write + its
+  FieldPolicy.DROP entry. (The vestigial `param_memory=` constructor arg is now accepted-but-ignored
+  at 10 backend call sites; left in place to avoid a broad ripple -- tracked as a follow-up.) *
+  Trace._initial_hook_plan -- read once via `getattr(trace, "_initial_hook_plan", ())` in the
+  backward hook-plan assembly but never assigned anywhere, so it always yielded the empty default.
+  Remove the read + its FieldPolicy.DROP entry.
+
+Regenerate the backend-parity field-order golden: the diff is exactly the removed Trace field name
+  plus recomputed digest chunks (the Module field folds into the digest), no other structural
+  change.
+
+- **data**: Normalize string-concat FieldPolicy keys to literals
+  ([`a2b8d7c`](https://github.com/johnmarktaylor91/torchlens/commit/a2b8d7c3d3ef20d69dc20e4c2101173a090759ec))
+
+The Trace FieldPolicy table spelled ~16 DROP keys as `"_raw" + "_layer_dict"` etc -- a codemod scar
+  that resolved to the same literal string. Collapse them to plain literals (`"_raw_layer_dict"`,
+  ...). The resolved keys are byte-identical, so the field-order golden is unchanged; this is pure
+  source readability.
+
+- **import**: Defer fastlog.preview so visualization stays off cold-start
+  ([`352489b`](https://github.com/johnmarktaylor91/torchlens/commit/352489b89f5d1ac189ca2f662f2980114243ab68))
+
+torchlens.fastlog is imported eagerly at `import torchlens`, and its top-level `from
+  ..visualization.fastlog_preview import preview_fastlog` pulled the whole visualization stack
+  (NodeSpec + render pipeline) into every cold start, even for the common non-drawing case. Resolve
+  `fastlog.preview` through a module __getattr__ instead; `tl.fastlog.preview` and `from
+  torchlens.fastlog import preview` still work, but the visualization import now happens on first
+  preview access.
+
+- **import**: Drop eager facets import so it resolves lazily via _LAZY_ATTRS
+  ([`7edabcb`](https://github.com/johnmarktaylor91/torchlens/commit/7edabcb7fbaf2048395060581473820c0d4bcf76))
+
+torchlens/__init__.py eagerly force-imported torchlens.semantic.facets even though "facets" is
+  already registered in _LAZY_ATTRS for on-demand loading via __getattr__ -- defeating the lazy
+  machinery and paying facets' import cost on every `import torchlens`. Remove the eager line;
+  tl.facets still resolves.
+
+### Testing
+
+- Guard repr_html "notebook extra available" test behind importorskip("IPython")
+  ([`9c01ae8`](https://github.com/johnmarktaylor91/torchlens/commit/9c01ae8ac23796d90946ec8a0b47c51c22f3167a))
+
+test_repr_html_succeeds_when_notebook_extra_is_available asserts the HTML card path, which needs
+  IPython (the notebook extra). CI's lean .[dev,tabular] env lacks IPython, so _repr_html_ falls
+  back to text and the test failed. Skip it when IPython is absent -- matching the test's own "when
+  available" intent.
+
+- Guard xarray export tests behind importorskip (optional dep, lean CI)
+  ([`05ebd73`](https://github.com/johnmarktaylor91/torchlens/commit/05ebd7350ebdc080fe866588265bec4fc34896db))
+
+test_xarray_export_* call tl.export.xarray(), which imports the optional xarray package; skip them
+  where xarray is absent (CI's .[dev,tabular] env).
+
+- Hub_push asserts real pickle artifact (Trace now picklable post-cert10)
+  ([`48cb9ad`](https://github.com/johnmarktaylor91/torchlens/commit/48cb9ad6ca982923d6379c87a5248383a347866f))
+
+The Trace became picklable via GradFn weakref serialization, so push_to_hub now uploads the real
+  pickled artifact directly (its documented picklable path) rather than the .tlspec bundle-scrub
+  fallback. Drop the stale "naive pickle fails" precondition and the gzip/tar bundle assertions;
+  assert the uploaded payload is a real, large pickle artifact (protocol opcode 0x80) and never a
+  ~240-byte JSON stub.
+
+- Skip menagerie tests when the menagerie dep stack (pydantic) is absent
+  ([`99c9d9e`](https://github.com/johnmarktaylor91/torchlens/commit/99c9d9e7d874ed50e7a1bee08b9b556273d5cb35))
+
+The menagerie/ build subsystem carries its own dependency stack (pydantic via menagerie/schema.py,
+  undeclared in the core install). On lean environments such as CI smoke, importing any menagerie
+  module aborts collection of the whole suite. Add a conftest collect_ignore_glob that drops
+  tests/test_menagerie_*.py when pydantic is unimportable, so the core suite collects cleanly on
+  lean CI while the menagerie tests still run wherever their deps are installed.
+
+- Tolerate expected torch-capability warnings + version-varying arg-specs across the matrix
+  ([`623ead7`](https://github.com/johnmarktaylor91/torchlens/commit/623ead7a084616be98aed0ec8c67ac7807212672))
+
+Two pre-existing torch-matrix failures surfaced when this (cert10) code reached CI for the first
+  time:
+
+- torch 2.1: a plain tl.trace emits the expected "HAS_FUNCTORCH_LEVEL_API is unavailable"
+  graceful-degradation UserWarning, which the strict error::UserWarning:torchlens filter turned into
+  a hard failure. torch 2.1 is a declared-supported version, so add a message-specific "default"
+  filterwarnings exception (matching the existing deprecation-alias pattern): capability
+  degradations stay visible-not-fatal. Flags still flip; doctor()/snapshot still report;
+  test_torch_compat still asserts them locally.
+
+- torch 2.8: _KNOWN_UNSUPPORTED_ARG_SPECS is a cross-torch-version union of internal/private
+  helpers; "op" is decorated on some versions and absent on 2.8, so the strict "known <= decorated"
+  subset assertion failed. Add a _TORCH_VERSION_VARYING_UNSUPPORTED allowlist and assert only that
+  undecorated known entries are version-varying -- keeping the stale/typo guard while tolerating
+  torch-version drift, with a clear message listing any new offenders.
+
+- Use git grep instead of rg in source-audit tests (rg absent on CI)
+  ([`d8ac8ce`](https://github.com/johnmarktaylor91/torchlens/commit/d8ac8ce44114e40698dba14847b24677920efaf8))
+
+test_per_operation_oracle_deferred_per_ad_50 and test_not_mvp_audit shelled out to ripgrep, which
+  isn't installed in the CI env -> FileNotFoundError. Switch to `git grep` (present wherever the
+  repo is a git checkout, i.e. CI and dev), searching tracked files -- correct for source-hygiene
+  audits. Use -E for the regex-pattern audit; keeps the tripwire coverage on CI.
+
+- Version-gate functorch-level capability + guard dagua tests for lean CI
+  ([`65fd4b8`](https://github.com/johnmarktaylor91/torchlens/commit/65fd4b812f07c2910914647367e7a2203ab9ff8d))
+
+Two more pre-existing cert10 torch-matrix / optional-dep test-hygiene gaps surfaced on CI:
+
+- torch 2.1: HAS_FUNCTORCH_LEVEL_API (torch._C._functorch.maybe_current_level) is a torch-2.4+
+  addition, absent on the supported 2.1-2.3 range, so two capability expectation tests wrongly
+  required it everywhere. Probe torch directly and gate that one flag's expected value on actual
+  availability (other flags unchanged).
+
+- dagua is an unused experimental integration whose renderer imports the external `dagua` package on
+  use; the 6 tests that build/render dagua graphs now pytest.importorskip("dagua") so they skip on
+  envs without it (CI, and everywhere until dagua is adopted) while the surrounding non-dagua tests
+  still run.
+
+
 ## v2.29.1 (2026-07-09)
 
 ### Bug Fixes
