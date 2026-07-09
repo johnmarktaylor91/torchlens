@@ -13,6 +13,7 @@ from ._base import (
     Severity,
     TorchLensError,
     TorchLensWarning,
+    TraceNotReproducibleWarning,
     ValidationError,
 )
 
@@ -171,6 +172,7 @@ __all__ = [
     "Severity",
     "TorchLensError",
     "TorchLensWarning",
+    "TraceNotReproducibleWarning",
     "ValidationError",
     *_LEGACY_EXCEPTION_PATHS,
 ]

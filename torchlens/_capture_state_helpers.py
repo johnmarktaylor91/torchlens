@@ -745,7 +745,9 @@ def _model_for_ground_truth_validation(
     """
 
     try:
-        return copy.deepcopy(model), None
+        copied_model = copy.deepcopy(model)
+        _strip_copied_forward_decorations(copied_model)
+        return copied_model, None
     except Exception:
         model_type = type(model)
         if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
@@ -757,7 +759,101 @@ def _model_for_ground_truth_validation(
                 RuntimeWarning,
                 stacklevel=3,
             )
-        return model, _ModuleTreePlainAttrSnapshot(model)
+        try:
+            return model, _ModuleTreePlainAttrSnapshot(model)
+        except RuntimeError:
+            warnings.warn(
+                "TorchLens validate_forward_pass could not snapshot non-registered mutable "
+                "state after deepcopy failed; falling back to live model state without "
+                "plain-attribute restoration.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return model, None
+
+
+def _strip_copied_forward_decorations(model: nn.Module) -> None:
+    """Remove TorchLens forward wrappers copied from another module instance.
+
+    Parameters
+    ----------
+    model:
+        Deep-copied validation model whose submodules may carry instance-level
+        TorchLens forward wrappers closing over the source modules.
+    """
+
+    from .backends.torch._tl import is_forward_call_decorated
+
+    for module in model.modules():
+        current_forward = module.__dict__.get("forward", None)
+        if current_forward is None or not is_forward_call_decorated(current_forward):
+            continue
+        original_forward = getattr(current_forward, "__wrapped__", None)
+        if original_forward is not None and getattr(original_forward, "__self__", module) is module:
+            module.forward = cast(Callable[..., Any], original_forward)
+        else:
+            module.__dict__.pop("forward", None)
+
+
+def _restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> None:
+    """Align simple plain attributes on a validation copy with its source.
+
+    Parameters
+    ----------
+    source:
+        Original module tree.
+    copied:
+        Deep-copied module tree that should represent ``source`` at validation
+        entry.
+    """
+
+    simple_types = (type(None), bool, int, float, complex, str, bytes)
+    for source_module, copied_module in zip(source.modules(), copied.modules()):
+        source_names = _module_plain_attr_names(source_module)
+        copied_names = _module_plain_attr_names(copied_module)
+        for name in sorted(source_names & copied_names):
+            source_value = getattr(source_module, name)
+            copied_value = getattr(copied_module, name)
+            if not isinstance(source_value, simple_types):
+                continue
+            if not isinstance(copied_value, simple_types):
+                continue
+            if source_value != copied_value:
+                setattr(copied_module, name, source_value)
+
+
+def _model_for_validation_replay(
+    model: nn.Module,
+) -> tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None, bool]:
+    """Return a model instance to use for validation capture and replay.
+
+    Parameters
+    ----------
+    model:
+        Original model being validated.
+
+    Returns
+    -------
+    tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None, bool]
+        A deep-copied model when possible, optional plain-attribute snapshot
+        for fallback restoration, and whether the copy succeeded.
+    """
+
+    try:
+        copied_model = copy.deepcopy(model)
+        _strip_copied_forward_decorations(copied_model)
+        _restore_simple_plain_attrs_on_copy(model, copied_model)
+        return copied_model, None, True
+    except Exception:
+        warnings.warn(
+            "TorchLens validation replay against live model state; model could not be copied.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        try:
+            return model, _ModuleTreePlainAttrSnapshot(model), False
+        except RuntimeError:
+            return model, None, False
 
 
 def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:

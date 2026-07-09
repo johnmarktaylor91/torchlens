@@ -6,6 +6,8 @@ deep clone helpers, and integration tests through specific exemption paths.
 
 from collections import namedtuple
 from dataclasses import replace
+import threading
+import warnings
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -14,10 +16,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass
 import torchlens.user_funcs as user_funcs
-from torchlens.errors import MetadataInvariantError
+from torchlens.errors import MetadataInvariantError, TraceNotReproducibleWarning
 from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
 from torchlens.validation import check_metadata_invariants
@@ -999,6 +1002,81 @@ def test_validate_forward_pass_plain_attribute_mutable_state_isolated() -> None:
     assert validate_forward_pass(PlainMutableState(), torch.randn(3)) is True
 
 
+def test_validate_forward_pass_restores_pristine_state_before_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validation replay starts from the validation model's pre-capture state."""
+
+    class CounterBuffer(nn.Module):
+        """Model whose registered counter changes its structural forward path."""
+
+        def __init__(self) -> None:
+            """Initialize the mutable buffer."""
+
+            super().__init__()
+            self.register_buffer("step", torch.zeros(()))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a counter-selected branch, then advance the counter."""
+
+            step = cast(torch.Tensor, self.step)
+            if step.item() > 0:
+                output = x * 2
+            else:
+                output = x + 1
+            step.add_(1)
+            return output
+
+    replay_entry_steps: list[float] = []
+
+    def observe_replay_entry(trace: Trace) -> None:
+        """Record the validation model state visible at replay completion."""
+
+        source_ref = getattr(trace, "_source_model_ref")
+        source_model = source_ref()
+        assert source_model is not None
+        replay_entry_steps.append(float(cast(torch.Tensor, source_model.step).item()))
+
+    with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                CounterBuffer(),
+                torch.randn(3),
+                validate_metadata=False,
+                _trace_observer=observe_replay_entry,
+            )
+            is True
+        )
+    assert replay_entry_steps == [0.0]
+
+    original_restore = user_public_impls._restore_validation_replay_state
+
+    def skip_restore(
+        model: nn.Module,
+        state_dict: dict[str, torch.Tensor],
+        plain_attr_snapshot: object | None,
+    ) -> None:
+        """Simulate the old validation behavior that replayed post-pass state."""
+
+        del model, state_dict, plain_attr_snapshot
+
+    replay_entry_steps.clear()
+    monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", skip_restore)
+
+    with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                CounterBuffer(),
+                torch.randn(3),
+                validate_metadata=False,
+                _trace_observer=observe_replay_entry,
+            )
+            is True
+        )
+    assert replay_entry_steps == [2.0]
+    monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", original_restore)
+
+
 def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() -> None:
     """Un-deepcopyable models fall back to state_dict restore with warning."""
 
@@ -1019,6 +1097,207 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_replay_copy_fallback_warns_for_lock_attr() -> None:
+    """Replay copy failure falls back to live state with an explicit warning."""
+
+    class LockBackedModel(nn.Module):
+        """Model holding an uncopyable external resource."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and a simple registered buffer."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.register_buffer("bias", torch.ones(3))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Use registered tensor state without mutating the lock."""
+
+            return x + cast(torch.Tensor, self.bias)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="validation replay against live model state; model could not be copied",
+    ):
+        assert validate_forward_pass(LockBackedModel(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
+    """Validation warns when a second trace has a different structure."""
+
+    class ToggleBranch(nn.Module):
+        """Model that changes control flow after one forward pass."""
+
+        def __init__(self) -> None:
+            """Initialize branch state."""
+
+            super().__init__()
+            self.use_mul = False
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a different branch after the first pass."""
+
+            if self.use_mul:
+                out = x * 2
+            else:
+                out = x + 1
+            self.use_mul = True
+            return out
+
+    with pytest.warns(
+        TraceNotReproducibleWarning,
+        match="stateful/non-reproducible.*make the forward path state-independent",
+    ):
+        assert validate_forward_pass(ToggleBranch(), torch.randn(2, 3)) is True
+
+
+def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
+    """Validation does not warn for a stateless repeated trace."""
+
+    class StatelessToy(nn.Module):
+        """Small stateless model with stable graph structure."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a deterministic stateless tensor computation."""
+
+            return torch.relu(x + 1)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(StatelessToy(), torch.randn(2, 3)) is True
+
+    messages = [str(warning.message) for warning in caught]
+    assert not any("stateful/non-reproducible" in message for message in messages)
+
+
+def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None:
+    """Same-option retracing must ignore train-mode BatchNorm value drift."""
+
+    class BatchNormModel(nn.Module):
+        """Model with a state-mutating registered BatchNorm buffer."""
+
+        def __init__(self) -> None:
+            """Initialize train-mode BatchNorm."""
+
+            super().__init__()
+            self.batch_norm = nn.BatchNorm1d(3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Update BatchNorm running statistics and return normalized inputs."""
+
+            return self.batch_norm(x)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(BatchNormModel(), torch.randn(4, 3)) is True
+
+    assert not any(issubclass(warning.category, TraceNotReproducibleWarning) for warning in caught)
+
+
+def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
+    """Live-model fallback retains the two pre-existing model executions."""
+
+    execution_count = [0]
+
+    class UncopyableExecutionCounter(nn.Module):
+        """Uncopyable model that records every full forward execution."""
+
+        def __init__(self) -> None:
+            """Initialize the execution counter."""
+
+            super().__init__()
+
+        def __deepcopy__(self, memo: dict[int, object]) -> "UncopyableExecutionCounter":
+            """Reject validation's isolation copies."""
+
+            del memo
+            raise TypeError("cannot deepcopy model")
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Count and execute a stable forward path."""
+
+            execution_count[0] += 1
+            return x + 1
+
+    model = UncopyableExecutionCounter()
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert validate_forward_pass(model, torch.randn(2, 3)) is True
+
+    assert execution_count == [2]
+
+
+def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
+    """Ground-truth fallback reports when it cannot restore plain mutable state."""
+
+    class UncopyableOpaqueState(nn.Module):
+        """Model that defeats both deepcopy and plain-attribute snapshots."""
+
+        def __init__(self) -> None:
+            """Initialize opaque state that fallback snapshotting cannot represent."""
+
+            super().__init__()
+            self.opaque_state = object()
+
+        def __deepcopy__(self, memo: dict[int, object]) -> "UncopyableOpaqueState":
+            """Reject isolated ground-truth copies."""
+
+            del memo
+            raise TypeError("cannot deepcopy model")
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a stable output without using the opaque state."""
+
+            return x + 1
+
+    model = UncopyableOpaqueState()
+    with pytest.warns(RuntimeWarning, match="without plain-attribute restoration"):
+        fallback_model, snapshot = user_public_impls._model_for_ground_truth_validation(model)
+
+    assert fallback_model is model
+    assert snapshot is None
+
+
+def test_validate_forward_pass_ground_truth_copy_strips_traced_forward_wrappers() -> None:
+    """Ground-truth validation must execute a previously traced nested-model copy."""
+
+    class CountingChild(nn.Module):
+        """Nested child with a source-visible forward counter."""
+
+        def __init__(self) -> None:
+            """Initialize the source execution counter."""
+
+            super().__init__()
+            self.executions = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Count each child forward execution."""
+
+            self.executions += 1
+            return x + 1
+
+    class NestedModel(nn.Module):
+        """Parent model used to install persistent TorchLens wrappers."""
+
+        def __init__(self) -> None:
+            """Initialize the nested child."""
+
+            super().__init__()
+            self.child = CountingChild()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Delegate to the nested child."""
+
+            return self.child(x)
+
+    model = NestedModel()
+    prior_trace = trace_fn(model, torch.randn(2, 3))
+    prior_trace.cleanup()
+    model.child.executions = 0
+
+    assert validate_forward_pass(model, torch.randn(2, 3)) is True
+    assert model.child.executions == 0
 
 
 def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(

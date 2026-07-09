@@ -363,7 +363,7 @@ class _BufferMutatingFailModel(nn.Module):
 
 @pytest.mark.parametrize(
     ("failure_site", "expected_original_calls"),
-    [("ground_truth", 0), ("traced", 1)],
+    [("ground_truth", 0), ("traced", 0)],
 )
 def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
     failure_site: ValidationFailureSite,
@@ -372,8 +372,8 @@ def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
     """Registered buffer state is restored bit-exact when forward raises.
 
     Parametrized over the failing validation site: the deep-copied
-    ground-truth run and the original traced run. Both must leave the original
-    model exactly as it was before
+    ground-truth run and the isolated traced validation run. Both must leave the
+    original model exactly as it was before
     ``validate_forward_pass`` was called, with the original exception
     propagating.
     """
