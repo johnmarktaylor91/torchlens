@@ -1243,6 +1243,7 @@ def _build_collapsed_module_node(
         graph_node_label = "pass".join(module_tuple)
         module_call = ml.ops[int(call_index) - 1]  # type: ignore[index]
         module_num_tensors = module_call.num_layers
+        module_num_buffers = sum(self[layer].is_buffer for layer in module_call.ops)
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
         if (
             _collapsed_module_should_show_remainder(self, address, module_call.ops, collapse_fn)
@@ -1250,12 +1251,17 @@ def _build_collapsed_module_node(
         ):
             remainder_stats = _collapsed_module_remainder_stats(self, address, module_call.ops)
             module_num_tensors = remainder_stats["num_layers"]
+            module_num_buffers -= sum(
+                layer.is_buffer
+                for layer in _surfaced_own_output_ops(self, address, module_call.ops)
+            )
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
     else:
         graph_node_label = module_tuple[0]
         module_num_tensors = ml.num_layers
+        module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)  # type: ignore[union-attr]
 
     # Deduplicate: multiple layers in the same collapsed module will each
@@ -1310,7 +1316,9 @@ def _build_collapsed_module_node(
     ]
     if fold is not None and fold.shape_summary is not None:
         lines.append(f"shapes {fold.shape_summary}")
-    lines.extend([f"{module_num_tensors} layers total", param_detail])
+    lines.extend(
+        [format_collapsed_module_contents(module_num_tensors, module_num_buffers), param_detail]
+    )
     default_spec = NodeSpec(
         lines=lines,
         shape="box3d",

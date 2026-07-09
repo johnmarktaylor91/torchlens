@@ -105,6 +105,32 @@ from ._render_utils import (
     make_module_cluster_attrs,
 )
 
+
+def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
+    """Format the operation and buffer counts for a collapsed module.
+
+    Parameters
+    ----------
+    num_layers:
+        Total tensor-layer count already computed for the module.
+    num_buffer_layers:
+        Number of buffer tensor layers within ``num_layers``.
+
+    Returns
+    -------
+    str
+        An honest collapsed-module summary such as ``"2 ops + 6 buffers"``.
+    """
+
+    num_ops = max(0, num_layers - num_buffer_layers)
+    parts: list[str] = []
+    if num_ops:
+        parts.append(f"{num_ops} {'op' if num_ops == 1 else 'ops'}")
+    if num_buffer_layers:
+        parts.append(f"{num_buffer_layers} {'buffer' if num_buffer_layers == 1 else 'buffers'}")
+    return " + ".join(parts)
+
+
 if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
     from ..data_classes.module import Module
@@ -745,6 +771,7 @@ __all__ = [
     "direction_to_rankdir",
     "field",
     "format_memory",
+    "format_collapsed_module_contents",
     "format_module_kwargs",
     "format_module_path",
     "format_param_list",
