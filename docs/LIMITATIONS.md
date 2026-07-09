@@ -240,15 +240,15 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   aliasing (for example, `torch.add(a, b, out=a)`) is not pre-snapshotted and
   may expose post-mutation inputs; TorchLens emits a warning when it detects
   that case at hook fire time.
-- **Pre-bound local `from torch import ...` aliases**: TorchLens patches
-  many module-level torch aliases when wrappers are installed, but it cannot
-  rewrite arbitrary closure or local variables that captured raw torch
-  callables before `wrap_torch()` / `trace()` ran. Those calls may execute
-  outside capture. Prefer `import torch` or `import torch.nn.functional as F`
-  in model code and call through the module attribute inside `forward`, or
-  create local aliases only after TorchLens has installed wrappers. Run
-  `tl.utils.doctor()` to check the process-global torch namespace wrapper
-  state; it cannot inspect private closure locals.
+- **Detached torch references (handled, with a deliberate boundary)**:
+  TorchLens re-patches detached `from torch import ...` references when wrappers
+  are installed, including module-level aliases and function-local imports,
+  and repeats that repair when wrapping is re-entered. The sys.modules crawl
+  does not reach callable references captured in closure cells or stashed in
+  nested containers before wrapping, so those calls are not captured today.
+  A runtime escape detector is planned to catch those references. Run
+  `tl.utils.doctor()` to check the process-global torch namespace wrapper state;
+  it cannot inspect private closure cells or container contents.
 - **bfloat16 / fp16 + non-deterministic GPU reductions**: validation
   replay compares activations to within ``3e-6`` absolute tolerance; on
   bf16/fp16 GPU atomics, small reordering differences can cross that

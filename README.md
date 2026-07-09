@@ -441,6 +441,9 @@ sparse tensors, meta tensors, quantization, and `torch.func.vmap`.
 See [LIMITATIONS.md](docs/LIMITATIONS.md) for the full matrix: what fails, what
 works, and the recommended workaround for each context.
 
+TorchLens also repairs detached module-level and function-local `from torch import ...`
+references when wrappers are installed, with documented boundaries for pre-wrap closures.
+
 
 ## Tutorials and Docs
 
