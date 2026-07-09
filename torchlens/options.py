@@ -657,8 +657,11 @@ class CaptureOptions:
     save_visualizations:
         Whether rendered visualizer image files should be copied into portable bundles.
     keep_orphans:
-        Whether island ops are retained in raw metadata and exposed via
-        ``trace.orphans``.
+        Whether island ops (computations unreachable from both the model inputs and
+        outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
+        to ``True`` so islands are surfaced rather than silently dropped; set ``False`` to
+        prune them. Retained orphans do not enter ``layer_list``/summaries; they live only
+        on the ``trace.orphans`` accessor.
     output_device:
         Device placement for saved tensors.
     save_arg_values:
@@ -747,7 +750,7 @@ class CaptureOptions:
     save_raw_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
-    keep_orphans: bool = False
+    keep_orphans: bool = True
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
     save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
@@ -893,7 +896,7 @@ class CaptureOptions:
                 "save_visualizations", save_visualizations, False, specified_fields
             ),
             "keep_orphans": _resolve_option_value(
-                "keep_orphans", keep_orphans, False, specified_fields
+                "keep_orphans", keep_orphans, True, specified_fields
             ),
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields
