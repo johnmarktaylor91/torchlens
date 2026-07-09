@@ -7,10 +7,11 @@ explicit replay/rerun recipe.
 | --- | --- |
 | Configure an intervention on a representation site. | Capture an intervention-ready log, select a site, apply a helper, and rerun or replay. |
 
-Their construct:
+Their construct (third-party example; verify `IntervenableModel` arguments and output
+against the Pyvene version installed in your environment):
 
 ```python
-# migration-test: tool=pyvene expected=[[0.0, 0.0]]
+# third-party example; Pyvene must be installed and configured for the target model
 import torch
 from pyvene import IntervenableConfig, IntervenableModel, ZeroIntervention
 

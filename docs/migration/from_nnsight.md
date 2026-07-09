@@ -7,10 +7,11 @@ TorchLens capture followed by label/module lookup on the completed log.
 | --- | --- |
 | Save an intermediate value during a trace. | Capture the eager forward, then read the saved activation. |
 
-Their construct:
+Their construct (pseudocode: NNsight requires a compatible language model wrapper and
+token/input contract; the local `Tiny` module below is not such a wrapper):
 
 ```python
-# migration-test: tool=nnsight expected=[[2.5, 2.5]]
+# illustrative only; adapt the model and input to the installed NNsight version
 import torch
 from torch import nn
 from nnsight import LanguageModel
@@ -28,9 +29,9 @@ class Tiny(nn.Module):
         return torch.relu(self.proj(x))
 
 
-model = LanguageModel(Tiny(), dispatch=True)
+model = LanguageModel("your-supported-hugging-face-model", dispatch=True)
 x = torch.tensor([[2.0, 3.0]])
-with model.trace(x):
+with model.trace(input_ids=x):
     saved = model.proj.output.save()
 
 RESULT = saved.value.detach().tolist()

@@ -169,8 +169,10 @@ trace = recording.to_trace()
 act = tl.pluck(model, x, 'relu_1_2')   # returns tensor directly
 
 # Batch extraction across a dataset
+# `dataset` is an application-provided iterable of input batches; for example:
+# dataset = [torch.randn(1, 3, 224, 224) for _ in range(8)]
 tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
-                   batch_size=32, output_dir='activations/')
+                   batch_size=32, output_dir='/tmp/torchlens-activations/')
 ```
 
 **Performance note:** With `halt=` and `tl.record`, capture can run *faster
@@ -323,6 +325,9 @@ bundle.compare_at(tl.func('relu'))
 **Facets** provide named sub-views for attention heads, LSTM outputs, and
 fused projections (for models with those structures):
 
+The following is an API sketch; `vit_model` and `lstm` must be models whose module
+structures provide the shown paths, and are not defined by this generic example.
+
 ```python
 # ViT / transformer model with attention blocks
 log = tl.trace(vit_model, x)
@@ -365,6 +370,7 @@ and cannot handle dynamic architectures.
 | Interventions / halt / fastlog | yes | -- | -- | -- | -- | -- |
 
 ```python
+# API sketch; supply compatible models and input in an application context.
 log = tl.trace(torch_model, x)                      # PyTorch (default)
 log = tl.trace(jax_fn,      inputs, backend='jax')  # JAX preview
 log = tl.trace(tg_fn,       inputs, backend='tinygrad')
@@ -425,6 +431,7 @@ Use the provisional address-free structural hash to catch an unintended graph ch
 pinning model weights or module names:
 
 ```python
+# `model` and `example_input` must be supplied by the application.
 import torchlens as tl
 
 pinned = tl.assert_unchanged(model, example_input, expected=None)  # prints and returns a hash

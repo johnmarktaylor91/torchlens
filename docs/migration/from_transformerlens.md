@@ -11,7 +11,7 @@ TransformerLens hook-point names.
 Their construct:
 
 ```python
-# migration-test: tool=transformer_lens expected=[[2.5, 2.5]]
+# third-party example; activation values depend on the downloaded checkpoint
 import torch
 from transformer_lens import HookedTransformer
 
@@ -19,7 +19,7 @@ from transformer_lens import HookedTransformer
 model = HookedTransformer.from_pretrained("tiny-stories-1M")
 tokens = model.to_tokens("hello")
 _, cache = model.run_with_cache(tokens)
-RESULT = cache["hook_embed"][0, 0, :2].detach().reshape(1, 2).tolist()
+RESULT_SHAPE = tuple(cache["hook_embed"][0, 0, :2].detach().reshape(1, 2).shape)
 ```
 
 TorchLens equivalent:
