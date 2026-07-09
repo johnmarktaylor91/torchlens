@@ -27,7 +27,6 @@ from .types import (
     RecordingTrace,
 )
 from ..ir.predicate import MLXValueUnavailableError, _DEFERRED_VALUE
-from ..visualization.fastlog_preview import preview_fastlog as preview
 
 __all__ = [
     "ActivationRecord",
@@ -58,3 +57,18 @@ __all__ = [
     "recover",
     "record",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily resolve the visualization-backed ``preview`` helper.
+
+    ``preview`` pulls in ``torchlens.visualization`` (NodeSpec and the render stack), so it
+    is deferred to first access rather than imported when ``torchlens.fastlog`` is imported
+    (which happens eagerly at ``import torchlens``). Keeping it out of the import path shaves
+    the visualization import off cold-start for the common non-drawing case.
+    """
+    if name == "preview":
+        from ..visualization.fastlog_preview import preview_fastlog
+
+        return preview_fastlog
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
