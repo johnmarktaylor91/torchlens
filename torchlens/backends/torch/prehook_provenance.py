@@ -196,18 +196,28 @@ def rollback_prehook_provenance(trace: "Trace") -> None:
         nn.Module.register_forward_pre_hook = ledger.local_registration_original  # type: ignore[method-assign]
     if torch_module.register_module_forward_pre_hook is _global_registration_wrapper_for(ledger):
         torch_module.register_module_forward_pre_hook = ledger.global_registration_original
-    for replacement in reversed(ledger.attribute_replacements):
-        current = getattr(replacement.owner, "__dict__", {}).get(replacement.name)
-        if current is not replacement.wrapper:
+    for attribute_replacement in reversed(ledger.attribute_replacements):
+        current = getattr(attribute_replacement.owner, "__dict__", {}).get(
+            attribute_replacement.name
+        )
+        if current is not attribute_replacement.wrapper:
             continue
-        if replacement.owned_before:
-            setattr(replacement.owner, replacement.name, replacement.original)
+        if attribute_replacement.owned_before:
+            setattr(
+                attribute_replacement.owner,
+                attribute_replacement.name,
+                attribute_replacement.original,
+            )
         else:
-            getattr(replacement.owner, "__dict__", {}).pop(replacement.name, None)
-    for replacement in reversed(ledger.registry_replacements):
-        current = replacement.registry.get(replacement.hook_id)
-        if current is replacement.wrapper:
-            replacement.registry[replacement.hook_id] = replacement.original
+            getattr(attribute_replacement.owner, "__dict__", {}).pop(
+                attribute_replacement.name, None
+            )
+    for registry_replacement in reversed(ledger.registry_replacements):
+        current = registry_replacement.registry.get(registry_replacement.hook_id)
+        if current is registry_replacement.wrapper:
+            registry_replacement.registry[registry_replacement.hook_id] = (
+                registry_replacement.original
+            )
     trace.__dict__.pop("_prehook_provenance_ledger", None)
 
 

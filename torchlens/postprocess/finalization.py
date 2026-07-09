@@ -291,7 +291,11 @@ def _finalize_snapshot_source_labels(
     observations = tuple(
         replace(
             observation,
-            source_op=mapping.get(observation.source_op, observation.source_op),
+            source_op=(
+                mapping.get(observation.source_op, observation.source_op)
+                if observation.source_op is not None
+                else None
+            ),
         )
         for observation in snapshot.tensor_observations
     )
