@@ -17,6 +17,19 @@ pd = pytest.importorskip("pandas")
 import torchlens as tl  # noqa: E402
 
 
+def test_hash_namespace_is_available_through_all_public_import_patterns() -> None:
+    """The structural-hash namespace should preserve lazy facade import patterns."""
+
+    import torchlens.hash as hash_module
+    from torchlens import hash as imported_namespace
+    from torchlens.hash import model as model_hash
+
+    assert tl.hash is hash_module
+    assert imported_namespace is hash_module
+    assert model_hash is hash_module.model
+    assert tl.assert_unchanged is hash_module.assert_unchanged
+
+
 class _Tracker:
     """Small object with tracker-like custom_methods for export tests."""
 
