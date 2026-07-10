@@ -396,7 +396,6 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_output_head",
         "_output_tokenizer",
         "_semantic_output_metadata",
-        "_annotation_revision",
         "tinygrad_payload_policy",
         "tinygrad_uop_captures",
     }
