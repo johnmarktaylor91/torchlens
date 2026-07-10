@@ -1723,12 +1723,11 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
     """Return the branch-test kind (``IF`` or ``ELIF``) for a branch-entry edge.
 
     ``conditional_branch_edges`` records the edges that enter each condition test but carries
-    no kind, so a naive renderer labels every test ``IF`` -- wrong for an if/elif ladder where
-    only the first test is the ``if`` and the rest are ``elif``. The authoritative order lives
-    on ``conditional_records[*].bool_layers`` (``[if_bool, elif_1_bool, ...]``; ``else`` has no
-    test). Map the edge's child (the condition-subgraph entry op) to the nearest downstream
-    branch bool via a bounded forward walk, then read its position: index 0 -> ``IF``, any
-    later index -> ``ELIF``.
+    no kind. Map the edge's child to the nearest downstream branch bool via a bounded forward
+    walk, then use that bool's AST-derived ``conditional_context_kind``. This remains honest
+    when one source-level ``if`` is evaluated repeatedly in a loop: every evaluation is ``IF``
+    even though all evaluations accumulate in one conditional event. Static ``elif`` tests are
+    classified directly as ``elif_test`` and continue to render as ``ELIF``.
 
     Parameters
     ----------
@@ -1744,8 +1743,16 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
     """
     bool_kind: dict[str, str] = {}
     for event in getattr(trace, "conditional_records", ()) or ():
-        for position, bool_label in enumerate(getattr(event, "bool_layers", ()) or ()):
-            bool_kind.setdefault(bool_label.split(":", 1)[0], "IF" if position == 0 else "ELIF")
+        for bool_label in getattr(event, "bool_layers", ()) or ():
+            bool_layer = trace[bool_label]
+            bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
+            context_kinds = (
+                {getattr(op, "conditional_context_kind", None) for op in bool_ops}
+                if bool_ops
+                else {getattr(bool_layer, "conditional_context_kind", None)}
+            )
+            kind = "ELIF" if context_kinds == {"elif_test"} else "IF"
+            bool_kind[bool_label.split(":", 1)[0]] = kind
     if not bool_kind:
         return "IF"
 

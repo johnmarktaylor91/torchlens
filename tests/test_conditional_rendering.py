@@ -145,6 +145,21 @@ class RolledMixedArmModel(nn.Module):
         return x
 
 
+class LoopRepeatedIfModel(nn.Module):
+    """Evaluate the same source ``if`` independently on every loop iteration."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run four evaluations of one source-level condition."""
+
+        for index in range(4):
+            marker = (x.mean() * 0) + (1 if index % 2 == 0 else -1)
+            if marker > 0:
+                x = torch.relu(x)
+            else:
+                x = torch.sigmoid(x)
+        return x
+
+
 def _render_dot_source(
     model: nn.Module,
     x: torch.Tensor,
@@ -295,6 +310,27 @@ def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
         kinds = [expected_by_bool[trace[c].children[0]] for _, c in trace.conditional_branch_edges]
         assert kinds.count("IF") == 1
         assert kinds.count("ELIF") == len(kinds) - 1
+    finally:
+        trace.cleanup()
+
+
+def test_loop_repeated_if_condition_entries_remain_if() -> None:
+    """Repeated evaluations of one source ``if`` never become an ELIF ladder."""
+
+    dot_source, trace = _render_dot_source(LoopRepeatedIfModel(), torch.ones(2, 2))
+    try:
+        event = trace.conditional_records[0]
+        assert len(event.bool_layers) == 4
+        assert all(
+            {op.conditional_context_kind for op in trace[bool_label].ops.values()} == {"if_test"}
+            for bool_label in event.bool_layers
+        )
+        edge_lines = [
+            _find_edge_line(dot_source, parent_label, child_label)
+            for parent_label, child_label in trace.conditional_branch_edges
+        ]
+        assert len(edge_lines) == 4
+        assert all("IF" in line and "ELIF" not in line for line in edge_lines)
     finally:
         trace.cleanup()
 
