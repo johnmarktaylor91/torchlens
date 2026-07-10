@@ -83,6 +83,7 @@ class _GuardState:
     tables: DetectorTables
     owner_thread_id: int
     mode: EscapeDetectorMode
+    guard_pass_index: int
     prior_profile: Callable[[types.FrameType, str, Any], Any] | None = None
     monitoring_tool_id: int | None = None
     monitoring_codes: tuple[types.CodeType, ...] = ()
@@ -395,6 +396,9 @@ def _report_escape(
         "function": callsite.f_code.co_name,
         "storage_hint": _storage_hint(callsite),
         "owner_thread_id": guard.owner_thread_id,
+        "guard_pass_index": guard.guard_pass_index,
+        "capture_mode": getattr(guard.trace, "capture_mode", None),
+        "exhaustive_pass": bool(getattr(guard.trace, "_in_exhaustive_pass", False)),
         "stack": tuple(traceback.format_stack(callsite, limit=5)),
         "witness_corroborated": False,
         "enforced": False,
@@ -584,6 +588,7 @@ def _copy_recording_diagnostics(trace: Any) -> None:
         "escape_diagnostics",
         "escape_detector_event_count",
         "escape_detector_callback_ns",
+        "capture_guard_passes",
     ):
         if hasattr(trace, field_name):
             object.__setattr__(recording, field_name, getattr(trace, field_name))
@@ -608,7 +613,16 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
     owner_thread_id = threading.get_ident()
     thread_count_start = threading.active_count()
     tables = build_detector_tables()
-    guard = _GuardState(trace, tables, owner_thread_id, mode)
+    guard_passes = trace.__dict__.setdefault("capture_guard_passes", [])
+    guard_pass_index = len(guard_passes) + 1
+    guard_passes.append(
+        {
+            "guard_pass_index": guard_pass_index,
+            "capture_mode": getattr(trace, "capture_mode", None),
+            "owner_thread_id": owner_thread_id,
+        }
+    )
+    guard = _GuardState(trace, tables, owner_thread_id, mode, guard_pass_index)
     trace.detached_patch_policy = _state._detached_patch_policy
     trace.detached_patch_epoch = _state._detached_patch_epoch
     trace.escape_detector_mode = mode
@@ -617,7 +631,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
     trace.capture_thread_count_start = thread_count_start
     trace.capture_thread_activity_detected = False
     trace.escape_detector_backward_coverage = "not_armed"
-    trace.escape_diagnostics = []
+    trace.__dict__.setdefault("escape_diagnostics", [])
     if _state._detached_patch_policy == "scoped":
         trace.capture_verified = False
         trace.capture_verification_reason = "scoped_dispatch_witness_not_enabled"
@@ -637,8 +651,12 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
         thread_count_end = threading.active_count()
         trace.capture_thread_count_end = thread_count_end
         trace.capture_thread_activity_detected = thread_count_end != thread_count_start
-        trace.escape_detector_event_count = guard.event_count
-        trace.escape_detector_callback_ns = guard.callback_ns
+        trace.escape_detector_event_count = (
+            int(getattr(trace, "escape_detector_event_count", 0)) + guard.event_count
+        )
+        trace.escape_detector_callback_ns = (
+            int(getattr(trace, "escape_detector_callback_ns", 0)) + guard.callback_ns
+        )
         if trace.capture_thread_activity_detected:
             trace.capture_verified = False
             trace.capture_verification_reason = "owner_thread_tripwire_changed"

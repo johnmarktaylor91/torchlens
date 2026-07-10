@@ -1546,6 +1546,8 @@ def unwrap_torch() -> None:
     _state._active_trace = None
     reset_detector_tables()
     _state._escape_detector_mode = "off"
+    _state._detached_patch_policy = _RELEASE_DEFAULT_PATCH_POLICY
+    _state._detached_patch_modules = ()
     from .backward import uninstall_autograd_wrappers
 
     uninstall_autograd_wrappers()

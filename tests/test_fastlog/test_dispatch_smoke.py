@@ -73,7 +73,7 @@ def _run_dispatcher_smoke(
             log_source_tensor(trace, x, "input", "input.x")
             model(x)
     finally:
-        _cleanup_model_session(model, [x])
+        _cleanup_model_session(trace, model, [x])
     trace._fastlog_recording = state.recording
     return Recording.from_capture_events(trace)
 
