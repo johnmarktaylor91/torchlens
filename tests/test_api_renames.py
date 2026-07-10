@@ -220,7 +220,6 @@ def test_paper_api_model_history_import_warns_and_redirects() -> None:
     ("legacy_name", "target_name"),
     [
         ("log_forward_pass", "_trace"),
-        ("get_model_activations", "extract"),
     ],
 )
 def test_paper_api_capture_shims_warn_and_redirect(
@@ -249,7 +248,23 @@ def test_paper_api_capture_shims_warn_and_redirect(
 
     assert result is sentinel
     assert isinstance(captured["args"][0], _TinyModel)
-    assert captured["kwargs"] == {"layers": ["linear"]}
+    assert captured["kwargs"] == {"layers_to_save": ["linear"]}
+
+
+def test_get_model_activations_is_not_advertised_as_a_legacy_api() -> None:
+    """The never-shipped paper-era name is absent instead of forwarding to extract."""
+
+    with pytest.raises(AttributeError, match="get_model_activations"):
+        getattr(tl, "get_model_activations")
+
+
+def test_log_forward_pass_rejects_untranslatable_legacy_kwargs() -> None:
+    """Unsupported legacy options direct callers to the migration guidance."""
+
+    with pytest.warns(DeprecationWarning, match="log_forward_pass"):
+        shim = tl.log_forward_pass
+    with pytest.raises(TypeError, match="docs/migration/v2.0_api_changes.md"):
+        shim(_TinyModel(), _tiny_input(), keep_unsaved_layers=True)
 
 
 @pytest.mark.parametrize(

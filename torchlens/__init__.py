@@ -193,7 +193,6 @@ _MOVED_OBJECTS = {
 
 _LEGACY_API_SHIMS = {
     "log_forward_pass": ("trace", "trace"),
-    "get_model_activations": ("extract", "extract"),
     "validate_model_activations": ("validate", "validate_forward"),
     "validate_saved_activations": ("validate", "validate_saved"),
     "render_graph": ("Trace.draw() / show_model_graph", "draw"),
@@ -203,6 +202,49 @@ _LEGACY_API_SHIMS = {
     "get_model_structure": ("structure getter", "structure"),
     "show_model_structure": ("structure getter", "structure"),
 }
+
+_LEGACY_TRACE_KWARG_ALIASES = {
+    "layers": "layers_to_save",
+    "save_function_args": "save_arg_values",
+    "save_gradients": "save_grads",
+}
+
+
+def _translate_legacy_trace_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Translate supported paper-era ``log_forward_pass`` keyword names.
+
+    Parameters
+    ----------
+    kwargs:
+        Keyword arguments supplied to the deprecated entry point.
+
+    Returns
+    -------
+    dict[str, Any]
+        Arguments accepted by :func:`torchlens.trace`.
+
+    Raises
+    ------
+    TypeError
+        If an unsupported paper-era option is supplied or both an old and new
+        spelling are present.
+    """
+
+    translated = dict(kwargs)
+    if "keep_unsaved_layers" in translated:
+        raise TypeError(
+            "log_forward_pass(keep_unsaved_layers=...) has no direct trace() equivalent; "
+            "see docs/migration/v2.0_api_changes.md."
+        )
+    for old_name, new_name in _LEGACY_TRACE_KWARG_ALIASES.items():
+        if old_name not in translated:
+            continue
+        if new_name in translated:
+            raise TypeError(
+                f"log_forward_pass received both {old_name!r} and {new_name!r}; use {new_name!r}."
+            )
+        translated[new_name] = translated.pop(old_name)
+    return translated
 
 
 def _resolve_top_level(name: str) -> Any:
@@ -376,6 +418,8 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
         """Warn and delegate a legacy top-level API call."""
 
         _warn_legacy_api_name(name, replacement)
+        if name == "log_forward_pass":
+            return _resolve_top_level("_trace")(*args, **_translate_legacy_trace_kwargs(kwargs))
         if name == "validate_model_activations":
             kwargs.setdefault("scope", "forward")
             return _resolve_top_level("validate")(*args, **kwargs)
@@ -390,8 +434,6 @@ def _legacy_trace_alias(name: str, replacement: str) -> _Callable[..., Any]:
             kwargs.setdefault("layers_to_save", None)
             structure_trace = _resolve_top_level("_trace")(*args, **kwargs)
             return structure_trace.modules
-        if name == "get_model_activations":
-            return extract(*args, **kwargs)
         return _resolve_top_level("_trace")(*args, **kwargs)
 
     _shim.__name__ = name
