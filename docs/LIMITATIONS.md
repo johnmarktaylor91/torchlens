@@ -230,10 +230,30 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   dtype / label handling in the subclass won't fire during logging.
 - **Very deep module hierarchy** (>1000 levels): the submodule traversal
   is recursive and may hit Python's default recursion limit.
-- **User forward hooks / pre-hooks**: TorchLens registers its own hooks
-  at model-prep time. Ordering with user hooks depends on registration
-  order; in particular, user pre-hooks that mutate inputs are seen by
-  TorchLens as the new mutated input, not the pre-hook input.
+- **User forward hooks / pre-hooks**: PyTorch eager capture now records root and
+  submodule inputs both as passed to ``Module.__call__`` and after the complete
+  user forward-pre-hook chain, plus an ordered effect for every executed global
+  or module hook. In-place writes, replacements, kwargs hooks, recursion, and
+  hooks registered during capture are attributed without changing PyTorch hook
+  ordering. Detection remains best-effort for version-silent writes through
+  ``.data``, raw storage, NumPy aliases, custom kernels, and exotic tensor
+  subclasses; these cases are marked incomplete rather than reported unchanged.
+  Arbitrary mutations inside non-tensor user objects and compiled module-call
+  dispatch remain out of scope. Registry insertion that bypasses PyTorch's public
+  registration APIs is detected at runtime when observable and downgraded to
+  attribution-incomplete provenance. During an active trace, code that scans
+  ``_forward_pre_hooks`` sees TorchLens wrapper objects; inspect each wrapper's
+  ``__wrapped__`` attribute to recover the user callable. If TorchLens detects a
+  private registry-registration bypass, the affected module (or all modules for
+  a global bypass) stays marked attribution-incomplete for the rest of that
+  capture. This sticky flag is intentionally conservative because later private
+  registry edits cannot prove that no hook execution was missed.
+
+  <!-- TODO(pre-hook-glossary-finishing-phase): Add glossary entries for the
+  provisional ModuleCall fields `inputs_before_pre_hooks`,
+  `inputs_after_pre_hooks`, `forward_pre_hook_effects`, and the derived
+  `had_pre_hook_input_change` property after the human naming session. Also add
+  entries for ModuleInputSnapshot, TensorInputObservation, and PreHookEffect. -->
 - **Input-routed interventions on in-place operations**: `splice_module(...,
   input="in")` snapshots semantic inputs for recognized in-place calls, but raw
   callable hooks that read `ctx.args` still receive live references. `out=`

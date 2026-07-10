@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from .param import ParamAccessor
     from .trace import Trace
     from ..ir.container import ContainerSpec
+    from .prehook import ModuleInputSnapshot, PreHookEffect
 
 
 # Module fields deliberately omitted from ``ModuleAccessor.to_pandas()`` columns.
@@ -467,6 +468,7 @@ _MODULE_CALL_CONTAINER_DEFAULTS: dict[str, Any] = {
     "code_context": [],
     "module_call_stack": [],
     "call_children": [],
+    "forward_pre_hook_effects": (),
 }
 
 
@@ -500,6 +502,9 @@ class ModuleCall:
         "output_paths": FieldPolicy.KEEP,
         "forward_args": FieldPolicy.BLOB_RECURSIVE,
         "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "inputs_before_pre_hooks": FieldPolicy.KEEP,
+        "inputs_after_pre_hooks": FieldPolicy.KEEP,
+        "forward_pre_hook_effects": FieldPolicy.KEEP,
         "forward_arg_names": FieldPolicy.KEEP,
         "num_forward_args_total": FieldPolicy.KEEP,
         "num_forward_pos_args": FieldPolicy.KEEP,
@@ -538,6 +543,9 @@ class ModuleCall:
     output_paths: tuple[tuple[Any, ...], ...]
     forward_args: tuple[Any, ...] | None
     forward_kwargs: dict[str, Any] | None
+    inputs_before_pre_hooks: "ModuleInputSnapshot | None"
+    inputs_after_pre_hooks: "ModuleInputSnapshot | None"
+    forward_pre_hook_effects: tuple["PreHookEffect", ...]
     forward_arg_names: List[str]
     num_forward_args_total: int
     num_forward_pos_args: int
@@ -563,6 +571,9 @@ class ModuleCall:
         output_paths: tuple[tuple[Any, ...], ...] | None = None,
         forward_args: tuple[Any, ...] | None = None,
         forward_kwargs: dict[str, Any] | None = None,
+        inputs_before_pre_hooks: "ModuleInputSnapshot | None" = None,
+        inputs_after_pre_hooks: "ModuleInputSnapshot | None" = None,
+        forward_pre_hook_effects: tuple["PreHookEffect", ...] | None = None,
         forward_args_template: Any = None,
         forward_kwargs_template: Any = None,
         forward_arg_names: List[str] | None = None,
@@ -604,6 +615,12 @@ class ModuleCall:
             Positional arguments observed at module entry.
         forward_kwargs:
             Keyword arguments observed at module entry.
+        inputs_before_pre_hooks:
+            Provisional public field containing inputs as passed to ``Module.__call__``.
+        inputs_after_pre_hooks:
+            Provisional public field containing the logical state after user pre-hooks.
+        forward_pre_hook_effects:
+            Provisional public field containing one effect per executed user pre-hook.
         forward_args_template:
             Serializable template for positional arguments.
         forward_kwargs_template:
@@ -651,6 +668,11 @@ class ModuleCall:
         self.output_paths = output_paths if output_paths is not None else ()
         self.forward_args = forward_args
         self.forward_kwargs = forward_kwargs
+        self.inputs_before_pre_hooks = inputs_before_pre_hooks
+        self.inputs_after_pre_hooks = inputs_after_pre_hooks
+        self.forward_pre_hook_effects = (
+            forward_pre_hook_effects if forward_pre_hook_effects is not None else ()
+        )
         self.forward_arg_names = forward_arg_names if forward_arg_names is not None else []
         self.num_forward_pos_args = len(forward_args) if forward_args is not None else 0
         self.num_forward_kwargs = len(forward_kwargs) if forward_kwargs is not None else 0
@@ -708,6 +730,21 @@ class ModuleCall:
         """Whether forward arguments were captured for this module call."""
 
         return self.forward_args is not None or self.forward_kwargs is not None
+
+    @property
+    def had_pre_hook_input_change(self) -> bool | None:
+        """Return whether any user pre-hook changed effective module inputs.
+
+        This public name is provisional pending the TorchLens human naming
+        session. ``None`` means at least one executed transition lacked enough
+        evidence to claim that no change occurred.
+        """
+
+        if any(effect.changed is True for effect in self.forward_pre_hook_effects):
+            return True
+        if any(effect.changed is None for effect in self.forward_pre_hook_effects):
+            return None
+        return False
 
     @property
     def forward_args_template(self) -> Any:
@@ -1190,6 +1227,9 @@ class ModuleCall:
             "_source_trace_ref": None,
             "output_structure": None,
             "output_paths": (),
+            "inputs_before_pre_hooks": None,
+            "inputs_after_pre_hooks": None,
+            "forward_pre_hook_effects": (),
         }
         default_fill_state(state, defaults=module_call_setstate_defaults)
         # Repair present-but-wrong-typed container fields from legacy states.

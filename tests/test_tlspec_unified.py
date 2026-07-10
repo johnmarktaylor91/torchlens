@@ -66,6 +66,26 @@ class UnifiedSavedOrphanModel(nn.Module):
         return x + 1
 
 
+class UnifiedPreHookModel(nn.Module):
+    """Tiny model whose pre-hook provenance produces dedicated body payloads."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the effective input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor after user pre-hooks.
+
+        Returns
+        -------
+        torch.Tensor
+            Effective module input.
+        """
+
+        return x
+
+
 def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
@@ -90,6 +110,20 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
             random_seed=0,
         ),
     )
+
+
+def _captured_pre_hook_log() -> tl.Trace:
+    """Create a trace with persisted mutating pre-hook provenance.
+
+    Returns
+    -------
+    tl.Trace
+        Trace whose body index includes ``pre_hook_input`` payloads.
+    """
+
+    model = UnifiedPreHookModel()
+    model.register_forward_pre_hook(lambda _module, args: (args[0] + 1,))
+    return tl.trace(model, torch.zeros(2, 3))
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:
@@ -274,6 +308,35 @@ def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: 
 
 
 @pytest.mark.smoke
+def test_validate_tlspec_accepts_pre_hook_input_body_payloads(tmp_path: Path) -> None:
+    """The validator accepts the v6 pre-hook provenance schema extension."""
+
+    path = tmp_path / "pre_hook_input.tlspec"
+    _captured_pre_hook_log().save(path)
+    manifest = _read_manifest(path)
+
+    assert "pre_hook_input" in {entry["intended_use"] for entry in manifest["body_index"]}
+    validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> None:
+    """Extending the v6 vocabulary does not disarm unknown-kind validation."""
+
+    path = tmp_path / "unknown_intended_use.tlspec"
+    _captured_pre_hook_log().save(path)
+    manifest = _read_manifest(path)
+    entry = next(
+        item for item in manifest["body_index"] if item["intended_use"] == "pre_hook_input"
+    )
+    entry["intended_use"] = "unknown_provenance_payload"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ValueError, match="intended_use"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Trace.save writes unified manifests that load polymorphically."""
@@ -308,7 +371,7 @@ def test_fresh_unified_save_reports_current_version_with_no_deprecation_warning(
     merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
     so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
     every same-runtime load raised a false "Bundle tlspec_version=1 is older
-    than runtime tlspec_version=5" ``DeprecationWarning``.
+    than the runtime ``tlspec_version``" ``DeprecationWarning``.
     """
 
     log = _captured_log()

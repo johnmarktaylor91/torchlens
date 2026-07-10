@@ -305,7 +305,9 @@ class TorchBackend:
         else:
             model, input_tensors, input_objects = prepared_model, None, None
         uninstall_buffer_write_tracker(cast("Trace", session))
-        _cleanup_model_session(cast(torch.nn.Module, model), input_tensors, input_objects)
+        _cleanup_model_session(
+            cast("Trace", session), cast(torch.nn.Module, model), input_tensors, input_objects
+        )
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch logging context manager."""
@@ -944,6 +946,10 @@ class TorchBackend:
             if events is not None:
                 failed_fastlog_events = CaptureEvents()
                 failed_fastlog_events.extend(list(getattr(events, "op_events", ())))
+                failed_fastlog_events.module_prep_events.extend(events.module_prep_events)
+                failed_fastlog_events.module_enter_events.extend(events.module_enter_events)
+                failed_fastlog_events.module_exit_events.extend(events.module_exit_events)
+                failed_fastlog_events.pre_hook_events.extend(events.pre_hook_events)
                 setattr(session, "_failed_fastlog_capture_events", failed_fastlog_events)
         try:
             exc.partial_log = PartialTrace.from_trace(  # type: ignore[attr-defined]

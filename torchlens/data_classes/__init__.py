@@ -8,6 +8,7 @@ from .grad_fn_call import GradFnCall
 from .internal_types import FuncExecutionContext, VisualizationOverrides
 from .module import ModuleAccessor, Module, ModuleCall
 from .param import ParamAccessor, Param
+from .prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
 
 __all__ = [
     "BackwardPass",
@@ -22,8 +23,11 @@ __all__ = [
     "Module",
     "ModuleAccessor",
     "ModuleCall",
+    "ModuleInputSnapshot",
     "Param",
     "ParamAccessor",
+    "PreHookEffect",
+    "TensorInputObservation",
     "VisualizationOverrides",
 ]
 

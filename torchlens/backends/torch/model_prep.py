@@ -29,7 +29,6 @@ from ._tl import (
     get_module_meta,
     get_tensor_label,
     is_forward_call_decorated,
-    is_tensor_replacement_wrapped,
     mark_forward_call_decorated,
     mark_tensor_replacement_wrapped,
     promote_label_to_buffer_source_and_clear_label,
@@ -554,7 +553,6 @@ def _prepare_model_session(
             trace._mod_call_labels[mod_id] = []
             trace._mod_entered[mod_id] = []
             trace._mod_exited[mod_id] = []
-        _wrap_user_forward_hooks(module)
     if trace.capture_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
     prepare_buffer_tensors(trace, model)
@@ -562,6 +560,13 @@ def _prepare_model_session(
         from .buffer_writes import install_buffer_write_tracker
 
         install_buffer_write_tracker(trace, model)
+    from .prehook_provenance import install_prehook_provenance
+
+    install_prehook_provenance(
+        trace,
+        model,
+        forward_hook_wrapper_factory=_make_user_forward_hook_wrapper,
+    )
 
 
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
@@ -1669,29 +1674,6 @@ def _ensure_module_output_tensor_logged(
     _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
 
 
-def _wrap_user_forward_hooks(module: nn.Module) -> None:
-    """Wrap raw PyTorch forward hooks so tensor replacements stay logged.
-
-    Parameters
-    ----------
-    module:
-        Module whose registered forward hooks should be normalized.
-
-    Returns
-    -------
-    None
-        Hook callables in ``module._forward_hooks`` are replaced in place once.
-    """
-
-    hooks = getattr(module, "_forward_hooks", None)
-    if not hooks:
-        return
-    for hook_id, hook_fn in list(hooks.items()):
-        if is_tensor_replacement_wrapped(hook_fn):
-            continue
-        hooks[hook_id] = _make_user_forward_hook_wrapper(module, hook_fn)
-
-
 def _make_user_forward_hook_wrapper(
     module: nn.Module, hook_fn: Callable[..., Any]
 ) -> Callable[..., Any]:
@@ -1945,6 +1927,9 @@ def module_forward_decorator(
 
             state = get_active_recording_state()
             frame = _mstack.push_frame(trace, state.module_stack, module)
+            from .prehook_provenance import bind_invocation
+
+            bind_invocation(trace, module, frame.address, frame.pass_index, args, kwargs)
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
@@ -2066,6 +2051,9 @@ def module_forward_decorator(
 
         # ---- Exhaustive mode: full entry -> forward -> exit ----
         frame = _mstack.push_frame(trace, trace._exhaustive_module_stack, module)
+        from .prehook_provenance import bind_invocation
+
+        bind_invocation(trace, module, frame.address, frame.pass_index, args, kwargs)
         try:
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
@@ -2173,6 +2161,7 @@ def clear_hooks(hook_handles: list[Any]) -> None:
 
 
 def _cleanup_model_session(
+    trace: "Trace",
     model: nn.Module,
     input_tensors: Any = None,
     input_objects: Any = None,
@@ -2186,10 +2175,15 @@ def _cleanup_model_session(
     **Does NOT** remove permanent module metadata or unwrap ``module.forward`` — those persist for
     the lifetime of the model instance.
     """
-    # Restore requires_grad and remove session-scoped param attributes
-    for param in model.parameters():
-        restore_param_requires_grad(param)
-        clear_meta(param)
+    from .prehook_provenance import rollback_prehook_provenance
+
+    try:
+        rollback_prehook_provenance(trace)
+    finally:
+        # Restore requires_grad and remove session-scoped param attributes
+        for param in model.parameters():
+            restore_param_requires_grad(param)
+            clear_meta(param)
 
     # Session-scoped module tracking data lives in Trace dicts (not on
     # modules), so no per-module cleanup iteration is needed — the dicts
