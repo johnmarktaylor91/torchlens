@@ -10,6 +10,7 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens import Trace, trace as trace_fn
 
 
@@ -31,6 +32,29 @@ class _PlainPickleModel(nn.Module):
         """
 
         return torch.sin(x) + torch.cos(x)
+
+
+class _ConditionalBodyCacheModel(nn.Module):
+    """Model whose condition ancestry receives the conditional-body cache."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run one data-dependent branch.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output from the selected branch.
+        """
+
+        condition_value = x.sum()
+        if condition_value > 0:
+            return torch.relu(x)
+        return torch.sigmoid(x)
 
 
 def _build_trace(seed: int = 0) -> Trace:
@@ -87,6 +111,29 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
     assert restored.layer_list[0].source_trace is restored
     assert isinstance(_first_saved_layer(restored).out, torch.Tensor)
+
+
+@pytest.mark.smoke
+def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path: Path) -> None:
+    """The property-backed conditional cache must not clobber its backing field."""
+
+    trace = trace_fn(_ConditionalBodyCacheModel(), torch.ones(2, 3), layers_to_save="all")
+    cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
+    label = cached_op.layer_label
+    assert cached_op.is_in_conditional_body is True
+    trace[label]._is_in_conditional_body = True
+
+    pickle_restored = pickle.loads(pickle.dumps(trace))
+    assert pickle_restored[label].ops[0]._is_in_conditional_body is True
+    assert pickle_restored[label].ops[0].is_in_conditional_body is True
+
+    bundle_path = tmp_path / "conditional_cache.tlspec"
+    trace.save(bundle_path)
+    tlspec_restored = tl.load(bundle_path)
+    assert tlspec_restored[label].ops[0]._is_in_conditional_body is True
+    assert tlspec_restored[label].ops[0].is_in_conditional_body is True
+    assert tlspec_restored[label]._is_in_conditional_body is True
+    assert tlspec_restored[label].is_in_conditional_body is True
 
 
 def test_old_style_pickle_without_io_format_version_warns_and_remains_usable(

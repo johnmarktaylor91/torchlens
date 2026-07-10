@@ -254,7 +254,7 @@ _OP_SLOT_NAMES = tuple(
 def _clear_property_backed_state_fields(state: dict[str, Any]) -> None:
     """Remove state keys that are represented by computed Op properties."""
 
-    for field_name in _OP_PROPERTY_BACKED_FIELD_NAMES - {"is_in_conditional_body"}:
+    for field_name in _OP_PROPERTY_BACKED_FIELD_NAMES:
         state.pop(field_name, None)
 
 
