@@ -45,9 +45,33 @@ def validate_tlspec(path: str | Path) -> None:
 
     from ..io import detect_tlspec_format, inspect_tlspec
 
-    if detect_tlspec_format(path) != "v2.0_unified":
+    tlspec_path = Path(path)
+    if not tlspec_path.exists():
+        raise FileNotFoundError(f"TorchLens .tlspec path does not exist: {tlspec_path}.")
+    if not tlspec_path.is_dir():
+        raise ValueError(f"TorchLens .tlspec path must be a directory: {tlspec_path}.")
+
+    manifest_path = tlspec_path / "manifest.json"
+    if manifest_path.exists():
+        try:
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest_value = json.load(handle)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse .tlspec manifest JSON at {manifest_path}.") from exc
+        if not isinstance(manifest_value, dict):
+            raise ValueError(f".tlspec manifest at {manifest_path} must be a JSON object.")
+
+    tlspec_format = detect_tlspec_format(tlspec_path)
+    if tlspec_format in {
+        "v2.16_intervention_with_kind",
+        "v2.16_intervention",
+        "v2.16_modellog_portable",
+    }:
         return
-    manifest = inspect_tlspec(path)
+    if tlspec_format != "v2.0_unified":
+        raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
+
+    manifest = inspect_tlspec(tlspec_path)
     schema_version = _manifest_schema_version(manifest)
     schema = _load_tlspec_manifest_schema(schema_version)
     _validate_manifest_against_schema(manifest, schema)

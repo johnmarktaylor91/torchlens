@@ -363,6 +363,39 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
 
 
 @pytest.mark.smoke
+def test_validate_tlspec_rejects_missing_path(tmp_path: Path) -> None:
+    """A nonexistent path is not a legacy bundle."""
+
+    path = tmp_path / "missing.tlspec"
+
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
+    """A present corrupt manifest is rejected instead of treated as legacy."""
+
+    path = tmp_path / "corrupt.tlspec"
+    path.mkdir()
+    (path / "manifest.json").write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Failed to parse.*manifest"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_still_accepts_genuine_legacy_bundle() -> None:
+    """A checked-in v2.16 model-log fixture remains accepted for backcompat."""
+
+    fixture_path = (
+        Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
+    )
+
+    validate_tlspec(fixture_path)
+
+
+@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Trace.save writes unified manifests that load polymorphically."""
