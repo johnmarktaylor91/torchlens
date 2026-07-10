@@ -73,7 +73,11 @@ from .escape_detection import (
     mark_expected_original_accounted,
     reset_detector_tables,
 )
-from .completeness_witness import CompletenessWitnessMode, completeness_scope_for_wrapper
+from .completeness_witness import (
+    CompletenessWitnessMode,
+    completeness_scope_for_wrapper,
+    record_uncaptured_owner_callsite,
+)
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
@@ -505,7 +509,23 @@ def transform_builder_decorator(
                 func_call_id,
             )
             if _collect_output_tensors(out_orig):
-                with _state.pause_logging():
+                # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
+                if _state._completeness_witness_mode == "shadow":
+                    with _state.pause_logging():
+                        log_function_output_tensors(
+                            trace,
+                            raw_built,
+                            transform_kind,
+                            call_args,
+                            call_kwargs,
+                            call_args,
+                            call_kwargs,
+                            out_orig,
+                            exec_ctx,
+                            True,
+                            func_call_id,
+                        )
+                else:
                     log_function_output_tensors(
                         trace,
                         raw_built,
@@ -598,7 +618,23 @@ def direct_transform_decorator(
             func_call_id,
         )
         if _collect_output_tensors(out_orig):
-            with _state.pause_logging():
+            # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
+            if _state._completeness_witness_mode == "shadow":
+                with _state.pause_logging():
+                    log_function_output_tensors(
+                        trace,
+                        raw_replay,
+                        func_name,
+                        call_args,
+                        {},
+                        call_args,
+                        {},
+                        out_orig,
+                        exec_ctx,
+                        True,
+                        func_call_id,
+                    )
+            else:
                 log_function_output_tensors(
                     trace,
                     raw_replay,
@@ -922,7 +958,15 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     UserWarning,
                     stacklevel=2,
                 )
-            with _state.pause_logging():
+            # A raw transform interior is outside the witness claim, but the witness-off
+            # route retains its original logging state and avoids the context-manager cost.
+            if _state._completeness_witness_mode == "shadow":
+                with _state.pause_logging():
+                    if _state._escape_detector_mode == "shadow":
+                        with expected_original_call(func, f"torch_func:{func_name}:functorch"):
+                            return func(*args, **kwargs)
+                    return func(*args, **kwargs)
+            else:
                 if _state._escape_detector_mode == "shadow":
                     with expected_original_call(func, f"torch_func:{func_name}:functorch"):
                         return func(*args, **kwargs)
@@ -1090,7 +1134,23 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             output_tensors = _collect_output_tensors(out_orig)
 
         if len(output_tensors) > 0:
-            with _state.pause_logging():
+            # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
+            if _state._completeness_witness_mode == "shadow":
+                with _state.pause_logging():
+                    log_function_output_tensors(
+                        trace,
+                        func,
+                        func_name,
+                        args,
+                        kwargs,
+                        arg_copies,
+                        kwarg_copies,
+                        out_orig,
+                        exec_ctx,
+                        is_bottom_level_func,
+                        func_call_id,
+                    )
+            else:
                 log_function_output_tensors(
                     trace,
                     func,
@@ -1135,10 +1195,16 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
 
-        mark_expected_original_accounted(
-            expected_token,
-            captured=is_bottom_level_func and len(output_tensors) > 0,
+        call_emitted_op = expected_token is not None and any(
+            event.func_call_id == func_call_id for event in reversed(trace.capture_events.op_events)
         )
+        mark_expected_original_accounted(expected_token, captured=call_emitted_op)
+        if (
+            expected_token is not None
+            and not call_emitted_op
+            and _state._completeness_witness_mode == "shadow"
+        ):
+            record_uncaptured_owner_callsite(expected_token)
 
         producer_label = None
         if isinstance(out_orig, torch.Tensor):

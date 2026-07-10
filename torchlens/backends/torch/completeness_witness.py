@@ -33,28 +33,43 @@ MAX_AUDITED_COMPLETENESS_BOUNDARIES = 8
 
 @dataclass(frozen=True)
 class AuditedCompletenessBoundary:
-    """One exact wrapper whose metadata-only dispatch interval is out of census."""
+    """One exact wrapper/operator boundary that is intentionally not captured."""
 
     wrapper_name: str
+    operator: str | None
     reason: str
 
 
 AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
     AuditedCompletenessBoundary(
         wrapper_name="torch_func:numpy:not_logged",
+        operator=None,
         reason="existing metadata/export conversion boundary; TorchLens never records it as an op",
     ),
     AuditedCompletenessBoundary(
         wrapper_name="torch_func:__array__:not_logged",
+        operator=None,
         reason="existing NumPy protocol conversion boundary; TorchLens never records it as an op",
     ),
     AuditedCompletenessBoundary(
         wrapper_name="torch_func:size:not_logged",
+        operator=None,
         reason="existing tensor shape metadata boundary; TorchLens never records it as an op",
     ),
     AuditedCompletenessBoundary(
         wrapper_name="torch_func:dim:not_logged",
+        operator=None,
         reason="existing tensor rank metadata boundary; TorchLens never records it as an op",
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="torch_func:item:logged",
+        operator="aten._local_scalar_dense.default",
+        reason="item extracts a Python scalar, and TorchLens intentionally records no scalar-output op",
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="torch_func:__bool__:logged",
+        operator="aten._local_scalar_dense.default",
+        reason="tensor truth testing extracts a Python bool, which is intentionally not an op output",
     ),
 )
 """Reviewable exact expected-opaque rows; additions require a regression test and reason."""
@@ -62,7 +77,32 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
 if len(AUDITED_COMPLETENESS_BOUNDARIES) > MAX_AUDITED_COMPLETENESS_BOUNDARIES:
     raise RuntimeError("TorchLens completeness boundary budget exceeded.")
 
-_EXPECTED_OPAQUE_WRAPPERS = frozenset(row.wrapper_name for row in AUDITED_COMPLETENESS_BOUNDARIES)
+_EXPECTED_OPAQUE_WRAPPERS = frozenset(
+    row.wrapper_name for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is None
+)
+
+
+def _is_expected_opaque_dispatch(operator: str, owner: ExpectedOriginalToken) -> bool:
+    """Return whether one owned dispatch exactly matches an audited boundary.
+
+    Parameters
+    ----------
+    operator:
+        Stable dispatcher operator name.
+    owner:
+        Exact wrapper token active for the dispatch.
+
+    Returns
+    -------
+    bool
+        ``True`` for an exact wrapper/operator row or a wrapper-wide metadata boundary.
+    """
+
+    return any(
+        row.wrapper_name == owner.wrapper_name
+        and (row.operator is None or row.operator == operator)
+        for row in AUDITED_COMPLETENESS_BOUNDARIES
+    )
 
 
 def completeness_scope_for_wrapper(
@@ -186,6 +226,26 @@ def _dispatch_callsite() -> _DispatchCallsite:
     )
 
 
+def record_uncaptured_owner_callsite(token: ExpectedOriginalToken | None) -> None:
+    """Attach a user callsite only when an owned interval emitted no op.
+
+    Parameters
+    ----------
+    token:
+        Completed exact wrapper token, if diagnostics were armed.
+
+    Returns
+    -------
+    None
+        The token receives a stable file, line, and function tuple in place.
+    """
+
+    if token is None:
+        return
+    callsite = _dispatch_callsite()
+    token.capture_callsite = (callsite.file, callsite.line, callsite.function)
+
+
 class _CompletenessDispatchMode(TorchDispatchMode):
     """Census aten calls while TorchLens active logging is enabled."""
 
@@ -238,7 +298,9 @@ class _CompletenessDispatchMode(TorchDispatchMode):
             )
             if in_scope:
                 owner = _active_token()
-                callsite = _dispatch_callsite() if owner is None else None
+                callsite = (
+                    _dispatch_callsite() if owner is None or owner.func_call_id is None else None
+                )
                 self.state.events.append(_DispatchEvent(_operator_name(func), owner, callsite))
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
@@ -296,7 +358,7 @@ def _finalize_census(state: _WitnessState) -> None:
         if owner is not None:
             owner_entry = owner_events.setdefault(id(owner), (owner, []))
             owner_entry[1].append(event.operator)
-        if owner is not None and owner.census_scope == "expected_opaque":
+        if owner is not None and _is_expected_opaque_dispatch(event.operator, owner):
             expected_opaque_count += 1
             continue
         if owner is not None and owner.capture_accounted is True:
@@ -304,6 +366,8 @@ def _finalize_census(state: _WitnessState) -> None:
             continue
         reason = "unowned_dispatch" if owner is None else "owner_not_captured"
         callsite = event.callsite
+        if callsite is None and owner is not None and owner.capture_callsite is not None:
+            callsite = _DispatchCallsite(*owner.capture_callsite)
         diagnostics.append(
             {
                 "violation_id": len(diagnostics) + 1,
@@ -326,6 +390,12 @@ def _finalize_census(state: _WitnessState) -> None:
         )
     decompositions = trace.__dict__.setdefault("completeness_decompositions", [])
     for owner, operators in owner_events.values():
+        owner_scope = (
+            "expected_opaque"
+            if operators
+            and all(_is_expected_opaque_dispatch(operator, owner) for operator in operators)
+            else owner.census_scope
+        )
         decompositions.append(
             {
                 "guard_pass_index": state.guard_pass_index,
@@ -334,7 +404,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "owner_func_call_id": owner.func_call_id,
                 "owner_barcode": _barcode_text(owner.call_barcode),
                 "capture_accounted": owner.capture_accounted,
-                "scope": owner.census_scope,
+                "scope": owner_scope,
                 "aten_ops": tuple(operators),
             }
         )
@@ -373,6 +443,9 @@ def _finalize_census(state: _WitnessState) -> None:
     if getattr(trace, "escape_detector_verified", None) is False:
         trace.capture_verified = False
         trace.capture_verification_reason = "callable_escape_shadow_report"
+    elif getattr(trace, "_raw_transform_escape_detected", False):
+        trace.capture_verified = False
+        trace.capture_verification_reason = "transform_call_route_unverified"
     else:
         trace.capture_verified = True
         detector_verified = getattr(trace, "escape_detector_verified", None)

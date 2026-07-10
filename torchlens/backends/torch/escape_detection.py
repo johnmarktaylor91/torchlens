@@ -191,6 +191,7 @@ class ExpectedOriginalToken:
     call_barcode: object | None = None
     census_scope: Literal["owned", "expected_opaque"] = "owned"
     capture_accounted: bool | None = None
+    capture_callsite: tuple[str, int, str] | None = None
 
 
 @dataclass
