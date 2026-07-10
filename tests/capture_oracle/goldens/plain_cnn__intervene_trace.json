@@ -1,0 +1,599 @@
+{
+  "record": {
+    "case": {
+      "config": "intervene_trace",
+      "features": [
+        "intervene"
+      ],
+      "model_axis": "plain_cnn",
+      "name": "plain_cnn__intervene_trace"
+    },
+    "expected_to_change": {
+      "producer_path": {
+        "current": [
+          "exhaustive"
+        ],
+        "reason": "Internal producer identities are migration mechanics, not model facts."
+      }
+    },
+    "ground_truth": {
+      "disk_storage": {
+        "created": false,
+        "files": []
+      },
+      "events": [
+        {
+          "identity": {
+            "bool_value": null,
+            "dtype": "float32",
+            "func_name": "conv2d",
+            "has_saved_activation": true,
+            "intervention_fired": false,
+            "intervention_replaced": false,
+            "is_bottom_level": true,
+            "is_output_parent": false,
+            "is_scalar_bool": false,
+            "kind": "op",
+            "label_raw": "conv2d_1_2_raw",
+            "layer_type": "conv2d",
+            "parent_labels_raw": [
+              "input_1_raw"
+            ],
+            "pass_index": 1,
+            "predicate_matched": true,
+            "raw_index": 2,
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ],
+            "step_index": 0,
+            "type_index": 1
+          },
+          "population": {
+            "_edge_uses": "populated",
+            "backend_semantics.aliased_output_inputs": "defaulted_empty",
+            "backend_semantics.autograd_memory": "populated",
+            "backend_semantics.backend_grad_handle": "populated",
+            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
+            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.grad_fn_class_name": "populated",
+            "backend_semantics.mutated_input_positions": "defaulted_empty",
+            "backend_semantics.num_autograd_tensors": "populated",
+            "backend_semantics.unknown_aliasing": "defaulted_false",
+            "bool_value": "unknown",
+            "capture_spec": "unknown",
+            "construction_done": "defaulted_false",
+            "equivalence_class": "populated",
+            "fire_results": "defaulted_empty",
+            "func_call_id": "populated",
+            "function.arg_names": "populated",
+            "function.code_context": "populated",
+            "function.flops_backward": "populated",
+            "function.flops_forward": "populated",
+            "function.func": "populated",
+            "function.func_autocast_state": "populated",
+            "function.func_call_id": "populated",
+            "function.func_config": "populated",
+            "function.func_duration": "populated",
+            "function.func_name": "populated",
+            "function.func_non_tensor_args": "populated",
+            "function.func_qualname": "populated",
+            "function.func_rng_states": "defaulted_empty",
+            "function.is_inplace": "defaulted_false",
+            "function.non_tensor_kwargs": "defaulted_empty",
+            "function.non_tensor_pos_args": "populated",
+            "function.num_args_total": "populated",
+            "function.num_kwargs": "defaulted_zero",
+            "function.num_pos_args": "populated",
+            "grad_fn_class_qualname": "populated",
+            "grad_fn_handle": "populated",
+            "has_internal_source_ancestor": "defaulted_false",
+            "input_ancestors": "populated",
+            "input_was_parameter": "defaulted_false",
+            "internal_source_ancestors": "defaulted_empty",
+            "intervention_fired": "defaulted_false",
+            "intervention_replaced": "defaulted_false",
+            "intervention_template_ref": "unknown",
+            "is_bottom_level": "populated",
+            "is_output_parent": "defaulted_false",
+            "is_scalar_bool": "defaulted_false",
+            "is_transform": "defaulted_false",
+            "kind": "populated",
+            "label_raw": "populated",
+            "layer_label_raw": "populated",
+            "layer_type": "populated",
+            "module_stack[0].address": "populated",
+            "module_stack[0].address_normalized": "unknown",
+            "module_stack[0].call_index": "populated",
+            "module_stack[0].entry_argnames": "defaulted_empty",
+            "module_stack[0].fx_qualpath": "unknown",
+            "module_stack[0].module_type": "populated",
+            "modules": "populated",
+            "output.activation_transform": "unknown",
+            "output.child_versions": "defaulted_empty",
+            "output.container_path": "defaulted_empty",
+            "output.container_spec": "unknown",
+            "output.detach_saved_activations": "defaulted_false",
+            "output.has_saved_activation": "populated",
+            "output.in_multi_output": "defaulted_false",
+            "output.multi_output_index": "unknown",
+            "output.output_device": "populated",
+            "output.tensor.backend_handle_id": "populated",
+            "output.tensor.blob_ref": "unknown",
+            "output.tensor.device": "populated",
+            "output.tensor.dtype": "populated",
+            "output.tensor.label_raw": "populated",
+            "output.tensor.memory": "populated",
+            "output.tensor.payload": "populated",
+            "output.tensor.requires_grad": "populated",
+            "output.tensor.shape": "populated",
+            "output.transformed_tensor": "unknown",
+            "output.visualizer_path": "unknown",
+            "params": "populated",
+            "parent_arg_positions": "populated",
+            "parent_params": "populated",
+            "parents[0].arg_position": "defaulted_zero",
+            "parents[0].edge_use": "populated",
+            "parents[0].parent_label_raw": "populated",
+            "pass_index": "populated",
+            "policy.must_keep_topology": "populated",
+            "policy.requires_isolation": "defaulted_false",
+            "policy.save_args": "defaulted_false",
+            "policy.save_code": "populated",
+            "policy.save_grad": "defaulted_false",
+            "policy.save_mode": "populated",
+            "policy.save_payload": "populated",
+            "policy.save_rng": "defaulted_false",
+            "policy.stream": "defaulted_false",
+            "predicate_matched": "populated",
+            "raw_index": "populated",
+            "record_context": "unknown",
+            "root_ancestors": "populated",
+            "source_trace": "populated",
+            "source_trace_id": "populated",
+            "step_index": "defaulted_zero",
+            "templates.args_template": "unknown",
+            "templates.has_saved_args": "defaulted_false",
+            "templates.kwargs_template": "unknown",
+            "templates.saved_args": "unknown",
+            "templates.saved_kwargs": "unknown",
+            "tracing_finished": "defaulted_false",
+            "transform_chain": "defaulted_empty",
+            "transform_config": "populated",
+            "transform_fn_name": "unknown",
+            "transform_fn_qualname": "unknown",
+            "transform_fn_source": "unknown",
+            "transform_kind": "unknown",
+            "type_index": "populated",
+            "unattributed_tensor_args": "defaulted_empty"
+          }
+        },
+        {
+          "identity": {
+            "bool_value": null,
+            "dtype": "float32",
+            "func_name": "relu",
+            "has_saved_activation": true,
+            "intervention_fired": true,
+            "intervention_replaced": true,
+            "is_bottom_level": true,
+            "is_output_parent": true,
+            "is_scalar_bool": false,
+            "kind": "op",
+            "label_raw": "relu_1_3_raw",
+            "layer_type": "relu",
+            "parent_labels_raw": [
+              "conv2d_1_2_raw"
+            ],
+            "pass_index": 1,
+            "predicate_matched": true,
+            "raw_index": 3,
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ],
+            "step_index": 0,
+            "type_index": 1
+          },
+          "population": {
+            "_edge_uses": "populated",
+            "backend_semantics.aliased_output_inputs": "defaulted_empty",
+            "backend_semantics.autograd_memory": "defaulted_zero",
+            "backend_semantics.backend_grad_handle": "populated",
+            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
+            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.grad_fn_class_name": "populated",
+            "backend_semantics.mutated_input_positions": "defaulted_empty",
+            "backend_semantics.num_autograd_tensors": "defaulted_zero",
+            "backend_semantics.unknown_aliasing": "defaulted_false",
+            "bool_value": "unknown",
+            "capture_spec": "unknown",
+            "construction_done": "defaulted_false",
+            "equivalence_class": "populated",
+            "fire_results": "populated",
+            "func_call_id": "populated",
+            "function.arg_names": "populated",
+            "function.code_context": "populated",
+            "function.flops_backward": "populated",
+            "function.flops_forward": "populated",
+            "function.func": "populated",
+            "function.func_autocast_state": "populated",
+            "function.func_call_id": "populated",
+            "function.func_config": "defaulted_empty",
+            "function.func_duration": "populated",
+            "function.func_name": "populated",
+            "function.func_non_tensor_args": "defaulted_empty",
+            "function.func_qualname": "populated",
+            "function.func_rng_states": "defaulted_empty",
+            "function.is_inplace": "defaulted_false",
+            "function.non_tensor_kwargs": "defaulted_empty",
+            "function.non_tensor_pos_args": "defaulted_empty",
+            "function.num_args_total": "populated",
+            "function.num_kwargs": "defaulted_zero",
+            "function.num_pos_args": "populated",
+            "grad_fn_class_qualname": "populated",
+            "grad_fn_handle": "populated",
+            "has_internal_source_ancestor": "defaulted_false",
+            "input_ancestors": "populated",
+            "input_was_parameter": "defaulted_false",
+            "internal_source_ancestors": "defaulted_empty",
+            "intervention_fired": "populated",
+            "intervention_replaced": "populated",
+            "intervention_template_ref": "unknown",
+            "is_bottom_level": "populated",
+            "is_output_parent": "populated",
+            "is_scalar_bool": "defaulted_false",
+            "is_transform": "defaulted_false",
+            "kind": "populated",
+            "label_raw": "populated",
+            "layer_label_raw": "populated",
+            "layer_type": "populated",
+            "module_stack": "defaulted_empty",
+            "modules": "defaulted_empty",
+            "output.activation_transform": "unknown",
+            "output.child_versions": "defaulted_empty",
+            "output.container_path": "defaulted_empty",
+            "output.container_spec": "unknown",
+            "output.detach_saved_activations": "defaulted_false",
+            "output.has_saved_activation": "populated",
+            "output.in_multi_output": "defaulted_false",
+            "output.multi_output_index": "unknown",
+            "output.output_device": "populated",
+            "output.tensor.backend_handle_id": "populated",
+            "output.tensor.blob_ref": "unknown",
+            "output.tensor.device": "populated",
+            "output.tensor.dtype": "populated",
+            "output.tensor.label_raw": "populated",
+            "output.tensor.memory": "populated",
+            "output.tensor.payload": "populated",
+            "output.tensor.requires_grad": "populated",
+            "output.tensor.shape": "populated",
+            "output.transformed_tensor": "unknown",
+            "output.visualizer_path": "unknown",
+            "params": "defaulted_empty",
+            "parent_arg_positions": "populated",
+            "parent_params": "defaulted_empty",
+            "parents[0].arg_position": "defaulted_zero",
+            "parents[0].edge_use": "populated",
+            "parents[0].parent_label_raw": "populated",
+            "pass_index": "populated",
+            "policy.must_keep_topology": "populated",
+            "policy.requires_isolation": "defaulted_false",
+            "policy.save_args": "defaulted_false",
+            "policy.save_code": "populated",
+            "policy.save_grad": "defaulted_false",
+            "policy.save_mode": "populated",
+            "policy.save_payload": "populated",
+            "policy.save_rng": "defaulted_false",
+            "policy.stream": "defaulted_false",
+            "predicate_matched": "populated",
+            "raw_index": "populated",
+            "record_context": "unknown",
+            "root_ancestors": "populated",
+            "source_trace": "populated",
+            "source_trace_id": "populated",
+            "step_index": "defaulted_zero",
+            "templates.args_template": "unknown",
+            "templates.has_saved_args": "defaulted_false",
+            "templates.kwargs_template": "unknown",
+            "templates.saved_args": "unknown",
+            "templates.saved_kwargs": "unknown",
+            "tracing_finished": "defaulted_false",
+            "transform_chain": "defaulted_empty",
+            "transform_config": "populated",
+            "transform_fn_name": "unknown",
+            "transform_fn_qualname": "unknown",
+            "transform_fn_source": "unknown",
+            "transform_kind": "unknown",
+            "type_index": "populated",
+            "unattributed_tensor_args": "defaulted_empty"
+          }
+        }
+      ],
+      "final_ops": [
+        {
+          "children": [
+            "conv2d_1_1"
+          ],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "input_1",
+          "label_raw": "input_1_raw",
+          "layer_type": "input",
+          "parents": [],
+          "shape": [
+            1,
+            1,
+            4,
+            4
+          ]
+        },
+        {
+          "children": [
+            "relu_1_2"
+          ],
+          "dtype": "float32",
+          "func_name": "conv2d",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "conv2d_1_1",
+          "label_raw": "conv2d_1_2_raw",
+          "layer_type": "conv2d",
+          "parents": [
+            "input_1"
+          ],
+          "shape": [
+            1,
+            2,
+            4,
+            4
+          ]
+        },
+        {
+          "children": [
+            "output_1"
+          ],
+          "dtype": "float32",
+          "func_name": "relu",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "relu_1_2",
+          "label_raw": "relu_1_3_raw",
+          "layer_type": "relu",
+          "parents": [
+            "conv2d_1_1"
+          ],
+          "shape": [
+            1,
+            2,
+            4,
+            4
+          ]
+        },
+        {
+          "children": [],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": true,
+          "label": "output_1",
+          "label_raw": "output_1_raw",
+          "layer_type": "output",
+          "parents": [
+            "relu_1_2"
+          ],
+          "shape": [
+            1,
+            2,
+            4,
+            4
+          ]
+        }
+      ],
+      "gradients": {
+        "event_types": [],
+        "saved_payloads": []
+      },
+      "outcome": {
+        "failed": false,
+        "halt_frontier": null,
+        "halt_reason": null,
+        "halted": false,
+        "output_layers": [
+          "output_1"
+        ],
+        "status": "complete"
+      },
+      "selected_payloads": [
+        {
+          "label_raw": "input_1_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "cae3a3b1",
+              "673d883d",
+              "c842fd39",
+              "56865588",
+              "0ccb751e",
+              "85db0a07",
+              "22664379",
+              "7c3bb372"
+            ],
+            "shape": [
+              1,
+              1,
+              4,
+              4
+            ]
+          }
+        },
+        {
+          "label_raw": "conv2d_1_2_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "aa516d91",
+              "fc9069ca",
+              "6483162d",
+              "68babf8f",
+              "616b627d",
+              "8a1da11b",
+              "0a7b53c8",
+              "520c8cc6"
+            ],
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ]
+          }
+        },
+        {
+          "label_raw": "relu_1_3_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "8cc25ce6",
+              "664b80e8",
+              "85b998e5",
+              "3a58d7ec",
+              "54e253ae",
+              "852487d3",
+              "b95ea486",
+              "961ef686"
+            ],
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ]
+          }
+        },
+        {
+          "label_raw": "output_1_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "8cc25ce6",
+              "664b80e8",
+              "85b998e5",
+              "3a58d7ec",
+              "54e253ae",
+              "852487d3",
+              "b95ea486",
+              "961ef686"
+            ],
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ]
+          }
+        }
+      ],
+      "side_effects": {
+        "buffer_changes": {},
+        "buffer_mutation_count": 0,
+        "forward_invocations": 1,
+        "inplace_op_count": 0,
+        "input_value_after": {
+          "dtype": "float32",
+          "sha256_chunks": [
+            "cae3a3b1",
+            "673d883d",
+            "c842fd39",
+            "56865588",
+            "0ccb751e",
+            "85db0a07",
+            "22664379",
+            "7c3bb372"
+          ],
+          "shape": [
+            1,
+            1,
+            4,
+            4
+          ]
+        },
+        "input_value_before": {
+          "dtype": "float32",
+          "sha256_chunks": [
+            "cae3a3b1",
+            "673d883d",
+            "c842fd39",
+            "56865588",
+            "0ccb751e",
+            "85db0a07",
+            "22664379",
+            "7c3bb372"
+          ],
+          "shape": [
+            1,
+            1,
+            4,
+            4
+          ]
+        },
+        "input_value_changed": false,
+        "input_version_delta": 0,
+        "pre_hook_invocations": 0,
+        "rng_draw_count": 0,
+        "rng_state_after": [
+          "22e52678",
+          "e07f1165",
+          "b0261e4f",
+          "8b7a02f8",
+          "d1d8135f",
+          "7b0d5719",
+          "958414d8",
+          "086b6594"
+        ],
+        "rng_state_before": [
+          "b8cf38b6",
+          "2ca4ca46",
+          "19b3a5d1",
+          "37a56ef7",
+          "46340ec7",
+          "4cbae9ac",
+          "056aac24",
+          "f1182cb7"
+        ]
+      }
+    },
+    "schema_version": 1,
+    "tracking": {
+      "cuda_peak_memory_median_bytes": 0,
+      "python_peak_memory_median_bytes": 437217,
+      "sample_count": 3,
+      "torch_version": "2.8.0+cu128",
+      "wall_time_median_ms": 200.9580790763721
+    }
+  },
+  "sha256_chunks": [
+    "1cb2bb0e",
+    "5fdbec23",
+    "8a984d2c",
+    "bc844e06",
+    "3dbecd92",
+    "c24b93f5",
+    "3a29f478",
+    "640dbf1d"
+  ]
+}

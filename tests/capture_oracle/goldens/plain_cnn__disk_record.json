@@ -1,0 +1,526 @@
+{
+  "record": {
+    "case": {
+      "config": "disk_record",
+      "features": [
+        "disk"
+      ],
+      "model_axis": "plain_cnn",
+      "name": "plain_cnn__disk_record"
+    },
+    "expected_to_change": {
+      "predicate_lossy_event_fields": {
+        "current": [
+          {
+            "label_raw": "conv2d_1_2_raw",
+            "population": {
+              "_edge_uses": "defaulted_empty",
+              "backend_semantics.autograd_memory": "unknown",
+              "backend_semantics.bytes_delta_at_call": "defaulted_zero",
+              "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+              "backend_semantics.num_autograd_tensors": "unknown",
+              "equivalence_class": "unknown",
+              "function.arg_names": "defaulted_empty",
+              "function.code_context": "defaulted_empty",
+              "function.flops_backward": "unknown",
+              "function.flops_forward": "unknown",
+              "function.func_autocast_state": "unknown",
+              "function.func_config": "defaulted_empty",
+              "function.func_duration": "unknown",
+              "function.func_non_tensor_args": "defaulted_empty",
+              "function.func_rng_states": "unknown",
+              "function.is_inplace": "defaulted_false",
+              "has_internal_source_ancestor": "defaulted_false",
+              "input_ancestors": "defaulted_empty",
+              "internal_source_ancestors": "defaulted_empty",
+              "params": "defaulted_empty",
+              "parent_arg_positions": "populated",
+              "parent_params": "defaulted_empty",
+              "parents[0].arg_position": "unknown",
+              "parents[0].edge_use": "populated",
+              "root_ancestors": "defaulted_empty"
+            },
+            "values": {
+              "is_inplace": false,
+              "params_count": 0,
+              "parent_arg_positions": [
+                null
+              ],
+              "parent_edge_uses": [
+                "unknown"
+              ],
+              "parent_params_count": 0
+            }
+          },
+          {
+            "label_raw": "relu_1_3_raw",
+            "population": {
+              "_edge_uses": "defaulted_empty",
+              "backend_semantics.autograd_memory": "unknown",
+              "backend_semantics.bytes_delta_at_call": "defaulted_zero",
+              "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+              "backend_semantics.num_autograd_tensors": "unknown",
+              "equivalence_class": "unknown",
+              "function.arg_names": "defaulted_empty",
+              "function.code_context": "defaulted_empty",
+              "function.flops_backward": "unknown",
+              "function.flops_forward": "unknown",
+              "function.func_autocast_state": "unknown",
+              "function.func_config": "defaulted_empty",
+              "function.func_duration": "unknown",
+              "function.func_non_tensor_args": "defaulted_empty",
+              "function.func_rng_states": "unknown",
+              "function.is_inplace": "defaulted_false",
+              "has_internal_source_ancestor": "defaulted_false",
+              "input_ancestors": "defaulted_empty",
+              "internal_source_ancestors": "defaulted_empty",
+              "params": "defaulted_empty",
+              "parent_arg_positions": "populated",
+              "parent_params": "defaulted_empty",
+              "parents[0].arg_position": "unknown",
+              "parents[0].edge_use": "populated",
+              "root_ancestors": "defaulted_empty"
+            },
+            "values": {
+              "is_inplace": false,
+              "params_count": 0,
+              "parent_arg_positions": [
+                null
+              ],
+              "parent_edge_uses": [
+                "unknown"
+              ],
+              "parent_params_count": 0
+            }
+          }
+        ],
+        "reason": "The predicate producer currently emits empty parameter and argument-edge metadata plus false/zero/empty richness defaults instead of explicit unavailable completeness."
+      },
+      "producer_path": {
+        "current": [
+          "predicate"
+        ],
+        "reason": "Internal producer identities are migration mechanics, not model facts."
+      }
+    },
+    "ground_truth": {
+      "disk_storage": {
+        "created": true,
+        "files": [
+          "blobs/0000000001.safetensors",
+          "blobs/0000000002.safetensors",
+          "fastlog_index.jsonl",
+          "label_index.json",
+          "manifest.json",
+          "metadata.json",
+          "pass_index.json"
+        ]
+      },
+      "events": [
+        {
+          "identity": {
+            "bool_value": null,
+            "dtype": "float32",
+            "func_name": "conv2d",
+            "has_saved_activation": true,
+            "intervention_fired": false,
+            "intervention_replaced": false,
+            "is_bottom_level": true,
+            "is_output_parent": false,
+            "is_scalar_bool": null,
+            "kind": "op",
+            "label_raw": "conv2d_1_2_raw",
+            "layer_type": "conv2d",
+            "parent_labels_raw": [
+              "input_1_raw"
+            ],
+            "pass_index": 1,
+            "predicate_matched": true,
+            "raw_index": 2,
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ],
+            "step_index": 1,
+            "type_index": 1
+          },
+          "population": {
+            "backend_semantics.aliased_output_inputs": "defaulted_empty",
+            "backend_semantics.backend_grad_handle": "populated",
+            "backend_semantics.grad_fn_class_name": "populated",
+            "backend_semantics.mutated_input_positions": "defaulted_empty",
+            "backend_semantics.unknown_aliasing": "defaulted_false",
+            "bool_value": "unknown",
+            "capture_spec": "populated",
+            "construction_done": "populated",
+            "fire_results": "defaulted_empty",
+            "func_call_id": "unknown",
+            "function.func": "populated",
+            "function.func_call_id": "populated",
+            "function.func_name": "populated",
+            "function.func_qualname": "populated",
+            "function.non_tensor_kwargs": "defaulted_empty",
+            "function.non_tensor_pos_args": "defaulted_empty",
+            "function.num_args_total": "populated",
+            "function.num_kwargs": "defaulted_zero",
+            "function.num_pos_args": "populated",
+            "grad_fn_class_qualname": "unknown",
+            "grad_fn_handle": "unknown",
+            "input_was_parameter": "defaulted_false",
+            "intervention_fired": "defaulted_false",
+            "intervention_replaced": "defaulted_false",
+            "intervention_template_ref": "unknown",
+            "is_bottom_level": "populated",
+            "is_output_parent": "defaulted_false",
+            "is_scalar_bool": "unknown",
+            "is_transform": "defaulted_false",
+            "kind": "populated",
+            "label_raw": "populated",
+            "layer_label_raw": "populated",
+            "layer_type": "populated",
+            "module_stack[0].address": "populated",
+            "module_stack[0].address_normalized": "unknown",
+            "module_stack[0].call_index": "populated",
+            "module_stack[0].entry_argnames": "defaulted_empty",
+            "module_stack[0].fx_qualpath": "unknown",
+            "module_stack[0].module_type": "populated",
+            "module_stack[1].address": "populated",
+            "module_stack[1].address_normalized": "unknown",
+            "module_stack[1].call_index": "populated",
+            "module_stack[1].entry_argnames": "defaulted_empty",
+            "module_stack[1].fx_qualpath": "unknown",
+            "module_stack[1].module_type": "populated",
+            "modules": "populated",
+            "output.activation_transform": "unknown",
+            "output.child_versions": "defaulted_empty",
+            "output.container_path": "defaulted_empty",
+            "output.container_spec": "unknown",
+            "output.detach_saved_activations": "populated",
+            "output.has_saved_activation": "populated",
+            "output.in_multi_output": "defaulted_false",
+            "output.multi_output_index": "defaulted_zero",
+            "output.output_device": "populated",
+            "output.tensor.backend_handle_id": "populated",
+            "output.tensor.blob_ref": "unknown",
+            "output.tensor.device": "populated",
+            "output.tensor.dtype": "populated",
+            "output.tensor.label_raw": "populated",
+            "output.tensor.memory": "populated",
+            "output.tensor.payload": "populated",
+            "output.tensor.requires_grad": "populated",
+            "output.tensor.shape": "populated",
+            "output.transformed_tensor": "unknown",
+            "output.visualizer_path": "unknown",
+            "parents[0].parent_label_raw": "populated",
+            "pass_index": "populated",
+            "policy.must_keep_topology": "defaulted_false",
+            "policy.requires_isolation": "defaulted_false",
+            "policy.save_args": "defaulted_false",
+            "policy.save_code": "defaulted_false",
+            "policy.save_grad": "defaulted_false",
+            "policy.save_mode": "populated",
+            "policy.save_payload": "populated",
+            "policy.save_rng": "defaulted_false",
+            "policy.stream": "defaulted_false",
+            "predicate_matched": "populated",
+            "raw_index": "populated",
+            "record_context": "populated",
+            "source_trace": "unknown",
+            "source_trace_id": "unknown",
+            "step_index": "populated",
+            "templates.args_template": "unknown",
+            "templates.has_saved_args": "defaulted_false",
+            "templates.kwargs_template": "unknown",
+            "templates.saved_args": "unknown",
+            "templates.saved_kwargs": "unknown",
+            "tracing_finished": "defaulted_false",
+            "transform_chain": "defaulted_empty",
+            "transform_config": "populated",
+            "transform_fn_name": "unknown",
+            "transform_fn_qualname": "unknown",
+            "transform_fn_source": "unknown",
+            "transform_kind": "unknown",
+            "type_index": "populated",
+            "unattributed_tensor_args": "defaulted_empty"
+          }
+        },
+        {
+          "identity": {
+            "bool_value": null,
+            "dtype": "float32",
+            "func_name": "relu",
+            "has_saved_activation": true,
+            "intervention_fired": false,
+            "intervention_replaced": false,
+            "is_bottom_level": true,
+            "is_output_parent": true,
+            "is_scalar_bool": null,
+            "kind": "op",
+            "label_raw": "relu_1_3_raw",
+            "layer_type": "relu",
+            "parent_labels_raw": [
+              "conv2d_1_2_raw"
+            ],
+            "pass_index": 1,
+            "predicate_matched": true,
+            "raw_index": 3,
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ],
+            "step_index": 2,
+            "type_index": 1
+          },
+          "population": {
+            "backend_semantics.aliased_output_inputs": "defaulted_empty",
+            "backend_semantics.backend_grad_handle": "populated",
+            "backend_semantics.grad_fn_class_name": "populated",
+            "backend_semantics.mutated_input_positions": "defaulted_empty",
+            "backend_semantics.unknown_aliasing": "defaulted_false",
+            "bool_value": "unknown",
+            "capture_spec": "populated",
+            "construction_done": "populated",
+            "fire_results": "defaulted_empty",
+            "func_call_id": "unknown",
+            "function.func": "populated",
+            "function.func_call_id": "populated",
+            "function.func_name": "populated",
+            "function.func_qualname": "populated",
+            "function.non_tensor_kwargs": "defaulted_empty",
+            "function.non_tensor_pos_args": "defaulted_empty",
+            "function.num_args_total": "populated",
+            "function.num_kwargs": "defaulted_zero",
+            "function.num_pos_args": "populated",
+            "grad_fn_class_qualname": "unknown",
+            "grad_fn_handle": "unknown",
+            "input_was_parameter": "defaulted_false",
+            "intervention_fired": "defaulted_false",
+            "intervention_replaced": "defaulted_false",
+            "intervention_template_ref": "unknown",
+            "is_bottom_level": "populated",
+            "is_output_parent": "populated",
+            "is_scalar_bool": "unknown",
+            "is_transform": "defaulted_false",
+            "kind": "populated",
+            "label_raw": "populated",
+            "layer_label_raw": "populated",
+            "layer_type": "populated",
+            "module_stack[0].address": "populated",
+            "module_stack[0].address_normalized": "unknown",
+            "module_stack[0].call_index": "populated",
+            "module_stack[0].entry_argnames": "defaulted_empty",
+            "module_stack[0].fx_qualpath": "unknown",
+            "module_stack[0].module_type": "populated",
+            "modules": "populated",
+            "output.activation_transform": "unknown",
+            "output.child_versions": "defaulted_empty",
+            "output.container_path": "defaulted_empty",
+            "output.container_spec": "unknown",
+            "output.detach_saved_activations": "populated",
+            "output.has_saved_activation": "populated",
+            "output.in_multi_output": "defaulted_false",
+            "output.multi_output_index": "defaulted_zero",
+            "output.output_device": "populated",
+            "output.tensor.backend_handle_id": "populated",
+            "output.tensor.blob_ref": "unknown",
+            "output.tensor.device": "populated",
+            "output.tensor.dtype": "populated",
+            "output.tensor.label_raw": "populated",
+            "output.tensor.memory": "populated",
+            "output.tensor.payload": "populated",
+            "output.tensor.requires_grad": "populated",
+            "output.tensor.shape": "populated",
+            "output.transformed_tensor": "unknown",
+            "output.visualizer_path": "unknown",
+            "parents[0].parent_label_raw": "populated",
+            "pass_index": "populated",
+            "policy.must_keep_topology": "defaulted_false",
+            "policy.requires_isolation": "defaulted_false",
+            "policy.save_args": "defaulted_false",
+            "policy.save_code": "defaulted_false",
+            "policy.save_grad": "defaulted_false",
+            "policy.save_mode": "populated",
+            "policy.save_payload": "populated",
+            "policy.save_rng": "defaulted_false",
+            "policy.stream": "defaulted_false",
+            "predicate_matched": "populated",
+            "raw_index": "populated",
+            "record_context": "populated",
+            "source_trace": "unknown",
+            "source_trace_id": "unknown",
+            "step_index": "populated",
+            "templates.args_template": "unknown",
+            "templates.has_saved_args": "defaulted_false",
+            "templates.kwargs_template": "unknown",
+            "templates.saved_args": "unknown",
+            "templates.saved_kwargs": "unknown",
+            "tracing_finished": "defaulted_false",
+            "transform_chain": "defaulted_empty",
+            "transform_config": "populated",
+            "transform_fn_name": "unknown",
+            "transform_fn_qualname": "unknown",
+            "transform_fn_source": "unknown",
+            "transform_kind": "unknown",
+            "type_index": "populated",
+            "unattributed_tensor_args": "defaulted_empty"
+          }
+        }
+      ],
+      "final_ops": [],
+      "gradients": {
+        "event_types": [],
+        "saved_payloads": []
+      },
+      "outcome": {
+        "error_message": null,
+        "error_type": null,
+        "failed": false,
+        "halt_reason": null,
+        "halted": false,
+        "last_event_func": null,
+        "last_event_label": null,
+        "last_successful_op_label": null,
+        "n_ops_completed": 0,
+        "status": "complete"
+      },
+      "selected_payloads": [
+        {
+          "label_raw": "conv2d_1_2_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "aa516d91",
+              "fc9069ca",
+              "6483162d",
+              "68babf8f",
+              "616b627d",
+              "8a1da11b",
+              "0a7b53c8",
+              "520c8cc6"
+            ],
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ]
+          }
+        },
+        {
+          "label_raw": "relu_1_3_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "8cc25ce6",
+              "664b80e8",
+              "85b998e5",
+              "3a58d7ec",
+              "54e253ae",
+              "852487d3",
+              "b95ea486",
+              "961ef686"
+            ],
+            "shape": [
+              1,
+              2,
+              4,
+              4
+            ]
+          }
+        }
+      ],
+      "side_effects": {
+        "buffer_changes": {},
+        "buffer_mutation_count": 0,
+        "forward_invocations": 1,
+        "inplace_op_count": 0,
+        "input_value_after": {
+          "dtype": "float32",
+          "sha256_chunks": [
+            "cae3a3b1",
+            "673d883d",
+            "c842fd39",
+            "56865588",
+            "0ccb751e",
+            "85db0a07",
+            "22664379",
+            "7c3bb372"
+          ],
+          "shape": [
+            1,
+            1,
+            4,
+            4
+          ]
+        },
+        "input_value_before": {
+          "dtype": "float32",
+          "sha256_chunks": [
+            "cae3a3b1",
+            "673d883d",
+            "c842fd39",
+            "56865588",
+            "0ccb751e",
+            "85db0a07",
+            "22664379",
+            "7c3bb372"
+          ],
+          "shape": [
+            1,
+            1,
+            4,
+            4
+          ]
+        },
+        "input_value_changed": false,
+        "input_version_delta": 0,
+        "pre_hook_invocations": 0,
+        "rng_draw_count": 0,
+        "rng_state_after": [
+          "22e52678",
+          "e07f1165",
+          "b0261e4f",
+          "8b7a02f8",
+          "d1d8135f",
+          "7b0d5719",
+          "958414d8",
+          "086b6594"
+        ],
+        "rng_state_before": [
+          "b8cf38b6",
+          "2ca4ca46",
+          "19b3a5d1",
+          "37a56ef7",
+          "46340ec7",
+          "4cbae9ac",
+          "056aac24",
+          "f1182cb7"
+        ]
+      }
+    },
+    "schema_version": 1,
+    "tracking": {
+      "cuda_peak_memory_median_bytes": 0,
+      "python_peak_memory_median_bytes": 1259982,
+      "sample_count": 3,
+      "torch_version": "2.8.0+cu128",
+      "wall_time_median_ms": 95.05267604254186
+    }
+  },
+  "sha256_chunks": [
+    "8beb2170",
+    "e9c39ce6",
+    "a6a1b0a9",
+    "5cb07d59",
+    "9bf170c3",
+    "406b159f",
+    "2055f7db",
+    "03bc8aa5"
+  ]
+}
