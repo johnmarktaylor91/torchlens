@@ -45,9 +45,33 @@ def validate_tlspec(path: str | Path) -> None:
 
     from ..io import detect_tlspec_format, inspect_tlspec
 
-    if detect_tlspec_format(path) != "v2.0_unified":
+    tlspec_path = Path(path)
+    if not tlspec_path.exists():
+        raise FileNotFoundError(f"TorchLens .tlspec path does not exist: {tlspec_path}.")
+    if not tlspec_path.is_dir():
+        raise ValueError(f"TorchLens .tlspec path must be a directory: {tlspec_path}.")
+
+    manifest_path = tlspec_path / "manifest.json"
+    if manifest_path.exists():
+        try:
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest_value = json.load(handle)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse .tlspec manifest JSON at {manifest_path}.") from exc
+        if not isinstance(manifest_value, dict):
+            raise ValueError(f".tlspec manifest at {manifest_path} must be a JSON object.")
+
+    tlspec_format = detect_tlspec_format(tlspec_path)
+    if tlspec_format in {
+        "v2.16_intervention_with_kind",
+        "v2.16_intervention",
+        "v2.16_modellog_portable",
+    }:
         return
-    manifest = inspect_tlspec(path)
+    if tlspec_format != "v2.0_unified":
+        raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
+
+    manifest = inspect_tlspec(tlspec_path)
     schema_version = _manifest_schema_version(manifest)
     schema = _load_tlspec_manifest_schema(schema_version)
     _validate_manifest_against_schema(manifest, schema)
@@ -144,8 +168,9 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     # ``tlspec_version`` tracks the portable scrub/state format
     # (``torchlens._io.TLSPEC_VERSION``) and grows independently of
     # ``schema_version`` (which selects which of this file's schema variants
-    # applies), so only a floor is enforced here, not an exact value.
+    # applies), so its supported range is enforced independently.
     _require_int(manifest, "tlspec_version", minimum=1)
+    _validate_tlspec_version_ceiling(manifest["tlspec_version"])
     _require_str_enum(manifest, "kind", {"intervention", "trace", "bundle"})
     _require_str(manifest, "created_at")
     _require_str(manifest, "torchlens_version")
@@ -180,6 +205,29 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
             raise ValueError(
                 "Non-intervention .tlspec manifests require null intervention_compat_metadata."
             )
+
+
+def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
+    """Reject portable states newer than the loader can interpret.
+
+    Parameters
+    ----------
+    tlspec_version:
+        Portable I/O state format version declared by the manifest.
+
+    Raises
+    ------
+    ValueError
+        If the declared version is newer than this runtime supports.
+    """
+
+    from .._io import TLSPEC_VERSION
+
+    if tlspec_version > TLSPEC_VERSION:
+        raise ValueError(
+            f"Bundle uses tlspec_version={tlspec_version}, but this runtime only supports "
+            f"{TLSPEC_VERSION}."
+        )
 
 
 # JSON Schema keywords enforced by ``_validate_schema_properties``. This is a
@@ -464,6 +512,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
     if not isinstance(value, list):
         raise ValueError("Manifest body_index must be a list.")
     v1_intended_uses = {
+        "annotation_blob",
         "bundle_marker",
         "buffer_initial_value",
         "captured_arg",

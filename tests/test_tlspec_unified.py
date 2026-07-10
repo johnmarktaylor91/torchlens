@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from pathlib import Path
 from typing import Any, Callable
@@ -84,6 +85,32 @@ class UnifiedPreHookModel(nn.Module):
         """
 
         return x
+
+
+class UnifiedPlainAttributeBufferModel(nn.Module):
+    """Model exposing an unregistered tensor attribute during capture."""
+
+    def __init__(self) -> None:
+        """Initialize the plain tensor attribute."""
+
+        super().__init__()
+        self.scale = torch.ones(3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Multiply by the plain tensor attribute.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scaled output tensor.
+        """
+
+        return x * self.scale
 
 
 def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
@@ -334,6 +361,64 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
+    with pytest.raises(TorchLensIOError, match="intended_use"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("mutation", ["ghost", "filename"])
+def test_unified_load_rejects_desynchronized_body_index(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    """Load cross-checks the public body index against operative tensors."""
+
+    path = tmp_path / f"desynchronized_{mutation}.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    if mutation == "ghost":
+        ghost_entry = dict(manifest["body_index"][0])
+        ghost_entry["filename"] = "blobs/ghost.safetensors"
+        manifest["body_index"].append(ghost_entry)
+    else:
+        manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(TorchLensIOError, match="body_index"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_missing_path(tmp_path: Path) -> None:
+    """A nonexistent path is not a legacy bundle."""
+
+    path = tmp_path / "missing.tlspec"
+
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
+    """A present corrupt manifest is rejected instead of treated as legacy."""
+
+    path = tmp_path / "corrupt.tlspec"
+    path.mkdir()
+    (path / "manifest.json").write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Failed to parse.*manifest"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_still_accepts_genuine_legacy_bundle() -> None:
+    """A checked-in v2.16 model-log fixture remains accepted for backcompat."""
+
+    fixture_path = (
+        Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
+    )
+
+    validate_tlspec(fixture_path)
 
 
 @pytest.mark.smoke
@@ -356,6 +441,53 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     assert [layer.layer_label for layer in loaded.layer_list] == [
         layer.layer_label for layer in log.layer_list
     ]
+
+
+@pytest.mark.smoke
+def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
+    """Current manifests must not apply the v4 backend-address repair."""
+
+    trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
+    plain_buffer_op = next(op for op in trace.ops if op.is_buffer and op.address == "scale")
+    assert plain_buffer_op.backend_address is None
+    assert trace[plain_buffer_op.layer_label].backend_address is None
+
+    path = tmp_path / "plain_attribute_buffer.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    loaded_op = loaded[plain_buffer_op.layer_label].ops[0]
+
+    assert loaded_op.backend_address is None
+    assert loaded[plain_buffer_op.layer_label].backend_address is None
+
+
+@pytest.mark.smoke
+def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
+    """Safetensors sidecars restore each tensor's autograd participation bit."""
+
+    trace = tl.trace(
+        nn.Linear(3, 3),
+        torch.randn(2, 3, requires_grad=True),
+        layers_to_save="all",
+        backward_ready=True,
+    )
+    source_op = next(
+        op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
+    )
+    path = tmp_path / "requires_grad.tlspec"
+
+    trace.save(path)
+    manifest = _read_manifest(path)
+    loaded = tl.load(path)
+    loaded_out = loaded[source_op.layer_label].ops[0].out
+    lazy_loaded = tl.load(path, lazy=True)
+    lazy_out = lazy_loaded[source_op.layer_label].ops[0].materialize_out()
+
+    assert any(entry["requires_grad"] is True for entry in manifest["tensors"])
+    assert isinstance(loaded_out, torch.Tensor)
+    assert loaded_out.requires_grad is True
+    assert isinstance(lazy_out, torch.Tensor)
+    assert lazy_out.requires_grad is True
 
 
 @pytest.mark.smoke
@@ -401,6 +533,24 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
 
     with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
         tl.load(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
+    """Validation enforces the same portable-version ceiling as loading."""
+
+    path = tmp_path / "newer_validation_version.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest["tlspec_version"] = TLSPEC_VERSION + 1
+    _write_manifest(path, manifest)
+    expected = (
+        f"Bundle uses tlspec_version={TLSPEC_VERSION + 1}, but this runtime only supports "
+        f"{TLSPEC_VERSION}."
+    )
+
+    with pytest.raises(ValueError, match=re.escape(expected)):
+        validate_tlspec(path)
 
 
 @pytest.mark.smoke

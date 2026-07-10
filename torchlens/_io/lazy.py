@@ -49,6 +49,8 @@ class LazyActivationRef:
         Logical tensor kind.
     expected_sha256:
         Expected blob checksum from the manifest.
+    requires_grad:
+        Whether the materialized torch tensor should require gradients.
     logical_backend:
         Backend that produced the logical payload before transport.
     codec:
@@ -71,6 +73,7 @@ class LazyActivationRef:
     relative_path: str
     kind: Literal["out", "grad"]
     expected_sha256: str
+    requires_grad: bool = False
     logical_backend: str = "torch"
     codec: str = "torch_safetensors_v1"
     logical_dtype: str | None = None
@@ -170,9 +173,12 @@ class LazyActivationRef:
             raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
         tensor = next(iter(tensor_map.values()))
         effective_hints = self.payload_hints if payload_hints is None else payload_hints
-        return materialize_transport_tensor(
+        payload = materialize_transport_tensor(
             tensor,
             self,
             map_location=map_location,
             payload_hints=effective_hints,
         )
+        if self.requires_grad and isinstance(payload, torch.Tensor):
+            payload.requires_grad_(True)
+        return payload

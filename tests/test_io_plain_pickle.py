@@ -10,6 +10,7 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens import Trace, trace as trace_fn
 
 
@@ -31,6 +32,29 @@ class _PlainPickleModel(nn.Module):
         """
 
         return torch.sin(x) + torch.cos(x)
+
+
+class _ConditionalBodyCacheModel(nn.Module):
+    """Model whose condition ancestry receives the conditional-body cache."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run one data-dependent branch.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output from the selected branch.
+        """
+
+        condition_value = x.sum()
+        if condition_value > 0:
+            return torch.relu(x)
+        return torch.sigmoid(x)
 
 
 def _build_trace(seed: int = 0) -> Trace:
@@ -87,6 +111,29 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
     assert restored.layer_list[0].source_trace is restored
     assert isinstance(_first_saved_layer(restored).out, torch.Tensor)
+
+
+@pytest.mark.smoke
+def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path: Path) -> None:
+    """The property-backed conditional cache must not clobber its backing field."""
+
+    trace = trace_fn(_ConditionalBodyCacheModel(), torch.ones(2, 3), layers_to_save="all")
+    cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
+    label = cached_op.layer_label
+    assert cached_op.is_in_conditional_body is True
+    trace[label]._is_in_conditional_body = True
+
+    pickle_restored = pickle.loads(pickle.dumps(trace))
+    assert pickle_restored[label].ops[0]._is_in_conditional_body is True
+    assert pickle_restored[label].ops[0].is_in_conditional_body is True
+
+    bundle_path = tmp_path / "conditional_cache.tlspec"
+    trace.save(bundle_path)
+    tlspec_restored = tl.load(bundle_path)
+    assert tlspec_restored[label].ops[0]._is_in_conditional_body is True
+    assert tlspec_restored[label].ops[0].is_in_conditional_body is True
+    assert tlspec_restored[label]._is_in_conditional_body is True
+    assert tlspec_restored[label].is_in_conditional_body is True
 
 
 def test_old_style_pickle_without_io_format_version_warns_and_remains_usable(
@@ -325,6 +372,33 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
     # Consumer patterns from finalization/loop_detection/invariants must work.
     assert "missing" not in restored.input_to_module_calls
     assert list(restored.input_to_module_calls) == []
+
+
+def test_backend_address_repair_only_applies_before_v5() -> None:
+    """The v5 field migration must not overwrite a current explicit ``None``."""
+
+    from torchlens._io import TLSPEC_VERSION
+    from torchlens.data_classes.layer import Layer
+    from torchlens.data_classes.op import Op
+
+    trace = _build_trace()
+    op_state = trace.ops[0].__getstate__()
+    layer_state = trace.layer_list[0].__getstate__()
+    for state, factory in (
+        (op_state, lambda: Op.__new__(Op)),
+        (layer_state, lambda: Layer.__new__(Layer)),
+    ):
+        state["address"] = "plain.attribute"
+        state["backend_address"] = None
+        state["tlspec_version"] = TLSPEC_VERSION
+        current = factory()
+        current.__setstate__(dict(state))
+        assert current.backend_address is None
+
+        state["tlspec_version"] = 4
+        legacy = factory()
+        legacy.__setstate__(dict(state))
+        assert legacy.backend_address == "plain.attribute"
 
 
 def test_setstate_present_but_wrong_typed_container_is_coerced() -> None:

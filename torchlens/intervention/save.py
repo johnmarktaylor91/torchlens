@@ -1555,6 +1555,7 @@ def _write_tlspec_tensor_blob(
         layout=str(contiguous.layout).replace("torch.", ""),
         bytes=int(contiguous.numel() * contiguous.element_size()),
         sha256=sha256_of_file(blob_path),
+        requires_grad=bool(tensor.requires_grad),
     )
 
 
@@ -1579,7 +1580,10 @@ def _load_tensor_refs(spec_path: Path, entries: list[TensorEntry]) -> dict[str, 
         path = spec_path / entry.relative_path
         if sha256_of_file(path) != entry.sha256:
             raise ReplayPreconditionError(f"Tensor sidecar checksum mismatch: {entry.blob_id}")
-        tensors[entry.blob_id] = load_file(str(path))[_BLOB_TENSOR_KEY]
+        tensor = load_file(str(path))[_BLOB_TENSOR_KEY]
+        if entry.requires_grad:
+            tensor.requires_grad_(True)
+        tensors[entry.blob_id] = tensor
     return tensors
 
 
