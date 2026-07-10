@@ -4,7 +4,7 @@ Covers: import paths, registry consistency, perturbation unit tests,
 deep clone helpers, and integration tests through specific exemption paths.
 """
 
-from collections import namedtuple
+from collections import defaultdict, deque, namedtuple
 from dataclasses import replace
 import threading
 import warnings
@@ -44,6 +44,8 @@ from torchlens.validation.core import (
     _op_reduction_depth,
     _deep_numeric_replay_matches_saved,
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
+    ValidationDecisionRecorder,
+    validate_parents_of_saved_layer,
 )
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
@@ -1395,6 +1397,144 @@ def test_validate_forward_pass_preserves_distinct_recurrent_output_labels() -> N
             return first, second
 
     assert validate_forward_pass(SharedHeadTuple(), torch.randn(2, 3)) is True
+
+
+def test_replay_validation_checks_every_recurrent_pass() -> None:
+    """PIN: all five executions of a shared module are replay-validated.
+
+    NOTE: this behavior already held before the 2026-07 dead-code removal (the
+    pipeline enqueues pass-qualified labels); this test PINS it so it can never
+    regress. It passes on the pre-refactor base by design.
+    """
+
+    class RecurrentLinear(nn.Module):
+        """Apply one linear cell repeatedly."""
+
+        def __init__(self) -> None:
+            """Initialize the shared recurrent cell."""
+
+            super().__init__()
+            self.cell = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run five recurrent cell passes."""
+
+            for _ in range(5):
+                x = self.cell(x)
+            return x
+
+    model = RecurrentLinear()
+    inputs = torch.randn(2, 3)
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+
+    assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is True
+    replayed_cell_passes = [
+        decision
+        for decision in trace.validation_replay_status.decisions
+        if decision["phase"] == "replay"
+        and decision["func_name"] == "linear"
+        and decision["decision"] == "validated"
+    ]
+    assert len(replayed_cell_passes) == 5
+    assert {decision["op_label"] for decision in replayed_cell_passes} == {
+        "linear_1_1:1",
+        "linear_1_1:2",
+        "linear_1_1:3",
+        "linear_1_1:4",
+        "linear_1_1:5",
+    }
+
+
+def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> None:
+    """Internal-helper hardening: bare-label direct calls validate every pass.
+
+    The public pipeline already fails this corruption end-to-end (it enqueues
+    pass-qualified labels). This test hardens the INTERNAL
+    validate_parents_of_saved_layer entry point against bare multi-pass labels,
+    which previously resolved through a single representative op.
+    """
+
+    class RecurrentLinear(nn.Module):
+        """Apply one linear cell repeatedly."""
+
+        def __init__(self) -> None:
+            """Initialize the shared recurrent cell."""
+
+            super().__init__()
+            self.cell = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run five recurrent cell passes."""
+
+            for _ in range(5):
+                x = self.cell(x)
+            return x
+
+    model = RecurrentLinear()
+    inputs = torch.randn(2, 3)
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+    third_pass = next(op for op in trace.layer_list if op.label == "linear_1_1:3")
+    assert third_pass.saved_args is not None
+    third_pass.saved_args = (third_pass.saved_args[0] + 1.0, *third_pass.saved_args[1:])
+
+    decision_recorder = ValidationDecisionRecorder()
+    result = validate_parents_of_saved_layer(
+        trace,
+        "linear_1_1",
+        set(),
+        set(),
+        defaultdict(set),
+        deque(),
+        decision_recorder=decision_recorder,
+    )
+
+    assert result.failed
+    assert any(
+        decision["op_label"] == "linear_1_1"
+        and decision["phase"] == "replay"
+        and decision["decision"] == "failed"
+        for decision in decision_recorder.as_status().decisions
+    )
+
+
+def test_replay_validation_checks_every_train_batch_norm_pass() -> None:
+    """PIN: train-mode BatchNorm replays all passes from pristine state.
+
+    Passes on the pre-refactor base by design -- pins existing behavior against
+    regression (see test_replay_validation_checks_every_recurrent_pass).
+    """
+
+    class RecurrentBatchNorm(nn.Module):
+        """Apply one train-mode BatchNorm module repeatedly."""
+
+        def __init__(self) -> None:
+            """Initialize the shared normalization module."""
+
+            super().__init__()
+            self.batch_norm = nn.BatchNorm1d(3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run five normalization passes."""
+
+            for _ in range(5):
+                x = self.batch_norm(x)
+            return x
+
+    model = RecurrentBatchNorm().train()
+    inputs = torch.randn(8, 3)
+    pristine_state = {name: value.detach().clone() for name, value in model.state_dict().items()}
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+    model.load_state_dict(pristine_state)
+
+    assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is True
+    replayed_batch_norm_passes = [
+        decision
+        for decision in trace.validation_replay_status.decisions
+        if decision["phase"] == "replay"
+        and decision["func_name"] == "batch_norm"
+        and decision["decision"] == "validated"
+    ]
+    assert len(replayed_batch_norm_passes) == 5
 
 
 def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
