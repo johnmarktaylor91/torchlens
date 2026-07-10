@@ -2,6 +2,15 @@
 
 from .errors._base import CaptureError
 from .errors._base import ConfigurationError
+from .errors._base import TorchLensWarning
+
+
+class TorchLensCaptureGapError(CaptureError, RuntimeError):
+    """Reserved enforcement error for an unrepresented torch invocation."""
+
+
+class TorchLensCaptureGapWarning(TorchLensWarning):
+    """Shadow-mode report for a possible unrepresented torch invocation."""
 
 
 class TorchLensPostfuncError(CaptureError, RuntimeError):

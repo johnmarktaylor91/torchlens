@@ -6,7 +6,7 @@ import dataclasses
 import contextlib
 import inspect
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Iterator, cast
 
 import torch
 
@@ -36,6 +36,7 @@ from ...utils.tensor_utils import _is_cuda_available, safe_copy
 from . import _tl
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
+from .escape_detection import capture_escape_guard
 from .model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,
@@ -310,8 +311,18 @@ class TorchBackend:
         )
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
-        """Return the existing torch logging context manager."""
-        return _state.active_logging(cast("Trace", session))
+        """Compose owner-thread/detector guard with the logging context."""
+
+        @contextlib.contextmanager
+        def guarded_logging() -> Iterator[None]:
+            """Enter detector state before enabling wrapper logging."""
+
+            trace = cast("Trace", session)
+            with capture_escape_guard(trace):
+                with _state.active_logging(trace):
+                    yield
+
+        return guarded_logging()
 
     def pause_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch pause-logging context manager."""

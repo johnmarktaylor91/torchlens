@@ -67,6 +67,11 @@ from .buffer_writes import (
     resolve_registered_buffer_address,
     snapshot_buffer_args,
 )
+from .escape_detection import (
+    EscapeDetectorMode,
+    expected_original_call,
+    reset_detector_tables,
+)
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
@@ -899,6 +904,9 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     UserWarning,
                     stacklevel=2,
                 )
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(func, f"torch_func:{func_name}:functorch"):
+                    return func(*args, **kwargs)
             return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.
@@ -913,6 +921,9 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Reset barcode; skip metadata-only functions that would cause recursion.
         trace._current_func_barcode = 0
         if func_name in funcs_not_to_log:
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(func, f"torch_func:{func_name}:not_logged"):
+                    return func(*args, **kwargs)
             return func(*args, **kwargs)
 
         # Inline tensor extraction — avoids BFS crawl for the common case
@@ -979,7 +990,11 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             else False
         )
         try:
-            out_orig = func(*args, **kwargs)
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(func, f"torch_func:{func_name}:logged"):
+                    out_orig = func(*args, **kwargs)
+            else:
+                out_orig = func(*args, **kwargs)
         finally:
             _nvtx_range_pop(nvtx_pushed)
         return_value = out_orig
@@ -1112,6 +1127,10 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             del wrapped_func.__wrapped__
         except AttributeError:
             pass
+
+    setattr(wrapped_func, "__tl_original_id__", id(func))
+    setattr(wrapped_func, "__tl_wrapper_name__", f"torch_func:{func_name}")
+    setattr(wrapped_func, "__tl_detector_excluded__", func_name in funcs_not_to_log)
 
     return wrapped_func
 
@@ -1525,6 +1544,8 @@ def unwrap_torch() -> None:
     """
     _state._logging_enabled = False
     _state._active_trace = None
+    reset_detector_tables()
+    _state._escape_detector_mode = "off"
     from .backward import uninstall_autograd_wrappers
 
     uninstall_autograd_wrappers()
@@ -1661,10 +1682,33 @@ def _configure_patch_policy(
     return cast(DetachedPatchPolicy, _state._detached_patch_policy)
 
 
+def _configure_escape_detector(mode: EscapeDetectorMode | None) -> EscapeDetectorMode:
+    """Validate and apply the process-level diagnostic detector mode.
+
+    Parameters
+    ----------
+    mode:
+        ``None`` preserves the current mode; ``"shadow"`` reports without
+        enforcement and ``"off"`` disables profiling.
+
+    Returns
+    -------
+    EscapeDetectorMode
+        Effective mode for subsequent captures.
+    """
+
+    if mode is not None:
+        if mode not in {"off", "shadow"}:
+            raise ValueError("escape_detector must be 'off' or 'shadow'.")
+        _state._escape_detector_mode = mode
+    return cast(EscapeDetectorMode, _state._escape_detector_mode)
+
+
 def wrap_torch(
     *,
     patch_policy: DetachedPatchPolicy | Literal["default"] | None = None,
     patch_modules: tuple[str, ...] = (),
+    escape_detector: EscapeDetectorMode | None = None,
 ) -> None:
     """Install (or re-install) torchlens wrappers on all torch functions.
 
@@ -1684,10 +1728,14 @@ def wrap_torch(
         shallow discovery plus bounded provenance/allowlist deep scanning.
     patch_modules:
         Additive exact module names or package prefixes for scoped deep scanning.
+    escape_detector:
+        Opt-in callable diagnostic mode. ``"shadow"`` reports exact raw-call
+        escapes and marks traces unverified; the release default is ``"off"``.
     """
     from .backward import install_autograd_wrappers
 
     effective_policy = _configure_patch_policy(patch_policy, patch_modules)
+    _configure_escape_detector(escape_detector)
 
     if _state._is_decorated:
         install_autograd_wrappers()
@@ -1744,6 +1792,7 @@ def wrapped(
     *,
     patch_policy: DetachedPatchPolicy | Literal["default"] | None = None,
     patch_modules: tuple[str, ...] = (),
+    escape_detector: EscapeDetectorMode | None = None,
 ) -> Iterator[None]:
     """Context manager: wrap torch on entry, unwrap on exit.
 
@@ -1759,8 +1808,14 @@ def wrapped(
         Process-level detached-reference policy for this wrapper epoch.
     patch_modules:
         Additive scoped deep-scan module/package prefixes.
+    escape_detector:
+        Optional ``"off"`` or diagnostic ``"shadow"`` mode.
     """
-    wrap_torch(patch_policy=patch_policy, patch_modules=patch_modules)
+    wrap_torch(
+        patch_policy=patch_policy,
+        patch_modules=patch_modules,
+        escape_detector=escape_detector,
+    )
     try:
         yield
     finally:

@@ -19,6 +19,7 @@ from typing import Any, Callable, Iterator, Literal, cast
 
 import torch
 
+from ... import _state
 from ...utils._torch_compat import get_accumulate_grad_class
 
 from ..._deprecations import MISSING, MissingType
@@ -40,6 +41,7 @@ from ...ir.events import (
 )
 from ._tl import get_tensor_label
 from .tensor_tracking import _ensure_backward_event_stream
+from .escape_detection import expected_original_call
 
 _BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
 _ORIGINAL_AUTOGRAD_BACKWARD: Callable[..., Any] | None = None
@@ -2351,7 +2353,6 @@ def _run_backward_with_capture(
     Any
         Return value from ``backward_callable``.
     """
-    from ... import _state
     from ...intervention.hooks import normalize_hooks_from_spec
 
     _ensure_not_inference_only_backward(trace)
@@ -2576,7 +2577,9 @@ def install_autograd_wrappers() -> None:
 
         def run() -> Any:
             """Invoke the original autograd backward function."""
-
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(original, "autograd:backward"):
+                    return original(*args, **kwargs)
             return original(*args, **kwargs)
 
         return _capture_autograd_engine_call(
@@ -2596,7 +2599,9 @@ def install_autograd_wrappers() -> None:
 
         def run() -> Any:
             """Invoke the original autograd grad function."""
-
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(original, "autograd:grad"):
+                    return original(*args, **kwargs)
             return original(*args, **kwargs)
 
         return _capture_autograd_engine_call(
@@ -2744,6 +2749,9 @@ class RecordingBackward:
 
             def run() -> Any:
                 """Run the original Tensor.backward implementation."""
+                if _state._escape_detector_mode == "shadow":
+                    with expected_original_call(original_backward, "autograd:tensor_backward"):
+                        return original_backward(tensor_self, *args, **kwargs)  # type: ignore[no-untyped-call]
                 return original_backward(tensor_self, *args, **kwargs)  # type: ignore[no-untyped-call]
 
             return _run_backward_with_capture(

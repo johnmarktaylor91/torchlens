@@ -65,6 +65,7 @@ from .tensor_tracking import _append_module_suffix_to_equivalence_class
 from .sources import log_source_tensor
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from . import module_stack as _mstack
+from .escape_detection import expected_original_call
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances of the same class type. Cleared at the start of each
@@ -1891,7 +1892,11 @@ def module_forward_decorator(
                 [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
             )
             input_tensor_labels = set(get_label_list(input_tensors_fast))
-            out = orig_forward(*args, **kwargs)
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(orig_forward, "module_forward:fast"):
+                    out = orig_forward(*args, **kwargs)
+            else:
+                out = orig_forward(*args, **kwargs)
             output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
                 # Force _decorated_identity() for nn.Identity modules and pass-throughs
@@ -1978,7 +1983,11 @@ def module_forward_decorator(
                     state.append_context(enter_ctx)
             out = None
             try:
-                out = orig_forward(*args, **kwargs)
+                if _state._escape_detector_mode == "shadow":
+                    with expected_original_call(orig_forward, "module_forward:predicate"):
+                        out = orig_forward(*args, **kwargs)
+                else:
+                    out = orig_forward(*args, **kwargs)
                 return out
             finally:
                 active_model_exc = sys.exc_info()[1]
@@ -2050,7 +2059,11 @@ def module_forward_decorator(
                 trace, module, args, kwargs
             )
             try:
-                out = orig_forward(*args, **kwargs)
+                if _state._escape_detector_mode == "shadow":
+                    with expected_original_call(orig_forward, "module_forward:exhaustive"):
+                        out = orig_forward(*args, **kwargs)
+                else:
+                    out = orig_forward(*args, **kwargs)
                 from ...intervention.runtime import _apply_module_boundary_live_hooks
 
                 out = _apply_module_boundary_live_hooks(
