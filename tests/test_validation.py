@@ -15,11 +15,11 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens.user_funcs as user_funcs
 import torchlens as tl
 import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass
-import torchlens.user_funcs as user_funcs
 from torchlens.errors import MetadataInvariantError, TraceNotReproducibleWarning
 from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
@@ -1547,6 +1547,37 @@ def test_skip_perturbation_entirely_are_strings():
         assert isinstance(entry, str) and len(entry) > 0
 
 
+def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
+    """Keep ``full`` value-sensitive and pin the perturbation exemption registry."""
+
+    assert sorted(SKIP_PERTURBATION_ENTIRELY) == [
+        "broadcast_tensors",
+        "copy_",
+        "deform_conv2d",
+        "expand_as",
+        "exponential_",
+        "fill_",
+        "full_like",
+        "meshgrid",
+        "new_ones",
+        "new_zeros",
+        "nms",
+        "ones_like",
+        "ps_roi_align",
+        "ps_roi_pool",
+        "rand_like",
+        "randn_like",
+        "roi_align",
+        "roi_pool",
+        "zero_",
+        "zeros_like",
+    ]
+    assert "full" not in SKIP_VALIDATION_ENTIRELY
+    assert "full" not in SKIP_PERTURBATION_ENTIRELY
+    assert "full" not in CUSTOM_EXEMPTION_CHECKS
+    assert "full" not in STRUCTURAL_ARG_POSITIONS
+
+
 def test_structural_arg_positions_values_are_sets_of_ints():
     for func_name, positions in STRUCTURAL_ARG_POSITIONS.items():
         assert isinstance(func_name, str) and len(func_name) > 0
@@ -1564,6 +1595,16 @@ def test_custom_exemption_checks_are_callable():
 # =============================================================================
 # Perturbation unit tests
 # =============================================================================
+
+
+def test_perturbation_response_gate_treats_one_ulp_change_as_unequal() -> None:
+    """The perturbation gate accepts only exact, NaN-aware output equality."""
+
+    saved = torch.tensor([1.0], dtype=torch.float32)
+    recomputed = torch.nextafter(saved, torch.tensor([float("inf")], dtype=torch.float32))
+
+    assert not tensor_nanequal(recomputed, saved, allow_tolerance=False)
+    assert tensor_nanequal(saved, saved.clone(), allow_tolerance=False)
 
 
 @pytest.mark.smoke
@@ -2208,6 +2249,26 @@ class _EmptyLikeModel(nn.Module):
         return x * 2
 
 
+class _InputDerivedFullModel(nn.Module):
+    """Model whose ``full`` fill value is derived from the input."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Fill an input-shaped tensor with the first input value.
+
+        Parameters
+        ----------
+        x:
+            Input tensor supplying the output shape and fill value.
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor created by ``torch.full`` from an input-derived value.
+        """
+
+        return torch.full(x.shape, x[0])
+
+
 def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
     """Return the only layer in ``trace`` with the requested function name.
 
@@ -2261,6 +2322,33 @@ def _assert_custom_exemption_for_arg(
 
         assert CUSTOM_EXEMPTION_CHECKS[func_name](trace, layer, [parent]) is expected
         assert _check_perturbation_exemptions(trace, layer, [parent]) is expected
+    finally:
+        trace.cleanup()
+
+
+def test_input_derived_full_validates_without_an_exemption() -> None:
+    """``full`` is replay-validated through the pipeline rather than exempted."""
+
+    model = _InputDerivedFullModel()
+    x = torch.tensor([1.0, 2.0], dtype=torch.float32)
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        assert trace.validate_forward_pass([model(x).detach().clone()]) is True
+
+        full_decisions = [
+            decision
+            for decision in trace.validation_replay_status.decisions
+            if decision.get("func_name") == "full"
+        ]
+        assert full_decisions == [
+            {
+                "op_label": _only_layer_with_func_name(trace, "full").layer_label + ":1",
+                "func_name": "full",
+                "phase": "replay",
+                "decision": "validated",
+                "reason": "replay_matched",
+            }
+        ]
     finally:
         trace.cleanup()
 
