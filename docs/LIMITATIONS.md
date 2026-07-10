@@ -270,12 +270,17 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   misses, warns with the callable and callsite, and records the report in
   `trace.escape_diagnostics`; it does not enforce completeness in this rollout.
   In particular, a C `functools.partial` can remain invisible to Python profiling.
+  A Python inventory original that recursively calls itself through a pre-wrap reference can
+  self-convict after its one-shot wrapper-edge token is consumed; this is documented rather than
+  broadly exempted because recursive callsites are arbitrary user/library code.
   Scoped traces therefore carry `capture_verified=False` until the separate
   dispatcher witness is enabled. Deferred `log_backward()` is also outside the
   current detector lifetime and reports `escape_detector_backward_coverage ==
   "not_armed"`. See
   [scoped detached-reference migration](migration/scoped_detached_patching.md)
   for the exact policy and remediation matrix.
+  Live `capture_verified` state is not portable through `.tlspec`: loaded traces expose
+  `None`/unknown and never falsely retain `True`.
 - **bfloat16 / fp16 + non-deterministic GPU reductions**: validation
   replay compares activations to within ``3e-6`` absolute tolerance; on
   bf16/fp16 GPU atomics, small reordering differences can cross that

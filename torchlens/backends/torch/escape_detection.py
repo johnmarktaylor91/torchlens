@@ -43,7 +43,120 @@ class AuditedEscapeExemption:
     reason: str
 
 
-AUDITED_ESCAPE_EXEMPTIONS: tuple[AuditedEscapeExemption, ...] = ()
+AUDITED_ESCAPE_EXEMPTIONS: tuple[AuditedEscapeExemption, ...] = (
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:adaptive_max_pool1d:logged",
+        child_qualname="torch.nn.functional._adaptive_max_pool1d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:adaptive_max_pool1d:logged",
+        child_qualname="torch.nn.functional.adaptive_max_pool1d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:adaptive_max_pool2d:logged",
+        child_qualname="torch.nn.functional._adaptive_max_pool2d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:adaptive_max_pool2d:logged",
+        child_qualname="torch.nn.functional.adaptive_max_pool2d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:adaptive_max_pool3d:logged",
+        child_qualname="torch.nn.functional._adaptive_max_pool3d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:adaptive_max_pool3d:logged",
+        child_qualname="torch.nn.functional.adaptive_max_pool3d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:fractional_max_pool2d:logged",
+        child_qualname="torch.nn.functional._fractional_max_pool2d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:fractional_max_pool2d:logged",
+        child_qualname="torch.nn.functional.fractional_max_pool2d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:fractional_max_pool3d:logged",
+        child_qualname="torch.nn.functional._fractional_max_pool3d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:fractional_max_pool3d:logged",
+        child_qualname="torch.nn.functional.fractional_max_pool3d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:max_pool1d:logged",
+        child_qualname="torch.nn.functional._max_pool1d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:max_pool1d:logged",
+        child_qualname="torch.nn.functional.max_pool1d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:max_pool2d:logged",
+        child_qualname="torch.nn.functional._max_pool2d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:max_pool2d:logged",
+        child_qualname="torch.nn.functional.max_pool2d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:max_pool3d:logged",
+        child_qualname="torch.nn.functional._max_pool3d",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch false branch uses its pre-wrap closure-held pool callable",
+    ),
+    AuditedEscapeExemption(
+        parent_wrapper="torch_func:max_pool3d:logged",
+        child_qualname="torch.nn.functional.max_pool3d_with_indices",
+        caller_filename_suffix="torch/_jit_internal.py",
+        caller_name="fn",
+        reason="boolean_dispatch true branch uses its pre-wrap closure-held pool callable",
+    ),
+)
 """Reviewable exact exemptions; additions require a regression test and reason."""
 
 if len(AUDITED_ESCAPE_EXEMPTIONS) > MAX_AUDITED_EXEMPTIONS:

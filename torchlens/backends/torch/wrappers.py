@@ -129,7 +129,8 @@ class PatchReport:
     slots_patched:
         Number of identity-matching slots replaced and ledgered.
     source_files_opened:
-        Number of source files opened by this pass. Scoped always reports zero.
+        Number of source files successfully opened by this pass. Scoped and full
+        always report zero because only legacy uses source-gated deep scanning.
     """
 
     policy: DetachedPatchPolicy
@@ -1911,6 +1912,7 @@ def patch_detached_references(
         "direct_attributes_inspected": 0,
         "slots_patched": 0,
     }
+    source_open_counter = [0]
     deep_candidates: dict[int, tuple[str, types.ModuleType]] = {}
     scoped_hot_ids = _scoped_hot_module_ids(model, module_names)
     force_full_scan = requested_policy == "full"
@@ -1954,7 +1956,11 @@ def patch_detached_references(
             if effective_policy == "scoped":
                 if exact_hit or id(mod) in scoped_hot_ids:
                     deep_candidates[id(mod)] = (mod_key, mod)
-            elif _should_deep_scan_detached_module(mod, effective_policy):
+            elif _should_deep_scan_detached_module(
+                mod,
+                effective_policy,
+                source_open_counter=source_open_counter,
+            ):
                 deep_candidates[id(mod)] = (mod_key, mod)
 
         crawled_class_ids: set[int] = set()
@@ -1979,7 +1985,7 @@ def patch_detached_references(
         deep_modules_scanned=counters["deep_modules_scanned"],
         direct_attributes_inspected=counters["direct_attributes_inspected"],
         slots_patched=counters["slots_patched"],
-        source_files_opened=0,
+        source_files_opened=source_open_counter[0],
     )
 
 
@@ -2133,7 +2139,12 @@ def _should_skip_detached_module_key(mod_key: str, policy: DetachedPatchPolicy) 
     return mod_key.startswith(prefixes) or ".dist-info" in mod_key
 
 
-def _should_deep_scan_detached_module(mod: types.ModuleType, policy: DetachedPatchPolicy) -> bool:
+def _should_deep_scan_detached_module(
+    mod: types.ModuleType,
+    policy: DetachedPatchPolicy,
+    *,
+    source_open_counter: list[int] | None = None,
+) -> bool:
     """Return whether Level 2/3 detached-reference scans should run for a module.
 
     Parameters
@@ -2142,6 +2153,8 @@ def _should_deep_scan_detached_module(mod: types.ModuleType, policy: DetachedPat
         Module object being scanned.
     policy:
         Detached-reference patch policy.
+    source_open_counter:
+        Optional single-item counter incremented for successful legacy source opens.
 
     Returns
     -------
@@ -2153,7 +2166,7 @@ def _should_deep_scan_detached_module(mod: types.ModuleType, policy: DetachedPat
         return True
     if _module_file_is_stdlib(mod):
         return False
-    has_torch = _module_source_mentions_torch(mod)
+    has_torch = _module_source_mentions_torch(mod, source_open_counter=source_open_counter)
     return has_torch is not False
 
 
@@ -2210,13 +2223,19 @@ def _module_file_is_stdlib(mod: types.ModuleType) -> bool:
     return False
 
 
-def _module_source_mentions_torch(mod: types.ModuleType) -> bool | None:
+def _module_source_mentions_torch(
+    mod: types.ModuleType,
+    *,
+    source_open_counter: list[int] | None = None,
+) -> bool | None:
     """Return whether a module's Python source contains ``b"torch"``.
 
     Parameters
     ----------
     mod:
         Module object to inspect.
+    source_open_counter:
+        Optional single-item counter incremented after a source file is opened.
 
     Returns
     -------
@@ -2234,6 +2253,8 @@ def _module_source_mentions_torch(mod: types.ModuleType) -> bool | None:
         return cached
     try:
         with open(mod_file, "rb") as source_file:
+            if source_open_counter is not None:
+                source_open_counter[0] += 1
             has_torch = b"torch" in source_file.read()
     except OSError:
         _state._detached_source_has_torch[mod_file] = None

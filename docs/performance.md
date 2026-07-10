@@ -109,7 +109,9 @@ print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
 
 The honest rollout comparison is **legacy with no guard** versus **scoped with the requested
 guard**, not crawl time in isolation. On Python 3.9–3.11, shadow mode uses `sys.setprofile` and can
-be expensive for Python-call-heavy models; on Python 3.12+ it prefers local Python-start monitoring
+be expensive for Python-call-heavy models: a representative call-heavy 16-layer MLP measurement on
+Python 3.11 was **+371%** versus the unguarded capture. Treat shadow as an expensive, diagnostic-only
+soak tool, not a production capture setting. On Python 3.12+ it prefers local Python-start monitoring
 plus diagnostic CALL events. Shadow remains default-off. The dispatcher-witness overhead is still
 unknown and must pass its separate performance gate before scoped can become the default.
 

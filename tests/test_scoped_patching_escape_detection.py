@@ -9,6 +9,7 @@ import threading
 import types
 import warnings
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -158,6 +159,38 @@ def test_scoped_never_reads_module_source(monkeypatch: pytest.MonkeyPatch) -> No
     report = patch_detached_references(policy="scoped")
     assert report.source_files_opened == 0
     assert opened == []
+
+
+def test_legacy_reports_source_files_opened(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Legacy reports successful source reads instead of a hardcoded zero."""
+
+    wrap_torch(patch_policy="legacy")
+    source_path = tmp_path / "torchlens_source_count_probe.py"
+    source_path.write_text("import torch\n", encoding="utf-8")
+    module_name = "_tl_legacy_source_count_probe"
+    module = types.ModuleType(module_name)
+    module.__file__ = str(source_path)
+    sys.modules[module_name] = module
+    opened: list[Any] = []
+    original_open = open
+
+    def recording_open(*args: Any, **kwargs: Any) -> Any:
+        """Record successful source-open attempts and preserve normal behavior."""
+
+        file_obj = original_open(*args, **kwargs)
+        opened.append(args[0] if args else None)
+        return file_obj
+
+    monkeypatch.setattr("builtins.open", recording_open)
+    try:
+        report = patch_detached_references(policy="legacy")
+    finally:
+        sys.modules.pop(module_name, None)
+    assert report.source_files_opened == len(opened)
+    assert str(source_path) in opened
 
 
 def test_module_identity_replacement_under_same_key_is_scanned() -> None:
@@ -492,7 +525,7 @@ def test_full_policy_does_not_claim_closure_completeness() -> None:
 
 
 def test_clean_composites_and_descriptor_wrappers_do_not_convict() -> None:
-    """Torch-internal composites and legitimate Tensor methods need no exemption."""
+    """Ordinary Torch composites and legitimate Tensor methods do not convict."""
 
     class Model(nn.Module):
         """Exercise Python composite, getset, method, and print wrapper paths."""
@@ -510,8 +543,60 @@ def test_clean_composites_and_descriptor_wrappers_do_not_convict() -> None:
         trace = tl.trace(Model(), torch.randn(3))
     assert trace.escape_diagnostics == []
     assert _gap_warnings(caught) == []
-    assert AUDITED_ESCAPE_EXEMPTIONS == ()
+    assert len(AUDITED_ESCAPE_EXEMPTIONS) == 16
+    assert all(
+        row.caller_filename_suffix == "torch/_jit_internal.py" for row in AUDITED_ESCAPE_EXEMPTIONS
+    )
+    assert all(row.caller_name == "fn" for row in AUDITED_ESCAPE_EXEMPTIONS)
+    assert all(row.reason for row in AUDITED_ESCAPE_EXEMPTIONS)
     assert len(AUDITED_ESCAPE_EXEMPTIONS) <= MAX_AUDITED_EXEMPTIONS
+
+
+@pytest.mark.parametrize(
+    ("function_name", "input_shape", "kwargs"),
+    [
+        ("max_pool1d", (1, 1, 8), {"kernel_size": 2}),
+        ("max_pool2d", (1, 1, 8, 8), {"kernel_size": 2}),
+        ("max_pool3d", (1, 1, 6, 6, 6), {"kernel_size": 2}),
+        ("adaptive_max_pool1d", (1, 1, 8), {"output_size": 2}),
+        ("adaptive_max_pool2d", (1, 1, 8, 8), {"output_size": 2}),
+        ("adaptive_max_pool3d", (1, 1, 6, 6, 6), {"output_size": 2}),
+        (
+            "fractional_max_pool2d",
+            (1, 1, 8, 8),
+            {"kernel_size": 2, "output_size": 3},
+        ),
+        (
+            "fractional_max_pool3d",
+            (1, 1, 6, 6, 6),
+            {"kernel_size": 2, "output_size": 2},
+        ),
+    ],
+)
+@pytest.mark.parametrize("return_indices", [False, True], ids=["values", "indices"])
+def test_boolean_dispatch_pooling_family_does_not_convict(
+    function_name: str,
+    input_shape: tuple[int, ...],
+    kwargs: dict[str, Any],
+    return_indices: bool,
+) -> None:
+    """Pre-wrap boolean-dispatch closure branches are audited clean composites."""
+
+    class Model(nn.Module):
+        """Invoke one live functional pooling dispatcher."""
+
+        def forward(self, x: torch.Tensor) -> Any:
+            """Run the selected boolean-dispatch branch."""
+
+            pool = getattr(torch.nn.functional, function_name)
+            return pool(x, return_indices=return_indices, **kwargs)
+
+    wrap_torch(patch_policy="scoped", escape_detector="shadow")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(Model(), torch.randn(input_shape))
+    assert trace.escape_diagnostics == []
+    assert _gap_warnings(caught) == []
 
 
 def test_pause_logging_excludes_raw_internal_work() -> None:

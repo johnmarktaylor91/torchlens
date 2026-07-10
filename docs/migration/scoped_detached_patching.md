@@ -60,7 +60,16 @@ with transient Tensor-bound builtins by requiring a Tensor receiver and an exact
 wrapped-method inventory. They never exempt the dynamic duration of a wrapper. Thus a raw descriptor
 called by a user callback inside a composite wrapper remains reportable. TorchLens-internal
 exceptions, if ever required, must match an exact parent/child/callsite row; the audited table has a
-hard budget of 16 entries and ships empty.
+hard budget of 16 entries. Its current rows are exhausted by the two branches of the eight
+`torch._jit_internal.boolean_dispatch` pooling functions; each row is restricted to the exact
+parent wrapper, child callable, `_jit_internal.py` callsite, and `fn` caller.
+
+The one-shot token also cannot represent a Python inventory original that recursively calls itself
+through a pre-wrap reference. For example, a synthetic registered original shaped like
+`def original(x): return original(x - 1) if x else x` consumes its wrapper token on the first call,
+then the recursive call can self-convict. This class is documented rather than exempted because its
+callsite is arbitrary original/user code; a general recursion exemption would become an ancestry
+blanket and hide real escaped calls.
 
 Shadow is default-off. When it is enabled, the resulting trace remains unverified even with no
 reports. Scoped traces are also unverified without shadow because the dispatcher completeness
@@ -85,6 +94,9 @@ Live torch traces expose these diagnostic fields:
 
 Public `tl.record(...)` uses the same guarded forward hot path and mirrors these fields onto the
 returned `Recording`.
+
+`capture_verified` is live diagnostic state and does not survive a `.tlspec` round-trip: a loaded
+trace reports `None`/unknown, never a falsely preserved `True`.
 
 ## Honest boundaries
 
