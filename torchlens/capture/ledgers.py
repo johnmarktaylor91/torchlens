@@ -130,6 +130,19 @@ class EventJournal:
                 break
         return event_id
 
+    def clear(self) -> None:
+        """Release all journaled event references.
+
+        Returns
+        -------
+        None
+            Removes the session-local mirror once legacy forward cleanup has
+            reached its historical release point.
+        """
+
+        self._facts.clear()
+        self._by_id.clear()
+
     @property
     def facts(self) -> tuple[EventFact, ...]:
         """Return journaled facts in producer order."""
@@ -191,6 +204,17 @@ class DecisionLedger:
             fire_results=event.fire_results,
         )
 
+    def clear(self) -> None:
+        """Release all decision sidecars.
+
+        Returns
+        -------
+        None
+            Removes session-local references after the active run ends.
+        """
+
+        self._records.clear()
+
     @property
     def records(self) -> Mapping[EventId, DecisionRecord]:
         """Return a read-only stable-id lookup of decisions."""
@@ -232,6 +256,18 @@ class PayloadLedger:
         """
 
         self._records[event_id] = PayloadRecord(output=event.output)
+
+    def clear(self) -> None:
+        """Release all payload leases.
+
+        Returns
+        -------
+        None
+            Drops activation references at the legacy forward-memory release
+            point rather than extending their lifetime through the session.
+        """
+
+        self._records.clear()
 
     @property
     def records(self) -> Mapping[EventId, PayloadRecord]:
@@ -280,6 +316,17 @@ class CompletenessManifest:
         """
 
         self._states[demand] = CompletenessState.UNAVAILABLE
+
+    def clear(self) -> None:
+        """Release all recorded completeness state.
+
+        Returns
+        -------
+        None
+            Clears run-local observability bookkeeping after teardown.
+        """
+
+        self._states.clear()
 
     def state_for(self, demand: str) -> CompletenessState:
         """Return observability for one demand, defaulting to unavailable.

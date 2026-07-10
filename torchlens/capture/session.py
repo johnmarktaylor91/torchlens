@@ -14,7 +14,7 @@ TerminalState = Literal["complete", "halted", "failed"]
 CleanupCallback = Callable[[], None]
 
 _LEGACY_CAPTURE_SESSIONS: "WeakKeyDictionary[object, CaptureSession]" = WeakKeyDictionary()
-_LEGACY_EVENT_SESSIONS: dict[int, tuple[ReferenceType[object], CaptureSession]] = {}
+_LEGACY_EVENT_SESSIONS: dict[int, tuple[ReferenceType[object], ReferenceType[CaptureSession]]] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +61,7 @@ class _CleanupEntry:
     completed: bool = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, weakref_slot=True)
 class CaptureSession:
     """The only mutable owner of one capture run's new spine state.
 
@@ -90,6 +90,34 @@ class CaptureSession:
     builders: dict[str, object] = field(default_factory=dict)
     cleanup_stack: list[_CleanupEntry] = field(default_factory=list)
     outcome: RunOutcome | None = None
+
+    def release(self) -> None:
+        """Release all run-local compatibility sidecars.
+
+        This is called only after legacy forward-memory cleanup has completed.
+        It keeps the Stage-2 adapter lifetime-neutral by releasing its event,
+        payload, cleanup, and outcome references at the same point as the
+        legacy capture path.
+
+        Returns
+        -------
+        None
+            This operation is idempotent.
+        """
+
+        self.event_journal.clear()
+        self.decision_ledger.clear()
+        self.payload_ledger.clear()
+        self.completeness.clear()
+        self.output_bindings.clear()
+        self.counters.clear()
+        self.module_state.clear()
+        self.history_state.clear()
+        self.builders.clear()
+        self.cleanup_stack.clear()
+        self.backend_token = None
+        if self.outcome is not None:
+            self.outcome = RunOutcome(state=self.outcome.state)
 
     def observe_event(self, event: OpEvent) -> None:
         """Populate stage-2 sidecars from an existing producer event.
@@ -353,6 +381,41 @@ def capture_session_for(owner: object) -> CaptureSession | None:
         return None
 
 
+def detach_capture_session(trace: object, events: object, session: CaptureSession) -> None:
+    """Detach and release a completed legacy compatibility session.
+
+    Parameters
+    ----------
+    trace
+        Legacy trace compatibility owner for the completed run.
+    events
+        Legacy event buffer associated with the completed run.
+    session
+        Stage-2 session to detach.  Mismatched registry entries are retained
+        to avoid disturbing a subsequent run.
+
+    Returns
+    -------
+    None
+        Removes both compatibility registrations and clears the session.  The
+        operation is safe to invoke more than once.
+    """
+
+    try:
+        if _LEGACY_CAPTURE_SESSIONS.get(trace) is session:
+            _LEGACY_CAPTURE_SESSIONS.pop(trace, None)
+    except TypeError:
+        pass
+
+    event_id = id(events)
+    entry = _LEGACY_EVENT_SESSIONS.get(event_id)
+    if entry is not None:
+        events_ref, session_ref = entry
+        if events_ref() is events and session_ref() is session:
+            _LEGACY_EVENT_SESSIONS.pop(event_id, None)
+    session.release()
+
+
 def attach_capture_events_session(events: object, session: CaptureSession) -> None:
     """Associate a legacy event buffer with its session outside serialized state.
 
@@ -366,12 +429,17 @@ def attach_capture_events_session(events: object, session: CaptureSession) -> No
 
     event_id = id(events)
 
-    def discard_events(_events_ref: ReferenceType[object]) -> None:
+    def discard_events(
+        _events_ref: ReferenceType[object],
+        _registry: dict[int, tuple[ReferenceType[object], ReferenceType[CaptureSession]]] = (
+            _LEGACY_EVENT_SESSIONS
+        ),
+    ) -> None:
         """Drop the compatibility association when its event buffer is collected."""
 
-        _LEGACY_EVENT_SESSIONS.pop(event_id, None)
+        _registry.pop(event_id, None)
 
-    _LEGACY_EVENT_SESSIONS[event_id] = (ref(events, discard_events), session)
+    _LEGACY_EVENT_SESSIONS[event_id] = (ref(events, discard_events), ref(session))
 
 
 def capture_session_for_events(events: object) -> CaptureSession | None:
@@ -391,8 +459,10 @@ def capture_session_for_events(events: object) -> CaptureSession | None:
     entry = _LEGACY_EVENT_SESSIONS.get(id(events))
     if entry is None:
         return None
-    events_ref, session = entry
+    events_ref, session_ref = entry
     if events_ref() is events:
-        return session
+        session = session_ref()
+        if session is not None:
+            return session
     _LEGACY_EVENT_SESSIONS.pop(id(events), None)
     return None
