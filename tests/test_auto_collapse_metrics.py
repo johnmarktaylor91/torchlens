@@ -2474,6 +2474,40 @@ def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(
         trace.cleanup()
 
 
+@pytest.mark.parametrize("training", [True, False])
+def test_max_child_segment_decomposes_ops_and_buffers(
+    tmp_path: Path,
+    training: bool,
+) -> None:
+    """Child-segment labels match covered trace ops and buffers in train and eval."""
+
+    model = BatchNormFlowStack(depth=8).train(training)
+    with torch.no_grad():
+        trace = tl.trace(model, torch.randn(2, 4, 8, 8))
+    try:
+        result = select_collapse_plan(trace, RenderContext(), mode="max")
+        child_segments = [
+            segment for segment in (result.segments or {}).values() if segment.kind == "child"
+        ]
+        assert child_segments
+        source = _draw_source(trace, tmp_path, f"bn_child_segments_{training}", "max", False)
+
+        for segment in child_segments:
+            covered = [trace.ops[f"{label}:1"] for label in segment.ops]
+            expected_buffers = sum(op.is_buffer for op in covered)
+            expected_ops = len(covered) - expected_buffers
+            expected_contents = format_collapsed_module_contents(len(covered), expected_buffers)
+
+            assert expected_buffers > 0
+            assert segment.num_ops == expected_ops
+            assert segment.num_buffers == expected_buffers
+            assert expected_contents in segment.label
+            assert segment.label in source
+            assert f"{len(covered)} ops" not in segment.label
+    finally:
+        trace.cleanup()
+
+
 @pytest.mark.serial
 def test_signal_tally_latency_under_budget() -> None:
     """Signal tally stays under a load-scaled per-3k-node budget."""

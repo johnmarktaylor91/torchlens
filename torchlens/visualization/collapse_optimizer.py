@@ -1274,14 +1274,26 @@ def _make_child_segment_descriptor(
     """Build a renderer descriptor for one child segment."""
 
     _ = context
-    num_ops = len(covered_ops) or sum(
-        int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
-    )
+    if covered_ops:
+        covered_entries = tuple(_trace_op_for_render_label(trace, label) for label in covered_ops)
+        num_layers = len(covered_entries)
+        num_buffers = sum(bool(entry.is_buffer) for entry in covered_entries)
+    else:
+        num_layers = sum(
+            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
+        )
+        buffer_labels = {
+            label
+            for address in addresses
+            for label in (getattr(trace.modules[address], "buffer_layers", ()) or ())
+        }
+        num_buffers = len(buffer_labels)
+    num_ops = max(0, num_layers - num_buffers)
     num_params = sum(
         int(getattr(trace.modules[address], "num_params", 0) or 0) for address in addresses
     )
     owner = _segment_owner_key(trace, addresses)
-    label = _child_segment_label(addresses, num_ops, num_params)
+    label = _child_segment_label(addresses, num_layers, num_buffers, num_params)
     name = f"{addresses[0].replace('.', '_')}__segment__{addresses[-1].replace('.', '_')}pass1"
     return SegmentDescriptor(
         name=name,
@@ -1291,6 +1303,7 @@ def _make_child_segment_descriptor(
         ops=covered_ops,
         owner=owner,
         num_ops=num_ops,
+        num_buffers=num_buffers,
         num_params=num_params,
     )
 
@@ -1378,8 +1391,15 @@ def _segment_owner_key(trace: "Trace", addresses: tuple[str, ...]) -> str | None
     return parent_key if parent_key in trace.modules else parent
 
 
-def _child_segment_label(addresses: tuple[str, ...], num_ops: int, num_params: int) -> str:
+def _child_segment_label(
+    addresses: tuple[str, ...],
+    num_layers: int,
+    num_buffers: int,
+    num_params: int,
+) -> str:
     """Return a class-free range label for a child segment."""
+
+    from ._render_common import format_collapsed_module_contents
 
     first = addresses[0]
     last = addresses[-1]
@@ -1387,7 +1407,11 @@ def _child_segment_label(addresses: tuple[str, ...], num_ops: int, num_params: i
     first_leaf = first.rsplit(".", 1)[-1]
     last_leaf = last.rsplit(".", 1)[-1]
     range_text = f"{prefix}.{first_leaf}-{last_leaf}" if prefix else f"{first_leaf}-{last_leaf}"
-    return f"{range_text} -- {len(addresses)} blocks, {num_ops} ops, {_format_param_count(num_params)} params"
+    contents = format_collapsed_module_contents(num_layers, num_buffers)
+    return (
+        f"{range_text} -- {len(addresses)} blocks, {contents}, "
+        f"{_format_param_count(num_params)} params"
+    )
 
 
 def _format_param_count(value: int) -> str:

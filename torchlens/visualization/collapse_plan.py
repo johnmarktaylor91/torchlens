@@ -145,6 +145,8 @@ class SegmentDescriptor:
         Module-cluster owner key, or ``None`` for top-level emission.
     num_ops:
         Number of operations represented by the segment.
+    num_buffers:
+        Number of buffer layers represented by the segment.
     num_params:
         Number of parameters represented by the segment.
     """
@@ -156,6 +158,7 @@ class SegmentDescriptor:
     ops: tuple[str, ...] = ()
     owner: str | None = None
     num_ops: int = 0
+    num_buffers: int = 0
     num_params: int = 0
 
 
