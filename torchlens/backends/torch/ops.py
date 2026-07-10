@@ -3299,7 +3299,8 @@ def log_function_output_tensors_predicate(
 ) -> None:
     """Compatibility shim for predicate-mode operation emission."""
 
-    _emit_predicate_operation_events(
+    _emit_operation_events(
+        get_capture_producer_policy("predicate"),
         self,
         func,
         func_name,
