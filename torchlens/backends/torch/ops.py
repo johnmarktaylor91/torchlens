@@ -127,6 +127,7 @@ from ...capture.arg_positions import (
     _cache_dynamic_spec,
     _normalize_func_name,
 )
+from ...capture.session import capture_session_for
 
 from .tensor_tracking import (
     _add_tensor_backward_hook,
@@ -1425,7 +1426,8 @@ def log_function_output_tensors(
         policy = get_capture_producer_policy(cast(CaptureProducerMode, self.capture_mode))
         self._capture_producer_policy = policy
     layer_counter_before = self._layer_counter
-    policy.emit(
+    _emit_operation_events(
+        policy,
         self,
         func,
         func_name,
@@ -1489,6 +1491,10 @@ def _emit_operation_events(
     None
         Appends or updates capture events for the active trace.
     """
+
+    capture_session = capture_session_for(self)
+    if capture_session is not None:
+        capture_session.note_legacy_emission()
 
     policy.emit(
         self,

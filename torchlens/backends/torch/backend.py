@@ -13,6 +13,7 @@ import torch
 from ... import _state
 from ...data_classes.internal_types import FuncExecutionContext
 from ..._io import BlobRef as PortableBlobRef
+from ...capture.session import capture_session_for
 from ...fastlog.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from ...ir import replace_op_event
 from ...ir.events import OpEvent
@@ -306,10 +307,23 @@ class TorchBackend:
             input_objects = None
         else:
             model, input_tensors, input_objects = prepared_model, None, None
-        uninstall_buffer_write_tracker(cast("Trace", session))
-        _cleanup_model_session(
-            cast("Trace", session), cast(torch.nn.Module, model), input_tensors, input_objects
-        )
+
+        def cleanup_action() -> None:
+            """Run the legacy model teardown at its historical call site."""
+
+            uninstall_buffer_write_tracker(cast("Trace", session))
+            _cleanup_model_session(
+                cast("Trace", session),
+                cast(torch.nn.Module, model),
+                input_tensors,
+                input_objects,
+            )
+
+        capture_session = capture_session_for(session)
+        if capture_session is None:
+            cleanup_action()
+            return
+        capture_session.run_cleanup("model_session", cleanup_action)
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Compose owner-thread/detector guard with the logging context."""

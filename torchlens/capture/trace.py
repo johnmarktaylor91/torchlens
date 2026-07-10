@@ -51,6 +51,7 @@ from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
 from .._capture_state_helpers import unwrap_compiled_submodules
 from .config import InternalCaptureConfig
+from .session import CaptureSession, attach_capture_events_session, attach_legacy_capture_session
 from .stop import StopDirective, evaluate_halt_stop
 
 if TYPE_CHECKING:
@@ -59,6 +60,29 @@ from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _timed_phase, _vprint
 
 _ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
+
+
+def _cleanup_forward_memory_once(
+    trace: "Trace",
+    backend: CaptureBackend,
+    session: CaptureSession | None,
+) -> None:
+    """Run the legacy forward-memory teardown through the active session.
+
+    Parameters
+    ----------
+    trace
+        Legacy trace compatibility owner.
+    backend
+        Selected capture backend.
+    session
+        Stage-2 run owner, when the compatibility adapter was initialized.
+    """
+
+    if session is None:
+        backend.cleanup_forward_memory(trace)
+        return
+    session.run_cleanup("forward_memory", lambda: backend.cleanup_forward_memory(trace))
 
 
 def _process_rss_bytes() -> int:
@@ -942,6 +966,7 @@ def run_and_log_inputs_through_model(
 
     self.capture_start_time = time.time()
     input_tensors: list[Any] = []
+    capture_session: CaptureSession | None = None
     compiled_unwrap_exception: tuple[
         type[BaseException] | None, BaseException | None, TracebackType | None
     ] = (None, None, None)
@@ -1003,6 +1028,16 @@ def run_and_log_inputs_through_model(
             postprocess=postprocess,
             stop=self._stop_directive,
         )
+        capture_session = attach_legacy_capture_session(
+            self,
+            backend_token=backend,
+            backend_name=str(_backend_name_for_trace(self)),
+            layers_to_save=layers_to_save,
+            grad_layers_to_save=grad_layers_to_save,
+            random_seed=random_seed,
+            postprocess=postprocess,
+        )
+        attach_capture_events_session(self.capture_events, capture_session)
 
         with _timed_phase(self, "ctx_build:model_prepare"):
             # One-time model preparation + incremental sys.modules crawl
@@ -1094,6 +1129,7 @@ def run_and_log_inputs_through_model(
             backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
             self.capture_end_time = time.time()
             self.__dict__.pop("_capture_producer_policy", None)
+            capture_session.transition("complete", output=outputs, product=self)
             return outputs
 
         output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
@@ -1106,6 +1142,7 @@ def run_and_log_inputs_through_model(
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
         self.__dict__.pop("_capture_producer_policy", None)
+        capture_session.transition("complete", output=outputs, product=self)
         return outputs
 
     except HaltSignal as halt_exc:
@@ -1125,11 +1162,21 @@ def run_and_log_inputs_through_model(
                 postprocess,
             )
             self.__dict__.pop("_capture_producer_policy", None)
+            if capture_session is not None:
+                capture_session.transition(
+                    "halted",
+                    output=halted_output,
+                    product=self,
+                    partial_product=self,
+                    exception=halt_exc,
+                )
             return halted_output
         backend.cleanup_halted_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs))
         )
         self.__dict__.pop("_capture_producer_policy", None)
+        if capture_session is not None:
+            capture_session.transition("halted", partial_product=self, exception=halt_exc)
         raise
 
     except Exception as e:
@@ -1138,6 +1185,12 @@ def run_and_log_inputs_through_model(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )
         self.__dict__.pop("_capture_producer_policy", None)
+        if capture_session is not None:
+            capture_session.transition(
+                "failed",
+                partial_product=getattr(e, "partial_log", None),
+                exception=e,
+            )
         raise e
 
     finally:
@@ -1145,6 +1198,6 @@ def run_and_log_inputs_through_model(
             _clear_saved_activation_dedup_caches(self)
             # Release input tensor references so GC can reclaim backend memory.
             input_tensors = None  # type: ignore[assignment]
-            backend.cleanup_forward_memory(self)
+            _cleanup_forward_memory_once(self, backend, capture_session)
         finally:
             compiled_unwrap_context.__exit__(*compiled_unwrap_exception)

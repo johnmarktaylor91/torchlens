@@ -143,6 +143,11 @@ class CaptureEvents:
         self.op_events.append(event)
         self.op_event_by_label_raw[event.label_raw] = event
         self.live_index.append(event)
+        from ..capture.session import capture_session_for_events
+
+        session = capture_session_for_events(self)
+        if session is not None:
+            session.observe_event(event)
 
     def append_backward(
         self,
@@ -292,6 +297,11 @@ def replace_op_event(trace: Any, label_raw: str, **updates: Any) -> OpEvent | No
         events.op_event_index_by_label_raw[label_raw] = index
     events.op_events[index] = updated_event
     events.live_index.replace(updated_event)
+    from ..capture.session import capture_session_for_events
+
+    session = capture_session_for_events(events)
+    if session is not None:
+        session.replace_event(updated_event)
     return updated_event
 
 
