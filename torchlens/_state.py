@@ -423,6 +423,9 @@ _detached_positive_modules: list[Callable[[], Any | None]] = []
 
 _escape_detector_mode: str = "off"
 """Callable escape detector mode: ``"off"`` or diagnostic ``"shadow"``."""
+
+_completeness_witness_mode: str = "off"
+"""Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``."""
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 
