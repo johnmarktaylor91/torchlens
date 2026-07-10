@@ -18,6 +18,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
+import example_models
 from torchlens.backends.torch.escape_detection import (
     AUDITED_ESCAPE_EXEMPTIONS,
     MAX_AUDITED_EXEMPTIONS,
@@ -726,6 +727,33 @@ def test_scoped_and_legacy_match_on_in_scope_standard_model() -> None:
     unwrap_torch()
     wrap_torch(patch_policy="scoped")
     scoped = tl.trace(model, inputs)
+    assert scoped.graph_shape_hash == legacy.graph_shape_hash
+    assert [op.func_name for op in scoped.ops] == [op.func_name for op in legacy.ops]
+    assert scoped.layer_labels == legacy.layer_labels
+
+
+@pytest.mark.parametrize(
+    "model_type",
+    [
+        example_models.SimpleFF,
+        example_models.GeluModel,
+        example_models.SimpleInternallyGenerated,
+        example_models.SimpleBranching,
+        example_models.SimpleLoopNoParam,
+        example_models.NestedModules,
+    ],
+)
+def test_scoped_and_legacy_match_standard_test_model_zoo(
+    model_type: type[nn.Module],
+) -> None:
+    """Scoped matches legacy graphs across representative standard zoo axes."""
+
+    inputs = torch.full((5,), 2.0)
+    wrap_torch(patch_policy="legacy")
+    legacy = tl.trace(model_type(), inputs)
+    unwrap_torch()
+    wrap_torch(patch_policy="scoped")
+    scoped = tl.trace(model_type(), inputs)
     assert scoped.graph_shape_hash == legacy.graph_shape_hash
     assert [op.func_name for op in scoped.ops] == [op.func_name for op in legacy.ops]
     assert scoped.layer_labels == legacy.layer_labels
