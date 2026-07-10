@@ -11,7 +11,8 @@ Their construct (third-party example; verify `IntervenableModel` arguments and o
 against the Pyvene version installed in your environment):
 
 ```python
-# third-party example; Pyvene must be installed and configured for the target model
+# migration-test: tool=pyvene expected=[[0.0, 0.0]]
+# Pyvene must be installed and configured for the target model.
 import torch
 from pyvene import IntervenableConfig, IntervenableModel, ZeroIntervention
 
