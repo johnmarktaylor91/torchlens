@@ -717,7 +717,7 @@ def _load_unified_tlspec(
 
         return load_intervention_spec(bundle_path)
     if kind == "trace":
-        _preflight_unified_trace_manifest(manifest)
+        _preflight_unified_trace_manifest(manifest, bundle_path=bundle_path)
         parsed_manifest = _manifest_for_unified_trace_load(manifest)
         return _load_trace_payload(
             bundle_path,
@@ -732,13 +732,19 @@ def _load_unified_tlspec(
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
 
 
-def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
+def _preflight_unified_trace_manifest(
+    manifest: dict[str, Any],
+    *,
+    bundle_path: Path,
+) -> None:
     """Inspect backend-aware trace manifest fields before torch manifest parsing.
 
     Parameters
     ----------
     manifest:
         Raw unified manifest object.
+    bundle_path:
+        Root bundle directory containing the declared tensor blobs.
 
     Raises
     ------
@@ -747,6 +753,15 @@ def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
     BackendPayloadUnsupportedError
         If a non-torch audit-only manifest cannot be materialized by this runtime.
     """
+
+    from ..validation import validate_tlspec
+
+    try:
+        validate_tlspec(bundle_path)
+    except ValueError as exc:
+        raise TorchLensIOError(f"Invalid unified trace manifest: {exc}") from exc
+
+    _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
 
     schema_version = manifest.get("schema_version", 1)
     if not isinstance(schema_version, int) or isinstance(schema_version, bool):
@@ -784,6 +799,61 @@ def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
     materializes = bool(payload_policy.get("materialization_supported", False))
     if materializes:
         _preflight_schema_v2_payload_codecs(manifest, backend_name=backend_name)
+
+
+def _preflight_unified_trace_body_index(
+    manifest: dict[str, Any],
+    *,
+    bundle_path: Path,
+) -> None:
+    """Cross-check the public body index against operative tensor entries.
+
+    Parameters
+    ----------
+    manifest:
+        Raw unified trace manifest.
+    bundle_path:
+        Root bundle directory containing persisted blobs.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the body index is desynchronized from tensor entries or files.
+    """
+
+    body_index = manifest.get("body_index")
+    tensors = manifest.get("tensors")
+    if not isinstance(body_index, list):
+        raise TorchLensIOError("Unified trace manifest body_index must be a list.")
+    if not isinstance(tensors, list):
+        raise TorchLensIOError("Unified trace manifest tensors must be a list.")
+    if len(body_index) != len(tensors):
+        raise TorchLensIOError(
+            "Unified trace manifest body_index length does not match tensor entries."
+        )
+
+    for index, (body_entry, tensor_entry) in enumerate(zip(body_index, tensors)):
+        if not isinstance(body_entry, dict) or not isinstance(tensor_entry, dict):
+            raise TorchLensIOError(
+                f"Unified trace body_index/tensors entry {index} must be an object."
+            )
+        body_filename = body_entry.get("filename")
+        tensor_filename = tensor_entry.get("relative_path")
+        if body_filename != tensor_filename:
+            raise TorchLensIOError(
+                f"Unified trace body_index[{index}].filename does not match "
+                "the corresponding tensor relative_path."
+            )
+        if not isinstance(tensor_filename, str) or tensor_filename == "":
+            raise TorchLensIOError(
+                f"Unified trace tensors[{index}].relative_path must be a non-empty string."
+            )
+        blob_path = resolve_bundle_blob_path(bundle_path, tensor_filename)
+        _reject_symlink_path(blob_path, context="tensor blob")
+        if not blob_path.is_file():
+            raise TorchLensIOError(
+                f"Unified trace body_index[{index}] references missing blob file {blob_path}."
+            )
 
 
 def _preflight_schema_v2_runtime(

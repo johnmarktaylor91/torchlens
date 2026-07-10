@@ -360,6 +360,31 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
+    with pytest.raises(TorchLensIOError, match="intended_use"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("mutation", ["ghost", "filename"])
+def test_unified_load_rejects_desynchronized_body_index(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    """Load cross-checks the public body index against operative tensors."""
+
+    path = tmp_path / f"desynchronized_{mutation}.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    if mutation == "ghost":
+        ghost_entry = dict(manifest["body_index"][0])
+        ghost_entry["filename"] = "blobs/ghost.safetensors"
+        manifest["body_index"].append(ghost_entry)
+    else:
+        manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(TorchLensIOError, match="body_index"):
+        tl.load(path)
 
 
 @pytest.mark.smoke
