@@ -76,6 +76,19 @@ def test_orphans_hidden_by_default() -> None:
     assert "orphan__randn_1_1" not in source
 
 
+def test_default_orphans_warn_instead_of_rendering_empty_cluster() -> None:
+    """Dropped orphan husks do not produce an empty cluster when requested for display."""
+
+    trace = tl.trace(WithOrphanIsland(), torch.ones(1, 4))
+
+    with pytest.warns(UserWarning, match="re-trace with keep_orphans=True"):
+        dot = trace.draw(show_orphans=True, return_graph=True, vis_save_only=True)
+    source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
+
+    assert not trace.orphans
+    assert "cluster_orphans" not in source
+
+
 @pytest.mark.parametrize("show_orphans", (False, True))
 def test_orphans_do_not_mask_num_ops_self_consistency_failure(show_orphans: bool) -> None:
     """A bad aggregate count still fails regardless of orphan visibility."""

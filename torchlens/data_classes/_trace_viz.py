@@ -195,6 +195,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
             show_buffer_layers = cast(BufferVisibilityLiteral | bool, vis_buffers)
         if vis_direction is not MISSING:
             direction = cast(VisDirectionLiteral, vis_direction)
+        if vis_mode == "none":
+            return None
 
         return _impl(
             self,

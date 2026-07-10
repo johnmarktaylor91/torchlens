@@ -2,6 +2,8 @@
 
 # ruff: noqa: F403, F405
 
+import warnings
+
 from ._render_common import *
 from ._render_leaf import *
 from ._render_edges import *
@@ -820,8 +822,8 @@ def _add_orphan_island_nodes(
     """Render orphan (island) ops as a dashed cluster of disconnected nodes.
 
     Orphans are ops unreachable from both the model inputs and outputs; they are pruned
-    from the main graph and live only on ``trace.orphans`` (retained when
-    ``keep_orphans=True``, the default). ``draw(show_orphans=True)`` surfaces them as a
+    from the main graph and live only on ``trace.orphans`` when
+    ``keep_orphans=True``. ``draw(show_orphans=True)`` surfaces them as a
     labelled, dashed cluster of edgeless nodes so a user can SEE the dead-end computation
     without it polluting the connected graph. This is a prototype rendering: nodes carry the
     op label, function, and tensor shape, and are intentionally styled distinctly (dashed,
@@ -839,8 +841,19 @@ def _add_orphan_island_nodes(
     theme:
         Active visualization theme (currently unused; reserved for themed orphan styling).
     """
-    orphan_logs = getattr(self, "_orphan_logs", ())
+    orphan_logs = tuple(
+        op
+        for op in getattr(self, "_orphan_logs", ())
+        if bool(getattr(op, "is_orphan", False))
+        and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
+    )
     if not orphan_logs:
+        if getattr(self, "_orphan_logs", ()):
+            warnings.warn(
+                "orphans were dropped from this capture; re-trace with keep_orphans=True",
+                UserWarning,
+                stacklevel=2,
+            )
         return
 
     with dot.subgraph(name="cluster_orphans") as orphan_cluster:
