@@ -664,12 +664,15 @@ def _make_pre_hook_wrapper(
         with _paused_logging():
             before = _observe_state(token.args, token.kwargs)
         result: Any = None
+        inputs_after_side_effects: _StateObservation | None = None
         outcome: Literal["none", "returned", "invalid_return", "raised"] = "none"
         exception_type = None
         exception_message = None
         try:
             result = original(*hook_args, **hook_kwargs)
             if result is not None:
+                with _paused_logging():
+                    inputs_after_side_effects = _observe_state(actual_args, actual_kwargs)
                 outcome = "returned"
                 if with_kwargs:
                     if isinstance(result, tuple) and len(result) == 2:
@@ -689,6 +692,14 @@ def _make_pre_hook_wrapper(
             with _paused_logging():
                 after = _observe_state(token.args, token.kwargs)
                 changed, kinds, paths, reasons = _compare_observations(before, after)
+                if inputs_after_side_effects is not None:
+                    _, side_effect_kinds, side_effect_paths, side_effect_reasons = (
+                        _compare_observations(before, inputs_after_side_effects)
+                    )
+                    kinds = tuple(sorted(set(kinds) | set(side_effect_kinds)))
+                    paths = tuple(sorted(set(paths) | set(side_effect_paths), key=repr))
+                    reasons = tuple(sorted(set(reasons) | set(side_effect_reasons)))
+                    changed = True if kinds else (None if reasons else False)
             token.incomplete_reasons.update(reasons)
             token.effects.append(
                 PreHookEffect(

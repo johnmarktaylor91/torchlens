@@ -925,6 +925,12 @@ BACKWARD_PASS_FIELD_ORDER = [
 # Source: https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 IGNORED_FUNCS = [
     ("torch", "load"),
+    ("torch", "empty"),
+    ("torch", "empty_strided"),
+    ("torch", "empty_permuted"),
+    ("torch", "frombuffer"),
+    ("torch", "asarray"),
+    ("torch", "fill"),
     ("torch", "as_tensor"),
     ("torch", "from_numpy"),
     ("torch", "tensor"),
