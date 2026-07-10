@@ -931,7 +931,7 @@ def _snapshot_state(
                     payload_origins[tensor_id] = "immutable_producer_snapshot"
                     return payload
             try:
-                copied = value.detach().clone()
+                copied = value.detach().clone()  # noqa: detach - provenance snapshot copy
             except Exception:
                 copied = None
                 copy_failures.add(tensor_id)
