@@ -1434,19 +1434,13 @@ def _ensure_module_output_tensor_logged(
     #   leaked tensor enters a module untagged 2+ levels deep), whose frame is still
     #   on `trace._exhaustive_module_stack` -- the plain snapshot already includes it.
     # * intervention_replacement: a raw `register_forward_hook` fires AFTER the
-    #   hooked module's own `decorated_forward` has returned and popped its frame
-    #   (model_prep.py's module_forward_decorator `finally`), so the live snapshot
-    #   only holds the PARENT chain -- append the hooked module's own
-    #   (address, module_call_index), which is already known, to reconstruct the
-    #   full ancestor stack the same way the internal_source branch gets it for free.
+    #   hooked module's own `decorated_forward` has returned and popped its frame.
+    #   The replacement is therefore a module-exit boundary op owned by the live
+    #   PARENT scope that consumes the hooked module's output. Re-entering the
+    #   hooked module here would make its ModuleCall its own parent and child.
     from .sources import _snapshot_exhaustive_module_stack
 
-    if is_internal_source:
-        modules = _snapshot_exhaustive_module_stack(trace)
-    else:
-        ancestor_modules = _snapshot_exhaustive_module_stack(trace)
-        own_frame = [(address, module_call_index)] if address else []
-        modules = ancestor_modules + own_frame
+    modules = _snapshot_exhaustive_module_stack(trace)
     equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
     module_args, module_kwargs = trace._module_forward_args.get(
         (address, module_call_index), ((), {})
@@ -1631,14 +1625,10 @@ def _ensure_module_output_tensor_logged(
             "conditional_elif_children": {},
             "conditional_else_children": [],
             "conditional_arm_children": {},
-            # `module=None` when there is no owning submodule (matches the
-            # convention in sources.py's `modules[-1] if modules else None`
-            # for ordinary ops) -- the root model itself has `address == ""`
-            # and is never a real "module" entry, so `(address, ...)` would
-            # otherwise finalize into a bogus `":<index>"` label (see
-            # `_module_call_label` / `labeling.py`) that fails the
-            # module-hierarchy invariant lookup during postprocessing.
-            "module": (address, module_call_index) if address else None,
+            # Match ordinary op ownership: the innermost live frame owns the op.
+            # For intervention replacements this is the parent scope consuming
+            # the exited module's output, never the exited module itself.
+            "module": modules[-1] if modules else None,
             "_address_normalized": None,
             "modules": modules,
             "module_call_stack": [],
