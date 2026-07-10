@@ -132,7 +132,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False,
         container_max_inline: int = 12,
         show_input_transform_summary: bool = False,
-        show_orphans: bool = False,
+        show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.
     ) -> Any:
         """Render the computational graph for this model log.
 

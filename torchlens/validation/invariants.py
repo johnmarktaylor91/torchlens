@@ -1598,6 +1598,7 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
     expected_ops = sum(
         1 for lpl in ml.layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
     )
+    expected_ops += _retained_orphan_computational_count(ml, name)
     if ml.num_ops != expected_ops:
         raise MetadataInvariantError(
             name,
@@ -1655,6 +1656,110 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
         )
 
 
+def _retained_orphan_computational_count(ml: "Trace", name: str) -> int:
+    """Return retained orphan ops after proving their narrow island contract.
+
+    Parameters
+    ----------
+    ml:
+        Trace whose aggregate operation count is being checked.
+    name:
+        Invariant name to report if retained-orphan metadata is inconsistent.
+
+    Returns
+    -------
+    int
+        Number of retained orphan ops that have the same computational role as
+        operations counted in ``layer_list``.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If purported retained orphans are not exactly the detached island
+        records established during postprocessing.
+    """
+    orphan_logs = tuple(getattr(ml, "_orphan_logs", ()))
+    retained_orphans = tuple(log for log in orphan_logs if getattr(log, "is_orphan", False))
+    if not retained_orphans:
+        return 0
+
+    if not getattr(ml, "keep_orphans", False):
+        raise MetadataInvariantError(name, "retained orphan logs require keep_orphans=True")
+
+    orphan_raw_labels = list(getattr(ml, "_orphan_labels", ()))
+    orphan_log_raw_labels = [getattr(log, "_label_raw", None) for log in orphan_logs]
+    if orphan_raw_labels != orphan_log_raw_labels:
+        raise MetadataInvariantError(
+            name,
+            "_orphan_labels must exactly match _orphan_logs raw labels for retained islands",
+        )
+    if len(orphan_raw_labels) != len(set(orphan_raw_labels)):
+        raise MetadataInvariantError(name, "_orphan_labels contains duplicate raw labels")
+    if len(retained_orphans) != len(orphan_logs):
+        raise MetadataInvariantError(
+            name,
+            "retained orphan islands must mark every _orphan_logs entry is_orphan=True",
+        )
+
+    active_labels = {layer.layer_label for layer in ml.layer_list}
+    for orphan in retained_orphans:
+        island_edges = set(orphan.parents) | set(orphan.children)
+        active_edges = island_edges & active_labels
+        if active_edges:
+            raise MetadataInvariantError(
+                name,
+                f"Retained orphan {orphan.layer_label} has edges into active graph: {active_edges}",
+            )
+
+    return sum(
+        1
+        for orphan in retained_orphans
+        if not (orphan.is_input or orphan.is_output or orphan.is_buffer)
+    )
+
+
+def _retained_orphan_op_labels(ml: "Trace") -> set[str]:
+    """Return final labels belonging to explicitly retained orphan operations.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing postprocessed orphan metadata.
+
+    Returns
+    -------
+    set[str]
+        Labels for the exact retained-island class, which is outside the active
+        ``op_labels`` projection by design.
+    """
+    return {
+        orphan.label
+        for orphan in getattr(ml, "_orphan_logs", ())
+        if getattr(orphan, "is_orphan", False)
+    }
+
+
+def _retained_orphan_layer_labels(ml: "Trace") -> set[str]:
+    """Return no-pass labels belonging to explicitly retained orphan operations.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing postprocessed orphan metadata.
+
+    Returns
+    -------
+    set[str]
+        No-pass labels for the same narrow retained-island class as
+        :func:`_retained_orphan_op_labels`.
+    """
+    return {
+        orphan.layer_label
+        for orphan in getattr(ml, "_orphan_logs", ())
+        if getattr(orphan, "is_orphan", False)
+    }
+
+
 # ---------------------------------------------------------------------------
 # B. Special layer lists ↔ Op flags
 # ---------------------------------------------------------------------------
@@ -1674,8 +1779,17 @@ def _check_special_layer_lists(ml: "Trace") -> None:
     For each (list_attr, flag_attr) pair, verifies bidirectional consistency:
     - Forward: every label in the list has the flag set on its Op.
     - Reverse: every Op with the flag set appears in the list.
+
+    Retained orphan ops are the sole exception to active ``op_labels``
+    membership: they are intentionally absent from the active graph but retain
+    their internal-source/sink flags in raw metadata.
     """
     name = "special_layer_lists"
+    retained_orphans_by_label = {
+        orphan.label: orphan
+        for orphan in getattr(ml, "_orphan_logs", ())
+        if getattr(orphan, "is_orphan", False)
+    }
     for list_attr, flag_attr, label_kind in _SPECIAL_LIST_FLAG_PAIRS:
         special_list = getattr(ml, list_attr)
         special_set = set(special_list)
@@ -1684,6 +1798,8 @@ def _check_special_layer_lists(ml: "Trace") -> None:
 
         # All entries must be valid labels
         missing = special_set - label_set
+        if label_kind == "op":
+            missing -= _retained_orphan_op_labels(ml)
         if missing:
             raise MetadataInvariantError(
                 name, f"{list_attr} contains labels not in {label_field}: {missing}"
@@ -1691,7 +1807,11 @@ def _check_special_layer_lists(ml: "Trace") -> None:
 
         # Forward: every label in the list has the flag set
         for label in special_list:
-            lpl = ml[label]
+            lpl = (
+                retained_orphans_by_label[label]
+                if label in retained_orphans_by_label
+                else ml[label]
+            )
             if not getattr(lpl, flag_attr):
                 raise MetadataInvariantError(
                     name,
@@ -4720,7 +4840,7 @@ def _check_equivalence_symmetry(ml: "Trace") -> None:
     - All labels in equivalence sets exist in op_labels.
     """
     name = "equivalence_symmetry"
-    label_set = set(ml.op_labels)
+    label_set = set(ml.op_labels) | _retained_orphan_op_labels(ml)
 
     # op_equivalence_classes is keyed by equivalence type descriptors (not Op labels),
     # with values being sets of Op labels in that equivalence group.
@@ -5337,7 +5457,7 @@ def _check_lookup_key_consistency(ml: "Trace") -> None:
     # All final labels are valid lookup labels. Multi-pass raw labels map to
     # pass-qualified Op labels, while single-pass raw labels may map to Layer
     # labels for compatibility lookup.
-    label_set = set(ml.layer_labels) | set(ml.op_labels)
+    label_set = set(ml.layer_labels) | set(ml.op_labels) | _retained_orphan_layer_labels(ml)
     for final in raw_fwd.values():
         if final not in label_set:
             raise MetadataInvariantError(
