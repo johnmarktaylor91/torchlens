@@ -11,10 +11,11 @@ import time
 import types
 import weakref
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Collection, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from functools import partial, wraps
-from typing import Any, TYPE_CHECKING, cast
+from typing import Any, Literal, TYPE_CHECKING, cast
 
 import torch
 
@@ -66,14 +67,22 @@ from .buffer_writes import (
     resolve_registered_buffer_address,
     snapshot_buffer_args,
 )
+from .escape_detection import (
+    EscapeDetectorMode,
+    expected_original_call,
+    reset_detector_tables,
+)
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
     pass
 
 
-_DETACHED_REFERENCE_PATCH_POLICY = "default"
-"""Policy for detached-reference patching: ``"default"``, ``"full"``, or ``"scoped"``."""
+DetachedPatchPolicy = Literal["scoped", "legacy", "full"]
+"""Supported detached-reference discovery policies."""
+
+_RELEASE_DEFAULT_PATCH_POLICY: DetachedPatchPolicy = "legacy"
+"""Release default; scoped remains opt-in until its certification soak completes."""
 
 _KNOWN_TORCH_FREE_PREFIXES = (
     "PIL",
@@ -101,7 +110,48 @@ _STDLIB_PATHS = tuple(
 )
 
 
-_PATCHED_MODEL_INSTANCES: weakref.WeakSet[Any] = weakref.WeakSet()
+@dataclass(frozen=True)
+class PatchReport:
+    """Summary of one detached-reference discovery pass.
+
+    Parameters
+    ----------
+    policy:
+        Effective discovery policy.
+    epoch:
+        Wrapper lifecycle epoch.
+    module_identities_scanned:
+        Number of module identities shallow-scanned.
+    deep_modules_scanned:
+        Number of modules receiving class/default inspection.
+    direct_attributes_inspected:
+        Number of direct module attributes inspected.
+    slots_patched:
+        Number of identity-matching slots replaced and ledgered.
+    source_files_opened:
+        Number of source files successfully opened by this pass. Scoped and full
+        always report zero because only legacy uses source-gated deep scanning.
+    """
+
+    policy: DetachedPatchPolicy
+    epoch: int
+    module_identities_scanned: int = 0
+    deep_modules_scanned: int = 0
+    direct_attributes_inspected: int = 0
+    slots_patched: int = 0
+    source_files_opened: int = 0
+
+
+@dataclass(frozen=True)
+class _MutationLedgerEntry:
+    """One reversible identity-conditional foreign-slot mutation."""
+
+    owner_ref: Callable[[], Any | None]
+    slot_kind: Literal["module", "class", "defaults", "kwdefault", "model"]
+    slot_key: str | None
+    original: Any
+    replacement: Any
+    epoch: int
 
 
 # ---------------------------------------------------------------------------
@@ -855,6 +905,9 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     UserWarning,
                     stacklevel=2,
                 )
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(func, f"torch_func:{func_name}:functorch"):
+                    return func(*args, **kwargs)
             return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.
@@ -869,6 +922,9 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Reset barcode; skip metadata-only functions that would cause recursion.
         trace._current_func_barcode = 0
         if func_name in funcs_not_to_log:
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(func, f"torch_func:{func_name}:not_logged"):
+                    return func(*args, **kwargs)
             return func(*args, **kwargs)
 
         # Inline tensor extraction — avoids BFS crawl for the common case
@@ -935,7 +991,11 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             else False
         )
         try:
-            out_orig = func(*args, **kwargs)
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(func, f"torch_func:{func_name}:logged"):
+                    out_orig = func(*args, **kwargs)
+            else:
+                out_orig = func(*args, **kwargs)
         finally:
             _nvtx_range_pop(nvtx_pushed)
         return_value = out_orig
@@ -1068,6 +1128,10 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             del wrapped_func.__wrapped__
         except AttributeError:
             pass
+
+    setattr(wrapped_func, "__tl_original_id__", id(func))
+    setattr(wrapped_func, "__tl_wrapper_name__", f"torch_func:{func_name}")
+    setattr(wrapped_func, "__tl_detector_excluded__", func_name in funcs_not_to_log)
 
     return wrapped_func
 
@@ -1372,59 +1436,102 @@ def decorate_all_once() -> None:
     _fix_tensor_sequence_slot()
 
 
-def _replace_detached_references(mapping: dict[int, Any]) -> None:
-    """Crawl ``sys.modules`` and replace callable references using ``mapping``.
+def _weak_owner_ref(owner: Any) -> Callable[[], Any | None]:
+    """Return a weak owner reference, with a conservative strong fallback.
 
-    ``mapping`` may be either original->decorated or decorated->original. This
-    keeps the sys.modules crawl logic symmetric so ``undecorate`` can reverse
-    the same module/class/default-arg patching done during normal decoration.
+    Parameters
+    ----------
+    owner:
+        Object whose slot TorchLens may mutate.
+
+    Returns
+    -------
+    Callable[[], Any | None]
+        Zero-argument owner resolver used during conditional reversal.
     """
-    if not mapping:
-        return
 
-    for mod in list(sys.modules.values()):
-        if mod is None:
-            continue
-        if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
-            continue
+    try:
+        return weakref.ref(owner)
+    except TypeError:
+        return lambda: owner
 
+
+def _record_mutation(
+    owner: Any,
+    slot_kind: Literal["module", "class", "defaults", "kwdefault", "model"],
+    slot_key: str | None,
+    original: Any,
+    replacement: Any,
+) -> None:
+    """Append one mutation to the current epoch ledger.
+
+    Parameters
+    ----------
+    owner:
+        Mutated module, class, function, or model object.
+    slot_kind:
+        Mutation category used for reversal.
+    slot_key:
+        Attribute/default key, or ``None`` for positional defaults.
+    original:
+        Identity/value present immediately before TorchLens wrote.
+    replacement:
+        Exact identity/value TorchLens installed.
+    """
+
+    _state._detached_patch_ledger.append(
+        _MutationLedgerEntry(
+            _weak_owner_ref(owner),
+            slot_kind,
+            slot_key,
+            original,
+            replacement,
+            _state._detached_patch_epoch,
+        )
+    )
+
+
+def _reverse_detached_reference_ledger() -> None:
+    """Conditionally reverse mutations from the current wrapper epoch.
+
+    A slot is restored only when it still contains the exact replacement
+    TorchLens installed. User mutations made after patching are preserved.
+    """
+
+    for entry in reversed(_state._detached_patch_ledger):
+        owner = entry.owner_ref()
+        if owner is None:
+            continue
         try:
-            mod_dict = vars(mod)
-        except TypeError:
+            if entry.slot_kind in {"module", "model"}:
+                owner_dict = vars(owner)
+                if owner_dict.get(entry.slot_key) is entry.replacement:
+                    owner_dict[cast(str, entry.slot_key)] = entry.original
+            elif entry.slot_kind == "class":
+                if vars(owner).get(entry.slot_key) is entry.replacement:
+                    setattr(owner, cast(str, entry.slot_key), entry.original)
+            elif entry.slot_kind == "defaults":
+                if getattr(owner, "__defaults__", None) is entry.replacement:
+                    owner.__defaults__ = entry.original
+            elif entry.slot_kind == "kwdefault":
+                kwdefaults = getattr(owner, "__kwdefaults__", None)
+                if (
+                    isinstance(kwdefaults, dict)
+                    and kwdefaults.get(entry.slot_key) is entry.replacement
+                ):
+                    kwdefaults[cast(str, entry.slot_key)] = entry.original
+        except (AttributeError, KeyError, TypeError):
             continue
+    _state._detached_patch_ledger.clear()
 
-        for attr_name, attr_val in list(mod_dict.items()):
-            if id(attr_val) in mapping:
-                try:
-                    mod_dict[attr_name] = mapping[id(attr_val)]
-                except (TypeError, KeyError):
-                    pass
-                continue
 
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    is_type = isinstance(attr_val, type)
-            except Exception:
-                is_type = False
-            if is_type:
-                try:
-                    cls_dict = vars(attr_val)
-                except TypeError:
-                    continue
-                for cls_attr_name, cls_attr_val in list(cls_dict.items()):
-                    if id(cls_attr_val) in mapping:
-                        try:
-                            setattr(attr_val, cls_attr_name, mapping[id(cls_attr_val)])
-                        except (AttributeError, TypeError):
-                            pass
+def _reset_detached_patch_epoch_state() -> None:
+    """Clear identity caches that cannot cross wrapper epochs."""
 
-            try:
-                is_callable = callable(attr_val) and not is_type
-            except Exception:
-                is_callable = False
-            if is_callable:
-                _patch_function_defaults(attr_val, mapping)
+    _state._crawled_module_keys.clear()
+    _state._crawled_module_identities.clear()
+    _state._detached_positive_module_ids.clear()
+    _state._detached_positive_modules.clear()
 
 
 def unwrap_torch() -> None:
@@ -1438,13 +1545,18 @@ def unwrap_torch() -> None:
     """
     _state._logging_enabled = False
     _state._active_trace = None
+    reset_detector_tables()
+    _state._escape_detector_mode = "off"
+    _state._detached_patch_policy = _RELEASE_DEFAULT_PATCH_POLICY
+    _state._detached_patch_modules = ()
     from .backward import uninstall_autograd_wrappers
 
     uninstall_autograd_wrappers()
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
-        _PATCHED_MODEL_INSTANCES.clear()
+        _reverse_detached_reference_ledger()
+        _reset_detached_patch_epoch_state()
         return
 
     for namespace_name, func_name in get_orig_torch_funcs():
@@ -1497,15 +1609,110 @@ def unwrap_torch() -> None:
         except (AttributeError, TypeError):
             pass
 
-    _replace_detached_references(_state._decorated_to_orig)
+    _reverse_detached_reference_ledger()
     _state._is_decorated = False
-    _PATCHED_MODEL_INSTANCES.clear()
+    _reset_detached_patch_epoch_state()
 
     # Restoring Tensor.__getitem__ doesn't clear the stale sq_item slot.
     _fix_tensor_sequence_slot()
 
 
-def wrap_torch() -> None:
+def _resolve_patch_policy(
+    policy: DetachedPatchPolicy | Literal["default"] | None,
+) -> DetachedPatchPolicy:
+    """Resolve a public/compatibility detached-reference policy.
+
+    Parameters
+    ----------
+    policy:
+        Requested policy. ``None`` preserves the current epoch choice, while
+        deprecated ``"default"`` resolves to the release default.
+
+    Returns
+    -------
+    DetachedPatchPolicy
+        Effective typed policy.
+
+    Raises
+    ------
+    ValueError
+        If the policy name is unsupported.
+    """
+
+    if policy is None:
+        current = _state._detached_patch_policy
+        if current in {"scoped", "legacy", "full"}:
+            return cast(DetachedPatchPolicy, current)
+        return _RELEASE_DEFAULT_PATCH_POLICY
+    if policy == "default":
+        warnings.warn(
+            "Detached patch policy 'default' is deprecated; omit patch_policy to use the "
+            "release default.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return _RELEASE_DEFAULT_PATCH_POLICY
+    if policy not in {"scoped", "legacy", "full"}:
+        raise ValueError("patch_policy must be 'scoped', 'legacy', or 'full'.")
+    return policy
+
+
+def _configure_patch_policy(
+    policy: DetachedPatchPolicy | Literal["default"] | None,
+    modules: tuple[str, ...],
+) -> DetachedPatchPolicy:
+    """Apply monotone process-level patch configuration for this epoch.
+
+    Parameters
+    ----------
+    policy:
+        Optional explicitly requested policy.
+    modules:
+        Additive module/package prefixes for scoped deep scanning.
+
+    Returns
+    -------
+    DetachedPatchPolicy
+        Effective policy after configuration.
+    """
+
+    effective = _resolve_patch_policy(policy)
+    if policy is not None:
+        _state._detached_patch_policy = effective
+    if modules:
+        normalized = tuple(dict.fromkeys((*_state._detached_patch_modules, *modules)))
+        _state._detached_patch_modules = normalized
+    return cast(DetachedPatchPolicy, _state._detached_patch_policy)
+
+
+def _configure_escape_detector(mode: EscapeDetectorMode | None) -> EscapeDetectorMode:
+    """Validate and apply the process-level diagnostic detector mode.
+
+    Parameters
+    ----------
+    mode:
+        ``None`` preserves the current mode; ``"shadow"`` reports without
+        enforcement and ``"off"`` disables profiling.
+
+    Returns
+    -------
+    EscapeDetectorMode
+        Effective mode for subsequent captures.
+    """
+
+    if mode is not None:
+        if mode not in {"off", "shadow"}:
+            raise ValueError("escape_detector must be 'off' or 'shadow'.")
+        _state._escape_detector_mode = mode
+    return cast(EscapeDetectorMode, _state._escape_detector_mode)
+
+
+def wrap_torch(
+    *,
+    patch_policy: DetachedPatchPolicy | Literal["default"] | None = None,
+    patch_modules: tuple[str, ...] = (),
+    escape_detector: EscapeDetectorMode | None = None,
+) -> None:
     """Install (or re-install) torchlens wrappers on all torch functions.
 
     If this is the first call, performs full decoration (equivalent to
@@ -1513,19 +1720,40 @@ def wrap_torch() -> None:
     previously removed via ``unwrap_torch()``, re-installs them from the
     cached maps without re-creating wrapper objects.
 
-    Safe to call multiple times — no-op if already wrapped.
+    Safe to call multiple times. Patching is process-global, so policy and
+    allowlist configuration also apply process-wide for the current epoch.
+
+    Parameters
+    ----------
+    patch_policy:
+        ``"legacy"`` preserves the release-default broad crawl, ``"full"``
+        deep-scans every eligible module, and ``"scoped"`` performs exact
+        shallow discovery plus bounded provenance/allowlist deep scanning.
+    patch_modules:
+        Additive exact module names or package prefixes for scoped deep scanning.
+    escape_detector:
+        Opt-in callable diagnostic mode. ``"shadow"`` reports exact raw-call
+        escapes and marks traces unverified; the release default is ``"off"``.
     """
     from .backward import install_autograd_wrappers
 
+    effective_policy = _configure_patch_policy(patch_policy, patch_modules)
+    _configure_escape_detector(escape_detector)
+
     if _state._is_decorated:
         install_autograd_wrappers()
+        if patch_policy is not None or patch_modules:
+            patch_detached_references(policy=effective_policy, modules=patch_modules)
         return
+
+    _state._detached_patch_epoch += 1
+    _reset_detached_patch_epoch_state()
 
     if not _state._orig_to_decorated:
         # First time: full decoration
         decorate_all_once()
         install_autograd_wrappers()
-        patch_detached_references()
+        patch_detached_references(policy=effective_policy, modules=patch_modules)
         return
 
     # Re-install from existing maps (after a prior unwrap_torch)
@@ -1556,15 +1784,19 @@ def wrap_torch() -> None:
     _state._decorated_identity = torch_func_decorator(identity, "identity")
     _state._is_decorated = True
     install_autograd_wrappers()
-    _state._crawled_module_keys.clear()
-    patch_detached_references()
+    patch_detached_references(policy=effective_policy, modules=patch_modules)
 
     # Re-wrapping __getitem__ pollutes sq_item again; clear it.
     _fix_tensor_sequence_slot()
 
 
 @contextmanager
-def wrapped() -> Iterator[None]:
+def wrapped(
+    *,
+    patch_policy: DetachedPatchPolicy | Literal["default"] | None = None,
+    patch_modules: tuple[str, ...] = (),
+    escape_detector: EscapeDetectorMode | None = None,
+) -> Iterator[None]:
     """Context manager: wrap torch on entry, unwrap on exit.
 
     Usage::
@@ -1572,8 +1804,21 @@ def wrapped() -> Iterator[None]:
         with torchlens.wrapped():
             log = torchlens.trace(model, x)
         # torch is clean again here
+
+    Parameters
+    ----------
+    patch_policy:
+        Process-level detached-reference policy for this wrapper epoch.
+    patch_modules:
+        Additive scoped deep-scan module/package prefixes.
+    escape_detector:
+        Optional ``"off"`` or diagnostic ``"shadow"`` mode.
     """
-    wrap_torch()
+    wrap_torch(
+        patch_policy=patch_policy,
+        patch_modules=patch_modules,
+        escape_detector=escape_detector,
+    )
     try:
         yield
     finally:
@@ -1585,7 +1830,13 @@ def wrapped() -> Iterator[None]:
 # ---------------------------------------------------------------------------
 
 
-def patch_detached_references(full: bool = False) -> None:
+def patch_detached_references(
+    full: bool | None = None,
+    *,
+    policy: DetachedPatchPolicy | Literal["default"] | None = None,
+    modules: Collection[str] = (),
+    model: Any | None = None,
+) -> PatchReport:
     """Crawl ``sys.modules`` and replace stale references to original torch
     functions with their decorated counterparts.
 
@@ -1612,108 +1863,261 @@ def patch_detached_references(full: bool = False) -> None:
        ``patch_model_instance()`` at ``trace`` time, since model
        instances may not exist yet when this function runs.
 
-    The default policy preserves the Level-1 direct-reference scan for every
-    eligible module, and skips Level 2/3 only for readable Python modules whose
-    source does not contain the substring ``"torch"``. Pass ``full=True`` to
-    force the deep scan for every module that is not in the skip
-    set.
+    ``legacy`` preserves the release-default Level-1 broad scan and source-gated
+    Level-2/3 behavior. ``full`` deep-scans every eligible module. ``scoped``
+    shallow-scans exact module identities and deep-scans only exact-positive,
+    model-provenance, prior-positive, and allowlisted candidates; it never reads
+    source files.
 
     Parameters
     ----------
     full:
-        If True, bypass source pre-filtering and run the deep crawl.
+        Deprecated compatibility spelling. ``True`` selects ``full`` and
+        ``False`` selects the release default. Cannot be combined with ``policy``.
+    policy:
+        Explicit detached-reference patching policy.
+    modules:
+        Additive exact module names or package prefixes for scoped deep scanning.
+    model:
+        Root model whose class/forward provenance contributes scoped candidates.
 
     Returns
     -------
-    None
-        Matching stale references are patched in-place.
+    PatchReport
+        Structured discovery and mutation counts.
     """
-    policy = "full" if full else _DETACHED_REFERENCE_PATCH_POLICY
-    if policy not in {"default", "full", "scoped"}:
-        raise ValueError("_DETACHED_REFERENCE_PATCH_POLICY must be 'default', 'full', or 'scoped'.")
-    if policy == "scoped":
-        policy = "default"
-    new_keys = set(sys.modules.keys()) - _state._crawled_module_keys
-    if not new_keys:
-        return
-
+    if full is not None and policy is not None:
+        raise ValueError("full and policy cannot be supplied together.")
+    requested_policy: DetachedPatchPolicy | Literal["default"] | None = policy
+    if full is not None:
+        requested_policy = "full" if full else _RELEASE_DEFAULT_PATCH_POLICY
+        warnings.warn(
+            "full= is deprecated; use policy='full' or omit policy for the release default.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    module_names = tuple(modules)
+    effective_policy = _resolve_patch_policy(requested_policy)
     mapping = _state._orig_to_decorated
     if not mapping:
-        return
+        return PatchReport(effective_policy, _state._detached_patch_epoch)
 
-    crawled_class_ids: set[int] = set()
+    live_modules = _distinct_live_modules()
+    new_modules = [
+        (key, module) for key, module in live_modules if not _module_identity_was_crawled(module)
+    ]
+    counters = {
+        "module_identities_scanned": 0,
+        "deep_modules_scanned": 0,
+        "direct_attributes_inspected": 0,
+        "slots_patched": 0,
+    }
+    source_open_counter = [0]
+    deep_candidates: dict[int, tuple[str, types.ModuleType]] = {}
+    scoped_hot_ids = _scoped_hot_module_ids(model, module_names)
+    force_full_scan = requested_policy == "full"
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        for mod_key in new_keys:
+        for mod_key, mod in live_modules:
+            should_scan = force_full_scan or (mod_key, mod) in new_modules
+            if effective_policy == "scoped" and id(mod) in scoped_hot_ids:
+                should_scan = True
+            if not should_scan:
+                continue
             _state._crawled_module_keys.add(mod_key)
-            if _should_skip_detached_module_key(mod_key, policy):
+            _remember_crawled_module_identity(mod)
+            if _should_skip_detached_module_key(mod_key, effective_policy):
                 continue
-            mod = sys.modules.get(mod_key)
-            if mod is None:
+            if _safe_module_name(mod, mod_key).startswith("torchlens"):
                 continue
-            # Skip torchlens internals — we don't want to patch our own references.
-            # Read __name__ defensively: lazy-import shims can raise (not just
-            # AttributeError) from __getattr__, and hasattr() only swallows
-            # AttributeError. Fall back to the sys.modules key on any failure.
-            try:
-                mod_name = mod.__name__
-            except Exception:
-                mod_name = mod_key
-            if isinstance(mod_name, str) and mod_name.startswith("torchlens"):
-                continue
-
             try:
                 mod_dict = vars(mod)
             except TypeError:
                 continue
-
-            should_deep_scan = _should_deep_scan_detached_module(mod, policy)
+            counters["module_identities_scanned"] += 1
+            exact_hit = False
             for attr_name, attr_val in list(mod_dict.items()):
-                # Level 1: module-level references (e.g. ``from torch import cos``)
-                if id(attr_val) in mapping:
-                    try:
-                        mod_dict[attr_name] = mapping[id(attr_val)]
-                    except (TypeError, KeyError):
-                        pass
+                counters["direct_attributes_inspected"] += 1
+                replacement = mapping.get(id(attr_val))
+                if replacement is None:
                     continue
-                if not should_deep_scan:
-                    continue
-
-                # Level 2: class-level attributes that hold torch function references
-                attr_type = type(attr_val)
-                if issubclass(attr_type, type):
-                    try:
-                        is_type = isinstance(attr_val, type)
-                    except Exception:
-                        is_type = False
-                else:
-                    is_type = False
-                if is_type:
-                    cls_id = id(attr_val)
-                    if cls_id in crawled_class_ids:
-                        continue
-                    crawled_class_ids.add(cls_id)
-                    try:
-                        cls_dict = vars(attr_val)
-                    except TypeError:
-                        continue
-                    for cls_attr_name, cls_attr_val in list(cls_dict.items()):
-                        if id(cls_attr_val) in mapping:
-                            try:
-                                setattr(attr_val, cls_attr_name, mapping[id(cls_attr_val)])
-                            except (AttributeError, TypeError):
-                                pass
-
-                # Level 3: function default arguments (e.g. ``def f(act=torch.relu)``)
                 try:
-                    is_callable = callable(attr_val) and not is_type
-                except Exception:
-                    is_callable = False
-                if is_callable:
-                    _patch_function_defaults(attr_val, mapping)
+                    if mod_dict.get(attr_name) is not attr_val:
+                        continue
+                    mod_dict[attr_name] = replacement
+                except (KeyError, TypeError):
+                    continue
+                _record_mutation(mod, "module", attr_name, attr_val, replacement)
+                counters["slots_patched"] += 1
+                exact_hit = True
+            if exact_hit:
+                _remember_positive_module(mod)
+            if effective_policy == "scoped":
+                if exact_hit or id(mod) in scoped_hot_ids:
+                    deep_candidates[id(mod)] = (mod_key, mod)
+            elif _should_deep_scan_detached_module(
+                mod,
+                effective_policy,
+                source_open_counter=source_open_counter,
+            ):
+                deep_candidates[id(mod)] = (mod_key, mod)
+
+        crawled_class_ids: set[int] = set()
+        for _mod_key, mod in deep_candidates.values():
+            counters["deep_modules_scanned"] += 1
+            try:
+                values = list(vars(mod).values())
+            except TypeError:
+                continue
+            for attr_val in values:
+                is_type = _safe_is_type(attr_val)
+                if is_type and id(attr_val) not in crawled_class_ids:
+                    crawled_class_ids.add(id(attr_val))
+                    counters["slots_patched"] += _patch_class_attributes(attr_val, mapping)
+                if not is_type and _safe_is_callable(attr_val):
+                    counters["slots_patched"] += _patch_function_defaults(attr_val, mapping)
+
+    return PatchReport(
+        policy=effective_policy,
+        epoch=_state._detached_patch_epoch,
+        module_identities_scanned=counters["module_identities_scanned"],
+        deep_modules_scanned=counters["deep_modules_scanned"],
+        direct_attributes_inspected=counters["direct_attributes_inspected"],
+        slots_patched=counters["slots_patched"],
+        source_files_opened=source_open_counter[0],
+    )
 
 
-def _should_skip_detached_module_key(mod_key: str, policy: str) -> bool:
+def _distinct_live_modules() -> list[tuple[str, types.ModuleType]]:
+    """Return one stable sys.modules entry per live module identity."""
+
+    result: list[tuple[str, types.ModuleType]] = []
+    seen: set[int] = set()
+    for key, module in list(sys.modules.items()):
+        if not isinstance(module, types.ModuleType) or id(module) in seen:
+            continue
+        seen.add(id(module))
+        result.append((key, module))
+    return result
+
+
+def _module_identity_was_crawled(module: types.ModuleType) -> bool:
+    """Return whether this exact live module identity was already scanned."""
+
+    reference = _state._crawled_module_identities.get(id(module))
+    return reference is not None and reference() is module
+
+
+def _remember_crawled_module_identity(module: types.ModuleType) -> None:
+    """Record one scanned identity, weakly when the owner supports it."""
+
+    _state._crawled_module_identities[id(module)] = _weak_owner_ref(module)
+
+
+def _remember_positive_module(module: types.ModuleType) -> None:
+    """Retain one exact-hit scoped module as a weak hot candidate."""
+
+    if id(module) in _state._detached_positive_module_ids:
+        return
+    _state._detached_positive_module_ids.add(id(module))
+    _state._detached_positive_modules.append(_weak_owner_ref(module))
+
+
+def _safe_module_name(module: types.ModuleType, fallback: str) -> str:
+    """Return a defensive module name without triggering lazy-module failures."""
+
+    try:
+        name = module.__name__
+    except Exception:
+        return fallback
+    return name if isinstance(name, str) else fallback
+
+
+def _module_matches_allowlist(name: str, modules: Collection[str]) -> bool:
+    """Return whether ``name`` matches an exact module or package prefix."""
+
+    return any(name == prefix or name.startswith(f"{prefix}.") for prefix in modules)
+
+
+def _scoped_hot_module_ids(model: Any | None, modules: Collection[str]) -> set[int]:
+    """Return current scoped deep/shallow hot module identities."""
+
+    names = set(modules) | set(_state._detached_patch_modules)
+    if model is not None:
+        try:
+            model_modules = tuple(model.modules())
+        except (AttributeError, TypeError):
+            model_modules = (model,)
+        for model_module in model_modules:
+            cls = type(model_module)
+            cls_module = getattr(cls, "__module__", None)
+            if isinstance(cls_module, str):
+                names.add(cls_module)
+            forward = getattr(cls, "forward", None)
+            forward_module = getattr(forward, "__module__", None)
+            if isinstance(forward_module, str):
+                names.add(forward_module)
+    live_positive_refs: list[Callable[[], Any | None]] = []
+    hot_ids: set[int] = set()
+    for reference in _state._detached_positive_modules:
+        positive_module = reference()
+        if positive_module is None:
+            continue
+        live_positive_refs.append(reference)
+        hot_ids.add(id(positive_module))
+    _state._detached_positive_modules[:] = live_positive_refs
+    _state._detached_positive_module_ids.clear()
+    _state._detached_positive_module_ids.update(hot_ids)
+    for key, module in _distinct_live_modules():
+        name = _safe_module_name(module, key)
+        if _module_matches_allowlist(name, names):
+            hot_ids.add(id(module))
+    return hot_ids
+
+
+def _safe_is_type(value: Any) -> bool:
+    """Return ``isinstance(value, type)`` without propagating foreign errors."""
+
+    try:
+        return isinstance(value, type)
+    except Exception:
+        return False
+
+
+def _safe_is_callable(value: Any) -> bool:
+    """Return ``callable(value)`` without propagating foreign errors."""
+
+    try:
+        return callable(value)
+    except Exception:
+        return False
+
+
+def _patch_class_attributes(cls: type[Any], mapping: dict[int, Any]) -> int:
+    """Patch direct raw callable identities in one class dictionary."""
+
+    try:
+        cls_dict = vars(cls)
+    except TypeError:
+        return 0
+    patched = 0
+    for name, value in list(cls_dict.items()):
+        replacement = mapping.get(id(value))
+        if replacement is None:
+            continue
+        try:
+            if vars(cls).get(name) is not value:
+                continue
+            setattr(cls, name, replacement)
+        except (AttributeError, TypeError):
+            continue
+        _record_mutation(cls, "class", name, value, replacement)
+        patched += 1
+    return patched
+
+
+def _should_skip_detached_module_key(mod_key: str, policy: DetachedPatchPolicy) -> bool:
     """Return whether a sys.modules key should be skipped before module lookup.
 
     Parameters
@@ -1730,12 +2134,17 @@ def _should_skip_detached_module_key(mod_key: str, policy: str) -> bool:
     """
 
     prefixes = _LEGACY_DETACHED_SKIP_PREFIXES
-    if policy != "full":
+    if policy == "legacy":
         prefixes = prefixes + _KNOWN_TORCH_FREE_PREFIXES
     return mod_key.startswith(prefixes) or ".dist-info" in mod_key
 
 
-def _should_deep_scan_detached_module(mod: types.ModuleType, policy: str) -> bool:
+def _should_deep_scan_detached_module(
+    mod: types.ModuleType,
+    policy: DetachedPatchPolicy,
+    *,
+    source_open_counter: list[int] | None = None,
+) -> bool:
     """Return whether Level 2/3 detached-reference scans should run for a module.
 
     Parameters
@@ -1744,6 +2153,8 @@ def _should_deep_scan_detached_module(mod: types.ModuleType, policy: str) -> boo
         Module object being scanned.
     policy:
         Detached-reference patch policy.
+    source_open_counter:
+        Optional single-item counter incremented for successful legacy source opens.
 
     Returns
     -------
@@ -1755,7 +2166,7 @@ def _should_deep_scan_detached_module(mod: types.ModuleType, policy: str) -> boo
         return True
     if _module_file_is_stdlib(mod):
         return False
-    has_torch = _module_source_mentions_torch(mod)
+    has_torch = _module_source_mentions_torch(mod, source_open_counter=source_open_counter)
     return has_torch is not False
 
 
@@ -1812,13 +2223,19 @@ def _module_file_is_stdlib(mod: types.ModuleType) -> bool:
     return False
 
 
-def _module_source_mentions_torch(mod: types.ModuleType) -> bool | None:
+def _module_source_mentions_torch(
+    mod: types.ModuleType,
+    *,
+    source_open_counter: list[int] | None = None,
+) -> bool | None:
     """Return whether a module's Python source contains ``b"torch"``.
 
     Parameters
     ----------
     mod:
         Module object to inspect.
+    source_open_counter:
+        Optional single-item counter incremented after a source file is opened.
 
     Returns
     -------
@@ -1836,6 +2253,8 @@ def _module_source_mentions_torch(mod: types.ModuleType) -> bool | None:
         return cached
     try:
         with open(mod_file, "rb") as source_file:
+            if source_open_counter is not None:
+                source_open_counter[0] += 1
             has_torch = b"torch" in source_file.read()
     except OSError:
         _state._detached_source_has_torch[mod_file] = None
@@ -1858,20 +2277,26 @@ def clear_patch_detached_references_cache() -> None:
     _state._detached_source_has_torch.clear()
 
 
-def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:
+def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> int:
     """Patch ``__defaults__`` and ``__kwdefaults__`` of a function if they contain
     original torch function references.
 
     This handles the case where a function uses a torch function as a default
     argument value, e.g. ``def f(out=torch.relu)``. The default still
     points to the pre-decoration original; we replace it with the wrapper.
+
+    Returns
+    -------
+    int
+        Number of positional-default tuples and keyword-default slots patched.
     """
+    patched = 0
     try:
         defaults = getattr(func, "__defaults__", None)
     except Exception:
-        return
+        return 0
     if defaults is not None and not isinstance(defaults, tuple):
-        return
+        return 0
     if defaults is not None:
         new_defaults = []
         changed = False
@@ -1882,22 +2307,35 @@ def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:
             else:
                 new_defaults.append(d)
         if changed:
+            replacement_defaults = tuple(new_defaults)
             try:
-                func.__defaults__ = tuple(new_defaults)
+                if getattr(func, "__defaults__", None) is not defaults:
+                    return patched
+                func.__defaults__ = replacement_defaults
             except (AttributeError, TypeError):
                 pass
+            else:
+                _record_mutation(func, "defaults", None, defaults, replacement_defaults)
+                patched += 1
 
     try:
         kwdefaults = getattr(func, "__kwdefaults__", None)
     except Exception:
-        return
+        return patched
     if kwdefaults is not None and isinstance(kwdefaults, dict):
         for k, v in list(kwdefaults.items()):
             if id(v) in mapping:
+                replacement = mapping[id(v)]
                 try:
-                    kwdefaults[k] = mapping[id(v)]
+                    if kwdefaults.get(k) is not v:
+                        continue
+                    kwdefaults[k] = replacement
                 except (TypeError, KeyError):
                     pass
+                else:
+                    _record_mutation(func, "kwdefault", k, v, replacement)
+                    patched += 1
+    return patched
 
 
 def patch_model_instance(model: Any) -> None:
@@ -1914,12 +2352,6 @@ def patch_model_instance(model: Any) -> None:
     mapping = _state._orig_to_decorated
     if not mapping:
         return
-    try:
-        if model in _PATCHED_MODEL_INSTANCES:
-            return
-    except TypeError:
-        pass
-
     for module in model.modules():
         try:
             mod_dict = vars(module)
@@ -1931,10 +2363,10 @@ def patch_model_instance(model: Any) -> None:
             decorated_func = mapping.get(id(attr_val))
             if decorated_func is not None:
                 try:
+                    if mod_dict.get(attr_name) is not attr_val:
+                        continue
                     mod_dict[attr_name] = decorated_func
                 except (TypeError, KeyError):
                     pass
-    try:
-        _PATCHED_MODEL_INSTANCES.add(model)
-    except TypeError:
-        pass
+                else:
+                    _record_mutation(module, "model", attr_name, attr_val, decorated_func)

@@ -74,15 +74,8 @@ def uses_default(x: Any, op: Any = tanh) -> Any:
         wrap_torch()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Known limitation: closure-bound `from torch import ...` aliases created before "
-        "wrap_torch() are not rewritten without a profiling detector."
-    ),
-    strict=True,
-)
-def test_from_import_closure_binding_before_wrap_escapes_capture() -> None:
-    """Document pre-wrap closure and nested-container binding escapes."""
+def test_from_import_closure_binding_before_wrap_reports_capture_gap() -> None:
+    """Pre-wrap closure and nested-container bindings report in shadow mode."""
 
     unwrap_torch()
     clear_patch_detached_references_cache()
@@ -106,18 +99,16 @@ def test_from_import_closure_binding_before_wrap_escapes_capture() -> None:
         return FromImportClosureModel()
 
     model = build_model()
-    wrap_torch()
+    wrap_torch(patch_policy="scoped", escape_detector="shadow")
     try:
-        log = tl.trace(model, torch.randn(3))
-        # These references live in a closure cell and a nested dict/list created
-        # before wrapping. The current crawl cannot reach either location, so
-        # this strict xfail pins the documented boundary until escape detection
-        # can report such callables at runtime.
-        assert any(op.func_name == "relu" for op in log.ops)
-        assert any(op.func_name == "sigmoid" for op in log.ops)
+        with pytest.warns(tl.errors.TorchLensCaptureGapWarning):
+            trace = tl.trace(model, torch.randn(3))
+        assert trace.capture_verified is False
+        assert len(trace.escape_diagnostics) == 2
     finally:
+        unwrap_torch()
         clear_patch_detached_references_cache()
-        wrap_torch()
+        wrap_torch(patch_policy="legacy", escape_detector="off")
 
 
 def _import_temp_module(tmp_path: Path, mod_name: str, source: str) -> types.ModuleType:

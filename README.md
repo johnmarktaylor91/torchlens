@@ -462,8 +462,10 @@ sparse tensors, meta tensors, quantization, and `torch.func.vmap`.
 See [LIMITATIONS.md](docs/LIMITATIONS.md) for the full matrix: what fails, what
 works, and the recommended workaround for each context.
 
-TorchLens also repairs detached module-level and function-local `from torch import ...`
-references when wrappers are installed, with documented boundaries for pre-wrap closures.
+TorchLens also repairs detached `from torch import ...` references when wrappers are installed.
+The release default retains the legacy broad crawl; an opt-in
+[`patch_policy="scoped"`](docs/migration/scoped_detached_patching.md) mode narrows foreign-object
+mutation and offers a default-off shadow escape detector for pre-wrap closures and containers.
 
 
 ## Tutorials and Docs

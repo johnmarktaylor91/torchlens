@@ -19,6 +19,8 @@ from ._base import (
 
 _LEGACY_EXCEPTION_PATHS = {
     "MutatedReferenceError": ("torchlens._errors", "MutatedReferenceError"),
+    "TorchLensCaptureGapError": ("torchlens._errors", "TorchLensCaptureGapError"),
+    "TorchLensCaptureGapWarning": ("torchlens._errors", "TorchLensCaptureGapWarning"),
     "PostTraceParamUnavailable": ("torchlens._errors", "PostTraceParamUnavailable"),
     "ShapeInferenceError": ("torchlens._errors", "ShapeInferenceError"),
     "TorchLensPostfuncError": ("torchlens._errors", "TorchLensPostfuncError"),

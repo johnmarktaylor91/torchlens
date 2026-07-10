@@ -399,6 +399,30 @@ Values are ``True`` when source contains the byte substring ``b"torch"``,
 ``False`` when readable source does not, and ``None`` when source could not be
 classified and the conservative full scan should run.
 """
+
+_detached_patch_policy: str = "legacy"
+"""Effective detached-reference policy for the current wrapper epoch."""
+
+_detached_patch_modules: tuple[str, ...] = ()
+"""Additive exact-module or package-prefix allowlist for scoped deep scanning."""
+
+_detached_patch_epoch: int = 0
+"""Monotonically increasing identity for wrapper/patch lifecycle epochs."""
+
+_detached_patch_ledger: list[Any] = []
+"""Identity-conditional foreign-slot mutations made in the current epoch."""
+
+_crawled_module_identities: dict[int, Callable[[], Any | None]] = {}
+"""Module identity resolvers shallow-scanned in the current patch epoch."""
+
+_detached_positive_module_ids: set[int] = set()
+"""Module identities with an exact raw-callable hit in the current epoch."""
+
+_detached_positive_modules: list[Callable[[], Any | None]] = []
+"""Owner resolvers for positive scoped candidates retained across captures."""
+
+_escape_detector_mode: str = "off"
+"""Callable escape detector mode: ``"off"`` or diagnostic ``"shadow"``."""
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 

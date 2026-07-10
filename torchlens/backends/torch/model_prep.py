@@ -65,6 +65,7 @@ from .tensor_tracking import _append_module_suffix_to_equivalence_class
 from .sources import log_source_tensor
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from . import module_stack as _mstack
+from .escape_detection import expected_original_call
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances of the same class type. Cleared at the start of each
@@ -394,15 +395,6 @@ def _prepare_model_once(model: nn.Module) -> None:
         # Stamp this module's current root and flag any prior root it was
         # re-rooted away from as stale (role-swap bookkeeping).
         _state.record_module_root_prep(model, module)
-
-        # Replace any original torch functions stored as instance attributes
-        # (e.g. self.act = torch.relu assigned before decoration). Idempotent:
-        # already-decorated refs are absent from _orig_to_decorated.
-        for func_name, func in list(module.__dict__.items()):
-            if func_name.startswith("__") or not callable(func):
-                continue
-            if id(func) in _state._orig_to_decorated:
-                module.__dict__[func_name] = _state._orig_to_decorated[id(func)]
 
         # Annotate children with their full dotted address path (root-relative).
         for _, child_module, child_address in child_entries:
@@ -1900,7 +1892,11 @@ def module_forward_decorator(
                 [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
             )
             input_tensor_labels = set(get_label_list(input_tensors_fast))
-            out = orig_forward(*args, **kwargs)
+            if _state._escape_detector_mode == "shadow":
+                with expected_original_call(orig_forward, "module_forward:fast"):
+                    out = orig_forward(*args, **kwargs)
+            else:
+                out = orig_forward(*args, **kwargs)
             output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
                 # Force _decorated_identity() for nn.Identity modules and pass-throughs
@@ -1987,7 +1983,11 @@ def module_forward_decorator(
                     state.append_context(enter_ctx)
             out = None
             try:
-                out = orig_forward(*args, **kwargs)
+                if _state._escape_detector_mode == "shadow":
+                    with expected_original_call(orig_forward, "module_forward:predicate"):
+                        out = orig_forward(*args, **kwargs)
+                else:
+                    out = orig_forward(*args, **kwargs)
                 return out
             finally:
                 active_model_exc = sys.exc_info()[1]
@@ -2059,7 +2059,11 @@ def module_forward_decorator(
                 trace, module, args, kwargs
             )
             try:
-                out = orig_forward(*args, **kwargs)
+                if _state._escape_detector_mode == "shadow":
+                    with expected_original_call(orig_forward, "module_forward:exhaustive"):
+                        out = orig_forward(*args, **kwargs)
+                else:
+                    out = orig_forward(*args, **kwargs)
                 from ...intervention.runtime import _apply_module_boundary_live_hooks
 
                 out = _apply_module_boundary_live_hooks(
@@ -2321,17 +2325,14 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     1. ``wrap_torch()`` — Ensures torch functions are wrapped (no-op if already wrapped,
        re-wraps after ``unwrap_torch()``, first-time decoration on first call).
     2. ``_prepare_model_once(model)`` — Phase 1 model prep (cached per instance).
-    3. ``patch_detached_references()`` — Crawl sys.modules for stale refs
-       (incremental: only scans newly-imported modules).
-    4. ``patch_model_instance(model)`` — Level 4 crawl on model instance attrs.
+    3. ``patch_detached_references(model=model)`` — Incremental identity crawl
+       plus model-provenance candidates under scoped policy.
+    4. ``patch_model_instance(model)`` — Per-capture Level 4 scan, including
+       callable attributes reassigned since a prior capture.
     """
     from .wrappers import wrap_torch, patch_detached_references, patch_model_instance
 
     wrap_torch()  # idempotent — no-op if already wrapped; auto-rewraps after unwrap
-    already_prepared = model in _state._prepared_models
     _prepare_model_once(model)  # idempotent — cached in _state._prepared_models
-    patch_detached_references()  # incremental — only new sys.modules entries
-    # Phase 1 already patches instance attrs during its DFS, so skip the
-    # redundant full crawl for models that were already prepared.
-    if not already_prepared:
-        patch_model_instance(model)  # level 4 — model instance attrs
+    patch_detached_references(model=model)
+    patch_model_instance(model)
