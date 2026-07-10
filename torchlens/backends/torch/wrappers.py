@@ -1133,11 +1133,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         else:
             output_tensors = _collect_output_tensors(out_orig)
 
+        call_emitted_op = False
         if len(output_tensors) > 0:
             # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
             if _state._completeness_witness_mode == "shadow":
                 with _state.pause_logging():
-                    log_function_output_tensors(
+                    call_emitted_op = log_function_output_tensors(
                         trace,
                         func,
                         func_name,
@@ -1151,7 +1152,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                         func_call_id,
                     )
             else:
-                log_function_output_tensors(
+                call_emitted_op = log_function_output_tensors(
                     trace,
                     func,
                     func_name,
@@ -1195,9 +1196,6 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
 
-        call_emitted_op = expected_token is not None and any(
-            event.func_call_id == func_call_id for event in reversed(trace.capture_events.op_events)
-        )
         mark_expected_original_accounted(expected_token, captured=call_emitted_op)
         if (
             expected_token is not None

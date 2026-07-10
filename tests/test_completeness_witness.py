@@ -178,7 +178,7 @@ class _ScalarExtractionModel(nn.Module):
             Input shifted according to its scalar values.
         """
 
-        shift = x.sum().item()
+        shift = x.sum().item() + float(x.sum()) + int(x.sum())
         if x.sum() > 0:
             return x + shift
         return x - shift
@@ -272,6 +272,44 @@ def test_direct_aten_call_in_submodule_still_trips_witness() -> None:
 
 
 @pytest.mark.smoke
+def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
+    """Fastlog accounting uses capture emission rather than Trace-only events."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        recording = tl.record(model, torch.randn(2, 4), save=tl.func("relu"))
+
+    assert recording.completeness_witness_verified is True
+    assert recording.completeness_witness_event_count >= 4
+    assert recording.completeness_witness_unaccounted_count == 0
+    assert recording.completeness_diagnostics == []
+    assert recording.capture_verified is True
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+
+
+@pytest.mark.smoke
+def test_record_direct_aten_call_trips_non_vacuous_witness() -> None:
+    """A direct aten gap remains loud on the fastlog capture path."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+        recording = tl.record(
+            _DirectAtenGapModel(),
+            torch.randn(4),
+            save=tl.func("sigmoid"),
+        )
+
+    assert recording.completeness_witness_verified is False
+    assert recording.completeness_witness_unaccounted_count == 1
+    assert recording.capture_verified is False
+    report = recording.completeness_diagnostics[0]
+    assert report["operator"] == "aten.relu.default"
+    assert report["reason"] == "unowned_dispatch"
+
+
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("owner_name", "pool"),
     [
@@ -310,7 +348,7 @@ def test_logged_nested_wrapper_calls_are_accounted(
 
 @pytest.mark.smoke
 def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
-    """Item and tensor truth testing remain intentional scalar-output boundaries."""
+    """Python scalar conversions remain intentional scalar-output boundaries."""
 
     wrap_torch(patch_policy="scoped", completeness_witness=True)
     trace = tl.trace(_ScalarExtractionModel(), torch.ones(4))
@@ -320,9 +358,14 @@ def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
     scalar_rows = [
         row
         for row in trace.completeness_decompositions
-        if row["owner_func_name"] in {"item", "__bool__"}
+        if row["owner_func_name"] in {"item", "__bool__", "__float__", "__int__"}
     ]
-    assert {row["owner_func_name"] for row in scalar_rows} == {"item", "__bool__"}
+    assert {row["owner_func_name"] for row in scalar_rows} == {
+        "item",
+        "__bool__",
+        "__float__",
+        "__int__",
+    }
     assert all(row["scope"] == "expected_opaque" for row in scalar_rows)
     assert all(row["aten_ops"] == ("aten._local_scalar_dense.default",) for row in scalar_rows)
 
@@ -409,11 +452,15 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:dim:not_logged",
         "torch_func:item:logged",
         "torch_func:__bool__:logged",
+        "torch_func:__float__:logged",
+        "torch_func:__int__:logged",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {
         "torch_func:item:logged",
         "torch_func:__bool__:logged",
+        "torch_func:__float__:logged",
+        "torch_func:__int__:logged",
     }
     assert {row.operator for row in scalar_rows} == {"aten._local_scalar_dense.default"}
     assert all(row.reason for row in AUDITED_COMPLETENESS_BOUNDARIES)

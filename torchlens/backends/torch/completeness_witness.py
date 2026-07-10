@@ -71,6 +71,16 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         operator="aten._local_scalar_dense.default",
         reason="tensor truth testing extracts a Python bool, which is intentionally not an op output",
     ),
+    AuditedCompletenessBoundary(
+        wrapper_name="torch_func:__float__:logged",
+        operator="aten._local_scalar_dense.default",
+        reason="float(tensor) extracts a Python float, which is intentionally not an op output",
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="torch_func:__int__:logged",
+        operator="aten._local_scalar_dense.default",
+        reason="int(tensor) extracts a Python int, which is intentionally not an op output",
+    ),
 )
 """Reviewable exact expected-opaque rows; additions require a regression test and reason."""
 

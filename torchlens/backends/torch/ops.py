@@ -1408,17 +1408,23 @@ def log_function_output_tensors(
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
     func_call_id: int,
-) -> None:
+) -> bool:
     """Dispatch to exhaustive or fast logging based on current logging mode.
 
     Called by every decorated torch function wrapper after executing the
     original function.  The mode was set in ``save_new_outs`` (fast)
     or ``trace`` (exhaustive).
+
+    Returns
+    -------
+    bool
+        Whether the selected capture producer logged at least one output op.
     """
     policy = getattr(self, "_capture_producer_policy", None)
     if policy is None:
         policy = get_capture_producer_policy(cast(CaptureProducerMode, self.capture_mode))
         self._capture_producer_policy = policy
+    layer_counter_before = self._layer_counter
     policy.emit(
         self,
         func,
@@ -1432,6 +1438,7 @@ def log_function_output_tensors(
         is_bottom_level_func,
         func_call_id,
     )
+    return self._layer_counter > layer_counter_before
 
 
 def _emit_operation_events(
