@@ -512,6 +512,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
     if not isinstance(value, list):
         raise ValueError("Manifest body_index must be a list.")
     v1_intended_uses = {
+        "annotation_blob",
         "bundle_marker",
         "buffer_initial_value",
         "captured_arg",

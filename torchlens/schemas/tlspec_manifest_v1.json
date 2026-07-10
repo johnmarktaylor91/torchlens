@@ -149,6 +149,7 @@
           "intended_use": {
             "type": "string",
             "enum": [
+              "annotation_blob",
               "bundle_marker",
               "buffer_initial_value",
               "captured_arg",
