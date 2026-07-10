@@ -112,6 +112,7 @@ x = torch.randn(4)
 tl.wrap_torch(patch_policy="scoped", escape_detector="shadow")
 trace = tl.trace(model, x)
 print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
+tl.unwrap_torch()
 ```
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
@@ -133,6 +134,7 @@ tl.wrap_torch(
 trace = tl.trace(model, x)
 print(trace.completeness_witness_verified)
 print(trace.completeness_witness_unaccounted_count)
+tl.unwrap_torch()
 ```
 
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
