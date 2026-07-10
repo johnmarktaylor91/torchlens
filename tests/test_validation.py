@@ -15,6 +15,8 @@ import pytest
 import torch
 import torch.nn as nn
 
+# Import the implementation entry point first: it breaks the standalone
+# collection cycle between torchlens and torchlens._user_public_impls.
 import torchlens.user_funcs as user_funcs
 import torchlens as tl
 import torchlens._user_public_impls as user_public_impls

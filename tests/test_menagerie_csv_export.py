@@ -9,6 +9,7 @@ import sqlite3
 from typing import Any
 
 import pyarrow.parquet as pq
+import pytest
 
 from menagerie.catalog import CatalogRow, write_catalog
 from menagerie.csv_dictionary import DEFAULT_SCHEMA_PATH, SIDE_TABLE_COLUMNS, parse_flagship_schema
@@ -22,6 +23,10 @@ from menagerie.csv_export import (
     _is_trustworthy,
 )
 from menagerie.op_taxonomy import OP_TAXONOMY_VERSION
+
+SCHEMA_ARTIFACT = (
+    Path(__file__).resolve().parents[1] / ".research" / "menagerie-csv-schema" / "SCHEMA_v2.md"
+)
 
 
 def _fixture_rows() -> list[CatalogRow]:
@@ -445,6 +450,10 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+@pytest.mark.skipif(
+    not SCHEMA_ARTIFACT.exists(),
+    reason="requires local menagerie data artifacts; not part of the portable suite",
+)
 def test_public_csv_export_schema_join_and_dictionary(tmp_path: Path) -> None:
     """CSV export preserves schema order, joins side tables, and documents every column."""
 
@@ -537,6 +546,10 @@ def test_public_csv_export_schema_join_and_dictionary(tmp_path: Path) -> None:
     assert "install_difficulty = runtime dependency classification" in dictionary
 
 
+@pytest.mark.skipif(
+    not SCHEMA_ARTIFACT.exists(),
+    reason="requires local menagerie data artifacts; not part of the portable suite",
+)
 def test_stale_trace_summary_nulls_retrace_fields_and_side_tables(tmp_path: Path) -> None:
     """Stale trace summaries must not populate authoritative retrace-derived measurements."""
 
