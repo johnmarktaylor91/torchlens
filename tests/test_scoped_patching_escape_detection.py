@@ -24,6 +24,7 @@ from torchlens.backends.torch.escape_detection import (
     reset_detector_tables,
 )
 from torchlens.backends.torch.wrappers import (
+    _remember_crawled_module_identity,
     clear_patch_detached_references_cache,
     patch_detached_references,
     torch_func_decorator,
@@ -172,6 +173,19 @@ def test_module_identity_replacement_under_same_key_is_scanned() -> None:
         assert second.op is _state._orig_to_decorated[id(raw)]
     finally:
         sys.modules.pop(name, None)
+
+
+def test_nonweakrefable_module_identity_uses_conservative_fallback() -> None:
+    """CFFI-style module identities need not support weak references."""
+
+    class NonWeakOwner:
+        """Minimal object with no weak-reference slot."""
+
+        __slots__ = ()
+
+    owner = NonWeakOwner()
+    _remember_crawled_module_identity(owner)  # type: ignore[arg-type]
+    assert _state._crawled_module_identities[id(owner)]() is owner
 
 
 def test_ledger_restores_owned_slot_and_preserves_user_reassignment() -> None:

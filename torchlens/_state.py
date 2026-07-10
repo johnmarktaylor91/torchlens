@@ -412,14 +412,14 @@ _detached_patch_epoch: int = 0
 _detached_patch_ledger: list[Any] = []
 """Identity-conditional foreign-slot mutations made in the current epoch."""
 
-_crawled_module_identities: dict[int, weakref.ReferenceType[Any]] = {}
-"""Weak module identities shallow-scanned in the current patch epoch."""
+_crawled_module_identities: dict[int, Callable[[], Any | None]] = {}
+"""Module identity resolvers shallow-scanned in the current patch epoch."""
 
 _detached_positive_module_ids: set[int] = set()
 """Module identities with an exact raw-callable hit in the current epoch."""
 
-_detached_positive_modules: list[weakref.ReferenceType[Any]] = []
-"""Weak references to positive scoped candidates retained across captures."""
+_detached_positive_modules: list[Callable[[], Any | None]] = []
+"""Owner resolvers for positive scoped candidates retained across captures."""
 
 _escape_detector_mode: str = "off"
 """Callable escape detector mode: ``"off"`` or diagnostic ``"shadow"``."""

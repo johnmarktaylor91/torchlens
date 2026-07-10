@@ -2004,9 +2004,9 @@ def _module_identity_was_crawled(module: types.ModuleType) -> bool:
 
 
 def _remember_crawled_module_identity(module: types.ModuleType) -> None:
-    """Record one shallow-scanned module identity weakly."""
+    """Record one scanned identity, weakly when the owner supports it."""
 
-    _state._crawled_module_identities[id(module)] = weakref.ref(module)
+    _state._crawled_module_identities[id(module)] = _weak_owner_ref(module)
 
 
 def _remember_positive_module(module: types.ModuleType) -> None:
@@ -2015,7 +2015,7 @@ def _remember_positive_module(module: types.ModuleType) -> None:
     if id(module) in _state._detached_positive_module_ids:
         return
     _state._detached_positive_module_ids.add(id(module))
-    _state._detached_positive_modules.append(weakref.ref(module))
+    _state._detached_positive_modules.append(_weak_owner_ref(module))
 
 
 def _safe_module_name(module: types.ModuleType, fallback: str) -> str:
