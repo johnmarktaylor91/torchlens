@@ -1,6 +1,371 @@
 # CHANGELOG
 
 
+## v2.31.0 (2026-07-10)
+
+### Bug Fixes
+
+- **api**: Correct paper-era trace compatibility
+  ([`2c96a50`](https://github.com/johnmarktaylor91/torchlens/commit/2c96a50a64c90d57a28c5938310027f67fb80dfd))
+
+- **audit**: Guard visual pack demo contrasts
+  ([`a559c2d`](https://github.com/johnmarktaylor91/torchlens/commit/a559c2d1a1c0f37733cdad4a5ccaeb1051876e09))
+
+- **backends**: Align preview capability handling
+  ([`175054d`](https://github.com/johnmarktaylor91/torchlens/commit/175054dc2388e95349f72404836e15eaec5693cf))
+
+- **capture**: Emit compiled-unwrap note inside restoration guard
+  ([`f505766`](https://github.com/johnmarktaylor91/torchlens/commit/f5057668e36607dcbdb26fd6d0e73bb1d4936d60))
+
+- **capture**: Exempt boolean dispatch pooling composites
+  ([`f909554`](https://github.com/johnmarktaylor91/torchlens/commit/f909554ca037716d9e1b0c37e5595f7bba91e91e))
+
+- **capture**: Factory wrappers honor device context for explicit device=None
+  ([`19f097c`](https://github.com/johnmarktaylor91/torchlens/commit/19f097ca429e1e5f31ab719431c941cc11d1d82c))
+
+The Python factory-function wrappers bypass torch's C-level DeviceContext dispatch, so they
+  re-inject the active device kwarg themselves. Two gaps let a torch.device('meta') context silently
+  place tensors on CPU:
+
+1. _maybe_inject_device_kwarg skipped injection whenever 'device' was a key in kwargs -- but
+  nn.Linear (and other modules) forward device=None explicitly via factory_kwargs. An explicit
+  device=None means 'defer to the active context', exactly like an absent kwarg, so meta-context
+  params came out on CPU once torch was wrapped. Only bail when a real (non-None) device is pinned.
+
+2. wrap_torch clears + repopulates torch's _device_constructors lru_cache with the wrapped
+  callables, but unwrap_torch never cleared it. After an unwrap the cache stayed stale, so torch's
+  device-context dispatch stopped recognising the restored original factories -- breaking meta
+  context even for unwrapped torch. Clear the cache on unwrap so torch re-evaluates against the
+  restored originals.
+
+Regression tests cover the in-session normal-then-meta trace sequence (the meta guard must still
+  fire), explicit device=None on the empty family, and unwrap restoring the meta context.
+
+- **capture**: Prune dead scoped candidate identities
+  ([`4e21a14`](https://github.com/johnmarktaylor91/torchlens/commit/4e21a140e5a986a228c31ce6f55d5521f98838c2))
+
+- **capture**: Restore ignored routes and pre-hook effects
+  ([`9487983`](https://github.com/johnmarktaylor91/torchlens/commit/9487983f13be8c3f246b9af297bec75c1c90141a))
+
+- **capture**: Support nonweakrefable module identities
+  ([`163db6f`](https://github.com/johnmarktaylor91/torchlens/commit/163db6f5ae708144f6ead972b6855b7725323a79))
+
+- **capture**: Tighten provenance typing
+  ([`6d52add`](https://github.com/johnmarktaylor91/torchlens/commit/6d52addf5481c231d4c52ca5b7001bd3ed6851b7))
+
+- **capture**: Unwrap compiled models at public entry points
+  ([`abb5d12`](https://github.com/johnmarktaylor91/torchlens/commit/abb5d12484c4ef78e6b169c97a1b9a87369476f8))
+
+- **compile**: Unwrap compiled training capture entry points
+  ([`5c077f5`](https://github.com/johnmarktaylor91/torchlens/commit/5c077f5f2d8c715be8f245b40fa9d934aed9c8df))
+
+- **debug**: Find_nan reports the nearest user frame
+  ([`e44d046`](https://github.com/johnmarktaylor91/torchlens/commit/e44d0468a25a8a796b3fa8f1bf8ad8a6b946fc80))
+
+- **debug**: Identify user frame by torchlens package dir, not path component
+  ([`21cd1d7`](https://github.com/johnmarktaylor91/torchlens/commit/21cd1d70fc9402906301ddd03a71e998ac8a630a))
+
+find_nan's live source-line walk classified library frames by testing for a 'torchlens' path
+  component, which false-matched any checkout whose repo directory is named torchlens (e.g.
+  .../torchlens/tests/...), hiding the real user frame and reporting launcher frames like <frozen
+  runpy> under some pytest invocations. Match the actual torchlens/torch package directories
+  instead, skip <frozen ...> launcher frames, and keep <string>/<stdin> as user code.
+
+- **debug**: Preserve capture option explicitness
+  ([`40aa4a0`](https://github.com/johnmarktaylor91/torchlens/commit/40aa4a04fd3d722f3a26bf5db9227e00b2aa5b3a))
+
+- **docs**: Make witness examples executable
+  ([`764cdc3`](https://github.com/johnmarktaylor91/torchlens/commit/764cdc3962eb7f1e49d494cc3987cc2d92517c37))
+
+- **export**: Qualify recurrent node ids
+  ([`c56c719`](https://github.com/johnmarktaylor91/torchlens/commit/c56c719469136e1fcf18a3d9b8af78c7d2bee786))
+
+- **import**: Preserve bundle callable after submodule import
+  ([`9d0a888`](https://github.com/johnmarktaylor91/torchlens/commit/9d0a8881a5c8d9fbc0d6774dca00aa1df9d95fcb))
+
+- **import**: Preserve lazy facade exports over child modules
+  ([`bd705fe`](https://github.com/johnmarktaylor91/torchlens/commit/bd705fe239288e9ef95940867059b4fdffee0310))
+
+- **import**: Preserve lazy facade shim and wrapper fidelity
+  ([`c194b5e`](https://github.com/johnmarktaylor91/torchlens/commit/c194b5e1c7ef9500c94d94805628685c373e16e6))
+
+- **intervention**: Over-approximate in-place snapshot gating
+  ([`d2283d7`](https://github.com/johnmarktaylor91/torchlens/commit/d2283d755e696b65ca61ab01dc37b284df8ebef0))
+
+- **intervention**: Parent module-splice replacement at consuming scope
+  ([`d0d33e8`](https://github.com/johnmarktaylor91/torchlens/commit/d0d33e88cdbba19f1a9a0537bccdc8865ca237f2))
+
+- **intervention**: Reconcile live and replay replacements
+  ([`346425d`](https://github.com/johnmarktaylor91/torchlens/commit/346425d1d98b9094357e2d6d616ea163d231f1e4))
+
+- **intervention**: Snapshot in-place-op inputs for post-hook interventions
+  ([`0f4c305`](https://github.com/johnmarktaylor91/torchlens/commit/0f4c3053ccaf9a6dcec230986f076fa1556351b1))
+
+- **io**: Accept pre_hook_input in tlspec validation
+  ([`7c6c45a`](https://github.com/johnmarktaylor91/torchlens/commit/7c6c45a1c1e9dbd531b2a1d883a082cc9ddaa286))
+
+- **io**: Drop live escape diagnostics from bundles
+  ([`45f44f4`](https://github.com/johnmarktaylor91/torchlens/commit/45f44f40f936bab4846569a0302860c1bed7ef18))
+
+- **io**: Enforce tlspec version ceiling in validation
+  ([`e4c5018`](https://github.com/johnmarktaylor91/torchlens/commit/e4c5018db8c894c0295464264bd645bbdfe42c21))
+
+- **io**: Preserve audit-only body index compatibility
+  ([`bc0a2a8`](https://github.com/johnmarktaylor91/torchlens/commit/bc0a2a86fcc75252e0c4e000f97c1de51735ddea))
+
+- **io**: Preserve conditional body cache across round trips
+  ([`f20ccaa`](https://github.com/johnmarktaylor91/torchlens/commit/f20ccaa694ac160090e98fb2401beeca2247ae01))
+
+- **io**: Preserve current null backend addresses
+  ([`13bfaf1`](https://github.com/johnmarktaylor91/torchlens/commit/13bfaf15a321235c961e34fce8d84214e4554a3a))
+
+- **io**: Preserve intervention trace portability
+  ([`9def3c5`](https://github.com/johnmarktaylor91/torchlens/commit/9def3c5d3e5a2f1ba45aaeb30157b35fbf3c2e00))
+
+- **io**: Preserve tensor requires grad across round trips
+  ([`f72dcfb`](https://github.com/johnmarktaylor91/torchlens/commit/f72dcfb334417a36b3c09da7f5147846be358926))
+
+- **io**: Reject desynchronized tlspec body indexes
+  ([`1d2f2c4`](https://github.com/johnmarktaylor91/torchlens/commit/1d2f2c4ac38d2941b270d7449100bf4bea85380a))
+
+- **io**: Reject missing and corrupt tlspec manifests
+  ([`444c8a8`](https://github.com/johnmarktaylor91/torchlens/commit/444c8a810dcb61d115f4d94c7d45840ee0f398b5))
+
+- **io**: Type witness diagnostic defaults
+  ([`936825f`](https://github.com/johnmarktaylor91/torchlens/commit/936825fc227a4806d8ce2755c531bca94b61df7b))
+
+- **io**: Validate annotation blobs emitted by tlspec writer
+  ([`06494b3`](https://github.com/johnmarktaylor91/torchlens/commit/06494b394ce527808baa320d5c6805b94e9a661e))
+
+- **report**: Preserve subsecond profile timings
+  ([`6e9a265`](https://github.com/johnmarktaylor91/torchlens/commit/6e9a265309041a528937ad025bfbc14a8516f7e3))
+
+- **selectors**: Reject non-string function patterns
+  ([`32808fa`](https://github.com/johnmarktaylor91/torchlens/commit/32808fa6df69989ca99c78c3dcfad2ef8ca0a217))
+
+- **tinygrad**: Adapt preview capture to 0.13 semantics
+  ([`66b82cc`](https://github.com/johnmarktaylor91/torchlens/commit/66b82cc68d90083e9a0100f5dc82328f48b6d056))
+
+- **validation**: Align witness accounting across capture paths
+  ([`078d8dc`](https://github.com/johnmarktaylor91/torchlens/commit/078d8dccf4db9da938c4a4c76b22401953352e0d))
+
+- **validation**: Correct completeness witness claims
+  ([`067a46b`](https://github.com/johnmarktaylor91/torchlens/commit/067a46b008a51fca4770aa1d3b71e6b69070400e))
+
+- **validation**: Count distinct replay nodes
+  ([`13db70b`](https://github.com/johnmarktaylor91/torchlens/commit/13db70b0fcd077c976b4ae17428086ec6001a649))
+
+- **validation**: Initialize witness counters when witness is off
+  ([`db9ca6a`](https://github.com/johnmarktaylor91/torchlens/commit/db9ca6a2ea8b07610a2c2b70f00b11c8d85c8c4b))
+
+- **validation**: Isolate replay state for stateful models
+  ([`62ac1b4`](https://github.com/johnmarktaylor91/torchlens/commit/62ac1b4b8478a97e05400245c06f19090111b65b))
+
+- **validation**: Perturb copy source values
+  ([`acb0293`](https://github.com/johnmarktaylor91/torchlens/commit/acb02932ebf51855c14fab6652cf78e80335a690))
+
+- **validation**: Preserve reproducibility capture identity
+  ([`3d95a43`](https://github.com/johnmarktaylor91/torchlens/commit/3d95a43e95d648c9b7bfcc6b4dbf6d130ad8daca))
+
+- **validation**: Reject exempted-only replay passes
+  ([`bd41543`](https://github.com/johnmarktaylor91/torchlens/commit/bd41543177e2a1fb59a7c5017b28f559b1737034))
+
+- **validation**: Require per-op exclusion proof for selective save
+  ([`13069b7`](https://github.com/johnmarktaylor91/torchlens/commit/13069b7767884f818180369853d573fd0c574cef))
+
+- **validation**: Restore snapshotable attrs independently
+  ([`de250ae`](https://github.com/johnmarktaylor91/torchlens/commit/de250aea82344bfbda45cf7d478023c083df94d7))
+
+- **validation**: Support retained orphan islands
+  ([`25e9e60`](https://github.com/johnmarktaylor91/torchlens/commit/25e9e609a26248ed2fda4dc26befeaf8bd0d16b9))
+
+- **visualization**: Handle dropped orphan renders
+  ([`60d2010`](https://github.com/johnmarktaylor91/torchlens/commit/60d20103fe0e006a7ea1a4d5fd90d0a82cf9d0b0))
+
+- **viz**: Decompose child segment buffer counts
+  ([`e0789c4`](https://github.com/johnmarktaylor91/torchlens/commit/e0789c45a5a65f5dd9b5bc723035a33681effa7a))
+
+- **viz**: Decompose collapsed-module count into ops and buffers
+  ([`b25a631`](https://github.com/johnmarktaylor91/torchlens/commit/b25a6319c54ad35f9fd9c25e4bde43425a0c6b88))
+
+- **viz**: Exclude finished-trace orphan from its own co-parent/sibling labels
+  ([`e5423c0`](https://github.com/johnmarktaylor91/torchlens/commit/e5423c0ada5f123e4dbc040d948159fba0641b10))
+
+- **viz**: Improve feature maps and scree legends
+  ([`eb8af16`](https://github.com/johnmarktaylor91/torchlens/commit/eb8af168af54e085fd2813d325fc7d77cd7a184e))
+
+- **viz**: Keep repeated if labels pass-aware
+  ([`c9933ab`](https://github.com/johnmarktaylor91/torchlens/commit/c9933abb175c90cc34680c050b338ce48e1b550c))
+
+- **viz**: Make orphan Op repr safe
+  ([`d8dce28`](https://github.com/johnmarktaylor91/torchlens/commit/d8dce288c81a9726d187abedd75c742119f6fd78))
+
+- **viz**: Preserve trainability honesty in run folds
+  ([`65ed90b`](https://github.com/johnmarktaylor91/torchlens/commit/65ed90b7714967fe9b67f7847dfe0f37d816680f))
+
+- **viz**: Recompute segment edge cluster owner
+  ([`3410f58`](https://github.com/johnmarktaylor91/torchlens/commit/3410f580588f4bf258651d06c86bb2b71ba15a1a))
+
+- **viz**: Render-faithful collapse plan counts
+  ([`d9652ac`](https://github.com/johnmarktaylor91/torchlens/commit/d9652ac429508d70d80defcab4c8152ecaaa3d01))
+
+- **viz**: Summarize module output ops
+  ([`eeeadf4`](https://github.com/johnmarktaylor91/torchlens/commit/eeeadf453fb12f7114707039bf2db2558995ffc6))
+
+### Chores
+
+- **data**: Remove dead annotation revision state
+  ([`a572df3`](https://github.com/johnmarktaylor91/torchlens/commit/a572df362f0413e8175c977d7e640065bfefaa20))
+
+- **types**: Broaden escape-detector prior_profile annotation for strict mypy
+  ([`3069640`](https://github.com/johnmarktaylor91/torchlens/commit/3069640a0878ac6f9cc896729c2d2be89183b309))
+
+sys.getprofile() is typed with a Literal event param in modern typeshed; store the prior hook as
+  Callable[..., Any] | None. Behavior-neutral.
+
+- **types**: Repo-wide mypy zero
+  ([`ada6535`](https://github.com/johnmarktaylor91/torchlens/commit/ada65352e80fd13afb33d1ea9c4d8da3c8b8d993))
+
+### Documentation
+
+- **api**: Correct migration and debug references
+  ([`b13d63c`](https://github.com/johnmarktaylor91/torchlens/commit/b13d63c32f9f456e6c17aeee84bf3faf8659c81a))
+
+- **capture**: Document pre-hook provenance limits
+  ([`d28fc2d`](https://github.com/johnmarktaylor91/torchlens/commit/d28fc2dc51817770869baf8b1fe9ee575de57423))
+
+- **capture**: Document scoped patching rollout
+  ([`61cc214`](https://github.com/johnmarktaylor91/torchlens/commit/61cc2148add454e46d8a65287afc5872218f3faf))
+
+- **capture**: Explain view save aliasing
+  ([`c3942ac`](https://github.com/johnmarktaylor91/torchlens/commit/c3942aca8850824c13fc5fcacb821293826411c1))
+
+- **migration**: Fix stale snippets found by verification pass
+  ([`b16ca5e`](https://github.com/johnmarktaylor91/torchlens/commit/b16ca5e8f0bd8adac7c52a0723c6b63012e7b0b1))
+
+- **migration**: Restore two-sided migration-test contract
+  ([`e98bee8`](https://github.com/johnmarktaylor91/torchlens/commit/e98bee8791b3fae2160d71597140d47f8abb6ed1))
+
+- **performance**: Document witness overhead and scope
+  ([`1a86306`](https://github.com/johnmarktaylor91/torchlens/commit/1a863067201c45adff3610b99e2d22b871143769))
+
+- **positioning**: Document detached-reference handling
+  ([`20c5946`](https://github.com/johnmarktaylor91/torchlens/commit/20c59465be8ff80968bf656c0ea38501c68c5c59))
+
+- **reference**: Add collapse visual reference gallery
+  ([`e51a0d3`](https://github.com/johnmarktaylor91/torchlens/commit/e51a0d314f105548fa040be7b44767fc4a70f822))
+
+- **reference**: Tl.debug, tl.export, tl.attribution reference pages with executable examples
+  ([`6a68c5a`](https://github.com/johnmarktaylor91/torchlens/commit/6a68c5a1cb6611bfb6c578d9372b3f72fd7388dc))
+
+### Features
+
+- **capture**: Add pre-hook input provenance mechanism
+  ([`d6965e9`](https://github.com/johnmarktaylor91/torchlens/commit/d6965e90269ac726be792e283055d42d86659c00))
+
+- **capture**: Add real scoped detached patching
+  ([`a268c31`](https://github.com/johnmarktaylor91/torchlens/commit/a268c316aae46defef179537ae5955154cc99113))
+
+- **capture**: Add shadow escape detector
+  ([`8232b13`](https://github.com/johnmarktaylor91/torchlens/commit/8232b13ef7e78208e2fcc3c546a17c4111789e88))
+
+- **capture**: Gracefully unwrap torch.compile models
+  ([`fd18eaa`](https://github.com/johnmarktaylor91/torchlens/commit/fd18eaa583a85b3465ecdb9d382a3256a4b40077))
+
+- **debug**: Add find_nan diagnostics
+  ([`6265039`](https://github.com/johnmarktaylor91/torchlens/commit/6265039952b4aff15399b7e558b90e954bc2d3fe))
+
+- **hash**: Expose structural hash CI tripwire
+  ([`4cf5530`](https://github.com/johnmarktaylor91/torchlens/commit/4cf55308b6896421da5644d1f24f371427b4a1e5))
+
+- **io**: Bump pre-hook provenance schema to v6
+  ([`101e1b7`](https://github.com/johnmarktaylor91/torchlens/commit/101e1b73ff1499c6830bce1c9ba8a37deb0d14ea))
+
+- **trace**: Add profile and audit reports
+  ([`3aca629`](https://github.com/johnmarktaylor91/torchlens/commit/3aca629af9975d08e767827e43733a8c7bf65d9b))
+
+- **validation**: Add torch dispatch completeness witness
+  ([`06a40c2`](https://github.com/johnmarktaylor91/torchlens/commit/06a40c28d116443472241da1802574fa3dfd8540))
+
+- **viz**: Rename draw kwarg fold_runs to fold_repeats
+  ([`18f141e`](https://github.com/johnmarktaylor91/torchlens/commit/18f141e6d7138bd7f60f912b5778c6301024c8b7))
+
+Clean break for the new collapse repeat-folding option; no deprecated alias is kept.
+
+### Performance Improvements
+
+- **capture**: Add constant-time prehook fast path
+  ([`f3200a8`](https://github.com/johnmarktaylor91/torchlens/commit/f3200a88f1cd8f22179c48ec61f8b1d1102c7906))
+
+- **import**: Lazify core feature facades
+  ([`b2f973f`](https://github.com/johnmarktaylor91/torchlens/commit/b2f973fc2e5c17177e9c1b3a0788419830af9b56))
+
+### Refactoring
+
+- **validation**: Remove dead pass-dedup branches; pin all-pass replay
+  ([`d3dece8`](https://github.com/johnmarktaylor91/torchlens/commit/d3dece820469178b377c0aa5cbdeb62ad11db275))
+
+The replay pipeline already validates every pass of multi-pass layers (BFS enqueues pass-qualified
+  op labels); the single-representative-op selection and parent-layer dedup branches were dead code
+  on the pipeline path. Remove them, pin the all-pass behavior with regression tests, and harden the
+  internal validate_parents_of_saved_layer entry against bare multi-pass labels.
+
+### Testing
+
+- Guard optional-dep doc snippets and torch<2.2 pre-wrap-vmap witness case
+  ([`aa7a97e`](https://github.com/johnmarktaylor91/torchlens/commit/aa7a97e7508411394ea5dfa1a8dc222a74005b64))
+
+- doc-snippet runner skips a block when it needs an unavailable optional dependency (e.g.
+  tl.export.xarray without xarray installed) instead of failing on lean CI envs. - the graceful
+  pre-wrap-vmap transform-escape witness-only path requires torch>=2.2; on the 2.1 best-effort floor
+  the escaped output honestly raises, so skip there.
+
+- **backend**: Regenerate field-order golden
+  ([`f276ea2`](https://github.com/johnmarktaylor91/torchlens/commit/f276ea27a8d57cfdc53144e3a24e69e6b9a4083e))
+
+- **capture**: Allowlist non-introspectable arg-specs for newly-wrapped factory routes
+  ([`86c18a6`](https://github.com/johnmarktaylor91/torchlens/commit/86c18a64104bffdb4101ee1578645e730def5441))
+
+- **capture**: Certify scoped escape boundaries
+  ([`ac249b5`](https://github.com/johnmarktaylor91/torchlens/commit/ac249b5cab39d302cbae1b6f2a34f429b596836b))
+
+- **capture**: Compare scoped policy across model zoo
+  ([`28c48fc`](https://github.com/johnmarktaylor91/torchlens/commit/28c48fc0f275592ab74086e83d793f01a6131161))
+
+- **capture**: Cover pre-hook provenance matrix
+  ([`fba850b`](https://github.com/johnmarktaylor91/torchlens/commit/fba850bba75b957b1f85e6e01e9c4a319d42fa0c))
+
+- **goldens**: Regenerate tlspec manifest projection
+  ([`e027813`](https://github.com/johnmarktaylor91/torchlens/commit/e027813ad614d3f9a86ce2d75c246909c26dc750))
+
+- **portability**: Guard local menagerie dependencies
+  ([`277a431`](https://github.com/johnmarktaylor91/torchlens/commit/277a431ab5a8fd3214891831dffc08f65f1a0bae))
+
+- **train**: Exempt provenance snapshot detach
+  ([`775481d`](https://github.com/johnmarktaylor91/torchlens/commit/775481d45f582020fecdb765ab7535b8e21ea4b4))
+
+- **validation**: Align alias-contract test to honest unverified status for selective traces
+  ([`8b2441b`](https://github.com/johnmarktaylor91/torchlens/commit/8b2441b4d60eb78543f02352d21a3ab051777fdb))
+
+- **validation**: Certify dispatch completeness witness
+  ([`8e9be72`](https://github.com/johnmarktaylor91/torchlens/commit/8e9be72f09252247e57f8c86b3d1280fdb18e2fa))
+
+- **validation**: Cover replay defaults and stateful warnings
+  ([`c3499ca`](https://github.com/johnmarktaylor91/torchlens/commit/c3499cae16b1f4fec8e6f42b33c5310f379de9da))
+
+- **validation**: Document witness field lifecycle
+  ([`3e2e36f`](https://github.com/johnmarktaylor91/torchlens/commit/3e2e36fc525d96920b1cd79af9422d6cea0ec4f5))
+
+- **validation**: Pin exemption registries and exact perturbation gate
+  ([`93193e5`](https://github.com/johnmarktaylor91/torchlens/commit/93193e5d889b78e75b58a51e99b22edc69a740a2))
+
+- **validation**: Seed perturbation exception case
+  ([`3eb9443`](https://github.com/johnmarktaylor91/torchlens/commit/3eb94430116a8ed421b963aac79265e69cd1bef7))
+
+- **viz**: Re-snapshot module containment for synthetic splice op
+  ([`fc7e4b6`](https://github.com/johnmarktaylor91/torchlens/commit/fc7e4b64d64ae581a5bbaf50eb07f9dfb761c722))
+
+
 ## v2.30.1 (2026-07-09)
 
 ### Bug Fixes
