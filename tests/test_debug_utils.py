@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import inspect
 from typing import Any
 
 import pytest
@@ -44,6 +45,44 @@ class SparseNanModel(nn.Module):
         return born_nonfinite + 1
 
 
+def _user_nan_function(x: torch.Tensor) -> torch.Tensor:
+    """Produce a NaN from a user-defined call site.
+
+    Parameters
+    ----------
+    x:
+        Finite model input.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing NaN values.
+    """
+
+    zero = x - x
+    return zero / zero
+
+
+class UserFunctionNanModel(nn.Module):
+    """Model that delegates its non-finite operation to user code."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the user-defined non-finite operation.
+
+        Parameters
+        ----------
+        x:
+            Model input.
+
+        Returns
+        -------
+        torch.Tensor
+            User-function output.
+        """
+
+        return _user_nan_function(x)
+
+
 def test_find_nan_live_reports_op_module_and_test_location() -> None:
     """Live find_nan stops at the non-finite operation with a user location."""
 
@@ -57,6 +96,17 @@ def test_find_nan_live_reports_op_module_and_test_location() -> None:
     assert result.source_line is not None
     assert __file__ in result.source_line
     assert "FindNanResult(found=True" in repr(result)
+
+
+def test_find_nan_live_reports_nearest_user_function_location() -> None:
+    """Live find_nan reports the function containing the offending operation."""
+
+    result = tl.debug.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
+    source, start_line = inspect.getsourcelines(_user_nan_function)
+    expected_line = start_line + source.index("    return zero / zero\n")
+
+    assert result.found is True
+    assert result.source_line == f"{__file__}:{expected_line}"
 
 
 def test_trace_find_nan_agrees_with_live_capture() -> None:

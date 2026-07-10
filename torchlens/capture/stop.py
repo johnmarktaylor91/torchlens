@@ -19,7 +19,7 @@ ForwardStopDisposition = Literal["raise", "attach_partial", "return_partial"]
 
 
 def _live_user_location() -> tuple[str | None, int | None]:
-    """Return the nearest non-TorchLens, non-PyTorch stack location.
+    """Return the nearest non-library stack location.
 
     Returns
     -------
@@ -31,7 +31,12 @@ def _live_user_location() -> tuple[str | None, int | None]:
     for frame in reversed(traceback.extract_stack()[:-1]):
         path = Path(frame.filename)
         path_parts = path.parts
-        if "torchlens" in path_parts or "torch" in path_parts:
+        if (
+            "torchlens" in path_parts
+            or "torch" in path_parts
+            or "site-packages" in path_parts
+            or "dist-packages" in path_parts
+        ):
             continue
         return str(path), frame.lineno
     return None, None
