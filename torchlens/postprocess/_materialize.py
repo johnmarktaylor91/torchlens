@@ -157,6 +157,9 @@ def materialize_from_events(
         events.module_exit_events,
     )
     op_events = _op_events_in_raw_order(events.op_events)
+    for event in op_events:
+        if event.layer_type == "input" and event.label_raw not in trace.input_layers:
+            trace.input_layers.append(event.label_raw)
     op_event_labels = {event.label_raw for event in op_events}
     children_by_parent = _children_by_parent(trace, op_events, op_event_labels)
     buffer_addresses_by_label = _buffer_addresses_by_label(trace, op_events)
@@ -492,7 +495,7 @@ def _fields_from_event(
             "root_ancestors": set(event.root_ancestors),
             "children": children,
             "has_children": bool(children),
-            "is_input": event.kind == "source" and event.layer_type == "input",
+            "is_input": event.layer_type == "input",
             "input_was_parameter": event.input_was_parameter,
             "has_input_ancestor": bool(event.input_ancestors),
             "input_ancestors": set(event.input_ancestors),
@@ -1679,9 +1682,7 @@ def _input_io_roles(trace: "Trace", op_events: list[OpEvent]) -> dict[str, str]:
         Input role strings keyed by raw input label.
     """
 
-    input_events = [
-        event for event in op_events if event.kind == "source" and event.layer_type == "input"
-    ]
+    input_events = [event for event in op_events if event.layer_type == "input"]
     input_addresses = getattr(trace, "_input_tensor_addresses", None)
     if isinstance(input_addresses, list) and len(input_addresses) == len(input_events):
         return {
@@ -1782,7 +1783,7 @@ def _event_io_role(event: OpEvent, input_io_role: str | None) -> str | None:
         Source input role when derivable, otherwise ``None``.
     """
 
-    if event.kind == "source" and event.layer_type == "input":
+    if event.layer_type == "input":
         return input_io_role
     return None
 

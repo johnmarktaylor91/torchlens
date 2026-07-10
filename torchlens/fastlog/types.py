@@ -745,25 +745,6 @@ class Recording(CapturedRun):
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
-        # Symmetric with the output_layers back-fill above: the fastlog
-        # predicate-capture path stamps OpEvent.kind from the raw
-        # RecordContext.kind ("input"/"buffer"/"op"/...), not the "source"
-        # convention `_materialize.py` checks (`event.kind == "source"`,
-        # which torch/backends/ops.py's canonical event builder only ever
-        # produces from an exhaustive-mode capture). The per-layer is_input
-        # flag that actually lands on each Op is authoritatively normalized
-        # from layer_type alone (`_normalize_io_role_flags`,
-        # torchlens/postprocess/labeling.py: `is_input = layer_type ==
-        # "input"`), independent of event.kind. Match that exact criterion
-        # here so the replayed Trace satisfies check_metadata_invariants'
-        # bidirectional input_layers <-> is_input consistency check, instead
-        # of leaving input_layers empty while individual Ops still carry
-        # is_input=True.
-        trace.input_layers = [
-            event.label_raw
-            for event in self._capture_events.op_events
-            if event.layer_type == "input"
-        ]
         # Complete the special-layer-list backfill for the remaining two of the
         # five (list <-> per-Op-flag) pairs the `special_layer_lists` invariant
         # checks (torchlens/validation/invariants.py `_SPECIAL_LIST_FLAG_PAIRS`:

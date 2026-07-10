@@ -141,8 +141,8 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
         _ = unsaved.out
 
 
-def test_recording_to_trace_backfills_timing_and_input_layers() -> None:
-    """record().to_trace() seeds live-dispatch bookkeeping the replay path skips.
+def test_recording_to_trace_materializes_input_layers_and_backfills_timing() -> None:
+    """Step 0 materializes input layers while replay seeds capture timing.
 
     Regression test for the ``Recording.to_trace()`` bridge: unlike every real
     capture backend, replaying captured events into a fresh ``Trace`` used to
@@ -190,6 +190,34 @@ def test_recording_to_trace_backfills_timing_and_input_layers() -> None:
     # The two invariant groups this fix targets must pass cleanly.
     _check_trace_self_consistency(cooked)
     _check_special_layer_lists(cooked)
+
+
+@pytest.mark.parametrize(
+    "model,x",
+    [
+        (ConvReluAdd(), torch.randn(1, 1, 4, 4)),
+        (nn.BatchNorm1d(4).train(), torch.randn(2, 4)),
+    ],
+    ids=["plain", "training_batchnorm"],
+)
+def test_recording_to_trace_inputs_come_from_materialization(
+    model: nn.Module,
+    x: torch.Tensor,
+) -> None:
+    """Plain and buffer-writing recordings get input lists from normal Step 0."""
+
+    recording = tl.record(model, x, save=lambda _ctx: True, random_seed=37)
+    cooked = recording.to_trace()
+
+    expected_raw_inputs = {
+        event.label_raw
+        for event in recording._capture_events.op_events
+        if event.layer_type == "input"
+    }
+    actual_raw_inputs = {cooked[label].ops[0]._label_raw for label in cooked.input_layers}
+    assert expected_raw_inputs
+    assert actual_raw_inputs == expected_raw_inputs
+    check_metadata_invariants(cooked)
 
 
 @pytest.mark.parametrize(
