@@ -65,7 +65,7 @@
       "step_index": 1
     },
     {
-      "in_submodule": true,
+      "in_submodule": false,
       "label": "interventionreplacement_1_2",
       "lookup_keys": [
         "-3",
@@ -77,11 +77,9 @@
         "interventionreplacement_1_3",
         "interventionreplacement_1_3_raw"
       ],
-      "module": "relu:1",
-      "module_call_depth": 1,
-      "modules": [
-        "relu:1"
-      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 2
@@ -168,8 +166,7 @@
         "input_1"
       ],
       "ops": [
-        "relu_1_1:1",
-        "interventionreplacement_1_2:1"
+        "relu_1_1:1"
       ],
       "output_layers": [
         "relu_1_1"
@@ -239,8 +236,7 @@
       "num_params_frozen": 0,
       "num_params_trainable": 0,
       "ops": [
-        "relu_1_1",
-        "interventionreplacement_1_2"
+        "relu_1_1"
       ],
       "output_layers": [
         "relu_1_1"
@@ -312,13 +308,13 @@
       "step_index": 0
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "relu:1",
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": "relu.relu",
       "input_to_modules": [],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,
@@ -353,7 +349,7 @@
       "atomic_module_call": null,
       "func_name": "interventionreplacement",
       "fx_call_index": 0,
-      "fx_qualpath": "relu.intervention_replacement",
+      "fx_qualpath": null,
       "input_to_modules": [
         "proj:1"
       ],
@@ -374,15 +370,13 @@
         "interventionreplacement_1_3",
         "interventionreplacement_1_3_raw"
       ],
-      "module": "relu:1",
+      "module": null,
       "module_entry_arg_keys": {
         "proj:1": [
           0
         ]
       },
-      "modules": [
-        "relu:1"
-      ],
+      "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 2
