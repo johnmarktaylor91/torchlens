@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import gc
 import sys
 import threading
 import types
@@ -25,6 +26,8 @@ from torchlens.backends.torch.escape_detection import (
 )
 from torchlens.backends.torch.wrappers import (
     _remember_crawled_module_identity,
+    _remember_positive_module,
+    _scoped_hot_module_ids,
     clear_patch_detached_references_cache,
     patch_detached_references,
     torch_func_decorator,
@@ -186,6 +189,20 @@ def test_nonweakrefable_module_identity_uses_conservative_fallback() -> None:
     owner = NonWeakOwner()
     _remember_crawled_module_identity(owner)  # type: ignore[arg-type]
     assert _state._crawled_module_identities[id(owner)]() is owner
+
+
+def test_dead_positive_module_identity_is_pruned() -> None:
+    """Weak positive candidates cannot leave an id-reuse authorization behind."""
+
+    name = "_tl_scoped_dead_positive"
+    module = types.ModuleType(name)
+    module_id = id(module)
+    _remember_positive_module(module)
+    del module
+    gc.collect()
+    hot_ids = _scoped_hot_module_ids(None, ())
+    assert module_id not in hot_ids
+    assert module_id not in _state._detached_positive_module_ids
 
 
 def test_ledger_restores_owned_slot_and_preserves_user_reassignment() -> None:

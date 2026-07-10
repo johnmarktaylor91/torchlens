@@ -2052,7 +2052,17 @@ def _scoped_hot_module_ids(model: Any | None, modules: Collection[str]) -> set[i
             forward_module = getattr(forward, "__module__", None)
             if isinstance(forward_module, str):
                 names.add(forward_module)
-    hot_ids = set(_state._detached_positive_module_ids)
+    live_positive_refs: list[Callable[[], Any | None]] = []
+    hot_ids: set[int] = set()
+    for reference in _state._detached_positive_modules:
+        positive_module = reference()
+        if positive_module is None:
+            continue
+        live_positive_refs.append(reference)
+        hot_ids.add(id(positive_module))
+    _state._detached_positive_modules[:] = live_positive_refs
+    _state._detached_positive_module_ids.clear()
+    _state._detached_positive_module_ids.update(hot_ids)
     for key, module in _distinct_live_modules():
         name = _safe_module_name(module, key)
         if _module_matches_allowlist(name, names):
