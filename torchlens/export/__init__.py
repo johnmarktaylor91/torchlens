@@ -617,6 +617,7 @@ def netron(log: Any, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     entries = _iter_layers(log)
+    repeated_labels = _repeated_layer_labels(entries)
     payload = {
         "ir_version": "torchlens-lossy-onnx-shaped-v1",
         "producer_name": "torchlens",
@@ -626,10 +627,10 @@ def netron(log: Any, path: str | Path) -> Path:
             "name": str(getattr(log, "model_class_name", "TorchLens graph")),
             "node": [
                 {
-                    "name": str(getattr(layer, "layer_label", "")),
+                    "name": _export_node_id(layer, repeated_labels),
                     "op_type": str(getattr(layer, "func_name", getattr(layer, "layer_type", ""))),
                     "input": list(getattr(layer, "parents", []) or []),
-                    "output": [str(getattr(layer, "layer_label", ""))],
+                    "output": [_export_node_id(layer, repeated_labels)],
                     "attribute": [
                         {
                             "name": "shape",
@@ -662,6 +663,49 @@ def _iter_layers(log: Any) -> list[Any]:
     return list(
         getattr(log, "layer_list", None) or getattr(log, "layer_dict_main_keys", {}).values()
     )
+
+
+def _repeated_layer_labels(entries: list[Any]) -> set[str]:
+    """Return rolled layer labels that occur in multiple execution passes.
+
+    Parameters
+    ----------
+    entries:
+        Layer-pass entries in export order.
+
+    Returns
+    -------
+    set[str]
+        Labels requiring pass qualification for unique export node IDs.
+    """
+
+    counts: dict[str, int] = {}
+    for entry in entries:
+        label = str(getattr(entry, "layer_label", ""))
+        counts[label] = counts.get(label, 0) + 1
+    return {label for label, count in counts.items() if count > 1}
+
+
+def _export_node_id(entry: Any, repeated_labels: set[str]) -> str:
+    """Return a unique static-export node ID for one layer pass.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass entry.
+    repeated_labels:
+        Rolled labels requiring pass qualification.
+
+    Returns
+    -------
+    str
+        Pass-qualified ID for recurrent layers, otherwise the stable rolled label.
+    """
+
+    layer_label = str(getattr(entry, "layer_label", ""))
+    if layer_label in repeated_labels:
+        return str(getattr(entry, "label", layer_label))
+    return layer_label
 
 
 def _duration_us(layer: Any) -> int:
@@ -958,14 +1002,15 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     """
 
     entries = _iter_layers(log)
-    node_ids = {getattr(entry, "layer_label", "") for entry in entries}
+    repeated_labels = _repeated_layer_labels(entries)
+    node_ids = {_export_node_id(entry, repeated_labels) for entry in entries}
     nodes: list[dict[str, Any]] = []
     for index, entry in enumerate(entries):
-        node_id = str(getattr(entry, "layer_label", f"node_{index}"))
+        node_id = _export_node_id(entry, repeated_labels) or f"node_{index}"
         nodes.append(
             {
                 "id": node_id,
-                "label": node_id,
+                "label": str(getattr(entry, "layer_label", node_id)),
                 "type": _node_type(entry),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
                 "memory": str(getattr(entry, "activation_memory", "")),
@@ -975,7 +1020,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
         )
     edges: list[dict[str, str]] = []
     for entry in entries:
-        target = str(getattr(entry, "layer_label", ""))
+        target = _export_node_id(entry, repeated_labels)
         for parent in getattr(entry, "parents", None) or []:
             if parent in node_ids:
                 edges.append({"source": str(parent), "target": target})

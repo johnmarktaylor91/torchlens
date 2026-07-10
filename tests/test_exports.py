@@ -282,6 +282,40 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
     assert api.uploaded
 
 
+def test_recurrent_static_graph_exports_use_unique_pass_qualified_ids(tmp_path: Path) -> None:
+    """Recurrent exports preserve every execution pass and every connecting edge."""
+
+    class _LoopModel(nn.Module):
+        """Three-step recurrent linear/ReLU chain."""
+
+        def __init__(self) -> None:
+            """Initialize the reused linear layer."""
+
+            super().__init__()
+            self.linear = nn.Linear(2, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply the same two operations for three iterations."""
+
+            for _ in range(3):
+                x = torch.relu(self.linear(x))
+            return x
+
+    log = tl.trace(_LoopModel(), torch.randn(1, 2))
+    explorer_path = tl.export.model_explorer(log, tmp_path / "recurrent-explorer.json")
+    netron_path = tl.export.netron(log, tmp_path / "recurrent-netron.json")
+
+    explorer_graph = json.loads(explorer_path.read_text(encoding="utf-8"))["graphs"][0]
+    explorer_ids = [node["id"] for node in explorer_graph["nodes"]]
+    assert len(explorer_ids) == len(set(explorer_ids)) == 8
+    assert len(explorer_graph["edges"]) == 7
+
+    netron_nodes = json.loads(netron_path.read_text(encoding="utf-8"))["graph"]["node"]
+    netron_outputs = {output for node in netron_nodes for output in node["output"]}
+    assert len(netron_nodes) == len(netron_outputs) == 8
+    assert all(input_id in netron_outputs for node in netron_nodes for input_id in node["input"])
+
+
 def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None:
     """push_to_hub must upload the real scrubbed artifact, never a JSON stub.
 
