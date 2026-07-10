@@ -23,6 +23,7 @@ from torchlens.intervention.types import EdgeUseRecord
 
 from ..backends.torch._tl import get_buffer_address, get_tensor_label, get_tensor_meta
 from ..capture.ledgers import DecisionRecord, EventId, PayloadRecord
+from ..capture.session import capture_session_for
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..data_classes._module_role_hints import (
     multi_output_role_from_path,
@@ -123,13 +124,7 @@ def register_materialized_event(
     events.append(event)
 
 
-def materialize_from_events(
-    trace: "Trace",
-    events: CaptureEvents,
-    *,
-    decisions: Mapping[EventId, DecisionRecord] | None = None,
-    payloads: Mapping[EventId, PayloadRecord] | None = None,
-) -> None:
+def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     """Materialize capture events into raw build-state logs.
 
     Parameters
@@ -138,17 +133,15 @@ def materialize_from_events(
         Trace whose transient build state was populated during capture.
     events
         Mutable event accumulator owned by the active capture session.
-    decisions
-        Optional stable-id decision sidecars from the active capture session.
-    payloads
-        Optional stable-id payload sidecars from the active capture session.
-
     Returns
     -------
     None
         Populates raw trace lookup structures without consuming the sealed source lanes.
     """
 
+    capture_session = capture_session_for(trace)
+    decisions = None if capture_session is None else capture_session.decision_ledger.records
+    payloads = None if capture_session is None else capture_session.payload_ledger.records
     live_module_forward_args = dict(getattr(trace, "_module_forward_args", {}))
     _rebuild_module_side_channels(trace, events)
     module_enter_addresses = _module_enter_addresses(
