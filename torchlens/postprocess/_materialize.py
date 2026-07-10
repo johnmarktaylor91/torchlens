@@ -22,6 +22,7 @@ from torchlens.ir.events import (
 from torchlens.intervention.types import EdgeUseRecord
 
 from ..backends.torch._tl import get_buffer_address, get_tensor_label, get_tensor_meta
+from ..capture.ledgers import DecisionRecord, EventId, PayloadRecord
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..data_classes._module_role_hints import (
     multi_output_role_from_path,
@@ -122,7 +123,13 @@ def register_materialized_event(
     events.append(event)
 
 
-def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
+def materialize_from_events(
+    trace: "Trace",
+    events: CaptureEvents,
+    *,
+    decisions: Mapping[EventId, DecisionRecord] | None = None,
+    payloads: Mapping[EventId, PayloadRecord] | None = None,
+) -> None:
     """Materialize capture events into raw build-state logs.
 
     Parameters
@@ -131,6 +138,10 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
         Trace whose transient build state was populated during capture.
     events
         Mutable event accumulator owned by the active capture session.
+    decisions
+        Optional stable-id decision sidecars from the active capture session.
+    payloads
+        Optional stable-id payload sidecars from the active capture session.
 
     Returns
     -------
@@ -180,6 +191,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     output_versions = _output_versions_by_parent(events)
 
     for event in op_events:
+        event_id = EventId.from_event(event)
         fields_dict = _fields_from_event(
             trace,
             event,
@@ -195,6 +207,8 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
             input_io_roles.get(event.label_raw),
             output_versions.get(event.label_raw, {}),
             op_events_by_label,
+            None if decisions is None else decisions.get(event_id),
+            None if payloads is None else payloads.get(event_id),
         )
         with _timed_phase(trace, "object_construction:op"):
             op_log = materialize_log_from_fields(fields_dict)
@@ -275,6 +289,8 @@ def _fields_from_event(
     input_io_role: str | None,
     output_versions_by_child: dict[str, object],
     op_events_by_label: Mapping[str, OpEvent],
+    decision: DecisionRecord | None,
+    payload: PayloadRecord | None,
 ) -> dict[str, object]:
     """Build a complete raw ``Op`` field dictionary from one operation event.
 
@@ -308,6 +324,10 @@ def _fields_from_event(
         Child-specific output snapshots keyed by child label.
     op_events_by_label
         Operation events keyed by raw label.
+    decision
+        Stable-id decision sidecar when the event belongs to an active session.
+    payload
+        Stable-id payload sidecar when the event belongs to an active session.
 
     Returns
     -------
@@ -315,7 +335,7 @@ def _fields_from_event(
         Complete pre-postprocess field mapping accepted by ``Op``.
     """
 
-    output = event.output
+    output = event.output if payload is None else cast(Any, payload.output)
     tensor = output.tensor
     transformed = output.transformed_tensor
     function = event.function
@@ -370,10 +390,12 @@ def _fields_from_event(
             "annotations": _annotations_from_event(event),
             "interventions": [
                 result.fire_record
-                for result in event.fire_results
+                for result in (event.fire_results if decision is None else decision.fire_results)
                 if result.fire_record is not None
             ],
-            "intervention_replaced": event.intervention_replaced,
+            "intervention_replaced": (
+                event.intervention_replaced if decision is None else decision.intervention_replaced
+            ),
             "detach_saved_activations": output.detach_saved_activations,
             "has_saved_args": False if templates is None else templates.has_saved_args,
             "saved_args": None if templates is None else templates.saved_args,

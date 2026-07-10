@@ -476,7 +476,16 @@ def postprocess(
         }
         self._capture_events = working_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
-            materialize_from_events(self, working_events)
+            materialize_from_events(
+                self,
+                working_events,
+                decisions=(
+                    None if capture_session is None else capture_session.decision_ledger.records
+                ),
+                payloads=(
+                    None if capture_session is None else capture_session.payload_ledger.records
+                ),
+            )
         _assert_postprocess_contract(self, "0")
         delattr(self, "capture_events")
 
