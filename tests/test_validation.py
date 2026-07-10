@@ -227,6 +227,46 @@ def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire
     assert bool(status) is False
 
 
+def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
+    """Exemptions alone must produce a non-boolean unverified terminal state."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="structural_1:1",
+        func_name="structural",
+        phase="perturbation",
+        decision="exempted",
+        reason="pre_perturbation_exemption",
+    )
+
+    status = recorder.as_status()
+
+    assert status.state == "unverified"
+    assert status.reason == "no_nodes_replay_validated"
+    assert status.replayed_node_count == 0
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(status)
+
+
+def test_validation_positive_replay_coverage_can_still_pass() -> None:
+    """The zero-coverage guard must not block a genuinely validated node."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="identity_1:1",
+        func_name="identity",
+        phase="replay",
+        decision="validated",
+        reason="replay_matched",
+    )
+
+    status = recorder.as_status()
+
+    assert status.state == "passed"
+    assert status.replayed_node_count == 1
+    assert bool(status) is True
+
+
 @pytest.mark.smoke
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
