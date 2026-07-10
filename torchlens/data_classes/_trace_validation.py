@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
-from .._training_validation import reject_compiled_model
 from ..options import ReplayOptions, merge_replay_options
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
@@ -81,9 +80,9 @@ class TraceValidationMixin(_TraceMixinBase):
             :func:`torchlens.capture.trace.save_new_outs`.
         """
         from ..capture.trace import save_new_outs as _impl
+        from .._capture_state_helpers import unwrap_compiled_model
 
-        if backward_ready is True:
-            reject_compiled_model(model, api_name="Trace.save_new_outs")
+        model = unwrap_compiled_model(model)
 
         return _impl(
             self,

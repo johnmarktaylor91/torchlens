@@ -9,6 +9,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
 from torchlens.io import TraceState
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
@@ -412,15 +413,17 @@ def test_rerun_rejects_torchscript_model() -> None:
 
 
 @pytest.mark.skipif(not hasattr(torch, "compile"), reason="torch.compile unavailable")
-def test_rerun_rejects_compiled_model() -> None:
-    """Rerun rejects torch.compile wrappers before capture."""
+def test_rerun_unwraps_compiled_model() -> None:
+    """Rerun traces a torch.compile wrapper through its eager source module."""
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
     compiled = torch.compile(ReluAdd(), backend="eager")
 
-    with pytest.raises(RuntimeError, match="torch.compile"):
-        log.run(compiled, x)
+    reset_compiled_model_unwrap_warning_state()
+    with pytest.warns(UserWarning, match="compiled model detected"):
+        result = log.run(compiled, x)
+    assert result is log
 
 
 def test_rerun_rejects_fsdp_when_constructible() -> None:

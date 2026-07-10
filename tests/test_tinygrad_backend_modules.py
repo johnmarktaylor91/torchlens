@@ -10,6 +10,7 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends import BackendUnsupportedError
+from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -176,9 +177,10 @@ def test_tinygrad_simple_linear_uses_object_module_hierarchy() -> None:
     assert trace.modules["fc"].address_parent == "self"
     assert trace.modules["fc"].params
     assert {param.module_address for param in trace.modules["fc"].params} == {"fc"}
-    fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
     assert fc_labels
-    assert all("fc:1" in trace[label].modules for label in fc_labels)
+    assert all(("fc", 1) in trace[label].modules for label in fc_labels)
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
@@ -200,10 +202,12 @@ def test_tinygrad_nested_modules_preserve_address_tree_and_selectors() -> None:
     assert trace.modules["encoder"].address_parent == "self"
     assert trace.modules["encoder"].address_children == ["encoder.proj"]
     assert trace.modules["encoder.proj"].address_parent == "encoder"
-    proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=16).labels()
-    encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=32).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=16).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=32).labels()
     assert set(proj_labels) < set(encoder_labels)
-    assert all("encoder.proj:1" in trace[label].modules for label in proj_labels)
+    assert all(("encoder.proj", 1) in trace[label].modules for label in proj_labels)
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
@@ -224,9 +228,10 @@ def test_tinygrad_shared_submodule_aliases_and_multicall() -> None:
     assert trace.modules["self"].address_children == ["left"]
     assert {param.module_address for param in shared.params} == {"left"}
     assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}
-    left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
-    assert any("left:1" in trace[label].modules for label in left_labels)
-    assert any("left:2" in trace[label].modules for label in left_labels)
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
+    assert any(("left", 1) in trace[label].modules for label in left_labels)
+    assert any(("left", 2) in trace[label].modules for label in left_labels)
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
@@ -237,10 +242,11 @@ def test_tinygrad_reused_uop_keeps_first_construction_attribution() -> None:
     model = TinyReusedTensorModel()
     trace = tl.trace(model, Tensor.ones(1, 3), backend="tinygrad")
 
-    fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
     assert fc_labels
     assert trace.modules["fc"].num_calls == 1
-    assert all("fc:1" in trace[label].modules for label in fc_labels)
+    assert all(("fc", 1) in trace[label].modules for label in fc_labels)
     root_only = [
         op.label
         for op in trace.layer_list

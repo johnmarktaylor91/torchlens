@@ -9,7 +9,7 @@ from torch import nn
 
 from .._deprecations import MISSING, MissingType
 from .._input_coerce import _coerce_input_args
-from .._training_validation import reject_compiled_model
+from .._capture_state_helpers import unwrap_compiled_model
 from ..backends import BackendName, BackendUnsupportedError
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
@@ -142,7 +142,7 @@ def record(
             "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
             "for the JAX full-save preview."
         )
-    reject_compiled_model(model, api_name="torchlens.fastlog.record")
+    model = unwrap_compiled_model(model)
     if storage is not None and streaming is not None:
         raise TypeError("Do not pass both `storage` and `streaming`.")
     validate_postprocess(postprocess)

@@ -920,7 +920,6 @@ class Trace(
     input_structure: Any
     _containers: dict[int, Any]
     _annotation_blobs: dict[str, Any] | None
-    _annotation_revision: int
     _last_sibling_ordering_decision: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -1878,15 +1877,14 @@ class Trace(
         return user_annotations
 
     def _mark_annotations_mutated(self) -> None:
-        """Bump the annotation revision and invalidate render-only caches.
+        """Invalidate render-only caches after an annotation mutation.
 
         Returns
         -------
         None
-            This trace's annotation revision is incremented.
+            The cached sibling-ordering decision is discarded.
         """
 
-        self._annotation_revision = int(getattr(self, "_annotation_revision", 0)) + 1
         self.__dict__.pop("_last_sibling_ordering_decision", None)
 
     def find_layers(self, query: str, *, limit: int = 10) -> List[str]:
@@ -2551,8 +2549,6 @@ class Trace(
         preserved_state = {
             field_name: current_state.get(field_name) for field_name in preserved_fields
         }
-        if "_annotation_revision" in current_state:
-            preserved_state["_annotation_revision"] = current_state["_annotation_revision"]
         replacement_state = dict(state_items(new_log))
         replacement_state.update(preserved_state)
         replacement_state["annotations"] = self._merge_user_annotations(

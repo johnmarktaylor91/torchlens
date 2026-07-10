@@ -39,6 +39,9 @@ facades = {
     for name, (module_path, attr_name) in tl._LAZY_ATTRS.items()
     if attr_name is None
 }
+shim_private_targets = {"_trace": ("torchlens.user_funcs", "trace")}
+for private_name, (module_path, attr_name) in shim_private_targets.items():
+    assert getattr(tl, private_name) is getattr(importlib.import_module(module_path), attr_name)
 collisions = {}
 for facade_name, module_path in facades.items():
     eager_module = importlib.import_module(module_path)

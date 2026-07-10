@@ -18,6 +18,7 @@ gradient-specific resolution.
 
 import collections.abc
 import copy
+import functools
 import os
 import pickle
 import re
@@ -2703,3 +2704,30 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
     """Forward to the batch validation implementation."""
 
     return _public_impls_module().validate_batch_of_models_and_inputs(*args, **kwargs)
+
+
+def _sync_public_impl_wrapper_metadata() -> None:
+    """Expose canonical signatures on lazily delegated public wrappers.
+
+    Returns
+    -------
+    None
+        Updates wrapper metadata in place after the implementation module is loaded.
+    """
+
+    implementations = _public_impls_module()
+    for name in (
+        "summary",
+        "show_model_graph",
+        "draw_backward",
+        "draw_combined",
+        "show_bundle_graph",
+        "validate_forward_pass",
+        "validate_backward_pass",
+        "validate_saved_outs",
+        "validate_batch_of_models_and_inputs",
+    ):
+        functools.update_wrapper(globals()[name], getattr(implementations, name))
+
+
+_sync_public_impl_wrapper_metadata()
