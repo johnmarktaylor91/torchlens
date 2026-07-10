@@ -175,6 +175,98 @@ def test_validation_replay_status_aggregate_fold() -> None:
     assert bool(passed_status) is True
 
 
+def test_validation_decision_recorder_counts_distinct_nodes() -> None:
+    """Node coverage counts must not count replay phases as extra nodes."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="add_1:1",
+        func_name="add",
+        phase="replay",
+        decision="validated",
+        reason="replay_matched",
+    )
+    recorder.record(
+        op_label="add_1:1",
+        func_name="add",
+        phase="perturbation",
+        decision="validated",
+        reason="perturbation_changed",
+    )
+    recorder.record(
+        op_label="output_1:1",
+        func_name="none",
+        phase="ground_truth",
+        decision="validated",
+        reason="ground_truth_matched",
+    )
+
+    status = recorder.as_status()
+
+    assert status.replayed_node_count == 2
+    assert status.state == "passed"
+
+
+def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire() -> None:
+    """Repeated failure decisions still produce one genuine failed node."""
+
+    recorder = ValidationDecisionRecorder()
+    for phase in ("replay", "perturbation"):
+        recorder.record(
+            op_label="broken_1:1",
+            func_name="broken",
+            phase=phase,
+            decision="failed",
+            reason="replay_mismatch",
+        )
+
+    status = recorder.as_status()
+
+    assert status.failed_node_count == 1
+    assert status.state == "failed"
+    assert bool(status) is False
+
+
+def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
+    """Exemptions alone must produce a non-boolean unverified terminal state."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="structural_1:1",
+        func_name="structural",
+        phase="perturbation",
+        decision="exempted",
+        reason="pre_perturbation_exemption",
+    )
+
+    status = recorder.as_status()
+
+    assert status.state == "unverified"
+    assert status.reason == "no_nodes_replay_validated"
+    assert status.replayed_node_count == 0
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(status)
+
+
+def test_validation_positive_replay_coverage_can_still_pass() -> None:
+    """The zero-coverage guard must not block a genuinely validated node."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="identity_1:1",
+        func_name="identity",
+        phase="replay",
+        decision="validated",
+        reason="replay_matched",
+    )
+
+    status = recorder.as_status()
+
+    assert status.state == "passed"
+    assert status.replayed_node_count == 1
+    assert bool(status) is True
+
+
 @pytest.mark.smoke
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
@@ -1201,7 +1293,7 @@ def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None
 
 
 def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
-    """Live-model fallback retains the two pre-existing model executions."""
+    """Live-model fallback also runs the structural reproducibility trace."""
 
     execution_count = [0]
 
@@ -1229,11 +1321,11 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(model, torch.randn(2, 3)) is True
 
-    assert execution_count == [2]
+    assert execution_count == [3]
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
-    """Ground-truth fallback reports when it cannot restore plain mutable state."""
+    """Ground-truth fallback skips only an unsnapshotable plain attribute."""
 
     class UncopyableOpaqueState(nn.Module):
         """Model that defeats both deepcopy and plain-attribute snapshots."""
@@ -1256,11 +1348,42 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
             return x + 1
 
     model = UncopyableOpaqueState()
-    with pytest.warns(RuntimeWarning, match="without plain-attribute restoration"):
+    with pytest.warns(RuntimeWarning, match="skipping restoration for this attribute only"):
         fallback_model, snapshot = user_public_impls._model_for_ground_truth_validation(model)
 
     assert fallback_model is model
-    assert snapshot is None
+    assert snapshot is not None
+
+
+def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> None:
+    """An opaque attr must not block restoration or the reproducibility tripwire."""
+
+    class LockBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused lock."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and branch counter."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Change graph shape after the first execution."""
+
+            output = x + 1 if self.step == 0 else x * 2
+            self.step += 1
+            return output
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = validate_forward_pass(LockBackedToggle(), torch.randn(3))
+
+    assert result is True
+    assert any(
+        "skipping restoration for this attribute only" in str(item.message) for item in caught
+    )
+    assert any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
 
 
 def test_validate_forward_pass_ground_truth_copy_strips_traced_forward_wrappers() -> None:
@@ -1694,7 +1817,6 @@ def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
 
     assert sorted(SKIP_PERTURBATION_ENTIRELY) == [
         "broadcast_tensors",
-        "copy_",
         "deform_conv2d",
         "expand_as",
         "exponential_",
@@ -1718,6 +1840,59 @@ def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
     assert "full" not in SKIP_PERTURBATION_ENTIRELY
     assert "full" not in CUSTOM_EXEMPTION_CHECKS
     assert "full" not in STRUCTURAL_ARG_POSITIONS
+
+
+def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
+    """Healthy ``copy_`` validates while an ignored source still trips validation."""
+
+    class CopySourceModel(nn.Module):
+        """Copy a computed source into a fresh destination."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return values copied from a non-destination parent."""
+
+            source = x + 2
+            destination = torch.zeros_like(x)
+            destination.copy_(source)
+            return destination
+
+    x = torch.tensor([2.0, 3.0, 4.0])
+    healthy_trace = trace_fn(CopySourceModel(), x, save_arg_values=True)
+    healthy_copy = next(op for op in healthy_trace.layer_list if op.func_name == "copy_")
+
+    assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
+    assert (
+        healthy_trace.validate_forward_pass(
+            [healthy_trace[healthy_trace.output_layers[0]].out.detach().clone()],
+            validate_metadata=False,
+        )
+        is True
+    )
+
+    broken_trace = trace_fn(CopySourceModel(), x, save_arg_values=True)
+    broken_copy = next(op for op in broken_trace.layer_list if op.func_name == "copy_")
+    saved_output = broken_copy.out.detach().clone()
+
+    def ignore_source(destination: torch.Tensor, source: torch.Tensor) -> torch.Tensor:
+        """Replay the saved bytes while deliberately ignoring the source parent."""
+
+        del source
+        return destination.copy_(saved_output)
+
+    broken_copy.func = ignore_source
+    broken_result = broken_trace.validate_forward_pass(
+        [broken_trace[broken_trace.output_layers[0]].out.detach().clone()],
+        validate_metadata=False,
+    )
+
+    assert broken_result is False
+    assert broken_trace.validation_replay_status.state == "failed"
+    assert any(
+        decision["op_label"] == broken_copy.label
+        and decision["phase"] == "perturbation"
+        and decision["decision"] == "failed"
+        for decision in broken_trace.validation_replay_status.decisions
+    )
 
 
 def test_structural_arg_positions_values_are_sets_of_ints():

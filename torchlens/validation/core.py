@@ -177,6 +177,23 @@ class ValidationDecisionRecorder:
 
         return sum(item.decision == decision for item in self.decisions)
 
+    def node_count(self, decision: ValidationDecisionKind) -> int:
+        """Return the number of distinct op labels with a decision kind.
+
+        Parameters
+        ----------
+        decision:
+            Decision kind whose distinct operation labels should be counted.
+
+        Returns
+        -------
+        int
+            Number of distinct operation labels. Trace-level decisions with no
+            label share one aggregate ``None`` bucket.
+        """
+
+        return len({item.op_label for item in self.decisions if item.decision == decision})
+
     def reason_counts(self, decision: ValidationDecisionKind) -> dict[str, int]:
         """Return reason-code counts for a given decision kind.
 
@@ -214,9 +231,9 @@ class ValidationDecisionRecorder:
         return ValidationReplayStatus.from_replay_counts(
             backend=backend,
             source="live",
-            replayed_node_count=self.count("validated"),
-            unverified_node_count=self.count("unverified"),
-            failed_node_count=self.count("failed"),
+            replayed_node_count=self.node_count("validated"),
+            unverified_node_count=self.node_count("unverified"),
+            failed_node_count=self.node_count("failed"),
             unverified_reason_counts=self.reason_counts("unverified"),
             exempted_reason_counts=self.reason_counts("exempted"),
             decisions=tuple(item.as_dict() for item in self.decisions),
@@ -1026,11 +1043,25 @@ def _not_saved_by_user_justification(
 
     predicate_options = getattr(trace, "_predicate_save_options", None)
     predicate_decisions = getattr(trace, "_predicate_save_decisions", None)
-    if predicate_options is None and not predicate_decisions:
+    if predicate_options is None or not isinstance(predicate_decisions, dict):
+        return None
+    if bool(getattr(layer, "has_saved_activation", False)):
+        return None
+    if bool(getattr(trace, "save_arg_values", False)):
+        return None
+    raw_label = getattr(layer, "_label_raw", None)
+    if raw_label is None:
+        return None
+    decision_key = (
+        str(raw_label),
+        int(getattr(layer, "pass_index", 0)),
+        tuple(getattr(layer, "container_path", ())),
+    )
+    predicate_decision = predicate_decisions.get(decision_key)
+    if predicate_decision is None or bool(getattr(predicate_decision, "save_out", True)):
         return None
     label = str(getattr(layer, "label", getattr(layer, "layer_label", "<unknown>")))
     func_name = str(getattr(layer, "func_name", "<unknown>"))
-    has_saved_activation = bool(getattr(layer, "has_saved_activation", False))
     saved_args_present = getattr(layer, "saved_args", None) is not None
     default_op = getattr(predicate_options, "default_op", None)
     keep_op = getattr(predicate_options, "keep_op", None)
@@ -1038,7 +1069,8 @@ def _not_saved_by_user_justification(
     return (
         "predicate save configuration excluded replay payload "
         f"(original_reason={original_reason}, op_label={label}, func_name={func_name}, "
-        f"has_saved_activation={has_saved_activation}, saved_args_present={saved_args_present}, "
+        f"predicate_decision_key={decision_key!r}, predicate_save_out=False, "
+        f"has_saved_activation=False, saved_args_present={saved_args_present}, "
         f"save_arg_values={bool(getattr(trace, 'save_arg_values', False))}, "
         f"default_op={default_op}, keep_op={keep_op_name})"
     )
@@ -1387,6 +1419,26 @@ def _parent_logged_for_any_arg_alias(target_layer: Op, parent_layer_labels: set[
     )
 
 
+def _saved_out_payload(layer: Op) -> torch.Tensor | None:
+    """Return an op's physical saved output without materialization errors.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose retained payload is needed for replay validation.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Retained output tensor, or ``None`` when selective capture omitted it.
+    """
+
+    slot = getattr(layer, "_slot", None)
+    if callable(slot):
+        return cast(torch.Tensor | None, slot("out"))
+    return cast(torch.Tensor | None, getattr(layer, "out", None))
+
+
 def _check_arglocs_correct_for_arg(
     self: "Trace",
     target_layer: Op,
@@ -1429,7 +1481,7 @@ def _check_arglocs_correct_for_arg(
     elif target_layer_label in parent_layer.out_versions_by_child:
         parent_outs = parent_layer.out_versions_by_child[target_layer_label]
     else:
-        parent_outs = parent_layer.out
+        parent_outs = _saved_out_payload(parent_layer)
     if parent_outs is None:
         return ValidationCheckResult.unverified("missing_saved_parent_payload")
 
@@ -1462,9 +1514,15 @@ def _check_arglocs_correct_for_arg(
         and (not torch.all(torch.abs(parent_outs) == 1))
         and not any(
             [
-                torch.equal(parent_outs, _op_for_validation_label(self, other_parent).out)
+                torch.equal(parent_outs, other_parent_out)
                 for other_parent in target_layer.parents
                 if other_parent != parent_layer_label
+                and (
+                    other_parent_out := _saved_out_payload(
+                        _op_for_validation_label(self, other_parent)
+                    )
+                )
+                is not None
             ]
         )
     ):
@@ -1519,7 +1577,8 @@ def _check_perturbation_exemptions(
     # Empty tensors cannot be meaningfully perturbed.
     for perturbed_label in layers_to_perturb:
         p_entry = _op_for_validation_label(self, perturbed_label)
-        if p_entry.out is not None and p_entry.out.numel() == 0:
+        perturbed_payload = _saved_out_payload(p_entry)
+        if perturbed_payload is not None and perturbed_payload.numel() == 0:
             return True
 
     # Registry 2: pure out= kwarg destination. torch's out= convention makes the
@@ -2111,6 +2170,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             justification=SKIP_VALIDATION_ENTIRELY[layer.func_name],
         )
 
+    saved_output = _saved_out_payload(layer)
+    if saved_output is None:
+        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
         return ValidationCheckResult.exempted("pre_perturbation_exemption")
@@ -2155,7 +2218,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         # input (e.g., wrong shape). It is unverified, not a pass.
         return ValidationCheckResult.unverified("perturbation_execution_exception")
 
-    matches_saved = tensor_nanequal(recomputed_output, layer.out, allow_tolerance=True)
+    matches_saved = tensor_nanequal(recomputed_output, saved_output, allow_tolerance=True)
     if not matches_saved and not perturb and isinstance(recomputed_output, torch.Tensor):
         matches_saved = _deep_numeric_replay_matches_saved(layer, recomputed_output)
 
@@ -2814,7 +2877,7 @@ def _prepare_input_args_for_validating_layer(
                         f"'{parent_layer_arg}' for child "
                         f"'{layer_to_validate_parents_for.layer_label}'."
                     )
-                parent_values = parent_layer.out
+                parent_values = _saved_out_payload(parent_layer)
             if parent_values is None:
                 if parent_layer_arg in layers_to_perturb:
                     return None, "missing_saved_parent_payload"
@@ -3629,7 +3692,7 @@ def _buffer_parent_source_equal(
 ) -> bool:
     """Return whether a child saved arg already equals the buffer-version value."""
 
-    parent_out = parent_layer.out
+    parent_out = _saved_out_payload(parent_layer)
     if parent_out is None:
         return False
     try:

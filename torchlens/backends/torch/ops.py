@@ -4705,6 +4705,12 @@ def _make_layer_log_entry(
                     predicate_ctx,
                     activation_transform,
                 )
+    if predicate_spec is not None and self.save_arg_values and not fields_dict["has_saved_args"]:
+        fields_dict["has_saved_args"] = True
+        fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
+        fields_dict["saved_kwargs"] = {
+            key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
+        }
     op_event = _op_event_from_log(self, fields_dict, t, fire_results)
     self.capture_events.append(op_event)
     if op_event.grad_fn_handle is not None:

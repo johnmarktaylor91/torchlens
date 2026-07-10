@@ -311,8 +311,8 @@ class ValidationReplayStatus:
         -------
         ValidationReplayStatus
             ``failed`` when any replay failure exists, otherwise ``unverified``
-            when any importer-owned region is not per-op replayed, otherwise
-            ``passed``.
+            when any importer-owned region is not per-op replayed or no node
+            was replay-validated, otherwise ``passed``.
         """
 
         total_unverified_count = (
@@ -356,6 +356,25 @@ class ValidationReplayStatus:
                 effect_region_node_count=effect_region_node_count,
                 payload_load_status=payload_load_status,
                 failed_node_count=failed_node_count,
+                unverified_reason_counts=unverified_reason_counts,
+                exempted_reason_counts=exempted_reason_counts,
+                decisions=decisions,
+            )
+        if replayed_node_count == 0:
+            return cls.unverified(
+                backend=backend,
+                source=source,
+                reason="no_nodes_replay_validated",
+                message=(
+                    "Replay validation did not validate any nodes; exemptions alone "
+                    "cannot produce a passing result."
+                ),
+                replayed_node_count=0,
+                unverified_node_count=0,
+                pure_unverified_node_count=pure_unverified_node_count,
+                effect_region_node_count=effect_region_node_count,
+                payload_load_status=payload_load_status,
+                failed_node_count=0,
                 unverified_reason_counts=unverified_reason_counts,
                 exempted_reason_counts=exempted_reason_counts,
                 decisions=decisions,

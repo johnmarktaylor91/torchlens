@@ -1217,9 +1217,7 @@ def _validate_forward_pass_torch(
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
-        validation_model, validation_plain_attr_snapshot, _validation_model_copied = (
-            _model_for_validation_replay(model)
-        )
+        validation_model, validation_plain_attr_snapshot, _ = _model_for_validation_replay(model)
         validation_state_dict = _clone_state_dict_with_metadata(validation_model)
         validation_input_args = safe_copy_args(input_args)
         validation_input_kwargs = safe_copy_kwargs(input_kwargs)
@@ -1251,14 +1249,13 @@ def _validate_forward_pass_torch(
             random_seed=random_seed,
             save_rng_states=True,
         )
-        if _validation_model_copied:
-            _warn_if_validation_trace_not_reproducible(
-                trace,
-                validation_model,
-                reproducibility_input_args,
-                reproducibility_input_kwargs,
-                random_seed,
-            )
+        _warn_if_validation_trace_not_reproducible(
+            trace,
+            validation_model,
+            reproducibility_input_args,
+            reproducibility_input_kwargs,
+            random_seed,
+        )
         _restore_validation_replay_state(
             validation_model,
             validation_state_dict,
