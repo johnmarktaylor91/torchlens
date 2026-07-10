@@ -285,6 +285,12 @@ def populate_object_module_build_data(
         parent_call_label: str | None = None
         for module_index, (address, call_index) in enumerate(normalized_calls):
             call_label = f"{address}:{call_index}"
+            if call_label not in mbd["module_call_stacks"]:
+                mbd["module_call_stacks"][call_label] = [
+                    f"{ancestor_address}:{ancestor_call_index}"
+                    for ancestor_address, ancestor_call_index in normalized_calls[:module_index]
+                    if ancestor_address != "self"
+                ]
             if mbd["module_num_calls"][address] < call_index:
                 mbd["module_num_calls"][address] = call_index
             mbd["module_num_tensors"][address] += 1
