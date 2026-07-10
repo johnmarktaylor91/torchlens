@@ -777,7 +777,11 @@ def validate_parents_of_saved_layer(
         self,
         layer_to_validate_parents_for_label,
     )
-    ops_to_validate = _validation_ops_for_entry(layer_to_validate_parents_for)
+    validation_entry = self.layer_logs.get(
+        layer_to_validate_parents_for_label,
+        layer_to_validate_parents_for,
+    )
+    ops_to_validate = _validation_ops_for_entry(validation_entry)
 
     # Check that the arguments are logged correctly when the evidence is
     # available. Unverified evidence is recorded but does not preempt replay.
@@ -1128,7 +1132,7 @@ def _op_for_validation_label(self: "Trace", label: str) -> Op:
 
 
 def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> List[Op]:
-    """Return concrete child ops for expensive forward replay validation.
+    """Return every concrete child op for forward replay validation.
 
     Parameters
     ----------
@@ -1138,24 +1142,11 @@ def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> 
     Returns
     -------
     list of Op
-        A stable subset that covers the Layer's distinct parent-layer edges.
+        Every pass in stable capture order.
     """
 
-    if len(ops_to_validate) <= 1:
-        return ops_to_validate
-
-    representative_ops: dict[str, Op] = {}
-    fallback_op = ops_to_validate[0]
-    for target_op in ops_to_validate:
-        data_parents = _data_parent_labels(target_op)
-        if not data_parents:
-            representative_ops.setdefault(target_op.label, target_op)
-        for parent_label in sorted(data_parents):
-            parent_layer_label = _op_for_validation_label(self, parent_label).layer_label
-            representative_ops.setdefault(parent_layer_label, target_op)
-    if not representative_ops:
-        return [fallback_op]
-    return list(dict.fromkeys(representative_ops.values()))
+    del self
+    return ops_to_validate
 
 
 def _representative_parent_edges(self: "Trace", ops_to_validate: List[Op]) -> List[tuple[Op, str]]:
@@ -1224,7 +1215,7 @@ def _validation_ops_for_entry(entry: Any) -> List[Op]:
     op_list = cast(list[Op], cast(Any, ops)._list)
     if len(op_list) == 0:
         return []
-    return [op_list[0]]
+    return op_list
 
 
 def _check_layer_arguments_logged_correctly(
@@ -1239,7 +1230,10 @@ def _check_layer_arguments_logged_correctly(
     Returns:
         Structured validation result for argument logging evidence.
     """
-    target_entry = _op_for_validation_label(self, target_layer_label)
+    target_entry = self.layer_logs.get(
+        target_layer_label,
+        _op_for_validation_label(self, target_layer_label),
+    )
     target_ops = _representative_ops_for_replay(self, _validation_ops_for_entry(target_entry))
 
     for target_layer in target_ops:
