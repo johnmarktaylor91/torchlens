@@ -67,19 +67,14 @@ class CaptureEvents:
     backward_event_seq: int = 0
 
     def copy_for_replay(self) -> "CaptureEvents":
-        """Return a structural copy safe to drain during materialization.
+        """Return a structural working projection for postprocess mutation.
 
-        ``_postprocess`` (``postprocess/_materialize.py``) destructively drains
-        the event containers it is handed -- ``op_events.clear()``,
-        ``module_events.clear()``, ``live_index.clear()``, and so on -- and
-        ``postprocess/graph_traversal.py`` replaces entries in ``op_events`` /
-        ``op_event_by_label_raw`` in place. When a long-lived, frozen
-        ``Recording`` cooks itself into a ``Trace`` via ``Recording.to_trace()``
-        it must NOT alias its own ``_capture_events`` into the new ``Trace``, or
-        that single materialization pass silently empties the Recording's own
-        read-only event stream: a second ``to_trace()`` then crashes and the
-        lazy ``recording_trace`` / ``records`` accessors memoize empty/wrong
-        answers. Hand ``_postprocess`` a copy instead.
+        Later postprocess steps replace entries in ``op_events`` and
+        ``op_event_by_label_raw`` in place. A projector must therefore mutate
+        an independent container projection instead of the sealed capture
+        lanes. This is also used when a long-lived, frozen ``Recording`` cooks
+        itself into a ``Trace`` so repeated projections cannot alter its event
+        stream.
 
         Every mutable container is duplicated into a fresh object (nested list
         values included where they are rebuilt in place); the frozen ``OpEvent``

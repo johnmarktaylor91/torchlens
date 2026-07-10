@@ -9,7 +9,6 @@ Step 4 (_mark_layer_depths): Optional forward/backward BFS recording
     min/max hop counts from input and output nodes.
 """
 
-import dataclasses
 from collections import OrderedDict
 from typing import TYPE_CHECKING, cast
 
@@ -21,6 +20,7 @@ from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
 from ..utils.introspection import _get_code_context
 from ..data_classes.op import Op
+from ..ir import replace_op_event
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -139,12 +139,7 @@ def _resolve_output_parent_labels(
         if parent_label is not None:
             event = capture_events.op_event_by_label_raw.get(parent_label)
             if event is not None:
-                updated_event = dataclasses.replace(event, is_output_parent=True)
-                capture_events.op_event_by_label_raw[parent_label] = updated_event
-                for index, existing_event in enumerate(capture_events.op_events):
-                    if existing_event.label_raw == parent_label:
-                        capture_events.op_events[index] = updated_event
-                        break
+                replace_op_event(self, parent_label, is_output_parent=True)
         parent_labels.append(parent_label)
     return parent_labels
 

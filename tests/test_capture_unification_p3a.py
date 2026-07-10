@@ -161,6 +161,22 @@ def test_selective_save_keeps_unsaved_non_orphan_op_metadata() -> None:
         _ = unsaved.out
 
 
+def test_postprocess_preserves_repeatedly_readable_capture_lanes() -> None:
+    """Postprocess keeps its event projection intact after Step 0."""
+
+    log = tl.trace(PredicateToy(), torch.randn(2, 4), random_seed=17)
+    events = log._capture_events
+    first_labels = tuple(event.label_raw for event in events.op_events)
+
+    assert first_labels
+    assert tuple(event.label_raw for event in events.op_events) == first_labels
+    assert events.module_prep_events
+    assert events.module_enter_events
+    assert events.module_exit_events
+    assert events.op_event_by_label_raw
+    assert events.op_event_index_by_label_raw
+
+
 def test_selective_save_oracle_matches_full_trace_for_recurrent_passes() -> None:
     """Selective-save payloads match full trace payloads, including recurrent ops."""
 

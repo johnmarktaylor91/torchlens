@@ -704,17 +704,11 @@ class Recording(CapturedRun):
         trace._predicate_save_options = RecordingOptions()
         trace._replay_arg_version_data_complete = False
         # Hand postprocess a STRUCTURAL COPY, never this frozen Recording's own
-        # `_capture_events`. `_postprocess()` destructively drains the event
-        # containers it materializes (`_materialize.py` `.clear()`s op_events,
-        # module_events, live_index, ... and `graph_traversal.py` replaces
-        # op_events entries in place). Aliasing the Recording's own buffer here
-        # would silently empty a frozen=True object's read-only event stream:
-        # a second `.to_trace()` would then crash ("could not attribute a model
-        # output tensor to any traced op") and the lazy `recording_trace` /
-        # `records` accessors would memoize empty/wrong answers if first read
-        # AFTER `to_trace()`. The copy shares the frozen OpEvents + tensor
-        # payloads by reference (cheap; no activation cloning) while giving the
-        # materializer its own drainable containers. NOTE: `output_layers`,
+        # `_capture_events`. Later graph traversal replaces operation events in
+        # place, so aliasing the Recording's buffer would mutate its read-only
+        # event stream. The copy shares frozen OpEvents and tensor payloads by
+        # reference (cheap; no activation cloning) while giving postprocess an
+        # independent working projection. NOTE: `output_layers`,
         # `input_layers`, `buffer_layers`, `internal_source_ops`, the
         # `_layer_counter` seed, and `_recover_halt_frontier()` all read from
         # `self._capture_events` (the original, intact) below -- only the

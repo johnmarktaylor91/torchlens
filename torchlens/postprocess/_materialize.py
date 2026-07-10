@@ -135,7 +135,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     Returns
     -------
     None
-        Populates raw trace lookup structures and destructively consumes event lists.
+        Populates raw trace lookup structures without consuming the sealed source lanes.
     """
 
     live_module_forward_args = dict(getattr(trace, "_module_forward_args", {}))
@@ -200,20 +200,6 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
             op_log = materialize_log_from_fields(fields_dict)
         _register_raw_log(trace, event, op_log)
     _drop_missing_buffer_sources(trace)
-
-    events.op_events.clear()
-    events.module_events.clear()
-    events.module_prep_events.clear()
-    events.module_enter_events.clear()
-    events.module_exit_events.clear()
-    events.pre_hook_events.clear()
-    events.conditional_events.clear()
-    events.output_version_events.clear()
-    events.live_by_raw_label.clear()
-    events.op_event_by_label_raw.clear()
-    events.op_event_index_by_label_raw.clear()
-    events.live_index.clear()
-    events.grad_fn_handles_by_label_raw.clear()
 
 
 def _op_events_in_raw_order(op_events: list[OpEvent]) -> list[OpEvent]:

@@ -40,6 +40,7 @@ import time
 import torch
 import warnings
 
+from ..capture.session import capture_session_for_events
 from ..utils.tensor_utils import _is_cuda_available, safe_copy
 from ..utils.hashing import (
     compute_graph_shape_hash,
@@ -459,9 +460,23 @@ def postprocess(
     if capture_events is not None:
         self._raw_event_shape_hash = compute_raw_event_shape_hash(capture_events)
         remember_event_stream(self, capture_events)
-        self._capture_events = capture_events
+        capture_session = capture_session_for_events(capture_events)
+        sealed_op_events = (
+            [fact.event for fact in capture_session.event_journal.facts]
+            if capture_session is not None
+            else list(capture_events.op_events)
+        )
+        working_events = capture_events.copy_for_replay()
+        working_events.op_events = sealed_op_events
+        working_events.op_event_by_label_raw = {
+            event.label_raw: event for event in sealed_op_events
+        }
+        working_events.op_event_index_by_label_raw = {
+            event.label_raw: index for index, event in enumerate(sealed_op_events)
+        }
+        self._capture_events = working_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
-            materialize_from_events(self, capture_events)
+            materialize_from_events(self, working_events)
         _assert_postprocess_contract(self, "0")
         delattr(self, "capture_events")
 
