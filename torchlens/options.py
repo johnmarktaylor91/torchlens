@@ -661,9 +661,6 @@ class CaptureOptions:
         outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
         to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
         enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
-        NOTE: retaining orphans changes ``num_ops`` and currently trips the trace
-        self-consistency invariant, so the default stays opt-in until the validation
-        invariants account for retained islands.
     output_device:
         Device placement for saved tensors.
     save_arg_values:
