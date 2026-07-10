@@ -11,7 +11,8 @@ input tensor.
 Their construct:
 
 ```python
-# third-party example; output values depend on the pinned ThingsVision/model weights
+# migration-test: tool=thingsvision expected=[[2.5, 2.5]]
+# Output values depend on the pinned ThingsVision/model weights.
 import torch
 from thingsvision import get_extractor
 
@@ -22,7 +23,7 @@ features = extractor.extract_features(
     module_name="features.0",
     flatten_acts=False,
 )
-RESULT_SHAPE = tuple(features[0, :1, :1, :2].reshape(1, 2).shape)
+RESULT = features[0, :1, :1, :2].reshape(1, 2).tolist()
 ```
 
 TorchLens equivalent:
