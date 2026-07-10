@@ -56,7 +56,9 @@ class TraceProfile:
             Human-readable table representation.
         """
 
-        return self.frame.to_string(index=False)
+        display_frame = self.frame.copy()
+        display_frame["time"] = display_frame["time"].map(_format_duration)
+        return display_frame.to_string(index=False)
 
 
 def _require_pandas() -> Any:
@@ -102,7 +104,7 @@ def _ops_for_labels(trace: "Trace", labels: list[str]) -> list[Any]:
     return ops
 
 
-def _sum_optional(ops: list[Any], field: str) -> int | None:
+def _sum_optional(ops: list[Any], field: str) -> int | float | None:
     """Sum a metric without turning wholly unavailable metadata into zero.
 
     Parameters
@@ -114,13 +116,39 @@ def _sum_optional(ops: list[Any], field: str) -> int | None:
 
     Returns
     -------
-    int | None
+    int | float | None
         Sum when at least one value is available, otherwise ``None``.
     """
 
     values = [getattr(op, field, None) for op in ops]
-    available = [int(value) for value in values if value is not None]
+    if field == "func_duration":
+        available = [float(value) for value in values if value is not None]
+    else:
+        available = [int(value) for value in values if value is not None]
     return sum(available) if available else None
+
+
+def _format_duration(seconds: float | None) -> str:
+    """Format an operation duration using a compact human-readable unit.
+
+    Parameters
+    ----------
+    seconds:
+        Duration in seconds, if instrumentation captured one.
+
+    Returns
+    -------
+    str
+        Duration rendered in seconds, milliseconds, or microseconds.
+    """
+
+    if seconds is None:
+        return ""
+    if seconds >= 1:
+        return f"{seconds:.3f} s"
+    if seconds >= 1e-3:
+        return f"{seconds * 1e3:.3f} ms"
+    return f"{seconds * 1e6:.3f} us"
 
 
 def _values(ops: list[Any], field: str) -> str | None:

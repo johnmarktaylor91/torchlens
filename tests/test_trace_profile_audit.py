@@ -92,6 +92,18 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
     assert "TraceProfile" not in repr(trace.profile())
 
 
+def test_trace_profile_preserves_subsecond_time_for_hotspot_sorting() -> None:
+    """profile retains float durations rather than truncating them to integer seconds."""
+
+    trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
+    frame = trace.profile().to_pandas()
+
+    assert frame["time"].notna().all()
+    assert (frame["time"] > 0).any()
+    assert frame["time"].tolist() == sorted(frame["time"].tolist(), reverse=True)
+    assert any(unit in repr(trace.profile()) for unit in (" us", " ms", " s"))
+
+
 def test_trace_profile_sparse_save_preserves_honest_availability() -> None:
     """profile retains metadata while making unavailable activation payloads visible."""
 
@@ -126,12 +138,22 @@ def test_trace_audit_nan_finding_names_op_and_follow_up() -> None:
     assert finding.follow_up == "trace.find_nan()"
 
 
-def test_trace_audit_sparse_save_lists_payload_checks_as_skipped() -> None:
-    """audit refuses to certify payload diagnostics from a sparse capture."""
+def test_trace_audit_sparse_save_runs_find_nan_with_honest_scope() -> None:
+    """audit scans saved sparse payloads while skipping full-coverage diagnostics."""
 
     audit = tl.trace(ProfileModel().eval(), torch.randn(2, 4), save=tl.func("linear")).audit()
 
     skipped = dict(audit.skipped)
-    assert "find_nan" in skipped
-    assert "selective-save" in skipped["find_nan"]
+    assert "find_nan" in audit.checks_run
+    assert "find_nan" not in skipped
     assert "dead_neurons" in skipped
+
+
+def test_trace_audit_sparse_save_reports_saved_nan_with_uncertainty() -> None:
+    """audit reports a NaN retained by a sparse save predicate with its uncertainty zone."""
+
+    audit = tl.trace(NanModel(), torch.ones(1, 2), save=tl.func("truediv")).audit()
+
+    finding = next(finding for finding in audit.findings if finding.check == "find_nan")
+    assert "First among saved tensors" in finding.message
+    assert "Unsaved upstream uncertainty zone" in finding.message
