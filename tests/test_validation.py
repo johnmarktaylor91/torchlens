@@ -175,6 +175,58 @@ def test_validation_replay_status_aggregate_fold() -> None:
     assert bool(passed_status) is True
 
 
+def test_validation_decision_recorder_counts_distinct_nodes() -> None:
+    """Node coverage counts must not count replay phases as extra nodes."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="add_1:1",
+        func_name="add",
+        phase="replay",
+        decision="validated",
+        reason="replay_matched",
+    )
+    recorder.record(
+        op_label="add_1:1",
+        func_name="add",
+        phase="perturbation",
+        decision="validated",
+        reason="perturbation_changed",
+    )
+    recorder.record(
+        op_label="output_1:1",
+        func_name="none",
+        phase="ground_truth",
+        decision="validated",
+        reason="ground_truth_matched",
+    )
+
+    status = recorder.as_status()
+
+    assert status.replayed_node_count == 2
+    assert status.state == "passed"
+
+
+def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire() -> None:
+    """Repeated failure decisions still produce one genuine failed node."""
+
+    recorder = ValidationDecisionRecorder()
+    for phase in ("replay", "perturbation"):
+        recorder.record(
+            op_label="broken_1:1",
+            func_name="broken",
+            phase=phase,
+            decision="failed",
+            reason="replay_mismatch",
+        )
+
+    status = recorder.as_status()
+
+    assert status.failed_node_count == 1
+    assert status.state == "failed"
+    assert bool(status) is False
+
+
 @pytest.mark.smoke
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""

@@ -177,6 +177,23 @@ class ValidationDecisionRecorder:
 
         return sum(item.decision == decision for item in self.decisions)
 
+    def node_count(self, decision: ValidationDecisionKind) -> int:
+        """Return the number of distinct op labels with a decision kind.
+
+        Parameters
+        ----------
+        decision:
+            Decision kind whose distinct operation labels should be counted.
+
+        Returns
+        -------
+        int
+            Number of distinct operation labels. Trace-level decisions with no
+            label share one aggregate ``None`` bucket.
+        """
+
+        return len({item.op_label for item in self.decisions if item.decision == decision})
+
     def reason_counts(self, decision: ValidationDecisionKind) -> dict[str, int]:
         """Return reason-code counts for a given decision kind.
 
@@ -214,9 +231,9 @@ class ValidationDecisionRecorder:
         return ValidationReplayStatus.from_replay_counts(
             backend=backend,
             source="live",
-            replayed_node_count=self.count("validated"),
-            unverified_node_count=self.count("unverified"),
-            failed_node_count=self.count("failed"),
+            replayed_node_count=self.node_count("validated"),
+            unverified_node_count=self.node_count("unverified"),
+            failed_node_count=self.node_count("failed"),
             unverified_reason_counts=self.reason_counts("unverified"),
             exempted_reason_counts=self.reason_counts("exempted"),
             decisions=tuple(item.as_dict() for item in self.decisions),

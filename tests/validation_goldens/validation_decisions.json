@@ -104,7 +104,7 @@
       "functionless_source_or_boundary": 4
     },
     "failed_node_count": 0,
-    "replayed_node_count": 10,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -149,7 +149,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 4,
+    "replayed_node_count": 3,
     "state": "unverified",
     "unverified_node_count": 1,
     "unverified_reason_counts": {
@@ -203,7 +203,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 1,
-    "replayed_node_count": 5,
+    "replayed_node_count": 3,
     "state": "failed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -267,7 +267,7 @@
       "uninitialized_by_design": 2
     },
     "failed_node_count": 0,
-    "replayed_node_count": 4,
+    "replayed_node_count": 3,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -340,7 +340,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 9,
+    "replayed_node_count": 5,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -415,7 +415,7 @@
       "intentional_intervention_replacement": 2
     },
     "failed_node_count": 0,
-    "replayed_node_count": 7,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -485,7 +485,7 @@
       "skip_perturbation_entirely:zeros_like": 1
     },
     "failed_node_count": 0,
-    "replayed_node_count": 6,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -530,7 +530,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 3,
+    "replayed_node_count": 2,
     "state": "unverified",
     "unverified_node_count": 2,
     "unverified_reason_counts": {
@@ -675,7 +675,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 19,
+    "replayed_node_count": 9,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -723,7 +723,7 @@
       "not_saved_by_user": 1
     },
     "failed_node_count": 0,
-    "replayed_node_count": 3,
+    "replayed_node_count": 2,
     "state": "unverified",
     "unverified_node_count": 1,
     "unverified_reason_counts": {
@@ -794,7 +794,7 @@
       "ulp_swamped_perturbation": 1
     },
     "failed_node_count": 0,
-    "replayed_node_count": 6,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
