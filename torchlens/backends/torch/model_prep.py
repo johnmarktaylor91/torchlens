@@ -395,15 +395,6 @@ def _prepare_model_once(model: nn.Module) -> None:
         # re-rooted away from as stale (role-swap bookkeeping).
         _state.record_module_root_prep(model, module)
 
-        # Replace any original torch functions stored as instance attributes
-        # (e.g. self.act = torch.relu assigned before decoration). Idempotent:
-        # already-decorated refs are absent from _orig_to_decorated.
-        for func_name, func in list(module.__dict__.items()):
-            if func_name.startswith("__") or not callable(func):
-                continue
-            if id(func) in _state._orig_to_decorated:
-                module.__dict__[func_name] = _state._orig_to_decorated[id(func)]
-
         # Annotate children with their full dotted address path (root-relative).
         for _, child_module, child_address in child_entries:
             set_module_meta(
@@ -2321,17 +2312,14 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     1. ``wrap_torch()`` — Ensures torch functions are wrapped (no-op if already wrapped,
        re-wraps after ``unwrap_torch()``, first-time decoration on first call).
     2. ``_prepare_model_once(model)`` — Phase 1 model prep (cached per instance).
-    3. ``patch_detached_references()`` — Crawl sys.modules for stale refs
-       (incremental: only scans newly-imported modules).
-    4. ``patch_model_instance(model)`` — Level 4 crawl on model instance attrs.
+    3. ``patch_detached_references(model=model)`` — Incremental identity crawl
+       plus model-provenance candidates under scoped policy.
+    4. ``patch_model_instance(model)`` — Per-capture Level 4 scan, including
+       callable attributes reassigned since a prior capture.
     """
     from .wrappers import wrap_torch, patch_detached_references, patch_model_instance
 
     wrap_torch()  # idempotent — no-op if already wrapped; auto-rewraps after unwrap
-    already_prepared = model in _state._prepared_models
     _prepare_model_once(model)  # idempotent — cached in _state._prepared_models
-    patch_detached_references()  # incremental — only new sys.modules entries
-    # Phase 1 already patches instance attrs during its DFS, so skip the
-    # redundant full crawl for models that were already prepared.
-    if not already_prepared:
-        patch_model_instance(model)  # level 4 — model instance attrs
+    patch_detached_references(model=model)
+    patch_model_instance(model)
