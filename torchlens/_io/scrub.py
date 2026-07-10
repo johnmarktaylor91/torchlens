@@ -382,6 +382,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_container_ordinals_by_output_op_label",
         "_container_ordinals_by_input_func_call_id",
         "_validation_replay_status",
+        "_tl_predicate_intervention_spec_keys",
         "jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_ordered_captures",

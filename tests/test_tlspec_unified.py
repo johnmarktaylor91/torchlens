@@ -6,6 +6,7 @@ import json
 import re
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -14,6 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
+from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import BackendPayloadUnsupportedError
 from torchlens.intervention.types import FireRecord, HelperSpec, InterventionSpec
 from torchlens.options import CaptureOptions
@@ -1017,3 +1019,49 @@ def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
+
+
+@pytest.mark.parametrize(
+    ("helper_name", "helper"),
+    [
+        ("zero_ablate", tl.zero_ablate()),
+        ("splice_module", tl.splice_module(nn.Identity())),
+    ],
+)
+def test_intervene_trace_round_trips_transient_dedup_state(
+    tmp_path: Path,
+    helper_name: str,
+    helper: Any,
+) -> None:
+    """Predicate intervention bookkeeping does not leak into portable trace state."""
+
+    trace = tl.trace(
+        UnifiedTinyModel(),
+        torch.randn(2, 3),
+        intervene=tl.when(tl.func("relu"), helper),
+    )
+    path = tmp_path / f"{helper_name}.tlspec"
+
+    tl.save(trace, path)
+    loaded = tl.load(path)
+    replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
+
+    assert replaced_ops
+    assert any(
+        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
+    )
+
+
+def test_unknown_backend_runtime_version_serializes_as_null() -> None:
+    """Unknown backend runtime versions remain JSON null instead of the string ``None``."""
+
+    source = SimpleNamespace(
+        backend_runtime_version=None,
+        backend_runtime_config={},
+        backend_runtime_device_summary={},
+    )
+
+    runtime = _TlSpecWriter._backend_runtime(source, backend_name="mlx")
+
+    assert runtime["version"] is None
+    assert '"version": null' in json.dumps(runtime)

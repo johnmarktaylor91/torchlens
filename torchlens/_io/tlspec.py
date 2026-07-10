@@ -370,9 +370,10 @@ class _TlSpecWriter:
         device_summary = getattr(source, "backend_runtime_device_summary", None)
         if not isinstance(device_summary, dict):
             device_summary = {}
+        runtime_version = getattr(source, "backend_runtime_version", "0.0.metadata")
         return {
             "name": runtime_name,
-            "version": str(getattr(source, "backend_runtime_version", "0.0.metadata")),
+            "version": None if runtime_version is None else str(runtime_version),
             "runtime_config": runtime_config,
             "device_summary": device_summary,
             "compat_policy": {"policy": "metadata-only"},

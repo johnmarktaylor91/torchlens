@@ -389,8 +389,11 @@ def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
             raise ValueError(f"Manifest backend_runtime missing {field_name!r}.")
     if not isinstance(runtime.get("name"), str) or runtime.get("name") == "":
         raise ValueError("Manifest backend_runtime.name must be a non-empty string.")
-    if not isinstance(runtime.get("version"), str) or runtime.get("version") == "":
-        raise ValueError("Manifest backend_runtime.version must be a non-empty string.")
+    runtime_version = runtime.get("version")
+    if runtime_version is not None and (
+        not isinstance(runtime_version, str) or runtime_version == ""
+    ):
+        raise ValueError("Manifest backend_runtime.version must be null or a non-empty string.")
     for field_name in ("runtime_config", "device_summary", "compat_policy"):
         if not isinstance(runtime.get(field_name), dict):
             raise ValueError(f"Manifest backend_runtime.{field_name} must be an object.")
