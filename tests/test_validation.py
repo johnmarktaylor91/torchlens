@@ -1293,7 +1293,7 @@ def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None
 
 
 def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
-    """Live-model fallback retains the two pre-existing model executions."""
+    """Live-model fallback also runs the structural reproducibility trace."""
 
     execution_count = [0]
 
@@ -1321,11 +1321,11 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(model, torch.randn(2, 3)) is True
 
-    assert execution_count == [2]
+    assert execution_count == [3]
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
-    """Ground-truth fallback reports when it cannot restore plain mutable state."""
+    """Ground-truth fallback skips only an unsnapshotable plain attribute."""
 
     class UncopyableOpaqueState(nn.Module):
         """Model that defeats both deepcopy and plain-attribute snapshots."""
@@ -1348,11 +1348,42 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
             return x + 1
 
     model = UncopyableOpaqueState()
-    with pytest.warns(RuntimeWarning, match="without plain-attribute restoration"):
+    with pytest.warns(RuntimeWarning, match="skipping restoration for this attribute only"):
         fallback_model, snapshot = user_public_impls._model_for_ground_truth_validation(model)
 
     assert fallback_model is model
-    assert snapshot is None
+    assert snapshot is not None
+
+
+def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> None:
+    """An opaque attr must not block restoration or the reproducibility tripwire."""
+
+    class LockBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused lock."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and branch counter."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Change graph shape after the first execution."""
+
+            output = x + 1 if self.step == 0 else x * 2
+            self.step += 1
+            return output
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = validate_forward_pass(LockBackedToggle(), torch.randn(3))
+
+    assert result is True
+    assert any(
+        "skipping restoration for this attribute only" in str(item.message) for item in caught
+    )
+    assert any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
 
 
 def test_validate_forward_pass_ground_truth_copy_strips_traced_forward_wrappers() -> None:

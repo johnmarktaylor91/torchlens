@@ -671,12 +671,23 @@ class _ModuleTreePlainAttrSnapshot:
             self._module_attr_names[id(module)] = (module, attr_names, module_path)
             for name in sorted(attr_names):
                 attr_path = f"{module_path}.{name}"
+                try:
+                    snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
+                except RuntimeError as exc:
+                    warnings.warn(
+                        "TorchLens validation deepcopy fallback could not snapshot plain "
+                        f"attribute '{attr_path}'; skipping restoration for this attribute "
+                        f"only ({exc}).",
+                        RuntimeWarning,
+                        stacklevel=3,
+                    )
+                    continue
                 self._entries.append(
                     (
                         module,
                         name,
                         attr_path,
-                        _snapshot_module_plain_attr_value(module, name, attr_path),
+                        snapshot,
                     )
                 )
 
