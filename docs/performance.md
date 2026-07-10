@@ -107,13 +107,43 @@ trace = tl.trace(model, x)
 print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
 ```
 
+The independent aten-level completeness witness is also opt-in and can run alone or alongside the
+callable detector:
+
+```python
+tl.wrap_torch(
+    patch_policy="scoped",
+    escape_detector="shadow",
+    completeness_witness=True,
+)
+trace = tl.trace(model, x)
+print(trace.completeness_witness_verified)
+print(trace.completeness_witness_unaccounted_count)
+```
+
+The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
+it does not correlate by clock time. A captured Python call may own several ordered aten operations,
+recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper that
+does not become a captured leaf, produce a `TorchLensCaptureGapWarning`, set
+`trace.completeness_witness_verified=False`, and append structured rows to
+`trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
+torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
+kernel interiors below the dispatcher are not observable; the dispatched boundary operator itself is
+still accounted normally.
+
 The honest rollout comparison is **legacy with no guard** versus **scoped with the requested
 guard**, not crawl time in isolation. On Python 3.9–3.11, shadow mode uses `sys.setprofile` and can
 be expensive for Python-call-heavy models: a representative call-heavy 16-layer MLP measurement on
 Python 3.11 was **+371%** versus the unguarded capture. Treat shadow as an expensive, diagnostic-only
 soak tool, not a production capture setting. On Python 3.12+ it prefers local Python-start monitoring
-plus diagnostic CALL events. Shadow remains default-off. The dispatcher-witness overhead is still
-unknown and must pass its separate performance gate before scoped can become the default.
+plus diagnostic CALL events. Shadow remains default-off.
+
+The dispatcher witness is likewise default-off. On Python 3.11.6 with PyTorch 2.8.0, a CPU
+16-layer `Linear(64, 64)`/`ReLU` MLP at batch size 16 measured **+13.1%** median capture overhead
+versus the same scoped capture with the witness disabled. The measurement used two warmups followed
+by ten alternating batches of five full `tl.trace` calls per mode; median time was 0.544 s/capture
+without the witness and 0.616 s/capture with it. Treat this as a representative diagnostic cost,
+not a cross-hardware guarantee.
 
 ### Phase timing buckets
 
