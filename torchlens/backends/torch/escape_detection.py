@@ -186,6 +186,12 @@ class ExpectedOriginalToken:
     wrapper_frame_id: int
     owner_thread_id: int
     pending: bool = True
+    func_name: str | None = None
+    func_call_id: int | None = None
+    call_barcode: object | None = None
+    census_scope: Literal["owned", "expected_opaque"] = "owned"
+    capture_accounted: bool | None = None
+    capture_callsite: tuple[str, int, str] | None = None
 
 
 @dataclass
@@ -308,7 +314,7 @@ def _token_stack() -> list[ExpectedOriginalToken]:
     return cast(list[ExpectedOriginalToken], stack)
 
 
-class _ExpectedOriginalContext(AbstractContextManager[None]):
+class _ExpectedOriginalContext(AbstractContextManager[ExpectedOriginalToken]):
     """Concrete context that pushes and removes one prebuilt edge token."""
 
     def __init__(self, token: ExpectedOriginalToken) -> None:
@@ -316,10 +322,11 @@ class _ExpectedOriginalContext(AbstractContextManager[None]):
 
         self.token = token
 
-    def __enter__(self) -> None:
-        """Push the expected-edge token."""
+    def __enter__(self) -> ExpectedOriginalToken:
+        """Push and return the expected-edge token."""
 
         _token_stack().append(self.token)
+        return self.token
 
     def __exit__(self, exc_type: Any, exc: Any, traceback_obj: Any) -> None:
         """Remove the token without suppressing an exception."""
@@ -335,7 +342,12 @@ class _ExpectedOriginalContext(AbstractContextManager[None]):
 def expected_original_call(
     original: Callable[..., Any],
     wrapper_name: str,
-) -> AbstractContextManager[None]:
+    *,
+    func_name: str | None = None,
+    func_call_id: int | None = None,
+    call_barcode: object | None = None,
+    census_scope: Literal["owned", "expected_opaque"] = "owned",
+) -> AbstractContextManager[ExpectedOriginalToken]:
     """Authorize exactly one immediate wrapper-to-original profiler event.
 
     Parameters
@@ -344,10 +356,19 @@ def expected_original_call(
         Saved original callable invoked by the wrapper.
     wrapper_name:
         Stable wrapper/call-edge label used in diagnostics and exemptions.
+    func_name:
+        TorchLens function name for dispatch ownership diagnostics.
+    func_call_id:
+        Monotone captured-call identity shared with the resulting ``Op``.
+    call_barcode:
+        Leaf-detection barcode written to the active Trace before the call.
+    census_scope:
+        Whether dispatcher work belongs to a prospective captured op or an
+        exact documented opaque boundary.
 
     Returns
     -------
-    AbstractContextManager[None]
+    AbstractContextManager[ExpectedOriginalToken]
         Context carrying a token bound to the calling wrapper frame.
     """
 
@@ -360,8 +381,31 @@ def expected_original_call(
             wrapper_name=wrapper_name,
             wrapper_frame_id=id(caller) if caller is not None else 0,
             owner_thread_id=threading.get_ident(),
+            func_name=func_name,
+            func_call_id=func_call_id,
+            call_barcode=call_barcode,
+            census_scope=census_scope,
         )
     )
+
+
+def mark_expected_original_accounted(
+    token: ExpectedOriginalToken | None,
+    *,
+    captured: bool,
+) -> None:
+    """Record whether a token's dispatch interval became a captured leaf.
+
+    Parameters
+    ----------
+    token:
+        Token returned by :func:`expected_original_call`, if diagnostics were armed.
+    captured:
+        Whether the wrapper passed the shared barcode leaf test and emitted tensor ops.
+    """
+
+    if token is not None:
+        token.capture_accounted = captured
 
 
 def _active_token() -> ExpectedOriginalToken | None:
@@ -518,6 +562,7 @@ def _report_escape(
     }
     reports = guard.trace.__dict__.setdefault("escape_diagnostics", [])
     reports.append(detail)
+    guard.trace.escape_detector_verified = False
     guard.trace.capture_verified = False
     guard.trace.capture_verification_reason = "callable_escape_shadow_report"
     callable_name = _safe_qualname(original)
@@ -690,6 +735,9 @@ def _copy_recording_diagnostics(trace: Any) -> None:
         "detached_patch_policy",
         "detached_patch_epoch",
         "escape_detector_mode",
+        "escape_detector_verified",
+        "completeness_witness_mode",
+        "completeness_witness_verified",
         "capture_owner_thread_id",
         "capture_owner_thread_qualified",
         "capture_thread_count_start",
@@ -701,6 +749,13 @@ def _copy_recording_diagnostics(trace: Any) -> None:
         "escape_diagnostics",
         "escape_detector_event_count",
         "escape_detector_callback_ns",
+        "completeness_diagnostics",
+        "completeness_decompositions",
+        "completeness_witness_event_count",
+        "completeness_witness_accounted_count",
+        "completeness_witness_expected_opaque_count",
+        "completeness_witness_unaccounted_count",
+        "completeness_witness_callback_ns",
         "capture_guard_passes",
     ):
         if hasattr(trace, field_name):
@@ -739,6 +794,8 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
     trace.detached_patch_policy = _state._detached_patch_policy
     trace.detached_patch_epoch = _state._detached_patch_epoch
     trace.escape_detector_mode = mode
+    if not hasattr(trace, "escape_detector_verified"):
+        trace.escape_detector_verified = True if mode == "shadow" else None
     trace.capture_owner_thread_id = owner_thread_id
     trace.capture_owner_thread_qualified = True
     trace.capture_thread_count_start = thread_count_start
@@ -771,6 +828,10 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
             int(getattr(trace, "escape_detector_callback_ns", 0)) + guard.callback_ns
         )
         if trace.capture_thread_activity_detected:
+            if mode == "shadow":
+                trace.escape_detector_verified = False
+            if getattr(trace, "completeness_witness_verified", None) is True:
+                trace.completeness_witness_verified = False
             trace.capture_verified = False
             trace.capture_verification_reason = "owner_thread_tripwire_changed"
             warnings.warn(

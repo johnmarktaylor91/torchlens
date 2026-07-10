@@ -1892,7 +1892,10 @@ def module_forward_decorator(
                 [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
             )
             input_tensor_labels = set(get_label_list(input_tensors_fast))
-            if _state._escape_detector_mode == "shadow":
+            if (
+                _state._escape_detector_mode == "shadow"
+                or _state._completeness_witness_mode == "shadow"
+            ):
                 with expected_original_call(orig_forward, "module_forward:fast"):
                     out = orig_forward(*args, **kwargs)
             else:
@@ -1983,7 +1986,10 @@ def module_forward_decorator(
                     state.append_context(enter_ctx)
             out = None
             try:
-                if _state._escape_detector_mode == "shadow":
+                if (
+                    _state._escape_detector_mode == "shadow"
+                    or _state._completeness_witness_mode == "shadow"
+                ):
                     with expected_original_call(orig_forward, "module_forward:predicate"):
                         out = orig_forward(*args, **kwargs)
                 else:
@@ -2059,7 +2065,10 @@ def module_forward_decorator(
                 trace, module, args, kwargs
             )
             try:
-                if _state._escape_detector_mode == "shadow":
+                if (
+                    _state._escape_detector_mode == "shadow"
+                    or _state._completeness_witness_mode == "shadow"
+                ):
                     with expected_original_call(orig_forward, "module_forward:exhaustive"):
                         out = orig_forward(*args, **kwargs)
                 else:

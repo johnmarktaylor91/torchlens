@@ -102,18 +102,76 @@ with `tl.partial.from_failed_capture(exc)`.
 introspection. The callable detector is a separate, opt-in diagnostic cost:
 
 ```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.ReLU()
+x = torch.randn(4)
 tl.wrap_torch(patch_policy="scoped", escape_detector="shadow")
 trace = tl.trace(model, x)
 print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
+tl.unwrap_torch()
 ```
+
+The independent aten-level completeness witness is also opt-in and can run alone or alongside the
+callable detector:
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.ReLU()
+x = torch.randn(4)
+tl.wrap_torch(
+    patch_policy="scoped",
+    escape_detector="shadow",
+    completeness_witness=True,
+)
+trace = tl.trace(model, x)
+print(trace.completeness_witness_verified)
+print(trace.completeness_witness_unaccounted_count)
+tl.unwrap_torch()
+```
+
+The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
+it does not correlate by clock time. A captured Python call may own several ordered aten operations,
+recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
+`func_call_id` emits no logged op, produce a `TorchLensCaptureGapWarning`, set
+`trace.completeness_witness_verified=False`, and append structured rows to
+`trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
+torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
+kernel interiors below the dispatcher are not observable; the dispatched boundary operator itself is
+still accounted normally.
+
+`completeness_witness_verified=True` makes only this dispatch-census claim: every owner-thread aten
+event observed during active logging was correlated to an emitted op or to an exact audited boundary.
+It does not prove that every user call route entered active logging. In particular, a transform callable
+built before wrapping can escape without a transform boundary op; TorchLens detects that route and leaves
+the census result `True` while setting `capture_verified=False` with
+`capture_verification_reason="transform_call_route_unverified"`. `escape_detector_verified=True` makes
+the separate claim that the callable detector saw no observable raw-call escape. `capture_verified=True`
+is the combined result only when the enabled census/detector checks pass, no raw-transform escape was
+detected, and the owner-thread qualification remains valid.
 
 The honest rollout comparison is **legacy with no guard** versus **scoped with the requested
 guard**, not crawl time in isolation. On Python 3.9–3.11, shadow mode uses `sys.setprofile` and can
 be expensive for Python-call-heavy models: a representative call-heavy 16-layer MLP measurement on
 Python 3.11 was **+371%** versus the unguarded capture. Treat shadow as an expensive, diagnostic-only
 soak tool, not a production capture setting. On Python 3.12+ it prefers local Python-start monitoring
-plus diagnostic CALL events. Shadow remains default-off. The dispatcher-witness overhead is still
-unknown and must pass its separate performance gate before scoped can become the default.
+plus diagnostic CALL events. Shadow remains default-off.
+
+The dispatcher witness is likewise default-off. Its diagnostic cost is environment- and workload-
+dependent; use an alternating on/off measurement on the target host rather than relying on a fixed
+cross-hardware percentage. On this worktree's Python 3.11.6/PyTorch 2.8.0 CPU environment, a
+16-pair `Linear(64, 64)`/`ReLU` MLP at batch size 16 measured **+17.8%** median overhead: 0.374
+s/capture with the witness off and 0.440 s/capture with it on. Ten alternating batches of five
+full `tl.trace` calls per mode followed four two-capture warmup batches; the per-batch ranges were
+0.341–0.379 s off and 0.415–0.453 s on. The witness-off route does not enter the witness-only
+`pause_logging()` contexts used to keep TorchLens bookkeeping dispatches out of the user-op census.
 
 ### Phase timing buckets
 

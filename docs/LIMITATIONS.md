@@ -281,6 +281,12 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   for the exact policy and remediation matrix.
   Live `capture_verified` state is not portable through `.tlspec`: loaded traces expose
   `None`/unknown and never falsely retain `True`.
+  `completeness_witness_verified=True` is narrower than `capture_verified=True`: it certifies
+  only that observed owner-thread aten dispatches during active logging were represented by an
+  emitted op or an exact audited boundary. It does not certify that every call route entered the
+  census. A pre-wrap torch.func/functorch callable can have no boundary op; when its transform
+  escape signal fires, TorchLens preserves the clean witness-only result but sets
+  `capture_verified=False` with `capture_verification_reason="transform_call_route_unverified"`.
 - **bfloat16 / fp16 + non-deterministic GPU reductions**: validation
   replay compares activations to within ``3e-6`` absolute tolerance; on
   bf16/fp16 GPU atomics, small reordering differences can cross that

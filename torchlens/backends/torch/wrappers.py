@@ -70,7 +70,13 @@ from .buffer_writes import (
 from .escape_detection import (
     EscapeDetectorMode,
     expected_original_call,
+    mark_expected_original_accounted,
     reset_detector_tables,
+)
+from .completeness_witness import (
+    CompletenessWitnessMode,
+    completeness_scope_for_wrapper,
+    record_uncaptured_owner_callsite,
 )
 from .sources import log_source_tensor
 
@@ -83,6 +89,19 @@ DetachedPatchPolicy = Literal["scoped", "legacy", "full"]
 
 _RELEASE_DEFAULT_PATCH_POLICY: DetachedPatchPolicy = "legacy"
 """Release default; scoped remains opt-in until its certification soak completes."""
+
+
+def _diagnostic_edge_armed() -> bool:
+    """Return whether either exact wrapper-edge diagnostic is enabled.
+
+    Returns
+    -------
+    bool
+        ``True`` when a shared one-shot token is required.
+    """
+
+    return _state._escape_detector_mode == "shadow" or _state._completeness_witness_mode == "shadow"
+
 
 _KNOWN_TORCH_FREE_PREFIXES = (
     "PIL",
@@ -490,19 +509,36 @@ def transform_builder_decorator(
                 func_call_id,
             )
             if _collect_output_tensors(out_orig):
-                log_function_output_tensors(
-                    trace,
-                    raw_built,
-                    transform_kind,
-                    call_args,
-                    call_kwargs,
-                    call_args,
-                    call_kwargs,
-                    out_orig,
-                    exec_ctx,
-                    True,
-                    func_call_id,
-                )
+                # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
+                if _state._completeness_witness_mode == "shadow":
+                    with _state.pause_logging():
+                        log_function_output_tensors(
+                            trace,
+                            raw_built,
+                            transform_kind,
+                            call_args,
+                            call_kwargs,
+                            call_args,
+                            call_kwargs,
+                            out_orig,
+                            exec_ctx,
+                            True,
+                            func_call_id,
+                        )
+                else:
+                    log_function_output_tensors(
+                        trace,
+                        raw_built,
+                        transform_kind,
+                        call_args,
+                        call_kwargs,
+                        call_args,
+                        call_kwargs,
+                        out_orig,
+                        exec_ctx,
+                        True,
+                        func_call_id,
+                    )
             return out_orig
 
         _set_transform_metadata(
@@ -582,19 +618,36 @@ def direct_transform_decorator(
             func_call_id,
         )
         if _collect_output_tensors(out_orig):
-            log_function_output_tensors(
-                trace,
-                raw_replay,
-                func_name,
-                call_args,
-                {},
-                call_args,
-                {},
-                out_orig,
-                exec_ctx,
-                True,
-                func_call_id,
-            )
+            # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
+            if _state._completeness_witness_mode == "shadow":
+                with _state.pause_logging():
+                    log_function_output_tensors(
+                        trace,
+                        raw_replay,
+                        func_name,
+                        call_args,
+                        {},
+                        call_args,
+                        {},
+                        out_orig,
+                        exec_ctx,
+                        True,
+                        func_call_id,
+                    )
+            else:
+                log_function_output_tensors(
+                    trace,
+                    raw_replay,
+                    func_name,
+                    call_args,
+                    {},
+                    call_args,
+                    {},
+                    out_orig,
+                    exec_ctx,
+                    True,
+                    func_call_id,
+                )
         return out_orig
 
     return wrapped_direct
@@ -905,10 +958,19 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     UserWarning,
                     stacklevel=2,
                 )
-            if _state._escape_detector_mode == "shadow":
-                with expected_original_call(func, f"torch_func:{func_name}:functorch"):
+            # A raw transform interior is outside the witness claim, but the witness-off
+            # route retains its original logging state and avoids the context-manager cost.
+            if _state._completeness_witness_mode == "shadow":
+                with _state.pause_logging():
+                    if _state._escape_detector_mode == "shadow":
+                        with expected_original_call(func, f"torch_func:{func_name}:functorch"):
+                            return func(*args, **kwargs)
                     return func(*args, **kwargs)
-            return func(*args, **kwargs)
+            else:
+                if _state._escape_detector_mode == "shadow":
+                    with expected_original_call(func, f"torch_func:{func_name}:functorch"):
+                        return func(*args, **kwargs)
+                return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.
         if _state._collect_usage_stats:
@@ -922,8 +984,14 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Reset barcode; skip metadata-only functions that would cause recursion.
         trace._current_func_barcode = 0
         if func_name in funcs_not_to_log:
-            if _state._escape_detector_mode == "shadow":
-                with expected_original_call(func, f"torch_func:{func_name}:not_logged"):
+            if _diagnostic_edge_armed():
+                wrapper_name = f"torch_func:{func_name}:not_logged"
+                with expected_original_call(
+                    func,
+                    wrapper_name,
+                    func_name=func_name,
+                    census_scope=completeness_scope_for_wrapper(wrapper_name),
+                ):
                     return func(*args, **kwargs)
             return func(*args, **kwargs)
 
@@ -990,9 +1058,16 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             if getattr(trace, "emit_nvtx", False)
             else False
         )
+        expected_token = None
         try:
-            if _state._escape_detector_mode == "shadow":
-                with expected_original_call(func, f"torch_func:{func_name}:logged"):
+            if _diagnostic_edge_armed():
+                with expected_original_call(
+                    func,
+                    f"torch_func:{func_name}:logged",
+                    func_name=func_name,
+                    func_call_id=func_call_id,
+                    call_barcode=func_call_barcode,
+                ) as expected_token:
                     out_orig = func(*args, **kwargs)
             else:
                 out_orig = func(*args, **kwargs)
@@ -1058,20 +1133,38 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         else:
             output_tensors = _collect_output_tensors(out_orig)
 
+        call_emitted_op = False
         if len(output_tensors) > 0:
-            log_function_output_tensors(
-                trace,
-                func,
-                func_name,
-                args,
-                kwargs,
-                arg_copies,
-                kwarg_copies,
-                out_orig,
-                exec_ctx,
-                is_bottom_level_func,
-                func_call_id,
-            )
+            # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
+            if _state._completeness_witness_mode == "shadow":
+                with _state.pause_logging():
+                    call_emitted_op = log_function_output_tensors(
+                        trace,
+                        func,
+                        func_name,
+                        args,
+                        kwargs,
+                        arg_copies,
+                        kwarg_copies,
+                        out_orig,
+                        exec_ctx,
+                        is_bottom_level_func,
+                        func_call_id,
+                    )
+            else:
+                call_emitted_op = log_function_output_tensors(
+                    trace,
+                    func,
+                    func_name,
+                    args,
+                    kwargs,
+                    arg_copies,
+                    kwarg_copies,
+                    out_orig,
+                    exec_ctx,
+                    is_bottom_level_func,
+                    func_call_id,
+                )
 
             # Same-object returns are logged against out_orig (a safe_copy with
             # the op's new label). When Python object identity is preserved we
@@ -1102,6 +1195,14 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
+
+        mark_expected_original_accounted(expected_token, captured=call_emitted_op)
+        if (
+            expected_token is not None
+            and not call_emitted_op
+            and _state._completeness_witness_mode == "shadow"
+        ):
+            record_uncaptured_owner_callsite(expected_token)
 
         producer_label = None
         if isinstance(out_orig, torch.Tensor):
@@ -1547,6 +1648,7 @@ def unwrap_torch() -> None:
     _state._active_trace = None
     reset_detector_tables()
     _state._escape_detector_mode = "off"
+    _state._completeness_witness_mode = "off"
     _state._detached_patch_policy = _RELEASE_DEFAULT_PATCH_POLICY
     _state._detached_patch_modules = ()
     from .backward import uninstall_autograd_wrappers
@@ -1707,11 +1809,37 @@ def _configure_escape_detector(mode: EscapeDetectorMode | None) -> EscapeDetecto
     return cast(EscapeDetectorMode, _state._escape_detector_mode)
 
 
+def _configure_completeness_witness(
+    mode: bool | CompletenessWitnessMode | None,
+) -> CompletenessWitnessMode:
+    """Validate and apply the process-level dispatcher witness mode.
+
+    Parameters
+    ----------
+    mode:
+        ``True`` enables diagnostic shadow mode, ``False`` disables it, and
+        ``None`` preserves the current wrapper-epoch setting.
+
+    Returns
+    -------
+    CompletenessWitnessMode
+        Effective mode for subsequent captures.
+    """
+
+    if mode is not None:
+        normalized: str = "shadow" if mode is True else "off" if mode is False else mode
+        if normalized not in {"off", "shadow"}:
+            raise ValueError("completeness_witness must be a bool, 'off', or 'shadow'.")
+        _state._completeness_witness_mode = normalized
+    return cast(CompletenessWitnessMode, _state._completeness_witness_mode)
+
+
 def wrap_torch(
     *,
     patch_policy: DetachedPatchPolicy | Literal["default"] | None = None,
     patch_modules: tuple[str, ...] = (),
     escape_detector: EscapeDetectorMode | None = None,
+    completeness_witness: bool | CompletenessWitnessMode | None = None,
 ) -> None:
     """Install (or re-install) torchlens wrappers on all torch functions.
 
@@ -1734,11 +1862,15 @@ def wrap_torch(
     escape_detector:
         Opt-in callable diagnostic mode. ``"shadow"`` reports exact raw-call
         escapes and marks traces unverified; the release default is ``"off"``.
+    completeness_witness:
+        Opt-in aten dispatcher census. ``True`` or ``"shadow"`` reports
+        unaccounted dispatches and marks traces unverified; default is off.
     """
     from .backward import install_autograd_wrappers
 
     effective_policy = _configure_patch_policy(patch_policy, patch_modules)
     _configure_escape_detector(escape_detector)
+    _configure_completeness_witness(completeness_witness)
 
     if _state._is_decorated:
         install_autograd_wrappers()
@@ -1796,6 +1928,7 @@ def wrapped(
     patch_policy: DetachedPatchPolicy | Literal["default"] | None = None,
     patch_modules: tuple[str, ...] = (),
     escape_detector: EscapeDetectorMode | None = None,
+    completeness_witness: bool | CompletenessWitnessMode | None = None,
 ) -> Iterator[None]:
     """Context manager: wrap torch on entry, unwrap on exit.
 
@@ -1813,11 +1946,14 @@ def wrapped(
         Additive scoped deep-scan module/package prefixes.
     escape_detector:
         Optional ``"off"`` or diagnostic ``"shadow"`` mode.
+    completeness_witness:
+        Optional bool or ``"off"``/``"shadow"`` dispatcher witness mode.
     """
     wrap_torch(
         patch_policy=patch_policy,
         patch_modules=patch_modules,
         escape_detector=escape_detector,
+        completeness_witness=completeness_witness,
     )
     try:
         yield
