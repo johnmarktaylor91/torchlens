@@ -795,10 +795,17 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[s
     Only applies to known factory functions (``torch.zeros``, ``torch.ones``, etc.)
     whose names were collected into ``_DEVICE_CONSTRUCTOR_NAMES`` at decoration time.
     """
-    # Early exit: not a factory function, or caller already specified device
+    # Early exit: not a factory function, or caller already pinned a real device.
     if not (_DEVICE_CONSTRUCTOR_NAMES and func_name in _DEVICE_CONSTRUCTOR_NAMES):
         return kwargs
-    if "device" in kwargs:
+    # An EXPLICIT ``device=None`` (e.g. ``nn.Linear`` forwards ``factory_kwargs``
+    # with ``device=None``) means "defer to the active device context", exactly
+    # like an absent kwarg -- native C dispatch would still inject the context
+    # device. Only a non-None device pins the result, so bail solely in that case;
+    # otherwise fall through and inject the active DeviceContext device. Using
+    # ``"device" in kwargs`` here would treat ``device=None`` as pinned and skip
+    # injection, silently placing meta-context tensors on CPU.
+    if kwargs.get("device") is not None:
         return kwargs
     stack_length = get_torch_function_mode_stack_length()
     if stack_length is not None and stack_length > 0:
@@ -1717,6 +1724,21 @@ def unwrap_torch() -> None:
 
     # Restoring Tensor.__getitem__ doesn't clear the stale sq_item slot.
     _fix_tensor_sequence_slot()
+
+    # Torch's ``_device_constructors()`` is an lru_cache keyed on nothing; it
+    # memoizes the SET of factory callables that ``DeviceContext.__torch_function__``
+    # injects a device into. ``wrap_torch`` cleared and re-populated it so the set
+    # held our WRAPPED callables. Now that the originals are restored, that cache is
+    # stale (it still points at the replaced wrappers), so torch's device-context
+    # dispatch would no longer recognise the restored ``torch.empty``/``zeros``/...
+    # as device constructors -- silently breaking ``with torch.device('meta'): ...``
+    # after an unwrap. Clear it so torch re-evaluates against the restored originals.
+    device_constructors = get_device_constructors()
+    if device_constructors is not None:
+        try:
+            device_constructors.cache_clear()
+        except (AttributeError, TypeError):
+            pass
 
 
 def _resolve_patch_policy(
