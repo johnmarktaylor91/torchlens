@@ -97,7 +97,8 @@ from .code_panel import (
     render_code_panel_subgraph,
     resolve_code_panel_source,
 )
-from .collapse_plan import CollapsePlan, RawOp, RenderContext, SegmentDescriptor
+from .collapse_plan import CollapsePlan, RawOp, SegmentDescriptor
+from .request import RenderContext
 from .render_ir import build_render_ir, projected_antiparallel_endpoint_pairs
 from ._render_utils import (
     compute_module_penwidth,

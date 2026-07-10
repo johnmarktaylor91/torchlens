@@ -10,6 +10,8 @@ from ._render_edges import *
 from ._render_nodes import *
 from ._render_flow import *
 from ._render_utils import html_escape
+from .request import RenderTarget, ResolvedRenderRequest
+from .source_graph import _resolve_focus_module, build_source_graph
 
 
 def _view_rendered_file(filepath: str) -> None:
@@ -312,6 +314,56 @@ def draw(
     if fold_repeats not in {None, True, False}:
         raise ValueError("fold_repeats must be None, True, or False.")
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
+    theme = resolve_theme(vis_theme, for_paper=for_paper)
+    if node_overlay is None:
+        node_overlay = getattr(self, "_node_overlay_scores", None)
+    elif isinstance(node_overlay, str) and node_overlay == getattr(
+        self, "_node_overlay_name", None
+    ):
+        node_overlay = getattr(self, "_node_overlay_scores", None)
+    resolved_node_overlay = cast("str | OverlayScores | None", node_overlay)
+    overrides = VisualizationOverrides(
+        graph=graphviz_graph_overrides(vis_graph_overrides),
+        edge=vis_edge_overrides or {},
+        grad_edge=vis_grad_edge_overrides or {},
+        module=vis_module_overrides or {},
+    )
+    request = ResolvedRenderRequest(
+        vis_mode=vis_mode,
+        show_buffer_layers=show_buffer_layers,
+        show_containers=show_containers,
+        engine=vis_node_placement,
+        skip_fn=skip_fn,
+        vis_call_depth=vis_call_depth,
+        module=module,
+        node_mode=node_mode,
+        node_spec_fn=node_spec_fn,
+        collapsed_node_spec_fn=collapsed_node_spec_fn,
+        collapse_fn=collapse_fn,
+        collapse=collapse,
+        fold_repeats=fold_repeats,
+        graph_overrides=vis_graph_overrides,
+        edge_overrides=vis_edge_overrides,
+        grad_edge_overrides=vis_grad_edge_overrides,
+        module_overrides=vis_module_overrides,
+        overrides=overrides,
+        theme=vis_theme,
+        intervention_mode=vis_intervention_mode,
+        show_cone=vis_show_cone,
+        code_panel=code_panel,
+        node_overlay=resolved_node_overlay,
+        node_label_fields=tuple(node_label_fields) if node_label_fields is not None else None,
+        show_legend=show_legend,
+        font_size=font_size,
+        dpi=dpi,
+        for_paper=for_paper,
+        return_graph=return_graph,
+        order_siblings=order_siblings,
+        container_max_inline=container_max_inline,
+        show_input_transform_summary=show_input_transform_summary,
+        show_orphans=show_orphans,
+        direction=direction,
+    )
     site_labels, _ = intervention_site_and_cone_labels(self, show_cone=vis_show_cone)
     intervention_node_spec_fn = make_intervention_node_spec_fn(
         self,
@@ -342,16 +394,13 @@ def draw(
         )
     if vis_renderer not in {"graphviz", "dagua"}:
         raise ValueError("vis_renderer must be 'graphviz' or 'dagua'")
-    render_context = RenderContext(
-        vis_mode=vis_mode,
-        show_buffer_layers=show_buffer_layers,
-        show_containers=show_containers,
-        engine=vis_node_placement,
-    )
+    render_context = request
     if collapse != "none" and collapse_fn is None:
         from .auto_collapse import resolve_collapse_fn
 
         collapse_fn = resolve_collapse_fn(self, collapse, vis_mode, context=render_context)
+    request = request.with_resolved_collapse(collapse_fn)
+    render_context = request
     repeat_folds: dict[str, ModuleRepeatFold] = {}
     collapse_uses_default_folds = collapse in {"auto", "max"} or (
         isinstance(collapse, float) and collapse > 0.0
@@ -368,48 +417,25 @@ def draw(
     segments: dict[str, SegmentDescriptor] = {}
     if collapse_fn is not None:
         segments = dict(getattr(collapse_fn, "_torchlens_v2_segments", {}) or {})
-    theme = resolve_theme(vis_theme, for_paper=for_paper)
-    if node_overlay is None:
-        node_overlay = getattr(self, "_node_overlay_scores", None)
-    elif isinstance(node_overlay, str) and node_overlay == getattr(
-        self, "_node_overlay_name", None
-    ):
-        node_overlay = getattr(self, "_node_overlay_scores", None)
-    resolved_node_overlay = cast("str | OverlayScores | None", node_overlay)
-
-    overrides = VisualizationOverrides(
-        graph=graphviz_graph_overrides(vis_graph_overrides),
-        edge=vis_edge_overrides or {},
-        grad_edge=vis_grad_edge_overrides or {},
-        module=vis_module_overrides or {},
-    )
-
     # THE _layers_logged guard: protects all downstream rendering code from missing-layer lookups.
     if not self._layers_logged:
         raise ValueError(
             "Must have all layers logged in order to render the graph; use show_model_graph."
         )
 
-    vis_outpath = _strip_render_extension(vis_outpath)
-
-    # Unrolled: iterate Op objects (one node per pass).
-    # Rolled: iterate Layer objects (one node per logical layer, multi-pass
-    # collapsed into a single node with edge annotations).
-    if vis_mode == "unrolled":
-        entries_to_plot: dict[str, GraphNode] = dict(self.layer_dict_main_keys)
-    elif vis_mode == "rolled":
-        entries_to_plot = dict(self.layer_logs)
-    else:
-        raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
-
-    if module is not None:
-        target_module = _resolve_focus_module(self, module)
-        entries_to_plot = _build_module_focus_entries(
-            self,
-            entries_to_plot,
-            target_module,
-            vis_mode=vis_mode,
-        )
+    target = RenderTarget(
+        outpath=_strip_render_extension(vis_outpath),
+        fileformat=vis_fileformat,
+        save_only=vis_save_only,
+        viewer=not vis_save_only,
+        renderer_name=vis_renderer,
+    )
+    vis_outpath = target.outpath
+    vis_fileformat = target.fileformat
+    vis_save_only = target.save_only
+    vis_renderer = target.renderer_name
+    source_graph = build_source_graph(self, request)
+    entries_to_plot = source_graph.entries_to_plot
 
     rankdir = direction_to_rankdir(direction)
 
@@ -421,13 +447,8 @@ def draw(
         get_node_placement_engine,
     )
 
-    edge_map, skipped_labels = _build_skip_filtered_edge_map(
-        self,
-        entries_to_plot,
-        vis_mode=vis_mode,
-        show_buffer_layers=show_buffer_layers,
-        skip_fn=skip_fn,
-    )
+    edge_map = source_graph.edge_map
+    skipped_labels = source_graph.skipped_labels
     source_text = resolve_code_panel_source(
         code_panel,
         getattr(self, "_source_code_blob", {}),
@@ -579,13 +600,7 @@ def draw(
         self,
         collapse_fn=collapse_fn,
         repeat_folds=repeat_folds,
-        context=RenderContext(
-            vis_mode=vis_mode,
-            show_buffer_layers=show_buffer_layers,
-            show_containers=show_containers,
-            engine="dot",
-            skip_fn=skip_fn,
-        ),
+        context=request,
     )
     antiparallel_projected_edges = projected_antiparallel_endpoint_pairs(forward_render_ir)
 
@@ -1226,46 +1241,6 @@ def _queue_container_clusters(
         if cluster.owner_key == -1:
             continue
         module_cluster_dict[cast(str, cluster.owner_key)]["container_clusters"].append(cluster)
-
-
-def _resolve_focus_module(
-    trace: "Trace",
-    module: "Module | str",
-) -> "Module":
-    """Resolve and validate a module focus argument.
-
-    Parameters
-    ----------
-    trace:
-        Model log being rendered.
-    module:
-        Module instance or module address string.
-
-    Returns
-    -------
-    Module
-        Module to focus.
-
-    Raises
-    ------
-    ValueError
-        If the module cannot be found or belongs to a different Trace.
-    """
-
-    from ..data_classes.module import Module
-
-    if isinstance(module, str):
-        if module not in trace.modules:
-            raise ValueError(f"Module address '{module}' was not found in this Trace.")
-        resolved = trace.modules[module]
-        if not isinstance(resolved, Module):
-            raise ValueError(f"Module address '{module}' resolved to a module pass, not a Module.")
-        return resolved
-    if not isinstance(module, Module):
-        raise ValueError("module must be a Module, module address string, or None.")
-    if module._source_trace is not trace:
-        raise ValueError("Module focus must belong to the Trace being rendered.")
-    return module
 
 
 def _is_collapsed_module(

@@ -5,40 +5,15 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from .._literals import BufferVisibilityLiteral, VisModeLiteral, VisNodePlacementLiteral
+from .request import RenderContext
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
-
-
-@dataclass(frozen=True)
-class RenderContext:
-    """Visualization context bits that affect collapse planning.
-
-    Parameters
-    ----------
-    vis_mode:
-        Render granularity, ``"unrolled"`` by default.
-    show_buffer_layers:
-        Buffer visibility policy used by the renderer.
-    show_containers:
-        Container overlay policy. R1a parity is scoped to ``False``.
-    engine:
-        Graph layout engine. R1a parity is scoped to Graphviz ``dot``.
-    skip_fn:
-        Optional public node-skip predicate threaded into render IR.
-    """
-
-    vis_mode: VisModeLiteral = "unrolled"
-    show_buffer_layers: BufferVisibilityLiteral = "meaningful"
-    show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False
-    engine: VisNodePlacementLiteral = "dot"
-    skip_fn: Callable[[Any], bool] | None = None
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from .collapse_plan import RenderContext
+from .request import RenderContext
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
