@@ -12,6 +12,7 @@ from .data_classes.grad_fn_call import GradFnCall
 from .data_classes.op import TensorLog
 from .data_classes.module import Module, ModuleCall
 from .data_classes.param import Param
+from .data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
 from .intervention import SaveLevel, SiteTable, SpecCompat, TargetManifestDiff, TensorSliceSpec
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
 
@@ -32,12 +33,15 @@ __all__ = [
     "Macs",
     "Module",
     "ModuleCall",
+    "ModuleInputSnapshot",
     "Param",
+    "PreHookEffect",
     "Quantity",
     "SaveLevel",
     "SiteTable",
     "SpecCompat",
     "TargetManifestDiff",
     "TensorLog",
+    "TensorInputObservation",
     "TensorSliceSpec",
 ]

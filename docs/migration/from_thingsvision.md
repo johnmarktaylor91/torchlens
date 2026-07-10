@@ -12,6 +12,7 @@ Their construct:
 
 ```python
 # migration-test: tool=thingsvision expected=[[2.5, 2.5]]
+# Output values depend on the pinned ThingsVision/model weights.
 import torch
 from thingsvision import get_extractor
 

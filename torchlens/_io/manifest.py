@@ -55,6 +55,8 @@ class TensorEntry:
         Persisted tensor byte size after any ``.contiguous()`` conversion.
     sha256:
         SHA-256 digest of the written blob file bytes.
+    requires_grad:
+        Whether the logical torch tensor required gradients at save time.
     logical_backend:
         Optional logical backend that produced the payload before transport.
     codec:
@@ -82,6 +84,7 @@ class TensorEntry:
     layout: str
     bytes: int
     sha256: str
+    requires_grad: bool = False
     logical_backend: str | None = None
     codec: str | None = None
     logical_dtype: str | None = None
@@ -150,6 +153,9 @@ class TensorEntry:
         codec_metadata = data.get("codec_metadata")
         if codec_metadata is not None and not isinstance(codec_metadata, dict):
             raise TorchLensIOError("Manifest tensor entry 'codec_metadata' must be an object.")
+        requires_grad = data.get("requires_grad", False)
+        if not isinstance(requires_grad, bool):
+            raise TorchLensIOError("Manifest tensor entry 'requires_grad' must be a boolean.")
 
         return cls(
             blob_id=data["blob_id"],
@@ -163,6 +169,7 @@ class TensorEntry:
             layout=data["layout"],
             bytes=num_bytes,
             sha256=data["sha256"],
+            requires_grad=requires_grad,
             codec_metadata=codec_metadata,
             **optional_strings,
         )

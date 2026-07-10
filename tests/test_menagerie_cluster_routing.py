@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,11 @@ from menagerie.cluster_runner import (
 )
 from menagerie.ledger import VerificationRun, append_verification_run, connect
 from menagerie.runtime import DependencyPlan
+
+CATALOG_ARTIFACT = Path(__file__).resolve().parents[1] / "menagerie" / "data" / "catalog.db"
+CATALOG_SKIP_REASON = "requires local menagerie data artifacts; not part of the portable suite"
+CLUSTER_SKIP_REASON = "requires local cluster environment; not part of the portable suite"
+HAS_CLUSTER_ENV = bool(os.environ.get("TORCHLENS_MENAGERIE_CLUSTER"))
 
 
 def _assignment(stable_id: str, array_index: int, **overrides: object) -> ClusterAssignment:
@@ -124,6 +130,7 @@ def test_resource_route_cuda_required_fits_local_gpu(monkeypatch: pytest.MonkeyP
     assert route.cluster is False
 
 
+@pytest.mark.skipif(not CATALOG_ARTIFACT.exists(), reason=CATALOG_SKIP_REASON)
 def test_catalog_cuda_required_ids_route_to_local_rtx_2080_ti() -> None:
     """Catalog-confirmed CUDA-only recipes route to the local 11 GiB GPU."""
 
@@ -149,6 +156,7 @@ def test_catalog_cuda_required_ids_route_to_local_rtx_2080_ti() -> None:
         assert route.cluster is False
 
 
+@pytest.mark.skipif(not CATALOG_ARTIFACT.exists(), reason=CATALOG_SKIP_REASON)
 def test_cuda_required_catalog_recipes_request_cuda() -> None:
     """The hard-CUDA recipe records carry explicit CUDA device metadata."""
 
@@ -173,6 +181,7 @@ def test_cuda_required_catalog_recipes_request_cuda() -> None:
     assert all(record["recipe"].get("device_requested") == "cuda" for record in records.values())
 
 
+@pytest.mark.skipif(not CATALOG_ARTIFACT.exists(), reason=CATALOG_SKIP_REASON)
 def test_cuda_required_catalog_rows_resolve_to_cuda_env() -> None:
     """The CUDA-only catalog rows resolve to a CUDA validation island."""
 
@@ -424,6 +433,7 @@ def _args(tmp_path: Path, *extra: str) -> Any:
     )
 
 
+@pytest.mark.skipif(not HAS_CLUSTER_ENV, reason=CLUSTER_SKIP_REASON)
 def test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local(
     tmp_path: Path,
     monkeypatch: Any,
@@ -920,6 +930,7 @@ def test_local_first_remote_ram_failure_does_not_escalate(
     assert routed == ()
 
 
+@pytest.mark.skipif(not CATALOG_ARTIFACT.exists(), reason=CATALOG_SKIP_REASON)
 def test_giant_registry_force_cluster_only_for_genuine_giants() -> None:
     """Only measured-nonfit giants keep ``force_cluster=True``.
 
@@ -988,6 +999,7 @@ def test_no_build_catalog_selection_uses_read_only_loader(
     assert [item.stable_id for item in selected] == ["m1"]
 
 
+@pytest.mark.skipif(not HAS_CLUSTER_ENV, reason=CLUSTER_SKIP_REASON)
 def test_cluster_routing_resume_uses_ledger_not_manifest(
     tmp_path: Path,
     monkeypatch: Any,
@@ -1045,6 +1057,7 @@ def test_cluster_routing_resume_uses_ledger_not_manifest(
     assert records["m4527"]["status"] == "validated"
 
 
+@pytest.mark.skipif(not HAS_CLUSTER_ENV, reason=CLUSTER_SKIP_REASON)
 def test_cluster_unreachable_writes_terminal_rows_and_continues(
     tmp_path: Path,
     monkeypatch: Any,
@@ -1086,6 +1099,7 @@ def test_cluster_unreachable_writes_terminal_rows_and_continues(
     assert records["m4527"]["status"] == "skipped:cluster_unavailable"
 
 
+@pytest.mark.skipif(not HAS_CLUSTER_ENV, reason=CLUSTER_SKIP_REASON)
 def test_cluster_timeout_writes_terminal_rows_and_continues(
     tmp_path: Path,
     monkeypatch: Any,
@@ -1120,6 +1134,7 @@ def test_cluster_timeout_writes_terminal_rows_and_continues(
     assert "reason=cluster_timeout" in row["error_message"]
 
 
+@pytest.mark.skipif(not CATALOG_ARTIFACT.exists(), reason=CATALOG_SKIP_REASON)
 def test_cluster_candidates_exclude_pixi_island_giants() -> None:
     """A pixi-island giant (deps absent on the cluster) is never cluster-routed.
 

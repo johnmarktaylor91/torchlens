@@ -4,8 +4,10 @@ Covers: import paths, registry consistency, perturbation unit tests,
 deep clone helpers, and integration tests through specific exemption paths.
 """
 
-from collections import namedtuple
+from collections import defaultdict, deque, namedtuple
 from dataclasses import replace
+import threading
+import warnings
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -13,11 +15,14 @@ import pytest
 import torch
 import torch.nn as nn
 
+# Import the implementation entry point first: it breaks the standalone
+# collection cycle between torchlens and torchlens._user_public_impls.
+import torchlens.user_funcs as user_funcs
 import torchlens as tl
+import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens.validation import validate_forward_pass
-import torchlens.user_funcs as user_funcs
-from torchlens.errors import MetadataInvariantError
+from torchlens.errors import MetadataInvariantError, TraceNotReproducibleWarning
 from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
 from torchlens.validation import check_metadata_invariants
@@ -41,6 +46,8 @@ from torchlens.validation.core import (
     _op_reduction_depth,
     _deep_numeric_replay_matches_saved,
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
+    ValidationDecisionRecorder,
+    validate_parents_of_saved_layer,
 )
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
@@ -166,6 +173,98 @@ def test_validation_replay_status_aggregate_fold() -> None:
     assert bool(failed_status) is False
     assert passed_status.state == "passed"
     assert bool(passed_status) is True
+
+
+def test_validation_decision_recorder_counts_distinct_nodes() -> None:
+    """Node coverage counts must not count replay phases as extra nodes."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="add_1:1",
+        func_name="add",
+        phase="replay",
+        decision="validated",
+        reason="replay_matched",
+    )
+    recorder.record(
+        op_label="add_1:1",
+        func_name="add",
+        phase="perturbation",
+        decision="validated",
+        reason="perturbation_changed",
+    )
+    recorder.record(
+        op_label="output_1:1",
+        func_name="none",
+        phase="ground_truth",
+        decision="validated",
+        reason="ground_truth_matched",
+    )
+
+    status = recorder.as_status()
+
+    assert status.replayed_node_count == 2
+    assert status.state == "passed"
+
+
+def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire() -> None:
+    """Repeated failure decisions still produce one genuine failed node."""
+
+    recorder = ValidationDecisionRecorder()
+    for phase in ("replay", "perturbation"):
+        recorder.record(
+            op_label="broken_1:1",
+            func_name="broken",
+            phase=phase,
+            decision="failed",
+            reason="replay_mismatch",
+        )
+
+    status = recorder.as_status()
+
+    assert status.failed_node_count == 1
+    assert status.state == "failed"
+    assert bool(status) is False
+
+
+def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
+    """Exemptions alone must produce a non-boolean unverified terminal state."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="structural_1:1",
+        func_name="structural",
+        phase="perturbation",
+        decision="exempted",
+        reason="pre_perturbation_exemption",
+    )
+
+    status = recorder.as_status()
+
+    assert status.state == "unverified"
+    assert status.reason == "no_nodes_replay_validated"
+    assert status.replayed_node_count == 0
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(status)
+
+
+def test_validation_positive_replay_coverage_can_still_pass() -> None:
+    """The zero-coverage guard must not block a genuinely validated node."""
+
+    recorder = ValidationDecisionRecorder()
+    recorder.record(
+        op_label="identity_1:1",
+        func_name="identity",
+        phase="replay",
+        decision="validated",
+        reason="replay_matched",
+    )
+
+    status = recorder.as_status()
+
+    assert status.state == "passed"
+    assert status.replayed_node_count == 1
+    assert bool(status) is True
 
 
 @pytest.mark.smoke
@@ -999,6 +1098,81 @@ def test_validate_forward_pass_plain_attribute_mutable_state_isolated() -> None:
     assert validate_forward_pass(PlainMutableState(), torch.randn(3)) is True
 
 
+def test_validate_forward_pass_restores_pristine_state_before_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validation replay starts from the validation model's pre-capture state."""
+
+    class CounterBuffer(nn.Module):
+        """Model whose registered counter changes its structural forward path."""
+
+        def __init__(self) -> None:
+            """Initialize the mutable buffer."""
+
+            super().__init__()
+            self.register_buffer("step", torch.zeros(()))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a counter-selected branch, then advance the counter."""
+
+            step = cast(torch.Tensor, self.step)
+            if step.item() > 0:
+                output = x * 2
+            else:
+                output = x + 1
+            step.add_(1)
+            return output
+
+    replay_entry_steps: list[float] = []
+
+    def observe_replay_entry(trace: Trace) -> None:
+        """Record the validation model state visible at replay completion."""
+
+        source_ref = getattr(trace, "_source_model_ref")
+        source_model = source_ref()
+        assert source_model is not None
+        replay_entry_steps.append(float(cast(torch.Tensor, source_model.step).item()))
+
+    with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                CounterBuffer(),
+                torch.randn(3),
+                validate_metadata=False,
+                _trace_observer=observe_replay_entry,
+            )
+            is True
+        )
+    assert replay_entry_steps == [0.0]
+
+    original_restore = user_public_impls._restore_validation_replay_state
+
+    def skip_restore(
+        model: nn.Module,
+        state_dict: dict[str, torch.Tensor],
+        plain_attr_snapshot: object | None,
+    ) -> None:
+        """Simulate the old validation behavior that replayed post-pass state."""
+
+        del model, state_dict, plain_attr_snapshot
+
+    replay_entry_steps.clear()
+    monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", skip_restore)
+
+    with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                CounterBuffer(),
+                torch.randn(3),
+                validate_metadata=False,
+                _trace_observer=observe_replay_entry,
+            )
+            is True
+        )
+    assert replay_entry_steps == [2.0]
+    monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", original_restore)
+
+
 def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() -> None:
     """Un-deepcopyable models fall back to state_dict restore with warning."""
 
@@ -1019,6 +1193,238 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_replay_copy_fallback_warns_for_lock_attr() -> None:
+    """Replay copy failure falls back to live state with an explicit warning."""
+
+    class LockBackedModel(nn.Module):
+        """Model holding an uncopyable external resource."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and a simple registered buffer."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.register_buffer("bias", torch.ones(3))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Use registered tensor state without mutating the lock."""
+
+            return x + cast(torch.Tensor, self.bias)
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="validation replay against live model state; model could not be copied",
+    ):
+        assert validate_forward_pass(LockBackedModel(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
+    """Validation warns when a second trace has a different structure."""
+
+    class ToggleBranch(nn.Module):
+        """Model that changes control flow after one forward pass."""
+
+        def __init__(self) -> None:
+            """Initialize branch state."""
+
+            super().__init__()
+            self.use_mul = False
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a different branch after the first pass."""
+
+            if self.use_mul:
+                out = x * 2
+            else:
+                out = x + 1
+            self.use_mul = True
+            return out
+
+    with pytest.warns(
+        TraceNotReproducibleWarning,
+        match="stateful/non-reproducible.*make the forward path state-independent",
+    ):
+        assert validate_forward_pass(ToggleBranch(), torch.randn(2, 3)) is True
+
+
+def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
+    """Validation does not warn for a stateless repeated trace."""
+
+    class StatelessToy(nn.Module):
+        """Small stateless model with stable graph structure."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a deterministic stateless tensor computation."""
+
+            return torch.relu(x + 1)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(StatelessToy(), torch.randn(2, 3)) is True
+
+    messages = [str(warning.message) for warning in caught]
+    assert not any("stateful/non-reproducible" in message for message in messages)
+
+
+def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None:
+    """Same-option retracing must ignore train-mode BatchNorm value drift."""
+
+    class BatchNormModel(nn.Module):
+        """Model with a state-mutating registered BatchNorm buffer."""
+
+        def __init__(self) -> None:
+            """Initialize train-mode BatchNorm."""
+
+            super().__init__()
+            self.batch_norm = nn.BatchNorm1d(3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Update BatchNorm running statistics and return normalized inputs."""
+
+            return self.batch_norm(x)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(BatchNormModel(), torch.randn(4, 3)) is True
+
+    assert not any(issubclass(warning.category, TraceNotReproducibleWarning) for warning in caught)
+
+
+def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
+    """Live-model fallback also runs the structural reproducibility trace."""
+
+    execution_count = [0]
+
+    class UncopyableExecutionCounter(nn.Module):
+        """Uncopyable model that records every full forward execution."""
+
+        def __init__(self) -> None:
+            """Initialize the execution counter."""
+
+            super().__init__()
+
+        def __deepcopy__(self, memo: dict[int, object]) -> "UncopyableExecutionCounter":
+            """Reject validation's isolation copies."""
+
+            del memo
+            raise TypeError("cannot deepcopy model")
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Count and execute a stable forward path."""
+
+            execution_count[0] += 1
+            return x + 1
+
+    model = UncopyableExecutionCounter()
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert validate_forward_pass(model, torch.randn(2, 3)) is True
+
+    assert execution_count == [3]
+
+
+def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
+    """Ground-truth fallback skips only an unsnapshotable plain attribute."""
+
+    class UncopyableOpaqueState(nn.Module):
+        """Model that defeats both deepcopy and plain-attribute snapshots."""
+
+        def __init__(self) -> None:
+            """Initialize opaque state that fallback snapshotting cannot represent."""
+
+            super().__init__()
+            self.opaque_state = object()
+
+        def __deepcopy__(self, memo: dict[int, object]) -> "UncopyableOpaqueState":
+            """Reject isolated ground-truth copies."""
+
+            del memo
+            raise TypeError("cannot deepcopy model")
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a stable output without using the opaque state."""
+
+            return x + 1
+
+    model = UncopyableOpaqueState()
+    with pytest.warns(RuntimeWarning, match="skipping restoration for this attribute only"):
+        fallback_model, snapshot = user_public_impls._model_for_ground_truth_validation(model)
+
+    assert fallback_model is model
+    assert snapshot is not None
+
+
+def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> None:
+    """An opaque attr must not block restoration or the reproducibility tripwire."""
+
+    class LockBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused lock."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and branch counter."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Change graph shape after the first execution."""
+
+            output = x + 1 if self.step == 0 else x * 2
+            self.step += 1
+            return output
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = validate_forward_pass(LockBackedToggle(), torch.randn(3))
+
+    assert result is True
+    assert any(
+        "skipping restoration for this attribute only" in str(item.message) for item in caught
+    )
+    assert any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+
+
+def test_validate_forward_pass_ground_truth_copy_strips_traced_forward_wrappers() -> None:
+    """Ground-truth validation must execute a previously traced nested-model copy."""
+
+    class CountingChild(nn.Module):
+        """Nested child with a source-visible forward counter."""
+
+        def __init__(self) -> None:
+            """Initialize the source execution counter."""
+
+            super().__init__()
+            self.executions = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Count each child forward execution."""
+
+            self.executions += 1
+            return x + 1
+
+    class NestedModel(nn.Module):
+        """Parent model used to install persistent TorchLens wrappers."""
+
+        def __init__(self) -> None:
+            """Initialize the nested child."""
+
+            super().__init__()
+            self.child = CountingChild()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Delegate to the nested child."""
+
+            return self.child(x)
+
+    model = NestedModel()
+    prior_trace = trace_fn(model, torch.randn(2, 3))
+    prior_trace.cleanup()
+    model.child.executions = 0
+
+    assert validate_forward_pass(model, torch.randn(2, 3)) is True
+    assert model.child.executions == 0
 
 
 def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
@@ -1116,6 +1522,144 @@ def test_validate_forward_pass_preserves_distinct_recurrent_output_labels() -> N
             return first, second
 
     assert validate_forward_pass(SharedHeadTuple(), torch.randn(2, 3)) is True
+
+
+def test_replay_validation_checks_every_recurrent_pass() -> None:
+    """PIN: all five executions of a shared module are replay-validated.
+
+    NOTE: this behavior already held before the 2026-07 dead-code removal (the
+    pipeline enqueues pass-qualified labels); this test PINS it so it can never
+    regress. It passes on the pre-refactor base by design.
+    """
+
+    class RecurrentLinear(nn.Module):
+        """Apply one linear cell repeatedly."""
+
+        def __init__(self) -> None:
+            """Initialize the shared recurrent cell."""
+
+            super().__init__()
+            self.cell = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run five recurrent cell passes."""
+
+            for _ in range(5):
+                x = self.cell(x)
+            return x
+
+    model = RecurrentLinear()
+    inputs = torch.randn(2, 3)
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+
+    assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is True
+    replayed_cell_passes = [
+        decision
+        for decision in trace.validation_replay_status.decisions
+        if decision["phase"] == "replay"
+        and decision["func_name"] == "linear"
+        and decision["decision"] == "validated"
+    ]
+    assert len(replayed_cell_passes) == 5
+    assert {decision["op_label"] for decision in replayed_cell_passes} == {
+        "linear_1_1:1",
+        "linear_1_1:2",
+        "linear_1_1:3",
+        "linear_1_1:4",
+        "linear_1_1:5",
+    }
+
+
+def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> None:
+    """Internal-helper hardening: bare-label direct calls validate every pass.
+
+    The public pipeline already fails this corruption end-to-end (it enqueues
+    pass-qualified labels). This test hardens the INTERNAL
+    validate_parents_of_saved_layer entry point against bare multi-pass labels,
+    which previously resolved through a single representative op.
+    """
+
+    class RecurrentLinear(nn.Module):
+        """Apply one linear cell repeatedly."""
+
+        def __init__(self) -> None:
+            """Initialize the shared recurrent cell."""
+
+            super().__init__()
+            self.cell = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run five recurrent cell passes."""
+
+            for _ in range(5):
+                x = self.cell(x)
+            return x
+
+    model = RecurrentLinear()
+    inputs = torch.randn(2, 3)
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+    third_pass = next(op for op in trace.layer_list if op.label == "linear_1_1:3")
+    assert third_pass.saved_args is not None
+    third_pass.saved_args = (third_pass.saved_args[0] + 1.0, *third_pass.saved_args[1:])
+
+    decision_recorder = ValidationDecisionRecorder()
+    result = validate_parents_of_saved_layer(
+        trace,
+        "linear_1_1",
+        set(),
+        set(),
+        defaultdict(set),
+        deque(),
+        decision_recorder=decision_recorder,
+    )
+
+    assert result.failed
+    assert any(
+        decision["op_label"] == "linear_1_1"
+        and decision["phase"] == "replay"
+        and decision["decision"] == "failed"
+        for decision in decision_recorder.as_status().decisions
+    )
+
+
+def test_replay_validation_checks_every_train_batch_norm_pass() -> None:
+    """PIN: train-mode BatchNorm replays all passes from pristine state.
+
+    Passes on the pre-refactor base by design -- pins existing behavior against
+    regression (see test_replay_validation_checks_every_recurrent_pass).
+    """
+
+    class RecurrentBatchNorm(nn.Module):
+        """Apply one train-mode BatchNorm module repeatedly."""
+
+        def __init__(self) -> None:
+            """Initialize the shared normalization module."""
+
+            super().__init__()
+            self.batch_norm = nn.BatchNorm1d(3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run five normalization passes."""
+
+            for _ in range(5):
+                x = self.batch_norm(x)
+            return x
+
+    model = RecurrentBatchNorm().train()
+    inputs = torch.randn(8, 3)
+    pristine_state = {name: value.detach().clone() for name, value in model.state_dict().items()}
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+    model.load_state_dict(pristine_state)
+
+    assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is True
+    replayed_batch_norm_passes = [
+        decision
+        for decision in trace.validation_replay_status.decisions
+        if decision["phase"] == "replay"
+        and decision["func_name"] == "batch_norm"
+        and decision["decision"] == "validated"
+    ]
+    assert len(replayed_batch_norm_passes) == 5
 
 
 def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
@@ -1268,6 +1812,89 @@ def test_skip_perturbation_entirely_are_strings():
         assert isinstance(entry, str) and len(entry) > 0
 
 
+def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
+    """Keep ``full`` value-sensitive and pin the perturbation exemption registry."""
+
+    assert sorted(SKIP_PERTURBATION_ENTIRELY) == [
+        "broadcast_tensors",
+        "deform_conv2d",
+        "expand_as",
+        "exponential_",
+        "fill_",
+        "full_like",
+        "meshgrid",
+        "new_ones",
+        "new_zeros",
+        "nms",
+        "ones_like",
+        "ps_roi_align",
+        "ps_roi_pool",
+        "rand_like",
+        "randn_like",
+        "roi_align",
+        "roi_pool",
+        "zero_",
+        "zeros_like",
+    ]
+    assert "full" not in SKIP_VALIDATION_ENTIRELY
+    assert "full" not in SKIP_PERTURBATION_ENTIRELY
+    assert "full" not in CUSTOM_EXEMPTION_CHECKS
+    assert "full" not in STRUCTURAL_ARG_POSITIONS
+
+
+def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
+    """Healthy ``copy_`` validates while an ignored source still trips validation."""
+
+    class CopySourceModel(nn.Module):
+        """Copy a computed source into a fresh destination."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return values copied from a non-destination parent."""
+
+            source = x + 2
+            destination = torch.zeros_like(x)
+            destination.copy_(source)
+            return destination
+
+    x = torch.tensor([2.0, 3.0, 4.0])
+    healthy_trace = trace_fn(CopySourceModel(), x, save_arg_values=True)
+    healthy_copy = next(op for op in healthy_trace.layer_list if op.func_name == "copy_")
+
+    assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
+    assert (
+        healthy_trace.validate_forward_pass(
+            [healthy_trace[healthy_trace.output_layers[0]].out.detach().clone()],
+            validate_metadata=False,
+        )
+        is True
+    )
+
+    broken_trace = trace_fn(CopySourceModel(), x, save_arg_values=True)
+    broken_copy = next(op for op in broken_trace.layer_list if op.func_name == "copy_")
+    saved_output = broken_copy.out.detach().clone()
+
+    def ignore_source(destination: torch.Tensor, source: torch.Tensor) -> torch.Tensor:
+        """Replay the saved bytes while deliberately ignoring the source parent."""
+
+        del source
+        return destination.copy_(saved_output)
+
+    broken_copy.func = ignore_source
+    broken_result = broken_trace.validate_forward_pass(
+        [broken_trace[broken_trace.output_layers[0]].out.detach().clone()],
+        validate_metadata=False,
+    )
+
+    assert broken_result is False
+    assert broken_trace.validation_replay_status.state == "failed"
+    assert any(
+        decision["op_label"] == broken_copy.label
+        and decision["phase"] == "perturbation"
+        and decision["decision"] == "failed"
+        for decision in broken_trace.validation_replay_status.decisions
+    )
+
+
 def test_structural_arg_positions_values_are_sets_of_ints():
     for func_name, positions in STRUCTURAL_ARG_POSITIONS.items():
         assert isinstance(func_name, str) and len(func_name) > 0
@@ -1285,6 +1912,16 @@ def test_custom_exemption_checks_are_callable():
 # =============================================================================
 # Perturbation unit tests
 # =============================================================================
+
+
+def test_perturbation_response_gate_treats_one_ulp_change_as_unequal() -> None:
+    """The perturbation gate accepts only exact, NaN-aware output equality."""
+
+    saved = torch.tensor([1.0], dtype=torch.float32)
+    recomputed = torch.nextafter(saved, torch.tensor([float("inf")], dtype=torch.float32))
+
+    assert not tensor_nanequal(recomputed, saved, allow_tolerance=False)
+    assert tensor_nanequal(saved, saved.clone(), allow_tolerance=False)
 
 
 @pytest.mark.smoke
@@ -1929,6 +2566,26 @@ class _EmptyLikeModel(nn.Module):
         return x * 2
 
 
+class _InputDerivedFullModel(nn.Module):
+    """Model whose ``full`` fill value is derived from the input."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Fill an input-shaped tensor with the first input value.
+
+        Parameters
+        ----------
+        x:
+            Input tensor supplying the output shape and fill value.
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor created by ``torch.full`` from an input-derived value.
+        """
+
+        return torch.full(x.shape, x[0])
+
+
 def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
     """Return the only layer in ``trace`` with the requested function name.
 
@@ -1982,6 +2639,33 @@ def _assert_custom_exemption_for_arg(
 
         assert CUSTOM_EXEMPTION_CHECKS[func_name](trace, layer, [parent]) is expected
         assert _check_perturbation_exemptions(trace, layer, [parent]) is expected
+    finally:
+        trace.cleanup()
+
+
+def test_input_derived_full_validates_without_an_exemption() -> None:
+    """``full`` is replay-validated through the pipeline rather than exempted."""
+
+    model = _InputDerivedFullModel()
+    x = torch.tensor([1.0, 2.0], dtype=torch.float32)
+    trace = trace_fn(model, x, save_arg_values=True, random_seed=123)
+    try:
+        assert trace.validate_forward_pass([model(x).detach().clone()]) is True
+
+        full_decisions = [
+            decision
+            for decision in trace.validation_replay_status.decisions
+            if decision.get("func_name") == "full"
+        ]
+        assert full_decisions == [
+            {
+                "op_label": _only_layer_with_func_name(trace, "full").layer_label + ":1",
+                "func_name": "full",
+                "phase": "replay",
+                "decision": "validated",
+                "reason": "replay_matched",
+            }
+        ]
     finally:
         trace.cleanup()
 

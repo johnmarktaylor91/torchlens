@@ -106,6 +106,7 @@ def run(
     if replay_options.append:
         return _append_rerun(log, model, x, strict=replay_options.strict)
     _preflight(log, model, x)
+    model = _unwrap_compiled_model(model)
     _warn_if_direct_writes_will_be_overlaid(log)
 
     spec = getattr(log, "_intervention_spec", None)
@@ -206,6 +207,7 @@ def _chunked_rerun(
     """
 
     _preflight(log, model, x)
+    model = _unwrap_compiled_model(model)
     model = _unwrap_model_for_chunk_plan(model)
     x = _coerce_input_args(model, x)
     plan = plan_chunks(x, chunk_size=chunk_size, chunk_paths=chunk_paths)
@@ -298,6 +300,7 @@ def _append_rerun(
     if _is_streaming_append_active(log):
         raise AppendStreamingNotSupportedError(_streaming_append_error_message(log))
     _preflight(log, model, x)
+    model = _unwrap_compiled_model(model)
     _preflight_append(log, model)
     _warn_if_direct_writes_will_be_overlaid(log)
     _warn_if_batch_sensitive_train_modules(model)
@@ -809,6 +812,25 @@ def _preflight(log: "Trace", model: nn.Module, x: Any) -> None:
     from ..user_funcs import _reject_opaque_wrappers
 
     _reject_opaque_wrappers(model)
+
+
+def _unwrap_compiled_model(model: nn.Module) -> nn.Module:
+    """Return the eager source module for a compiled rerun target.
+
+    Parameters
+    ----------
+    model:
+        User-supplied rerun model.
+
+    Returns
+    -------
+    nn.Module
+        The eager source when ``model`` is a compiled Dynamo wrapper.
+    """
+
+    from .._capture_state_helpers import unwrap_compiled_model
+
+    return unwrap_compiled_model(model)
 
 
 def _capture_with_active_spec(

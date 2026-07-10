@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from ..data_classes.grad_fn import GradFn
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def _backward_dot_call_node_name(grad_fn_handle: "GradFn", call: Any) -> str:
@@ -897,34 +897,34 @@ def _collapse_address_for_node(
 
 def _run_fold_for_address(
     address_w_pass: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
-) -> "ModuleRunFold | None":
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
+) -> "ModuleRepeatFold | None":
     """Return the fold descriptor for a module address.
 
     Parameters
     ----------
     address_w_pass:
         Pass-qualified or pass-free module address.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
     -------
-    ModuleRunFold | None
+    ModuleRepeatFold | None
         Matching fold descriptor, or ``None``.
     """
 
-    if run_folds is None:
+    if repeat_folds is None:
         return None
-    return run_folds.get(address_w_pass.rsplit(":", 1)[0])
+    return repeat_folds.get(address_w_pass.rsplit(":", 1)[0])
 
 
 def _run_fold_graph_node_name(
     address_w_pass: str,
     vis_mode: str,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
 ) -> str:
-    """Return the Graphviz node name after run-fold remapping.
+    """Return the Graphviz node name after repeat-fold remapping.
 
     Parameters
     ----------
@@ -932,7 +932,7 @@ def _run_fold_graph_node_name(
         Pass-qualified or pass-free module address.
     vis_mode:
         ``"unrolled"`` or ``"rolled"`` visualization mode.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
@@ -941,7 +941,7 @@ def _run_fold_graph_node_name(
         Graphviz node identifier for the folded representative or original module.
     """
 
-    fold = _run_fold_for_address(address_w_pass, run_folds)
+    fold = _run_fold_for_address(address_w_pass, repeat_folds)
     if fold is None:
         module_tuple = address_w_pass.split(":")
     else:
@@ -952,24 +952,26 @@ def _run_fold_graph_node_name(
     return module_tuple[0]
 
 
-def _unique_run_folds(run_folds: Mapping[str, "ModuleRunFold"]) -> tuple["ModuleRunFold", ...]:
+def _unique_repeat_folds(
+    repeat_folds: Mapping[str, "ModuleRepeatFold"],
+) -> tuple["ModuleRepeatFold", ...]:
     """Return unique fold descriptors in deterministic representative order.
 
     Parameters
     ----------
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
 
     Returns
     -------
-    tuple[ModuleRunFold, ...]
+    tuple[ModuleRepeatFold, ...]
         Unique folds sorted by representative address.
     """
 
     seen: set[str] = set()
-    unique: list[ModuleRunFold] = []
-    for address in sorted(run_folds):
-        fold = run_folds[address]
+    unique: list[ModuleRepeatFold] = []
+    for address in sorted(repeat_folds):
+        fold = repeat_folds[address]
         if fold.representative in seen:
             continue
         seen.add(fold.representative)
@@ -978,14 +980,14 @@ def _unique_run_folds(run_folds: Mapping[str, "ModuleRunFold"]) -> tuple["Module
 
 
 def _run_fold_representative_names(
-    run_folds: Mapping[str, "ModuleRunFold"],
+    repeat_folds: Mapping[str, "ModuleRepeatFold"],
     vis_mode: str,
 ) -> set[str]:
     """Return Graphviz node names for unique folded-run representatives.
 
     Parameters
     ----------
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by pass-free module address.
     vis_mode:
         ``"unrolled"`` or ``"rolled"`` visualization mode.
@@ -1002,7 +1004,7 @@ def _run_fold_representative_names(
             vis_mode,
             {fold.representative: fold},
         )
-        for fold in _unique_run_folds(run_folds)
+        for fold in _unique_repeat_folds(repeat_folds)
     }
 
 
@@ -1721,12 +1723,11 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
     """Return the branch-test kind (``IF`` or ``ELIF``) for a branch-entry edge.
 
     ``conditional_branch_edges`` records the edges that enter each condition test but carries
-    no kind, so a naive renderer labels every test ``IF`` -- wrong for an if/elif ladder where
-    only the first test is the ``if`` and the rest are ``elif``. The authoritative order lives
-    on ``conditional_records[*].bool_layers`` (``[if_bool, elif_1_bool, ...]``; ``else`` has no
-    test). Map the edge's child (the condition-subgraph entry op) to the nearest downstream
-    branch bool via a bounded forward walk, then read its position: index 0 -> ``IF``, any
-    later index -> ``ELIF``.
+    no kind. Map the edge's child to the nearest downstream branch bool via a bounded forward
+    walk, then use that bool's AST-derived ``conditional_context_kind``. This remains honest
+    when one source-level ``if`` is evaluated repeatedly in a loop: every evaluation is ``IF``
+    even though all evaluations accumulate in one conditional event. Static ``elif`` tests are
+    classified directly as ``elif_test`` and continue to render as ``ELIF``.
 
     Parameters
     ----------
@@ -1742,8 +1743,16 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
     """
     bool_kind: dict[str, str] = {}
     for event in getattr(trace, "conditional_records", ()) or ():
-        for position, bool_label in enumerate(getattr(event, "bool_layers", ()) or ()):
-            bool_kind.setdefault(bool_label.split(":", 1)[0], "IF" if position == 0 else "ELIF")
+        for bool_label in getattr(event, "bool_layers", ()) or ():
+            bool_layer = trace[bool_label]
+            bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
+            context_kinds = (
+                {getattr(op, "conditional_context_kind", None) for op in bool_ops}
+                if bool_ops
+                else {getattr(bool_layer, "conditional_context_kind", None)}
+            )
+            kind = "ELIF" if context_kinds == {"elif_test"} else "IF"
+            bool_kind[bool_label.split(":", 1)[0]] = kind
     if not bool_kind:
         return "IF"
 
@@ -2075,6 +2084,6 @@ __all__ = [
     "_shared_gradient_passes",
     "_should_collapse_module",
     "_single_op_module_should_keep_op_render",
-    "_unique_run_folds",
+    "_unique_repeat_folds",
     "_unwrap_focus_node",
 ]

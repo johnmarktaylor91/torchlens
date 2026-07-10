@@ -69,7 +69,6 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
     "new_zeros",
     "new_ones",
     "zero_",
-    "copy_",
     "fill_",
     "zeros_like",
     "ones_like",
@@ -95,6 +94,7 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
 # When the perturbed layer's tensor matches saved_args[pos], skip perturbation.
 # ---------------------------------------------------------------------------
 STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
+    "copy_": {0},  # destination values are overwritten; source values determine output
     "cross_entropy": {1},  # target labels (LongTensor)
     "embedding": {1},  # index tensor — random indices cause CUDA OOB
     "gather": {2},  # index tensor

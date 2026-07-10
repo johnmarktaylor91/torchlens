@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -13,6 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
+from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import BackendPayloadUnsupportedError
 from torchlens.intervention.types import FireRecord, HelperSpec, InterventionSpec
 from torchlens.options import CaptureOptions
@@ -66,6 +69,52 @@ class UnifiedSavedOrphanModel(nn.Module):
         return x + 1
 
 
+class UnifiedPreHookModel(nn.Module):
+    """Tiny model whose pre-hook provenance produces dedicated body payloads."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the effective input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor after user pre-hooks.
+
+        Returns
+        -------
+        torch.Tensor
+            Effective module input.
+        """
+
+        return x
+
+
+class UnifiedPlainAttributeBufferModel(nn.Module):
+    """Model exposing an unregistered tensor attribute during capture."""
+
+    def __init__(self) -> None:
+        """Initialize the plain tensor attribute."""
+
+        super().__init__()
+        self.scale = torch.ones(3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Multiply by the plain tensor attribute.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scaled output tensor.
+        """
+
+        return x * self.scale
+
+
 def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
@@ -90,6 +139,20 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
             random_seed=0,
         ),
     )
+
+
+def _captured_pre_hook_log() -> tl.Trace:
+    """Create a trace with persisted mutating pre-hook provenance.
+
+    Returns
+    -------
+    tl.Trace
+        Trace whose body index includes ``pre_hook_input`` payloads.
+    """
+
+    model = UnifiedPreHookModel()
+    model.register_forward_pre_hook(lambda _module, args: (args[0] + 1,))
+    return tl.trace(model, torch.zeros(2, 3))
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:
@@ -274,6 +337,93 @@ def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: 
 
 
 @pytest.mark.smoke
+def test_validate_tlspec_accepts_pre_hook_input_body_payloads(tmp_path: Path) -> None:
+    """The validator accepts the v6 pre-hook provenance schema extension."""
+
+    path = tmp_path / "pre_hook_input.tlspec"
+    _captured_pre_hook_log().save(path)
+    manifest = _read_manifest(path)
+
+    assert "pre_hook_input" in {entry["intended_use"] for entry in manifest["body_index"]}
+    validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> None:
+    """Extending the v6 vocabulary does not disarm unknown-kind validation."""
+
+    path = tmp_path / "unknown_intended_use.tlspec"
+    _captured_pre_hook_log().save(path)
+    manifest = _read_manifest(path)
+    entry = next(
+        item for item in manifest["body_index"] if item["intended_use"] == "pre_hook_input"
+    )
+    entry["intended_use"] = "unknown_provenance_payload"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ValueError, match="intended_use"):
+        validate_tlspec(path)
+    with pytest.raises(TorchLensIOError, match="intended_use"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("mutation", ["ghost", "filename"])
+def test_unified_load_rejects_desynchronized_body_index(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    """Load cross-checks the public body index against operative tensors."""
+
+    path = tmp_path / f"desynchronized_{mutation}.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    if mutation == "ghost":
+        ghost_entry = dict(manifest["body_index"][0])
+        ghost_entry["filename"] = "blobs/ghost.safetensors"
+        manifest["body_index"].append(ghost_entry)
+    else:
+        manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(TorchLensIOError, match="body_index"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_missing_path(tmp_path: Path) -> None:
+    """A nonexistent path is not a legacy bundle."""
+
+    path = tmp_path / "missing.tlspec"
+
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
+    """A present corrupt manifest is rejected instead of treated as legacy."""
+
+    path = tmp_path / "corrupt.tlspec"
+    path.mkdir()
+    (path / "manifest.json").write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Failed to parse.*manifest"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_still_accepts_genuine_legacy_bundle() -> None:
+    """A checked-in v2.16 model-log fixture remains accepted for backcompat."""
+
+    fixture_path = (
+        Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
+    )
+
+    validate_tlspec(fixture_path)
+
+
+@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Trace.save writes unified manifests that load polymorphically."""
@@ -296,6 +446,53 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
 
 
 @pytest.mark.smoke
+def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
+    """Current manifests must not apply the v4 backend-address repair."""
+
+    trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
+    plain_buffer_op = next(op for op in trace.ops if op.is_buffer and op.address == "scale")
+    assert plain_buffer_op.backend_address is None
+    assert trace[plain_buffer_op.layer_label].backend_address is None
+
+    path = tmp_path / "plain_attribute_buffer.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    loaded_op = loaded[plain_buffer_op.layer_label].ops[0]
+
+    assert loaded_op.backend_address is None
+    assert loaded[plain_buffer_op.layer_label].backend_address is None
+
+
+@pytest.mark.smoke
+def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
+    """Safetensors sidecars restore each tensor's autograd participation bit."""
+
+    trace = tl.trace(
+        nn.Linear(3, 3),
+        torch.randn(2, 3, requires_grad=True),
+        layers_to_save="all",
+        backward_ready=True,
+    )
+    source_op = next(
+        op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
+    )
+    path = tmp_path / "requires_grad.tlspec"
+
+    trace.save(path)
+    manifest = _read_manifest(path)
+    loaded = tl.load(path)
+    loaded_out = loaded[source_op.layer_label].ops[0].out
+    lazy_loaded = tl.load(path, lazy=True)
+    lazy_out = lazy_loaded[source_op.layer_label].ops[0].materialize_out()
+
+    assert any(entry["requires_grad"] is True for entry in manifest["tensors"])
+    assert isinstance(loaded_out, torch.Tensor)
+    assert loaded_out.requires_grad is True
+    assert isinstance(lazy_out, torch.Tensor)
+    assert lazy_out.requires_grad is True
+
+
+@pytest.mark.smoke
 def test_fresh_unified_save_reports_current_version_with_no_deprecation_warning(
     tmp_path: Path,
 ) -> None:
@@ -308,7 +505,7 @@ def test_fresh_unified_save_reports_current_version_with_no_deprecation_warning(
     merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
     so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
     every same-runtime load raised a false "Bundle tlspec_version=1 is older
-    than runtime tlspec_version=5" ``DeprecationWarning``.
+    than the runtime ``tlspec_version``" ``DeprecationWarning``.
     """
 
     log = _captured_log()
@@ -338,6 +535,24 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
 
     with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
         tl.load(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
+    """Validation enforces the same portable-version ceiling as loading."""
+
+    path = tmp_path / "newer_validation_version.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest["tlspec_version"] = TLSPEC_VERSION + 1
+    _write_manifest(path, manifest)
+    expected = (
+        f"Bundle uses tlspec_version={TLSPEC_VERSION + 1}, but this runtime only supports "
+        f"{TLSPEC_VERSION}."
+    )
+
+    with pytest.raises(ValueError, match=re.escape(expected)):
+        validate_tlspec(path)
 
 
 @pytest.mark.smoke
@@ -804,3 +1019,49 @@ def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
+
+
+@pytest.mark.parametrize(
+    ("helper_name", "helper"),
+    [
+        ("zero_ablate", tl.zero_ablate()),
+        ("splice_module", tl.splice_module(nn.Identity())),
+    ],
+)
+def test_intervene_trace_round_trips_transient_dedup_state(
+    tmp_path: Path,
+    helper_name: str,
+    helper: Any,
+) -> None:
+    """Predicate intervention bookkeeping does not leak into portable trace state."""
+
+    trace = tl.trace(
+        UnifiedTinyModel(),
+        torch.randn(2, 3),
+        intervene=tl.when(tl.func("relu"), helper),
+    )
+    path = tmp_path / f"{helper_name}.tlspec"
+
+    tl.save(trace, path)
+    loaded = tl.load(path)
+    replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
+
+    assert replaced_ops
+    assert any(
+        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
+    )
+
+
+def test_unknown_backend_runtime_version_serializes_as_null() -> None:
+    """Unknown backend runtime versions remain JSON null instead of the string ``None``."""
+
+    source = SimpleNamespace(
+        backend_runtime_version=None,
+        backend_runtime_config={},
+        backend_runtime_device_summary={},
+    )
+
+    runtime = _TlSpecWriter._backend_runtime(source, backend_name="mlx")
+
+    assert runtime["version"] is None
+    assert '"version": null' in json.dumps(runtime)

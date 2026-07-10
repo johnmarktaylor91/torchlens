@@ -2,16 +2,45 @@
 
 from __future__ import annotations
 
+import importlib
 import re
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from collections.abc import Callable
+from typing import Any, Iterator, cast
 
 from torch import nn
 
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
+_LAZY_SUBMODULE_EXPORTS = {"dagua", "node_styles"}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve explicitly exported experimental child modules on demand.
+
+    Parameters
+    ----------
+    name:
+        Public experimental attribute to resolve.
+
+    Returns
+    -------
+    Any
+        Requested experimental child module.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an exported experimental child module.
+    """
+
+    if name in _LAZY_SUBMODULE_EXPORTS:
+        module = importlib.import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def attribute_walk(model: nn.Module, address: str) -> Any:
@@ -124,7 +153,8 @@ class Session:
         import torchlens
 
         index = len(self.logs)
-        log = torchlens.trace(
+        trace_fn = cast(Callable[..., Any], torchlens.trace)
+        log = trace_fn(
             self.model,
             input_args,
             input_kwargs=input_kwargs,
@@ -151,7 +181,8 @@ class Session:
 
         import torchlens
 
-        return torchlens.bundle(
+        bundle_fn = cast(Callable[..., Any], torchlens.bundle)
+        return bundle_fn(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.logs)}
         )
 
@@ -247,7 +278,8 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
             model.forward = original_forward
             try:
                 capture_input = list(args)
-                log = torchlens.trace(model, capture_input, kwargs or None)
+                trace_fn = cast(Callable[..., Any], torchlens.trace)
+                log = trace_fn(model, capture_input, kwargs or None)
                 session.logs.append(log)
             finally:
                 model.forward = wrapped_forward

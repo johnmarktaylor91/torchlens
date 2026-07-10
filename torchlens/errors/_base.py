@@ -174,6 +174,10 @@ class TorchLensWarning(UserWarning):
         super().__init__("" if message is None else message)
 
 
+class TraceNotReproducibleWarning(TorchLensWarning):
+    """Warning emitted when validation captures different graph structures."""
+
+
 __all__ = [
     "CaptureError",
     "CompatibilityError",
@@ -182,5 +186,6 @@ __all__ = [
     "Severity",
     "TorchLensError",
     "TorchLensWarning",
+    "TraceNotReproducibleWarning",
     "ValidationError",
 ]

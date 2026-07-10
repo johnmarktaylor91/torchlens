@@ -454,6 +454,7 @@ def render_rank_layout(
         _render_node_label,
         _is_buffer_visible,
         _is_hidden_buffer_update_node,
+        format_collapsed_module_contents,
     )
     from .._render_utils import compute_module_penwidth
     from ..modes import COLLAPSED_MODE_REGISTRY
@@ -540,9 +541,11 @@ def render_rank_layout(
                 if vis_mode == "unrolled":
                     mpl = trace.modules[mod_w_pass]
                     n_tensors = mpl.num_layers
+                    n_buffers = sum(trace[la].is_buffer for la in mpl.ops)
                     has_anc = any(trace[la].has_input_ancestor for la in mpl.ops)
                 else:
                     n_tensors = ml.num_layers
+                    n_buffers = sum(trace[la].is_buffer for la in ml.layer_labels)
                     has_anc = any(trace[la].has_input_ancestor for la in ml.layer_labels)
 
                 np_ = ml.num_calls
@@ -585,7 +588,7 @@ def render_rank_layout(
                         title.replace("<b>", "").replace("</b>", ""),
                         ml.class_name,
                         f"{ss}, {format_memory(mod_out.activation_memory)}",
-                        f"{n_tensors} layers total",
+                        format_collapsed_module_contents(n_tensors, n_buffers),
                         pd,
                     ],
                     shape="box3d",

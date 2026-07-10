@@ -382,6 +382,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_container_ordinals_by_output_op_label",
         "_container_ordinals_by_input_func_call_id",
         "_validation_replay_status",
+        "_tl_predicate_intervention_spec_keys",
         "jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_ordered_captures",
@@ -396,7 +397,6 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_output_head",
         "_output_tokenizer",
         "_semantic_output_metadata",
-        "_annotation_revision",
         "tinygrad_payload_policy",
         "tinygrad_uop_captures",
     }
@@ -945,6 +945,11 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "rng_state"
     if field_name in {"forward_args", "forward_kwargs"}:
         return "module_arg"
+    if field_name in {"_args", "_kwargs", "payload"} and type(owner).__name__ in {
+        "ModuleInputSnapshot",
+        "TensorInputObservation",
+    }:
+        return "pre_hook_input"
     if field_name == "func_config":
         return "func_config"
     if field_name == "custom_attributes":

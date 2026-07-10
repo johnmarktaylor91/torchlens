@@ -13,11 +13,14 @@ from ._base import (
     Severity,
     TorchLensError,
     TorchLensWarning,
+    TraceNotReproducibleWarning,
     ValidationError,
 )
 
 _LEGACY_EXCEPTION_PATHS = {
     "MutatedReferenceError": ("torchlens._errors", "MutatedReferenceError"),
+    "TorchLensCaptureGapError": ("torchlens._errors", "TorchLensCaptureGapError"),
+    "TorchLensCaptureGapWarning": ("torchlens._errors", "TorchLensCaptureGapWarning"),
     "PostTraceParamUnavailable": ("torchlens._errors", "PostTraceParamUnavailable"),
     "ShapeInferenceError": ("torchlens._errors", "ShapeInferenceError"),
     "TorchLensPostfuncError": ("torchlens._errors", "TorchLensPostfuncError"),
@@ -171,6 +174,7 @@ __all__ = [
     "Severity",
     "TorchLensError",
     "TorchLensWarning",
+    "TraceNotReproducibleWarning",
     "ValidationError",
     *_LEGACY_EXCEPTION_PATHS,
 ]

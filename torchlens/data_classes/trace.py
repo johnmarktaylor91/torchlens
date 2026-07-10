@@ -53,6 +53,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    from ..debug._audit import TraceAudit
     from .._io.streaming import BundleStreamWriter
     from .func_call_location import FuncCallLocation
 
@@ -253,6 +254,10 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
 # for legacy states (still ``.values()``/``.items()``-usable); fresh captures
 # always carry the exact runtime container, so this only affects legacy fill.
 _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "escape_diagnostics": [],
+    "completeness_diagnostics": [],
+    "completeness_decompositions": [],
+    "capture_guard_passes": [],
     "annotations": {},
     "observer_spans": [],
     "manual_tensor_connections": [],
@@ -761,6 +766,41 @@ class Trace(
     integer index, layer label, module address, or substring.
     """
 
+    def find_nan(self) -> Any:
+        """Return the first NaN or Inf among saved outputs in execution order.
+
+        Selectively saved traces identify this as the first finding among
+        saved tensors and report unsaved ancestor operations as an uncertainty
+        zone rather than claiming the true birth operation.
+
+        Returns
+        -------
+        FindNanResult
+            Structured non-finite diagnostic. Source locations are surfaced
+            from the operation's existing recorded code context when available.
+        """
+
+        from ..debug._nan import find_nan_in_trace
+
+        return find_nan_in_trace(self)
+
+    def audit(self) -> "TraceAudit":
+        """Return an honest one-call health report for this completed trace.
+
+        Payload-dependent and gradient-dependent diagnostics are listed as
+        skipped when this capture cannot support them, rather than being used
+        to claim a clean result.
+
+        Returns
+        -------
+        torchlens.debug.TraceAudit
+            Prioritized findings plus checks run and skipped-check reasons.
+        """
+
+        from ..debug._audit import audit_trace
+
+        return audit_trace(self)
+
     def _ensure_build_state(self) -> TraceBuildState:
         """Return the transient capture/postprocess build state.
 
@@ -884,7 +924,6 @@ class Trace(
     input_structure: Any
     _containers: dict[int, Any]
     _annotation_blobs: dict[str, Any] | None
-    _annotation_revision: int
     _last_sibling_ordering_decision: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -911,6 +950,31 @@ class Trace(
         "tlspec_version": FieldPolicy.KEEP,
         "_tracing_finished": FieldPolicy.KEEP,
         "capture_mode": FieldPolicy.KEEP,
+        "detached_patch_policy": FieldPolicy.DROP,
+        "detached_patch_epoch": FieldPolicy.DROP,
+        "escape_detector_mode": FieldPolicy.DROP,
+        "escape_detector_verified": FieldPolicy.DROP,
+        "escape_diagnostics": FieldPolicy.DROP,
+        "escape_detector_event_count": FieldPolicy.DROP,
+        "escape_detector_callback_ns": FieldPolicy.DROP,
+        "escape_detector_backward_coverage": FieldPolicy.DROP,
+        "completeness_witness_mode": FieldPolicy.DROP,
+        "completeness_witness_verified": FieldPolicy.DROP,
+        "completeness_diagnostics": FieldPolicy.DROP,
+        "completeness_decompositions": FieldPolicy.DROP,
+        "completeness_witness_event_count": FieldPolicy.DROP,
+        "completeness_witness_accounted_count": FieldPolicy.DROP,
+        "completeness_witness_expected_opaque_count": FieldPolicy.DROP,
+        "completeness_witness_unaccounted_count": FieldPolicy.DROP,
+        "completeness_witness_callback_ns": FieldPolicy.DROP,
+        "capture_verified": FieldPolicy.DROP,
+        "capture_verification_reason": FieldPolicy.DROP,
+        "capture_owner_thread_id": FieldPolicy.DROP,
+        "capture_owner_thread_qualified": FieldPolicy.DROP,
+        "capture_thread_count_start": FieldPolicy.DROP,
+        "capture_thread_count_end": FieldPolicy.DROP,
+        "capture_thread_activity_detected": FieldPolicy.DROP,
+        "capture_guard_passes": FieldPolicy.DROP,
         "halted": FieldPolicy.KEEP,
         "halt_reason": FieldPolicy.KEEP,
         "halt_frontier": FieldPolicy.KEEP,
@@ -1827,15 +1891,14 @@ class Trace(
         return user_annotations
 
     def _mark_annotations_mutated(self) -> None:
-        """Bump the annotation revision and invalidate render-only caches.
+        """Invalidate render-only caches after an annotation mutation.
 
         Returns
         -------
         None
-            This trace's annotation revision is incremented.
+            The cached sibling-ordering decision is discarded.
         """
 
-        self._annotation_revision = int(getattr(self, "_annotation_revision", 0)) + 1
         self.__dict__.pop("_last_sibling_ordering_decision", None)
 
     def find_layers(self, query: str, *, limit: int = 10) -> List[str]:
@@ -2500,8 +2563,6 @@ class Trace(
         preserved_state = {
             field_name: current_state.get(field_name) for field_name in preserved_fields
         }
-        if "_annotation_revision" in current_state:
-            preserved_state["_annotation_revision"] = current_state["_annotation_revision"]
         replacement_state = dict(state_items(new_log))
         replacement_state.update(preserved_state)
         replacement_state["annotations"] = self._merge_user_annotations(

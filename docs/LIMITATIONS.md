@@ -70,6 +70,12 @@ raises for this state.
 If you hit a case we haven't listed, please
 [open an issue](https://github.com/johnmarktaylor91/torchlens/issues/new).
 
+Activation retention modes have different aliasing guarantees. The default
+`save_mode="copy"` safely clones saved values, and `save_mode="reference"` preserves
+capture-time values through TorchLens's in-place handling. `save_mode="view"` intentionally
+keeps a live alias: a later in-place operation can mutate the value visible through the
+earlier saved activation. Use `"copy"` unless that aliasing tradeoff is explicitly desired.
+
 ---
 
 ## At-a-glance matrix
@@ -77,7 +83,7 @@ If you hit a case we haven't listed, please
 | Context | What TorchLens does today | Workaround |
 |---|---|---|
 | **Nested `trace`** (hook/postfunc calls log again) | `RuntimeError` at inner entry | Use `pause_logging()` before the inner call, or run the inner log afterwards on the outer's sub-model |
-| **`torch.compile(model)`** | `RuntimeError` with pointer to this page | Log the un-compiled model |
+| **`torch.compile(model)`** | Unwraps to the eager source module and emits one note per process | Use a profiler/compiler tool to inspect fused compiled execution |
 | **`torch.jit.script` / `torch.jit.trace`** | `RuntimeError` at entry | Log the un-scripted / un-traced Python module |
 | **`torch.export.ExportedProgram`** | `RuntimeError` at entry | Log the source `nn.Module` before exporting |
 | **`FullyShardedDataParallel` (FSDP)** | `RuntimeError` at entry | Log a rank-local unsharded copy of the inner module |
@@ -90,6 +96,7 @@ If you hit a case we haven't listed, please
 | **`torch.func.vmap` / `grad` / `jacfwd`** | `UserWarning` per collapsed boundary; inner ops skipped | Log the pre-vmap module separately, or accept an incomplete log |
 | **Multi-process spawn / `DataLoader` workers** | `RuntimeError` if called from a worker | Log in the main process |
 | **Tensor subclasses with custom `__torch_function__`** | May work; limited metadata fidelity | Log with a plain `torch.Tensor` input if possible |
+| **Tensor `.data` attribute access** | Attribute access itself is not captured and may sever provenance | Prefer ordinary tensor operations or an explicit, traceable `detach()` when detachment is intended |
 | **Very deep module hierarchy (>1000 levels)** | May hit Python recursion limit | Flatten the hierarchy, or raise `sys.setrecursionlimit` |
 | **Buffer `.data = tensor` reassignment** | `RuntimeError` during end-of-capture reconciliation | Use `self.buffer = tensor` or `self.buffer.copy_(tensor)`; see [Buffers](buffers.md) |
 
@@ -113,16 +120,23 @@ interpretability package:
 - Use `torch.profiler` for kernel-level performance work. TorchLens records operation provenance,
   graph topology, activations, gradients, memory, and approximate FLOPs; it is not a profiler UI.
 
-### `torch.compile` — not supported (raises)
+### `torch.compile` — unwrapped to eager source
 
 ``torch.compile(model)`` returns a ``torch._dynamo.eval_frame.OptimizedModule``
-that replaces the Python ``forward`` with a compiled graph. Depending on the
-dynamo backend, our Python-level function wrappers are either inlined out of
-existence (inductor) or called on flattened IR tensors whose metadata won't
-match the user-visible graph.
+that wraps the original eager ``nn.Module`` at ``._orig_mod``. TorchLens is an
+eager-capture tool, so it does not trace the compiled graph, generated kernels,
+or fusion decisions.
 
-``trace`` detects ``OptimizedModule`` up front and raises a clear
-error. **Workaround**: log the model before applying ``torch.compile``.
+``trace`` detects ``OptimizedModule`` and transparently traces the eager source
+module it wraps. If a compiled wrapper appears as a submodule, TorchLens
+temporarily routes that child slot to ``._orig_mod`` for the capture and restores
+the user's module tree afterward. The first such unwrap in a process emits a
+one-time note. The resulting trace reflects eager Python semantics, not
+``torch.compile`` semantics such as fusion or backend-specific lowering.
+This eager-source behavior applies to ``trace``, metadata and summary helpers,
+graph display, forward/backward validation, and ``Trace.run``. ``record`` keeps
+an intentional hard rejection for compiled models because it is the torch-only
+fast capture lane.
 
 ### `torch.jit.script` / `torch.jit.trace` — not supported (raises)
 
@@ -223,19 +237,63 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   dtype / label handling in the subclass won't fire during logging.
 - **Very deep module hierarchy** (>1000 levels): the submodule traversal
   is recursive and may hit Python's default recursion limit.
-- **User forward hooks / pre-hooks**: TorchLens registers its own hooks
-  at model-prep time. Ordering with user hooks depends on registration
-  order; in particular, user pre-hooks that mutate inputs are seen by
-  TorchLens as the new mutated input, not the pre-hook input.
-- **Pre-bound local `from torch import ...` aliases**: TorchLens patches
-  many module-level torch aliases when wrappers are installed, but it cannot
-  rewrite arbitrary closure or local variables that captured raw torch
-  callables before `wrap_torch()` / `trace()` ran. Those calls may execute
-  outside capture. Prefer `import torch` or `import torch.nn.functional as F`
-  in model code and call through the module attribute inside `forward`, or
-  create local aliases only after TorchLens has installed wrappers. Run
-  `tl.utils.doctor()` to check the process-global torch namespace wrapper
-  state; it cannot inspect private closure locals.
+- **User forward hooks / pre-hooks**: PyTorch eager capture now records root and
+  submodule inputs both as passed to ``Module.__call__`` and after the complete
+  user forward-pre-hook chain, plus an ordered effect for every executed global
+  or module hook. In-place writes, replacements, kwargs hooks, recursion, and
+  hooks registered during capture are attributed without changing PyTorch hook
+  ordering. Detection remains best-effort for version-silent writes through
+  ``.data``, raw storage, NumPy aliases, custom kernels, and exotic tensor
+  subclasses; these cases are marked incomplete rather than reported unchanged.
+  Arbitrary mutations inside non-tensor user objects and compiled module-call
+  dispatch remain out of scope. Registry insertion that bypasses PyTorch's public
+  registration APIs is detected at runtime when observable and downgraded to
+  attribution-incomplete provenance. During an active trace, code that scans
+  ``_forward_pre_hooks`` sees TorchLens wrapper objects; inspect each wrapper's
+  ``__wrapped__`` attribute to recover the user callable. If TorchLens detects a
+  private registry-registration bypass, the affected module (or all modules for
+  a global bypass) stays marked attribution-incomplete for the rest of that
+  capture. This sticky flag is intentionally conservative because later private
+  registry edits cannot prove that no hook execution was missed.
+
+  <!-- TODO(pre-hook-glossary-finishing-phase): Add glossary entries for the
+  provisional ModuleCall fields `inputs_before_pre_hooks`,
+  `inputs_after_pre_hooks`, `forward_pre_hook_effects`, and the derived
+  `had_pre_hook_input_change` property after the human naming session. Also add
+  entries for ModuleInputSnapshot, TensorInputObservation, and PreHookEffect. -->
+- **Input-routed interventions on in-place operations**: `splice_module(...,
+  input="in")` snapshots semantic inputs for recognized in-place calls, but raw
+  callable hooks that read `ctx.args` still receive live references. `out=`
+  aliasing (for example, `torch.add(a, b, out=a)`) is not pre-snapshotted and
+  may expose post-mutation inputs; TorchLens emits a warning when it detects
+  that case at hook fire time.
+- **Detached torch references (scoped discovery and diagnostic boundary)**:
+  The release default remains the legacy broad module crawl. Real scoped
+  discovery is opt-in with `tl.wrap_torch(patch_policy="scoped")`; it exact-scans
+  direct module values, then limits class/default scanning to model-provenance,
+  prior-positive, and `patch_modules=` candidates. Scoped intentionally does not
+  recurse into closure cells, arbitrary containers, partials, or opaque C holders.
+  `escape_detector="shadow"` adds exact identity/code diagnostics for executed
+  misses, warns with the callable and callsite, and records the report in
+  `trace.escape_diagnostics`; it does not enforce completeness in this rollout.
+  In particular, a C `functools.partial` can remain invisible to Python profiling.
+  A Python inventory original that recursively calls itself through a pre-wrap reference can
+  self-convict after its one-shot wrapper-edge token is consumed; this is documented rather than
+  broadly exempted because recursive callsites are arbitrary user/library code.
+  Scoped traces therefore carry `capture_verified=False` until the separate
+  dispatcher witness is enabled. Deferred `log_backward()` is also outside the
+  current detector lifetime and reports `escape_detector_backward_coverage ==
+  "not_armed"`. See
+  [scoped detached-reference migration](migration/scoped_detached_patching.md)
+  for the exact policy and remediation matrix.
+  Live `capture_verified` state is not portable through `.tlspec`: loaded traces expose
+  `None`/unknown and never falsely retain `True`.
+  `completeness_witness_verified=True` is narrower than `capture_verified=True`: it certifies
+  only that observed owner-thread aten dispatches during active logging were represented by an
+  emitted op or an exact audited boundary. It does not certify that every call route entered the
+  census. A pre-wrap torch.func/functorch callable can have no boundary op; when its transform
+  escape signal fires, TorchLens preserves the clean witness-only result but sets
+  `capture_verified=False` with `capture_verification_reason="transform_call_route_unverified"`.
 - **bfloat16 / fp16 + non-deterministic GPU reductions**: validation
   replay compares activations to within ``3e-6`` absolute tolerance; on
   bf16/fp16 GPU atomics, small reordering differences can cross that

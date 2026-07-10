@@ -10,6 +10,8 @@ import torchlens
 TARGET_ALL = [
     "trace",
     "export",
+    "hash",
+    "assert_unchanged",
     "fastlog",
     "facets",
     "record",
@@ -111,6 +113,7 @@ CANONICAL_SUBMODULES = [
     "torchlens.experimental.dagua",
     "torchlens.export",
     "torchlens.fastlog",
+    "torchlens.hash",
     "torchlens.io",
     "torchlens.options",
     "torchlens.partial",
@@ -125,7 +128,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_90() -> None:
+def test_all_size_exactly_92() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -149,11 +152,13 @@ def test_all_size_exactly_90() -> None:
     follow-ups add `ActivationLookup`, `CapturedRun`, `decide_recording_of_batch`,
     `record_kpi_in_graph`, `register_tensor_connection`, `show_bundle_graph`,
     `options`, `to_disk`, `grad_input`, `grad_output`, and `in_backward_pass` = 90.
+    The provisional structural-hash namespace and CI tripwire add `hash` and
+    `assert_unchanged` = 92.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """
 
-    assert len(torchlens.__all__) == 90
+    assert len(torchlens.__all__) == 92
     assert torchlens.__all__ == TARGET_ALL
 
 

@@ -370,6 +370,19 @@ class ModuleEnterEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class PreHookProvenanceEvent:
+    """Typed sidecar for one module invocation's user pre-hook provenance."""
+
+    address: str
+    call_index: int | None
+    inputs_before_pre_hooks: object | None
+    inputs_after_pre_hooks: object | None
+    effects: tuple[object, ...]
+    capture_complete: bool
+    incomplete_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ModuleExitEvent:
     """Module forward-exit metadata emitted during exhaustive capture."""
 

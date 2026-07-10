@@ -821,6 +821,7 @@ def _apply_replay_hooks(
     current = out
     records: list[FireRecord] = []
     for entry in hook_entries:
+        original = current
         context = make_hook_context(
             name=_hook_name(entry),
             timing="post",
@@ -836,7 +837,7 @@ def _apply_replay_hooks(
             context,
             force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
         )
-        records.append(_replay_fire_record(entry, site))
+        records.append(_replay_fire_record(entry, site, replaced=current is not original))
     return current, records
 
 
@@ -871,10 +872,18 @@ def _commit_replay_updates(
                 "memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
                 "interventions": list(site.interventions),
+                "intervention_replaced": site.intervention_replaced,
             }
             _apply_out_update(site, tensor)
             if label in pending_records:
                 site.interventions.extend(pending_records[label])
+                site._internal_set(
+                    "intervention_replaced",
+                    bool(
+                        site.intervention_replaced
+                        or any(record.replaced for record in pending_records[label])
+                    ),
+                )
     except Exception:
         for label, state in snapshots.items():
             site = log.layer_dict_all_keys[label]
@@ -1363,7 +1372,7 @@ def _hook_name(entry: NormalizedHookEntry) -> str:
     return getattr(entry.normalized_callable, "__qualname__", "user_hook")
 
 
-def _replay_fire_record(entry: NormalizedHookEntry, site: "Op") -> FireRecord:
+def _replay_fire_record(entry: NormalizedHookEntry, site: "Op", *, replaced: bool) -> FireRecord:
     """Build a replay fire record.
 
     Parameters
@@ -1372,6 +1381,8 @@ def _replay_fire_record(entry: NormalizedHookEntry, site: "Op") -> FireRecord:
         Hook entry that fired.
     site:
         Target site.
+    replaced:
+        Whether the hook returned a different tensor object.
 
     Returns
     -------
@@ -1393,6 +1404,7 @@ def _replay_fire_record(entry: NormalizedHookEntry, site: "Op") -> FireRecord:
         helper_name=_hook_name(entry),
         seed=helper_kwargs.get("seed"),
         timestamp=time.monotonic(),
+        replaced=replaced,
     )
 
 

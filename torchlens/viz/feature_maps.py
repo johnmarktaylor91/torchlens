@@ -141,7 +141,7 @@ def feature_map_evolution(
 def feature_map_node_spec(
     *,
     overlay: bool = True,
-    alpha: float = 0.55,
+    alpha: float = 0.75,
     cmap: str = "magma",
     cell_size: int = 72,
     thumbnail_size: int = 72,

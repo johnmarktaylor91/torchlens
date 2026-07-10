@@ -16,7 +16,7 @@ from .auto_collapse import (
     ChildCondensedFlowGraph,
     CollapseAnalysis,
     ModuleCollapseSignals,
-    ModuleRunFold,
+    ModuleRepeatFold,
     _flow_ordered_child_addresses,
     _is_trunk_collapse,
     _make_run_fold,
@@ -41,7 +41,7 @@ from .collapse_plan import (
     PlanNode,
     RawOp,
     RenderContext,
-    RunFold,
+    RepeatFold,
     SegmentDescriptor,
     count,
     plan_from_v1,
@@ -120,7 +120,7 @@ class OptimizerResult:
     ----------
     selected:
         Module addresses rendered as boxes.
-    run_folds:
+    repeat_folds:
         Fold descriptors keyed by every folded address.
     plan:
         Renderer-faithful selected collapse plan.
@@ -143,7 +143,7 @@ class OptimizerResult:
     """
 
     selected: frozenset[str]
-    run_folds: Mapping[str, ModuleRunFold]
+    repeat_folds: Mapping[str, ModuleRepeatFold]
     plan: CollapsePlan
     visible_count: int
     analyze_ms: float
@@ -163,7 +163,7 @@ class _FrontierPoint:
     cost: float
     nodes: tuple[PlanNode, ...]
     selected: frozenset[str]
-    folds: tuple[ModuleRunFold, ...]
+    folds: tuple[ModuleRepeatFold, ...]
     box_costs: tuple[float, ...]
 
 
@@ -335,7 +335,7 @@ def select_collapse_plan(
         selected, plan = _floor_fallback_selection(trace, context)
         result = OptimizerResult(
             selected=selected,
-            run_folds={},
+            repeat_folds={},
             plan=plan,
             visible_count=count(plan),
             analyze_ms=analysis.elapsed_ms,
@@ -360,7 +360,7 @@ def select_collapse_plan(
         instantiated_point = first_pass_point
         plan = first_pass_plan
     _, winning_g, _, _, _, _, _ = best
-    run_folds = _fold_mapping(instantiated_point.folds)
+    repeat_folds = _fold_mapping(instantiated_point.folds)
     band_high = _readable_band_high(trace)
     if (
         count(plan) > band_high
@@ -403,7 +403,7 @@ def select_collapse_plan(
     assert count(plan) > 0, "v2 collapse plan produced no visible nodes"
     result = OptimizerResult(
         selected=instantiated_point.selected,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         plan=plan,
         visible_count=count(plan),
         analyze_ms=analysis.elapsed_ms,
@@ -453,13 +453,13 @@ def select_collapse_level(
     schedule = collapse_schedule(trace, context, weights)
     step = schedule.at(t)
     selected = step.collapsed_addresses
-    run_folds: dict[str, ModuleRunFold] = {}
+    repeat_folds: dict[str, ModuleRepeatFold] = {}
     segments: dict[str, SegmentDescriptor] = {}
     if t == 0.0:
         selected = frozenset()
     result = OptimizerResult(
         selected=selected,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         plan=step.plan,
         visible_count=step.visible_count,
         analyze_ms=0.0,
@@ -608,7 +608,7 @@ def _collapsed_addresses_for_result(result: OptimizerResult) -> frozenset[str]:
     """
 
     addresses = set(result.selected)
-    addresses.update(result.run_folds)
+    addresses.update(result.repeat_folds)
     for segment in (result.segments or {}).values():
         addresses.update(segment.members)
     return frozenset(addresses)
@@ -776,7 +776,7 @@ def _select_max_plan(
             ):
                 return OptimizerResult(
                     selected=point.selected,
-                    run_folds=_fold_mapping(point.folds),
+                    repeat_folds=_fold_mapping(point.folds),
                     plan=plan,
                     visible_count=plan_count,
                     analyze_ms=analysis.elapsed_ms,
@@ -792,7 +792,7 @@ def _select_max_plan(
                 if 3 <= repair_count <= k_hi:
                     return OptimizerResult(
                         selected=repair_point.selected,
-                        run_folds=_fold_mapping(repair_point.folds),
+                        repeat_folds=_fold_mapping(repair_point.folds),
                         plan=repair_plan,
                         visible_count=repair_count,
                         analyze_ms=analysis.elapsed_ms,
@@ -1249,7 +1249,7 @@ def _plan_module_address(node: PlanNode) -> str | None:
 
     if isinstance(node, ModuleBox):
         return node.call.rsplit(":", 1)[0]
-    if isinstance(node, RunFold):
+    if isinstance(node, RepeatFold):
         return node.rep.call.rsplit(":", 1)[0]
     return None
 
@@ -1274,14 +1274,26 @@ def _make_child_segment_descriptor(
     """Build a renderer descriptor for one child segment."""
 
     _ = context
-    num_ops = len(covered_ops) or sum(
-        int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
-    )
+    if covered_ops:
+        covered_entries = tuple(_trace_op_for_render_label(trace, label) for label in covered_ops)
+        num_layers = len(covered_entries)
+        num_buffers = sum(bool(entry.is_buffer) for entry in covered_entries)
+    else:
+        num_layers = sum(
+            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
+        )
+        buffer_labels = {
+            label
+            for address in addresses
+            for label in (getattr(trace.modules[address], "buffer_layers", ()) or ())
+        }
+        num_buffers = len(buffer_labels)
+    num_ops = max(0, num_layers - num_buffers)
     num_params = sum(
         int(getattr(trace.modules[address], "num_params", 0) or 0) for address in addresses
     )
     owner = _segment_owner_key(trace, addresses)
-    label = _child_segment_label(addresses, num_ops, num_params)
+    label = _child_segment_label(addresses, num_layers, num_buffers, num_params)
     name = f"{addresses[0].replace('.', '_')}__segment__{addresses[-1].replace('.', '_')}pass1"
     return SegmentDescriptor(
         name=name,
@@ -1291,6 +1303,7 @@ def _make_child_segment_descriptor(
         ops=covered_ops,
         owner=owner,
         num_ops=num_ops,
+        num_buffers=num_buffers,
         num_params=num_params,
     )
 
@@ -1378,8 +1391,15 @@ def _segment_owner_key(trace: "Trace", addresses: tuple[str, ...]) -> str | None
     return parent_key if parent_key in trace.modules else parent
 
 
-def _child_segment_label(addresses: tuple[str, ...], num_ops: int, num_params: int) -> str:
+def _child_segment_label(
+    addresses: tuple[str, ...],
+    num_layers: int,
+    num_buffers: int,
+    num_params: int,
+) -> str:
     """Return a class-free range label for a child segment."""
+
+    from ._render_common import format_collapsed_module_contents
 
     first = addresses[0]
     last = addresses[-1]
@@ -1387,7 +1407,11 @@ def _child_segment_label(addresses: tuple[str, ...], num_ops: int, num_params: i
     first_leaf = first.rsplit(".", 1)[-1]
     last_leaf = last.rsplit(".", 1)[-1]
     range_text = f"{prefix}.{first_leaf}-{last_leaf}" if prefix else f"{first_leaf}-{last_leaf}"
-    return f"{range_text} -- {len(addresses)} blocks, {num_ops} ops, {_format_param_count(num_params)} params"
+    contents = format_collapsed_module_contents(num_layers, num_buffers)
+    return (
+        f"{range_text} -- {len(addresses)} blocks, {contents}, "
+        f"{_format_param_count(num_params)} params"
+    )
 
 
 def _format_param_count(value: int) -> str:
@@ -1473,12 +1497,12 @@ def _instantiate_best_point(
         rendered_own_units=_rendered_own_unit_map(trace, context),
     )
     instantiated_point = _instantiate_module("self", decision_point.k, winning_state, winning_memo)
-    run_folds = _fold_mapping(instantiated_point.folds)
+    repeat_folds = _fold_mapping(instantiated_point.folds)
     collapse_fn = _collapse_fn_from_selected(instantiated_point.selected)
     if prefer_instantiated_nodes:
         plan = CollapsePlan(nodes=instantiated_point.nodes, context=context)
     else:
-        plan = plan_from_v1(trace, collapse_fn, run_folds, context)
+        plan = plan_from_v1(trace, collapse_fn, repeat_folds, context)
     return instantiated_point, plan
 
 
@@ -1792,7 +1816,7 @@ def _declined_result(context: RenderContext, reason: str) -> OptimizerResult:
 
     return OptimizerResult(
         selected=frozenset(),
-        run_folds={},
+        repeat_folds={},
         plan=CollapsePlan(nodes=(), context=context),
         visible_count=0,
         analyze_ms=0.0,
@@ -2341,7 +2365,7 @@ def _maximal_legal_runs(
     graph: "ChildCondensedFlowGraph",
     state: _OptimizerState,
 ) -> tuple[tuple[str, ...], ...]:
-    """Partition component members into maximal legal fold runs."""
+    """Partition component members into maximal legal fold repeats."""
 
     runs: list[tuple[str, ...]] = []
     index = 0
@@ -2448,7 +2472,7 @@ def _instantiate_module(
     else:
         nodes = [RawOp(op) for op in own_ops]
     selected: set[str] = set()
-    folds: list[ModuleRunFold] = []
+    folds: list[ModuleRepeatFold] = []
     box_costs: list[float] = []
     segments = _child_segments_for_parent(state, child_addresses)
     for segment, segment_decision in zip(segments, decision.segments, strict=True):
@@ -2495,7 +2519,7 @@ def _instantiate_segment(
     components = _role_components_for_children(state, parent_address, child_addresses)
     nodes: list[PlanNode] = []
     selected: set[str] = set()
-    folds: list[ModuleRunFold] = []
+    folds: list[ModuleRepeatFold] = []
     box_costs: list[float] = []
     total_cost = 0.0
     total_k = 0
@@ -2606,7 +2630,7 @@ def _instantiate_component_expanded(
 
     nodes: list[PlanNode] = []
     selected: set[str] = set()
-    folds: list[ModuleRunFold] = []
+    folds: list[ModuleRepeatFold] = []
     box_costs: list[float] = []
     total_cost = 0.0
     total_k = 0
@@ -2642,7 +2666,7 @@ def _instantiate_component_folded(
     skipped: set[int] = set()
     nodes: list[PlanNode] = []
     selected: set[str] = set()
-    folds: list[ModuleRunFold] = []
+    folds: list[ModuleRepeatFold] = []
     box_costs: list[float] = []
     total_cost = 0.0
     total_k = 0
@@ -2665,7 +2689,7 @@ def _instantiate_component_folded(
         ]
         fold_cost = round(sum(member_costs) / len(member_costs) + state.weights.fold_intrinsic, 6)
         nodes.append(
-            RunFold(
+            RepeatFold(
                 rep=ModuleBox(f"{fold.representative}:1"),
                 members=fold.addresses,
                 ellipsis=EllipsisNode(fold.addresses[1:]),
@@ -3244,7 +3268,7 @@ def _rendered_own_unit_map(trace: "Trace", context: RenderContext) -> dict[str, 
     emissions = rendered_node_universe_from_v1(
         trace,
         collapse_fn=None,
-        run_folds=None,
+        repeat_folds=None,
         context=context,
     )
     for emission in emissions:
@@ -3391,10 +3415,10 @@ def _memo_key(state: _OptimizerState, signal: ModuleCollapseSignals) -> _MemoKey
     )
 
 
-def _fold_mapping(folds: Sequence[ModuleRunFold]) -> dict[str, ModuleRunFold]:
+def _fold_mapping(folds: Sequence[ModuleRepeatFold]) -> dict[str, ModuleRepeatFold]:
     """Return renderer fold mapping keyed by every folded address."""
 
-    mapping: dict[str, ModuleRunFold] = {}
+    mapping: dict[str, ModuleRepeatFold] = {}
     for fold in sorted(folds, key=lambda item: item.representative):
         if any(address in mapping for address in fold.addresses):
             continue

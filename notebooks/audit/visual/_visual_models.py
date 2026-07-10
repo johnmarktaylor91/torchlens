@@ -3,7 +3,7 @@
 These extend the shared ``notebooks/audit/_models.py`` ZOO with architectures
 needed to exercise the full TorchLens visual language: genuinely recurrent
 models (cell-based loops that roll, fused RNN kernels that do not), deep
-same-class stacks for ellipsis/run-fold demos, branching topologies,
+same-class stacks for ellipsis/repeat-fold demos, branching topologies,
 a small transformer, multi-input/multi-output models, and degenerate cases.
 
 Each factory returns ``(model, example_input_or_tuple)`` ready for
@@ -154,7 +154,7 @@ class SmallResBlock(nn.Module):
 
 
 class BlockStack(nn.Module):
-    """Stem + 8 SmallResBlocks + head: minimal run-fold / ellipsis demo."""
+    """Stem + 8 SmallResBlocks + head: minimal repeat-fold / ellipsis demo."""
 
     def __init__(self, depth: int = 8) -> None:
         super().__init__()
@@ -190,6 +190,32 @@ class DictInput(nn.Module):
 
     def forward(self, payload: dict) -> torch.Tensor:
         return payload["a"] + payload["b"]
+
+
+class NestedContainers(nn.Module):
+    """Return nested dict-and-tuple output containers with live tensor leaves.
+
+    The visual pack uses this model for container modes because a flat output
+    can accidentally make several container presentations indistinguishable.
+    """
+
+    def forward(self, x: torch.Tensor) -> dict[str, object]:
+        """Build a nested output structure from three related tensor leaves.
+
+        Parameters
+        ----------
+        x:
+            Input activation.
+
+        Returns
+        -------
+        dict[str, object]
+            A dict containing a homogeneous tuple and a nested summary dict.
+        """
+        left = x + 1
+        right = x * 2
+        merged = left + right
+        return {"branches": (left, right, merged), "summary": {"mean": merged.mean()}}
 
 
 class AltBlockA(nn.Module):
@@ -442,6 +468,7 @@ VZOO: dict[str, object] = {
     "small_conv": lambda: (SmallConv(), torch.rand(2, 3, 64, 64)),
     "mixed_buffers": lambda: (MixedBuffers(), torch.randn(4, 8)),
     "dict_input": lambda: (DictInput(), {"a": torch.ones(2), "b": torch.ones(2) * 2}),
+    "nested_containers": lambda: (NestedContainers(), torch.ones(2)),
     # torchvision
     "resnet18": _resnet18,
     "resnet50": _resnet50,

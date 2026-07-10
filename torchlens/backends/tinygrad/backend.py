@@ -1332,11 +1332,7 @@ class TinygradBackend:
                 "scalar unless the traced output is already scalar."
             )
         selected_ops = tuple(
-            op
-            for op in trace.layer_list
-            if op.has_saved_activation
-            and not op.is_input
-            and op.annotations.get("tinygrad_observed_tensor_ops")
+            op for op in trace.layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
             selected_ops,
@@ -1885,6 +1881,9 @@ def _walk_tinygrad_modules(
     primary = address_by_id.get(module_id)
     if primary is not None:
         metadata[primary].setdefault("all_addresses", [primary]).append(address)
+        parent_address = address.rpartition(".")[0] or "self"
+        parent_children = metadata[parent_address]["address_children"]
+        parent_children.remove(address)
         return
 
     address_by_id[module_id] = address
@@ -2226,7 +2225,9 @@ def _param_refs_for_uop(
             from tinygrad import Tensor
 
             tensor = Tensor(candidate)
-            shape = tuple(tensor.shape)
+            # Tinygrad permits symbolic dimensions, but captured parameter shapes are
+            # represented as concrete dimensions in the portable TorchLens contract.
+            shape = cast(tuple[int, ...], tuple(tensor.shape))
             dtype = str(tensor.dtype)
             trainable = bool(getattr(tensor, "requires_grad", False))
         except Exception:
@@ -2556,7 +2557,8 @@ class _observe_tensor_ops:
                 self.observed_tensors.setdefault(id(result.uop), []).append(result)
             return result
 
-        Tensor._apply_uop = wrapped
+        # tinygrad deliberately exposes this as a method; preview capture replaces it temporarily.
+        Tensor._apply_uop = wrapped  # type: ignore[method-assign, assignment]
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -2579,7 +2581,8 @@ class _observe_tensor_ops:
 
         from tinygrad import Tensor
 
-        Tensor._apply_uop = self.original
+        # Restore the deliberately replaced tinygrad method after preview capture.
+        Tensor._apply_uop = self.original  # type: ignore[method-assign]
 
 
 class _reject_mid_capture_execution:
@@ -2782,7 +2785,9 @@ def _tinygrad_signature_key(
     uop_signature
         Recursive structural UOp signature.
     ordinal
-        Topological ordinal among retained non-input op candidates.
+        Legacy topological ordinal retained in the internal call signature for
+        compatibility. tinygrad 0.13's graph normalization introduces
+        unobserved UOps, so this value is intentionally excluded from matching.
     parent_signatures
         Direct parent structural signatures.
     shape
@@ -2796,7 +2801,8 @@ def _tinygrad_signature_key(
         Hashable conservative match key.
     """
 
-    return (uop_signature, ordinal, parent_signatures, shape, dtype)
+    del ordinal
+    return (uop_signature, parent_signatures, shape, dtype)
 
 
 def _tinygrad_trace_op_signatures(
@@ -2884,7 +2890,7 @@ def _tinygrad_live_intermediate_candidates(
                     dtype_ref=DtypeRef(backend="tinygrad", name=dtype),
                 )
             )
-        if tensors:
+        if _is_materializable_uop(uop):
             ordinal += 1
     return grouped
 

@@ -169,8 +169,10 @@ trace = recording.to_trace()
 act = tl.pluck(model, x, 'relu_1_2')   # returns tensor directly
 
 # Batch extraction across a dataset
+# `dataset` is an application-provided iterable of input batches; for example:
+# dataset = [torch.randn(1, 3, 224, 224) for _ in range(8)]
 tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
-                   batch_size=32, output_dir='activations/')
+                   batch_size=32, output_dir='/tmp/torchlens-activations/')
 ```
 
 **Performance note:** With `halt=` and `tl.record`, capture can run *faster
@@ -323,6 +325,9 @@ bundle.compare_at(tl.func('relu'))
 **Facets** provide named sub-views for attention heads, LSTM outputs, and
 fused projections (for models with those structures):
 
+The following is an API sketch; `vit_model` and `lstm` must be models whose module
+structures provide the shown paths, and are not defined by this generic example.
+
 ```python
 # ViT / transformer model with attention blocks
 log = tl.trace(vit_model, x)
@@ -365,6 +370,7 @@ and cannot handle dynamic architectures.
 | Interventions / halt / fastlog | yes | -- | -- | -- | -- | -- |
 
 ```python
+# API sketch; supply compatible models and input in an application context.
 log = tl.trace(torch_model, x)                      # PyTorch (default)
 log = tl.trace(jax_fn,      inputs, backend='jax')  # JAX preview
 log = tl.trace(tg_fn,       inputs, backend='tinygrad')
@@ -419,6 +425,21 @@ A sample across families is shown below.
 | <img src="images/menagerie/decision_transformer.jpg" height="200"> | <img src="images/menagerie/qml.png" height="200"> | <img src="images/menagerie/large_graph_3k.jpg" height="200"> |
 
 
+## Pin your architecture in CI
+
+Use the provisional address-free structural hash to catch an unintended graph change without
+pinning model weights or module names:
+
+```python
+# `model` and `example_input` must be supplied by the application.
+import torchlens as tl
+
+pinned = tl.assert_unchanged(model, example_input, expected=None)  # prints and returns a hash
+tl.assert_unchanged(model, example_input, pinned)  # raises if the architecture changes
+```
+
+See [`tl.hash`](docs/reference/hash.md) for trace-level hashing and its structural scope.
+
 ## Compatibility
 
 Before filing a bug for a model-specific failure, run the runtime compatibility
@@ -441,6 +462,11 @@ sparse tensors, meta tensors, quantization, and `torch.func.vmap`.
 See [LIMITATIONS.md](docs/LIMITATIONS.md) for the full matrix: what fails, what
 works, and the recommended workaround for each context.
 
+TorchLens also repairs detached `from torch import ...` references when wrappers are installed.
+The release default retains the legacy broad crawl; an opt-in
+[`patch_policy="scoped"`](docs/migration/scoped_detached_patching.md) mode narrows foreign-object
+mutation and offers a default-off shadow escape detector for pre-wrap closures and containers.
+
 
 ## Tutorials and Docs
 
@@ -456,6 +482,11 @@ works, and the recommended workaround for each context.
 | [docs/backward.md](docs/backward.md) | Backward capture details and limitations |
 | [docs/facets.md](docs/facets.md) | Facets, patching, and SDPA reconstruction |
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
+| [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
+| [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports |
+| [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |
+| [docs/reference/attribution.md](docs/reference/attribution.md) | Native input and layer attribution methods |
+| [docs/reference/collapse.md](docs/reference/collapse.md) | Smart-collapse visual reference and label contract |
 
 
 ## Security

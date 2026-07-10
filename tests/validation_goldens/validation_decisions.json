@@ -104,7 +104,7 @@
       "functionless_source_or_boundary": 4
     },
     "failed_node_count": 0,
-    "replayed_node_count": 10,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -149,7 +149,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 4,
+    "replayed_node_count": 3,
     "state": "unverified",
     "unverified_node_count": 1,
     "unverified_reason_counts": {
@@ -203,7 +203,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 1,
-    "replayed_node_count": 5,
+    "replayed_node_count": 3,
     "state": "failed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -267,7 +267,7 @@
       "uninitialized_by_design": 2
     },
     "failed_node_count": 0,
-    "replayed_node_count": 4,
+    "replayed_node_count": 3,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -340,7 +340,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 9,
+    "replayed_node_count": 5,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -415,7 +415,7 @@
       "intentional_intervention_replacement": 2
     },
     "failed_node_count": 0,
-    "replayed_node_count": 7,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -485,7 +485,7 @@
       "skip_perturbation_entirely:zeros_like": 1
     },
     "failed_node_count": 0,
-    "replayed_node_count": 6,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -530,7 +530,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 3,
+    "replayed_node_count": 2,
     "state": "unverified",
     "unverified_node_count": 2,
     "unverified_reason_counts": {
@@ -675,7 +675,7 @@
     ],
     "exempted_reason_counts": {},
     "failed_node_count": 0,
-    "replayed_node_count": 19,
+    "replayed_node_count": 9,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}
@@ -704,30 +704,31 @@
         "reason": "perturbation_changed"
       },
       {
-        "decision": "exempted",
+        "decision": "unverified",
         "func_name": "__mul__",
-        "justification": "predicate save configuration excluded replay payload (original_reason=missing_saved_args, op_label=mul_1_2:1, func_name=__mul__, has_saved_activation=True, saved_args_present=False, save_arg_values=True, default_op=False, keep_op=_save_only_mul)",
         "op_label": "mul_1_2",
         "phase": "replay",
-        "reason": "not_saved_by_user"
+        "reason": "missing_saved_args"
       },
       {
         "decision": "exempted",
         "func_name": "__add__",
-        "justification": "predicate save configuration excluded replay payload (original_reason=missing_saved_args, op_label=add_1_1:1, func_name=__add__, has_saved_activation=False, saved_args_present=False, save_arg_values=True, default_op=False, keep_op=_save_only_mul)",
+        "justification": "predicate save configuration excluded replay payload (original_reason=missing_saved_args, op_label=add_1_1:1, func_name=__add__, predicate_decision_key=('add_1_2_raw', 1, ()), predicate_save_out=False, has_saved_activation=False, saved_args_present=False, save_arg_values=False, default_op=False, keep_op=_save_only_mul)",
         "op_label": "add_1_1",
         "phase": "replay",
         "reason": "not_saved_by_user"
       }
     ],
     "exempted_reason_counts": {
-      "not_saved_by_user": 2
+      "not_saved_by_user": 1
     },
     "failed_node_count": 0,
-    "replayed_node_count": 3,
-    "state": "passed",
-    "unverified_node_count": 0,
-    "unverified_reason_counts": {}
+    "replayed_node_count": 2,
+    "state": "unverified",
+    "unverified_node_count": 1,
+    "unverified_reason_counts": {
+      "missing_saved_args": 1
+    }
   },
   "tiny_swamped_add": {
     "decisions": [
@@ -793,7 +794,7 @@
       "ulp_swamped_perturbation": 1
     },
     "failed_node_count": 0,
-    "replayed_node_count": 6,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}

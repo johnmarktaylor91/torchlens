@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,7 @@ class RawOp:
 
 @dataclass(frozen=True)
 class EllipsisNode:
-    """Rendered node that stands in for hidden run-fold members.
+    """Rendered node that stands in for hidden repeat-fold members.
 
     Parameters
     ----------
@@ -81,7 +81,7 @@ class EllipsisNode:
 
 
 @dataclass(frozen=True)
-class RunFold:
+class RepeatFold:
     """Collapsed sibling run represented by a module box plus ellipsis.
 
     Parameters
@@ -145,6 +145,8 @@ class SegmentDescriptor:
         Module-cluster owner key, or ``None`` for top-level emission.
     num_ops:
         Number of operations represented by the segment.
+    num_buffers:
+        Number of buffer layers represented by the segment.
     num_params:
         Number of parameters represented by the segment.
     """
@@ -156,6 +158,7 @@ class SegmentDescriptor:
     ops: tuple[str, ...] = ()
     owner: str | None = None
     num_ops: int = 0
+    num_buffers: int = 0
     num_params: int = 0
 
 
@@ -172,7 +175,7 @@ class Boundary:
     kind: str
 
 
-PlanNode = ModuleBox | RawOp | RunFold | OpSegment | ChildSegment | Boundary
+PlanNode = ModuleBox | RawOp | RepeatFold | OpSegment | ChildSegment | Boundary
 
 
 @dataclass(frozen=True)
@@ -309,7 +312,7 @@ def _plan_node_kind(node: PlanNode) -> str:
         return "module_box"
     if isinstance(node, RawOp):
         return "raw_op"
-    if isinstance(node, RunFold):
+    if isinstance(node, RepeatFold):
         return "run_fold"
     if isinstance(node, OpSegment):
         return "op_segment"
@@ -334,14 +337,14 @@ def count(plan: CollapsePlan) -> int:
 
     total = 0
     for node in plan.nodes:
-        total += 2 if isinstance(node, RunFold) else 1
+        total += 2 if isinstance(node, RepeatFold) else 1
     return total
 
 
 def plan_from_v1(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     context: RenderContext | None = None,
 ) -> CollapsePlan:
     """Reconstruct the plan implied by current v1 renderer decisions.
@@ -352,8 +355,8 @@ def plan_from_v1(
         Trace being rendered.
     collapse_fn:
         Active v1 collapse predicate.
-    run_folds:
-        Current v1 run-fold mapping.
+    repeat_folds:
+        Current v1 repeat-fold mapping.
     context:
         Render context. Defaults to the scoped S7 parity context.
 
@@ -370,7 +373,7 @@ def plan_from_v1(
     render_ir = build_render_ir(
         trace,
         collapse_fn=collapse_fn,
-        run_folds=run_folds,
+        repeat_folds=repeat_folds,
         context=resolved_context,
     )
     emissions = render_ir.node_emissions
@@ -392,7 +395,7 @@ def plan_from_v1(
                 ):
                     consumed_ellipsis.add(ellipsis_name)
                     nodes.append(
-                        RunFold(
+                        RepeatFold(
                             rep=ModuleBox(emission.call or emission.name),
                             members=tuple(fold.addresses),
                             ellipsis=EllipsisNode(tuple(fold.addresses[1:])),

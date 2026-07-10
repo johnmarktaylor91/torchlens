@@ -29,6 +29,8 @@ import functools
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from menagerie import validate_menagerie
 from menagerie.catalog import CatalogRow
 from menagerie.cluster_runner import (
@@ -46,6 +48,12 @@ from menagerie.ledger import (
     VerificationRun,
     append_verification_run,
     connect,
+)
+
+CASCADE_ARTIFACT = Path(__file__).resolve().parents[1] / "menagerie" / "data" / "catalog.db"
+pytestmark = pytest.mark.skipif(
+    not CASCADE_ARTIFACT.exists(),
+    reason="requires local menagerie data artifacts; not part of the portable suite",
 )
 
 

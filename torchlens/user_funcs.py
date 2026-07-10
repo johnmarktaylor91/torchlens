@@ -18,6 +18,7 @@ gradient-specific resolution.
 
 import collections.abc
 import copy
+import functools
 import os
 import pickle
 import re
@@ -32,7 +33,7 @@ from torch import nn
 
 from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._errors import TorchLensPostfuncError
-from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
+from .fastlog.exceptions import PredicateError
 from ._input_coerce import _coerce_input_args
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
@@ -50,7 +51,6 @@ from .backends._options import MLX_EXTRA_KWARG_POLICY, reject_extra_trace_kwargs
 from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
-from .fastlog.exceptions import PredicateError
 from .ir import ParentEdge, replace_op_event
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
@@ -85,6 +85,7 @@ from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
 from .intervention.resolver import _selector_resolution_direction
 from .intervention.resolver import resolve_sites
+from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .capture.stop import StopDirective
 from ._trace_state import TraceState
@@ -103,6 +104,7 @@ from ._capture_state_helpers import (
     _qualname_for_model,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
+    unwrap_compiled_model,
 )
 from ._chunked_capture_helpers import (
     _append_chunk_trace_state,
@@ -761,6 +763,9 @@ def _run_model_and_save_specified_outs(
         save_raw_gradients: Whether raw grads are retained when ``grad_transform`` is set.
             Metadata always describes the raw grad.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
+            ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
+            captured value through in-place handling; ``"view"`` is a live alias that
+            downstream in-place operations can mutate; and ``"cpu_async"`` clones to CPU.
         capture_tensor_grad_hooks: Whether forward tensors receive tensor-level
             backward hooks for implicit backward events and per-op gradient payloads.
         mark_layer_depths: Compute BFS distances from input/output layers.
@@ -1426,6 +1431,9 @@ def trace(
         save_raw_gradients: When ``False`` and ``grad_transform`` is set, do not retain raw
             grad tensors in memory; raw grad metadata is still populated.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
+            ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
+            captured value through in-place handling; ``"view"`` is a live alias that
+            downstream in-place operations can mutate; and ``"cpu_async"`` clones to CPU.
         capture_tensor_grad_hooks: If False, skip tensor-level backward hooks on
             forward tensors while preserving grad-fn registration for ``log_backward``.
         mark_layer_depths: Deprecated alias for
@@ -1760,6 +1768,7 @@ def _trace_torch_model(
     _reject_opaque_wrappers(model)
     if not isinstance(model, nn.Module):
         raise ValueError("Unsupported model type for capture")
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if reconstruction_ready is not MISSING and reconstruction_ready:
         save_arg_values = True
@@ -2701,3 +2710,30 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
     """Forward to the batch validation implementation."""
 
     return _public_impls_module().validate_batch_of_models_and_inputs(*args, **kwargs)
+
+
+def _sync_public_impl_wrapper_metadata() -> None:
+    """Expose canonical signatures on lazily delegated public wrappers.
+
+    Returns
+    -------
+    None
+        Updates wrapper metadata in place after the implementation module is loaded.
+    """
+
+    implementations = _public_impls_module()
+    for name in (
+        "summary",
+        "show_model_graph",
+        "draw_backward",
+        "draw_combined",
+        "show_bundle_graph",
+        "validate_forward_pass",
+        "validate_backward_pass",
+        "validate_saved_outs",
+        "validate_batch_of_models_and_inputs",
+    ):
+        functools.update_wrapper(globals()[name], getattr(implementations, name))
+
+
+_sync_public_impl_wrapper_metadata()

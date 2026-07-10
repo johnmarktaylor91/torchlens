@@ -6,10 +6,10 @@ import inspect
 import importlib
 import subprocess
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Literal, get_args, get_origin, get_type_hints
+from typing import Annotated, Any, Literal, cast, get_args, get_origin, get_type_hints
 
 import torch
 from torch import nn
@@ -460,7 +460,7 @@ def _log_ops_for_mode(
     elif mode == "train":
         model.train()
     try:
-        trace = trace_fn(
+        trace = cast(Callable[..., Any], trace_fn)(
             model,
             x,
             capture=CaptureOptions(layers_to_save=None),
@@ -528,7 +528,7 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
-    trace = trace_fn(
+    trace = cast(Callable[..., Any], trace_fn)(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None),
@@ -567,7 +567,7 @@ def peek_graph(
     from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
-    trace = trace_fn(
+    trace = cast(Callable[..., Any], trace_fn)(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None),
@@ -771,7 +771,8 @@ def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any)
 
     import torchlens
 
-    logs = [torchlens.trace(model, inputs, **kwargs) for inputs in inputs_iter]
+    trace_fn = cast(Callable[..., Any], torchlens.trace)
+    logs = [trace_fn(model, inputs, **kwargs) for inputs in inputs_iter]
     if not logs:
         raise ValueError("inputs_iter must yield at least one input.")
     return tuple(logs)

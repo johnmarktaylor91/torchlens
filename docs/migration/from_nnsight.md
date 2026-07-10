@@ -11,29 +11,18 @@ Their construct:
 
 ```python
 # migration-test: tool=nnsight expected=[[2.5, 2.5]]
+# LanguageModel traces a compatible Hugging Face language model and tokenizes the prompt.
 import torch
-from torch import nn
 from nnsight import LanguageModel
 
 
-class Tiny(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.proj = nn.Linear(2, 2)
-        with torch.no_grad():
-            self.proj.weight.copy_(torch.eye(2))
-            self.proj.bias.copy_(torch.tensor([0.5, -0.5]))
+model = LanguageModel("openai-community/gpt2", dispatch=True)
+with model.trace("TorchLens captures eager operations"):
+    hidden_states = model.transformer.h[0].output[0]
+    hidden_states[:, :, :2] = 2.5
+    saved = hidden_states[:, :1, :2].save()
 
-    def forward(self, x):
-        return torch.relu(self.proj(x))
-
-
-model = LanguageModel(Tiny(), dispatch=True)
-x = torch.tensor([[2.0, 3.0]])
-with model.trace(x):
-    saved = model.proj.output.save()
-
-RESULT = saved.value.detach().tolist()
+RESULT = saved.value[0].detach().tolist()
 ```
 
 TorchLens equivalent:

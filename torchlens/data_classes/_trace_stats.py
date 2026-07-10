@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, TextIO, Tuple, cast
 
 
 if TYPE_CHECKING:
+    from ..report._profile import TraceProfile
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
@@ -521,6 +522,39 @@ class TraceStatsMixin(_TraceMixinBase):
             ),
         )
 
+    def profile(
+        self: "Trace",
+        level: Literal["op", "module", "call"] = "op",
+        *,
+        sort_by: Literal["time", "flops", "activation_memory", "param_count"] = "time",
+        ascending: bool = False,
+    ) -> "TraceProfile":
+        """Return a unified resource profile assembled from this trace.
+
+        Parameters
+        ----------
+        level:
+            Profile granularity: operation, module address, or module call.
+        sort_by:
+            Resource column used for sorting. Time is descending by default.
+        ascending:
+            Whether to sort the selected metric ascending.
+
+        Returns
+        -------
+        torchlens.report.TraceProfile
+            Printable table object that also exposes ``to_pandas()``.
+
+        Notes
+        -----
+        Per-operation wall-times are captured under instrumentation. Treat them
+        as relative hotspot guidance, not clean benchmark timings.
+        """
+
+        from ..report._profile import build_profile
+
+        return build_profile(self, level=level, sort_by=sort_by, ascending=ascending)
+
     @property
     def layers(self: "Trace") -> "LayerAccessor":
         """Access aggregate per-layer metadata by label, index, or pass notation."""
@@ -600,7 +634,7 @@ class TraceStatsMixin(_TraceMixinBase):
         CollapsePlan
             Renderer-faithful diagnostic plan. Node kinds are ``ModuleBox`` for
             collapsed module calls, ``RawOp`` for exposed operations,
-            ``RunFold`` for representative-plus-ellipsis repeated runs,
+            ``RepeatFold`` for representative-plus-ellipsis repeated runs,
             ``OpSegment`` and ``ChildSegment`` for condensed segment boxes, and
             ``Boundary`` for input/output or renderer boundary nodes.
 

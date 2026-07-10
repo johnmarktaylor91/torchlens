@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.backends.torch import buffer_writes
 from torchlens.data_classes.cleanup import _scrub_per_op_equivalence_lists
 
@@ -368,6 +369,7 @@ class ManyBufferWrites(nn.Module):
         ),
     ],
 )
+@pytest.mark.filterwarnings("default::torchlens.errors.TraceNotReproducibleWarning")
 def test_buffer_write_models_validate_and_expose_entities(
     model_factory: Callable[[], nn.Module],
     input_factory: TensorFactory,
@@ -377,9 +379,19 @@ def test_buffer_write_models_validate_and_expose_entities(
 
     model = model_factory()
     x = input_factory()
-    assert tl.validation.validate_forward_pass(
-        model_factory(), x.clone(), random_seed=123, validate_metadata=True
-    )
+    if isinstance(model, DataCopyWrite):
+        with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
+            assert tl.validation.validate_forward_pass(
+                model_factory(), x.clone(), random_seed=123, validate_metadata=True
+            )
+    elif isinstance(model, DataSetter):
+        assert not tl.validation.validate_forward_pass(
+            model_factory(), x.clone(), random_seed=123, validate_metadata=True
+        )
+    else:
+        assert tl.validation.validate_forward_pass(
+            model_factory(), x.clone(), random_seed=123, validate_metadata=True
+        )
 
     trace = tl.trace(model, x, save_arg_values=True)
     for address, overwrite_count in expected_overwrites.items():

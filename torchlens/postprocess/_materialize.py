@@ -206,6 +206,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     events.module_prep_events.clear()
     events.module_enter_events.clear()
     events.module_exit_events.clear()
+    events.pre_hook_events.clear()
     events.conditional_events.clear()
     events.output_version_events.clear()
     events.live_by_raw_label.clear()
@@ -1098,6 +1099,16 @@ def _rebuild_module_side_channels(trace: "Trace", events: CaptureEvents) -> None
         _apply_module_enter_event(trace, enter_event, module_enter_addresses[id(enter_event)])
     for exit_event in events.module_exit_events:
         _apply_module_exit_event(trace, exit_event)
+    provenance = trace._module_build_data.setdefault("module_pre_hook_provenance", {})
+    for pre_hook_event in events.pre_hook_events:
+        if pre_hook_event.call_index is None:
+            continue
+        call_label = f"{pre_hook_event.address}:{pre_hook_event.call_index}"
+        provenance[call_label] = (
+            pre_hook_event.inputs_before_pre_hooks,
+            pre_hook_event.inputs_after_pre_hooks,
+            pre_hook_event.effects,
+        )
     if not events.module_enter_events:
         _fill_module_call_stacks_from_op_events(trace, events.op_events)
 

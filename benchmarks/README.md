@@ -30,3 +30,13 @@ Supporting files:
 `intervention_overhead.py` is the earlier focused benchmark for TorchLens
 intervention primitives. Its committed output lives in
 `intervention_overhead_results.md`.
+
+## Pre-hook provenance overhead
+
+`prehook_provenance_overhead.py` measures exhaustive capture on a 181-module
+ReLU chain with no user pre-hooks and with one process-global observational
+pre-hook. It prints JSON suitable for comparing revisions:
+
+```bash
+PYTHONPATH=$PWD python benchmarks/prehook_provenance_overhead.py
+```

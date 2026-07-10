@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import random
+import warnings
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -23,17 +24,21 @@ from ._literals import (
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
-    FoldRunsLiteral,
+    FoldRepeatsLiteral,
 )
 from ._capture_state_helpers import (
+    _ModuleTreePlainAttrSnapshot,
     _clone_state_dict_with_metadata,
     _model_for_ground_truth_validation,
+    _model_for_validation_replay,
     _move_tensors_to_device,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
+    unwrap_compiled_model,
 )
 from .backends import BackendName, resolve_backend_spec
 from .data_classes.trace import Trace
+from .errors import TraceNotReproducibleWarning
 from .options import (
     VisualizationOptions,
     merge_visualization_options,
@@ -43,6 +48,7 @@ from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_
 from .utils.display import warn_parallel
 from .utils.introspection import get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
+from .utils.hashing import compute_graph_shape_hash
 from .visualization.code_panel import CodePanelOption
 from ._robustness import check_model_and_input_variants
 
@@ -79,6 +85,7 @@ def log_model_metadata(
     Trace
         Trace with full metadata but no saved outs.
     """
+    model = unwrap_compiled_model(model)
     model_trace = trace(
         model,
         input_args,
@@ -125,6 +132,7 @@ def summary(
         Rendered summary text.
     """
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if input_kwargs is None:
         input_kwargs = {}
@@ -172,7 +180,7 @@ def show_model_graph(
     vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     collapse: CollapseLiteral | MissingType = MISSING,
-    fold_runs: FoldRunsLiteral | MissingType = MISSING,
+    fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
@@ -253,8 +261,8 @@ def show_model_graph(
         Smart module-collapse mode: ``"none"``, ``"auto"``, ``"max"``, or a
         float in ``[0.0, 1.0]``. Float levels follow the public monotone
         schedule.
-    fold_runs:
-        Run-fold policy. ``None`` preserves the default policy. ``True`` folds
+    fold_repeats:
+        Repeat-fold policy. ``None`` preserves the default policy. ``True`` folds
         every eligible repeated run. ``False`` disables run folding.
     random_seed:
         Fixed RNG seed for stochastic models.
@@ -272,6 +280,7 @@ def show_model_graph(
         The graph is rendered for side effects.
     """
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
@@ -299,7 +308,7 @@ def show_model_graph(
         vis_graph_overrides=vis_graph_overrides,
         vis_node_mode=vis_node_mode,
         collapse=collapse,
-        fold_runs=fold_runs,
+        fold_repeats=fold_repeats,
         vis_edge_overrides=vis_edge_overrides,
         vis_grad_edge_overrides=vis_grad_edge_overrides,
         vis_module_overrides=vis_module_overrides,
@@ -895,6 +904,138 @@ def validate_forward_pass(
     )
 
 
+def _restore_validation_replay_state(
+    model: nn.Module,
+    state_dict: dict[str, torch.Tensor],
+    plain_attr_snapshot: _ModuleTreePlainAttrSnapshot | None,
+) -> None:
+    """Restore a validation model to its pre-capture replay state.
+
+    Parameters
+    ----------
+    model:
+        Model used for validation capture and replay.
+    state_dict:
+        Cloned state dictionary from before the traced validation forward.
+    plain_attr_snapshot:
+        Optional snapshot of plain Python attributes to restore.
+    """
+
+    model.load_state_dict(state_dict)
+    if plain_attr_snapshot is not None:
+        plain_attr_snapshot.restore_changed_attrs()
+
+
+def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
+    """Return a concise first-difference hint for two validation traces.
+
+    Parameters
+    ----------
+    left:
+        First validation trace.
+    right:
+        Second validation trace.
+
+    Returns
+    -------
+    str | None
+        Human-readable first divergence hint, or ``None`` when no cheap hint is
+        available.
+    """
+
+    for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
+        left_sig = (
+            getattr(left_layer, "layer_type", None),
+            getattr(left_layer, "func_name", None),
+            len(getattr(left_layer, "parents", ()) or ()),
+            bool(getattr(left_layer, "is_output", False)),
+            bool(getattr(left_layer, "is_buffer", False)),
+        )
+        right_sig = (
+            getattr(right_layer, "layer_type", None),
+            getattr(right_layer, "func_name", None),
+            len(getattr(right_layer, "parents", ()) or ()),
+            bool(getattr(right_layer, "is_output", False)),
+            bool(getattr(right_layer, "is_buffer", False)),
+        )
+        if left_sig != right_sig:
+            return (
+                f"first divergence at op index {index}: "
+                f"{getattr(left_layer, 'func_name', None)!r} vs "
+                f"{getattr(right_layer, 'func_name', None)!r}"
+            )
+    if len(left.layer_list) != len(right.layer_list):
+        return f"op count changed: {len(left.layer_list)} vs {len(right.layer_list)}"
+    return None
+
+
+def _warn_if_validation_trace_not_reproducible(
+    first_trace: Trace,
+    model: nn.Module,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any],
+    random_seed: int,
+) -> None:
+    """Warn when a validation trace changes after one fresh re-trace.
+
+    Parameters
+    ----------
+    first_trace:
+        Trace captured from the model's pre-validation state.
+    model:
+        Validation model after the first traced forward has run.
+    input_args:
+        Positional inputs for the second capture.
+    input_kwargs:
+        Keyword inputs for the second capture.
+    random_seed:
+        Seed reused for the second capture to avoid RNG-only graph drift.
+    """
+
+    second_trace: Trace | None = None
+    try:
+        # Buffer-source identity is assigned during postprocessing only when the
+        # relevant activations are saved. Match the validation trace's "all"
+        # selection so the structural comparison does not compare two capture modes.
+        second_trace = _run_model_and_save_specified_outs(
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save="all",
+            activation_transform=None,
+            mark_layer_depths=False,
+            detach_saved_activations=False,
+            save_grads=False,
+            save_arg_values=False,
+            random_seed=random_seed,
+            save_rng_states=False,
+        )
+        first_hash = compute_graph_shape_hash(first_trace, include_module_address=False)
+        second_hash = compute_graph_shape_hash(second_trace, include_module_address=False)
+        if first_hash == second_hash:
+            return
+        hint = _first_reproducibility_divergence(first_trace, second_trace)
+        hint_suffix = f" ({hint})" if hint is not None else ""
+        warnings.warn(
+            "TorchLens validation detected a stateful/non-reproducible model: "
+            "fresh re-trace produced a structurally different graph. The trace "
+            "may represent a one-time execution. Re-run from fresh model state or "
+            f"make the forward path state-independent{hint_suffix}.",
+            TraceNotReproducibleWarning,
+            stacklevel=2,
+        )
+    except Exception as exc:
+        warnings.warn(
+            "TorchLens validation could not run the fresh re-trace reproducibility "
+            f"check ({type(exc).__name__}: {exc}).",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    finally:
+        if second_trace is not None:
+            second_trace.cleanup()
+
+
 def _validate_forward_pass_torch(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -953,6 +1094,7 @@ def _validate_forward_pass_torch(
     """
     warn_parallel()
     _reject_opaque_wrappers(model)
+    model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
@@ -1075,13 +1217,29 @@ def _validate_forward_pass_torch(
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
+        validation_model, validation_plain_attr_snapshot, _ = _model_for_validation_replay(model)
+        validation_state_dict = _clone_state_dict_with_metadata(validation_model)
+        validation_input_args = safe_copy_args(input_args)
+        validation_input_kwargs = safe_copy_kwargs(input_kwargs)
+        reproducibility_input_args = safe_copy_args(input_args)
+        reproducibility_input_kwargs = safe_copy_kwargs(input_kwargs)
+        if model_device is not None:
+            validation_input_args = _move_tensors_to_device(validation_input_args, model_device)
+            validation_input_kwargs = _move_tensors_to_device(validation_input_kwargs, model_device)
+            reproducibility_input_args = _move_tensors_to_device(
+                reproducibility_input_args, model_device
+            )
+            reproducibility_input_kwargs = _move_tensors_to_device(
+                reproducibility_input_kwargs, model_device
+            )
+
         # Step 2: Run the model *through* TorchLens, saving all outs.
         # save_arg_values=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved outs.
         trace = _run_model_and_save_specified_outs(
-            model=model,
-            input_args=input_args,
-            input_kwargs=input_kwargs,
+            model=validation_model,
+            input_args=validation_input_args,
+            input_kwargs=validation_input_kwargs,
             layers_to_save="all",
             activation_transform=None,
             mark_layer_depths=False,
@@ -1090,6 +1248,18 @@ def _validate_forward_pass_torch(
             save_arg_values=True,
             random_seed=random_seed,
             save_rng_states=True,
+        )
+        _warn_if_validation_trace_not_reproducible(
+            trace,
+            validation_model,
+            reproducibility_input_args,
+            reproducibility_input_kwargs,
+            random_seed,
+        )
+        _restore_validation_replay_state(
+            validation_model,
+            validation_state_dict,
+            validation_plain_attr_snapshot,
         )
         # Step 3: Validate by replaying the forward pass from saved outs.
         validation_result = trace.validate_forward_pass(

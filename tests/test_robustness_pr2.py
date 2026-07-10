@@ -70,6 +70,66 @@ def test_meta_tensor_parameter_raises() -> None:
         tl.trace(meta_model, x, capture=CaptureOptions(layers_to_save="none"))
 
 
+def test_meta_tensor_parameter_raises_after_prior_normal_traces() -> None:
+    """The meta guard must fire even after normal models were traced first.
+
+    Regression: torchlens's Python factory wrappers bypass torch's C-level
+    ``DeviceContext`` dispatch, so the wrapper re-injects the active device kwarg
+    itself. That injection skipped an EXPLICIT ``device=None`` (which ``nn.Linear``
+    forwards via ``factory_kwargs``), so once torch was wrapped by an earlier
+    trace, a model built under ``torch.device('meta')`` came out on CPU instead of
+    meta -- and the meta guard silently did not fire. Pin the in-session sequence
+    (normal traces THEN a meta model) rather than relying on test collection order.
+    """
+    for _ in range(3):
+        tl.trace(_Tiny(), torch.randn(2, 4))
+
+    with torch.device("meta"):
+        meta_model = _Tiny()
+    # The context must actually have produced meta params (the bug's real cause).
+    assert all(p.is_meta for p in meta_model.parameters())
+
+    with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
+        tl.trace(meta_model, torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+
+
+def test_wrapped_factories_honor_meta_context_with_explicit_device_none() -> None:
+    """Wrapped factory functions must honor an active device context for ``device=None``.
+
+    ``nn.Linear`` and friends forward ``device=None`` explicitly; treating that as a
+    pinned device (rather than "defer to the context") placed meta-context tensors on
+    CPU once torch was wrapped.
+    """
+    tl.trace(nn.Linear(4, 4), torch.randn(2, 4))  # ensure torch is wrapped
+
+    with torch.device("meta"):
+        assert torch.empty((4, 4)).is_meta
+        assert torch.empty((4, 4), device=None).is_meta
+        assert torch.empty_strided((4, 4), (4, 1), device=None).is_meta
+        assert nn.Linear(4, 4).weight.is_meta
+
+
+def test_unwrap_restores_meta_device_context() -> None:
+    """``unwrap_torch`` must not leave torch's device-constructor cache stale.
+
+    ``wrap_torch`` clears + repopulates torch's ``_device_constructors`` lru_cache so
+    it holds the wrapped callables. If unwrap does not clear it again, torch's
+    device-context dispatch stops recognising the RESTORED originals as device
+    constructors, silently breaking ``with torch.device('meta')`` after an unwrap.
+    """
+    from torchlens.backends.torch.wrappers import unwrap_torch
+
+    tl.trace(nn.Linear(4, 4), torch.randn(2, 4))  # wrap
+    unwrap_torch()
+    try:
+        with torch.device("meta"):
+            assert torch.empty(()).is_meta
+            assert nn.Linear(4, 4).weight.is_meta
+    finally:
+        # Leave torch wrapped so later tests in this session see the normal state.
+        tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
+
+
 def test_meta_tensor_detector_helper() -> None:
     """Sanity: the internal meta detector matches ``.device.type``."""
     assert _is_meta_tensor(torch.zeros(2, device="meta"))

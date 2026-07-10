@@ -62,7 +62,6 @@ unless a narrower policy is later set.
 | Old name | New name | Since-version | Planned removal |
 | --- | --- | --- | --- |
 | `log_forward_pass` | `trace` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `get_model_activations` | `extract` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `validate_model_activations` | `validate(scope="forward")` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `validate_saved_activations` | `validate(scope="saved")` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `render_graph` | `Trace.draw()` or `show_model_graph()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
@@ -107,6 +106,10 @@ unless a narrower policy is later set.
 | `save_outs_to` | `streaming.bundle_path` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `keep_outs_in_memory` | `streaming.retain_in_memory` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 | `out_sink` | `streaming.out_callback` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| `log_forward_pass(layers=...)` | `trace(layers_to_save=...)` | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
+| `log_forward_pass(save_function_args=...)` | `trace(save_arg_values=...)` | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
+| `log_forward_pass(save_gradients=...)` | `trace(save_grads=...)` | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
+| `log_forward_pass(keep_unsaved_layers=...)` | no direct equivalent; see migration guide | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
 | flat visualization option fields | grouped visualization option fields | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
 
 ## Recording And Fastlog Aliases

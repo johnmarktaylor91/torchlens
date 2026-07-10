@@ -41,6 +41,8 @@ from .._finalize import attach_function_root_module, attach_object_module_logs
 from .._finalize import finalize_single_pass_trace
 from .._options import PADDLE_EXTRA_KWARG_POLICY, PADDLE_PREVIEW_TRACE_OPTION_POLICY
 from .._options import reject_extra_trace_kwargs, reject_unsupported_trace_options
+from .._selective_save import apply_static_label_save_policy
+from .._selective_save import pop_static_label_save_predicate
 from .model_prep import (
     PaddleModuleTree,
     cleanup_model_session,
@@ -313,6 +315,7 @@ class PaddleBackend:
         save_visualizations = _default_if_missing(save_visualizations, False)
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = _default_if_missing(grad_options, None)
+        save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         _reject_extra_kwargs(extra_kwargs)
         if random_seed is not None:
             raise BackendUnsupportedError(
@@ -422,6 +425,7 @@ class PaddleBackend:
                 trace.num_params_frozen = 0
                 trace.param_source = "none"
             self._finish_trace(trace, module_tree if use_object_module else None)
+            apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
             if grad_options is not None:
                 self._attach_derived_grads(
                     trace=trace,

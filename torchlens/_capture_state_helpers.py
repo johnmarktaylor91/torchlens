@@ -11,6 +11,8 @@ import os
 import types
 import warnings
 from collections import OrderedDict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -50,6 +52,7 @@ _VALIDATION_DEEPCOPY_WARNING_TYPES: set[type[nn.Module]] = set()
 _PLAIN_ATTR_IGNORED_NAMES = frozenset({"_parameters", "_buffers", "_modules"})
 _PLAIN_ATTR_MAX_CONTAINER_ITEMS = 128
 _PLAIN_ATTR_MAX_TENSOR_NUMEL = 4096
+_COMPILED_MODEL_UNWRAP_WARNED = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,6 +97,163 @@ class _PlainAttrManagedTensorSnapshot:
     dtype: torch.dtype
     device: torch.device
     manager: str
+
+
+@dataclasses.dataclass(frozen=True)
+class _CompiledSubmoduleSwap:
+    """Snapshot of one temporarily unwrapped compiled submodule slot.
+
+    Parameters
+    ----------
+    parent:
+        Parent module that owns the child slot.
+    name:
+        Child name inside ``parent._modules``.
+    compiled_module:
+        Original compiled wrapper to restore.
+    """
+
+    parent: nn.Module
+    name: str
+    compiled_module: nn.Module
+
+
+def reset_compiled_model_unwrap_warning_state() -> None:
+    """Reset the process-local compiled-model unwrap warning flag.
+
+    Returns
+    -------
+    None
+        The next compiled-model unwrap emits the user-facing note again.
+    """
+
+    global _COMPILED_MODEL_UNWRAP_WARNED
+
+    _COMPILED_MODEL_UNWRAP_WARNED = False
+
+
+def _warn_compiled_model_unwrapped_once() -> None:
+    """Emit the compiled-model eager-source note at most once per process.
+
+    Returns
+    -------
+    None
+        Emits a ``UserWarning`` only on the first call in the process.
+    """
+
+    global _COMPILED_MODEL_UNWRAP_WARNED
+
+    if _COMPILED_MODEL_UNWRAP_WARNED:
+        return
+    _COMPILED_MODEL_UNWRAP_WARNED = True
+    warnings.warn(
+        "TorchLens: compiled model detected; tracing the eager source module it wraps "
+        "(torch.compile semantics such as fusion are not traced).",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _compiled_model_orig_module(model: nn.Module) -> nn.Module | None:
+    """Return the eager source module for a Dynamo compiled wrapper, if present.
+
+    Parameters
+    ----------
+    model:
+        Module to inspect.
+
+    Returns
+    -------
+    nn.Module | None
+        ``model._orig_mod`` when ``model`` is an OptimizedModule and the original
+        object is an ``nn.Module``; otherwise ``None``.
+    """
+
+    optimized_module_type = get_dynamo_optimized_module_type()
+    if optimized_module_type is None or not isinstance(model, optimized_module_type):
+        return None
+    orig_mod = getattr(model, "_orig_mod", None)
+    if isinstance(orig_mod, nn.Module):
+        return orig_mod
+    return None
+
+
+def unwrap_compiled_model(model: nn.Module) -> nn.Module:
+    """Return the eager source module for a top-level compiled wrapper.
+
+    Parameters
+    ----------
+    model:
+        User-supplied model.
+
+    Returns
+    -------
+    nn.Module
+        ``model._orig_mod`` when ``model`` is a Dynamo OptimizedModule, otherwise
+        ``model`` unchanged.
+    """
+
+    orig_mod = _compiled_model_orig_module(model)
+    if orig_mod is None:
+        return model
+    _warn_compiled_model_unwrapped_once()
+    return orig_mod
+
+
+@contextmanager
+def unwrap_compiled_submodules(model: nn.Module) -> Iterator[None]:
+    """Temporarily replace compiled child slots with their eager source modules.
+
+    Parameters
+    ----------
+    model:
+        Root model whose descendants should execute through eager modules during
+        TorchLens capture.
+
+    Yields
+    ------
+    None
+        Control while compiled child slots are unwrapped.
+    """
+
+    swaps: list[_CompiledSubmoduleSwap] = []
+    try:
+        traversal_queue: list[nn.Module] = [model]
+        seen_module_ids: set[int] = set()
+        while traversal_queue:
+            parent = traversal_queue.pop()
+            parent_id = id(parent)
+            if parent_id in seen_module_ids:
+                continue
+            seen_module_ids.add(parent_id)
+            for child_name, child_module in list(parent._modules.items()):
+                if child_module is None:
+                    continue
+                orig_mod = _compiled_model_orig_module(child_module)
+                if orig_mod is None:
+                    traversal_queue.append(child_module)
+                    continue
+                swaps.append(
+                    _CompiledSubmoduleSwap(
+                        parent=parent,
+                        name=child_name,
+                        compiled_module=child_module,
+                    )
+                )
+                parent._modules[child_name] = orig_mod
+                traversal_queue.append(orig_mod)
+    except BaseException:
+        for swap in reversed(swaps):
+            swap.parent._modules[swap.name] = swap.compiled_module
+        raise
+
+    try:
+        if swaps:
+            _warn_compiled_model_unwrapped_once()
+        yield
+    finally:
+        for swap in reversed(swaps):
+            swap.parent._modules[swap.name] = swap.compiled_module
 
 
 def _is_identity_stable_plain_attr(value: Any) -> bool:
@@ -511,12 +671,23 @@ class _ModuleTreePlainAttrSnapshot:
             self._module_attr_names[id(module)] = (module, attr_names, module_path)
             for name in sorted(attr_names):
                 attr_path = f"{module_path}.{name}"
+                try:
+                    snapshot = _snapshot_module_plain_attr_value(module, name, attr_path)
+                except RuntimeError as exc:
+                    warnings.warn(
+                        "TorchLens validation deepcopy fallback could not snapshot plain "
+                        f"attribute '{attr_path}'; skipping restoration for this attribute "
+                        f"only ({exc}).",
+                        RuntimeWarning,
+                        stacklevel=3,
+                    )
+                    continue
                 self._entries.append(
                     (
                         module,
                         name,
                         attr_path,
-                        _snapshot_module_plain_attr_value(module, name, attr_path),
+                        snapshot,
                     )
                 )
 
@@ -585,7 +756,9 @@ def _model_for_ground_truth_validation(
     """
 
     try:
-        return copy.deepcopy(model), None
+        copied_model = copy.deepcopy(model)
+        _strip_copied_forward_decorations(copied_model)
+        return copied_model, None
     except Exception:
         model_type = type(model)
         if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
@@ -597,7 +770,101 @@ def _model_for_ground_truth_validation(
                 RuntimeWarning,
                 stacklevel=3,
             )
-        return model, _ModuleTreePlainAttrSnapshot(model)
+        try:
+            return model, _ModuleTreePlainAttrSnapshot(model)
+        except RuntimeError:
+            warnings.warn(
+                "TorchLens validate_forward_pass could not snapshot non-registered mutable "
+                "state after deepcopy failed; falling back to live model state without "
+                "plain-attribute restoration.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return model, None
+
+
+def _strip_copied_forward_decorations(model: nn.Module) -> None:
+    """Remove TorchLens forward wrappers copied from another module instance.
+
+    Parameters
+    ----------
+    model:
+        Deep-copied validation model whose submodules may carry instance-level
+        TorchLens forward wrappers closing over the source modules.
+    """
+
+    from .backends.torch._tl import is_forward_call_decorated
+
+    for module in model.modules():
+        current_forward = module.__dict__.get("forward", None)
+        if current_forward is None or not is_forward_call_decorated(current_forward):
+            continue
+        original_forward = getattr(current_forward, "__wrapped__", None)
+        if original_forward is not None and getattr(original_forward, "__self__", module) is module:
+            module.forward = cast(Callable[..., Any], original_forward)
+        else:
+            module.__dict__.pop("forward", None)
+
+
+def _restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> None:
+    """Align simple plain attributes on a validation copy with its source.
+
+    Parameters
+    ----------
+    source:
+        Original module tree.
+    copied:
+        Deep-copied module tree that should represent ``source`` at validation
+        entry.
+    """
+
+    simple_types = (type(None), bool, int, float, complex, str, bytes)
+    for source_module, copied_module in zip(source.modules(), copied.modules()):
+        source_names = _module_plain_attr_names(source_module)
+        copied_names = _module_plain_attr_names(copied_module)
+        for name in sorted(source_names & copied_names):
+            source_value = getattr(source_module, name)
+            copied_value = getattr(copied_module, name)
+            if not isinstance(source_value, simple_types):
+                continue
+            if not isinstance(copied_value, simple_types):
+                continue
+            if source_value != copied_value:
+                setattr(copied_module, name, source_value)
+
+
+def _model_for_validation_replay(
+    model: nn.Module,
+) -> tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None, bool]:
+    """Return a model instance to use for validation capture and replay.
+
+    Parameters
+    ----------
+    model:
+        Original model being validated.
+
+    Returns
+    -------
+    tuple[nn.Module, _ModuleTreePlainAttrSnapshot | None, bool]
+        A deep-copied model when possible, optional plain-attribute snapshot
+        for fallback restoration, and whether the copy succeeded.
+    """
+
+    try:
+        copied_model = copy.deepcopy(model)
+        _strip_copied_forward_decorations(copied_model)
+        _restore_simple_plain_attrs_on_copy(model, copied_model)
+        return copied_model, None, True
+    except Exception:
+        warnings.warn(
+            "TorchLens validation replay against live model state; model could not be copied.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        try:
+            return model, _ModuleTreePlainAttrSnapshot(model), False
+        except RuntimeError:
+            return model, None, False
 
 
 def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
@@ -1070,9 +1337,6 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     our wrappers don't see the original ops, so the Trace would be
     empty or misleading:
 
-    * ``torch._dynamo.eval_frame.OptimizedModule`` (``torch.compile(model)``)
-      — dynamo replaces the forward with a compiled graph; our wrappers are
-      optimized away or bypassed depending on the backend.
     * ``torch.jit.ScriptModule`` / ``torch.jit.RecursiveScriptModule``
       (``torch.jit.script`` / ``torch.jit.trace``) — the forward runs on the
       TorchScript interpreter, not Python, so no Python-level decoration fires.
@@ -1083,7 +1347,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
       TorchLens cannot currently validate.
 
     In these cases the fix is the same: call ``trace`` on the
-    *un-wrapped* model before compiling, scripting, exporting, or sharding.
+    *un-wrapped* model before scripting, exporting, or sharding.
     """
     # FullyShardedDataParallel
     try:
@@ -1099,16 +1363,6 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
                 "TorchLens cannot validate. Call trace on the "
                 "underlying unwrapped nn.Module."
             )
-
-    # torch.compile -> torch._dynamo.eval_frame.OptimizedModule
-    optimized_module_type = get_dynamo_optimized_module_type()
-    if optimized_module_type is not None and isinstance(model, optimized_module_type):
-        raise RuntimeError(
-            "torchlens.trace does not support torch.compile'd "
-            "models: dynamo replaces the Python forward with a compiled "
-            "graph that byops TorchLens' function wrappers. "
-            "Call trace on the original (un-compiled) model."
-        )
 
     # torch.jit.script / torch.jit.trace -> ScriptModule
     if isinstance(model, torch.jit.ScriptModule):

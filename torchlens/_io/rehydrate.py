@@ -105,6 +105,7 @@ def rehydrate_trace(
     payload_statuses: list[str] = []
     if audit_only_payloads:
         payload_statuses.append("audit_only")
+    seen: set[int] = set()
     _rehydrate_object(
         trace,
         manifest_index=manifest_index,
@@ -115,8 +116,21 @@ def rehydrate_trace(
         payload_hints=payload_hints,
         audit_only_payloads=audit_only_payloads,
         payload_statuses=payload_statuses,
-        seen=set(),
+        seen=seen,
     )
+    if module_accessor_state is not None:
+        _rehydrate_object(
+            module_accessor_state,
+            manifest_index=manifest_index,
+            bundle_path=Path(bundle_path),
+            lazy=lazy,
+            map_location=map_location,
+            materialize_nested=materialize_nested,
+            payload_hints=payload_hints,
+            audit_only_payloads=audit_only_payloads,
+            payload_statuses=payload_statuses,
+            seen=seen,
+        )
 
     # rebuild_trace_accessors() MUST run AFTER _rehydrate_object(), not before.
     # accessor_rebuild.py bakes `trace._buffer_initial_values.get(address)`
@@ -766,6 +780,7 @@ def _build_lazy_tensor_ref(
         relative_path=entry.relative_path,
         kind=kind,
         expected_sha256=entry.sha256,
+        requires_grad=entry.requires_grad,
         logical_backend=entry.logical_backend or "torch",
         codec=entry.codec or "torch_safetensors_v1",
         logical_dtype=entry.logical_dtype,
@@ -932,7 +947,15 @@ def _load_safetensors_tensor(
 
     if len(tensor_map) != 1:
         raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
-    return next(iter(tensor_map.values()))
+    tensor = next(iter(tensor_map.values()))
+    requires_grad = (
+        entry.requires_grad if isinstance(entry, TensorEntry) else entry.get("requires_grad", False)
+    )
+    if not isinstance(requires_grad, bool):
+        raise TorchLensIOError("Manifest tensor entry 'requires_grad' must be a boolean.")
+    if requires_grad:
+        tensor.requires_grad_(True)
+    return tensor
 
 
 def _set_payload_load_status(
@@ -1060,6 +1083,17 @@ def rehydrate_nested(
         payload_statuses=payload_statuses,
         seen=set(),
     )
+    module_logs = getattr(trace, "_module_logs", None)
+    if module_logs is not None:
+        _rehydrate_nested_object(
+            module_logs,
+            manifest_index=manifest_index,
+            bundle_path=bundle_path,
+            map_location=map_location,
+            payload_hints=payload_hints,
+            payload_statuses=payload_statuses,
+            seen=set(),
+        )
     if payload_statuses:
         _set_payload_load_status(trace, manifest_index, payload_statuses)
 

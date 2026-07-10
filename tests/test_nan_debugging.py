@@ -140,3 +140,16 @@ def test_partial_trace_attached_to_generic_forward_exception() -> None:
     graph = partial.draw()
     assert "__add__" in graph
     assert "fixture failure" in graph
+
+
+def test_find_nan_accepts_explicit_capture_options() -> None:
+    """find_nan preserves only explicit capture fields while enabling its diagnostic gate."""
+
+    result = tl.debug.find_nan(
+        NonFiniteFixture(),
+        _input_tensor(),
+        capture=tl.options.CaptureOptions(inference_only=True),
+    )
+
+    assert result.found is True
+    assert result.scope == "first non-finite tensor"

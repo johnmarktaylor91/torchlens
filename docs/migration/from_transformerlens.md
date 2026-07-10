@@ -12,6 +12,7 @@ Their construct:
 
 ```python
 # migration-test: tool=transformer_lens expected=[[2.5, 2.5]]
+# Activation values depend on the downloaded checkpoint.
 import torch
 from transformer_lens import HookedTransformer
 

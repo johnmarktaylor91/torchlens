@@ -1202,8 +1202,8 @@ def test_missing_saved_args_yields_reason_coded_unverified() -> None:
     assert result.unverified_reason_counts["missing_saved_args"] >= 1
 
 
-def test_selective_save_unchecked_surface_is_exempted_not_saved_by_user() -> None:
-    """Predicate-excluded replay data should be a by-design exemption."""
+def test_selective_save_interior_gap_is_unverified() -> None:
+    """A selected op behind an unsaved parent must not become a clean pass."""
 
     trace = tl.trace(
         AddMulModel(),
@@ -1214,16 +1214,44 @@ def test_selective_save_unchecked_surface_is_exempted_not_saved_by_user() -> Non
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert result is True
+    assert isinstance(result, ValidationReplayStatus)
+    assert result.state == "unverified"
     status = trace.validation_replay_status
-    assert status.state == "passed"
-    assert status.unverified_node_count == 0
-    assert status.exempted_reason_counts["not_saved_by_user"] >= 1
-    decisions = [
-        decision for decision in status.decisions if decision.get("reason") == "not_saved_by_user"
-    ]
-    assert decisions
-    assert all(decision.get("justification") for decision in decisions)
+    assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert "not_saved_by_user" not in status.exempted_reason_counts
+    computational_ops = [op for op in trace.layer_list if op.func is not None]
+    assert computational_ops
+    assert all(op.has_saved_args and op.saved_args is not None for op in computational_ops)
+
+
+def test_not_saved_by_user_requires_exact_negative_predicate_decision() -> None:
+    """Only an exact per-op negative predicate decision proves user exclusion."""
+
+    trace = tl.trace(
+        AddMulModel(),
+        torch.randn(2, 3),
+        save=_save_only_mul,
+        save_arg_values=False,
+    )
+    add_op = _first_op_with_func(trace, "__add__")
+    mul_op = _first_op_with_func(trace, "__mul__")
+
+    add_proof = core._not_saved_by_user_justification(  # noqa: SLF001
+        trace,
+        add_op,
+        "missing_saved_args",
+    )
+
+    assert add_proof is not None
+    assert "predicate_save_out=False" in add_proof
+    assert (
+        core._not_saved_by_user_justification(  # noqa: SLF001
+            trace,
+            mul_op,
+            "missing_saved_args",
+        )
+        is None
+    )
 
 
 def test_selective_save_checkable_mismatch_still_fails() -> None:
@@ -1315,6 +1343,7 @@ def test_perturbation_exception_yields_reason_coded_unverified() -> None:
         save_arg_values=True,
     )
 
+    torch.manual_seed(108)
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
     assert isinstance(result, ValidationReplayStatus)

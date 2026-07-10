@@ -338,6 +338,7 @@ class BundleStreamWriter:
             layout=entry.layout,
             bytes=entry.bytes,
             sha256=entry.sha256,
+            requires_grad=entry.requires_grad,
             logical_backend=entry.logical_backend,
             codec=entry.codec,
             logical_dtype=entry.logical_dtype,
@@ -402,6 +403,7 @@ class BundleStreamWriter:
             layout=str(contiguous_tensor.layout).replace("torch.", ""),
             bytes=int(contiguous_tensor.numel() * contiguous_tensor.element_size()),
             sha256=sha256_of_file(blob_path),
+            requires_grad=bool(tensor.requires_grad),
         )
 
     def _build_manifest(

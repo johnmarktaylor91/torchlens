@@ -254,7 +254,7 @@ _OP_SLOT_NAMES = tuple(
 def _clear_property_backed_state_fields(state: dict[str, Any]) -> None:
     """Remove state keys that are represented by computed Op properties."""
 
-    for field_name in _OP_PROPERTY_BACKED_FIELD_NAMES - {"is_in_conditional_body"}:
+    for field_name in _OP_PROPERTY_BACKED_FIELD_NAMES:
         state.pop(field_name, None)
 
 
@@ -2010,15 +2010,30 @@ class Op:
         ml = self.source_trace
         if ml is None:
             return []
-        my_label = self.layer_label if self._tracing_finished else self._label_raw
+        _finished = self._tracing_finished or (
+            self.source_trace is not None and self.source_trace._tracing_finished
+        )
+        my_label = self.layer_label if _finished else self._label_raw
         siblings = []
         seen = {my_label}
         for parent_label in self.parents:
-            parent = ml[parent_label]
+            try:
+                parent = ml[parent_label]
+            except (KeyError, ValueError):
+                try:
+                    parent = ml.orphans[parent_label]
+                except KeyError:
+                    continue
             for child_label in parent.children:
                 if child_label not in seen:
                     seen.add(child_label)
-                    child = ml[child_label]
+                    try:
+                        child = ml[child_label]
+                    except (KeyError, ValueError):
+                        try:
+                            child = ml.orphans[child_label]
+                        except KeyError:
+                            continue
                     if not child.is_output:
                         siblings.append(child_label)
         return siblings
@@ -2034,15 +2049,30 @@ class Op:
         ml = self.source_trace
         if ml is None:
             return []
-        my_label = self.layer_label if self._tracing_finished else self._label_raw
+        _finished = self._tracing_finished or (
+            self.source_trace is not None and self.source_trace._tracing_finished
+        )
+        my_label = self.layer_label if _finished else self._label_raw
         spouses = []
         seen = {my_label}
         for child_label in self.children:
-            child = ml[child_label]
+            try:
+                child = ml[child_label]
+            except (KeyError, ValueError):
+                try:
+                    child = ml.orphans[child_label]
+                except KeyError:
+                    continue
             for parent_label in child.parents:
                 if parent_label not in seen:
                     seen.add(parent_label)
-                    parent = ml[parent_label]
+                    try:
+                        parent = ml[parent_label]
+                    except (KeyError, ValueError):
+                        try:
+                            parent = ml.orphans[parent_label]
+                        except KeyError:
+                            continue
                     if not parent.is_output:
                         spouses.append(parent_label)
         return spouses
@@ -2693,7 +2723,7 @@ class Op:
             state["device_ref"] = _device_ref_from_metadata(
                 state.get("out"), state.get("output_device")
             )
-        if state.get("backend_address") is None:
+        if version < 5 and state.get("backend_address") is None:
             state["backend_address"] = state.get("address")
         if state.get("resolver_status") is None:
             state["resolver_status"] = "resolved"
@@ -3331,10 +3361,10 @@ class Op:
     def __str__(self) -> str:
         """Return a human-readable operation summary."""
 
-        if self._tracing_finished:
+        trace_finished = self.source_trace is not None and self.source_trace._tracing_finished
+        if self._tracing_finished or trace_finished:
             return self._str_after_pass()
-        else:
-            return self._str_during_pass()
+        return self._str_during_pass()
 
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""

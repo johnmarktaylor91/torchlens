@@ -862,6 +862,49 @@ def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
         tl.trace(_PaddleLayer(), paddle.to_tensor([1.0]), backend="paddle", backward_ready=True)
 
 
+def test_paddle_preview_applies_static_label_save_selector() -> None:
+    """Paddle accepts advertised static save selectors and filters public payloads."""
+
+    paddle = pytest.importorskip("paddle")
+
+    class _PaddleRelu(paddle.nn.Layer):
+        """Small Paddle model with a selectively saved operation."""
+
+        def forward(self, x: Any) -> Any:
+            """Apply a deterministic ReLU."""
+
+            return paddle.nn.functional.relu(x)
+
+    model = _PaddleRelu()
+    model.eval()
+    trace = tl.trace(
+        model,
+        paddle.to_tensor([-1.0, 2.0]),
+        backend="paddle",
+        save=tl.contains("relu"),
+    )
+
+    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
+    assert len(saved_ops) == 1
+    assert saved_ops[0].func_name == "functional.relu"
+
+
+def test_tf_version_gate_reports_installed_version_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unsupported TF/Keras versions raise the actionable explicit-backend mismatch."""
+
+    keras_module = types.SimpleNamespace(__version__="2.13.1")
+    tf_module = types.SimpleNamespace(__version__="2.14.0")
+    monkeypatch.setitem(sys.modules, "keras", keras_module)
+    monkeypatch.setitem(sys.modules, "tensorflow", tf_module)
+    keras_model_type = type("Functional", (), {"__module__": "keras.src.models"})
+
+    with pytest.raises(
+        BackendMismatchError,
+        match=r"TF backend requires Keras>=3 and TF>=2\.16; found keras 2\.13\.1 / tf 2\.14\.0",
+    ):
+        _tf_can_handle(keras_model_type(), (), None)
+
+
 def test_registered_capture_backends_conform_to_protocol() -> None:
     """Every registered shared-capture adapter exposes the full protocol surface."""
 

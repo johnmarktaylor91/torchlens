@@ -87,6 +87,37 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
     )
 
 
+@pytest.mark.parametrize("training", [True, False])
+def test_batchnorm_module_summary_uses_real_output_shape_and_dtype(training: bool) -> None:
+    """BatchNorm summary rows use module outputs instead of trailing running-stat buffers."""
+
+    class _BatchNormModel(nn.Module):
+        """Small BatchNorm model with captured running-stat buffer operations."""
+
+        def __init__(self) -> None:
+            """Initialize the BatchNorm layer."""
+
+            super().__init__()
+            self.norm = nn.BatchNorm2d(3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Normalize one image batch."""
+
+            return self.norm(x)
+
+    model = _BatchNormModel()
+    model.train(training)
+    log = tl.trace(model, torch.randn(2, 3, 4, 4))
+
+    overview = log.summary(level="overview")
+    compute = log.summary(level="compute")
+
+    assert "norm (BatchNorm2d) | [2,3,4,4]" in overview
+    assert "| norm  |" in compute
+    assert "float32" in compute
+    assert "norm (BatchNorm2d) | [3]" not in overview
+
+
 @pytest.mark.parametrize(
     "level, expected_fragment",
     [

@@ -96,6 +96,8 @@ def _skip_incompatible_optional_example(file_name: str, tool: str) -> None:
         pytest.skip(
             "transformer_lens pretrained tiny-stories-1M cache values vary by installed weights/version"
         )
+    if file_name == "from_pyvene.md" and tool == "pyvene":
+        pytest.skip("pyvene example requires a version-specific configured model checkpoint")
 
 
 @pytest.mark.parametrize(("file_name", "tool", "expected", "code"), _iter_examples())

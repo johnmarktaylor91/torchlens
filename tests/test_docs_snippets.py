@@ -10,7 +10,14 @@ from typing import Any
 import pytest
 
 
-DOC_FILES = ("performance.md", "for-ai-agents.md")
+DOC_FILES = (
+    "performance.md",
+    "for-ai-agents.md",
+    "reference/debug.md",
+    "reference/export.md",
+    "reference/attribution.md",
+    "reference/collapse.md",
+)
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 
 
@@ -77,4 +84,23 @@ def test_p2_doc_python_block_runs(
         "__name__": f"docs_snippet_{Path(file_name).stem}_{block_index}",
         "DOCS_TMPDIR": str(tmp_path),
     }
-    exec(compile(code, synthetic_filename, "exec"), namespace)
+    try:
+        exec(compile(code, synthetic_filename, "exec"), namespace)
+    except (ImportError, ModuleNotFoundError) as exc:
+        # A doc example may demonstrate an OPTIONAL-dependency feature (e.g. the xarray
+        # export) that is not installed in every test env (CI installs only core deps).
+        # The example is still correct; skip when its dependency is absent rather than
+        # fail. Users who want that feature install the extra.
+        pytest.skip(f"doc snippet requires an unavailable optional dependency: {exc}")
+
+
+def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
+    """Keep visual-reference links and the render-script manifest aligned."""
+
+    from scripts.render_collapse_reference import DEFAULT_OUT_DIR, IMAGE_NAMES
+
+    page = (_docs_dir() / "reference" / "collapse.md").read_text(encoding="utf-8")
+    linked_names = tuple(re.findall(r"\.\./images/collapse/([^)]*\.svg)", page))
+    assert linked_names == IMAGE_NAMES
+    missing = [name for name in IMAGE_NAMES if not (DEFAULT_OUT_DIR / name).is_file()]
+    assert not missing, f"Regenerate with scripts/render_collapse_reference.py: {missing}"

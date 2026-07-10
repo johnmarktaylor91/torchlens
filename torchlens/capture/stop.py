@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import traceback
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..errors import CaptureError
@@ -14,6 +16,72 @@ if TYPE_CHECKING:
     from ..fastlog.types import RecordContext
 
 ForwardStopDisposition = Literal["raise", "attach_partial", "return_partial"]
+
+
+# The torchlens PACKAGE directory (``.../torchlens/torchlens``), derived from this
+# file's own location so it identifies the installed package regardless of what the
+# surrounding checkout/repo directory is named. Using a path-component check for the
+# string ``"torchlens"`` is WRONG: a repo cloned as ``.../torchlens/tests/...`` has a
+# ``torchlens`` component and would be mis-classified as library code (which hid the
+# real user frame and made find_nan report ``<frozen runpy>`` under some launchers).
+_TORCHLENS_PKG_DIR = Path(__file__).resolve().parent.parent
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    """Return whether ``path`` is inside ``root`` (version-portable)."""
+
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_library_frame(filename: str) -> bool:
+    """Return whether a stack frame belongs to library/launcher code, not user code."""
+
+    # Launcher/import-machinery frames (``<frozen runpy>``, ``<frozen importlib._bootstrap>``)
+    # are never user code. Keep ``<string>``/``<stdin>`` -- those ARE user code (``-c``/REPL).
+    if filename.startswith("<frozen"):
+        return True
+    try:
+        path = Path(filename).resolve()
+    except (OSError, ValueError):
+        return True
+    parts = path.parts
+    if "site-packages" in parts or "dist-packages" in parts:
+        return True
+    if _is_within(path, _TORCHLENS_PKG_DIR):
+        return True
+    try:
+        import torch
+
+        if _is_within(path, Path(torch.__file__).resolve().parent):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _live_user_location() -> tuple[str | None, int | None]:
+    """Return the nearest non-library stack location.
+
+    Walks the live stack from the innermost frame outward and returns the first frame
+    that is genuine user code -- i.e. not inside the torchlens or torch packages, not
+    under site/dist-packages, and not a synthetic launcher frame.
+
+    Returns
+    -------
+    tuple[str | None, int | None]
+        User file path and line number, or ``(None, None)`` when no user
+        frame can be identified.
+    """
+
+    for frame in reversed(traceback.extract_stack()[:-1]):
+        if _is_library_frame(frame.filename):
+            continue
+        return str(frame.filename), frame.lineno
+    return None, None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +179,11 @@ class StopDirective:
             "TorchLens capture stopped at first non-finite tensor: "
             f"op={func_name!r}, layer={raw_label!r}, shape={shape}, dtype={dtype}."
         )
+        file_path, line_no = _live_user_location()
         raise CaptureError(
             message,
+            file_path=file_path,
+            line_no=line_no,
             affected_sites=[raw_label],
             op=func_name,
             layer=raw_label,

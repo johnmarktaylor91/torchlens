@@ -38,7 +38,7 @@ def _decode_graphviz_stderr(error: subprocess.CalledProcessError) -> str:
 if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRunFold
+    from .auto_collapse import ModuleRepeatFold
 
 
 def _code_panel_composition_available(file_format: str, engine: str) -> bool:
@@ -387,7 +387,7 @@ def _enumerate_base_rendered_node_emissions(
     vis_call_depth: int,
     show_buffer_layers: BufferVisibilityLiteral,
     collapse_fn: CollapseFn | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     show_containers: ShowContainersLiteral,
     collapsed_container_nodes: Mapping[str, str],
 ) -> tuple[RenderedNodeEmission, ...]:
@@ -409,7 +409,7 @@ def _enumerate_base_rendered_node_emissions(
         Normalized buffer visibility.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
+    repeat_folds:
         Active run folds.
     show_containers:
         Container overlay mode.
@@ -429,13 +429,21 @@ def _enumerate_base_rendered_node_emissions(
             continue
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
+        if _is_hidden_buffer_update_node(
+            trace,
+            node,
+            entries_to_plot,
+            show_buffer_layers,
+            vis_mode,
+        ):
+            continue
         emission = _base_rendered_node_emission(
             trace,
             node,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
             collapse_fn=collapse_fn,
-            run_folds=run_folds,
+            repeat_folds=repeat_folds,
             show_containers=show_containers,
             collapsed_container_nodes=collapsed_container_nodes,
         )
@@ -456,7 +464,7 @@ def _base_rendered_node_emission(
     vis_mode: str,
     vis_call_depth: int,
     collapse_fn: CollapseFn | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     show_containers: ShowContainersLiteral,
     collapsed_container_nodes: Mapping[str, str],
 ) -> RenderedNodeEmission | None:
@@ -474,7 +482,7 @@ def _base_rendered_node_emission(
         Module depth threshold.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
+    repeat_folds:
         Active run folds.
     show_containers:
         Container overlay mode.
@@ -494,20 +502,22 @@ def _base_rendered_node_emission(
         collapse_fn=collapse_fn,
         max_module_depth=vis_call_depth,
     )
-    fold_ancestor_address = _run_fold_ancestor_for_node(node, run_folds)
+    fold_ancestor_address = _run_fold_ancestor_for_node(node, repeat_folds)
     if fold_ancestor_address is not None:
         collapse_address = fold_ancestor_address
     if collapse_address is not None:
-        if run_folds is not None and not _is_run_fold_representative(collapse_address, run_folds):
+        if repeat_folds is not None and not _is_run_fold_representative(
+            collapse_address, repeat_folds
+        ):
             return RenderedNodeEmission(
                 name=_render_node_label(node, vis_mode).replace(":", "pass"),
                 kind="hidden_run_member",
                 node=node,
                 module_address=collapse_address.rsplit(":", 1)[0],
                 call=collapse_address,
-                fold=_run_fold_for_address(collapse_address, run_folds),
+                fold=_run_fold_for_address(collapse_address, repeat_folds),
             )
-        name = _run_fold_graph_node_name(collapse_address, vis_mode, run_folds)
+        name = _run_fold_graph_node_name(collapse_address, vis_mode, repeat_folds)
         address = collapse_address.rsplit(":", 1)[0]
         return RenderedNodeEmission(
             name=name,
@@ -515,7 +525,7 @@ def _base_rendered_node_emission(
             node=node,
             module_address=address,
             call=collapse_address,
-            fold=_run_fold_for_address(address, run_folds),
+            fold=_run_fold_for_address(address, repeat_folds),
         )
     name = _render_node_label(node, vis_mode).replace(":", "pass")
     if show_containers in {"collapsed", "auto"} and name in collapsed_container_nodes:
@@ -541,10 +551,10 @@ def _enumerate_run_fold_ellipsis_emissions(
     vis_call_depth: int,
     show_buffer_layers: BufferVisibilityLiteral,
     collapse_fn: CollapseFn | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     collapsed_container_nodes: Mapping[str, str],
 ) -> tuple[RenderedNodeEmission, ...]:
-    """Enumerate run-fold ellipsis nodes triggered by rendered edges.
+    """Enumerate repeat-fold ellipsis nodes triggered by rendered edges.
 
     Parameters
     ----------
@@ -564,7 +574,7 @@ def _enumerate_run_fold_ellipsis_emissions(
         Normalized buffer visibility.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
+    repeat_folds:
         Active run folds.
     collapsed_container_nodes:
         Container leaf to summary-node mapping.
@@ -575,7 +585,7 @@ def _enumerate_run_fold_ellipsis_emissions(
         Ellipsis nodes in first-trigger order.
     """
 
-    if not run_folds:
+    if not repeat_folds:
         return ()
     emitted: set[str] = set()
     emissions: list[RenderedNodeEmission] = []
@@ -590,7 +600,7 @@ def _enumerate_run_fold_ellipsis_emissions(
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
             collapse_fn=collapse_fn,
-            run_folds=run_folds,
+            repeat_folds=repeat_folds,
         )
         parent_name = parent_endpoint or _render_node_label(parent_node, vis_mode).replace(
             ":", "pass"
@@ -606,27 +616,27 @@ def _enumerate_run_fold_ellipsis_emissions(
                 vis_mode=vis_mode,
                 vis_call_depth=vis_call_depth,
                 collapse_fn=collapse_fn,
-                run_folds=run_folds,
+                repeat_folds=repeat_folds,
             )
             child_name = (
                 collapsed_container_nodes.get(child_render_name)
                 or child_endpoint
                 or child_render_name
             )
-            parent_fold = _run_fold_hidden_endpoint(parent_endpoint, run_folds)
-            child_fold = _run_fold_hidden_endpoint(child_endpoint, run_folds)
+            parent_fold = _run_fold_hidden_endpoint(parent_endpoint, repeat_folds)
+            child_fold = _run_fold_hidden_endpoint(child_endpoint, repeat_folds)
             if parent_fold is not None and child_fold is parent_fold:
                 continue
             fold = parent_fold or child_fold
             if fold is None:
                 continue
             tail_name = (
-                _run_fold_graph_node_name(parent_endpoint, vis_mode, run_folds)
+                _run_fold_graph_node_name(parent_endpoint, vis_mode, repeat_folds)
                 if parent_endpoint
                 else parent_name
             )
             head_name = (
-                _run_fold_graph_node_name(child_endpoint, vis_mode, run_folds)
+                _run_fold_graph_node_name(child_endpoint, vis_mode, repeat_folds)
                 if child_endpoint
                 else child_name
             )
@@ -658,7 +668,7 @@ def _collapsed_endpoint_for_emission(
     vis_mode: str,
     vis_call_depth: int,
     collapse_fn: CollapseFn | None,
-    run_folds: Mapping[str, "ModuleRunFold"] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
 ) -> str | None:
     """Return pass-qualified collapsed endpoint for node-universe enumeration.
 
@@ -674,13 +684,13 @@ def _collapsed_endpoint_for_emission(
         Module depth threshold.
     collapse_fn:
         Active collapse predicate.
-    run_folds:
+    repeat_folds:
         Active run folds.
 
     Returns
     -------
     str | None
-        Collapsed endpoint address, including hidden run-fold members.
+        Collapsed endpoint address, including hidden repeat-fold members.
     """
 
     endpoint = _collapse_address_for_node(
@@ -690,7 +700,7 @@ def _collapsed_endpoint_for_emission(
         collapse_fn=collapse_fn,
         max_module_depth=vis_call_depth,
     )
-    fold_ancestor = _run_fold_ancestor_for_node(node, run_folds)
+    fold_ancestor = _run_fold_ancestor_for_node(node, repeat_folds)
     return fold_ancestor if fold_ancestor is not None else endpoint
 
 

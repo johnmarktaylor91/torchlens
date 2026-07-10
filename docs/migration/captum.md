@@ -9,6 +9,6 @@
 | Integrated gradients | No direct equivalent | Deferred to v2.x; use Captum for gradient-integration algorithms. |
 | Saliency / gradient attribution | Backward logging plus Tier-1 backward hooks where appropriate | Partial; full Captum method parity is deferred. |
 | Neuron conductance | No direct equivalent | Deferred to v2.x. |
-| Compare attribution metrics across runs | `Bundle.metric` or `Bundle.joint_metric` | Equivalent container-level computation. |
+| Compare attribution metrics across runs | `Bundle.joint_metric` or an explicit metric loop | Equivalent container-level computation. |
 | Persist attribution setup | `.tlspec/` for intervention recipe, separate code for metric | Partial; metrics are not fully serialized. |
 | Fused attention internals | Manual unfused implementation | TorchLens cannot see hidden fused intermediates. |

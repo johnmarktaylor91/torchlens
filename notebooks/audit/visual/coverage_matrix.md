@@ -17,10 +17,10 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `collapse:auto` | collapse='auto' (readability-targeted engine) | p32 |
 | `collapse:max` | collapse='max' (aggressive condensation + segments) | p32 |
 | `collapse:float` | collapse=t float slider in [0,1], monotone schedule | p33 |
-| `fold_runs:none` | fold_runs=None default policy (off for collapse='none') | p34 |
-| `fold_runs:true` | fold_runs=True (fold every legal run) | p34 |
-| `fold_runs:false` | fold_runs=False (folding disabled) | p34 |
-| `fold_runs:standalone` | fold_runs=True with collapse='none' (fold-only mode) | p35 |
+| `fold_repeats:none` | fold_repeats=None default policy (off for collapse='none') | p34 |
+| `fold_repeats:true` | fold_repeats=True (fold every legal run) | p34 |
+| `fold_repeats:false` | fold_repeats=False (folding disabled) | p34 |
+| `fold_repeats:standalone` | fold_repeats=True with collapse='none' (fold-only mode) | p35 |
 | `direction:bottomup` | direction='bottomup' (default) | p10 |
 | `direction:topdown` | direction='topdown' | p10 |
 | `direction:leftright` | direction='leftright' | p10 |
@@ -93,7 +93,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `node:module_box` | nested module cluster box | p3 |
 | `node:atomic_module` | atomic module box | p4 |
 | `node:collapsed_module` | collapsed module representative box | p20, p32 |
-| `node:ellipsis` | run-fold ellipsis node ('+N more Class') | p36 |
+| `node:ellipsis` | repeat-fold ellipsis node ('+N more Class') | p36 |
 | `node:segment` | segment box (max-mode condensed range) | p37 |
 | `node:container` | container nodes (dict/tuple outputs) | p15 |
 | `node:boundary_stub` | module-focus boundary stubs | p17 |
@@ -115,10 +115,10 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `control_flow:branch` | tensor-driven if/else taken-arm rendering | p29, p59, p60 |
 | `topology:parallel` | parallel branch / merge topology | p5, p11, p66 |
 | `topology:transformer` | transformer / attention block topology | p65 |
-| `scale:real_model` | real torchvision-scale architecture | p32, p34, p37, p64 |
+| `scale:real_model` | real torchvision-scale architecture | p32, p37, p64 |
 | `degenerate` | degenerate graphs (single op, no modules, scalar out) | p68 |
 | `regression:large_bbox` | large-graph bbox non-blank regression | p12 |
-| `artifact:apparent_cycle` | interleaved run-fold apparent-cycle artifact (known) | p39 |
+| `artifact:apparent_cycle` | interleaved repeat-fold apparent-cycle artifact (known) | p39 |
 | `diag:collapse_plan` | Trace.collapse_plan() diagnostic | p40 |
 | `diag:collapse_schedule` | Trace.collapse_schedule() diagnostic | p40 |
 
@@ -153,7 +153,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 11 | B | `b2_order_siblings` | order_siblings: execution order vs raw dot order | `mini_inception` | 2 |
 | 12 | B | `b3_large_chain` | REGRESSION: deep-chain bounding box | `large_chain` | 1 |
 | 13 | B | `b4_placement` | vis_node_placement: 'dot' vs 'rank' | `large_chain` | 2 |
-| 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes (and the cluster fallback) | `dict_input`, `dict_output`, `mid_graph_container`, `tuple_output` | 5 |
+| 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes (and the cluster fallback) | `dict_input`, `dict_output`, `nested_containers`, `tuple_output` | 5 |
 | 16 | C | `c2_container_max_inline` | container_max_inline: when 'auto' stops inlining | `tuple_output` | 2 |
 | 17 | C | `c3_module_focus` | module=: focus on one submodule | `demo_model` | 1 |
 | 18 | C | `c4_call_depth` | vis_call_depth: limiting module-box nesting | `demo_model` | 2 |
@@ -170,12 +170,12 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 30 | D | `d7_back_edge_midpoint` | REGRESSION: back-edge midpoint placement | `rnn_cell_loop` | 1 |
 | 32 | E | `e1_collapse_modes` | collapse: 'none' vs 'auto' vs 'max' on ResNet-18 | `resnet18` | 3 |
 | 33 | E | `e2_float_filmstrip` | Float collapse slider: t = 0.0 to 1.0 filmstrip | `resnet18` | 5 |
-| 34 | E | `e3_fold_runs` | fold_runs: None / True / False on MobileNetV2 | `mobilenet_v2` | 3 |
-| 35 | E | `e4_standalone_fold` | Standalone folding: fold_runs=True with collapse='none' | `block_stack` | 2 |
+| 34 | E | `e3_fold_repeats` | fold_repeats: None / True / False on a repeated block stack | `block_stack` | 3 |
+| 35 | E | `e4_standalone_fold` | Standalone folding: fold_repeats=True with collapse='none' | `block_stack` | 2 |
 | 36 | E | `e5_ellipsis_grammar` | The '+N more' ellipsis, up close | `block_stack` | 1 |
 | 37 | E | `e6_segments` | Segment boxes: max-mode condensed ranges | `resnet50` | 1 |
 | 38 | E | `e7_remainder_labels` | Remainder labels: 'N layers total' includes buffer leaves | `block_stack` | 2 |
-| 39 | E | `e8_interleaved_artifact` | KNOWN ARTIFACT: interleaved run-folds can look like a cycle | `interleaved_stack` | 2 |
+| 39 | E | `e8_interleaved_artifact` | KNOWN ARTIFACT: interleaved repeat-folds can look like a cycle | `interleaved_stack` | 2 |
 | 40 | E | `e9_collapse_diagnostics` | Diagnostics: Trace.collapse_plan() and Trace.collapse_schedule() | `(text page)` | - |
 | 42 | F | `f1_node_modes` | node_mode: 'default' vs 'profiling' | `tiny_mlp` | 2 |
 | 43 | F | `f2_domain_modes` | node_mode: 'vision' and 'attention' | `mini_inception`, `tiny_transformer` | 2 |

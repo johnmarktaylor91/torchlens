@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 
 import pytest
 
 from menagerie.catalog import CatalogRow, load_rows
 from menagerie.recipe import build_model_and_input
+
+CATALOG_ARTIFACT = Path(__file__).resolve().parents[1] / "menagerie" / "data" / "catalog.db"
+pytestmark = pytest.mark.skipif(
+    not CATALOG_ARTIFACT.exists(),
+    reason="requires local menagerie data artifacts; not part of the portable suite",
+)
 
 
 SAMPLE_MODEL_IDS = (

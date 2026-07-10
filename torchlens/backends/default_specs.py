@@ -279,6 +279,13 @@ def _tf_can_handle(
         import tensorflow as tf
 
         if not _tf_runtime_supported(tf, keras):
+            if _is_keras_object(model):
+                keras_version = getattr(keras, "__version__", None)
+                tf_version = getattr(tf, "__version__", None)
+                raise BackendMismatchError(
+                    "TF backend requires Keras>=3 and TF>=2.16; "
+                    f"found keras {keras_version} / tf {tf_version}."
+                )
             return False
 
         active_keras_backend = str(keras.backend.backend())

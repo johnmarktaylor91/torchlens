@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import inspect
 from typing import Any
 
 import pytest
@@ -18,9 +19,130 @@ class NanModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Divide by zero at a predictable operation."""
 
+        y = x - x
+        return y / y
+
+
+class SparseNanModel(nn.Module):
+    """Tiny model with an unsaved birth op and a saved downstream output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create Inf and propagate it through a subsequent add operation.
+
+        Parameters
+        ----------
+        x:
+            Finite input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Non-finite output.
+        """
+
         y = x + 1
-        z = y - y
-        return y / z
+        born_nonfinite = y / (y - y)
+        return born_nonfinite + 1
+
+
+def _user_nan_function(x: torch.Tensor) -> torch.Tensor:
+    """Produce a NaN from a user-defined call site.
+
+    Parameters
+    ----------
+    x:
+        Finite model input.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing NaN values.
+    """
+
+    zero = x - x
+    return zero / zero
+
+
+class UserFunctionNanModel(nn.Module):
+    """Model that delegates its non-finite operation to user code."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the user-defined non-finite operation.
+
+        Parameters
+        ----------
+        x:
+            Model input.
+
+        Returns
+        -------
+        torch.Tensor
+            User-function output.
+        """
+
+        return _user_nan_function(x)
+
+
+def test_find_nan_live_reports_op_module_and_test_location() -> None:
+    """Live find_nan stops at the non-finite operation with a user location."""
+
+    result = tl.debug.find_nan(nn.Sequential(NanModel()), torch.ones(2, 3))
+
+    assert result.found is True
+    assert result.op is not None
+    assert result.func_name == "__truediv__"
+    assert result.module_address == "0"
+    assert result.bad_tensors == ("output",)
+    assert result.source_line is not None
+    assert __file__ in result.source_line
+    assert "FindNanResult(found=True" in repr(result)
+
+
+def test_find_nan_live_reports_nearest_user_function_location() -> None:
+    """Live find_nan reports the function containing the offending operation."""
+
+    result = tl.debug.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
+    source, start_line = inspect.getsourcelines(_user_nan_function)
+    expected_line = start_line + source.index("    return zero / zero\n")
+
+    assert result.found is True
+    assert result.source_line == f"{__file__}:{expected_line}"
+
+
+def test_trace_find_nan_agrees_with_live_capture() -> None:
+    """Post-hoc full-save find_nan agrees with live detection."""
+
+    model = NanModel()
+    live = tl.debug.find_nan(model, torch.ones(2, 3))
+    post_hoc = tl.trace(model, torch.ones(2, 3)).find_nan()
+
+    assert post_hoc.found is True
+    assert post_hoc.func_name == live.func_name == "__truediv__"
+    assert post_hoc.kind == live.kind == "nan"
+    assert post_hoc.source_line is not None
+
+
+def test_trace_find_nan_names_sparse_uncertainty_zone() -> None:
+    """Sparse scans describe unsaved ancestors instead of overclaiming a birth op."""
+
+    trace = tl.trace(SparseNanModel(), torch.ones(2, 3), save=tl.func("add"))
+    result = trace.find_nan()
+
+    assert result.found is True
+    assert result.scope == "first among saved tensors"
+    assert result.func_name == "__add__"
+    assert any("truediv" in label for label in result.uncertainty_zone)
+    assert "uncertainty zone" in result.message
+
+
+def test_find_nan_live_clean_model_returns_clear_result() -> None:
+    """Live find_nan returns a no-finding result without raising."""
+
+    result = tl.debug.find_nan(nn.ReLU(), torch.ones(2, 3))
+
+    assert result.found is False
+    assert result.kind == "none"
+    assert "found=False" in repr(result)
 
 
 def test_bisect_nan_finds_first_nonfinite_op() -> None:
