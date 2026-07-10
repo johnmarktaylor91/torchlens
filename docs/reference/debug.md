@@ -190,4 +190,36 @@ Output:
 ['op', 'activation_memory', 'flops_forward', 'mem_per_flop', 'suggested']
 ```
 
-<!-- TODO: document tl.debug.find_nan after the parallel implementation ships. -->
+## `find_nan`
+
+`tl.debug.find_nan(model, x, **trace_kwargs)` runs a memory-light live capture and stops at
+the first non-finite operation output. `trace.find_nan()` instead scans the payloads saved in an
+existing trace; on a selective-save trace, its result explicitly identifies the uncertainty zone
+created by unsaved operations.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+class NonFinite(nn.Module):
+    def forward(self, x):
+        zeros = x - x
+        return zeros / zeros
+
+
+model = NonFinite()
+x = torch.ones(1, 2)
+live = tl.debug.find_nan(model, x)
+saved = tl.trace(model, x).find_nan()
+print(live.found, live.kind)
+print(saved.found, saved.kind)
+```
+
+Output:
+
+```text
+True nan
+True nan
+```
