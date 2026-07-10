@@ -1343,6 +1343,7 @@ def test_perturbation_exception_yields_reason_coded_unverified() -> None:
         save_arg_values=True,
     )
 
+    torch.manual_seed(108)
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
     assert isinstance(result, ValidationReplayStatus)
