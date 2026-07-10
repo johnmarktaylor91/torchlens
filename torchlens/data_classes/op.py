@@ -2010,7 +2010,10 @@ class Op:
         ml = self.source_trace
         if ml is None:
             return []
-        my_label = self.layer_label if self._tracing_finished else self._label_raw
+        _finished = self._tracing_finished or (
+            self.source_trace is not None and self.source_trace._tracing_finished
+        )
+        my_label = self.layer_label if _finished else self._label_raw
         siblings = []
         seen = {my_label}
         for parent_label in self.parents:
@@ -2046,7 +2049,10 @@ class Op:
         ml = self.source_trace
         if ml is None:
             return []
-        my_label = self.layer_label if self._tracing_finished else self._label_raw
+        _finished = self._tracing_finished or (
+            self.source_trace is not None and self.source_trace._tracing_finished
+        )
+        my_label = self.layer_label if _finished else self._label_raw
         spouses = []
         seen = {my_label}
         for child_label in self.children:
