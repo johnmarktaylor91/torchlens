@@ -384,6 +384,11 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
             None,
         )
         if op is None:
+            shape = fields["shape"]
+            if not isinstance(shape, tuple) or not all(
+                isinstance(dimension, int) for dimension in shape
+            ):
+                raise ValueError("CaptureError non-finite payload has an invalid shape field.")
             return FindNanResult(
                 True,
                 None,
@@ -391,7 +396,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
                 None,
                 str(fields["op"]),
                 str(fields["dtype"]),
-                tuple(fields["shape"]),
+                tuple(int(dimension) for dimension in shape),
                 ("output",),
                 _exception_source_line(exc),
                 "nan",
@@ -399,11 +404,8 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
                 (),
                 str(exc),
             )
-        kind = (
-            _nonfinite_kind(getattr(op, "out", None))
-            if isinstance(getattr(op, "out", None), torch.Tensor)
-            else "nan"
-        )
+        op_out = getattr(op, "out", None)
+        kind = _nonfinite_kind(op_out) if isinstance(op_out, torch.Tensor) else "nan"
         return _result_from_op(op, kind=kind, source_line=_exception_source_line(exc))
     return _no_finding_result(scope="live operation outputs")
 
