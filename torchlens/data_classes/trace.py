@@ -254,6 +254,10 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
 # for legacy states (still ``.values()``/``.items()``-usable); fresh captures
 # always carry the exact runtime container, so this only affects legacy fill.
 _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "escape_diagnostics": [],
+    "completeness_diagnostics": [],
+    "completeness_decompositions": [],
+    "capture_guard_passes": [],
     "annotations": {},
     "observer_spans": [],
     "manual_tensor_connections": [],
