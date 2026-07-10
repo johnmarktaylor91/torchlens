@@ -122,7 +122,10 @@ def test_alias_contract_snapshots_unsaved_mutated_parent(
 
     expected = [model_factory()(x.clone()).detach().clone()]
     try:
-        assert selective.validate_forward_pass(expected, validate_metadata=False)
+        status = selective.validate_forward_pass(expected, validate_metadata=False)
+        # A selective trace that omits mutated interior parents cannot fully replay, so it
+        # honestly reports "unverified" (or "passed" when enough was saved) -- never "failed".
+        assert status.state in {"passed", "unverified"}
     except ValueError as exc:
         assert "Cannot validate saved layer" in str(exc) or "was not saved" in str(exc)
 
