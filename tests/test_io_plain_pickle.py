@@ -374,6 +374,33 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
     assert list(restored.input_to_module_calls) == []
 
 
+def test_backend_address_repair_only_applies_before_v5() -> None:
+    """The v5 field migration must not overwrite a current explicit ``None``."""
+
+    from torchlens._io import TLSPEC_VERSION
+    from torchlens.data_classes.layer import Layer
+    from torchlens.data_classes.op import Op
+
+    trace = _build_trace()
+    op_state = trace.ops[0].__getstate__()
+    layer_state = trace.layer_list[0].__getstate__()
+    for state, factory in (
+        (op_state, lambda: Op.__new__(Op)),
+        (layer_state, lambda: Layer.__new__(Layer)),
+    ):
+        state["address"] = "plain.attribute"
+        state["backend_address"] = None
+        state["tlspec_version"] = TLSPEC_VERSION
+        current = factory()
+        current.__setstate__(dict(state))
+        assert current.backend_address is None
+
+        state["tlspec_version"] = 4
+        legacy = factory()
+        legacy.__setstate__(dict(state))
+        assert legacy.backend_address == "plain.attribute"
+
+
 def test_setstate_present_but_wrong_typed_container_is_coerced() -> None:
     """Present-but-wrong-typed container fields must be coerced on restore."""
 

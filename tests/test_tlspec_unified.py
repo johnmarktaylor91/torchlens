@@ -86,6 +86,32 @@ class UnifiedPreHookModel(nn.Module):
         return x
 
 
+class UnifiedPlainAttributeBufferModel(nn.Module):
+    """Model exposing an unregistered tensor attribute during capture."""
+
+    def __init__(self) -> None:
+        """Initialize the plain tensor attribute."""
+
+        super().__init__()
+        self.scale = torch.ones(3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Multiply by the plain tensor attribute.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scaled output tensor.
+        """
+
+        return x * self.scale
+
+
 def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
@@ -356,6 +382,24 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     assert [layer.layer_label for layer in loaded.layer_list] == [
         layer.layer_label for layer in log.layer_list
     ]
+
+
+@pytest.mark.smoke
+def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
+    """Current manifests must not apply the v4 backend-address repair."""
+
+    trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
+    plain_buffer_op = next(op for op in trace.ops if op.is_buffer and op.address == "scale")
+    assert plain_buffer_op.backend_address is None
+    assert trace[plain_buffer_op.layer_label].backend_address is None
+
+    path = tmp_path / "plain_attribute_buffer.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    loaded_op = loaded[plain_buffer_op.layer_label].ops[0]
+
+    assert loaded_op.backend_address is None
+    assert loaded[plain_buffer_op.layer_label].backend_address is None
 
 
 @pytest.mark.smoke

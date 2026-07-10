@@ -2723,7 +2723,7 @@ class Op:
             state["device_ref"] = _device_ref_from_metadata(
                 state.get("out"), state.get("output_device")
             )
-        if state.get("backend_address") is None:
+        if version < 5 and state.get("backend_address") is None:
             state["backend_address"] = state.get("address")
         if state.get("resolver_status") is None:
             state["resolver_status"] = "resolved"
