@@ -18,6 +18,9 @@ from torchlens.backends.torch.completeness_witness import (
 )
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
+# (major, minor) of the running torch, dependency-free (e.g. "2.8.0+cpu" -> (2, 8)).
+_TORCH_XY = tuple(int(p) for p in torch.__version__.split("+")[0].split(".")[:2])
+
 
 @pytest.fixture(autouse=True)
 def _isolated_witness_epoch() -> Iterator[None]:
@@ -406,6 +409,14 @@ def test_vmap_interior_is_expected_opaque() -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.skipif(
+    _TORCH_XY < (2, 2),
+    reason=(
+        "Graceful pre-wrap-vmap transform-escape handling (witness-only, "
+        "capture_verified=False) requires torch>=2.2; on the 2.1 best-effort floor the "
+        "escaped vmap output honestly raises an output-attribution error instead."
+    ),
+)
 def test_pre_wrap_vmap_is_witness_only_not_capture_verified() -> None:
     """A clean dispatch census does not verify an escaped raw transform call route."""
 
