@@ -2014,11 +2014,23 @@ class Op:
         siblings = []
         seen = {my_label}
         for parent_label in self.parents:
-            parent = ml[parent_label]
+            try:
+                parent = ml[parent_label]
+            except (KeyError, ValueError):
+                try:
+                    parent = ml.orphans[parent_label]
+                except KeyError:
+                    continue
             for child_label in parent.children:
                 if child_label not in seen:
                     seen.add(child_label)
-                    child = ml[child_label]
+                    try:
+                        child = ml[child_label]
+                    except (KeyError, ValueError):
+                        try:
+                            child = ml.orphans[child_label]
+                        except KeyError:
+                            continue
                     if not child.is_output:
                         siblings.append(child_label)
         return siblings
@@ -2038,11 +2050,23 @@ class Op:
         spouses = []
         seen = {my_label}
         for child_label in self.children:
-            child = ml[child_label]
+            try:
+                child = ml[child_label]
+            except (KeyError, ValueError):
+                try:
+                    child = ml.orphans[child_label]
+                except KeyError:
+                    continue
             for parent_label in child.parents:
                 if parent_label not in seen:
                     seen.add(parent_label)
-                    parent = ml[parent_label]
+                    try:
+                        parent = ml[parent_label]
+                    except (KeyError, ValueError):
+                        try:
+                            parent = ml.orphans[parent_label]
+                        except KeyError:
+                            continue
                     if not parent.is_output:
                         spouses.append(parent_label)
         return spouses
@@ -3331,10 +3355,10 @@ class Op:
     def __str__(self) -> str:
         """Return a human-readable operation summary."""
 
-        if self._tracing_finished:
+        trace_finished = self.source_trace is not None and self.source_trace._tracing_finished
+        if self._tracing_finished or trace_finished:
             return self._str_after_pass()
-        else:
-            return self._str_during_pass()
+        return self._str_during_pass()
 
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""

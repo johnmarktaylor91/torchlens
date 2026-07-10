@@ -76,6 +76,24 @@ def test_orphans_hidden_by_default() -> None:
     assert "orphan__randn_1_1" not in source
 
 
+def test_orphan_island_ops_have_safe_repr_and_list_printing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Completed orphan parent/child ops use the finalized, orphan-aware repr path."""
+
+    trace = _orphan_trace()
+    parent, child = tuple(trace.orphans)
+
+    assert parent.children == [child.layer_label]
+    assert child.parents == [parent.layer_label]
+    assert "PASS NOT FINISHED" not in repr(parent)
+    assert "PASS NOT FINISHED" not in repr(child)
+    print(list(trace.orphans))
+    printed = capsys.readouterr().out
+    assert parent.layer_label in printed
+    assert child.layer_label in printed
+
+
 def test_default_orphans_warn_instead_of_rendering_empty_cluster() -> None:
     """Dropped orphan husks do not produce an empty cluster when requested for display."""
 
