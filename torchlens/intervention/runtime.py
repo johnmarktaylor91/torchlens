@@ -13,7 +13,7 @@ import torch
 
 from .. import _state
 from .._state import pause_logging
-from ..backends.torch._tl import copy_replacement_meta
+from ..backends.torch._tl import clear_tensor_label, copy_replacement_meta, get_tensor_label
 from ..capture.arg_positions import _normalize_func_name
 from ..ir.intervention import FireResult
 from ..utils.arg_handling import copy_arg_tree
@@ -338,13 +338,20 @@ def _apply_live_hooks(
             hook_context,
             force_shape_change=bool(normalized_entry.metadata.get("force_shape_change", False)),
         )
+        result, replaced = _apply_inplace_replacement_to_mutated_storage(
+            result,
+            current_out=current_out,
+            site=site,
+            call_args=call_args,
+            call_kwargs=call_kwargs,
+        )
         record = _build_live_fire_record(
             normalized_entry,
             site=site,
             container_path=container_path,
             previous_notes=previous_notes,
             run_ctx=hook_context.run_ctx,
-            replaced=result is not current_out,
+            replaced=replaced,
         )
         _append_active_spec_records([record])
         fire_results.append(
@@ -363,12 +370,82 @@ def _apply_live_hooks(
                 post_hook_shape=tuple(result.shape),
                 pre_hook_dtype=pre_hook_dtype,
                 post_hook_dtype=str(result.dtype),
-                replaced=result is not current_out,
+                replaced=replaced,
                 fire_record=record,
             )
         )
         current_out = result
     return current_out, tuple(fire_results)
+
+
+def _apply_inplace_replacement_to_mutated_storage(
+    result: torch.Tensor,
+    *,
+    current_out: torch.Tensor,
+    site: Any,
+    call_args: tuple[Any, ...],
+    call_kwargs: dict[str, Any] | None,
+) -> tuple[torch.Tensor, bool]:
+    """Make a live output replacement effective for discarded in-place returns.
+
+    Parameters
+    ----------
+    result:
+        Validated hook result.
+    current_out:
+        Output tensor supplied to the hook.
+    site:
+        Capture-time site metadata.
+    call_args:
+        Live positional inputs after the operation executed.
+    call_kwargs:
+        Live keyword inputs after the operation executed.
+
+    Returns
+    -------
+    tuple[torch.Tensor, bool]
+        Effective output and whether execution accepted the replacement.
+    """
+
+    if result is current_out:
+        return result, False
+    if not bool(getattr(site, "is_inplace", False)):
+        return result, True
+
+    func_name = str(getattr(site, "func_name", ""))
+    destination: torch.Tensor | None = None
+    if _is_inplace_style_func_name(func_name) and call_args:
+        candidate = call_args[0]
+        if isinstance(candidate, torch.Tensor):
+            destination = candidate
+    elif call_kwargs is not None:
+        candidate = call_kwargs.get("out")
+        if isinstance(candidate, torch.Tensor):
+            destination = candidate
+
+    safe_to_copy = destination is not None and (
+        tuple(destination.shape) == tuple(result.shape)
+        and destination.dtype == result.dtype
+        and destination.device == result.device
+    )
+    if safe_to_copy:
+        assert destination is not None
+        try:
+            with pause_logging():
+                destination.copy_(result)
+        except Exception:
+            safe_to_copy = False
+    if safe_to_copy:
+        return result, True
+
+    warnings.warn(
+        f"Refused an output replacement for in-place operation {func_name!r} because "
+        "TorchLens could not safely copy it into the mutated tensor storage; execution "
+        "continues with the original output and the fire record is marked replaced=False.",
+        UserWarning,
+        stacklevel=3,
+    )
+    return current_out, False
 
 
 def _apply_module_boundary_live_hooks(
@@ -432,6 +509,14 @@ def _apply_module_boundary_live_hooks(
             call_kwargs=call_kwargs,
         )
         if fire_results:
+            if hooked is not out:
+                parent_label = get_tensor_label(out)
+                if parent_label is not None:
+                    try:
+                        setattr(hooked, "_tl_module_intervention_parent_labels", (parent_label,))
+                    except Exception:
+                        pass
+                clear_tensor_label(hooked)
             _set_tensor_live_fire_results_if_available(hooked, fire_results)
         if hooked is not out:
             replacements[container_path] = hooked

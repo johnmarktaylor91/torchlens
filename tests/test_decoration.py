@@ -80,6 +80,47 @@ class InplaceModel(nn.Module):
         return x
 
 
+class IgnoredFunctionModel(nn.Module):
+    """Exercise tensor-producing functions ignored by ``__torch_function__``."""
+
+    def __init__(self, route: str) -> None:
+        """Store the ignored-function route to execute."""
+
+        super().__init__()
+        self.route = route
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call one ignored tensor-producing function and return its result."""
+
+        if self.route == "empty":
+            return torch.empty((2, 2))
+        if self.route == "empty_strided":
+            return torch.empty_strided((2, 2), (2, 1))
+        if self.route == "empty_permuted":
+            return torch.empty_permuted((2, 3), (1, 0))
+        if self.route == "frombuffer":
+            return torch.frombuffer(bytearray(16), dtype=torch.float32)
+        if self.route == "asarray":
+            return torch.asarray(x)
+        if self.route == "fill":
+            return torch.fill(x, 3.0)
+        raise AssertionError(f"unsupported route: {self.route}")
+
+
+@pytest.mark.parametrize(
+    "route",
+    ["empty", "empty_strided", "empty_permuted", "frombuffer", "asarray", "fill"],
+)
+def test_ignored_tensor_producers_are_wrapped(route: str) -> None:
+    """Ignored tensor producers emit capture ops, including input provenance."""
+
+    log = trace_fn(IgnoredFunctionModel(route), torch.tensor([-2.0, 4.0]))
+    op = next(layer for layer in log.layer_list if layer.func_name == route)
+
+    if route in {"asarray", "fill"}:
+        assert op.parents == ["input_1"]
+
+
 class SameObjectReturnModel(nn.Module):
     """Record object identity for torch operations that return their input."""
 

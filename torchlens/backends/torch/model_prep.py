@@ -1379,7 +1379,7 @@ def _ensure_module_output_tensor_logged(
         downstream module-exit and op logging can continue.
     """
 
-    from .ops import _make_layer_log_entry
+    from .ops import _make_layer_log_entry, _pop_tensor_live_fire_results
 
     is_internal_source = kind == "internal_source"
     if is_internal_source:
@@ -1434,19 +1434,13 @@ def _ensure_module_output_tensor_logged(
     #   leaked tensor enters a module untagged 2+ levels deep), whose frame is still
     #   on `trace._exhaustive_module_stack` -- the plain snapshot already includes it.
     # * intervention_replacement: a raw `register_forward_hook` fires AFTER the
-    #   hooked module's own `decorated_forward` has returned and popped its frame
-    #   (model_prep.py's module_forward_decorator `finally`), so the live snapshot
-    #   only holds the PARENT chain -- append the hooked module's own
-    #   (address, module_call_index), which is already known, to reconstruct the
-    #   full ancestor stack the same way the internal_source branch gets it for free.
+    #   hooked module's own `decorated_forward` has returned and popped its frame.
+    #   The replacement is therefore a module-exit boundary op owned by the live
+    #   PARENT scope that consumes the hooked module's output. Re-entering the
+    #   hooked module here would make its ModuleCall its own parent and child.
     from .sources import _snapshot_exhaustive_module_stack
 
-    if is_internal_source:
-        modules = _snapshot_exhaustive_module_stack(trace)
-    else:
-        ancestor_modules = _snapshot_exhaustive_module_stack(trace)
-        own_frame = [(address, module_call_index)] if address else []
-        modules = ancestor_modules + own_frame
+    modules = _snapshot_exhaustive_module_stack(trace)
     equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
     module_args, module_kwargs = trace._module_forward_args.get(
         (address, module_call_index), ((), {})
@@ -1631,14 +1625,10 @@ def _ensure_module_output_tensor_logged(
             "conditional_elif_children": {},
             "conditional_else_children": [],
             "conditional_arm_children": {},
-            # `module=None` when there is no owning submodule (matches the
-            # convention in sources.py's `modules[-1] if modules else None`
-            # for ordinary ops) -- the root model itself has `address == ""`
-            # and is never a real "module" entry, so `(address, ...)` would
-            # otherwise finalize into a bogus `":<index>"` label (see
-            # `_module_call_label` / `labeling.py`) that fails the
-            # module-hierarchy invariant lookup during postprocessing.
-            "module": (address, module_call_index) if address else None,
+            # Match ordinary op ownership: the innermost live frame owns the op.
+            # For intervention replacements this is the parent scope consuming
+            # the exited module's output, never the exited module itself.
+            "module": modules[-1] if modules else None,
             "_address_normalized": None,
             "modules": modules,
             "module_call_stack": [],
@@ -1652,6 +1642,13 @@ def _ensure_module_output_tensor_logged(
             "func_config": {},
         }
     )
+    fire_results = _pop_tensor_live_fire_results(tensor)
+    if fire_results:
+        fields_dict["fire_results"] = fire_results
+        fields_dict["interventions"] = [
+            result.fire_record for result in fire_results if result.fire_record is not None
+        ]
+        fields_dict["intervention_replaced"] = any(result.replaced for result in fire_results)
     trace.op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(
         trace, tensor, fields_dict, (), {}, trace.activation_transform
@@ -1771,35 +1768,56 @@ def _record_module_exit_metadata(
         # as input) need _decorated_identity() to create a distinct log entry
         # so the graph correctly shows the module boundary.
         tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
+        fire_results = tuple(getattr(t, "_tl_live_fire_results", ()))
         if (_module_type(module).lower() == "identity") or (
             tensor_label is not None and tensor_label in input_tensor_labels
         ):
+            intervention_parent_labels: list[str] = list(
+                getattr(t, "_tl_module_intervention_parent_labels", ())
+            )
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
+            if fire_results:
+                try:
+                    setattr(t, "_tl_live_fire_results", fire_results)
+                    setattr(
+                        t,
+                        "_tl_module_intervention_parent_labels",
+                        tuple(intervention_parent_labels),
+                    )
+                except Exception:
+                    pass
             tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
         if tensor_label is None:
-            # An untagged tensor is the module's own raw ``forward()`` return
-            # value. This code runs INSIDE the decorated ``forward()``, i.e.
-            # BEFORE PyTorch's ``Module._call_impl`` invokes any registered
-            # ``_forward_hooks`` (hooks fire one frame up, after ``forward``
-            # returns). So no hook has substituted anything yet at this point:
-            # the presence of ``_forward_hooks`` is NOT proof of a replacement,
-            # only a proxy, and a purely observational hook (returns ``None``)
-            # never substitutes at all. An untagged tensor here therefore has
-            # exactly one honest explanation -- an internally generated tensor
-            # whose construction TorchLens could not trace (e.g. built inside
-            # ``torch.vmap``) -- identical to the module-ENTRY path above. Log it
-            # as a clean graph source, NEVER a functionless intervention
-            # placeholder, so a genuine plain-capture gap still trips the
-            # tripwire (see project CLAUDE.md "Validation Integrity"). Genuine
-            # raw-forward-hook replacements are tagged AFTER the fact by
-            # ``_make_user_forward_hook_wrapper`` (which alone has proof that the
-            # user's callable returned a substitute), not here.
+            # A live module-boundary intervention deliberately clears copied op
+            # labels and leaves typed fire metadata on its fresh output. Preserve
+            # that value as an explicit replacement op. Without fire metadata, an
+            # untagged module return remains an internal source whose construction
+            # TorchLens could not trace (for example, inside ``torch.vmap``).
+            intervention_parent_labels = list(
+                getattr(t, "_tl_module_intervention_parent_labels", ())
+            )
             _ensure_module_output_tensor_logged(
-                trace, t, module, parent_labels=[], kind="internal_source"
+                trace,
+                t,
+                module,
+                parent_labels=intervention_parent_labels,
+                kind="intervention_replacement" if fire_results else "internal_source",
             )
             tensor_label = get_tensor_label(t)
         if tensor_label is None:
             continue
+        if fire_results:
+            from .ops import _pop_tensor_live_fire_results
+
+            remaining_fire_results = _pop_tensor_live_fire_results(t)
+            if remaining_fire_results:
+                replace_op_event(
+                    trace,
+                    tensor_label,
+                    intervention_fired=True,
+                    intervention_replaced=any(result.replaced for result in remaining_fire_results),
+                    fire_results=remaining_fire_results,
+                )
         is_atomic_module = _is_bottom_level_submodule_exit(trace, t, module)
         atomic_module_call = (address, module_call_index) if is_atomic_module else None
         output_tensor_labels_raw.append(tensor_label)

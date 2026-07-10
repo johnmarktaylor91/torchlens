@@ -68,6 +68,17 @@ class _NestedFreshTensorModel(torch.nn.Module):
         return self.head(self.block(x))
 
 
+class _DiscardedInplaceReturnModel(torch.nn.Module):
+    """Use a mutated tensor after discarding an in-place operation's return."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Discard ``relu_``'s return and consume its mutated input storage."""
+
+        y = x * 2
+        y.relu_()
+        return y + 1
+
+
 def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     """Return a zero replacement for a TorchLens live hook."""
 
@@ -118,6 +129,23 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
     assert relu_layer.parents == [fc1_layer.layer_label]
     assert len(relu_layer.interventions) == 1
     assert torch.count_nonzero(relu_layer.out) == 0
+
+
+def test_output_hook_replaces_discarded_inplace_return_storage() -> None:
+    """An output hook on ``relu_`` updates storage even when its return is discarded."""
+
+    log = tl.trace(
+        _DiscardedInplaceReturnModel(),
+        torch.tensor([-2.0, 3.0]),
+        intervention_ready=True,
+        hooks={tl.func("relu_"): tl.zero_ablate()},
+    )
+    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu_")
+
+    assert torch.equal(log[log.output_layers[0]].out, torch.ones(2))
+    assert torch.equal(relu_layer.out, torch.zeros(2))
+    assert relu_layer.intervention_replaced is True
+    assert relu_layer.interventions[-1].replaced is True
 
 
 def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:

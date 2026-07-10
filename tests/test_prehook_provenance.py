@@ -154,6 +154,26 @@ def test_non_kwargs_replacement_is_tuple_normalized_and_attributed() -> None:
     assert call.inputs_after_pre_hooks.tensor_observations[0].source_op is not None
 
 
+def test_in_place_mutation_and_replacement_record_both_effects() -> None:
+    """A pre-hook that mutates then replaces records both change kinds."""
+
+    model = _Nested()
+
+    def mutate_and_replace(_module: nn.Module, args: tuple[Any, ...]) -> tuple[torch.Tensor, ...]:
+        """Mutate the original tensor before returning a fresh replacement."""
+
+        tensor = args[0]
+        assert isinstance(tensor, torch.Tensor)
+        tensor.add_(2)
+        return (tensor.clone() * 3,)
+
+    model.child.register_forward_pre_hook(mutate_and_replace)
+    trace = tl.trace(model, torch.tensor([1.0]))
+    effect = _call(trace).forward_pre_hook_effects[0]
+
+    assert effect.change_kinds == ("identity", "in_place_tensor")
+
+
 def test_kwargs_transition_paths_and_invalid_return_are_canonical() -> None:
     """Matrix 4: kwargs replacement is typed and invalid returns remain PyTorch errors."""
 
