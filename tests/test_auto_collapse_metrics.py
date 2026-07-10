@@ -1205,6 +1205,47 @@ def _assert_plan_svg_parity(
     assert plan_count == _svg_node_count(out.with_suffix(".svg"))
 
 
+def test_float_collapse_plan_counts_match_train_batchnorm_svg(tmp_path: Path) -> None:
+    """Float plans exclude hidden BatchNorm bookkeeping at every tested level."""
+
+    model = torch.nn.Sequential(
+        torch.nn.Conv2d(3, 4, 3, padding=1),
+        torch.nn.BatchNorm2d(4),
+        torch.nn.ReLU(),
+        torch.nn.Conv2d(4, 4, 3, padding=1),
+        torch.nn.BatchNorm2d(4),
+    ).train()
+    trace = tl.trace(model, torch.randn(2, 3, 8, 8))
+    try:
+        hidden_updates = [
+            op
+            for op in trace.ops
+            if op.func_name == "add_"
+            and op.children
+            and all(trace.ops[child].is_buffer for child in op.children)
+        ]
+        assert len(hidden_updates) == 2
+
+        schedule = trace.collapse_schedule()
+        for index, threshold in enumerate((0.0, 0.25, 0.6, 1.0)):
+            plan = trace.collapse_plan(threshold)
+            out = tmp_path / f"batchnorm_float_{index}"
+            trace.draw(
+                collapse=threshold,
+                vis_outpath=str(out),
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_node_placement="dot",
+                show_containers=False,
+                order_siblings=False,
+            )
+            svg_count = _svg_node_count(out.with_suffix(".svg"))
+            assert count(plan) == svg_count
+            assert schedule.at(threshold).visible_count == svg_count
+    finally:
+        trace.cleanup()
+
+
 def _box_count(source: str) -> int:
     """Return collapsed module node count from DOT source."""
 

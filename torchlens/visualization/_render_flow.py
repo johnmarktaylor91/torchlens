@@ -429,6 +429,14 @@ def _enumerate_base_rendered_node_emissions(
             continue
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
+        if _is_hidden_buffer_update_node(
+            trace,
+            node,
+            entries_to_plot,
+            show_buffer_layers,
+            vis_mode,
+        ):
+            continue
         emission = _base_rendered_node_emission(
             trace,
             node,
