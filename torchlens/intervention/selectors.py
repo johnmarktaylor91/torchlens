@@ -920,6 +920,10 @@ def func(name: str, *, output: int | str | None = None) -> FuncSelector:
         Immutable selector.
     """
 
+    if not isinstance(name, str):
+        raise TypeError(
+            "func() pattern must be a string function name, for example tl.func('relu')."
+        )
     return FuncSelector(name, output=output)
 
 

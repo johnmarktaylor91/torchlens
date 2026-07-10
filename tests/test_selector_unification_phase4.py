@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+import pytest
 
 import torchlens as tl
 
@@ -29,3 +30,10 @@ def test_selector_composition_and_negation_in_resolve_sites() -> None:
     relu_sites = log.resolve_sites(tl.func("relu") & ~tl.contains("linear"), max_fanout=100)
     assert relu_sites
     assert all(site.func_name == "relu" for site in relu_sites)
+
+
+def test_func_rejects_non_string_pattern() -> None:
+    """func provides an actionable error instead of returning a selector that cannot match."""
+
+    with pytest.raises(TypeError, match="string function name"):
+        tl.func(3)  # type: ignore[arg-type]
