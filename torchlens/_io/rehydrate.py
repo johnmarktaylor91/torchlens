@@ -780,6 +780,7 @@ def _build_lazy_tensor_ref(
         relative_path=entry.relative_path,
         kind=kind,
         expected_sha256=entry.sha256,
+        requires_grad=entry.requires_grad,
         logical_backend=entry.logical_backend or "torch",
         codec=entry.codec or "torch_safetensors_v1",
         logical_dtype=entry.logical_dtype,
@@ -946,7 +947,15 @@ def _load_safetensors_tensor(
 
     if len(tensor_map) != 1:
         raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
-    return next(iter(tensor_map.values()))
+    tensor = next(iter(tensor_map.values()))
+    requires_grad = (
+        entry.requires_grad if isinstance(entry, TensorEntry) else entry.get("requires_grad", False)
+    )
+    if not isinstance(requires_grad, bool):
+        raise TorchLensIOError("Manifest tensor entry 'requires_grad' must be a boolean.")
+    if requires_grad:
+        tensor.requires_grad_(True)
+    return tensor
 
 
 def _set_payload_load_status(

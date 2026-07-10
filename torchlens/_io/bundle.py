@@ -1412,6 +1412,7 @@ def _write_tensor_blob(
         layout=str(contiguous_tensor.layout).replace("torch.", ""),
         bytes=int(contiguous_tensor.numel() * contiguous_tensor.element_size()),
         sha256=sha256_of_file(blob_path),
+        requires_grad=bool(tensor.requires_grad),
     )
 
 
@@ -1465,6 +1466,7 @@ def _write_payload_blob(
         layout=str(transport_tensor.layout).replace("torch.", ""),
         bytes=int(transport_tensor.numel() * transport_tensor.element_size()),
         sha256=sha256_of_file(blob_path),
+        requires_grad=False,
         **manifest_fields,
     )
 
@@ -1722,6 +1724,7 @@ def _fast_copy_tensor_blob(
         layout=source_entry.layout,
         bytes=source_entry.bytes,
         sha256=source_entry.sha256,
+        requires_grad=source_entry.requires_grad,
         logical_backend=source_entry.logical_backend,
         codec=source_entry.codec,
         logical_dtype=source_entry.logical_dtype,

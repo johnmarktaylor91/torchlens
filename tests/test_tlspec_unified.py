@@ -462,6 +462,35 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
+def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
+    """Safetensors sidecars restore each tensor's autograd participation bit."""
+
+    trace = tl.trace(
+        nn.Linear(3, 3),
+        torch.randn(2, 3, requires_grad=True),
+        layers_to_save="all",
+        backward_ready=True,
+    )
+    source_op = next(
+        op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
+    )
+    path = tmp_path / "requires_grad.tlspec"
+
+    trace.save(path)
+    manifest = _read_manifest(path)
+    loaded = tl.load(path)
+    loaded_out = loaded[source_op.layer_label].ops[0].out
+    lazy_loaded = tl.load(path, lazy=True)
+    lazy_out = lazy_loaded[source_op.layer_label].ops[0].materialize_out()
+
+    assert any(entry["requires_grad"] is True for entry in manifest["tensors"])
+    assert isinstance(loaded_out, torch.Tensor)
+    assert loaded_out.requires_grad is True
+    assert isinstance(lazy_out, torch.Tensor)
+    assert lazy_out.requires_grad is True
+
+
+@pytest.mark.smoke
 def test_fresh_unified_save_reports_current_version_with_no_deprecation_warning(
     tmp_path: Path,
 ) -> None:
