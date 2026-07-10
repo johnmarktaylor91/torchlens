@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from pathlib import Path
 from typing import Any, Callable
@@ -503,6 +504,24 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
 
     with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
         tl.load(path)
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
+    """Validation enforces the same portable-version ceiling as loading."""
+
+    path = tmp_path / "newer_validation_version.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest["tlspec_version"] = TLSPEC_VERSION + 1
+    _write_manifest(path, manifest)
+    expected = (
+        f"Bundle uses tlspec_version={TLSPEC_VERSION + 1}, but this runtime only supports "
+        f"{TLSPEC_VERSION}."
+    )
+
+    with pytest.raises(ValueError, match=re.escape(expected)):
+        validate_tlspec(path)
 
 
 @pytest.mark.smoke

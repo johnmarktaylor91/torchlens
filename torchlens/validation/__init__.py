@@ -168,8 +168,9 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     # ``tlspec_version`` tracks the portable scrub/state format
     # (``torchlens._io.TLSPEC_VERSION``) and grows independently of
     # ``schema_version`` (which selects which of this file's schema variants
-    # applies), so only a floor is enforced here, not an exact value.
+    # applies), so its supported range is enforced independently.
     _require_int(manifest, "tlspec_version", minimum=1)
+    _validate_tlspec_version_ceiling(manifest["tlspec_version"])
     _require_str_enum(manifest, "kind", {"intervention", "trace", "bundle"})
     _require_str(manifest, "created_at")
     _require_str(manifest, "torchlens_version")
@@ -204,6 +205,29 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
             raise ValueError(
                 "Non-intervention .tlspec manifests require null intervention_compat_metadata."
             )
+
+
+def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
+    """Reject portable states newer than the loader can interpret.
+
+    Parameters
+    ----------
+    tlspec_version:
+        Portable I/O state format version declared by the manifest.
+
+    Raises
+    ------
+    ValueError
+        If the declared version is newer than this runtime supports.
+    """
+
+    from .._io import TLSPEC_VERSION
+
+    if tlspec_version > TLSPEC_VERSION:
+        raise ValueError(
+            f"Bundle uses tlspec_version={tlspec_version}, but this runtime only supports "
+            f"{TLSPEC_VERSION}."
+        )
 
 
 # JSON Schema keywords enforced by ``_validate_schema_properties``. This is a
