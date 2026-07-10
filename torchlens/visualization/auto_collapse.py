@@ -865,6 +865,23 @@ def _module_structural_signature(module: "Module") -> tuple[int, int, int, int]:
     )
 
 
+def _module_trainability_signature(module: "Module") -> tuple[bool, bool]:
+    """Return whether a module owns trainable and frozen parameters.
+
+    Parameters
+    ----------
+    module:
+        Module whose parameter trainability should be classified.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        ``(has_trainable, has_frozen)`` for label-honest repeat folding.
+    """
+
+    return (bool(module.num_params_trainable), bool(module.num_params_frozen))
+
+
 def _run_fold_hidden_members_uniform(trace: "Trace", addresses: Sequence[str]) -> bool:
     """Return whether every hidden run member shares one structural signature.
 
@@ -874,10 +891,13 @@ def _run_fold_hidden_members_uniform(trace: "Trace", addresses: Sequence[str]) -
     the fold is only honest when every hidden member
     (``addresses[1:]``) has the same structural fingerprint
     (:func:`_module_structural_signature`). The representative itself may
-    differ (its own stats stay visible) -- e.g. a MobileNetV2 stage whose
-    first block changes channel width before a plateau of identical residual
-    blocks. When a genuinely-different module (extra conv, different param
-    count) would be hidden, this returns ``False`` and the fold is rejected.
+    differ structurally (its own stats stay visible) -- e.g. a MobileNetV2
+    stage whose first block changes channel width before a plateau of
+    identical residual blocks. Its trainability classification must still
+    match every hidden member because the representative's visible parameter
+    label otherwise mischaracterizes the ``+N more`` modules. When a
+    genuinely-different hidden module or a trainability mismatch would be
+    hidden, this returns ``False`` and the fold is rejected.
 
     Parameters
     ----------
@@ -892,6 +912,14 @@ def _run_fold_hidden_members_uniform(trace: "Trace", addresses: Sequence[str]) -
         Whether the hidden members are structurally uniform.
     """
 
+    if len(addresses) <= 1:
+        return True
+    trainability_signatures = {
+        _module_trainability_signature(cast("Module", trace.modules[address]))
+        for address in addresses
+    }
+    if len(trainability_signatures) != 1:
+        return False
     hidden = addresses[1:]
     if len(hidden) <= 1:
         return True

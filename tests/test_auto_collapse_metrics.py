@@ -1697,6 +1697,34 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         trace.cleanup()
 
 
+def test_run_fold_does_not_hide_trainable_members_behind_frozen_rep(tmp_path: Path) -> None:
+    """A frozen representative cannot label hidden trainable peers as equivalent."""
+
+    model = RepeatedResidual(depth=8)
+    for parameter in model.blocks[0].parameters():
+        parameter.requires_grad_(False)
+    trace = _trace(model, torch.randn(2, 8))
+    try:
+        collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled")
+        folds = resolve_repeat_folds(trace, collapse_fn, fold_repeats=True)
+        source = _draw_source(
+            trace,
+            tmp_path,
+            "run_fold_mixed_trainability",
+            "auto",
+            fold_repeats=True,
+        )
+
+        assert trace.modules["blocks.0"].num_params_trainable == 0
+        assert all(trace.modules[f"blocks.{index}"].num_params_frozen == 0 for index in range(1, 8))
+        assert "blocks.0" not in folds
+        assert "blocks.1" in folds
+        assert "... +7 more ResidualBlock" not in source
+        assert "... +6 more ResidualBlock" in source
+    finally:
+        trace.cleanup()
+
+
 def test_auto_collapse_run_fold_parallel_ellipsis_stays_in_flow(tmp_path: Path) -> None:
     """Parallel run folds keep ellipsis edges from source to sink."""
 
