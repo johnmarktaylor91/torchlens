@@ -140,9 +140,9 @@ def audit_trace(trace: "Trace") -> TraceAudit:
     """Run every trace-local health diagnostic supported by one capture.
 
     Diagnostics requiring a second trace, a selected start operation, or a
-    fresh model execution are explicitly listed as skipped. Payload-dependent
-    diagnostics are skipped when selective saving cannot cover all compute
-    operations; this avoids treating a partial scan as a clean bill of health.
+    fresh model execution are explicitly listed as skipped. Sparse traces run
+    ``find_nan`` over their saved outputs and report its uncertainty zone;
+    checks that require complete payload coverage remain skipped.
 
     Parameters
     ----------
@@ -162,28 +162,29 @@ def audit_trace(trace: "Trace") -> TraceAudit:
         ("lineage", "requires a selected starting operation"),
         ("infer_input_shape", "requires a model and a new probe execution"),
     ]
+    result = find_nan_in_trace(trace)
+    checks_run.append("find_nan")
+    if result.found:
+        findings.append(
+            AuditFinding(
+                severity="critical",
+                check="find_nan",
+                message=result.message,
+                ops=(result.label,) if result.label is not None else (),
+                modules=(result.module_address,) if result.module_address is not None else (),
+                follow_up="trace.find_nan()",
+            )
+        )
+
     full_payloads = _has_full_saved_activations(trace)
     if full_payloads:
-        result = find_nan_in_trace(trace)
-        checks_run.append("find_nan")
-        if result.found:
-            findings.append(
-                AuditFinding(
-                    severity="critical",
-                    check="find_nan",
-                    message=result.message,
-                    ops=(result.label,) if result.label is not None else (),
-                    modules=(result.module_address,) if result.module_address is not None else (),
-                    follow_up="trace.find_nan()",
-                )
-            )
         bisect_nan(trace)
         checks_run.append("bisect_nan")
         dead_neurons(trace)
         checks_run.append("dead_neurons")
     else:
         reason = "selective-save trace does not retain every compute activation"
-        skipped.extend([("find_nan", reason), ("bisect_nan", reason), ("dead_neurons", reason)])
+        skipped.extend([("bisect_nan", reason), ("dead_neurons", reason)])
 
     has_gradients, gradient_reason = _has_saved_gradients(trace)
     if has_gradients:

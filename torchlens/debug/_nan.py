@@ -280,7 +280,8 @@ def _result_from_op(
 
     label = _op_label(op)
     location = source_line or _source_line(op)
-    message = f"First {scope} is {kind} at {label}."
+    prefix = scope[:1].upper() + scope[1:] if scope.startswith("first ") else f"First {scope}"
+    message = f"{prefix} is {kind} at {label}."
     if uncertainty_zone:
         message += " Unsaved upstream uncertainty zone: " + ", ".join(uncertainty_zone) + "."
     return FindNanResult(
@@ -364,7 +365,12 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
     capture = trace_kwargs.pop("capture", None)
     trace_kwargs.pop("raise_on_nan", None)
     if capture is not None:
-        trace_kwargs["capture"] = CaptureOptions(**{**capture.as_dict(), "raise_on_nan": True})
+        explicit_values = {
+            field_name: value
+            for field_name, value in capture.as_dict().items()
+            if capture.is_field_explicit(field_name)
+        }
+        trace_kwargs["capture"] = CaptureOptions(**explicit_values, raise_on_nan=True)
     else:
         trace_kwargs["capture"] = CaptureOptions(raise_on_nan=True)
     try:
