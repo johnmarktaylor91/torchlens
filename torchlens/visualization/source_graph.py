@@ -30,9 +30,9 @@ class SourceGraph:
         Typed container paths for each source entry.
     """
 
-    entries_to_plot: Mapping[str, Any]
-    edge_map: Mapping[str, list[Any]]
-    skipped_labels: frozenset[str]
+    entries_to_plot: dict[str, Any]
+    edge_map: dict[str, list[Any]]
+    skipped_labels: set[str]
     module_ancestry: Mapping[str, tuple[str, ...]]
     container_ancestry: Mapping[str, tuple[Any, ...]]
 
@@ -84,7 +84,7 @@ def build_source_graph(trace: "Trace", request: ResolvedRenderRequest) -> Source
     return SourceGraph(
         entries_to_plot=entries_to_plot,
         edge_map=edge_map,
-        skipped_labels=frozenset(skipped_labels),
+        skipped_labels=set(skipped_labels),
         module_ancestry=_SourceAncestryIndex(entries_to_plot, "modules"),
         container_ancestry=_SourceAncestryIndex(entries_to_plot, "container_path"),
     )
