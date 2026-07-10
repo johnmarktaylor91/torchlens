@@ -487,6 +487,14 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
         trace.completeness_witness_verified = None
     trace.__dict__.setdefault("completeness_diagnostics", [])
     trace.__dict__.setdefault("completeness_decompositions", [])
+    for counter_field in (
+        "completeness_witness_event_count",
+        "completeness_witness_accounted_count",
+        "completeness_witness_expected_opaque_count",
+        "completeness_witness_unaccounted_count",
+        "completeness_witness_callback_ns",
+    ):
+        trace.__dict__.setdefault(counter_field, 0)
     if mode == "off":
         yield
         return
