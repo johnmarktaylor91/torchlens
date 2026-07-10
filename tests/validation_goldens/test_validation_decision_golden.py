@@ -463,7 +463,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         selective_save,
         x_selective,
         save=_save_only_mul,
-        capture=CaptureOptions(save_arg_values=True),
+        capture=CaptureOptions(save_arg_values=False),
     )
 
     torch.manual_seed(18)
