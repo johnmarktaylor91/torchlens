@@ -1508,11 +1508,8 @@ def _module_shape(trace: "Trace", module: "Module") -> str:
     str
         Representative output shape.
     """
-    if not module.layer_labels:
-        return "-"
-    try:
-        layer = trace[module.layer_labels[-1]]
-    except KeyError:
+    layer = _module_output_layer(trace, module)
+    if layer is None:
         return "-"
     return _shape_str(getattr(layer, "shape", None))
 
@@ -1550,13 +1547,41 @@ def _module_dtype(trace: "Trace", module: "Module") -> str:
     str
         Representative dtype.
     """
-    if not module.layer_labels:
-        return "-"
-    try:
-        layer = trace[module.layer_labels[-1]]
-    except KeyError:
+    layer = _module_output_layer(trace, module)
+    if layer is None:
         return "-"
     return _dtype_str(getattr(layer, "dtype", None))
+
+
+def _module_output_layer(trace: "Trace", module: "Module") -> Any | None:
+    """Return the representative output layer for a module.
+
+    Parameters
+    ----------
+    trace:
+        Finalized log object.
+    module:
+        Module to summarize.
+
+    Returns
+    -------
+    Any or None
+        Last explicit module-call output, with the historical layer-list tail
+        used only when module-call output metadata is unavailable.
+    """
+
+    try:
+        module_call = trace.module_calls[f"{module.address}:{module.num_calls}"]
+        if module_call.output_ops:
+            return trace[module_call.output_ops[-1]]
+    except (KeyError, IndexError):
+        pass
+    if not module.layer_labels:
+        return None
+    try:
+        return trace[module.layer_labels[-1]]
+    except KeyError:
+        return None
 
 
 def _module_time_ms(trace: "Trace", module: "Module") -> float:
