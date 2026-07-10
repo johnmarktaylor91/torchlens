@@ -465,6 +465,56 @@ def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
     assert torch.equal(log[log.output_layers[0]].out, 100 * x)
 
 
+def test_module_scoped_splice_records_replacement_parent_and_fire_record() -> None:
+    """A module-boundary input splice records the value consumed downstream."""
+
+    class _AddOneBlock(torch.nn.Module):
+        """Produce a distinguishable pre-splice module output."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Add one to the input."""
+
+            return x + 1
+
+    class _DoubleReplacement(torch.nn.Module):
+        """Double the original module input."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return twice the input."""
+
+            return x * 2
+
+    class _Model(torch.nn.Module):
+        """Consume the spliced module output in a downstream sigmoid."""
+
+        def __init__(self) -> None:
+            """Initialize the named splice target."""
+
+            super().__init__()
+            self.block = _AddOneBlock()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply the block and its downstream consumer."""
+
+            return torch.sigmoid(self.block(x))
+
+    x = torch.tensor([1.0, 2.0])
+    log = tl.trace(
+        _Model(),
+        x,
+        intervention_ready=True,
+        hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
+    )
+    sigmoid = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
+    replacement = log[sigmoid.parents[0]]
+
+    assert torch.equal(replacement.out, x * 2)
+    assert torch.equal(sigmoid.out, torch.sigmoid(replacement.out))
+    assert replacement.intervention_replaced is True
+    assert replacement.interventions[-1].replaced is True
+    assert replacement.interventions[-1].helper_name == "splice_module"
+
+
 def test_splice_module_input_rejects_module_scoped_op_granularity() -> None:
     """Input splice rejects ambiguous op-level selectors inside module scopes."""
 

@@ -203,6 +203,8 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     assert log.state is TraceState.REPLAY_PROPAGATED
     assert log.last_run["engine"] == "replay"
     assert relu_site.interventions[-1].engine == "replay"
+    assert relu_site.interventions[-1].replaced is True
+    assert relu_site.intervention_replaced is True
 
 
 def test_differentiable_replay_patching_captures_backward_grads() -> None:
