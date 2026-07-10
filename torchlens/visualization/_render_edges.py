@@ -690,6 +690,120 @@ def _run_fold_ellipsis_owner_key(
     return _collapsed_module_owner_key(trace, fold.representative, "1", vis_mode)
 
 
+def _raw_render_node_owner_key(node: GraphNode, vis_mode: str) -> str | None:
+    """Return the innermost cluster that owns an unprojected render node.
+
+    Parameters
+    ----------
+    node:
+        Render node whose cluster ownership should be resolved.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str | None
+        Innermost owning cluster, or ``None`` for a top-level node.
+    """
+
+    modules = [str(module) for module in getattr(node, "modules", ()) or ()]
+    if getattr(node, "is_atomic_module", False) and modules:
+        modules = modules[:-1]
+    if not modules:
+        return None
+    owner = modules[-1]
+    return owner.rsplit(":", 1)[0] if vis_mode == "rolled" else owner
+
+
+def _rendered_endpoint_owner_key(
+    trace: "Trace",
+    node: GraphNode,
+    *,
+    segment: SegmentDescriptor | None,
+    collapsed_address: str | None,
+    hidden_fold: "ModuleRepeatFold | None",
+    vis_mode: str,
+) -> str | None:
+    """Return the cluster owning an edge endpoint after render projection.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the rendered module hierarchy.
+    node:
+        Original graph endpoint.
+    segment:
+        Segment descriptor replacing the endpoint, if any.
+    collapsed_address:
+        Collapsed module address replacing the endpoint, if any.
+    hidden_fold:
+        Repeat fold whose ellipsis replaces the endpoint, if any.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str | None
+        Owning cluster for the rendered endpoint, or ``None`` at top level.
+    """
+
+    if segment is not None:
+        return segment.owner
+    if hidden_fold is not None:
+        return _run_fold_ellipsis_owner_key(trace, hidden_fold, vis_mode)
+    if collapsed_address is not None:
+        address, _, call_index = collapsed_address.partition(":")
+        return _collapsed_module_owner_key(trace, address, call_index or "1", vis_mode)
+    return _raw_render_node_owner_key(node, vis_mode)
+
+
+def _lowest_common_rendered_owner_key(
+    owner1: str | None,
+    owner2: str | None,
+    vis_mode: str,
+) -> str | int:
+    """Return the lowest common cluster for two rendered endpoint owners.
+
+    Parameters
+    ----------
+    owner1:
+        Owning cluster of the first rendered endpoint.
+    owner2:
+        Owning cluster of the second rendered endpoint.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str | int
+        Lowest common cluster key, or ``-1`` for top-level emission.
+    """
+
+    if owner1 is None or owner2 is None:
+        return -1
+    address1, separator1, call1 = owner1.rpartition(":")
+    address2, separator2, call2 = owner2.rpartition(":")
+    if not separator1:
+        address1 = owner1
+    if not separator2:
+        address2 = owner2
+    parts1 = address1.split(".")
+    parts2 = address2.split(".")
+    common_parts: list[str] = []
+    for part1, part2 in zip(parts1, parts2, strict=False):
+        if part1 != part2:
+            break
+        common_parts.append(part1)
+    if not common_parts:
+        return -1
+    common_address = ".".join(common_parts)
+    if vis_mode == "rolled":
+        return common_address
+    if call1 != call2:
+        return -1
+    return f"{common_address}:{call1}" if separator1 and separator2 else common_address
+
+
 def _queue_run_fold_ellipsis_node(
     graphviz_graph: graphviz.Digraph,
     module_edge_dict: Dict[str, Any],
@@ -979,6 +1093,26 @@ def _add_edges_for_node(
                 tail_name = ellipsis_name
             if child_hidden_fold is not None:
                 head_name = ellipsis_name
+
+        if parent_segment is not None or child_segment is not None or ellipsis_fold is not None:
+            parent_owner = _rendered_endpoint_owner_key(
+                self,
+                parent_node,
+                segment=parent_segment,
+                collapsed_address=parent_module_name_w_pass,
+                hidden_fold=parent_hidden_fold,
+                vis_mode=vis_mode,
+            )
+            child_owner = _rendered_endpoint_owner_key(
+                self,
+                child_node,
+                segment=child_segment,
+                collapsed_address=child_module_name_w_pass,
+                hidden_fold=child_hidden_fold,
+                vis_mode=vis_mode,
+            )
+            module = _lowest_common_rendered_owner_key(parent_owner, child_owner, vis_mode)
+            edge_module_key = module
 
         edge_is_self_loop = tail_name == head_name
         if edge_is_self_loop and (parent_segment is not None or child_segment is not None):

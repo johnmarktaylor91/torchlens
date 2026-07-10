@@ -2379,6 +2379,28 @@ def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(
         assert "conv2d_2_2pass1 [" not in source
         assert "input_1pass1 -> conv2d_1_1__segment__conv2d_5_8pass1" in source
         assert "relu_4_9__segment__conv2d_7_12pass1 -> output_1pass1" in source
+        contracted_edge = (
+            "conv2d_1_1__segment__conv2d_5_8pass1 -> relu_4_9__segment__conv2d_7_12pass1"
+        )
+        edge_line = next(
+            index for index, line in enumerate(source.splitlines()) if contracted_edge in line
+        )
+        first_cluster_line = next(
+            index for index, line in enumerate(source.splitlines()) if "subgraph cluster_" in line
+        )
+        assert edge_line < first_cluster_line
+
+        result = select_collapse_plan(trace, RenderContext(), mode="max")
+        segments = tuple((result.segments or {}).values())
+        first_segment = next(
+            segment for segment in segments if segment.name.startswith("conv2d_1_1")
+        )
+        first_segment_members = [trace.ops[f"{label}:1"] for label in first_segment.ops]
+        assert first_segment.owner is None
+        assert any(op.is_atomic_module and op.modules == ["stem:1"] for op in first_segment_members)
+        assert any(
+            op.modules and op.modules[0].startswith("blocks:") for op in first_segment_members
+        )
     finally:
         trace.cleanup()
 
