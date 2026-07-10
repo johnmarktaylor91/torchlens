@@ -430,9 +430,10 @@ def _copy_tensor_payload(
     detach_tensor:
         Whether the saved payload should be detached from autograd.
     save_mode:
-        Payload retention mode. ``"copy"`` clones, ``"reference"`` stores the
-        original detached tensor, ``"view"`` stores the original graph-connected
-        tensor, and ``"cpu_async"`` clones to CPU with ``non_blocking=True``.
+        Payload retention mode. ``"copy"`` safely clones; ``"reference"`` safely
+        preserves the original value by relying on capture-time in-place handling;
+        ``"view"`` stores a live alias that downstream in-place operations can mutate;
+        and ``"cpu_async"`` clones to CPU with ``non_blocking=True``.
 
     Returns
     -------

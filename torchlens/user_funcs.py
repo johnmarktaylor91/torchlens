@@ -763,6 +763,9 @@ def _run_model_and_save_specified_outs(
         save_raw_gradients: Whether raw grads are retained when ``grad_transform`` is set.
             Metadata always describes the raw grad.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
+            ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
+            captured value through in-place handling; ``"view"`` is a live alias that
+            downstream in-place operations can mutate; and ``"cpu_async"`` clones to CPU.
         capture_tensor_grad_hooks: Whether forward tensors receive tensor-level
             backward hooks for implicit backward events and per-op gradient payloads.
         mark_layer_depths: Compute BFS distances from input/output layers.
@@ -1428,6 +1431,9 @@ def trace(
         save_raw_gradients: When ``False`` and ``grad_transform`` is set, do not retain raw
             grad tensors in memory; raw grad metadata is still populated.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
+            ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
+            captured value through in-place handling; ``"view"`` is a live alias that
+            downstream in-place operations can mutate; and ``"cpu_async"`` clones to CPU.
         capture_tensor_grad_hooks: If False, skip tensor-level backward hooks on
             forward tensors while preserving grad-fn registration for ``log_backward``.
         mark_layer_depths: Deprecated alias for

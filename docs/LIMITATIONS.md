@@ -70,6 +70,12 @@ raises for this state.
 If you hit a case we haven't listed, please
 [open an issue](https://github.com/johnmarktaylor91/torchlens/issues/new).
 
+Activation retention modes have different aliasing guarantees. The default
+`save_mode="copy"` safely clones saved values, and `save_mode="reference"` preserves
+capture-time values through TorchLens's in-place handling. `save_mode="view"` intentionally
+keeps a live alias: a later in-place operation can mutate the value visible through the
+earlier saved activation. Use `"copy"` unless that aliasing tradeoff is explicitly desired.
+
 ---
 
 ## At-a-glance matrix
