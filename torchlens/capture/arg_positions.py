@@ -636,7 +636,6 @@ _UNARY_FUNCS = [
     "rfftfreq",
     # Other
     "identity",
-    "copy",
     "data",
     "len",
     "format",
@@ -710,6 +709,7 @@ _BINARY_FUNCS = [
     "subtract",
     "mul",
     "multiply",
+    "copy",
     "div",
     "divide",
     "truedivide",

@@ -1817,7 +1817,6 @@ def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
 
     assert sorted(SKIP_PERTURBATION_ENTIRELY) == [
         "broadcast_tensors",
-        "copy_",
         "deform_conv2d",
         "expand_as",
         "exponential_",
@@ -1841,6 +1840,59 @@ def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
     assert "full" not in SKIP_PERTURBATION_ENTIRELY
     assert "full" not in CUSTOM_EXEMPTION_CHECKS
     assert "full" not in STRUCTURAL_ARG_POSITIONS
+
+
+def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
+    """Healthy ``copy_`` validates while an ignored source still trips validation."""
+
+    class CopySourceModel(nn.Module):
+        """Copy a computed source into a fresh destination."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return values copied from a non-destination parent."""
+
+            source = x + 2
+            destination = torch.zeros_like(x)
+            destination.copy_(source)
+            return destination
+
+    x = torch.tensor([2.0, 3.0, 4.0])
+    healthy_trace = trace_fn(CopySourceModel(), x, save_arg_values=True)
+    healthy_copy = next(op for op in healthy_trace.layer_list if op.func_name == "copy_")
+
+    assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
+    assert (
+        healthy_trace.validate_forward_pass(
+            [healthy_trace[healthy_trace.output_layers[0]].out.detach().clone()],
+            validate_metadata=False,
+        )
+        is True
+    )
+
+    broken_trace = trace_fn(CopySourceModel(), x, save_arg_values=True)
+    broken_copy = next(op for op in broken_trace.layer_list if op.func_name == "copy_")
+    saved_output = broken_copy.out.detach().clone()
+
+    def ignore_source(destination: torch.Tensor, source: torch.Tensor) -> torch.Tensor:
+        """Replay the saved bytes while deliberately ignoring the source parent."""
+
+        del source
+        return destination.copy_(saved_output)
+
+    broken_copy.func = ignore_source
+    broken_result = broken_trace.validate_forward_pass(
+        [broken_trace[broken_trace.output_layers[0]].out.detach().clone()],
+        validate_metadata=False,
+    )
+
+    assert broken_result is False
+    assert broken_trace.validation_replay_status.state == "failed"
+    assert any(
+        decision["op_label"] == broken_copy.label
+        and decision["phase"] == "perturbation"
+        and decision["decision"] == "failed"
+        for decision in broken_trace.validation_replay_status.decisions
+    )
 
 
 def test_structural_arg_positions_values_are_sets_of_ints():
