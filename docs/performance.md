@@ -102,6 +102,13 @@ with `tl.partial.from_failed_capture(exc)`.
 introspection. The callable detector is a separate, opt-in diagnostic cost:
 
 ```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.ReLU()
+x = torch.randn(4)
 tl.wrap_torch(patch_policy="scoped", escape_detector="shadow")
 trace = tl.trace(model, x)
 print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
@@ -111,6 +118,13 @@ The independent aten-level completeness witness is also opt-in and can run alone
 callable detector:
 
 ```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.ReLU()
+x = torch.randn(4)
 tl.wrap_torch(
     patch_policy="scoped",
     escape_detector="shadow",
