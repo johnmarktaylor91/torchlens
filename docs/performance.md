@@ -96,6 +96,23 @@ with `tl.partial.from_failed_capture(exc)`.
 | Forward chunking | `chunk_size=N` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
 
+### Scoped detached-reference diagnostics
+
+`tl.wrap_torch(patch_policy="scoped")` reduces the foreign modules that receive class/default
+introspection. The callable detector is a separate, opt-in diagnostic cost:
+
+```python
+tl.wrap_torch(patch_policy="scoped", escape_detector="shadow")
+trace = tl.trace(model, x)
+print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
+```
+
+The honest rollout comparison is **legacy with no guard** versus **scoped with the requested
+guard**, not crawl time in isolation. On Python 3.9–3.11, shadow mode uses `sys.setprofile` and can
+be expensive for Python-call-heavy models; on Python 3.12+ it prefers local Python-start monitoring
+plus diagnostic CALL events. Shadow remains default-off. The dispatcher-witness overhead is still
+unknown and must pass its separate performance gate before scoped can become the default.
+
 ### Phase timing buckets
 
 `trace._phase_timings` groups wall-clock timings by stable bucket names. Capture buckets include

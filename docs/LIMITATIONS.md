@@ -260,15 +260,22 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   aliasing (for example, `torch.add(a, b, out=a)`) is not pre-snapshotted and
   may expose post-mutation inputs; TorchLens emits a warning when it detects
   that case at hook fire time.
-- **Detached torch references (handled, with a deliberate boundary)**:
-  TorchLens re-patches detached `from torch import ...` references when wrappers
-  are installed, including module-level aliases and function-local imports,
-  and repeats that repair when wrapping is re-entered. The sys.modules crawl
-  does not reach callable references captured in closure cells or stashed in
-  nested containers before wrapping, so those calls are not captured today.
-  A runtime escape detector is planned to catch those references. Run
-  `tl.utils.doctor()` to check the process-global torch namespace wrapper state;
-  it cannot inspect private closure cells or container contents.
+- **Detached torch references (scoped discovery and diagnostic boundary)**:
+  The release default remains the legacy broad module crawl. Real scoped
+  discovery is opt-in with `tl.wrap_torch(patch_policy="scoped")`; it exact-scans
+  direct module values, then limits class/default scanning to model-provenance,
+  prior-positive, and `patch_modules=` candidates. Scoped intentionally does not
+  recurse into closure cells, arbitrary containers, partials, or opaque C holders.
+  `escape_detector="shadow"` adds exact identity/code diagnostics for executed
+  misses, warns with the callable and callsite, and records the report in
+  `trace.escape_diagnostics`; it does not enforce completeness in this rollout.
+  In particular, a C `functools.partial` can remain invisible to Python profiling.
+  Scoped traces therefore carry `capture_verified=False` until the separate
+  dispatcher witness is enabled. Deferred `log_backward()` is also outside the
+  current detector lifetime and reports `escape_detector_backward_coverage ==
+  "not_armed"`. See
+  [scoped detached-reference migration](migration/scoped_detached_patching.md)
+  for the exact policy and remediation matrix.
 - **bfloat16 / fp16 + non-deterministic GPU reductions**: validation
   replay compares activations to within ``3e-6`` absolute tolerance; on
   bf16/fp16 GPU atomics, small reordering differences can cross that
