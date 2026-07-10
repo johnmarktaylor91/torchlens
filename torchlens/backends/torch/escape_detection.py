@@ -203,7 +203,9 @@ class _GuardState:
     owner_thread_id: int
     mode: EscapeDetectorMode
     guard_pass_index: int
-    prior_profile: Callable[[types.FrameType, str, Any], Any] | None = None
+    # An arbitrary pre-existing profile hook (whatever ``sys.getprofile()`` returned);
+    # typeshed types that with a Literal event param, so keep this broad.
+    prior_profile: Callable[..., Any] | None = None
     monitoring_tool_id: int | None = None
     monitoring_codes: tuple[types.CodeType, ...] = ()
     seen_violations: set[tuple[int, str, int]] = field(default_factory=set)
