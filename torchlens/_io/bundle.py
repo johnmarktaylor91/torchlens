@@ -761,12 +761,11 @@ def _preflight_unified_trace_manifest(
     except ValueError as exc:
         raise TorchLensIOError(f"Invalid unified trace manifest: {exc}") from exc
 
-    _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
-
     schema_version = manifest.get("schema_version", 1)
     if not isinstance(schema_version, int) or isinstance(schema_version, bool):
         raise TorchLensIOError("Unified trace manifest schema_version must be an integer.")
     if schema_version == 1:
+        _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
         return
     if schema_version != 2:
         raise TorchLensIOError(
@@ -792,6 +791,7 @@ def _preflight_unified_trace_manifest(
             or manifest.get("torch_version") == ""
         ):
             raise TorchLensIOError("Torch manifest schema v2 requires non-empty torch_version.")
+        _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
         return
 
     _preflight_schema_v2_runtime(manifest, backend_name=backend_name)
@@ -799,6 +799,7 @@ def _preflight_unified_trace_manifest(
     materializes = bool(payload_policy.get("materialization_supported", False))
     if materializes:
         _preflight_schema_v2_payload_codecs(manifest, backend_name=backend_name)
+    _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
 
 
 def _preflight_unified_trace_body_index(
@@ -827,11 +828,16 @@ def _preflight_unified_trace_body_index(
         raise TorchLensIOError("Unified trace manifest body_index must be a list.")
     if not isinstance(tensors, list):
         raise TorchLensIOError("Unified trace manifest tensors must be a list.")
+    payload_policy = manifest.get("payload_policy")
+    if manifest.get("body_format") == "audit_only" and isinstance(payload_policy, dict):
+        if payload_policy.get("materialization_supported") is False:
+            return
     if len(body_index) != len(tensors):
         raise TorchLensIOError(
             "Unified trace manifest body_index length does not match tensor entries."
         )
 
+    missing_blob_ids: list[str] = []
     for index, (body_entry, tensor_entry) in enumerate(zip(body_index, tensors)):
         if not isinstance(body_entry, dict) or not isinstance(tensor_entry, dict):
             raise TorchLensIOError(
@@ -839,21 +845,25 @@ def _preflight_unified_trace_body_index(
             )
         body_filename = body_entry.get("filename")
         tensor_filename = tensor_entry.get("relative_path")
-        if body_filename != tensor_filename:
-            raise TorchLensIOError(
-                f"Unified trace body_index[{index}].filename does not match "
-                "the corresponding tensor relative_path."
-            )
         if not isinstance(tensor_filename, str) or tensor_filename == "":
             raise TorchLensIOError(
                 f"Unified trace tensors[{index}].relative_path must be a non-empty string."
             )
         blob_path = resolve_bundle_blob_path(bundle_path, tensor_filename)
         _reject_symlink_path(blob_path, context="tensor blob")
-        if not blob_path.is_file():
+        if body_filename != tensor_filename:
             raise TorchLensIOError(
-                f"Unified trace body_index[{index}] references missing blob file {blob_path}."
+                f"Unified trace body_index[{index}].filename does not match "
+                "the corresponding tensor relative_path."
             )
+        if not blob_path.is_file():
+            missing_blob_ids.append(str(tensor_entry.get("blob_id", "<unknown>")))
+    if missing_blob_ids:
+        raise TorchLensIOError(
+            "Bundle manifest references missing blob files for blob_id(s): "
+            + ", ".join(missing_blob_ids)
+            + "."
+        )
 
 
 def _preflight_schema_v2_runtime(
