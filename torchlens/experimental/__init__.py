@@ -7,7 +7,8 @@ import re
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from collections.abc import Callable
+from typing import Any, Iterator, cast
 
 from torch import nn
 
@@ -152,7 +153,8 @@ class Session:
         import torchlens
 
         index = len(self.logs)
-        log = torchlens.trace(
+        trace_fn = cast(Callable[..., Any], torchlens.trace)
+        log = trace_fn(
             self.model,
             input_args,
             input_kwargs=input_kwargs,
@@ -179,7 +181,8 @@ class Session:
 
         import torchlens
 
-        return torchlens.bundle(
+        bundle_fn = cast(Callable[..., Any], torchlens.bundle)
+        return bundle_fn(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.logs)}
         )
 
@@ -275,7 +278,8 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
             model.forward = original_forward
             try:
                 capture_input = list(args)
-                log = torchlens.trace(model, capture_input, kwargs or None)
+                trace_fn = cast(Callable[..., Any], torchlens.trace)
+                log = trace_fn(model, capture_input, kwargs or None)
                 session.logs.append(log)
             finally:
                 model.forward = wrapped_forward

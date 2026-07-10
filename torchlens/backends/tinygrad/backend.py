@@ -2225,7 +2225,9 @@ def _param_refs_for_uop(
             from tinygrad import Tensor
 
             tensor = Tensor(candidate)
-            shape = tuple(tensor.shape)
+            # Tinygrad permits symbolic dimensions, but captured parameter shapes are
+            # represented as concrete dimensions in the portable TorchLens contract.
+            shape = cast(tuple[int, ...], tuple(tensor.shape))
             dtype = str(tensor.dtype)
             trainable = bool(getattr(tensor, "requires_grad", False))
         except Exception:
@@ -2555,7 +2557,8 @@ class _observe_tensor_ops:
                 self.observed_tensors.setdefault(id(result.uop), []).append(result)
             return result
 
-        Tensor._apply_uop = wrapped
+        # tinygrad deliberately exposes this as a method; preview capture replaces it temporarily.
+        Tensor._apply_uop = wrapped  # type: ignore[method-assign, assignment]
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -2578,7 +2581,8 @@ class _observe_tensor_ops:
 
         from tinygrad import Tensor
 
-        Tensor._apply_uop = self.original
+        # Restore the deliberately replaced tinygrad method after preview capture.
+        Tensor._apply_uop = self.original  # type: ignore[method-assign]
 
 
 class _reject_mid_capture_execution:

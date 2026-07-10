@@ -1152,12 +1152,16 @@ def _set_variadic_wrapper_signature(wrapper: _Callable[..., Any], return_annotat
         Return annotation from the canonical target.
     """
 
-    wrapper.__signature__ = _inspect.Signature(
-        parameters=(
-            _inspect.Parameter("args", _inspect.Parameter.VAR_POSITIONAL, annotation=Any),
-            _inspect.Parameter("kwargs", _inspect.Parameter.VAR_KEYWORD, annotation=Any),
+    setattr(
+        wrapper,
+        "__signature__",
+        _inspect.Signature(
+            parameters=(
+                _inspect.Parameter("args", _inspect.Parameter.VAR_POSITIONAL, annotation=Any),
+                _inspect.Parameter("kwargs", _inspect.Parameter.VAR_KEYWORD, annotation=Any),
+            ),
+            return_annotation=return_annotation,
         ),
-        return_annotation=return_annotation,
     )
 
 

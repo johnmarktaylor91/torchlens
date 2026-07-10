@@ -34,6 +34,7 @@ import sys
 import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator
+from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
 
 from torch import nn
@@ -941,7 +942,9 @@ def run_and_log_inputs_through_model(
 
     self.capture_start_time = time.time()
     input_tensors: list[Any] = []
-    compiled_unwrap_exception: tuple[object, object, object] = (None, None, None)
+    compiled_unwrap_exception: tuple[
+        type[BaseException] | None, BaseException | None, TracebackType | None
+    ] = (None, None, None)
     compiled_unwrap_context = (
         unwrap_compiled_submodules(model)
         if isinstance(model, nn.Module)
@@ -1106,7 +1109,7 @@ def run_and_log_inputs_through_model(
         return outputs
 
     except HaltSignal as halt_exc:
-        compiled_unwrap_exception = cast(tuple[object, object, object], sys.exc_info())
+        compiled_unwrap_exception = sys.exc_info()
         options = getattr(self, "_predicate_save_options", None)
         if (
             options is not None
@@ -1130,7 +1133,7 @@ def run_and_log_inputs_through_model(
         raise
 
     except Exception as e:
-        compiled_unwrap_exception = cast(tuple[object, object, object], sys.exc_info())
+        compiled_unwrap_exception = sys.exc_info()
         backend.cleanup_failed_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )
