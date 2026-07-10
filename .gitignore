@@ -182,3 +182,6 @@ menagerie/data/verification.db*
 
 # Codex CLI per-session working artifact (file or dir).
 .codex
+
+# Internal capture-unification stage reports (codex writes to repo root; harvested to .research)
+/STAGE*_REPORT.md
