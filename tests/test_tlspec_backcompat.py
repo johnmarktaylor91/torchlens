@@ -277,7 +277,7 @@ def test_v2_16_tlspec_fixture_loads_and_matches_in_memory_counterpart(
     fixture_path = FIXTURE_ROOT / fixture_name
     assert tl.io.detect_tlspec_format(fixture_path) == expected_format
 
-    loaded = tl.load(fixture_path)
+    loaded = tl.load(fixture_path, trust_custom_callables=True)
     assert isinstance(loaded, expected_type)
     if isinstance(loaded, InterventionSpec):
         live_log = _build_intervention_counterpart(seed)
