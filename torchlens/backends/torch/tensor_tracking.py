@@ -72,10 +72,11 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
 def _ensure_backward_event_stream(trace: "Trace") -> Any:
     """Return the mutable capture event bundle for backward sidecar emission."""
 
-    events = getattr(trace, "_capture_events", None)
-    if events is not None:
-        return events
-    events = getattr(trace, "capture_events", None)
+    events = getattr(trace, "event_stream", None)
+    if events is None:
+        events = getattr(trace, "_capture_events", None)
+    if events is None:
+        events = getattr(trace, "capture_events", None)
     if events is not None:
         return events
     from ...ir import CaptureEvents

@@ -846,6 +846,10 @@ class Trace(
     def __getattr__(self, name: str) -> Any:
         """Route transient capture attributes through private build state."""
 
+        if name == "_capture_events":
+            events = self.event_stream
+            if events is not None:
+                return events
         state_field = self._build_state_attr_map().get(name)
         if state_field is None:
             raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
@@ -875,6 +879,12 @@ class Trace(
     def __delattr__(self, name: str) -> None:
         """Delete transient capture attributes from private build state."""
 
+        if name == "_capture_events":
+            from ..captured_run import forget_event_stream
+
+            self.__dict__.pop(name, None)
+            forget_event_stream(self)
+            return
         state_field = self._build_state_attr_map().get(name)
         if state_field is None:
             super().__delattr__(name)

@@ -57,10 +57,16 @@ class CapturedRun:
     def event_stream(self) -> CaptureEvents | None:
         """Return the raw capture event bundle when retained."""
 
-        events = getattr(self, "capture_events", None)
+        try:
+            events = object.__getattribute__(self, "capture_events")
+        except AttributeError:
+            events = None
         if events is not None:
             return events
-        events = getattr(self, "_capture_events", None)
+        try:
+            events = object.__getattribute__(self, "_capture_events")
+        except AttributeError:
+            events = None
         if events is not None:
             return events
         try:

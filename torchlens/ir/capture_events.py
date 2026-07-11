@@ -189,7 +189,6 @@ class CaptureEvents:
                     event,
                     output=output,
                     templates=templates,
-                    grad_fn_handle=None,
                     source_trace=None,
                 )
             )
@@ -234,7 +233,6 @@ class CaptureEvents:
         ]
         self.live_by_raw_label.clear()
         self.live_index.clear()
-        self.grad_fn_handles_by_label_raw.clear()
 
     def next_backward_seq(self) -> int:
         """Return the next monotonic backward event sequence number."""
