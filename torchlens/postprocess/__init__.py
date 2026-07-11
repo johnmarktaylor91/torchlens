@@ -477,6 +477,7 @@ def postprocess(
         self._capture_events = working_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
             materialize_from_events(self, working_events)
+        working_events.release_working_projection()
         _assert_postprocess_contract(self, "0")
         delattr(self, "capture_events")
 
@@ -487,6 +488,9 @@ def postprocess(
         warnings.warn("No layers were logged during the forward pass; skipping postprocessing.")
         _set_tracing_finished(self)
         _drop_transient_capture_state(self)
+        if capture_events is not None:
+            capture_events.release_runtime_sidecars()
+            self._capture_events = capture_events
         return
 
     _vprint(
@@ -647,6 +651,9 @@ def postprocess(
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
     _drop_transient_capture_state(self)
+    if capture_events is not None:
+        capture_events.release_runtime_sidecars()
+        self._capture_events = capture_events
 
 
 def postprocess_fast(self: "Trace") -> None:

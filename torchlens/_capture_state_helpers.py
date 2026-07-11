@@ -1221,6 +1221,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         trace.__dict__["_predicate_save_options"] = "cache_predicate_capture"
     trace.__dict__.pop("_capture_config", None)
     trace.__dict__.pop("_stop_directive", None)
+    trace.__dict__.pop("_capture_events", None)
     build_state = trace.__dict__.get("_build_state")
     if build_state is not None:
         registry = getattr(build_state, "container_registry", None)

@@ -44,8 +44,10 @@ def cleanup(self: "Trace") -> None:
     closed here because lazy materialization opens and closes files per call.
     """
     from ..backends.torch.backward import _purge_trace_from_backward_registry
+    from ..captured_run import forget_event_stream
 
     _purge_trace_from_backward_registry(self)
+    forget_event_stream(self)
     # GC-1: Release parameter references to allow model GC.
     if hasattr(self, "param_logs"):
         for pl in self.param_logs:
@@ -65,6 +67,7 @@ def cleanup(self: "Trace") -> None:
     for attr in [
         "_raw_layer_dict",
         "_raw_layer_labels_list",
+        "_capture_events",
         "_saved_grad_labels",
         "_module_logs",
         "_buffer_accessor",

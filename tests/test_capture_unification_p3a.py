@@ -162,10 +162,11 @@ def test_selective_save_keeps_unsaved_non_orphan_op_metadata() -> None:
 
 
 def test_postprocess_preserves_repeatedly_readable_capture_lanes() -> None:
-    """Postprocess keeps its event projection intact after Step 0."""
+    """Postprocess preserves the canonical event lanes for repeated reads."""
 
-    log = tl.trace(PredicateToy(), torch.randn(2, 4), random_seed=17)
-    events = log._capture_events
+    log = tl.trace(PredicateToy(), torch.randn(2, 4))
+    events = log.event_stream
+    assert events is not None
     first_labels = tuple(event.label_raw for event in events.op_events)
 
     assert first_labels

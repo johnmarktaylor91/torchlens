@@ -18,6 +18,17 @@ def remember_event_stream(run: object, events: CaptureEvents) -> None:
     _EVENT_STREAMS[run] = events
 
 
+def forget_event_stream(run: object) -> None:
+    """Release the retained raw event stream for an explicitly cleaned run."""
+
+    try:
+        events = _EVENT_STREAMS.pop(run, None)
+    except TypeError:
+        return
+    if events is not None:
+        events.release_working_projection()
+
+
 @runtime_checkable
 class ActivationLookup(Protocol[ActivationT]):
     """Protocol for raw-label/pass/address activation lookup consumers."""

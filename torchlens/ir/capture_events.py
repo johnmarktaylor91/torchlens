@@ -126,6 +126,52 @@ class CaptureEvents:
             backward_event_seq=self.backward_event_seq,
         )
 
+    def release_working_projection(self) -> None:
+        """Release mutable projector lanes without touching the sealed source.
+
+        Returns
+        -------
+        None
+            Drops working-container and runtime-handle references after Step 0.
+        """
+
+        self.op_events.clear()
+        self.module_events.clear()
+        self.module_prep_events.clear()
+        self.module_enter_events.clear()
+        self.module_exit_events.clear()
+        self.pre_hook_events.clear()
+        self.conditional_events.clear()
+        self.output_version_events.clear()
+        self.live_by_raw_label.clear()
+        self.op_event_by_label_raw.clear()
+        self.op_event_index_by_label_raw.clear()
+        self.live_index.clear()
+        self.grad_fn_handles_by_label_raw.clear()
+
+    def release_runtime_sidecars(self) -> None:
+        """Detach payload and runtime handles while retaining structural facts.
+
+        Returns
+        -------
+        None
+            Replaces operation entries with payload-free immutable facts.
+        """
+
+        structural_events: list[OpEvent] = []
+        for event in self.op_events:
+            tensor = replace(event.output.tensor, payload=None)
+            transformed = event.output.transformed_tensor
+            if transformed is not None:
+                transformed = replace(transformed, payload=None)
+            output = replace(event.output, tensor=tensor, transformed_tensor=transformed)
+            structural_events.append(
+                replace(event, output=output, grad_fn_handle=None, source_trace=None)
+            )
+        self.op_events = structural_events
+        self.op_event_by_label_raw = {event.label_raw: event for event in structural_events}
+        self.grad_fn_handles_by_label_raw.clear()
+
     def next_backward_seq(self) -> int:
         """Return the next monotonic backward event sequence number."""
 
