@@ -6,7 +6,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 import torch
 
@@ -740,7 +740,7 @@ class Recording(CapturedRun):
         # `_layer_counter` seed, and `_recover_halt_frontier()` all read from
         # `self._capture_events` (the original, intact) below -- only the
         # materialized `trace.capture_events` is the copy.
-        events_for_replay = projection.capture_events.copy_for_replay()
+        events_for_replay = cast(Any, projection.capture_events).copy_for_replay()
         trace.capture_events = events_for_replay
         projection.prepare_trace(trace)
         # Halt-finalization parity. A halted recording never reached the

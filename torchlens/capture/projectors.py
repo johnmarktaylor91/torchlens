@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable, cast
 
 from ..ir.events import OpEvent
 from .session import CapturedRunCore
@@ -102,7 +102,7 @@ class RecordingProjection:
         trace.forward_memory_backend = self.trace_facts["forward_memory_backend"]
         trace._source_model_ref = self.trace_facts["source_model_ref"]
         trace.random_seed = self.trace_facts["random_seed"]
-        trace._layer_counter = int(self.trace_facts["layer_counter"])
+        trace._layer_counter = cast(int, self.trace_facts["layer_counter"])
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label
 
