@@ -114,6 +114,38 @@ class OracleBranch(nn.Module):
         return self.merge(left + right)
 
 
+class OracleAlternating(nn.Module):
+    """Submodule alternating shared and middle module calls."""
+
+    def __init__(self) -> None:
+        """Initialize alternating modules."""
+
+        super().__init__()
+        self.shared = nn.Linear(4, 4)
+        self.middle = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create flow in both directions after rolled module projection."""
+
+        return self.shared(self.middle(self.shared(x)))
+
+
+class OracleFocusedAntiparallel(nn.Module):
+    """Focusable submodule whose rolled module projection is anti-parallel."""
+
+    def __init__(self) -> None:
+        """Initialize alternating shared and middle module calls."""
+
+        super().__init__()
+        self.encoder = OracleAlternating()
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Alternate modules so rolled collapse projects edges in both directions."""
+
+        return self.head(self.encoder(x))
+
+
 class OracleOrphans(nn.Module):
     """Model that deliberately computes an unreachable retained branch."""
 
@@ -223,6 +255,23 @@ def _collapse_small_modules(module: Any) -> bool:
     return str(getattr(module, "address", "")).startswith("blocks.")
 
 
+def _collapse_encoder_modules(module: Any) -> bool:
+    """Collapse alternating modules inside the focused encoder.
+
+    Parameters
+    ----------
+    module:
+        Candidate module log.
+
+    Returns
+    -------
+    bool
+        Whether the module belongs to the focused encoder's children.
+    """
+
+    return str(getattr(module, "address", "")).startswith("encoder.")
+
+
 def _skip_relu(layer: Any) -> bool:
     """Hide ReLU operations for skip-function characterization.
 
@@ -287,10 +336,6 @@ def _cases() -> tuple[OracleCase, ...]:
                 "vis_theme": "paper",
                 "code_panel": True,
             },
-            (
-                "expected_to_change_at_phase2:focus_antiparallel",
-                "expected_to_change_at_phase2:depth_container",
-            ),
         ),
         OracleCase(
             "batchnorm_train_buffers",
@@ -317,7 +362,6 @@ def _cases() -> tuple[OracleCase, ...]:
             OracleRepeat,
             (1, 4),
             {"collapse": "auto", "fold_repeats": None, "skip_fn": _skip_relu},
-            ("expected_to_change_at_phase2:skip_collapse_count",),
         ),
         OracleCase(
             "repeat_max_fold_off", OracleRepeat, (1, 4), {"collapse": "max", "fold_repeats": False}
@@ -353,6 +397,16 @@ def _cases() -> tuple[OracleCase, ...]:
                 "vis_show_cone": False,
                 "node_mode": "attention",
                 "show_containers": "labels",
+            },
+        ),
+        OracleCase(
+            "focused_branch_antiparallel",
+            OracleFocusedAntiparallel,
+            (1, 4),
+            {
+                "module": "encoder",
+                "vis_mode": "rolled",
+                "collapse_fn": _collapse_encoder_modules,
             },
         ),
         OracleCase(

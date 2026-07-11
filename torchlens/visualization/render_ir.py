@@ -152,6 +152,7 @@ def build_render_ir(
     collapse_fn: "Callable[[Module], bool] | None",
     repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
     context: RenderContext | None = None,
+    universe: Any | None = None,
 ) -> RenderIR:
     """Build the first render-IR slice from current renderer-faithful emissions.
 
@@ -173,16 +174,16 @@ def build_render_ir(
     """
 
     resolved_context = RenderContext() if context is None else context
-    from .rendering import rendered_node_universe_from_v1
+    if universe is None:
+        from .node_universe import build_node_universe
+        from .source_graph import build_source_graph
 
-    emissions = rendered_node_universe_from_v1(
-        trace,
-        collapse_fn=collapse_fn,
-        repeat_folds=repeat_folds,
-        context=resolved_context,
-    )
+        universe = build_node_universe(
+            build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
+        )
+    emissions = universe.emissions
     nodes = tuple(_node_from_emission(trace, emission, resolved_context) for emission in emissions)
-    edges = _build_forward_edges(trace, collapse_fn, repeat_folds, resolved_context)
+    edges = _edges_from_universe(universe)
     clusters = _build_clusters(nodes, edges)
     return RenderIR(
         context=resolved_context,
@@ -191,6 +192,46 @@ def build_render_ir(
         clusters=clusters,
         node_emissions=emissions,
     )
+
+
+def _edges_from_universe(universe: Any) -> tuple[RenderIREdge, ...]:
+    """Adapt projected universe occurrences to the temporary render-IR edge type.
+
+    Parameters
+    ----------
+    universe:
+        Shared presentation-free node universe.
+
+    Returns
+    -------
+    tuple[RenderIREdge, ...]
+        Projected edge records used by Phase 2 anti-parallel analysis.
+    """
+
+    edges: list[RenderIREdge] = []
+    for occurrence in universe.projected_edges:
+        raw_source = occurrence.source_label.replace(":", "pass")
+        raw_target = occurrence.target_label.replace(":", "pass")
+        reason = _projection_reason(
+            raw_source,
+            raw_target,
+            occurrence.source_unit,
+            occurrence.target_unit,
+        )
+        if occurrence.source_unit == occurrence.target_unit:
+            continue
+        edges.append(
+            RenderIREdge(
+                source_unit=occurrence.source_unit,
+                target_unit=occurrence.target_unit,
+                source_originals=(occurrence.source_label,),
+                target_originals=(occurrence.target_label,),
+                owner_cluster=None,
+                occurrence_key=occurrence.occurrence_key,
+                projection_reason=reason,
+            )
+        )
+    return tuple(edges)
 
 
 def _node_from_emission(

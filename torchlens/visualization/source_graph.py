@@ -35,6 +35,8 @@ class SourceGraph:
     skipped_labels: set[str]
     module_ancestry: Mapping[str, tuple[str, ...]]
     container_ancestry: Mapping[str, tuple[Any, ...]]
+    trace: "Trace"
+    request: ResolvedRenderRequest
 
 
 def build_source_graph(trace: "Trace", request: ResolvedRenderRequest) -> SourceGraph:
@@ -87,6 +89,8 @@ def build_source_graph(trace: "Trace", request: ResolvedRenderRequest) -> Source
         skipped_labels=set(skipped_labels),
         module_ancestry=_SourceAncestryIndex(entries_to_plot, "modules"),
         container_ancestry=_SourceAncestryIndex(entries_to_plot, "container_path"),
+        trace=trace,
+        request=request,
     )
 
 

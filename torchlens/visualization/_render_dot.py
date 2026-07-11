@@ -435,6 +435,15 @@ def draw(
     vis_save_only = target.save_only
     vis_renderer = target.renderer_name
     source_graph = build_source_graph(self, request)
+    from .node_universe import build_node_universe
+
+    node_universe = build_node_universe(
+        source_graph,
+        collapse_fn,
+        repeat_folds,
+        segments,
+        show_containers,
+    )
     entries_to_plot = source_graph.entries_to_plot
 
     rankdir = direction_to_rankdir(direction)
@@ -601,54 +610,44 @@ def draw(
         collapse_fn=collapse_fn,
         repeat_folds=repeat_folds,
         context=request,
+        universe=node_universe,
     )
     antiparallel_projected_edges = projected_antiparallel_endpoint_pairs(forward_render_ir)
 
-    for node in entries_to_plot.values():
-        if _render_node_label(node, vis_mode) in skipped_labels:
-            continue
-        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
-            continue
-        if _is_hidden_buffer_update_node(
-            self,
-            node,
-            entries_to_plot,
-            show_buffer_layers,
-            vis_mode,
-        ):
-            continue
-        _add_node_to_graphviz(
-            self,
-            node,
-            cast(graphviz.Digraph, forward_dot_recorder),
-            module_cluster_dict,
-            edges_used,
-            vis_mode,
-            collapsed_modules,
-            vis_call_depth,
-            show_buffer_layers,
-            overrides,
-            node_mode,
-            intervention_node_spec_fn,
-            collapsed_node_spec_fn,
-            collapse_fn,
-            edge_map,
-            vis_intervention_mode,
-            site_labels,
-            theme,
-            resolved_node_overlay,
-            node_label_fields,
-            captured_forward_edges,
-            rankdir,
-            show_containers,
-            collapsed_container_nodes,
-            show_input_transform_summary,
-            repeat_folds,
-            run_fold_ellipsis_nodes,
-            segments,
-            emitted_segment_nodes,
-            antiparallel_projected_edges,
-        )
+    for unit in node_universe.units:
+        for node in unit.source_nodes:
+            _add_node_to_graphviz(
+                self,
+                node,
+                cast(graphviz.Digraph, forward_dot_recorder),
+                module_cluster_dict,
+                edges_used,
+                vis_mode,
+                collapsed_modules,
+                vis_call_depth,
+                show_buffer_layers,
+                overrides,
+                node_mode,
+                intervention_node_spec_fn,
+                collapsed_node_spec_fn,
+                collapse_fn,
+                edge_map,
+                vis_intervention_mode,
+                site_labels,
+                theme,
+                resolved_node_overlay,
+                node_label_fields,
+                captured_forward_edges,
+                rankdir,
+                show_containers,
+                collapsed_container_nodes,
+                show_input_transform_summary,
+                repeat_folds,
+                run_fold_ellipsis_nodes,
+                segments,
+                emitted_segment_nodes,
+                antiparallel_projected_edges,
+            )
 
     for node_args in pending_container_collapse_nodes:
         forward_dot_recorder.node(**node_args)

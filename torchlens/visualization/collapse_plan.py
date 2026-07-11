@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from .request import RenderContext
 
@@ -342,16 +342,59 @@ def plan_from_v1(
         unrolled/dot/default-buffer/container-off context.
     """
 
-    resolved_context = RenderContext() if context is None else context
-    from .render_ir import build_render_ir
+    return collapse_plan_for_trace(trace, collapse_fn, repeat_folds, context)
 
-    render_ir = build_render_ir(
-        trace,
-        collapse_fn=collapse_fn,
-        repeat_folds=repeat_folds,
-        context=resolved_context,
+
+def collapse_plan_for_trace(
+    trace: "Trace",
+    collapse_fn: Callable[["Module"], bool] | None,
+    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
+    context: RenderContext | None = None,
+) -> CollapsePlan:
+    """Build a collapse plan through the shared node-universe entry point.
+
+    Parameters
+    ----------
+    trace:
+        Trace being projected.
+    collapse_fn:
+        Active collapse predicate.
+    repeat_folds:
+        Active repeat-fold mapping.
+    context:
+        Resolved render context.
+
+    Returns
+    -------
+    CollapsePlan
+        Renderer-faithful structural plan.
+    """
+
+    from .node_universe import build_node_universe
+    from .source_graph import build_source_graph
+
+    resolved_context = RenderContext() if context is None else context
+    universe = build_node_universe(
+        build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
     )
-    emissions = render_ir.node_emissions
+    return collapse_plan_from_universe(universe)
+
+
+def collapse_plan_from_universe(universe: Any) -> CollapsePlan:
+    """Convert visible structural units into the stable collapse-plan AST.
+
+    Parameters
+    ----------
+    universe:
+        Presentation-free node universe.
+
+    Returns
+    -------
+    CollapsePlan
+        Existing plan AST with unchanged count and representation semantics.
+    """
+
+    emissions = universe.emissions
     nodes: list[PlanNode] = []
     consumed_ellipsis: set[str] = set()
     for emission in emissions:
@@ -383,4 +426,4 @@ def plan_from_v1(
     for emission in emissions:
         if emission.kind == "run_fold_ellipsis" and emission.name not in consumed_ellipsis:
             nodes.append(Boundary("run_fold_ellipsis"))
-    return CollapsePlan(nodes=tuple(nodes), context=resolved_context)
+    return CollapsePlan(nodes=tuple(nodes), context=universe.source_graph.request)

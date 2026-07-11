@@ -5527,6 +5527,236 @@
         },
         "tags": []
       },
+      "focused_branch_antiparallel": {
+        "callbacks": {
+          "collapsed_node_spec_fn": [],
+          "node_spec_fn": []
+        },
+        "dot": "// Computational graph for the feedforward sweep\ndigraph OracleFocusedAntiparallel {\n\tgraph [bgcolor=white label=<<FONT COLOR='black'><B>OracleFocusedAntiparallel</B><br align='left'/>6 tensors total (80 B)<br align='left'/>50 params (all trainable, 200 B)<br align='left'/></FONT>> labeljust=left labelloc=t newrank=true ordering=out rankdir=BT]\n\tnode [ordering=out]\n\tlinear_1_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1 (x2)</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4, out_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.shared</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_1_1 -> __module_focus_output_linear_3_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tlinear_2_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4, out_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.middle</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\t__module_focus_input_input_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input</B></TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t__module_focus_input_input_1 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\t__module_focus_output_linear_3_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output</B></TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tsubgraph cluster_encoder {\n\t\tfillcolor=white label=<<B>@encoder</B><br align='left'/>(OracleAlternating)<br align='left'/>> labelloc=b margin=20 penwidth=5.0 style=\"filled,solid\"\n\t\tlinear_1_1 -> linear_2_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"8\">Out 1</FONT></TD></TR></TABLE>>]\n\t\tlinear_2_2 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black headlabel=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"8\">In 2</FONT></TD></TR></TABLE>> labelfontsize=8 style=solid]\n\t}\n\tsubgraph cluster_encoder {\n\t}\n\tsubgraph cluster_encoder {\n\t}\n}\n",
+        "plans": {
+          "0.25": "CollapsePlan(total=6, raw_op=6)",
+          "0.75": "CollapsePlan(total=6, raw_op=6)",
+          "auto": "CollapsePlan(total=6, raw_op=6)",
+          "max": "CollapsePlan(total=4, raw_op=3, op_segment=1)"
+        },
+        "schedule": "CollapseSchedule(steps=(CollapseScheduleStep(t=0.0, target_count=6, visible_count=6, collapsed_addresses=frozenset(), plan=CollapsePlan(total=6, raw_op=6)), CollapseScheduleStep(t=1.0, target_count=4, visible_count=4, collapsed_addresses=frozenset(), plan=CollapsePlan(total=4, raw_op=3, op_segment=1))))",
+        "structural": {
+          "edges": [
+            {
+              "attrs": {
+                "arrowsize": ".7",
+                "color": "black",
+                "fontcolor": "black",
+                "labelfontsize": "8",
+                "style": "solid"
+              },
+              "decorations": {
+                "color": "black",
+                "style": "solid"
+              },
+              "dst": 3,
+              "dst_name": "__module_focus_output_linear_3_3",
+              "kind": "edge",
+              "region": [
+                "OracleFocusedAntiparallel"
+              ],
+              "src": 0,
+              "src_name": "linear_1_1"
+            },
+            {
+              "attrs": {
+                "arrowsize": ".7",
+                "color": "black",
+                "fontcolor": "black",
+                "labelfontsize": "8",
+                "style": "solid"
+              },
+              "decorations": {
+                "color": "black",
+                "style": "solid"
+              },
+              "dst": 0,
+              "dst_name": "linear_1_1",
+              "kind": "edge",
+              "region": [
+                "OracleFocusedAntiparallel"
+              ],
+              "src": 2,
+              "src_name": "__module_focus_input_input_1"
+            },
+            {
+              "attrs": {
+                "arrowsize": ".7",
+                "color": "black",
+                "fontcolor": "black",
+                "labelfontsize": "8",
+                "style": "solid",
+                "taillabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"8\">Out 1</FONT></TD></TR></TABLE>>"
+              },
+              "decorations": {
+                "color": "black",
+                "style": "solid"
+              },
+              "dst": 1,
+              "dst_name": "linear_2_2",
+              "kind": "edge",
+              "region": [
+                "OracleFocusedAntiparallel",
+                "cluster_encoder"
+              ],
+              "src": 0,
+              "src_name": "linear_1_1"
+            },
+            {
+              "attrs": {
+                "arrowsize": ".7",
+                "color": "black",
+                "fontcolor": "black",
+                "headlabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"8\">In 2</FONT></TD></TR></TABLE>>",
+                "labelfontsize": "8",
+                "style": "solid"
+              },
+              "decorations": {
+                "color": "black",
+                "style": "solid"
+              },
+              "dst": 0,
+              "dst_name": "linear_1_1",
+              "kind": "edge",
+              "region": [
+                "OracleFocusedAntiparallel",
+                "cluster_encoder"
+              ],
+              "src": 1,
+              "src_name": "linear_2_2"
+            }
+          ],
+          "nodes": [
+            {
+              "attrs": {
+                "color": "black",
+                "fillcolor": "#D9D9D9",
+                "fontcolor": "black",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1 (x2)</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4, out_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.shared</TD></TR></TABLE>>",
+                "ordering": "out",
+                "shape": "box",
+                "style": "filled,solid"
+              },
+              "kind": "raw_op",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1 (x2)</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4, out_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.shared</TD></TR></TABLE>>",
+              "name": "linear_1_1",
+              "ordinal": 0,
+              "region": [
+                "OracleFocusedAntiparallel"
+              ]
+            },
+            {
+              "attrs": {
+                "color": "black",
+                "fillcolor": "#D9D9D9",
+                "fontcolor": "black",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4, out_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.middle</TD></TR></TABLE>>",
+                "ordering": "out",
+                "shape": "box",
+                "style": "filled,solid"
+              },
+              "kind": "raw_op",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4, out_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.middle</TD></TR></TABLE>>",
+              "name": "linear_2_2",
+              "ordinal": 1,
+              "region": [
+                "OracleFocusedAntiparallel"
+              ]
+            },
+            {
+              "attrs": {
+                "color": "black",
+                "fillcolor": "#98FB98",
+                "fontcolor": "black",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input</B></TD></TR></TABLE>>",
+                "ordering": "out",
+                "shape": "oval",
+                "style": "filled,solid"
+              },
+              "kind": "boundary",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input</B></TD></TR></TABLE>>",
+              "name": "__module_focus_input_input_1",
+              "ordinal": 2,
+              "region": [
+                "OracleFocusedAntiparallel"
+              ]
+            },
+            {
+              "attrs": {
+                "color": "black",
+                "fillcolor": "#ff9999",
+                "fontcolor": "black",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output</B></TD></TR></TABLE>>",
+                "ordering": "out",
+                "shape": "oval",
+                "style": "filled,solid"
+              },
+              "kind": "boundary",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output</B></TD></TR></TABLE>>",
+              "name": "__module_focus_output_linear_3_3",
+              "ordinal": 3,
+              "region": [
+                "OracleFocusedAntiparallel"
+              ]
+            }
+          ],
+          "ordering_constraints": [],
+          "regions": {
+            "attrs": {},
+            "children": [
+              {
+                "attrs": {
+                  "fillcolor": "white",
+                  "label": "<<B>@encoder</B><br align='left'/>(OracleAlternating)<br align='left'/>>",
+                  "labelloc": "b",
+                  "margin": "20",
+                  "penwidth": "5.0",
+                  "style": "filled,solid"
+                },
+                "children": [],
+                "members": [],
+                "path": [
+                  "OracleFocusedAntiparallel",
+                  "cluster_encoder"
+                ]
+              },
+              {
+                "attrs": {},
+                "children": [],
+                "members": [],
+                "path": [
+                  "OracleFocusedAntiparallel",
+                  "cluster_encoder"
+                ]
+              },
+              {
+                "attrs": {},
+                "children": [],
+                "members": [],
+                "path": [
+                  "OracleFocusedAntiparallel",
+                  "cluster_encoder"
+                ]
+              }
+            ],
+            "members": [
+              "linear_1_1",
+              "linear_2_2",
+              "__module_focus_input_input_1",
+              "__module_focus_output_linear_3_3"
+            ],
+            "path": [
+              "OracleFocusedAntiparallel"
+            ]
+          }
+        },
+        "tags": []
+      },
       "intervention_as_node": {
         "callbacks": {
           "collapsed_node_spec_fn": [],
@@ -6253,10 +6483,7 @@
             ]
           }
         },
-        "tags": [
-          "expected_to_change_at_phase2:focus_antiparallel",
-          "expected_to_change_at_phase2:depth_container"
-        ]
+        "tags": []
       },
       "none_short_circuit": {
         "callbacks": {},
@@ -7017,9 +7244,7 @@
             ]
           }
         },
-        "tags": [
-          "expected_to_change_at_phase2:skip_collapse_count"
-        ]
+        "tags": []
       },
       "repeat_custom_collapse_and_spec": {
         "callbacks": {
@@ -9637,13 +9862,13 @@
     "schema_version": 1
   },
   "sha256_chunks": [
-    "221ab00c",
-    "faaa32fc",
-    "558f79e9",
-    "d3934fb7",
-    "25efbfdd",
-    "ebfaff1b",
-    "0840e477",
-    "079ed93a"
+    "2344996b",
+    "2c3dcc38",
+    "32e59c73",
+    "e3aeba28",
+    "c95957f2",
+    "f2d0d8e9",
+    "b1f4088d",
+    "d5f3a4c3"
   ]
 }
