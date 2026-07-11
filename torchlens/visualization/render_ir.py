@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from .request import RenderContext
 
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
     from .rendering import RenderedNodeEmission
+    from .renderers.base import RendererCapabilities
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,16 @@ class RenderIROrderingConstraint:
 
 
 @dataclass(frozen=True)
+class RenderIRDotStatement:
+    """Immutable backend-ready DOT statement without TorchLens host objects."""
+
+    kind: Literal["node", "edge", "attr", "subgraph"]
+    args: tuple[Any, ...] = ()
+    attrs: tuple[tuple[str, Any], ...] = ()
+    children: tuple["RenderIRDotStatement", ...] = ()
+
+
+@dataclass(frozen=True)
 class RenderIR:
     """Resolved render description slice used before DOT emission.
 
@@ -169,6 +180,46 @@ class RenderIR:
     regions: tuple[RenderIRRegion, ...]
     node_emissions: tuple["RenderedNodeEmission", ...]
     ordering_constraints: tuple[RenderIROrderingConstraint, ...] = ()
+    dot_statements: tuple[RenderIRDotStatement, ...] = ()
+
+    def required_capabilities(self) -> "RendererCapabilities":
+        """Return backend features required to render this IR exactly.
+
+        Returns
+        -------
+        RendererCapabilities
+            Capability set inferred from decision-complete records.
+        """
+
+        from .renderers.base import RendererCapabilities
+
+        return RendererCapabilities(
+            nested_regions=bool(self.regions),
+            ordering_constraints=bool(self.ordering_constraints),
+            html_labels=any(_statement_uses_html(statement) for statement in self.dot_statements),
+            layout_execution=True,
+        )
+
+
+def _statement_uses_html(statement: RenderIRDotStatement) -> bool:
+    """Return whether a statement tree contains a Graphviz HTML label.
+
+    Parameters
+    ----------
+    statement:
+        Statement tree to inspect.
+
+    Returns
+    -------
+    bool
+        Whether a label uses Graphviz HTML syntax.
+    """
+
+    attrs: Mapping[str, Any] = dict(statement.attrs)
+    label = attrs.get("label")
+    return (isinstance(label, str) and label.startswith("<")) or any(
+        _statement_uses_html(child) for child in statement.children
+    )
 
 
 def projected_antiparallel_endpoint_pairs(render_ir: RenderIR) -> frozenset[tuple[str, str]]:
@@ -369,7 +420,7 @@ def _resolve_node_decision(
     from collections import defaultdict
 
     from .rendering import (
-        _ForwardDotRecorder,
+        _RenderIRDecisionBuilder,
         _build_collapsed_module_node,
         _build_layer_node,
         _collapsed_container_leaf_nodes,
@@ -383,7 +434,7 @@ def _resolve_node_decision(
         return (), (), "black", None, ()
     if _segment_for_node(node, segments) is not None:
         return (), (), "black", None, ()
-    recorder = _ForwardDotRecorder()
+    recorder = _RenderIRDecisionBuilder()
     module_nodes: dict[str, Any] = defaultdict(dict)
     show_buffers = _normalize_buffer_visibility(context.show_buffer_layers)
     collapsed_containers = _collapsed_container_leaf_nodes(

@@ -12,6 +12,7 @@ from ._render_nodes import *
 from ._render_flow import *
 from ._render_utils import html_escape
 from .request import RenderTarget, ResolvedRenderRequest
+from .renderers.graphviz import GraphvizRenderer
 from .source_graph import _resolve_focus_module, build_source_graph
 
 
@@ -573,7 +574,7 @@ def draw(
     dot.graph_attr.update(graph_args)
     dot.node_attr.update({"ordering": "out", **theme_node_attrs(theme, font_size=font_size)})
     dot.edge_attr.update(theme_edge_attrs(theme, font_size=font_size))
-    forward_dot_recorder = _ForwardDotRecorder()
+    forward_ir_builder = _RenderIRDecisionBuilder()
 
     # Accumulate edges per module cluster; actual Graphviz subgraphs are
     # created at the end in _setup_subgraphs to ensure proper nesting.
@@ -624,7 +625,7 @@ def draw(
             _add_node_to_graphviz(
                 self,
                 node,
-                cast(graphviz.Digraph, forward_dot_recorder),
+                cast(graphviz.Digraph, forward_ir_builder),
                 module_cluster_dict,
                 edges_used,
                 vis_mode,
@@ -658,7 +659,7 @@ def draw(
             )
 
     for node_args in pending_container_collapse_nodes:
-        forward_dot_recorder.node(**node_args)
+        forward_ir_builder.node(**node_args)
 
     container_overlay_edges: list[ContainerOverlayEdge] = []
     if show_containers == "nodes" and vis_mode == "unrolled":
@@ -671,7 +672,7 @@ def draw(
         )
         for overlay_node in container_overlay_nodes:
             if overlay_node.owner_key is None:
-                forward_dot_recorder.node(**overlay_node.args)
+                forward_ir_builder.node(**overlay_node.args)
             else:
                 module_cluster_dict[overlay_node.owner_key].setdefault("nodes", []).append(
                     overlay_node.args
@@ -690,7 +691,7 @@ def draw(
 
     if vis_intervention_mode == "as_node":
         _add_intervention_hook_nodes(
-            cast(graphviz.Digraph, forward_dot_recorder),
+            cast(graphviz.Digraph, forward_ir_builder),
             site_labels,
             vis_graph_overrides,
         )
@@ -738,27 +739,23 @@ def draw(
         overrides=overrides,
     )
 
-    forward_dot_ir = ForwardDotIR(
-        render_ir=forward_render_ir,
-        calls=tuple(forward_dot_recorder.calls),
-        module_cluster_dict=module_cluster_dict,
-        top_level_sibling_rank_groups=tuple(top_level_sibling_rank_groups),
-        captured_forward_edges=tuple(captured_forward_edges),
-        container_overlay_edges=tuple(container_overlay_edges),
+    forward_render_ir = replace(
+        forward_render_ir,
+        dot_statements=tuple(forward_ir_builder.calls),
     )
-    _replay_forward_dot_calls(dot, forward_dot_ir.calls)
+    GraphvizRenderer().emit(forward_render_ir, dot)
 
     # Finally, set up the subgraphs.
     _setup_subgraphs(
         self,
         dot,
         vis_mode,
-        forward_dot_ir.module_cluster_dict,
+        module_cluster_dict,
         overrides,
-        list(forward_dot_ir.render_ir.ordering_constraints),
-        forward_dot_ir.render_ir.regions,
+        list(forward_render_ir.ordering_constraints),
+        forward_render_ir.regions,
     )
-    for overlay_edge in forward_dot_ir.container_overlay_edges:
+    for overlay_edge in container_overlay_edges:
         dot.edge(
             tail_name=overlay_edge.tail_name,
             head_name=overlay_edge.head_name,
@@ -800,11 +797,11 @@ def draw(
     _RENDER_TIMEOUT = 120  # seconds
     source_override = None
     self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
-    if forward_dot_ir.render_ir.ordering_constraints:
+    if forward_render_ir.ordering_constraints:
         try:
             source_override, decision = _verify_and_apply_sibling_ordering(
                 dot.source,
-                forward_dot_ir.render_ir.ordering_constraints,
+                forward_render_ir.ordering_constraints,
                 captured_forward_edges,
                 rankdir,
             )
@@ -927,31 +924,6 @@ def _add_orphan_island_nodes(
                 fillcolor="gray95",
                 fontcolor="gray40",
             )
-
-
-def _replay_forward_dot_calls(dot: graphviz.Digraph, calls: Sequence[ForwardDotCall]) -> None:
-    """Replay recorded forward DOT calls into a Graphviz graph.
-
-    Parameters
-    ----------
-    dot:
-        Graphviz graph receiving the recorded calls.
-    calls:
-        Forward DOT calls recorded by the render IR builder.
-    """
-
-    for call in calls:
-        if call.kind == "node":
-            dot.node(*call.args, **call.kwargs)
-        elif call.kind == "edge":
-            dot.edge(*call.args, **call.kwargs)
-        elif call.kind == "attr":
-            dot.attr(*call.args, **call.kwargs)
-        elif call.kind == "subgraph":
-            with dot.subgraph(*call.args, **call.kwargs) as subgraph:
-                _replay_forward_dot_calls(subgraph, call.children)
-        else:
-            raise ValueError(f"Unknown forward DOT call kind: {call.kind}")
 
 
 def _render_graph_only_svg(engine: str, source_path: str, timeout: int) -> str:
@@ -1807,7 +1779,6 @@ __all__ = [
     "_rank_cost_node_name",
     "_rank_layout_cost_inputs",
     "_render_graph_only_svg",
-    "_replay_forward_dot_calls",
     "_resolve_focus_module",
     "_run_fold_for_graph_node_name",
     "_setup_combined_special_clusters",

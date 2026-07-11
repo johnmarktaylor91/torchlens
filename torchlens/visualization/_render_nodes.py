@@ -596,8 +596,6 @@ def _build_layer_node(
     if resolved_specs is not None:
         resolved_specs.append(spec)
 
-    # Graphviz node names can't contain colons (used for port syntax), so
-    # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
     node_args = _node_spec_to_graphviz_args(spec)
     if node.is_input:
         raw_input_attrs = _render_raw_input(
