@@ -349,18 +349,21 @@ def test_ground_truth_comparison_is_non_vacuous() -> None:
         _assert_record_matches_golden(mutated, golden, case)
 
 
-def test_stage0_legacy_paths_pin_one_pass_and_two_pass_counts() -> None:
-    """Committed live-selector cases pin one pass and negative-index cases pin two."""
+def test_stage0_legacy_paths_pin_exactly_once_counts() -> None:
+    """Committed live and negative-index selectors pin one user forward."""
 
     for case in CASES:
         payload = json.loads((_GOLDEN_DIR / f"{case.name}.json").read_text(encoding="utf-8"))[
             "record"
         ]
-        assert _forward_invocation_count(payload) == case.expected_forward_invocations
         if case.config == "two_pass_negative":
-            assert _producer_modes(payload) == ["exhaustive", "fast"]
+            assert _forward_invocation_count(payload) == case.expected_forward_invocations
+            assert _producer_modes(payload)[0] == "exhaustive"
         elif case.config == "predicate_live":
+            assert _forward_invocation_count(payload) == case.expected_forward_invocations
             assert _producer_modes(payload) == ["exhaustive"]
+        else:
+            assert _forward_invocation_count(payload) == case.expected_forward_invocations
 
 
 def test_only_stateful_two_pass_case_carves_out_outcome() -> None:

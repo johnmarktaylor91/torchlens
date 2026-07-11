@@ -18,7 +18,7 @@
         "current": {
           "buffer_changes": {},
           "buffer_mutation_count": 0,
-          "forward_invocations": 2,
+          "forward_invocations": 1,
           "input_value_after": {
             "dtype": "float32",
             "sha256_chunks": [
@@ -55,7 +55,7 @@
           },
           "input_value_changed": false,
           "input_version_delta": 0,
-          "pre_hook_invocations": 2,
+          "pre_hook_invocations": 1,
           "rng_draw_count": 0,
           "rng_state_after": [
             "22e52678",
@@ -686,13 +686,13 @@
     }
   },
   "sha256_chunks": [
-    "2a576010",
-    "d5c3e896",
-    "274c01a6",
-    "14eb2de7",
-    "47adcb4a",
-    "c97bb862",
-    "b7f14a88",
-    "8e882835"
+    "9d8f864c",
+    "5859c8ac",
+    "c9ebde4f",
+    "7225e70a",
+    "3a7b8239",
+    "b247f9a4",
+    "bc722329",
+    "8884eb25"
   ]
 }

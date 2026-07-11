@@ -42,6 +42,25 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
         tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
             look up the corresponding log entry when the grad arrives.
     """
+    if t.grad_fn is not None:
+        from .backward import _register_forward_grad_fn
+
+        _register_forward_grad_fn(trace, t.grad_fn, tensor_label)
+    should_defer_hook = getattr(
+        trace, "_deferred_gradient_selector", None
+    ) is not None and not getattr(trace, "_installing_deferred_gradient_hooks", False)
+    if should_defer_hook:
+        from ...capture.session import capture_session_for
+
+        session = capture_session_for(trace)
+        should_defer_hook = session is None or tensor_label not in session.live_gradient_labels
+    if (
+        not getattr(trace, "capture_tensor_grad_hooks", True)
+        or should_defer_hook
+        or (t.grad_fn is None and not t.requires_grad)
+    ):
+        return
+
     hooked_tensors = trace.__dict__.setdefault("_tl_backward_hooked_tensor_keys", set())
     hook_key = (tensor_label, id(t))
     if hook_key in hooked_tensors:
@@ -62,14 +81,7 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
             if getattr(active_trace, "save_grads", None) not in (None, False):
                 _log_tensor_grad(active_trace, grad, tensor_label)
 
-    if t.grad_fn is not None:
-        from .backward import _register_forward_grad_fn
-
-        _register_forward_grad_fn(trace, t.grad_fn, tensor_label)
-    if getattr(trace, "capture_tensor_grad_hooks", True) and (
-        (t.grad_fn is not None) or t.requires_grad
-    ):
-        t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
+    t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
 
 
 def _ensure_backward_event_stream(trace: "Trace") -> Any:

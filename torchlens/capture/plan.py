@@ -26,6 +26,48 @@ class EnrichmentLevel(str, Enum):
     PAYLOAD = "payload"
 
 
+class RetentionKind(str, Enum):
+    """Payload kind held while a structure-dependent selector resolves."""
+
+    NONE = "none"
+    ACTIVATION = "activation"
+    GRADIENT_REFERENCE = "gradient_reference"
+
+
+@dataclass(frozen=True, slots=True)
+class RetentionProfile:
+    """Precompiled deferred-retention bounds for a capture request.
+
+    Parameters
+    ----------
+    activation_kind
+        Whether detached activation values are retained.
+    activation_window
+        Maximum rolling-window size, or ``None`` for a candidate-class escrow.
+    gradient_kind
+        Whether live tensor references are retained for deferred grad hooks.
+    gradient_window
+        Maximum reference window, or ``None`` when the selector is unwindowable.
+    spillable
+        Whether retained values may be moved to temporary disk storage.
+    activation_ram_budget_bytes
+        Maximum detached activation bytes retained in memory before temp spill.
+    gradient_warning_threshold_bytes
+        Logical tensor-byte threshold for warning about unwindowable live references.
+    gradient_live_indices
+        Positive raw indices whose hooks can be installed during the forward.
+    """
+
+    activation_kind: RetentionKind = RetentionKind.NONE
+    activation_window: int | None = 0
+    gradient_kind: RetentionKind = RetentionKind.NONE
+    gradient_window: int | None = 0
+    spillable: bool = False
+    activation_ram_budget_bytes: int = 64 * 1024 * 1024
+    gradient_warning_threshold_bytes: int = 512 * 1024 * 1024
+    gradient_live_indices: tuple[int, ...] = ()
+
+
 def _freeze_intent(value: Any) -> Any:
     """Recursively freeze standard intent containers.
 
@@ -102,6 +144,7 @@ class CapturePlan:
     stop_policy: Any = None
     required_capabilities: frozenset[str] = field(default_factory=frozenset)
     backend_name: str = "torch"
+    retention_profile: RetentionProfile = field(default_factory=RetentionProfile)
 
     def __post_init__(self) -> None:
         """Freeze collection fields so compiled intent cannot change mid-run."""
@@ -144,6 +187,7 @@ class CapturePlan:
         execution_context: Any = None,
         stop_policy: Any = None,
         backend_name: str = "torch",
+        retention_profile: RetentionProfile | None = None,
     ) -> "CapturePlan":
         """Compile intent and reject unsupported requirements before capture.
 
@@ -205,6 +249,7 @@ class CapturePlan:
             stop_policy=stop_policy,
             required_capabilities=required,
             backend_name=backend_name,
+            retention_profile=retention_profile or RetentionProfile(),
         )
 
     def enrichment_for(self, operation_key: str) -> EnrichmentLevel:

@@ -28,6 +28,7 @@ WARMUPS = 3
 REPEATS = 10
 SMOKE_WARMUPS = 1
 SMOKE_REPEATS = 1
+GRADIENT_RETENTION_PEAK_RSS_BUDGET_MB = 256.0
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,23 @@ class TwoLayerGptBlock(nn.Module):
         """Run the decoder-style block stack."""
 
         return self.blocks(x)
+
+
+class GradientRetentionBench(nn.Module):
+    """Moderate graph-connected chain for deferred gradient-selector memory."""
+
+    def __init__(self, width: int = 256, depth: int = 24) -> None:
+        """Initialize the fixed-width differentiable chain."""
+
+        super().__init__()
+        self.layers = nn.ModuleList(nn.Linear(width, width) for _ in range(depth))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the graph-connected linear/ReLU chain."""
+
+        for layer in self.layers:
+            x = torch.relu(layer(x))
+        return x
 
 
 def _rss_mb() -> float:
@@ -412,3 +430,36 @@ def test_tiny_capture_bench_smoke() -> None:
     print(_format_table(results))
     assert len(results) == 6
     assert all(result.median_wall_s > 0 for result in results)
+
+
+def test_gradient_selector_deferred_retention_peak_memory() -> None:
+    """Gate unwindowable gradient-selector peak RSS against the recorded budget."""
+
+    torch.set_num_threads(1)
+    model = GradientRetentionBench().train()
+    x = torch.randn(16, 256, requires_grad=True)
+
+    def capture_and_backward() -> None:
+        """Capture a graph-connected selector, run backward, and release the trace."""
+
+        trace = tl.trace(
+            model,
+            x,
+            capture=tl.options.CaptureOptions(
+                layers_to_save="all",
+                save_grads=["linear"],
+                backward_ready=True,
+            ),
+        )
+        trace[trace.output_layers[0]].out.sum().backward()
+        assert any(op.has_grad and op.layer_type == "linear" for op in trace.layer_list)
+        model.zero_grad(set_to_none=True)
+        trace.cleanup()
+
+    wall_s, peak_rss_mb = _timed_median(capture_and_backward, warmups=1, repeats=3)
+    print(
+        "\ndeferred gradient-selector benchmark: "
+        f"median={wall_s:.6f}s, peak RSS delta={peak_rss_mb:.1f} MiB, "
+        f"budget={GRADIENT_RETENTION_PEAK_RSS_BUDGET_MB:.1f} MiB"
+    )
+    assert peak_rss_mb <= GRADIENT_RETENTION_PEAK_RSS_BUDGET_MB

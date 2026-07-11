@@ -443,6 +443,7 @@ def postprocess(
         for nested tuple outputs.
     """
     capture_events = getattr(self, "capture_events", None)
+    capture_session = None
     # Resolve each output tensor's graph parent BEFORE materializing events:
     # a registered buffer returned directly from forward() without ever being
     # used by a traced op has no graph node yet, and is logged here as a late
@@ -566,6 +567,10 @@ def postprocess(
     with _vtimed(self, "  Step 11.5: Populate source var names"):
         _populate_var_names(self)
     _assert_postprocess_contract(self, "11.5")
+
+    if capture_session is not None:
+        with _vtimed(self, "  Step 11.75: Resolve deferred retention"):
+            capture_session.resolve_deferred_retention(self, list(output_tensors))
 
     # Step 12: Undecorate all saved tensors and remove saved grad_fns.
     with _vtimed(self, "  Step 12: Undecorate tensors"):

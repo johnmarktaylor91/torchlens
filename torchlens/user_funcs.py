@@ -77,7 +77,6 @@ from .visualization.code_panel import (
     capture_model_source_code,
     make_weak_model_ref,
 )
-from .intervention.errors import InterventionReadyConflictError
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
@@ -87,6 +86,7 @@ from .intervention.resolver import _selector_resolution_direction
 from .intervention.resolver import resolve_sites
 from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
+from .fastlog.types import CaptureSpec
 from .capture.stop import StopDirective
 from ._trace_state import TraceState
 from ._capture_state_helpers import (
@@ -114,7 +114,6 @@ from ._chunked_capture_helpers import (
 from ._trace_selector_helpers import (
     _combine_save_predicates,
     _is_selective_label_save,
-    _layers_to_save_has_integer_selector,
     _layers_to_save_has_negative_index,
     _layers_to_save_mentions_identity,
     _layers_to_save_mentions_output,
@@ -733,6 +732,8 @@ def _run_model_and_save_specified_outs(
     retain_output_parents_for_layers_to_save: bool = False,
     _resolved_layer_nums_to_save: tuple[int, ...] | None = None,
     _resolved_grad_layer_nums_to_save: tuple[int, ...] | str | None = None,
+    _deferred_retention_selector: Any = None,
+    _deferred_gradient_selector: Any = None,
     _refresh_projection_capture: bool = False,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
@@ -926,6 +927,10 @@ def _run_model_and_save_specified_outs(
         trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
     if _resolved_grad_layer_nums_to_save is not None:
         trace._refresh_resolved_grad_layer_nums_to_save = _resolved_grad_layer_nums_to_save
+    if _deferred_retention_selector is not None:
+        trace._deferred_retention_selector = _deferred_retention_selector
+    if _deferred_gradient_selector is not None:
+        trace._deferred_gradient_selector = _deferred_gradient_selector
     if _refresh_projection_capture:
         trace._refresh_projection_capture = True
     _capture_output_metadata_from_model_config(trace, model)
@@ -975,7 +980,14 @@ def _run_model_and_save_specified_outs(
         trace._retain_layers_to_save_output_parents = True
     if save_predicate is not None or intervene_predicate is not None or halt_predicate is not None:
         predicate_history_size = lookback if lookback > 0 else 8
-        default_op = save_predicate is None and layers_to_save == "all"
+        default_save = save_predicate is None and layers_to_save == "all"
+        default_op: bool | CaptureSpec = default_save
+        if backward_ready:
+            default_op = CaptureSpec(
+                save_out=default_save,
+                save_metadata=default_save,
+                keep_grad=True,
+            )
         trace._predicate_save_options = RecordingOptions(
             keep_op=save_predicate,
             intervene=intervene_predicate,
@@ -2015,18 +2027,19 @@ def _trace_torch_model(
     if type(grads_to_save_resolved) is str:
         grads_to_save_resolved = grads_to_save_resolved.lower()
     requested_layers_to_save = layers_to_save
-    uses_two_pass = grads_to_save_resolved not in ["all", "none", None, []] or (
+    uses_deferred_gradients = grads_to_save_resolved not in ["all", "none", None, []]
+    uses_deferred_activation = _is_selective_label_save(layers_to_save) and (
+        _layers_to_save_mentions_output(layers_to_save)
+        or _layers_to_save_has_negative_index(layers_to_save)
+        or _layers_to_save_mentions_identity(layers_to_save)
+    )
+    needs_live_output_projection = (
         _is_selective_label_save(layers_to_save)
-        and (
-            should_save_grads
-            or _layers_to_save_mentions_output(layers_to_save)
-            or _layers_to_save_has_integer_selector(layers_to_save)
-            or _layers_to_save_has_negative_index(layers_to_save)
-            or _layers_to_save_mentions_identity(layers_to_save)
-        )
+        and should_save_grads
+        and not uses_deferred_activation
     )
     uses_selective_layers_to_save = _is_selective_label_save(layers_to_save)
-    if uses_selective_layers_to_save and not uses_two_pass:
+    if uses_selective_layers_to_save and not uses_deferred_activation:
         layers_predicate = _make_layers_to_save_predicate(layers_to_save)
         save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
         layers_to_save = "all"
@@ -2050,35 +2063,6 @@ def _trace_torch_model(
             halt,
             api_name="trace(halt=...)",
             supports_retroactive=False,
-        )
-    if intervention_ready and uses_two_pass:
-        raise InterventionReadyConflictError(
-            "intervention_ready=True is not compatible with selective two-pass "
-            "save_grads. Use a predicate save=... capture "
-            "or set save_grads to 'all', 'none', None, or []."
-        )
-    if hooks is not None and uses_two_pass:
-        raise InterventionReadyConflictError(
-            "hooks/intervention capture is not compatible with selective two-pass "
-            "save_grads. Use a predicate save=... capture "
-            "for single-pass selective saving."
-        )
-    if intervene is not None and uses_two_pass:
-        raise InterventionReadyConflictError(
-            "intervene=predicate capture is not compatible with selective two-pass "
-            "save_grads. Use predicate save=... capture "
-            "for single-pass selective saving."
-        )
-    if halt is not None and uses_two_pass:
-        raise InterventionReadyConflictError(
-            "trace(halt=predicate) is not compatible with selective two-pass "
-            "save_grads. Use predicate save=... capture "
-            "or set save_grads to 'all', 'none', None, or []."
-        )
-    if save_predicate is not None and uses_two_pass:
-        raise ValueError(
-            "trace(save=predicate) is single-pass selective save and cannot be combined with "
-            "specific save_grads in this phase."
         )
     log_name = name if name is not None else _state._auto_name(model)
     cache_path: Path | None = None
@@ -2135,18 +2119,6 @@ def _trace_torch_model(
             cached_log.capture_cache_path = str(cache_path)
             cached_log.batch_render = batch_render_policy
             return cached_log
-    if streaming_options.bundle_path is not None and uses_two_pass:
-        raise TorchLensIOError(
-            "storage=to_disk/save_outs_to is not compatible with selective two-pass "
-            "layers_to_save. Use predicate save=... for selective streaming, or "
-            'capture with layers_to_save="all" and filter post-hoc with '
-            "torchlens.save(..., include_outs=True)."
-        )
-    if grad_storage_path_value is not None and uses_two_pass:
-        raise TorchLensIOError(
-            "storage=to_disk(...) gradient streaming is only supported with save_grads=True "
-            "release. Capture all grads and filter post-hoc with torchlens.save(...)."
-        )
     if (
         chunk_plan is not None
         and normalized_chunk_size is not None
@@ -2426,169 +2398,88 @@ def _trace_torch_model(
                 pickle.dump(trace, file)
         return trace
 
-    if not uses_two_pass:
-        # --- SINGLE-PASS path ---
-        # "all" or "none": no name resolution needed, so one pass suffices.
-        trace = _run_model_and_save_specified_outs(
-            model=model,
-            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], input_args),
-            input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            activation_transform=activation_transform,
-            grad_transform=grad_transform,
-            save_raw_activations=save_raw_activations,
-            save_raw_gradients=save_raw_gradients,
-            save_mode=cast(SaveMode, save_mode_value),
-            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            mark_layer_depths=compute_input_output_distances,
-            detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_grads=should_save_grads,
-            grads_to_save=grads_to_save_resolved,
-            random_seed=random_seed,
-            num_context_lines=source_context_lines,
-            optimizer=optimizer,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            recurrence_detection=recurrence_detection,
-            save_outs_to=streaming_options.bundle_path,
-            keep_outs_in_memory=streaming_options.retain_in_memory,
-            grad_storage_path=grad_storage_path_value,
-            retain_grads_in_memory=retain_grads_in_memory_value,
-            out_sink=streaming_options.out_callback,
-            intervention_ready=intervention_ready,
-            capture_container_structure=capture_container_structure,
-            hooks=hooks,
-            intervention_spec=None,
-            normalized_hook_plan=None,
-            verbose=verbose,
-            backward_ready=train_mode_value,
-            inference_only=inference_only_value,
-            name=log_name,
-            module_filter=module_filter_value,
-            emit_nvtx=capture_options.emit_nvtx,
-            raise_on_nan=raise_on_nan_value,
-            module_containment_engine=module_containment_engine,
-            transform=input_transform,
-            raw_input=raw_input,
-            save_raw_input=save_raw_input_policy,
-            batch_render=batch_render_policy,
-            output_transform=output_transform_value,
-            output_style=output_style_value,
-            output_head=output_head_value,
-            save_raw_output=save_raw_output_policy,
-            layer_visualizers=layer_visualizers_value,
-            save_visualizations=save_visualizations_value,
-            recipes=facet_recipes,
-            save_predicate=save_predicate,
-            intervene_predicate=intervene,
-            halt_predicate=halt,
-            lookback=lookback,
-            lookback_payload_policy=lookback_payload_policy,
-            retain_output_parents_for_layers_to_save=(
-                retain_output_parents_for_layers_to_save or uses_selective_layers_to_save
-            ),
-        )
-        trace.profile_enabled = profile_enabled
-        trace.save_grads = save_grads_policy
-        if uses_selective_layers_to_save:
-            trace._layer_nums_to_save = [
-                op.raw_index
-                for op in trace.layer_list
-                if op.has_saved_activation and op.layer_type not in {"input", "output"}
-            ]
-            if not save_arg_values:
-                trace._replay_arg_version_data_complete = False
-    else:
-        # --- TWO-PASS path ---
-        # Pass 1 (exhaustive): Run with layers_to_save=None so the full graph is
-        # discovered and all layer labels are assigned. No
-        # outs are saved yet - this pass is purely for metadata/structure.
-        from .utils.display import progress_bar
-
-        capture_progress = iter(
-            progress_bar(("exhaustive", "fast"), total=2, desc="torchlens.capture")
-        )
-        next(capture_progress, None)
-        if verbose:
-            print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
-        trace = _run_model_and_save_specified_outs(
-            model=model,
-            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], input_args),
-            input_kwargs=input_kwargs,
-            layers_to_save=None,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            activation_transform=activation_transform,
-            grad_transform=grad_transform,
-            save_raw_activations=save_raw_activations,
-            save_raw_gradients=save_raw_gradients,
-            save_mode=cast(SaveMode, save_mode_value),
-            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            mark_layer_depths=compute_input_output_distances,
-            detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_grads=False,
-            grads_to_save=None,
-            random_seed=random_seed,
-            num_context_lines=source_context_lines,
-            optimizer=optimizer,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            recurrence_detection=recurrence_detection,
-            save_outs_to=streaming_options.bundle_path,
-            keep_outs_in_memory=streaming_options.retain_in_memory,
-            grad_storage_path=grad_storage_path_value,
-            retain_grads_in_memory=retain_grads_in_memory_value,
-            out_sink=streaming_options.out_callback,
-            intervention_ready=intervention_ready,
-            capture_container_structure=capture_container_structure,
-            hooks=hooks,
-            intervention_spec=None,
-            normalized_hook_plan=None,
-            verbose=verbose,
-            backward_ready=train_mode_value,
-            inference_only=inference_only_value,
-            name=log_name,
-            module_filter=module_filter_value,
-            emit_nvtx=capture_options.emit_nvtx,
-            raise_on_nan=raise_on_nan_value,
-            module_containment_engine=module_containment_engine,
-            transform=input_transform,
-            raw_input=raw_input,
-            save_raw_input=save_raw_input_policy,
-            batch_render=batch_render_policy,
-            output_transform=output_transform_value,
-            output_style=output_style_value,
-            output_head=output_head_value,
-            save_raw_output=save_raw_output_policy,
-            layer_visualizers=layer_visualizers_value,
-            save_visualizations=save_visualizations_value,
-            recipes=facet_recipes,
-            save_predicate=save_predicate,
-            intervene_predicate=intervene,
-            halt_predicate=halt,
-            lookback=lookback,
-            lookback_payload_policy=lookback_payload_policy,
-        )
-        trace.profile_enabled = profile_enabled
-        # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
-        # layers and replay the model, saving only the matching outs.
-        next(capture_progress, None)
-        _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
-        trace.save_grads = save_grads_policy
-        trace.save_grads = grads_to_save_resolved if should_save_grads else None
-        trace.save_new_outs(
-            model=model,
-            input_args=cast(torch.Tensor | list[Any], input_args),
-            input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,  # type: ignore[arg-type]
-            grad_layers_to_save=grads_to_save_resolved,
-            random_seed=random_seed,
-            backward_ready=train_mode_value,
-        )
+    trace = _run_model_and_save_specified_outs(
+        model=model,
+        input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], input_args),
+        input_kwargs=input_kwargs,
+        layers_to_save=layers_to_save,
+        keep_orphans=keep_orphans,
+        output_device=output_device,
+        activation_transform=activation_transform,
+        grad_transform=grad_transform,
+        save_raw_activations=save_raw_activations,
+        save_raw_gradients=save_raw_gradients,
+        save_mode=cast(SaveMode, save_mode_value),
+        capture_tensor_grad_hooks=capture_tensor_grad_hooks,
+        mark_layer_depths=compute_input_output_distances,
+        detach_saved_activations=detach_saved_activations,
+        save_arg_values=save_arg_values,
+        save_grads=should_save_grads,
+        grads_to_save=grads_to_save_resolved,
+        random_seed=random_seed,
+        num_context_lines=source_context_lines,
+        optimizer=optimizer,
+        save_code_context=save_code_context,
+        save_rng_states=save_rng_states,
+        recurrence_detection=recurrence_detection,
+        save_outs_to=streaming_options.bundle_path,
+        keep_outs_in_memory=streaming_options.retain_in_memory,
+        grad_storage_path=grad_storage_path_value,
+        retain_grads_in_memory=retain_grads_in_memory_value,
+        out_sink=streaming_options.out_callback,
+        intervention_ready=intervention_ready,
+        capture_container_structure=capture_container_structure,
+        hooks=hooks,
+        intervention_spec=None,
+        normalized_hook_plan=None,
+        verbose=verbose,
+        backward_ready=train_mode_value,
+        inference_only=inference_only_value,
+        name=log_name,
+        module_filter=module_filter_value,
+        emit_nvtx=capture_options.emit_nvtx,
+        raise_on_nan=raise_on_nan_value,
+        module_containment_engine=module_containment_engine,
+        transform=input_transform,
+        raw_input=raw_input,
+        save_raw_input=save_raw_input_policy,
+        batch_render=batch_render_policy,
+        output_transform=output_transform_value,
+        output_style=output_style_value,
+        output_head=output_head_value,
+        save_raw_output=save_raw_output_policy,
+        layer_visualizers=layer_visualizers_value,
+        save_visualizations=save_visualizations_value,
+        recipes=facet_recipes,
+        save_predicate=save_predicate,
+        intervene_predicate=intervene,
+        halt_predicate=halt,
+        lookback=lookback,
+        lookback_payload_policy=lookback_payload_policy,
+        retain_output_parents_for_layers_to_save=(
+            retain_output_parents_for_layers_to_save or uses_selective_layers_to_save
+        ),
+        _deferred_retention_selector=(
+            requested_layers_to_save
+            if uses_deferred_activation
+            else (["output"] if needs_live_output_projection else None)
+        ),
+        _deferred_gradient_selector=(
+            grads_to_save_resolved
+            if uses_deferred_gradients
+            else ("all" if uses_deferred_activation and train_mode_value else None)
+        ),
+    )
+    trace.profile_enabled = profile_enabled
+    trace.save_grads = save_grads_policy
+    if uses_selective_layers_to_save:
+        trace._layer_nums_to_save = [
+            op.raw_index
+            for op in trace.layer_list
+            if op.has_saved_activation and op.layer_type not in {"input", "output"}
+        ]
+        if not save_arg_values:
+            trace._replay_arg_version_data_complete = False
 
     # Print final summary.
     _vprint(

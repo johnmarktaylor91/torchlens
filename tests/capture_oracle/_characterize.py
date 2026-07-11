@@ -71,7 +71,7 @@ CASES: tuple[CaseSpec, ...] = (
     CaseSpec("plain_cnn__exhaustive", "plain_cnn", "exhaustive", 1),
     CaseSpec("plain_cnn__predicate_live", "plain_cnn", "predicate_live", 1),
     CaseSpec("plain_cnn__record", "plain_cnn", "record", 1),
-    CaseSpec("plain_cnn__two_pass_negative", "plain_cnn", "two_pass_negative", 2),
+    CaseSpec("plain_cnn__two_pass_negative", "plain_cnn", "two_pass_negative", 1),
     CaseSpec("plain_cnn__lookback", "plain_cnn", "lookback_trace", 1, ("lookback",)),
     CaseSpec("plain_cnn__intervene_trace", "plain_cnn", "intervene_trace", 1, ("intervene",)),
     CaseSpec("plain_cnn__intervene_record", "plain_cnn", "intervene_record", 1, ("intervene",)),
@@ -88,11 +88,11 @@ CASES: tuple[CaseSpec, ...] = (
         "train_batchnorm__two_pass_negative",
         "train_batchnorm",
         "two_pass_negative",
-        2,
+        1,
     ),
     CaseSpec("recurrent__exhaustive", "recurrent", "exhaustive", 1),
     CaseSpec("recurrent__record", "recurrent", "record", 1),
-    CaseSpec("recurrent__two_pass_negative", "recurrent", "two_pass_negative", 2),
+    CaseSpec("recurrent__two_pass_negative", "recurrent", "two_pass_negative", 1),
     CaseSpec("conditional__exhaustive", "conditional", "exhaustive", 1),
     CaseSpec("conditional__predicate_live", "conditional", "predicate_live", 1),
     CaseSpec("in_place__exhaustive", "in_place", "exhaustive", 1),
@@ -102,7 +102,7 @@ CASES: tuple[CaseSpec, ...] = (
         "mutating_pre_hook__two_pass_negative",
         "mutating_pre_hook",
         "two_pass_negative",
-        2,
+        1,
     ),
     CaseSpec("tiny_transformer__exhaustive", "tiny_transformer", "exhaustive", 1),
     CaseSpec("tiny_transformer__record", "tiny_transformer", "record", 1),
@@ -1102,7 +1102,7 @@ def _capture_once(case: CaseSpec) -> tuple[dict[str, Any], dict[str, float | int
                 "current": instrumentation.producer_modes,
             }
         }
-        if case.expected_forward_invocations == 2:
+        if case.config == "two_pass_negative":
             expected_to_change["two_pass_double_execution"] = {
                 "reason": (
                     "Structure-dependent selectors currently replay the user forward and double "

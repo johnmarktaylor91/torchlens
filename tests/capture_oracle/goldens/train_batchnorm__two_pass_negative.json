@@ -32,14 +32,14 @@
               "after": {
                 "dtype": "int64",
                 "sha256_chunks": [
-                  "d86e8112",
-                  "f3c4c444",
-                  "2126f8e9",
-                  "f44f1686",
-                  "7da487f2",
-                  "9052bf91",
-                  "b810457d",
-                  "b34209a4"
+                  "7c9fa136",
+                  "d4413fa6",
+                  "173637e8",
+                  "83b6998d",
+                  "32e1d675",
+                  "f88cddff",
+                  "9dcbcf33",
+                  "1820f4b8"
                 ],
                 "shape": []
               },
@@ -57,22 +57,22 @@
                 ],
                 "shape": []
               },
-              "numeric_delta": 2,
+              "numeric_delta": 1,
               "value_changed": true,
-              "version_delta": 2
+              "version_delta": 1
             },
             "bn.running_mean": {
               "after": {
                 "dtype": "float32",
                 "sha256_chunks": [
-                  "30d81fb3",
-                  "1fb86022",
-                  "a1cf4c15",
-                  "cdfed10e",
-                  "699d1818",
-                  "2dcdb504",
-                  "c34bf492",
-                  "38c3dad0"
+                  "6db1ac58",
+                  "c6987e1d",
+                  "45dbd82a",
+                  "b5f79d68",
+                  "1df3eb2f",
+                  "ca407dcb",
+                  "fcd56396",
+                  "740afd69"
                 ],
                 "shape": [
                   2
@@ -102,14 +102,14 @@
               "after": {
                 "dtype": "float32",
                 "sha256_chunks": [
-                  "42f2b9af",
-                  "6c83c513",
-                  "de8b04be",
-                  "fc3ca86a",
-                  "7db6dee4",
-                  "94dac852",
-                  "14ce584f",
-                  "ec5cb2d1"
+                  "aeecc9e4",
+                  "1363bc5a",
+                  "bcc65db7",
+                  "ebeba5cb",
+                  "aacf6fa6",
+                  "b0c81ae7",
+                  "da47befb",
+                  "6edc6084"
                 ],
                 "shape": [
                   2
@@ -136,8 +136,8 @@
               "version_delta": 0
             }
           },
-          "buffer_mutation_count": 2,
-          "forward_invocations": 2,
+          "buffer_mutation_count": 1,
+          "forward_invocations": 1,
           "input_value_after": {
             "dtype": "float32",
             "sha256_chunks": [
@@ -653,14 +653,323 @@
           }
         }
       ],
-      "final_ops": [],
+      "final_ops": [
+        {
+          "children": [
+            "batchnorm_1_2"
+          ],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": false,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "input_1",
+          "label_raw": "input_1_raw",
+          "layer_type": "input",
+          "parents": [],
+          "shape": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        {
+          "children": [
+            "add_1_1"
+          ],
+          "dtype": "int64",
+          "func_name": "none",
+          "has_saved_activation": false,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "buffer_1",
+          "label_raw": "buffer_1_raw",
+          "layer_type": "buffer",
+          "parents": [],
+          "shape": []
+        },
+        {
+          "children": [
+            "buffer_2"
+          ],
+          "dtype": "int64",
+          "func_name": "add_",
+          "has_saved_activation": false,
+          "is_inplace": true,
+          "is_output": false,
+          "label": "add_1_1",
+          "label_raw": "add_1_3_raw",
+          "layer_type": "add",
+          "parents": [
+            "buffer_1"
+          ],
+          "shape": []
+        },
+        {
+          "children": [],
+          "dtype": "int64",
+          "func_name": "none",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "buffer_2",
+          "label_raw": "buffer_2_raw",
+          "layer_type": "buffer",
+          "parents": [
+            "add_1_1"
+          ],
+          "shape": []
+        },
+        {
+          "children": [
+            "batchnorm_1_2"
+          ],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": false,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "buffer_3",
+          "label_raw": "buffer_3_raw",
+          "layer_type": "buffer",
+          "parents": [],
+          "shape": [
+            2
+          ]
+        },
+        {
+          "children": [
+            "batchnorm_1_2"
+          ],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": false,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "buffer_4",
+          "label_raw": "buffer_4_raw",
+          "layer_type": "buffer",
+          "parents": [],
+          "shape": [
+            2
+          ]
+        },
+        {
+          "children": [
+            "relu_1_3",
+            "buffer_5",
+            "buffer_6"
+          ],
+          "dtype": "float32",
+          "func_name": "batch_norm",
+          "has_saved_activation": false,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "batchnorm_1_2",
+          "label_raw": "batchnorm_1_7_raw",
+          "layer_type": "batchnorm",
+          "parents": [
+            "input_1",
+            "buffer_3",
+            "buffer_4"
+          ],
+          "shape": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        {
+          "children": [],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "buffer_5",
+          "label_raw": "buffer_5_raw",
+          "layer_type": "buffer",
+          "parents": [
+            "batchnorm_1_2"
+          ],
+          "shape": [
+            2
+          ]
+        },
+        {
+          "children": [],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "buffer_6",
+          "label_raw": "buffer_6_raw",
+          "layer_type": "buffer",
+          "parents": [
+            "batchnorm_1_2"
+          ],
+          "shape": [
+            2
+          ]
+        },
+        {
+          "children": [
+            "output_1"
+          ],
+          "dtype": "float32",
+          "func_name": "relu",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": false,
+          "label": "relu_1_3",
+          "label_raw": "relu_1_10_raw",
+          "layer_type": "relu",
+          "parents": [
+            "batchnorm_1_2"
+          ],
+          "shape": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        {
+          "children": [],
+          "dtype": "float32",
+          "func_name": "none",
+          "has_saved_activation": true,
+          "is_inplace": false,
+          "is_output": true,
+          "label": "output_1",
+          "label_raw": "output_1_raw",
+          "layer_type": "output",
+          "parents": [
+            "relu_1_3"
+          ],
+          "shape": [
+            2,
+            2,
+            4,
+            4
+          ]
+        }
+      ],
       "gradients": {
         "event_types": [],
         "saved_payloads": []
       },
-      "selected_payloads": [],
+      "selected_payloads": [
+        {
+          "label_raw": "buffer_2_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "int64",
+            "sha256_chunks": [
+              "7c9fa136",
+              "d4413fa6",
+              "173637e8",
+              "83b6998d",
+              "32e1d675",
+              "f88cddff",
+              "9dcbcf33",
+              "1820f4b8"
+            ],
+            "shape": []
+          }
+        },
+        {
+          "label_raw": "buffer_5_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "6db1ac58",
+              "c6987e1d",
+              "45dbd82a",
+              "b5f79d68",
+              "1df3eb2f",
+              "ca407dcb",
+              "fcd56396",
+              "740afd69"
+            ],
+            "shape": [
+              2
+            ]
+          }
+        },
+        {
+          "label_raw": "buffer_6_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "aeecc9e4",
+              "1363bc5a",
+              "bcc65db7",
+              "ebeba5cb",
+              "aacf6fa6",
+              "b0c81ae7",
+              "da47befb",
+              "6edc6084"
+            ],
+            "shape": [
+              2
+            ]
+          }
+        },
+        {
+          "label_raw": "relu_1_10_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "c908ae77",
+              "8754512b",
+              "626c49a0",
+              "4c54a8ab",
+              "1fad3eb6",
+              "00a99407",
+              "635b7ddd",
+              "dd3691a1"
+            ],
+            "shape": [
+              2,
+              2,
+              4,
+              4
+            ]
+          }
+        },
+        {
+          "label_raw": "output_1_raw",
+          "pass_index": 1,
+          "tensor": {
+            "dtype": "float32",
+            "sha256_chunks": [
+              "c908ae77",
+              "8754512b",
+              "626c49a0",
+              "4c54a8ab",
+              "1fad3eb6",
+              "00a99407",
+              "635b7ddd",
+              "dd3691a1"
+            ],
+            "shape": [
+              2,
+              2,
+              4,
+              4
+            ]
+          }
+        }
+      ],
       "side_effects": {
-        "inplace_op_count": 0
+        "inplace_op_count": 1
       }
     },
     "schema_version": 1,
@@ -673,13 +982,13 @@
     }
   },
   "sha256_chunks": [
-    "ac34f111",
-    "1d1a68fb",
-    "59f81457",
-    "1f27f412",
-    "c3b48c7e",
-    "e0e20792",
-    "c379ff07",
-    "a04a45c7"
+    "79459221",
+    "e89f1d6d",
+    "e7eac154",
+    "44aee989",
+    "f9ca0d0b",
+    "eb2c654f",
+    "f593b2cf",
+    "3261a21e"
   ]
 }

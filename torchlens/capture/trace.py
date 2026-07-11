@@ -941,11 +941,15 @@ def run_and_log_inputs_through_model(
         self._layer_nums_to_save = []
         self._grad_op_nums_to_save = []
     else:
-        if hasattr(self, "_refresh_resolved_layer_nums_to_save"):
+        if hasattr(self, "_deferred_retention_selector"):
+            self._layer_nums_to_save = []
+        elif hasattr(self, "_refresh_resolved_layer_nums_to_save"):
             self._layer_nums_to_save = self.__dict__.pop("_refresh_resolved_layer_nums_to_save")
         else:
             self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-        if hasattr(self, "_refresh_resolved_grad_layer_nums_to_save"):
+        if hasattr(self, "_deferred_gradient_selector"):
+            self._grad_op_nums_to_save = []
+        elif hasattr(self, "_refresh_resolved_grad_layer_nums_to_save"):
             self._grad_op_nums_to_save = self.__dict__.pop(
                 "_refresh_resolved_grad_layer_nums_to_save"
             )

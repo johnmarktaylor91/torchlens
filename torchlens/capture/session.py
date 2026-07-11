@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+import tempfile
 from types import MappingProxyType
 from typing import Any, Callable, Literal, Mapping
+import warnings
 from weakref import ReferenceType, WeakKeyDictionary, ref
 
+from .. import _state
 from ..ir.events import OpEvent
+from ..utils.tensor_utils import safe_copy
 from .kernel import CaptureKernel
 from .ledgers import (
     CompletenessManifest,
@@ -20,13 +25,34 @@ from .ledgers import (
     PayloadLedger,
     PayloadRecord,
 )
-from .plan import CapturePlan, EnrichmentLevel
+from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
 
 TerminalState = Literal["complete", "halted", "failed"]
 CleanupCallback = Callable[[], None]
 
 _LEGACY_CAPTURE_SESSIONS: "WeakKeyDictionary[object, CaptureSession]" = WeakKeyDictionary()
 _LEGACY_EVENT_SESSIONS: dict[int, tuple[ReferenceType[object], ReferenceType[CaptureSession]]] = {}
+
+
+@dataclass(slots=True)
+class ActivationEscrowPayload:
+    """One detached activation retained in RAM or a temporary spill file."""
+
+    tensor: Any | None
+    nbytes: int
+    spill_path: Path | None = None
+
+    def materialize(self) -> Any:
+        """Return the retained tensor, loading a temporary spill when necessary."""
+
+        if self.tensor is not None:
+            return self.tensor
+        if self.spill_path is None:
+            raise RuntimeError("Activation escrow payload has neither RAM nor spill storage.")
+        import torch
+
+        with _state.pause_logging():
+            return torch.load(self.spill_path, weights_only=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +154,18 @@ class CaptureSession:
     kernel: CaptureKernel = field(init=False)
     _sealed_core: CapturedRunCore | None = field(default=None, init=False, repr=False)
     projection_facts: dict[str, Any] = field(default_factory=dict)
+    activation_escrow: dict[int, ActivationEscrowPayload] = field(default_factory=dict)
+    gradient_reference_escrow: dict[int, Any] = field(default_factory=dict)
+    activation_escrow_ram_bytes: int = 0
+    activation_escrow_peak_ram_bytes: int = 0
+    activation_escrow_spilled_bytes: int = 0
+    gradient_reference_logical_bytes: int = 0
+    gradient_reference_peak_count: int = 0
+    live_gradient_labels: set[str] = field(default_factory=set)
+    _activation_spill_dir: tempfile.TemporaryDirectory[str] | None = field(
+        default=None, init=False, repr=False
+    )
+    _gradient_warning_emitted: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Compile the session's fixed-order capture kernel."""
@@ -158,9 +196,219 @@ class CaptureSession:
         self.history_state.clear()
         self.builders.clear()
         self.cleanup_stack.clear()
+        self.activation_escrow.clear()
+        self.gradient_reference_escrow.clear()
+        self.activation_escrow_ram_bytes = 0
+        self.activation_escrow_peak_ram_bytes = 0
+        self.activation_escrow_spilled_bytes = 0
+        self.gradient_reference_logical_bytes = 0
+        self.gradient_reference_peak_count = 0
+        self.live_gradient_labels.clear()
+        if self._activation_spill_dir is not None:
+            self._activation_spill_dir.cleanup()
+            self._activation_spill_dir = None
+        self._gradient_warning_emitted = False
         self.backend_token = None
         if self.outcome is not None:
             self.outcome = RunOutcome(state=self.outcome.state)
+
+    def escrow_candidate(
+        self,
+        raw_index: int,
+        tensor: Any,
+        fields_dict: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Retain one selector candidate before its immutable event is appended.
+
+        Parameters
+        ----------
+        raw_index
+            Reserved raw operation index.
+        tensor
+            Live backend tensor for the operation.
+        fields_dict
+            Live event fields, used to identify positive-index gradient targets.
+        """
+
+        profile = self.plan.retention_profile
+        if raw_index in profile.gradient_live_indices and fields_dict is not None:
+            self.live_gradient_labels.add(str(fields_dict["_label_raw"]))
+        if profile.activation_kind is RetentionKind.ACTIVATION:
+            with _state.pause_logging():
+                payload = safe_copy(tensor, detach_tensor=True)
+                nbytes = int(payload.nelement() * payload.element_size())
+            self.activation_escrow[raw_index] = ActivationEscrowPayload(payload, nbytes)
+            self.activation_escrow_ram_bytes += nbytes
+            self.activation_escrow_peak_ram_bytes = max(
+                self.activation_escrow_peak_ram_bytes,
+                self.activation_escrow_ram_bytes,
+            )
+            window = profile.activation_window
+            if window is not None:
+                while len(self.activation_escrow) > window:
+                    evicted = self.activation_escrow.pop(next(iter(self.activation_escrow)))
+                    if evicted.tensor is not None:
+                        self.activation_escrow_ram_bytes -= evicted.nbytes
+            self._spill_activation_escrow_to_budget()
+        if profile.gradient_kind is RetentionKind.GRADIENT_REFERENCE:
+            self.gradient_reference_escrow[raw_index] = tensor
+            with _state.pause_logging():
+                self.gradient_reference_logical_bytes += int(
+                    tensor.nelement() * tensor.element_size()
+                )
+            self.gradient_reference_peak_count = max(
+                self.gradient_reference_peak_count,
+                len(self.gradient_reference_escrow),
+            )
+            window = profile.gradient_window
+            if window is not None:
+                while len(self.gradient_reference_escrow) > window:
+                    oldest_index = next(iter(self.gradient_reference_escrow))
+                    evicted = self.gradient_reference_escrow.pop(oldest_index)
+                    with _state.pause_logging():
+                        self.gradient_reference_logical_bytes -= int(
+                            evicted.nelement() * evicted.element_size()
+                        )
+            self._warn_for_extreme_gradient_retention()
+
+    def _spill_activation_escrow_to_budget(self) -> None:
+        """Move oldest detached payloads to temporary files until RAM is within budget."""
+
+        profile = self.plan.retention_profile
+        if not profile.spillable:
+            return
+        while self.activation_escrow_ram_bytes > profile.activation_ram_budget_bytes:
+            candidate = next(
+                (entry for entry in self.activation_escrow.values() if entry.tensor is not None),
+                None,
+            )
+            if candidate is None:
+                return
+            if self._activation_spill_dir is None:
+                self._activation_spill_dir = tempfile.TemporaryDirectory(
+                    prefix="torchlens-activation-escrow-"
+                )
+            spill_path = Path(self._activation_spill_dir.name) / (
+                f"payload-{self.activation_escrow_spilled_bytes:020d}.pt"
+            )
+            import torch
+
+            with _state.pause_logging():
+                torch.save(candidate.tensor, spill_path)
+            candidate.tensor = None
+            candidate.spill_path = spill_path
+            self.activation_escrow_ram_bytes -= candidate.nbytes
+            self.activation_escrow_spilled_bytes += candidate.nbytes
+
+    def _warn_for_extreme_gradient_retention(self) -> None:
+        """Warn once when unwindowable live references cross the compiled byte bound."""
+
+        profile = self.plan.retention_profile
+        if (
+            self._gradient_warning_emitted
+            or profile.gradient_window is not None
+            or profile.spillable
+            or self.gradient_reference_logical_bytes <= profile.gradient_warning_threshold_bytes
+        ):
+            return
+        self._gradient_warning_emitted = True
+        retained_mib = self.gradient_reference_logical_bytes / (1024 * 1024)
+        warnings.warn(
+            "Unwindowable gradient selection is retaining graph-connected tensor references "
+            f"covering approximately {retained_mib:.1f} MiB of logical tensor payload. "
+            "Narrow the selector or use an explicit trace refresh to reduce peak memory.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+    def resolve_deferred_retention(self, trace: Any, output_tensors: list[Any]) -> None:
+        """Resolve final selectors, project activation winners, and install grad hooks."""
+
+        from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
+        from .trace import _get_op_nums_from_user_labels
+
+        activation_selector = getattr(trace, "_deferred_retention_selector", None)
+        if activation_selector is not None:
+            live_output_by_raw_index: dict[int, Any] = {}
+            for output_label, output_tensor in zip(trace.output_layers, output_tensors):
+                output_op = trace.layer_dict_all_keys[output_label]
+                live_output_by_raw_index[output_op.raw_index] = output_tensor
+                for parent_label in output_op.parents:
+                    parent = trace.layer_dict_all_keys[parent_label]
+                    live_output_by_raw_index[parent.raw_index] = output_tensor
+            selected = _get_op_nums_from_user_labels(trace, activation_selector)
+            selected_nums = set() if selected == "all" else set(selected)
+            selected_nums.update(
+                op.raw_index
+                for op in trace.layer_list
+                if getattr(op, "layer_type", None) == "output"
+            )
+            for op in trace.layer_list:
+                if op.raw_index in selected_nums and getattr(op, "layer_type", None) == "output":
+                    selected_nums.update(
+                        trace.layer_dict_all_keys[parent_label].raw_index
+                        for parent_label in op.parents
+                    )
+            for op in trace.layer_list:
+                if op.raw_index not in selected_nums:
+                    continue
+                payload = live_output_by_raw_index.get(op.raw_index)
+                payload_entry = self.activation_escrow.get(op.raw_index)
+                if payload is None and payload_entry is not None:
+                    payload = payload_entry.materialize()
+                if trace.backward_ready:
+                    payload = self.gradient_reference_escrow.get(op.raw_index, payload)
+                if payload is None and getattr(op, "layer_type", None) == "output":
+                    for parent_label in op.parents:
+                        parent = trace.layer_dict_all_keys[parent_label]
+                        payload = live_output_by_raw_index.get(parent.raw_index)
+                        parent_payload_entry = self.activation_escrow.get(parent.raw_index)
+                        if payload is None and parent_payload_entry is not None:
+                            payload = parent_payload_entry.materialize()
+                        if trace.backward_ready:
+                            payload = self.gradient_reference_escrow.get(parent.raw_index, payload)
+                        if payload is not None:
+                            break
+                if payload is None:
+                    continue
+                op.save_activation(
+                    payload,
+                    (),
+                    {},
+                    False,
+                    getattr(trace, "activation_transform", None),
+                )
+            from ..postprocess import _refresh_fast_saved_summary
+
+            _refresh_fast_saved_summary(trace)
+            trace._layer_nums_to_save = sorted(selected_nums)
+
+        gradient_selector = getattr(trace, "_deferred_gradient_selector", None)
+        if gradient_selector is None:
+            trace.__dict__.pop("_deferred_retention_selector", None)
+            return
+        selected_grads = _get_op_nums_from_user_labels(trace, gradient_selector)
+        trace._grad_op_nums_to_save = selected_grads
+        hook_nums = (
+            {op.raw_index for op in trace.layer_list}
+            if selected_grads == "all"
+            else set(selected_grads)
+        )
+        for op in trace.layer_list:
+            if op.raw_index in hook_nums and getattr(op, "layer_type", None) == "output":
+                hook_nums.update(
+                    trace.layer_dict_all_keys[parent_label].raw_index for parent_label in op.parents
+                )
+        trace._installing_deferred_gradient_hooks = True
+        try:
+            for op in trace.layer_list:
+                tensor = self.gradient_reference_escrow.get(op.raw_index)
+                if tensor is not None and op.raw_index in hook_nums:
+                    _add_tensor_backward_hook(trace, tensor, op._label_raw)
+        finally:
+            trace.__dict__.pop("_installing_deferred_gradient_hooks", None)
+        trace.__dict__.pop("_deferred_retention_selector", None)
+        trace.__dict__.pop("_deferred_gradient_selector", None)
 
     def observe_event(self, event: OpEvent) -> None:
         """Populate stage-2 sidecars from an existing producer event.
@@ -405,6 +653,31 @@ def compile_legacy_capture_plan(
         EnrichmentLevel.METADATA if capture_mode == "exhaustive" else EnrichmentLevel.SHELL
     )
     options = getattr(trace, "_predicate_save_options", None)
+    deferred_activation = bool(getattr(trace, "_deferred_retention_selector", None))
+    deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
+    graph_connected = bool(getattr(trace, "backward_ready", False))
+    negative_windows = _negative_selector_windows(layers_to_save)
+    grad_negative_windows = _negative_selector_windows(grad_layers_to_save)
+    grad_positive_indices = _positive_selector_indices(grad_layers_to_save)
+    activation_window = max(negative_windows) if negative_windows else None
+    gradient_window = max(grad_negative_windows) if grad_negative_windows else None
+    retention_profile = RetentionProfile(
+        activation_kind=(
+            RetentionKind.ACTIVATION
+            if deferred_activation and not graph_connected
+            else RetentionKind.NONE
+        ),
+        activation_window=activation_window if deferred_activation else 0,
+        gradient_kind=(
+            RetentionKind.GRADIENT_REFERENCE
+            if deferred_gradients
+            and not _contains_only_positive_integer_selectors(grad_layers_to_save)
+            else RetentionKind.NONE
+        ),
+        gradient_window=gradient_window if deferred_gradients else 0,
+        spillable=deferred_activation and not graph_connected,
+        gradient_live_indices=grad_positive_indices,
+    )
     return CapturePlan.compile(
         projection_target=projection_target,
         available_capabilities=(),
@@ -428,7 +701,49 @@ def compile_legacy_capture_plan(
         },
         stop_policy=getattr(trace, "_stop_directive", None),
         backend_name=backend_name,
+        retention_profile=retention_profile,
     )
+
+
+def _negative_selector_windows(selector: Any) -> tuple[int, ...]:
+    """Return rolling-window bounds declared by negative integer selectors.
+
+    Parameters
+    ----------
+    selector
+        Legacy selector value or nested selector container.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Positive tail-window sizes in encounter order.
+    """
+
+    if isinstance(selector, int) and selector < 0:
+        return (-selector,)
+    if isinstance(selector, (list, tuple, set, frozenset)):
+        return tuple(window for item in selector for window in _negative_selector_windows(item))
+    return ()
+
+
+def _positive_selector_indices(selector: Any) -> tuple[int, ...]:
+    """Return raw indices declared by positive integer gradient selectors."""
+
+    if isinstance(selector, int) and not isinstance(selector, bool) and selector >= 0:
+        return (selector + 1,)
+    if isinstance(selector, (list, tuple, set, frozenset)):
+        return tuple(index for item in selector for index in _positive_selector_indices(item))
+    return ()
+
+
+def _contains_only_positive_integer_selectors(selector: Any) -> bool:
+    """Return whether a gradient selection can install every hook live."""
+
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        return selector >= 0
+    if isinstance(selector, (list, tuple, set, frozenset)) and selector:
+        return all(_contains_only_positive_integer_selectors(item) for item in selector)
+    return False
 
 
 def attach_legacy_capture_session(

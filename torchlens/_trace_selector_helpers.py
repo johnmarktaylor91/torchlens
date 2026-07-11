@@ -127,7 +127,9 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
         if isinstance(layers_to_save, str)
         else set(cast(Iterable[Any], layers_to_save))
     )
-    requested_ints = {int(item) for item in requested if isinstance(item, int)}
+    requested_ints = {
+        int(item) + 1 for item in requested if isinstance(item, int) and int(item) >= 0
+    }
     requested_strings = {str(item) for item in requested if not isinstance(item, int)}
     cache_key = (
         "layers_to_save",

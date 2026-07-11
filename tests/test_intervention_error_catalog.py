@@ -81,7 +81,7 @@ CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "ControlFlowDivergenceError": "tests/test_intervention_phase7.py::test_rerun_strict_divergence_raises_before_swap",
     "SpecPortabilityError": "tests/test_intervention_error_catalog.py::test_spec_portability_alias_reconciles_executable_save_name",
     "GraphShapeMismatchError": "tests/test_intervention_error_catalog.py::test_graph_shape_mismatch_error_raised_for_executable_spec",
-    "InterventionReadyConflictError": "tests/test_intervention_error_catalog.py::test_intervention_ready_conflict_error_raised_for_two_pass_grads",
+    "InterventionReadyConflictError": "tests/test_intervention_error_catalog.py::test_intervention_ready_composes_with_deferred_selective_grads",
     "LiveModeLabelError": "tests/test_intervention_phase4c.py",
     "SpliceModuleDeviceError": "tests/test_intervention_error_catalog.py::test_splice_module_device_error_raised_for_device_mismatch",
     "SpliceModuleDtypeError": "tests/test_intervention_phase3.py::test_splice_module_dtype_error_is_specific",
@@ -511,18 +511,19 @@ def test_graph_shape_mismatch_error_raised_for_executable_spec(
         check_spec_compat(spec, other)
 
 
-def test_intervention_ready_conflict_error_raised_for_two_pass_grads() -> None:
-    """Intervention-ready capture rejects selective two-pass gradient saving."""
+def test_intervention_ready_composes_with_deferred_selective_grads() -> None:
+    """Intervention-ready capture composes with deferred selective gradients."""
 
-    with pytest.raises(terrors.InterventionReadyConflictError, match="selective two-pass"):
-        tl.trace(
-            _ReluAdd(),
-            torch.randn(1, 3, requires_grad=True),
-            capture=tl.options.CaptureOptions(
-                intervention_ready=True,
-                save_grads=["relu"],
-            ),
-        )
+    trace = tl.trace(
+        _ReluAdd(),
+        torch.randn(1, 3, requires_grad=True),
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            save_grads=["relu"],
+        ),
+    )
+    trace[trace.output_layers[0]].out.sum().backward()
+    assert {op.layer_type for op in trace.layer_list if op.has_grad} == {"relu"}
 
 
 def test_splice_module_device_error_raised_for_device_mismatch() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+import warnings
 
 import pytest
 import torch
@@ -15,6 +16,8 @@ from torchlens.backends.default_specs import _tf_runtime_supported
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.errors import SelectorCompositionError
+from torchlens.capture.plan import CapturePlan, RetentionKind, RetentionProfile
+from torchlens.capture.session import CaptureSession
 from torchlens.validation.invariants import _check_backend_neutral_graph_topology
 
 
@@ -172,7 +175,7 @@ def test_layers_to_save_absorbed_path_honors_pass_qualified_substrings() -> None
 
 
 def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None:
-    """Selective two-pass supports backward-ready and gradient selection."""
+    """Deferred selectors support backward-ready activation and gradient selection."""
 
     log = tl.trace(
         TinyLinear(),
@@ -186,6 +189,125 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
     assert saved[0].out.requires_grad
+
+    saved[0].out.sum().backward()
+    saved_grad_types = {op.layer_type for op in log.layer_list if op.has_grad}
+    assert saved_grad_types == {"linear"}
+    hooked_raw_labels = {raw_label for raw_label, _tensor_id in log._tl_backward_hooked_tensor_keys}
+    assert hooked_raw_labels == {saved[0]._label_raw}
+
+
+def _retention_session(profile: RetentionProfile) -> CaptureSession:
+    """Return a capture session with one explicitly supplied retention profile."""
+
+    return CaptureSession(
+        CapturePlan.compile(
+            projection_target="trace",
+            available_capabilities=(),
+            retention_profile=profile,
+        )
+    )
+
+
+def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None:
+    """Detached activation escrow crosses its RAM budget via measured temp spill."""
+
+    session = _retention_session(
+        RetentionProfile(
+            activation_kind=RetentionKind.ACTIVATION,
+            activation_window=None,
+            spillable=True,
+            activation_ram_budget_bytes=1,
+        )
+    )
+    tensor = torch.arange(8, dtype=torch.float32)
+    session.escrow_candidate(1, tensor)
+
+    payload = session.activation_escrow[1]
+    assert payload.tensor is None
+    assert payload.spill_path is not None and payload.spill_path.exists()
+    assert session.activation_escrow_ram_bytes == 0
+    assert session.activation_escrow_spilled_bytes == tensor.nelement() * tensor.element_size()
+    assert torch.equal(payload.materialize(), tensor)
+
+    spill_path = payload.spill_path
+    session.release()
+    assert not spill_path.exists()
+
+
+def test_gradient_retention_warning_is_extreme_unwindowable_only() -> None:
+    """The graph-retention warning excludes windowed and spillable profiles."""
+
+    extreme = _retention_session(
+        RetentionProfile(
+            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
+            gradient_window=None,
+            gradient_warning_threshold_bytes=1,
+        )
+    )
+    with pytest.warns(RuntimeWarning, match="Unwindowable gradient selection"):
+        extreme.escrow_candidate(1, torch.ones(2, requires_grad=True))
+
+    for profile in (
+        RetentionProfile(
+            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
+            gradient_window=1,
+            gradient_warning_threshold_bytes=1,
+        ),
+        RetentionProfile(
+            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
+            gradient_window=None,
+            spillable=True,
+            gradient_warning_threshold_bytes=1,
+        ),
+    ):
+        session = _retention_session(profile)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            session.escrow_candidate(1, torch.ones(2, requires_grad=True))
+        assert not [warning for warning in caught if warning.category is RuntimeWarning]
+
+
+def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None:
+    """Deferred activation winners reach both disk and callback storage projections."""
+
+    model = TinyLinear().eval()
+    x = torch.randn(2, 4)
+    bundle_path = tmp_path / "negative-selector.tlspec"
+    disk_trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save=[-1]),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+    )
+    assert bundle_path.exists()
+    loaded = tl.load(bundle_path)
+    disk_saved = [op for op in disk_trace.layer_list if op.has_saved_activation]
+    loaded_saved = [op for op in loaded.layer_list if op.has_saved_activation]
+    assert disk_saved and len(loaded_saved) == len(disk_saved)
+    assert all(
+        torch.equal(expected.out, actual.out) for expected, actual in zip(disk_saved, loaded_saved)
+    )
+
+    callback_values: list[torch.Tensor] = []
+
+    def capture_value(_label: str, value: torch.Tensor) -> None:
+        """Retain one callback-projected activation for comparison."""
+
+        callback_values.append(value.detach().clone())
+
+    callback_trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save=[-1]),
+        streaming=tl.options.StreamingOptions(out_callback=capture_value),
+    )
+    expected_values = [op.out for op in callback_trace.layer_list if op.has_saved_activation]
+    assert callback_values
+    assert len(callback_values) == len(expected_values)
+    assert all(
+        torch.equal(expected, actual) for expected, actual in zip(expected_values, callback_values)
+    )
 
 
 def test_layers_to_save_supports_intervention_ready_and_hooks() -> None:

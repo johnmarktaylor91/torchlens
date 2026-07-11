@@ -18,7 +18,7 @@
         "current": {
           "buffer_changes": {},
           "buffer_mutation_count": 0,
-          "forward_invocations": 2,
+          "forward_invocations": 1,
           "input_value_after": {
             "dtype": "float32",
             "sha256_chunks": [
@@ -545,13 +545,13 @@
     }
   },
   "sha256_chunks": [
-    "80d36345",
-    "4d0a1738",
-    "6b97b4d0",
-    "38467fbf",
-    "df83e039",
-    "c12101e6",
-    "53804fdc",
-    "92d1c19d"
+    "7e745d88",
+    "74dc786e",
+    "55c75847",
+    "8cac464a",
+    "6a129a52",
+    "0f032a76",
+    "3ab17b4e",
+    "c9deaaf9"
   ]
 }
