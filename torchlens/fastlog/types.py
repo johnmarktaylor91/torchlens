@@ -401,16 +401,11 @@ class Recording(CapturedRun):
             "_captured_run_cores",
             tuple(getattr(session, "captured_run_cores", ())),
         )
-        recording_state = getattr(session, "recording_state", None)
         has_core_projection = bool(getattr(session, "captured_run_cores", ()))
-        uses_disk_storage = bool(
-            getattr(getattr(recording_state, "storage_intent", None), "on_disk", False)
-        )
         object.__setattr__(
             base,
             "_records_built",
-            bool(object.__getattribute__(base, "records"))
-            and (not has_core_projection or uses_disk_storage),
+            bool(object.__getattribute__(base, "records")) and not has_core_projection,
         )
         object.__setattr__(base, "_recording_trace", None)
         return base
@@ -718,13 +713,18 @@ class Recording(CapturedRun):
                 "the topology is incomplete; user-op failures exclude the failing call; "
                 "TL-side capture failures may include a skipped/partial current-call event."
             )
-        if self._capture_events is None:
+        if not self._captured_run_cores:
             raise RuntimeError(
                 "Recording.to_trace() requires retained capture events; disk-recovered "
                 "recordings do not contain enough topology metadata."
             )
         from ..data_classes.trace import Trace
+        from ..capture.projectors import RecordingProjector
         from .options import RecordingOptions
+
+        projection = RecordingProjector().project(self._captured_run_cores)
+        if projection.capture_events is None:
+            raise RuntimeError("Recording.to_trace() core has no replay event facts.")
 
         trace = Trace(model_class_name="RecordedModel")
         trace.capture_mode = "exhaustive"
@@ -740,13 +740,8 @@ class Recording(CapturedRun):
         # `_layer_counter` seed, and `_recover_halt_frontier()` all read from
         # `self._capture_events` (the original, intact) below -- only the
         # materialized `trace.capture_events` is the copy.
-        events_for_replay = self._capture_events.copy_for_replay()
+        events_for_replay = projection.capture_events.copy_for_replay()
         trace.capture_events = events_for_replay
-        trace.output_layers = [
-            event.label_raw
-            for event in self._capture_events.op_events
-            if getattr(event, "is_output_parent", False)
-        ]
         # Halt-finalization parity. A halted recording never reached the
         # model's real return, so no captured event carries is_output_parent
         # (the output-marking step that stamps it only runs on a completed
@@ -761,8 +756,8 @@ class Recording(CapturedRun):
         # crash. Self._output_tensors is empty for a halted pass, so seed the
         # frontier's saved payload as the sole output tensor (no fabrication --
         # the tensor is the recording's own retained raw activation).
-        halt_output_tensors = list(self._output_tensors)
-        halt_output_addresses = list(self._output_tensor_addresses)
+        halt_output_tensors = list(projection.output_tensors)
+        halt_output_addresses = list(projection.output_tensor_addresses)
         if self.halted:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
             trace.halted = True
@@ -805,13 +800,11 @@ class Recording(CapturedRun):
         # capture/projections.py -- note buffers are ALSO internal-source ops, so
         # they legitimately appear in both lists, matching exhaustive tl.trace()).
         trace.buffer_layers = [
-            event.label_raw
-            for event in self._capture_events.op_events
-            if event.layer_type == "buffer"
+            event.label_raw for event in projection.events if event.layer_type == "buffer"
         ]
         trace.internal_source_ops = [
             event.label_raw
-            for event in self._capture_events.op_events
+            for event in projection.events
             if event.layer_type != "input" and not event.parents
         ]
 
@@ -834,17 +827,13 @@ class Recording(CapturedRun):
         # they are just otherwise discarded once the pass completes. Fields
         # that were not actually measured are left at their honest Trace
         # defaults -- no fabrication.
-        recording_state = getattr(self, "_recording_state", None)
-        runtime_trace = getattr(recording_state, "runtime_trace", None)
-        if self.start_times:
-            trace.capture_start_time = self.start_times[0]
-        elif runtime_trace is not None:
-            trace.capture_start_time = runtime_trace.capture_start_time
-        if runtime_trace is not None:
-            trace.setup_duration = runtime_trace.setup_duration
-            trace.forward_duration = runtime_trace.forward_duration
-            trace.forward_peak_memory = runtime_trace.forward_peak_memory
-            trace.forward_memory_backend = runtime_trace.forward_memory_backend
+        trace_facts = projection.trace_facts
+        trace.capture_start_time = trace_facts["capture_start_time"]
+        trace.setup_duration = trace_facts["setup_duration"]
+        trace.forward_duration = trace_facts["forward_duration"]
+        trace.forward_peak_memory = trace_facts["forward_peak_memory"]
+        trace.forward_memory_backend = trace_facts["forward_memory_backend"]
+        if trace_facts:
             # Backfill the weak source-model reference the live predicate-mode
             # primary pass set (capture/trace.py run_and_log_inputs_through_model).
             # _postprocess() below (graph_traversal.py _resolve_output_parent_labels)
@@ -854,14 +843,14 @@ class Recording(CapturedRun):
             # "could not attribute a model output tensor to any traced op" even
             # though the primary capture pass already identified it correctly.
             if getattr(trace, "_source_model_ref", None) is None:
-                trace._source_model_ref = getattr(runtime_trace, "_source_model_ref", None)
+                trace._source_model_ref = trace_facts["source_model_ref"]
             # The predicate-mode primary pass (capture/trace.py) genuinely seeds
             # and records the RNG seed on its runtime_trace (self.random_seed,
             # set even when the caller passed random_seed=None). random_seed is a
             # FieldPolicy.KEEP (serialized) field, so backfill it from the trace
             # that actually used it rather than leaving Trace.random_seed at its
             # None dataclass default -- no fabrication, it is the real seed.
-            runtime_seed = getattr(runtime_trace, "random_seed", None)
+            runtime_seed = trace_facts["random_seed"]
             if runtime_seed is not None:
                 trace.random_seed = runtime_seed
 
@@ -879,8 +868,7 @@ class Recording(CapturedRun):
         # raw_index-uniqueness/monotonicity contract. Seed from the true
         # event-stream high-water mark so output-node numbering continues from
         # there, matching the live-capture path exactly.
-        if self._capture_events.op_events:
-            trace._layer_counter = max(event.raw_index for event in self._capture_events.op_events)
+        trace._layer_counter = int(trace_facts["layer_counter"])
 
         # Snapshot each retained output tensor's raw label BEFORE handing it to
         # _postprocess(). Step 12 (_undecorate_all_saved_tensors,
@@ -937,7 +925,7 @@ class Recording(CapturedRun):
             output frontier exists for the halted partial graph.
         """
 
-        assert self._capture_events is not None  # guarded by to_trace() caller
+        assert self._captured_run_cores  # guarded by to_trace() caller
         payload_by_label_raw: dict[str, torch.Tensor] = {}
         for record in self.records:
             payload = record.ram_payload
@@ -953,7 +941,12 @@ class Recording(CapturedRun):
             return halt_label, payload_by_label_raw[halt_label]
 
         # Fallback: last captured op with a retained raw activation.
-        for event in reversed(self._capture_events.op_events):
+        from ..capture.projectors import TraceProjector
+
+        core_events = tuple(
+            event for core in self._captured_run_cores for event in TraceProjector(core).events()
+        )
+        for event in reversed(core_events):
             payload = payload_by_label_raw.get(event.label_raw)
             if payload is not None:
                 return event.label_raw, payload

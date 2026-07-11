@@ -75,6 +75,11 @@ class RecordingProjection:
     by_pass: dict[int, list[int]]
     by_label: dict[str, list[tuple[int, int]]]
     by_address: dict[str, list[int]]
+    events: tuple[OpEvent, ...]
+    capture_events: object | None
+    output_tensors: tuple[object, ...]
+    output_tensor_addresses: tuple[str, ...]
+    trace_facts: dict[str, object]
 
 
 class RecordingProjector:
@@ -100,11 +105,21 @@ class RecordingProjector:
         by_pass: dict[int, list[int]] = {}
         by_label: dict[str, list[tuple[int, int]]] = {}
         by_address: dict[str, list[int]] = {}
-        for core in cores:
-            for event in TraceProjector(core).events():
-                record = activation_record_from_event(event)
-                if record is None:
-                    continue
+        all_events: list[OpEvent] = []
+        captured_cores = tuple(cores)
+        for core in captured_cores:
+            core_events = TraceProjector(core).events()
+            all_events.extend(core_events)
+            stored_records = core.projection_facts.get("records", ())
+            if stored_records:
+                projected_records = stored_records
+            else:
+                projected_records = tuple(
+                    record
+                    for event in core_events
+                    if (record := activation_record_from_event(event)) is not None
+                )
+            for record in projected_records:
                 index = len(records)
                 records.append(record)
                 by_pass.setdefault(record.ctx.pass_index, []).append(index)
@@ -115,4 +130,33 @@ class RecordingProjector:
                     )
                 if record.ctx.address is not None:
                     by_address.setdefault(record.ctx.address, []).append(index)
-        return RecordingProjection(tuple(records), by_pass, by_label, by_address)
+        last_facts = captured_cores[-1].projection_facts if captured_cores else {}
+        capture_events = next(
+            (
+                core.projection_facts.get("capture_events")
+                for core in captured_cores
+                if core.projection_facts.get("capture_events") is not None
+            ),
+            None,
+        )
+        if capture_events is not None:
+            capture_events = capture_events.copy_for_replay()
+            capture_events.op_events = list(all_events)
+            capture_events.op_event_by_label_raw = {event.label_raw: event for event in all_events}
+            capture_events.op_event_index_by_label_raw = {
+                event.label_raw: index for index, event in enumerate(all_events)
+            }
+            capture_events.raw_layer_counter = max(
+                (event.raw_index for event in all_events), default=0
+            )
+        return RecordingProjection(
+            tuple(records),
+            by_pass,
+            by_label,
+            by_address,
+            tuple(all_events),
+            capture_events,
+            tuple(last_facts.get("output_tensors", ())),
+            tuple(last_facts.get("output_tensor_addresses", ())),
+            dict(last_facts),
+        )

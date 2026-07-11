@@ -418,6 +418,9 @@ class Recorder:
                     postprocess=False,
                 )
         except HaltSignal as halt_exc:
+            captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
+            if captured_run_core is not None:
+                self._captured_run_cores.append(captured_run_core)
             self._carry_module_structure_events(trace)
             self._capture_events.extend(trace.capture_events.op_events)
             object.__setattr__(
@@ -429,6 +432,9 @@ class Recorder:
             output = None
             return output
         except Exception as exc:
+            captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
+            if captured_run_core is not None:
+                self._captured_run_cores.append(captured_run_core)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
             if forward_disposition == "raise":
                 self._state.abort_storage(str(exc))
@@ -570,6 +576,7 @@ class Recorder:
         session.output_tensor_addresses = []
         session._fastlog_recording = self._state.recording
         session.recording_state = self._state
+        session.captured_run_cores = self._captured_run_cores
         recording = Recording.from_capture_events(session)
         self._stamp_failed_recording(recording, exc)
         return recording

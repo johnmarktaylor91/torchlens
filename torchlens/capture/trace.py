@@ -1132,6 +1132,11 @@ def run_and_log_inputs_through_model(
             )
             self._fastlog_output_tensors = list(output_tensors_any)
             self._fastlog_output_tensor_addresses = output_tensor_addresses
+            capture_session.snapshot_recording_projection(
+                self,
+                output_tensors=list(output_tensors_any),
+                output_tensor_addresses=output_tensor_addresses,
+            )
             self._fastlog_captured_run_core = capture_session.seal()
             self.__dict__.pop("_output_attribution_input_tensors", None)
             backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
@@ -1175,6 +1180,9 @@ def run_and_log_inputs_through_model(
                     "halted",
                 )
             return halted_output
+        if capture_session is not None and not postprocess:
+            capture_session.snapshot_recording_projection(self)
+            self._fastlog_captured_run_core = capture_session.seal()
         backend.cleanup_halted_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs))
         )
@@ -1185,6 +1193,9 @@ def run_and_log_inputs_through_model(
 
     except Exception as e:
         compiled_unwrap_exception = sys.exc_info()
+        if capture_session is not None and not postprocess:
+            capture_session.snapshot_recording_projection(self)
+            self._fastlog_captured_run_core = capture_session.seal()
         backend.cleanup_failed_forward_session(
             self, (model, input_tensors, (input_args, input_kwargs)), e
         )

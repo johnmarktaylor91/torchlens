@@ -49,6 +49,7 @@ class CapturedRunCore:
     decisions: Mapping[EventId, DecisionRecord]
     payloads: Mapping[EventId, PayloadRecord]
     completeness: Mapping[str, CompletenessState]
+    projection_facts: Mapping[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +127,7 @@ class CaptureSession:
     outcome: RunOutcome | None = None
     kernel: CaptureKernel = field(init=False)
     _sealed_core: CapturedRunCore | None = field(default=None, init=False, repr=False)
+    projection_facts: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Compile the session's fixed-order capture kernel."""
@@ -221,8 +223,54 @@ class CaptureSession:
                 decisions=MappingProxyType(dict(self.decision_ledger.records)),
                 payloads=MappingProxyType(dict(self.payload_ledger.records)),
                 completeness=MappingProxyType(dict(self.completeness.states)),
+                projection_facts=MappingProxyType(dict(self.projection_facts)),
             )
         return self._sealed_core
+
+    def snapshot_recording_projection(
+        self,
+        trace: object,
+        *,
+        output_tensors: list[Any] | None = None,
+        output_tensor_addresses: list[str] | None = None,
+    ) -> None:
+        """Snapshot legacy facts needed by Recording projections before sealing.
+
+        Parameters
+        ----------
+        trace
+            Live predicate-mode trace that measured the run facts.
+        output_tensors
+            Attributed model outputs for a completed run, when available.
+        output_tensor_addresses
+            Structural addresses corresponding to ``output_tensors``.
+        """
+
+        if self._sealed_core is not None:
+            raise RuntimeError("Cannot snapshot projection facts after the run core is sealed.")
+        capture_events = getattr(trace, "capture_events", None)
+        recording = getattr(trace, "_fastlog_recording", None)
+        records = ()
+        if recording is not None:
+            records = tuple(object.__getattribute__(recording, "records"))
+        self.projection_facts.update(
+            {
+                "capture_events": (
+                    None if capture_events is None else capture_events.copy_for_replay()
+                ),
+                "records": records,
+                "output_tensors": tuple(output_tensors or ()),
+                "output_tensor_addresses": tuple(output_tensor_addresses or ()),
+                "capture_start_time": getattr(trace, "capture_start_time", 0),
+                "setup_duration": getattr(trace, "setup_duration", 0),
+                "forward_duration": getattr(trace, "forward_duration", 0),
+                "forward_peak_memory": getattr(trace, "forward_peak_memory", None),
+                "forward_memory_backend": getattr(trace, "forward_memory_backend", None),
+                "random_seed": getattr(trace, "random_seed", None),
+                "source_model_ref": getattr(trace, "_source_model_ref", None),
+                "layer_counter": getattr(trace, "_layer_counter", 0),
+            }
+        )
 
     def register_cleanup(self, name: str, callback: CleanupCallback) -> None:
         """Register one teardown action on the session-owned cleanup stack.
