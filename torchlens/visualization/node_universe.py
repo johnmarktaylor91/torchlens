@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from ..data_classes.module import Module
-    from .auto_collapse import ModuleRepeatFold, SegmentDescriptor
+    from .auto_collapse import ModuleRepeatFold
     from ._render_common import RenderEdge, RenderedNodeEmission
 
 NodeUnitKind = Literal[
@@ -115,7 +115,7 @@ def build_node_universe(
     source_graph: SourceGraph,
     collapse_fn: "Callable[[Module], bool] | None",
     repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
-    segments: "Mapping[str, SegmentDescriptor] | None" = None,
+    segments: "Mapping[str, Any] | None" = None,
     containers: Any = None,
 ) -> NodeUniverse:
     """Project one normalized source graph into visible structural units.
