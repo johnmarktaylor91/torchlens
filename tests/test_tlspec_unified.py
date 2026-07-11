@@ -693,7 +693,7 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
 
     log.save_intervention(path, level=level)
     validate_tlspec(path)
-    loaded = tl.load(path)
+    loaded = tl.load(path, trust_custom_callables=True)
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, InterventionSpec)
