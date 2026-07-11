@@ -490,7 +490,7 @@ def postprocess(
         _drop_transient_capture_state(self)
         if capture_events is not None:
             capture_events.release_runtime_sidecars()
-            self._capture_events = capture_events
+            self.__dict__.pop("_capture_events", None)
         return
 
     _vprint(
@@ -653,7 +653,7 @@ def postprocess(
     _drop_transient_capture_state(self)
     if capture_events is not None:
         capture_events.release_runtime_sidecars()
-        self._capture_events = capture_events
+        self.__dict__.pop("_capture_events", None)
 
 
 def postprocess_fast(self: "Trace") -> None:
