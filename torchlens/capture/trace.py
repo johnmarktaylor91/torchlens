@@ -536,7 +536,7 @@ def save_new_outs(
             )
         resolved_layer_nums = tuple(sorted(expanded_layer_nums))
     refreshed = _run_model_and_save_specified_outs(
-        model=model,
+        model=cast(nn.Module, model),
         input_args=input_args,
         input_kwargs=input_kwargs or {},
         layers_to_save="all" if resolved_layer_nums is None else "none",
