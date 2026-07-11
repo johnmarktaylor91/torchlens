@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum
 import importlib
@@ -216,13 +216,24 @@ def save_intervention(
         raise
 
 
-def load_intervention_spec(path: str | Path) -> InterventionSpec:
+def load_intervention_spec(
+    path: str | Path,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> InterventionSpec:
     """Load an intervention spec from a ``.tlspec`` directory.
 
     Parameters
     ----------
     path:
         Directory containing ``spec.json`` and tensor sidecars.
+    trust_custom_callables:
+        Explicit permission to import custom callables recorded in the spec
+        when no allowlist is supplied. Enable only for trusted specs.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names. When supplied,
+        custom imports must be listed even if ``trust_custom_callables=True``.
 
     Returns
     -------
@@ -253,7 +264,11 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
         }
     )
     spec.metadata = metadata
-    _verify_loaded_function_keys(data.get("function_registry_keys", []))
+    _verify_loaded_function_keys(
+        data.get("function_registry_keys", []),
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
     return spec
 
 
@@ -1457,19 +1472,33 @@ def _function_key_for_layer(layer: Any) -> FunctionRegistryKey | None:
     return function_registry_key_from_callable(func)
 
 
-def _verify_loaded_function_keys(entries: Iterable[dict[str, Any]]) -> None:
+def _verify_loaded_function_keys(
+    entries: Iterable[dict[str, Any]],
+    *,
+    trust_custom_callables: bool,
+    allowed_custom_callable_modules: Collection[str] | None,
+) -> None:
     """Fail closed when saved function keys are unresolvable.
 
     Parameters
     ----------
     entries:
         Serialized function key entries.
+    trust_custom_callables:
+        Whether arbitrary custom callable imports are trusted when no allowlist
+        is supplied.
+    allowed_custom_callable_modules:
+        Optional custom callable module allowlist.
     """
 
     for entry in entries:
         key_data = entry.get("key", {})
         key = FunctionRegistryKey(**key_data)
-        resolve_function_registry_key(key)
+        resolve_function_registry_key(
+            key,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
 
 
 def _write_tensor_sidecars(

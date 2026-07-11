@@ -10,6 +10,7 @@ by partial saves. The bundle format is intentionally a plain directory with
 from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass
 import json
 import platform
@@ -445,6 +446,8 @@ def load(
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
     payload_hints: PayloadLoadHints | None = None,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object with eager tensor materialization.
 
@@ -477,6 +480,8 @@ def load(
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
     payload_hints: PayloadLoadHints | None = None,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
@@ -508,6 +513,8 @@ def load(
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
     payload_hints: PayloadLoadHints | None = None,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
@@ -525,6 +532,12 @@ def load(
     payload_hints:
         Optional backend payload hints used during materialization. This is
         separate from ``map_location``; JAX sharding hints must be passed here.
+    trust_custom_callables:
+        Explicit permission to import custom callables from an intervention
+        spec when no allowlist is supplied. Enable only for trusted specs.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names. When supplied,
+        custom imports must be listed even if ``trust_custom_callables=True``.
 
     Returns
     -------
@@ -564,7 +577,11 @@ def load(
         if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
             from ..intervention.save import load_intervention_spec
 
-            return load_intervention_spec(bundle_path)
+            return load_intervention_spec(
+                bundle_path,
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_custom_callable_modules,
+            )
         if tlspec_format == "v2.0_unified":
             return _load_unified_tlspec(
                 bundle_path,
@@ -572,11 +589,17 @@ def load(
                 map_location=map_location,
                 materialize_nested=materialize_nested,
                 payload_hints=payload_hints,
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_custom_callable_modules,
             )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
 
-        return load_intervention_spec(bundle_path)
+        return load_intervention_spec(
+            bundle_path,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
     _reject_symlink_path(bundle_path, context="bundle path")
     manifest_path = bundle_path / "manifest.json"
     metadata_path = bundle_path / "metadata.pkl"
@@ -683,6 +706,8 @@ def _load_unified_tlspec(
     map_location: str | torch.device,
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | None,
+    trust_custom_callables: bool,
+    allowed_custom_callable_modules: Collection[str] | None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
@@ -698,6 +723,11 @@ def _load_unified_tlspec(
         Whether nested blob refs should be materialized when ``lazy=True``.
     payload_hints:
         Optional backend payload hints used during materialization.
+    trust_custom_callables:
+        Whether arbitrary custom callable imports are trusted when no allowlist
+        is supplied.
+    allowed_custom_callable_modules:
+        Optional custom callable module allowlist.
 
     Returns
     -------
@@ -715,7 +745,11 @@ def _load_unified_tlspec(
     if kind == "intervention":
         from ..intervention.save import load_intervention_spec
 
-        return load_intervention_spec(bundle_path)
+        return load_intervention_spec(
+            bundle_path,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
     if kind == "trace":
         _preflight_unified_trace_manifest(manifest, bundle_path=bundle_path)
         parsed_manifest = _manifest_for_unified_trace_load(manifest)

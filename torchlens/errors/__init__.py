@@ -67,6 +67,10 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "ReplayPreconditionError",
     ),
+    "UntrustedCallableError": (
+        "torchlens.intervention.errors",
+        "UntrustedCallableError",
+    ),
     "OpaqueCallableInExecutableSaveError": (
         "torchlens.intervention.errors",
         "OpaqueCallableInExecutableSaveError",
