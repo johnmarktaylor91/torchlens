@@ -137,7 +137,10 @@ class RefreshProjector:
         refreshed_signature = self._graph_signature(refreshed)
         if target_signature != refreshed_signature:
             raise self._graph_change_error(refreshed)
-        if getattr(self.target, "internal_sink_ops", ()):
+        if any(
+            self.target.layer_dict_all_keys[label].layer_type == "buffer"
+            for label in getattr(self.target, "internal_sink_ops", ())
+        ):
             raise self._graph_change_error(refreshed)
         refreshed_by_raw = {layer._layer_label_raw: layer for layer in refreshed.layer_list}
         for layer in self.target.layer_list:
