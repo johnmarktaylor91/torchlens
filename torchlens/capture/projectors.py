@@ -75,6 +75,45 @@ class RefreshProjector:
     target: Any
     layer_nums_to_save: str | tuple[int, ...] = "all"
 
+    _DYNAMIC_OP_FIELDS = frozenset(
+        {
+            "out",
+            "transformed_out",
+            "has_saved_activation",
+            "saved_args",
+            "saved_kwargs",
+            "has_saved_args",
+            "shape",
+            "dtype",
+            "activation_memory",
+            "transformed_out_shape",
+            "transformed_out_dtype",
+            "transformed_activation_memory",
+            "grad",
+            "transformed_grad",
+            "has_grad",
+            "transformed_grad_shape",
+            "transformed_grad_dtype",
+            "transformed_gradient_memory",
+            "grad_fn_class_name",
+            "grad_fn_class_qualname",
+            "grad_fn_object_id",
+            "grad_fn_handle",
+            "autograd_memory",
+            "num_autograd_tensors",
+            "bytes_delta_at_call",
+            "bytes_peak_at_call",
+            "func_duration",
+            "func_rng_states",
+            "func_autocast_state",
+            "non_tensor_pos_args",
+            "non_tensor_kwargs",
+            "func_config",
+            "has_out_variations",
+            "out_versions_by_child",
+        }
+    )
+
     def project(self, refreshed: Any) -> None:
         """Validate and apply refreshed payloads without replacing graph containers.
 
@@ -92,12 +131,9 @@ class RefreshProjector:
         target_signature = self._graph_signature(self.target)
         refreshed_signature = self._graph_signature(refreshed)
         if target_signature != refreshed_signature:
-            raise ValueError(
-                "The computational graph changed for this forward pass compared to the original "
-                "call to trace (either due to different inputs or a different "
-                "random seed), so save_new_outs failed. Please re-run "
-                "trace with the desired inputs."
-            )
+            raise self._graph_change_error(refreshed)
+        if getattr(self.target, "internal_sink_ops", ()):
+            raise self._graph_change_error(refreshed)
         refreshed_by_raw = {layer._layer_label_raw: layer for layer in refreshed.layer_list}
         for layer in self.target.layer_list:
             new_shape = refreshed_by_raw[layer._layer_label_raw].shape
@@ -107,13 +143,15 @@ class RefreshProjector:
                     f"expected {layer.shape}, got {new_shape}. "
                     "The computational graph may have changed between ops."
                 )
+        from ..data_classes._state_adapter import state_items
+
+        preserved_states = [dict(state_items(layer)) for layer in self.target.layer_list]
         if not self.target._refresh_matching_rerun_state_from(refreshed):
-            raise ValueError(
-                "The computational graph changed for this forward pass compared to the original "
-                "call to trace (either due to different inputs or a different "
-                "random seed), so save_new_outs failed. Please re-run "
-                "trace with the desired inputs."
-            )
+            raise self._graph_change_error(refreshed)
+        for layer, preserved in zip(self.target.layer_list, preserved_states):
+            for field_name, value in preserved.items():
+                if field_name not in self._DYNAMIC_OP_FIELDS:
+                    layer._internal_set(field_name, value)
         self._rebind_backward_hooks()
         self._separate_output_payloads()
         if self.layer_nums_to_save != "all":
@@ -127,6 +165,21 @@ class RefreshProjector:
             for layer in self.target.layer_list:
                 if layer.raw_index not in selected:
                     self._clear_payload(layer)
+
+    @staticmethod
+    def _graph_change_error(refreshed: Any) -> ValueError:
+        """Build the legacy graph-change exception with partial-capture metadata."""
+
+        from ..partial import PartialTrace
+
+        error = ValueError(
+            "The computational graph changed for this forward pass compared to the original "
+            "call to trace (either due to different inputs or a different "
+            "random seed), so save_new_outs failed. Please re-run "
+            "trace with the desired inputs."
+        )
+        error.partial_log = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
+        return error
 
     def _rebind_backward_hooks(self) -> None:
         """Bind refreshed live tensors and grad-fn registry entries to the target Trace."""

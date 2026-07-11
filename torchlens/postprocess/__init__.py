@@ -101,6 +101,7 @@ from ..captured_run import remember_event_stream
 
 
 _POSTPROCESS_ASSERT_ENV = "TORCHLENS_POSTPROCESS_ASSERTIONS"
+_materialize_refresh_events = materialize_from_events
 
 
 @dataclass(frozen=True)
@@ -466,7 +467,12 @@ def postprocess(
         }
         self._capture_events = working_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
-            materialize_from_events(self, working_events)
+            materializer = (
+                _materialize_refresh_events
+                if getattr(self, "_refresh_projection_capture", False)
+                else materialize_from_events
+            )
+            materializer(self, working_events)
         working_events.release_working_projection()
         _assert_postprocess_contract(self, "0")
         delattr(self, "capture_events")

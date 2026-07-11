@@ -731,6 +731,8 @@ def _run_model_and_save_specified_outs(
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
     retain_output_parents_for_layers_to_save: bool = False,
+    _resolved_layer_nums_to_save: tuple[int, ...] | None = None,
+    _refresh_projection_capture: bool = False,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -836,6 +838,9 @@ def _run_model_and_save_specified_outs(
         retain_output_parents_for_layers_to_save: Whether this predicate capture
             originated from selective ``layers_to_save`` and must preserve the
             legacy output-parent payload rule.
+        _resolved_layer_nums_to_save: Internal refresh-only raw operation numbers
+            already resolved against the original Trace.
+        _refresh_projection_capture: Whether this run supplies a RefreshProjector.
 
     Returns
 
@@ -914,6 +919,9 @@ def _run_model_and_save_specified_outs(
         save_visualizations=save_visualizations,
         facet_registry_snapshot=facets_mod.snapshot(recipes),
     )
+    if _resolved_layer_nums_to_save is not None:
+        trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
+    trace._refresh_projection_capture = _refresh_projection_capture
     _capture_output_metadata_from_model_config(trace, model)
     trace._output_style = output_style
     trace._output_head = output_head

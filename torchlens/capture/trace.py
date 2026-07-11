@@ -525,11 +525,20 @@ def save_new_outs(
     save_grads_policy = getattr(self, "save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     refresh_seed = self.random_seed if random_seed is None else random_seed
+    resolved_layer_nums: tuple[int, ...] | None = None
+    if layer_nums_to_save != "all":
+        expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
+        for output_label in self.output_layers:
+            output = self.layer_dict_all_keys[output_label]
+            expanded_layer_nums.update(
+                self.layer_dict_all_keys[parent].raw_index for parent in output.parents
+            )
+        resolved_layer_nums = tuple(sorted(expanded_layer_nums))
     refreshed = _run_model_and_save_specified_outs(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs or {},
-        layers_to_save="all",
+        layers_to_save="all" if resolved_layer_nums is None else "none",
         output_device=getattr(self, "output_device", "same"),
         activation_transform=getattr(self, "activation_transform", None),
         grad_transform=getattr(self, "grad_transform", None),
@@ -555,6 +564,8 @@ def save_new_outs(
         output_transform=getattr(self, "_output_transform", None),
         save_raw_output=getattr(self, "save_raw_output", "small"),
         retain_output_parents_for_layers_to_save=True,
+        _resolved_layer_nums_to_save=resolved_layer_nums,
+        _refresh_projection_capture=True,
     )
     projected_layer_nums = (
         "all" if layer_nums_to_save == "all" else tuple(cast(list[int], layer_nums_to_save))
@@ -914,6 +925,9 @@ def run_and_log_inputs_through_model(
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
         self._grad_op_nums_to_save = []
+    elif hasattr(self, "_refresh_resolved_layer_nums_to_save"):
+        self._layer_nums_to_save = self.__dict__.pop("_refresh_resolved_layer_nums_to_save")
+        self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     else:
         self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
         self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
