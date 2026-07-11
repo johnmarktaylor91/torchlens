@@ -921,7 +921,8 @@ def _run_model_and_save_specified_outs(
     )
     if _resolved_layer_nums_to_save is not None:
         trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
-    trace._refresh_projection_capture = _refresh_projection_capture
+    if _refresh_projection_capture:
+        trace._refresh_projection_capture = True
     _capture_output_metadata_from_model_config(trace, model)
     trace._output_style = output_style
     trace._output_head = output_head
