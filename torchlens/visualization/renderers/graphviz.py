@@ -90,6 +90,8 @@ class GraphvizRenderer:
                 dot.edge(*statement.args, **kwargs)
             elif statement.kind == "attr":
                 dot.attr(*statement.args, **kwargs)
+            elif statement.kind == "raw":
+                dot.body.append(*statement.args)
             else:
                 with dot.subgraph(*statement.args, **kwargs) as subgraph:
                     self._emit_statements(subgraph, statement.children)

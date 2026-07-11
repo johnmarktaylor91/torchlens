@@ -356,6 +356,7 @@ class CapturedForwardEdge:
     target_node: GraphNode
     module_key: str | int
     occurrence_key: tuple[Any, ...]
+    attrs: tuple[tuple[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -496,6 +497,7 @@ class _RenderIRDecisionBuilder:
         """Initialize an empty recorder."""
 
         self.calls: list[RenderIRDotStatement] = []
+        self.body = _RenderIRBody(self.calls)
 
     def node(self, *args: Any, **kwargs: Any) -> None:
         """Record a Graphviz node call."""
@@ -528,6 +530,7 @@ class _RenderIRSubgraphDecisionBuilder:
         self._args = args
         self._kwargs = kwargs
         self._children: list[RenderIRDotStatement] = []
+        self.body = _RenderIRBody(self._children)
 
     def __enter__(self) -> "_RenderIRSubgraphDecisionBuilder":
         """Return the active nested recorder."""
@@ -561,6 +564,20 @@ class _RenderIRSubgraphDecisionBuilder:
         """Record a Graphviz edge call inside the subgraph."""
 
         self._children.append(RenderIRDotStatement("edge", tuple(args), tuple(kwargs.items())))
+
+
+class _RenderIRBody:
+    """Minimal Graphviz body adapter recording already-resolved raw statements."""
+
+    def __init__(self, calls: list[RenderIRDotStatement]) -> None:
+        """Initialize the adapter over a statement list."""
+
+        self._calls = calls
+
+    def append(self, value: str) -> None:
+        """Record one raw Graphviz body fragment."""
+
+        self._calls.append(RenderIRDotStatement("raw", (value,)))
 
 
 _CODE_PANEL_COMPOSED_FORMATS = frozenset({"svg", "pdf", "png"})

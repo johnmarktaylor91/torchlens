@@ -83,6 +83,9 @@ class RenderIREdge:
         "both_projected",
         "run_fold_ellipsis",
     ]
+    tail_name: str | None = None
+    head_name: str | None = None
+    attrs: tuple[tuple[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -148,7 +151,7 @@ class RenderIROrderingConstraint:
 class RenderIRDotStatement:
     """Immutable backend-ready DOT statement without TorchLens host objects."""
 
-    kind: Literal["node", "edge", "attr", "subgraph"]
+    kind: Literal["node", "edge", "attr", "subgraph", "raw"]
     args: tuple[Any, ...] = ()
     attrs: tuple[tuple[str, Any], ...] = ()
     children: tuple["RenderIRDotStatement", ...] = ()
@@ -645,14 +648,30 @@ def finalize_forward_regions(
     from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
     from .rendering import _collapsed_module_rolling_suffix
 
-    edge_owner = {edge.occurrence_key: edge.module_key for edge in captured_edges}
+    captured_by_occurrence = {edge.occurrence_key: edge for edge in captured_edges}
     edges = tuple(
         replace(
             edge,
             owner_cluster=(
-                str(edge_owner[edge.occurrence_key])
-                if edge_owner.get(edge.occurrence_key, -1) != -1
+                str(captured_by_occurrence[edge.occurrence_key].module_key)
+                if captured_by_occurrence.get(edge.occurrence_key) is not None
+                and captured_by_occurrence[edge.occurrence_key].module_key != -1
                 else None
+            ),
+            tail_name=(
+                captured_by_occurrence[edge.occurrence_key].tail_name
+                if edge.occurrence_key in captured_by_occurrence
+                else edge.source_unit
+            ),
+            head_name=(
+                captured_by_occurrence[edge.occurrence_key].head_name
+                if edge.occurrence_key in captured_by_occurrence
+                else edge.target_unit
+            ),
+            attrs=(
+                captured_by_occurrence[edge.occurrence_key].attrs
+                if edge.occurrence_key in captured_by_occurrence
+                else ()
             ),
         )
         for edge in render_ir.edges

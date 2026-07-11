@@ -739,22 +739,21 @@ def draw(
         overrides=overrides,
     )
 
-    forward_render_ir = replace(
-        forward_render_ir,
-        dot_statements=tuple(forward_ir_builder.calls),
-    )
-    GraphvizRenderer().emit(forward_render_ir, dot)
-
-    # Finally, set up the subgraphs.
+    # Resolve the complete nested region statement tree before renderer dispatch.
     _setup_subgraphs(
         self,
-        dot,
+        cast(graphviz.Digraph, forward_ir_builder),
         vis_mode,
         module_cluster_dict,
         overrides,
         list(forward_render_ir.ordering_constraints),
         forward_render_ir.regions,
     )
+    forward_render_ir = replace(
+        forward_render_ir,
+        dot_statements=tuple(forward_ir_builder.calls),
+    )
+    GraphvizRenderer().emit(forward_render_ir, dot)
     for overlay_edge in container_overlay_edges:
         dot.edge(
             tail_name=overlay_edge.tail_name,
