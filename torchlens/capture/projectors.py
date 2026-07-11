@@ -5,12 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Iterable, cast
 import warnings
+import weakref
+from weakref import WeakKeyDictionary
 
 from ..ir.events import OpEvent
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
     from ..fastlog.types import ActivationRecord
+
+_REFRESH_SOURCES: WeakKeyDictionary[Any, Any] = WeakKeyDictionary()
 
 
 def _event_from_core(core: CapturedRunCore, fact_index: int) -> OpEvent:
@@ -152,6 +156,8 @@ class RefreshProjector:
             for field_name, value in preserved.items():
                 if field_name not in self._DYNAMIC_OP_FIELDS:
                     layer._internal_set(field_name, value)
+        refreshed._refresh_projection_target_ref = weakref.ref(self.target)
+        _REFRESH_SOURCES[self.target] = refreshed
         self._rebind_backward_hooks()
         self._separate_output_payloads()
         if self.layer_nums_to_save != "all":
