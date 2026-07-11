@@ -36,7 +36,6 @@ def _trace_free_ir() -> RenderIR:
         ),
         edges=(),
         regions=(),
-        node_emissions=(),
         dot_statements=(
             RenderIRDotStatement(
                 kind="node",

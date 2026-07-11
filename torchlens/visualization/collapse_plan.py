@@ -316,35 +316,6 @@ def count(plan: CollapsePlan) -> int:
     return total
 
 
-def plan_from_v1(
-    trace: "Trace",
-    collapse_fn: Callable[["Module"], bool] | None,
-    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
-    context: RenderContext | None = None,
-) -> CollapsePlan:
-    """Reconstruct the plan implied by current v1 renderer decisions.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    collapse_fn:
-        Active v1 collapse predicate.
-    repeat_folds:
-        Current v1 repeat-fold mapping.
-    context:
-        Render context. Defaults to the scoped S7 parity context.
-
-    Returns
-    -------
-    CollapsePlan
-        Plan whose count matches the renderer's SVG node count in the default
-        unrolled/dot/default-buffer/container-off context.
-    """
-
-    return collapse_plan_for_trace(trace, collapse_fn, repeat_folds, context)
-
-
 def collapse_plan_for_trace(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,

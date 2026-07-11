@@ -1,4 +1,4 @@
-"""Public render entrypoints and rendered-node universe adapters."""
+"""Public backward and combined-graph rendering entrypoints."""
 
 # ruff: noqa: F403, F405
 
@@ -223,7 +223,6 @@ def render_backward_graph(
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
-    from .auto_collapse import ModuleRepeatFold
 
 
 def render_combined_graph(
@@ -403,85 +402,7 @@ def render_combined_graph(
     return cast(str, dot.source)
 
 
-def rendered_node_universe_from_v1(
-    trace: "Trace",
-    *,
-    collapse_fn: CollapseFn | None,
-    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
-    context: RenderContext | None = None,
-    vis_call_depth: int = 1000,
-) -> tuple[RenderedNodeEmission, ...]:
-    """Return the forward renderer's visible node universe for v1 collapse.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose forward graph is being inspected.
-    collapse_fn:
-        Active collapse predicate.
-    repeat_folds:
-        Active repeat-fold descriptors keyed by module address.
-    context:
-        Render context. Defaults to the S7 parity matrix.
-    vis_call_depth:
-        Legacy call-depth threshold used when ``collapse_fn`` is ``None``.
-
-    Returns
-    -------
-    tuple[RenderedNodeEmission, ...]
-        Visible rendered nodes in deterministic emission order.
-    """
-
-    resolved_context = RenderContext() if context is None else context
-    show_buffer_layers = _normalize_buffer_visibility(resolved_context.show_buffer_layers)
-    entries_to_plot = _entries_to_plot_for_context(trace, resolved_context.vis_mode)
-    skipped_labels: set[str] = set()
-    edge_map: dict[str, list[RenderEdge]] = {}
-    if repeat_folds or resolved_context.skip_fn is not None:
-        edge_map, skipped_labels = _build_skip_filtered_edge_map(
-            trace,
-            entries_to_plot,
-            vis_mode=resolved_context.vis_mode,
-            show_buffer_layers=show_buffer_layers,
-            skip_fn=resolved_context.skip_fn,
-        )
-    collapsed_container_nodes = _collapsed_container_leaf_nodes(
-        trace,
-        entries_to_plot,
-        vis_mode=resolved_context.vis_mode,
-        show_containers=resolved_context.show_containers,
-        container_max_inline=12,
-        pending_nodes=[],
-    )
-    emissions = _enumerate_base_rendered_node_emissions(
-        trace,
-        entries_to_plot,
-        skipped_labels=skipped_labels,
-        vis_mode=resolved_context.vis_mode,
-        vis_call_depth=vis_call_depth,
-        show_buffer_layers=show_buffer_layers,
-        collapse_fn=collapse_fn,
-        repeat_folds=repeat_folds,
-        show_containers=resolved_context.show_containers,
-        collapsed_container_nodes=collapsed_container_nodes,
-    )
-    ellipsis_emissions = _enumerate_run_fold_ellipsis_emissions(
-        trace,
-        entries_to_plot,
-        edge_map=edge_map,
-        skipped_labels=skipped_labels,
-        vis_mode=resolved_context.vis_mode,
-        vis_call_depth=vis_call_depth,
-        show_buffer_layers=show_buffer_layers,
-        collapse_fn=collapse_fn,
-        repeat_folds=repeat_folds,
-        collapsed_container_nodes=collapsed_container_nodes,
-    )
-    return (*emissions, *ellipsis_emissions)
-
-
 __all__ = [
     "render_backward_graph",
     "render_combined_graph",
-    "rendered_node_universe_from_v1",
 ]

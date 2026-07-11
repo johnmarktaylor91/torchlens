@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
+    from .node_universe import NodeUnit
     from .rendering import RenderedNodeEmission
     from .renderers.base import RendererCapabilities
 
@@ -174,15 +175,12 @@ class RenderIR:
         Nested region records in deterministic emission order.
     ordering_constraints:
         Declarative backend layout constraints.
-    node_emissions:
-        Legacy node emission adapter kept during migration.
     """
 
     context: RenderContext
     nodes: tuple[RenderIRNode, ...]
     edges: tuple[RenderIREdge, ...]
     regions: tuple[RenderIRRegion, ...]
-    node_emissions: tuple["RenderedNodeEmission", ...]
     ordering_constraints: tuple[RenderIROrderingConstraint, ...] = ()
     dot_statements: tuple[RenderIRDotStatement, ...] = ()
 
@@ -285,10 +283,9 @@ def build_render_ir(
         universe = build_node_universe(
             build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
         )
-    emissions = universe.emissions
     nodes = tuple(
-        _node_from_emission(trace, emission, resolved_context, universe, repeat_folds, segments)
-        for emission in emissions
+        _node_from_unit(trace, unit, resolved_context, universe, repeat_folds, segments)
+        for unit in universe.units
     )
     edges = _build_forward_edges_from_universe(universe)
     regions = _build_regions(trace, nodes, edges)
@@ -297,7 +294,6 @@ def build_render_ir(
         nodes=nodes,
         edges=edges,
         regions=regions,
-        node_emissions=emissions,
     )
 
 
@@ -341,15 +337,17 @@ def _build_forward_edges_from_universe(universe: Any) -> tuple[RenderIREdge, ...
     return tuple(edges)
 
 
-def _node_from_emission(
+def _node_from_unit(
     trace: "Trace",
-    emission: "RenderedNodeEmission",
+    unit: "NodeUnit",
     context: RenderContext,
     universe: Any,
     repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
     segments: "Mapping[str, Any] | None",
 ) -> RenderIRNode:
-    """Convert a legacy node emission into a render-IR node."""
+    """Decorate one structural node-universe unit as a render-IR node."""
+
+    emission = unit.emission
 
     hidden_originals: tuple[str, ...] = ()
     if emission.fold is not None and emission.kind in {"module_box", "run_fold_ellipsis"}:

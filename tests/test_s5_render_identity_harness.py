@@ -204,7 +204,6 @@ def _assert_ir_shape(trace: tl.Trace) -> None:
     assert render_ir.nodes
     assert render_ir.edges
     assert render_ir.regions
-    assert len(render_ir.nodes) == len(render_ir.node_emissions)
     assert all(node.name for node in render_ir.nodes)
     assert all(isinstance(edge, RenderIREdge) for edge in render_ir.edges)
     assert all(isinstance(region, RenderIRRegion) for region in render_ir.regions)
@@ -259,7 +258,6 @@ def test_s5_projected_antiparallel_pairs_require_projected_edges() -> None:
             ),
         ),
         regions=(),
-        node_emissions=(),
     )
 
     assert projected_antiparallel_endpoint_pairs(render_ir) == frozenset(
