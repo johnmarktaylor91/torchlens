@@ -565,6 +565,11 @@ class _RenderIRSubgraphDecisionBuilder:
 
         self._children.append(RenderIRDotStatement("edge", tuple(args), tuple(kwargs.items())))
 
+    def subgraph(self, *args: Any, **kwargs: Any) -> "_RenderIRSubgraphDecisionBuilder":
+        """Record a nested Graphviz subgraph."""
+
+        return _RenderIRSubgraphDecisionBuilder(self._children, tuple(args), dict(kwargs))
+
 
 class _RenderIRBody:
     """Minimal Graphviz body adapter recording already-resolved raw statements."""
