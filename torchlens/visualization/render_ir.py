@@ -560,7 +560,7 @@ def finalize_forward_regions(
     trace: "Trace",
     *,
     vis_mode: str,
-    module_payloads: Mapping[str, Any],
+    module_payloads: dict[str, Any],
     container_regions: tuple[Any, ...],
     captured_edges: tuple[Any, ...],
     overrides: Any,
