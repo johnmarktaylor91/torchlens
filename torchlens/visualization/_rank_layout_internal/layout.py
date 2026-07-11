@@ -613,10 +613,10 @@ def render_rank_layout(
     # Edges (at top level — neato -n routes them fine).
     # Capture the count BEFORE the loop mutates each edge dict (it pops keys).
     num_edges = len(all_edges)
-    for edge in all_edges:
-        tail = _dot_id(edge.pop("tail_name"))
-        head = _dot_id(edge.pop("head_name"))
-        parts = [f"{k}={_dot_quote(str(v))}" for k, v in edge.items()]
+    for edge_data in all_edges:
+        tail = _dot_id(edge_data.pop("tail_name"))
+        head = _dot_id(edge_data.pop("head_name"))
+        parts = [f"{k}={_dot_quote(str(v))}" for k, v in edge_data.items()]
         lines.append(f"  {tail} -> {head} [{' '.join(parts)}]")
 
     lines.append("}")
