@@ -641,8 +641,10 @@ def test_custom_function_key_is_refused_without_import(monkeypatch: pytest.Monke
 
 
 @pytest.mark.smoke
-def test_loaded_spec_refuses_custom_function_key_by_default(tmp_path: Path) -> None:
-    """The public intervention-spec loader propagates the custom trust gate."""
+def test_loaded_spec_tolerates_custom_key_without_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Analysis-mode loading tolerates custom keys without importing them."""
 
     path = tmp_path / "custom_key.tlspec"
     _log().save_intervention(path, level="audit")
@@ -661,10 +663,72 @@ def test_loaded_spec_refuses_custom_function_key_by_default(tmp_path: Path) -> N
     ]
     spec_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(UntrustedCallableError):
-        load_intervention_spec(path)
+    def fail_import(module_name: str) -> object:
+        """Fail if loading attempts to import an untrusted custom module.
+
+        Parameters
+        ----------
+        module_name:
+            Module name passed to the import system.
+
+        Returns
+        -------
+        object
+            This function always raises.
+        """
+
+        raise AssertionError(f"unexpected import of {module_name}")
+
+    with monkeypatch.context() as import_patch:
+        import_patch.setattr("torchlens.intervention.resolver.importlib.import_module", fail_import)
+        assert load_intervention_spec(path)
 
     assert load_intervention_spec(path, allowed_custom_callable_modules={"operator"})
+
+
+@pytest.mark.smoke
+def test_loaded_custom_key_is_denied_at_execution_until_trusted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Loaded foreign callables remain gated until execution explicitly trusts them."""
+
+    module_name = "torchlens_loaded_execution_gate"
+    marker = tmp_path / "imported_at_execution"
+    (tmp_path / f"{module_name}.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
+        "def payload(value):\n    return -value\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    path = tmp_path / "execution_gate.tlspec"
+    _log().save_intervention(path, level="audit")
+    spec_path = path / "spec.json"
+    payload = json.loads(spec_path.read_text(encoding="utf-8"))
+    payload["function_registry_keys"] = [
+        {
+            "layer_label": "foreign_1_1",
+            "key": {
+                "namespace": "custom",
+                "qualname": "payload",
+                "dispatch_kind": "function",
+                "import_path": f"{module_name}:payload",
+            },
+        }
+    ]
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_intervention_spec(path)
+    loaded_key = FunctionRegistryKey(**loaded.metadata["function_registry_keys"][0]["key"])
+    assert not marker.exists()
+
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(loaded_key)
+    assert not marker.exists()
+
+    resolved = resolve_function_registry_key(loaded_key, trust_custom_callables=True)
+    assert marker.read_text(encoding="utf-8") == "executed"
+    assert resolved(3) == -3
 
 
 @pytest.mark.smoke

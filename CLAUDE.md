@@ -214,11 +214,13 @@ The glossary is the **canonical** API spec (vault `brain/projects/torchlens/repo
 
 ### Trusted custom callable imports
 
-Intervention-spec loads refuse bundle-supplied `custom` callable imports by default because importing a
-module executes its top-level code. For a spec from a trusted source, use
-`tl.load(path, trust_custom_callables=True)`. Prefer the narrower
-`tl.load(path, allowed_custom_callable_modules={"my_trusted_module"})`; when an allowlist is supplied it
-remains enforced even alongside `trust_custom_callables=True`.
+Intervention-spec loads tolerate foreign `custom` callable keys for safe structural and metadata
+analysis without importing their modules. Resolution for execution denies those foreign imports by
+default because module imports execute top-level code. Trusted execution may opt in with
+`trust_custom_callables=True`; prefer the narrower
+`allowed_custom_callable_modules={"my_trusted_module"}`, which remains enforced even alongside broad
+trust. TorchLens-owned `torchlens.*` custom callables and the fixed `torch`, `torch.Tensor`,
+`torch.nn.functional`, and `operator` namespaces always resolve.
 
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 

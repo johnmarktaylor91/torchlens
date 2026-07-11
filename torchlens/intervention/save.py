@@ -30,6 +30,7 @@ from .errors import (
     ReplayPreconditionError,
     SiteResolutionError,
     UnserializableDictKeyError,
+    UntrustedCallableError,
 )
 from .helpers import HELPER_REGISTRY_VERSION, helper_from_serialized
 from .resolver import (
@@ -1478,15 +1479,20 @@ def _verify_loaded_function_keys(
     trust_custom_callables: bool,
     allowed_custom_callable_modules: Collection[str] | None,
 ) -> None:
-    """Fail closed when saved function keys are unresolvable.
+    """Validate resolvable saved keys without importing untrusted foreign code.
+
+    Load-time analysis tolerates a well-formed foreign custom key when its trust
+    gate denies resolution. Malformed and otherwise unresolvable keys still fail
+    closed. The foreign custom key is resolved only at execution, where the trust
+    gate is enforced again.
 
     Parameters
     ----------
     entries:
         Serialized function key entries.
     trust_custom_callables:
-        Whether arbitrary custom callable imports are trusted when no allowlist
-        is supplied.
+        Whether foreign custom callable imports may be verified when no
+        allowlist is supplied.
     allowed_custom_callable_modules:
         Optional custom callable module allowlist.
     """
@@ -1494,11 +1500,17 @@ def _verify_loaded_function_keys(
     for entry in entries:
         key_data = entry.get("key", {})
         key = FunctionRegistryKey(**key_data)
-        resolve_function_registry_key(
-            key,
-            trust_custom_callables=trust_custom_callables,
-            allowed_custom_callable_modules=allowed_custom_callable_modules,
-        )
+        try:
+            resolve_function_registry_key(
+                key,
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_custom_callable_modules,
+            )
+        except UntrustedCallableError:
+            # An untrusted custom key can be inspected without importing its module.
+            # Resolution for execution applies the same trust gate and still denies
+            # foreign code by default.
+            continue
 
 
 def _write_tensor_sidecars(
