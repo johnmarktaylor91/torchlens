@@ -246,13 +246,23 @@ def build_node_universe(
                 tuple(hidden.get(emission.name, ())),
             )
         )
-    projected_edges = _project_edges(source_graph.edge_map, endpoint_projection, request.vis_mode)
+    original_labels = {
+        _render_node_label(node, request.vis_mode): str(node.layer_label)
+        for node in source_graph.entries_to_plot.values()
+    }
+    projected_edges = _project_edges(
+        source_graph.edge_map,
+        endpoint_projection,
+        original_labels,
+        request.vis_mode,
+    )
     return NodeUniverse(source_graph, tuple(units), endpoint_projection, projected_edges)
 
 
 def _project_edges(
     edge_map: "Mapping[str, list[RenderEdge]]",
     projection: "Mapping[str, str]",
+    original_labels: "Mapping[str, str]",
     vis_mode: str,
 ) -> tuple[ProjectedEdgeOccurrence, ...]:
     """Project normalized edge occurrences onto visible unit identifiers.
@@ -263,6 +273,8 @@ def _project_edges(
         Normalized source edge occurrences.
     projection:
         Raw-label to visible-unit mapping.
+    original_labels:
+        Raw render labels mapped to stable TorchLens layer labels.
     vis_mode:
         Active render granularity.
 
@@ -286,7 +298,11 @@ def _project_edges(
                 continue
             projected.append(
                 ProjectedEdgeOccurrence(
-                    source_unit, target_unit, edge.occurrence_key, source_label, target_label
+                    source_unit,
+                    target_unit,
+                    edge.occurrence_key,
+                    original_labels.get(source_label, source_label),
+                    str(edge.target.layer_label),
                 )
             )
     return tuple(projected)
