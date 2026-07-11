@@ -164,12 +164,76 @@ class CaptureEvents:
             transformed = event.output.transformed_tensor
             if transformed is not None:
                 transformed = replace(transformed, payload=None)
-            output = replace(event.output, tensor=tensor, transformed_tensor=transformed)
+            child_versions = tuple(
+                (label, replace(child_tensor, payload=None))
+                for label, child_tensor in event.output.child_versions
+            )
+            output = replace(
+                event.output,
+                tensor=tensor,
+                transformed_tensor=transformed,
+                child_versions=child_versions,
+                activation_transform=None,
+            )
+            templates = event.templates
+            if templates is not None:
+                templates = replace(
+                    templates,
+                    saved_args=None,
+                    saved_kwargs=None,
+                    args_template=None,
+                    kwargs_template=None,
+                )
             structural_events.append(
-                replace(event, output=output, grad_fn_handle=None, source_trace=None)
+                replace(
+                    event,
+                    output=output,
+                    templates=templates,
+                    grad_fn_handle=None,
+                    source_trace=None,
+                )
             )
         self.op_events = structural_events
         self.op_event_by_label_raw = {event.label_raw: event for event in structural_events}
+        self.module_events = [
+            replace(event, forward_args=None, forward_kwargs=None) for event in self.module_events
+        ]
+        self.module_prep_events = [
+            replace(
+                event,
+                forward_pre_hooks=None,
+                forward_hooks=None,
+                backward_pre_hooks=None,
+                backward_hooks=None,
+                full_backward_pre_hooks=None,
+                full_backward_hooks=None,
+            )
+            for event in self.module_prep_events
+        ]
+        self.module_enter_events = [
+            replace(
+                event,
+                forward_args=None,
+                forward_kwargs=None,
+                forward_args_template=None,
+                forward_kwargs_template=None,
+            )
+            for event in self.module_enter_events
+        ]
+        self.pre_hook_events = [
+            replace(
+                event,
+                inputs_before_pre_hooks=None,
+                inputs_after_pre_hooks=None,
+            )
+            for event in self.pre_hook_events
+        ]
+        self.output_version_events = [
+            replace(event, payload=None, transform_state=None)
+            for event in self.output_version_events
+        ]
+        self.live_by_raw_label.clear()
+        self.live_index.clear()
         self.grad_fn_handles_by_label_raw.clear()
 
     def next_backward_seq(self) -> int:

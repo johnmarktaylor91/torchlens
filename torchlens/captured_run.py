@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import gc
 from typing import Any, Protocol, TypeVar, runtime_checkable
 from weakref import WeakKeyDictionary
 
@@ -27,6 +28,7 @@ def forget_event_stream(run: object) -> None:
         return
     if events is not None:
         events.release_working_projection()
+        gc.collect(0)
 
 
 @runtime_checkable
