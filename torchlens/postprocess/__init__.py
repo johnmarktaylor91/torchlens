@@ -41,6 +41,7 @@ import torch
 import warnings
 
 from ..capture.session import capture_session_for_events
+from ..capture.projectors import TraceProjector
 from ..utils.tensor_utils import _is_cuda_available, safe_copy
 from ..utils.hashing import (
     compute_graph_shape_hash,
@@ -462,7 +463,7 @@ def postprocess(
         remember_event_stream(self, capture_events)
         capture_session = capture_session_for_events(capture_events)
         sealed_op_events = (
-            [fact.event for fact in capture_session.event_journal.facts]
+            list(TraceProjector(capture_session.seal()).events())
             if capture_session is not None
             else list(capture_events.op_events)
         )

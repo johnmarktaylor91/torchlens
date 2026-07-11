@@ -7,7 +7,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from ..ir.events import OpEvent
+from ..ir.events import OpEvent, OutputRef
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -233,7 +233,7 @@ class PayloadRecord:
         storage write, or additional payload retention.
     """
 
-    output: object
+    output: OutputRef
 
 
 class PayloadLedger:

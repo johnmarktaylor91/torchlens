@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal
+from types import MappingProxyType
+from typing import Any, Callable, Literal, Mapping
 from weakref import ReferenceType, WeakKeyDictionary, ref
 
 from ..ir.events import OpEvent
 from .kernel import CaptureKernel
-from .ledgers import CompletenessManifest, DecisionLedger, EventJournal, PayloadLedger
+from .ledgers import (
+    CompletenessManifest,
+    CompletenessState,
+    DecisionLedger,
+    DecisionRecord,
+    EventFact,
+    EventId,
+    EventJournal,
+    PayloadLedger,
+    PayloadRecord,
+)
 from .plan import CapturePlan, EnrichmentLevel
 
 TerminalState = Literal["complete", "halted", "failed"]
@@ -16,6 +27,28 @@ CleanupCallback = Callable[[], None]
 
 _LEGACY_CAPTURE_SESSIONS: "WeakKeyDictionary[object, CaptureSession]" = WeakKeyDictionary()
 _LEGACY_EVENT_SESSIONS: dict[int, tuple[ReferenceType[object], ReferenceType[CaptureSession]]] = {}
+
+
+@dataclass(frozen=True, slots=True)
+class CapturedRunCore:
+    """Sealed, repeatedly readable facts produced by one capture execution.
+
+    Parameters
+    ----------
+    event_facts
+        Immutable operation facts in producer order.
+    decisions
+        Selection and intervention sidecars keyed by stable event identity.
+    payloads
+        Payload leases keyed by stable event identity.
+    completeness
+        Truthful observability states recorded for the run.
+    """
+
+    event_facts: tuple[EventFact, ...]
+    decisions: Mapping[EventId, DecisionRecord]
+    payloads: Mapping[EventId, PayloadRecord]
+    completeness: Mapping[str, CompletenessState]
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +125,7 @@ class CaptureSession:
     cleanup_stack: list[_CleanupEntry] = field(default_factory=list)
     outcome: RunOutcome | None = None
     kernel: CaptureKernel = field(init=False)
+    _sealed_core: CapturedRunCore | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Compile the session's fixed-order capture kernel."""
@@ -137,6 +171,8 @@ class CaptureSession:
             recomputed here.
         """
 
+        if self._sealed_core is not None:
+            raise RuntimeError("Cannot append capture facts after the run core is sealed.")
         event_id = self.event_journal.append(event)
         self.decision_ledger.append_from_event(event_id, event)
         self.payload_ledger.append_from_event(event_id, event)
@@ -163,9 +199,30 @@ class CaptureSession:
             Replacement event produced by a legacy compatibility helper.
         """
 
+        if self._sealed_core is not None:
+            raise RuntimeError("Cannot replace capture facts after the run core is sealed.")
         event_id = self.event_journal.replace(event)
         self.decision_ledger.append_from_event(event_id, event)
         self.payload_ledger.append_from_event(event_id, event)
+
+    def seal(self) -> CapturedRunCore:
+        """Seal and return the repeatedly readable projection source.
+
+        Returns
+        -------
+        CapturedRunCore
+            Immutable snapshots of facts and stable-id sidecars. Repeated calls
+            return the same core object.
+        """
+
+        if self._sealed_core is None:
+            self._sealed_core = CapturedRunCore(
+                event_facts=self.event_journal.facts,
+                decisions=MappingProxyType(dict(self.decision_ledger.records)),
+                payloads=MappingProxyType(dict(self.payload_ledger.records)),
+                completeness=MappingProxyType(dict(self.completeness.states)),
+            )
+        return self._sealed_core
 
     def register_cleanup(self, name: str, callback: CleanupCallback) -> None:
         """Register one teardown action on the session-owned cleanup stack.

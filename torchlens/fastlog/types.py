@@ -26,6 +26,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
+    from ..capture.session import CapturedRunCore
     from ..capture.projections import RecordingState
     from ..data_classes.trace import Trace
 
@@ -342,6 +343,9 @@ class Recording(CapturedRun):
     _records_built: bool = field(default=True, repr=False, compare=False)
     _recording_trace: RecordingTrace | None = field(default=None, repr=False, compare=False)
     _recording_state: Any | None = field(default=None, repr=False, compare=False)
+    _captured_run_cores: tuple["CapturedRunCore", ...] = field(
+        default=(), repr=False, compare=False
+    )
 
     @property
     def n_passes(self) -> int:
@@ -392,7 +396,22 @@ class Recording(CapturedRun):
             list(getattr(session, "output_tensor_addresses", [])),
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
-        object.__setattr__(base, "_records_built", bool(object.__getattribute__(base, "records")))
+        object.__setattr__(
+            base,
+            "_captured_run_cores",
+            tuple(getattr(session, "captured_run_cores", ())),
+        )
+        recording_state = getattr(session, "recording_state", None)
+        has_core_projection = bool(getattr(session, "captured_run_cores", ()))
+        uses_disk_storage = bool(
+            getattr(getattr(recording_state, "storage_intent", None), "on_disk", False)
+        )
+        object.__setattr__(
+            base,
+            "_records_built",
+            bool(object.__getattribute__(base, "records"))
+            and (not has_core_projection or uses_disk_storage),
+        )
         object.__setattr__(base, "_recording_trace", None)
         return base
 
@@ -407,14 +426,22 @@ class Recording(CapturedRun):
 
         if self._records_built:
             return
-        from ..capture.projections import activation_record_from_event
-
         records = object.__getattribute__(self, "records")
         records.clear()
         self.by_pass.clear()
         self.by_label.clear()
         self.by_address.clear()
-        if self._capture_events is not None:
+        if self._captured_run_cores:
+            from ..capture.projectors import RecordingProjector
+
+            projection = RecordingProjector().project(self._captured_run_cores)
+            records.extend(projection.records)
+            self.by_pass.update(projection.by_pass)
+            self.by_label.update(projection.by_label)
+            self.by_address.update(projection.by_address)
+        elif self._capture_events is not None:
+            from ..capture.projections import activation_record_from_event
+
             for event in self._capture_events.op_events:
                 record = activation_record_from_event(event)
                 if record is None:

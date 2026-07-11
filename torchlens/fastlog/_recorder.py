@@ -284,6 +284,7 @@ class Recorder:
         self._capture_events: CaptureEvents | None = None
         self._output_tensors: list[torch.Tensor] = []
         self._output_tensor_addresses: list[str] = []
+        self._captured_run_cores: list[Any] = []
         self._entered = False
         self._exited = False
         self._failed = False
@@ -324,6 +325,7 @@ class Recorder:
             session.output_tensor_addresses = self._output_tensor_addresses
             session._fastlog_recording = self._state.recording
             session.recording_state = self._state
+            session.captured_run_cores = self._captured_run_cores
             self._recording = Recording.from_capture_events(session)
         else:
             self._state.abort_storage(str(exc_value))
@@ -453,6 +455,9 @@ class Recorder:
         # scratch results back rather than re-extracting from the now-cleaned-up model.
         output_tensors = trace.__dict__.pop("_fastlog_output_tensors", None)
         output_tensor_addresses = trace.__dict__.pop("_fastlog_output_tensor_addresses", None)
+        captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
+        if captured_run_core is not None:
+            self._captured_run_cores.append(captured_run_core)
         if output_tensors is None or output_tensor_addresses is None:
             # Defensive fallback only; the postprocess=False branch above always
             # populates these on a normal return.
