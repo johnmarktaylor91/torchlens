@@ -619,7 +619,7 @@ def draw(
 
     decisions_by_name = {node.name: node for node in forward_render_ir.nodes}
     for unit in node_universe.units:
-        decision = decisions_by_name[unit.unit_id]
+        node_record = decisions_by_name[unit.unit_id]
         for source_index, node in enumerate(unit.source_nodes):
             _add_node_to_graphviz(
                 self,
@@ -652,9 +652,9 @@ def draw(
                 segments,
                 emitted_segment_nodes,
                 antiparallel_projected_edges,
-                decision
+                node_record
                 if source_index == 0
-                else replace(decision, node_calls=(), owned_node_args=()),
+                else replace(node_record, node_calls=(), owned_node_args=()),
             )
 
     for node_args in pending_container_collapse_nodes:
