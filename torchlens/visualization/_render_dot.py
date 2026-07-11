@@ -714,6 +714,29 @@ def draw(
                     top_level_sibling_rank_groups,
                     chain,
                 )
+    forward_render_ir = replace(
+        forward_render_ir,
+        ordering_constraints=tuple(
+            RenderIROrderingConstraint(
+                kind="sibling_order",
+                source_label=chain.source_label,
+                source_name=chain.source_name,
+                targets=chain.targets,
+                target_labels=chain.target_labels,
+                lca_key=chain.lca_key,
+            )
+            for chain in sibling_order_chains
+        ),
+    )
+    forward_render_ir = finalize_forward_regions(
+        forward_render_ir,
+        self,
+        vis_mode=vis_mode,
+        module_payloads=module_cluster_dict,
+        container_regions=tuple(container_clusters),
+        captured_edges=tuple(captured_forward_edges),
+        overrides=overrides,
+    )
 
     forward_dot_ir = ForwardDotIR(
         render_ir=forward_render_ir,
@@ -732,7 +755,8 @@ def draw(
         vis_mode,
         forward_dot_ir.module_cluster_dict,
         overrides,
-        list(forward_dot_ir.top_level_sibling_rank_groups),
+        list(forward_dot_ir.render_ir.ordering_constraints),
+        forward_dot_ir.render_ir.regions,
     )
     for overlay_edge in forward_dot_ir.container_overlay_edges:
         dot.edge(
@@ -776,11 +800,11 @@ def draw(
     _RENDER_TIMEOUT = 120  # seconds
     source_override = None
     self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
-    if sibling_order_chains:
+    if forward_dot_ir.render_ir.ordering_constraints:
         try:
             source_override, decision = _verify_and_apply_sibling_ordering(
                 dot.source,
-                sibling_order_chains,
+                forward_dot_ir.render_ir.ordering_constraints,
                 captured_forward_edges,
                 rankdir,
             )
@@ -1377,7 +1401,7 @@ def _queue_sibling_rank_group(
 
 def _verify_and_apply_sibling_ordering(
     source: str,
-    chains: tuple[SiblingOrderChain, ...],
+    chains: tuple[SiblingOrderChain | RenderIROrderingConstraint, ...],
     captured_edges: list[CapturedForwardEdge],
     rankdir: str,
 ) -> tuple[str, SiblingOrderDecision]:
@@ -1385,7 +1409,9 @@ def _verify_and_apply_sibling_ordering(
 
     baseline_source = _strip_sibling_rank_groups(source)
     baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
-    chains = _filter_sibling_chains_to_rendered_nodes(chains, baseline.nodes)
+    chains = _filter_sibling_chains_to_rendered_nodes(
+        cast(tuple[SiblingOrderChain, ...], chains), baseline.nodes
+    )
     if not chains:
         return baseline_source, _sibling_order_decision((), (), {})
     injected = _layout_dot_plain(source, rankdir, captured_edges)
@@ -1567,7 +1593,8 @@ def _setup_subgraphs(
     vis_mode: str,
     module_edge_dict: Dict[str, Any],
     overrides: Optional[VisualizationOverrides] = None,
-    top_level_rank_groups: Sequence[SiblingOrderChain] = (),
+    top_level_rank_groups: Sequence[SiblingOrderChain | RenderIROrderingConstraint] = (),
+    regions: Sequence[Any] = (),
 ) -> None:
     """Build nested Graphviz subgraphs for module clusters.
 
@@ -1592,6 +1619,9 @@ def _setup_subgraphs(
     """
     if "self" not in self.modules:
         return
+    region_styles = {
+        region.key: dict(region.style) for region in regions if region.kind == "module"
+    }
     if vis_mode == "unrolled":
         module_submodule_dict = defaultdict(list)
         for call_label, mpl in self.modules._pass_dict.items():
@@ -1624,9 +1654,10 @@ def _setup_subgraphs(
             max_call_depth,
             vis_mode,
             overrides,  # type: ignore[arg-type]
+            region_styles,
         )
     for chain in top_level_rank_groups:
-        _emit_sibling_rank_group(graphviz_graph, chain)
+        _emit_sibling_rank_group(graphviz_graph, cast(SiblingOrderChain, chain))
         emitted_rank_groups += 1
     queued_rank_groups = len(top_level_rank_groups) + sum(
         len(data.get("rank_groups", [])) for data in module_edge_dict.values()
@@ -1645,6 +1676,7 @@ def _setup_subgraphs_recurse(
     max_call_depth: int,
     vis_mode: str,
     overrides: VisualizationOverrides,
+    region_styles: Mapping[str, Mapping[str, str]],
 ) -> int:
     """Recursively build a single branch of the module subgraph hierarchy.
 
@@ -1702,6 +1734,7 @@ def _setup_subgraphs_recurse(
                 max_call_depth,
                 vis_mode,
                 overrides,
+                region_styles,
             )
 
     else:  # Leaf of this branch: create the subgraph and add all edges.
@@ -1729,18 +1762,19 @@ def _setup_subgraphs_recurse(
             # (e.g. an ``nn.ModuleDict`` key like ``"score & rank"``), so the
             # title must go through ``html_escape`` like any other
             # user-provided string -- do not assume it is HTML-safe.
-            module_args = make_module_cluster_attrs(
-                title=subgraph_title,
-                module_type=module_type,
-                line_style=line_style,
-                penwidth=pen_width,
-            )
-
-            for arg_name, arg_val in overrides.module.items():  # type: ignore[union-attr]
-                if callable(arg_val):
-                    module_args[arg_name] = str(arg_val(self, subgraph_name))
-                else:
-                    module_args[arg_name] = str(arg_val)
+            module_args = dict(region_styles.get(subgraph_name, {}))
+            if not module_args:
+                module_args = make_module_cluster_attrs(
+                    title=subgraph_title,
+                    module_type=module_type,
+                    line_style=line_style,
+                    penwidth=pen_width,
+                )
+                for arg_name, arg_val in overrides.module.items():  # type: ignore[union-attr]
+                    if callable(arg_val):
+                        module_args[arg_name] = str(arg_val(self, subgraph_name))
+                    else:
+                        module_args[arg_name] = str(arg_val)
             s.attr(**module_args)
             for chain in cluster_payload.get("rank_groups", []):
                 _emit_sibling_rank_group(s, chain)

@@ -99,7 +99,12 @@ from .code_panel import (
 )
 from .collapse_plan import CollapsePlan, RawOp, SegmentDescriptor
 from .request import RenderContext
-from .render_ir import build_render_ir, projected_antiparallel_endpoint_pairs
+from .render_ir import (
+    RenderIROrderingConstraint,
+    build_render_ir,
+    finalize_forward_regions,
+    projected_antiparallel_endpoint_pairs,
+)
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -715,6 +720,7 @@ __all__ = [
     "RenderContext",
     "RenderEdge",
     "RenderedNodeEmission",
+    "RenderIROrderingConstraint",
     "Role",
     "RollingAnnotation",
     "SIBLING_ORDER_EPSILON",
@@ -763,6 +769,7 @@ __all__ = [
     "base64",
     "batch_summary",
     "build_render_ir",
+    "finalize_forward_regions",
     "cast",
     "compose_graph_with_code_panel",
     "compute_module_penwidth",

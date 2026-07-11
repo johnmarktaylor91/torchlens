@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from .request import RenderContext
@@ -85,22 +85,62 @@ class RenderIREdge:
 
 
 @dataclass(frozen=True)
-class RenderIRCluster:
-    """Resolved ownership slice for nodes and edges in one cluster.
+class RenderIRRegion:
+    """One nested, renderer-neutral region selected for DOT emission.
 
     Parameters
     ----------
     key:
-        Renderer cluster key.
+        Stable region key.
+    parent_key:
+        Parent region key, or ``None`` for a top-level region.
+    kind:
+        Semantic region category.
+    label:
+        Resolved display label.
+    style:
+        Ordered Graphviz-compatible region attributes.
     node_names:
-        Rendered nodes owned by the cluster.
+        Rendered nodes owned by the region in emission order.
     edge_indexes:
         Indexes into :attr:`RenderIR.edges` emitted inside the cluster.
     """
 
     key: str
+    parent_key: str | None
+    kind: Literal["module", "container", "backward_pass", "combined"]
+    label: str
+    style: tuple[tuple[str, str], ...]
     node_names: tuple[str, ...]
     edge_indexes: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class RenderIROrderingConstraint:
+    """Declarative sibling-ordering constraint resolved before backend layout.
+
+    Parameters
+    ----------
+    kind:
+        Constraint family.
+    source_label:
+        Source TorchLens label for diagnostics.
+    source_name:
+        Rendered source node identifier.
+    targets:
+        Rendered target identifiers in required order.
+    target_labels:
+        Source labels corresponding to ``targets``.
+    lca_key:
+        Region key where the constraint is emitted, or ``-1`` at top level.
+    """
+
+    kind: Literal["sibling_order"]
+    source_label: str
+    source_name: str
+    targets: tuple[str, ...]
+    target_labels: tuple[str, ...]
+    lca_key: str | int
 
 
 @dataclass(frozen=True)
@@ -115,8 +155,10 @@ class RenderIR:
         Resolved nodes in deterministic renderer emission order.
     edges:
         Resolved forward edges in deterministic renderer traversal order.
-    clusters:
-        Cluster ownership records derived from resolved node and edge owners.
+    regions:
+        Nested region records in deterministic emission order.
+    ordering_constraints:
+        Declarative backend layout constraints.
     node_emissions:
         Legacy node emission adapter kept during migration.
     """
@@ -124,8 +166,9 @@ class RenderIR:
     context: RenderContext
     nodes: tuple[RenderIRNode, ...]
     edges: tuple[RenderIREdge, ...]
-    clusters: tuple[RenderIRCluster, ...]
+    regions: tuple[RenderIRRegion, ...]
     node_emissions: tuple["RenderedNodeEmission", ...]
+    ordering_constraints: tuple[RenderIROrderingConstraint, ...] = ()
 
 
 def projected_antiparallel_endpoint_pairs(render_ir: RenderIR) -> frozenset[tuple[str, str]]:
@@ -193,12 +236,12 @@ def build_render_ir(
         for emission in emissions
     )
     edges = _build_forward_edges_from_universe(universe)
-    clusters = _build_clusters(nodes, edges)
+    regions = _build_regions(trace, nodes, edges)
     return RenderIR(
         context=resolved_context,
         nodes=nodes,
         edges=edges,
-        clusters=clusters,
+        regions=regions,
         node_emissions=emissions,
     )
 
@@ -436,11 +479,12 @@ def _projection_reason(
     return "direct"
 
 
-def _build_clusters(
+def _build_regions(
+    trace: "Trace",
     nodes: tuple[RenderIRNode, ...],
     edges: tuple[RenderIREdge, ...],
-) -> tuple[RenderIRCluster, ...]:
-    """Build cluster ownership records from IR nodes and edges.
+) -> tuple[RenderIRRegion, ...]:
+    """Build preliminary nested module regions from resolved ownership.
 
     Parameters
     ----------
@@ -451,8 +495,9 @@ def _build_clusters(
 
     Returns
     -------
-    tuple[RenderIRCluster, ...]
-        Cluster records sorted by cluster key.
+    tuple[RenderIRRegion, ...]
+        Module regions sorted by stable key. Later forward-DOT assembly enriches
+        them with the final style and container members before serialization.
     """
 
     cluster_nodes: defaultdict[str, list[str]] = defaultdict(list)
@@ -463,11 +508,247 @@ def _build_clusters(
     for index, edge in enumerate(edges):
         if edge.owner_cluster is not None:
             cluster_edges[edge.owner_cluster].append(index)
+    region_keys = set(cluster_nodes) | set(cluster_edges)
+    if not region_keys:
+        region_keys = {
+            module.address
+            for module in trace.modules
+            if getattr(module, "address", "self") != "self"
+        }
     return tuple(
-        RenderIRCluster(
+        RenderIRRegion(
             key=key,
+            parent_key=_region_parent_key(key, region_keys),
+            kind="module",
+            label=key,
+            style=(),
             node_names=tuple(cluster_nodes.get(key, ())),
             edge_indexes=tuple(cluster_edges.get(key, ())),
         )
-        for key in sorted(set(cluster_nodes) | set(cluster_edges))
+        for key in sorted(region_keys)
     )
+
+
+def _region_parent_key(key: str, keys: set[str]) -> str | None:
+    """Return the nearest emitted module parent for a region key.
+
+    Parameters
+    ----------
+    key:
+        Region key using module-address syntax.
+    keys:
+        All emitted region keys.
+
+    Returns
+    -------
+    str | None
+        Nearest ancestor key present in ``keys``.
+    """
+
+    address, separator, call = key.partition(":")
+    parts = address.split(".")
+    for length in range(len(parts) - 1, 0, -1):
+        parent_address = ".".join(parts[:length])
+        parent = f"{parent_address}{separator}{call}" if separator else parent_address
+        if parent in keys:
+            return parent
+    return None
+
+
+def finalize_forward_regions(
+    render_ir: RenderIR,
+    trace: "Trace",
+    *,
+    vis_mode: str,
+    module_payloads: Mapping[str, Any],
+    container_regions: tuple[Any, ...],
+    captured_edges: tuple[Any, ...],
+    overrides: Any,
+) -> RenderIR:
+    """Attach final DOT region decisions to a forward render IR.
+
+    Parameters
+    ----------
+    render_ir:
+        IR built before edge emission.
+    trace:
+        Trace supplying module labels and types.
+    vis_mode:
+        Active rolled or unrolled mode.
+    module_payloads:
+        Legacy edge-emission payloads, consumed once to complete region membership.
+    container_regions:
+        Resolved opt-in container region descriptors.
+    captured_edges:
+        Rendered edge occurrences used to assign edge ownership.
+    overrides:
+        Resolved visualization overrides.
+
+    Returns
+    -------
+    RenderIR
+        The same IR with immutable, decision-complete nested region records.
+    """
+
+    from ._render_flow import _get_max_call_depth
+    from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
+    from .rendering import _collapsed_module_rolling_suffix
+
+    edge_owner = {edge.occurrence_key: edge.module_key for edge in captured_edges}
+    edges = tuple(
+        replace(
+            edge,
+            owner_cluster=(
+                str(edge_owner[edge.occurrence_key])
+                if edge_owner.get(edge.occurrence_key, -1) != -1
+                else None
+            ),
+        )
+        for edge in render_ir.edges
+    )
+    region_keys = set(module_payloads)
+    for node in render_ir.nodes:
+        if node.owner_cluster is not None:
+            region_keys.add(node.owner_cluster)
+    module_children, top_modules = _region_module_hierarchy(trace, vis_mode)
+    max_depth = _get_max_call_depth(top_modules, module_payloads, module_children)
+    regions: list[RenderIRRegion] = []
+    for key in sorted(region_keys):
+        address = key.split(":", 1)[0]
+        module = trace.modules[address]
+        if vis_mode == "unrolled" and getattr(module, "num_calls", 1) > 1:
+            label = key
+        elif vis_mode == "rolled" and getattr(module, "num_calls", 1) > 1:
+            label = (
+                f"{address} (x{module.num_calls}{_collapsed_module_rolling_suffix(trace, address)})"
+            )
+        else:
+            label = address
+        payload = module_payloads.get(key, {})
+        attrs = make_module_cluster_attrs(
+            title=label,
+            module_type=module.class_name,
+            line_style="solid" if payload.get("has_input_ancestor") else "dashed",
+            penwidth=compute_module_penwidth(
+                _region_call_depth(key, top_modules, module_children), max_depth
+            ),
+        )
+        for attr_name, attr_value in overrides.module.items():
+            attrs[attr_name] = str(attr_value(trace, key) if callable(attr_value) else attr_value)
+        node_names = tuple(str(args.get("name", "")) for args in payload.get("nodes", ()))
+        node_names += tuple(
+            node.name
+            for node in render_ir.nodes
+            if node.owner_cluster == key and node.name not in node_names
+        )
+        regions.append(
+            RenderIRRegion(
+                key=key,
+                parent_key=_region_parent_key(key, region_keys),
+                kind="module",
+                label=label,
+                style=tuple(attrs.items()),
+                node_names=node_names,
+                edge_indexes=tuple(
+                    index for index, edge in enumerate(edges) if edge.owner_cluster == key
+                ),
+            )
+        )
+    for container in container_regions:
+        attrs = make_module_cluster_attrs(
+            title=container.title,
+            module_type=container.kind,
+            line_style="dotted",
+            penwidth=1.0,
+            fillcolor="white",
+        )
+        owner = str(container.owner_key)
+        regions.append(
+            RenderIRRegion(
+                key=f"container:{container.cluster_id}",
+                parent_key=owner if owner in region_keys else None,
+                kind="container",
+                label=container.title,
+                style=tuple(attrs.items()),
+                node_names=container.node_names,
+                edge_indexes=(),
+            )
+        )
+    return replace(render_ir, edges=edges, regions=tuple(regions))
+
+
+def _module_depth(key: str) -> int:
+    """Return a module-address nesting depth for a region key.
+
+    Parameters
+    ----------
+    key:
+        Module region key, optionally pass-qualified.
+
+    Returns
+    -------
+    int
+        One-based module depth.
+    """
+
+    return len(key.split(":", 1)[0].split("."))
+
+
+def _region_module_hierarchy(
+    trace: "Trace", vis_mode: str
+) -> tuple[defaultdict[str, list[str]], list[str]]:
+    """Return the module hierarchy used by legacy DOT subgraph emission.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing recorded module calls.
+    vis_mode:
+        Active rolled or unrolled visualization mode.
+
+    Returns
+    -------
+    tuple[defaultdict[str, list[str]], list[str]]
+        Child mapping and top-level module keys in DOT emission order.
+    """
+
+    children: defaultdict[str, list[str]] = defaultdict(list)
+    if vis_mode == "unrolled":
+        for call_label, module_pass in trace.modules._pass_dict.items():
+            children[call_label] = list(module_pass.call_children)
+        return children, list(trace.modules["self"].ops[0].call_children)
+    for module in trace.modules:
+        if module.address != "self":
+            children[module.address] = list(module.call_children)
+    return children, list(trace.modules["self"].call_children)
+
+
+def _region_call_depth(
+    key: str,
+    top_modules: list[str],
+    children: Mapping[str, list[str]],
+) -> int:
+    """Return the legacy BFS subgraph depth for a module region.
+
+    Parameters
+    ----------
+    key:
+        Region key to locate.
+    top_modules:
+        Top-level emitted module keys.
+    children:
+        Module child mapping.
+
+    Returns
+    -------
+    int
+        Zero-based nesting depth used for module border widths.
+    """
+
+    pending = [(candidate, 0) for candidate in top_modules]
+    while pending:
+        candidate, depth = pending.pop(0)
+        if candidate == key:
+            return depth
+        pending.extend((child, depth + 1) for child in children[candidate])
+    return _module_depth(key) - 1
