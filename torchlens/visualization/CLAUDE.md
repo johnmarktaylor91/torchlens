@@ -27,5 +27,7 @@ operation and conservatively no-ops outside its supported forward/unrolled/dot c
 `code_panel.py` adds captured source beside Graphviz output. `bundle_diff.py`, `fastlog_preview.py`,
 and `fastlog_live.py` support specialized visualization workflows.
 
-Backward and combined graph entrypoints live in `_render_entrypoints.py`; they retain their dedicated
-rendering path. Experimental Dagua remains opt-in under `torchlens.experimental.dagua`.
+Backward and combined graph entrypoints live in `_render_entrypoints.py`. Their grad-function source
+normalizers produce the same `RenderIRNode`, `RenderIREdge`, and `RenderIRRegion` records as the forward
+pipeline, including backward-pass regions for unrolled graphs, and dispatch through the same renderer
+protocol and Graphviz backend. Experimental Dagua remains opt-in under `torchlens.experimental.dagua`.

@@ -36,6 +36,12 @@ class RenderTarget:
         Whether a local viewer should be opened after rendering.
     renderer_name:
         Requested renderer implementation.
+    graph_name:
+        Optional backend graph identifier.
+    graph_comment:
+        Optional backend graph comment.
+    timeout:
+        Maximum layout-execution time in seconds.
     """
 
     outpath: str = "modelgraph"
@@ -43,6 +49,9 @@ class RenderTarget:
     save_only: bool = False
     viewer: bool = True
     renderer_name: VisRendererLiteral = "graphviz"
+    graph_name: str | None = None
+    graph_comment: str | None = None
+    timeout: int = 120
 
 
 @dataclass(frozen=True)

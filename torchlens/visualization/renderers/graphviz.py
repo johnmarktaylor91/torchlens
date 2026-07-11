@@ -54,7 +54,11 @@ class GraphvizRenderer:
             DOT source and generated artifact locations.
         """
 
-        dot = graphviz.Digraph(format=target.fileformat)
+        dot = graphviz.Digraph(
+            name=target.graph_name,
+            comment=target.graph_comment,
+            format=target.fileformat,
+        )
         self.emit(ir, dot)
         source_path = Path(dot.save(target.outpath))
         output_path = Path(f"{target.outpath}.{target.fileformat}")
@@ -62,6 +66,7 @@ class GraphvizRenderer:
             [dot.engine, f"-T{target.fileformat}", "-o", str(output_path), str(source_path)],
             check=True,
             capture_output=True,
+            timeout=target.timeout,
         )
         return RenderReport(dot.source, source_path, output_path)
 

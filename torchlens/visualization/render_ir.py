@@ -38,7 +38,15 @@ class RenderIRNode:
     """
 
     name: str
-    kind: Literal["raw_op", "module_box", "boundary", "run_fold_ellipsis", "hidden_run_member"]
+    kind: Literal[
+        "raw_op",
+        "module_box",
+        "boundary",
+        "run_fold_ellipsis",
+        "hidden_run_member",
+        "grad_fn",
+        "grad_fn_call",
+    ]
     owner_cluster: str | None
     source_label: str | None
     hidden_originals: tuple[str, ...] = ()
@@ -114,7 +122,7 @@ class RenderIRRegion:
 
     key: str
     parent_key: str | None
-    kind: Literal["module", "container", "backward_pass", "combined"]
+    kind: Literal["module", "container", "backward_pass", "combined", "intervening_grad_fn"]
     label: str
     style: tuple[tuple[str, str], ...]
     node_names: tuple[str, ...]
@@ -294,6 +302,285 @@ def build_render_ir(
         nodes=nodes,
         edges=edges,
         regions=regions,
+    )
+
+
+def build_backward_render_ir(
+    trace: "Trace",
+    *,
+    vis_mode: Literal["rolled", "unrolled"],
+    pass_filter: set[int] | None,
+    dot_statements: tuple[RenderIRDotStatement, ...],
+) -> RenderIR:
+    """Normalize a captured backward graph into the package-wide render IR.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing captured grad-function handles and calls.
+    vis_mode:
+        Rolled handle mode or unrolled call mode.
+    pass_filter:
+        Optional one-based backward-pass indexes to retain.
+    dot_statements:
+        Fully resolved backend statements in byte-stable emission order.
+
+    Returns
+    -------
+    RenderIR
+        Renderer-neutral backward nodes, edges, regions, and resolved statements.
+    """
+
+    nodes, visible_by_pass = _normalize_backward_nodes(trace, vis_mode, pass_filter)
+    edges = _normalize_backward_edges(trace, vis_mode, pass_filter, visible_by_pass)
+    regions = _normalize_backward_regions(nodes, visible_by_pass)
+    return RenderIR(
+        context=RenderContext(vis_mode=vis_mode),
+        nodes=nodes,
+        edges=edges,
+        regions=regions,
+        dot_statements=dot_statements,
+    )
+
+
+def build_combined_render_ir(
+    trace: "Trace",
+    forward_ir: RenderIR,
+    *,
+    pass_filter: set[int] | None,
+    intervening_node_names: tuple[str, ...],
+    dot_statements: tuple[RenderIRDotStatement, ...],
+) -> RenderIR:
+    """Merge normalized forward and backward sources into one render IR.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing the paired forward and backward structures.
+    forward_ir:
+        Normalized unrolled forward graph.
+    pass_filter:
+        Optional one-based backward-pass indexes to retain.
+    intervening_node_names:
+        Grad-function node names assigned to the special intervening region.
+    dot_statements:
+        Fully resolved backend statements in byte-stable emission order.
+
+    Returns
+    -------
+    RenderIR
+        One IR containing both source normalizations.
+    """
+
+    backward_nodes, visible_by_pass = _normalize_backward_nodes(trace, "rolled", pass_filter)
+    backward_edges = _normalize_backward_edges(trace, "rolled", pass_filter, visible_by_pass)
+    correspondence_edges = _normalize_correspondence_edges(trace, pass_filter)
+    regions = list(forward_ir.regions)
+    if intervening_node_names:
+        regions.append(
+            RenderIRRegion(
+                key="__intervening__",
+                parent_key=None,
+                kind="intervening_grad_fn",
+                label="intervening grad_fns",
+                style=(),
+                node_names=intervening_node_names,
+                edge_indexes=(),
+            )
+        )
+    return replace(
+        forward_ir,
+        nodes=forward_ir.nodes + backward_nodes,
+        edges=forward_ir.edges + backward_edges + correspondence_edges,
+        regions=tuple(regions),
+        dot_statements=dot_statements,
+    )
+
+
+def _normalize_backward_nodes(
+    trace: "Trace",
+    vis_mode: Literal["rolled", "unrolled"],
+    pass_filter: set[int] | None,
+) -> tuple[tuple[RenderIRNode, ...], dict[int, list[tuple[Any, Any]]]]:
+    """Normalize visible grad-function handles or calls into IR nodes."""
+
+    from .rendering import (
+        _backward_dot_call_node_name,
+        _backward_dot_node_name,
+        _grad_fn_call_matches_backward_filter,
+        _grad_fn_matches_backward_filter,
+    )
+
+    visible_by_pass: defaultdict[int, list[tuple[Any, Any]]] = defaultdict(list)
+    nodes: list[RenderIRNode] = []
+    for grad_fn in trace.grad_fns:
+        if vis_mode == "rolled":
+            if not _grad_fn_matches_backward_filter(grad_fn, pass_filter):
+                continue
+            nodes.append(
+                RenderIRNode(
+                    name=_backward_dot_node_name(grad_fn),
+                    kind="grad_fn",
+                    owner_cluster=None,
+                    source_label=grad_fn.type,
+                )
+            )
+            continue
+        for call in grad_fn.calls.values():
+            if not _grad_fn_call_matches_backward_filter(call, pass_filter):
+                continue
+            pass_index = getattr(call, "backward_pass_index", None)
+            if pass_index is None:
+                continue
+            visible_by_pass[int(pass_index)].append((grad_fn, call))
+            nodes.append(
+                RenderIRNode(
+                    name=_backward_dot_call_node_name(grad_fn, call),
+                    kind="grad_fn_call",
+                    owner_cluster=f"backward_pass_{pass_index}",
+                    source_label=grad_fn.type,
+                    region_path=(f"backward_pass_{pass_index}",),
+                )
+            )
+    return tuple(nodes), dict(sorted(visible_by_pass.items()))
+
+
+def _normalize_backward_edges(
+    trace: "Trace",
+    vis_mode: Literal["rolled", "unrolled"],
+    pass_filter: set[int] | None,
+    visible_by_pass: dict[int, list[tuple[Any, Any]]],
+) -> tuple[RenderIREdge, ...]:
+    """Normalize visible grad-function dependencies into IR edges."""
+
+    from .rendering import (
+        _backward_dot_call_node_name,
+        _backward_dot_node_name,
+        _grad_fn_matches_backward_filter,
+    )
+
+    edges: list[RenderIREdge] = []
+    if vis_mode == "rolled":
+        visible_ids = {
+            grad_fn.grad_fn_object_id
+            for grad_fn in trace.grad_fns
+            if _grad_fn_matches_backward_filter(grad_fn, pass_filter)
+        }
+        for grad_fn in trace.grad_fns:
+            if grad_fn.grad_fn_object_id not in visible_ids:
+                continue
+            for next_id in grad_fn.next_grad_fn_ids:
+                if next_id not in visible_ids:
+                    continue
+                head = trace.grad_fn_logs[next_id]
+                tail_name = _backward_dot_node_name(grad_fn)
+                head_name = _backward_dot_node_name(head)
+                edges.append(
+                    _normalized_grad_edge(
+                        tail_name,
+                        head_name,
+                        grad_fn,
+                        head,
+                        len(edges),
+                    )
+                )
+        return tuple(edges)
+    for pass_index, calls in visible_by_pass.items():
+        calls_by_id: defaultdict[int, list[tuple[Any, Any]]] = defaultdict(list)
+        for grad_fn, call in calls:
+            calls_by_id[grad_fn.grad_fn_object_id].append((grad_fn, call))
+        for grad_fn, call in calls:
+            for next_id in grad_fn.next_grad_fn_ids:
+                for head, head_call in calls_by_id.get(next_id, ()):
+                    edges.append(
+                        _normalized_grad_edge(
+                            _backward_dot_call_node_name(grad_fn, call),
+                            _backward_dot_call_node_name(head, head_call),
+                            grad_fn,
+                            head,
+                            len(edges),
+                            owner_cluster=f"backward_pass_{pass_index}",
+                        )
+                    )
+    return tuple(edges)
+
+
+def _normalized_grad_edge(
+    tail_name: str,
+    head_name: str,
+    tail: Any,
+    head: Any,
+    index: int,
+    owner_cluster: str | None = None,
+) -> RenderIREdge:
+    """Create one normalized backward dependency edge."""
+
+    from .rendering import _backward_edge_attrs
+
+    return RenderIREdge(
+        source_unit=tail_name,
+        target_unit=head_name,
+        source_originals=(tail_name,),
+        target_originals=(head_name,),
+        owner_cluster=owner_cluster,
+        occurrence_key=("grad", index, tail_name, head_name),
+        projection_reason="direct",
+        tail_name=tail_name,
+        head_name=head_name,
+        attrs=tuple(_backward_edge_attrs(tail, head).items()),
+    )
+
+
+def _normalize_correspondence_edges(
+    trace: "Trace", pass_filter: set[int] | None
+) -> tuple[RenderIREdge, ...]:
+    """Normalize visible forward-to-grad-function correspondence edges."""
+
+    from .rendering import _backward_dot_node_name, _grad_fn_matches_backward_filter
+
+    edges: list[RenderIREdge] = []
+    for grad_fn in trace.grad_fns:
+        if not grad_fn.has_op or not _grad_fn_matches_backward_filter(grad_fn, pass_filter):
+            continue
+        op = grad_fn.op
+        if op is None:
+            continue
+        head_name = _backward_dot_node_name(grad_fn)
+        edges.append(
+            RenderIREdge(
+                source_unit=op.layer_label,
+                target_unit=head_name,
+                source_originals=(op.layer_label,),
+                target_originals=(head_name,),
+                owner_cluster=None,
+                occurrence_key=("correspondence", len(edges), op.layer_label, head_name),
+                projection_reason="direct",
+                tail_name=op.layer_label,
+                head_name=head_name,
+            )
+        )
+    return tuple(edges)
+
+
+def _normalize_backward_regions(
+    nodes: tuple[RenderIRNode, ...],
+    visible_by_pass: dict[int, list[tuple[Any, Any]]],
+) -> tuple[RenderIRRegion, ...]:
+    """Normalize unrolled backward-pass groups into IR regions."""
+
+    return tuple(
+        RenderIRRegion(
+            key=f"backward_pass_{pass_index}",
+            parent_key=None,
+            kind="backward_pass",
+            label=f"backward pass {pass_index}",
+            style=(),
+            node_names=tuple(
+                node.name for node in nodes if node.owner_cluster == f"backward_pass_{pass_index}"
+            ),
+            edge_indexes=(),
+        )
+        for pass_index in visible_by_pass
     )
 
 

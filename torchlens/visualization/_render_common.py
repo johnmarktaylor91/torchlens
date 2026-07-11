@@ -509,6 +509,11 @@ class _RenderIRDecisionBuilder:
 
         self.calls.append(RenderIRDotStatement("edge", tuple(args), tuple(kwargs.items())))
 
+    def attr(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz attribute statement."""
+
+        self.calls.append(RenderIRDotStatement("attr", tuple(args), tuple(kwargs.items())))
+
     def subgraph(self, *args: Any, **kwargs: Any) -> "_RenderIRSubgraphDecisionBuilder":
         """Record a nested Graphviz subgraph."""
 
