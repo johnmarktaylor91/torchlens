@@ -261,6 +261,10 @@ class CaptureSession:
                 "records": records,
                 "output_tensors": tuple(output_tensors or ()),
                 "output_tensor_addresses": tuple(output_tensor_addresses or ()),
+                "output_labels": tuple(
+                    getattr(getattr(tensor, "_tl", None), "label_raw", None)
+                    for tensor in (output_tensors or ())
+                ),
                 "capture_start_time": getattr(trace, "capture_start_time", 0),
                 "setup_duration": getattr(trace, "setup_duration", 0),
                 "forward_duration": getattr(trace, "forward_duration", 0),

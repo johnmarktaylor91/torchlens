@@ -742,6 +742,7 @@ class Recording(CapturedRun):
         # materialized `trace.capture_events` is the copy.
         events_for_replay = projection.capture_events.copy_for_replay()
         trace.capture_events = events_for_replay
+        projection.prepare_trace(trace)
         # Halt-finalization parity. A halted recording never reached the
         # model's real return, so no captured event carries is_output_parent
         # (the output-marking step that stamps it only runs on a completed
@@ -760,6 +761,7 @@ class Recording(CapturedRun):
         halt_output_addresses = list(projection.output_tensor_addresses)
         if self.halted:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
+            projection.bind_halt_frontier(frontier_tensor, frontier_label)
             trace.halted = True
             trace.halt_reason = self.halt_reason
             trace.halt_frontier = self.halt_reason
@@ -767,132 +769,10 @@ class Recording(CapturedRun):
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
-        trace.buffer_layers = list(projection.buffer_layers)
-        trace.internal_source_ops = list(projection.internal_source_ops)
-        # Complete the special-layer-list backfill for the remaining two of the
-        # five (list <-> per-Op-flag) pairs the `special_layer_lists` invariant
-        # checks (torchlens/validation/invariants.py `_SPECIAL_LIST_FLAG_PAIRS`:
-        # input_layers, output_layers, buffer_layers, internal_source_ops,
-        # internal_sink_ops). `input_layers`/`output_layers` are seeded above;
-        # `internal_sink_ops` is NOT seeded here on purpose -- it is computed
-        # fresh inside `_postprocess()` (graph_traversal.py
-        # `_log_internally_terminated_tensor`; buffer-write sinks are stamped by
-        # Step 6 `_fix_buffer_layers`), so it self-heals from the replayed event
-        # stream. `buffer_layers` and `internal_source_ops`, by contrast, are
-        # populated by `.append()` calls made directly on the LIVE per-pass Trace
-        # DURING capture (backends/torch/sources.py, ops.py, model_prep.py) --
-        # exactly the same mechanism as `input_layers` -- and are therefore
-        # dropped when replaying events into a brand-new Trace unless seeded here.
-        #
-        # `buffer_layers` is load-bearing, not just invariant bookkeeping:
-        # postprocess Step 6 `_fix_buffer_layers` (control_flow.py) iterates it to
-        # link `buffer_source`, deduplicate same-value buffers, assign
-        # `buffer_pass`, and mark buffer-write sinks; leaving it empty silently
-        # disables all of that (buffer_pass stays None, Module.buffer_layers comes
-        # back empty for every buffer-bearing module -- BatchNorm running stats,
-        # registered constants). Seed both from raw labels; Step 10
-        # `_rename_model_history_layer_names` (labeling.py) remaps these lists
-        # from raw to final labels exactly as it already does for input/output.
-        #
-        # Criteria mirror the authoritative per-Op flag normalization so the
-        # seeded lists stay bidirectionally consistent with the flags the
-        # invariant cross-checks: is_buffer <- layer_type == "buffer"
-        # (postprocess/labeling.py `_normalize_io_role_flags`); is_internal_source
-        # <- layer_type != "input" and no parents (postprocess/_materialize.py,
-        # capture/projections.py -- note buffers are ALSO internal-source ops, so
-        # they legitimately appear in both lists, matching exhaustive tl.trace()).
-        # The live capture path (torchlens/capture/trace.py) sets
-        # capture_start_time/setup_duration/forward_duration/forward_peak_memory/
-        # forward_memory_backend on the Trace it builds *during* the forward
-        # pass, before _postprocess() runs. Replaying captured events into a
-        # brand-new Trace here skips that live-dispatch setup entirely, so
-        # without this back-fill capture_start_time stays at the dataclass
-        # default of 0 and _log_time_elapsed (postprocess Step 14) computes
-        # cleanup_duration as `time.time() - 0 - 0 - 0`, a garbage
-        # multi-decade Duration. Seed capture_start_time from the Recording's
-        # own directly-measured first pass-start timestamp (always populated
-        # for a non-failed recording with retained capture events), and copy
-        # the remaining timing/memory fields from the fastlog Recorder's
-        # internal runtime_trace when reachable -- that trace genuinely
-        # measured them via the same _forward_peak_memory_bracket helper the
-        # normal capture path uses (predicate-mode primary pass, see
-        # torchlens/capture/trace.py's _run_predicate_forward_with_root_frame),
-        # they are just otherwise discarded once the pass completes. Fields
-        # that were not actually measured are left at their honest Trace
-        # defaults -- no fabrication.
-        trace_facts = projection.trace_facts
-        trace.capture_start_time = trace_facts["capture_start_time"]
-        trace.setup_duration = trace_facts["setup_duration"]
-        trace.forward_duration = trace_facts["forward_duration"]
-        trace.forward_peak_memory = trace_facts["forward_peak_memory"]
-        trace.forward_memory_backend = trace_facts["forward_memory_backend"]
-        if trace_facts:
-            # Backfill the weak source-model reference the live predicate-mode
-            # primary pass set (capture/trace.py run_and_log_inputs_through_model).
-            # _postprocess() below (graph_traversal.py _resolve_output_parent_labels)
-            # needs it on THIS trace to late-log a registered buffer that was
-            # returned directly from forward() without ever being touched by a
-            # traced op -- otherwise a buffer-only-output model crashes here with
-            # "could not attribute a model output tensor to any traced op" even
-            # though the primary capture pass already identified it correctly.
-            if getattr(trace, "_source_model_ref", None) is None:
-                trace._source_model_ref = trace_facts["source_model_ref"]
-            # The predicate-mode primary pass (capture/trace.py) genuinely seeds
-            # and records the RNG seed on its runtime_trace (self.random_seed,
-            # set even when the caller passed random_seed=None). random_seed is a
-            # FieldPolicy.KEEP (serialized) field, so backfill it from the trace
-            # that actually used it rather than leaving Trace.random_seed at its
-            # None dataclass default -- no fabrication, it is the real seed.
-            runtime_seed = trace_facts["random_seed"]
-            if runtime_seed is not None:
-                trace.random_seed = runtime_seed
-
-        # Seed the raw-index high-water mark before postprocess. The live torch
-        # capture path advances trace._layer_counter once per real op *during*
-        # the forward pass (backends/torch/ops.py, sources.py), so by the time
-        # postprocess Step 1 (_add_output_layers, graph_traversal.py) synthesizes
-        # the dedicated output node(s) via `self._layer_counter += 1`, the counter
-        # already sits at the last captured op's raw_index and each new output
-        # node gets a fresh, strictly-larger raw_index. Replaying events straight
-        # into a brand-new Trace here skips that live-dispatch bookkeeping, so
-        # without this seed _layer_counter stays at 0 and the first output node is
-        # stamped raw_index=1 -- colliding with input_1 (which carries its own
-        # captured raw_index=1) and violating the graph_ordering invariant's
-        # raw_index-uniqueness/monotonicity contract. Seed from the true
-        # event-stream high-water mark so output-node numbering continues from
-        # there, matching the live-capture path exactly.
-        trace._layer_counter = int(trace_facts["layer_counter"])
-
-        # Snapshot each retained output tensor's raw label BEFORE handing it to
-        # _postprocess(). Step 12 (_undecorate_all_saved_tensors,
-        # postprocess/finalization.py) strips the private `._tl` metadata --
-        # including `label_raw` -- off every saved tensor, and `halt_output_tensors`
-        # here are the SAME tensor objects retained across every to_trace() call on
-        # this frozen Recording (never copied; see the copy_for_replay() note above
-        # -- tensors are intentionally shared by reference for cost reasons, so that
-        # fix structurally cannot protect this side-channel). Without restoring the
-        # label afterward, a second to_trace() call falls into
-        # graph_traversal.py's _resolve_output_parent_labels() slow path (reached
-        # whenever the output-tensor count doesn't equal the output-label count --
-        # e.g. a model returning the same tensor twice, `return (y, y)`), which
-        # reads get_tensor_label() and finds it already cleared by the FIRST call,
-        # raising "could not attribute a model output tensor to any traced op".
-        from ..backends.torch._tl import get_tensor_label, set_tensor_label
-
-        _retained_output_labels = [get_tensor_label(t) for t in halt_output_tensors]
-
         trace._postprocess(
             halt_output_tensors,
             halt_output_addresses,
         )
-
-        # Restore any label Step 12 just cleared so the NEXT to_trace() call on
-        # this same Recording can still resolve it. Only restores what was
-        # actually there before -- no fabrication -- and only touches tensors
-        # that lost their label (leaves anything Step 12 didn't clear alone).
-        for _t, _label in zip(halt_output_tensors, _retained_output_labels):
-            if _label is not None and get_tensor_label(_t) is None:
-                set_tensor_label(_t, _label)
 
         return trace
 
