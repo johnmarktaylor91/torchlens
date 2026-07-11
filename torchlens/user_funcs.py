@@ -732,6 +732,7 @@ def _run_model_and_save_specified_outs(
     lookback_payload_policy: str = "metadata_only",
     retain_output_parents_for_layers_to_save: bool = False,
     _resolved_layer_nums_to_save: tuple[int, ...] | None = None,
+    _resolved_grad_layer_nums_to_save: tuple[int, ...] | str | None = None,
     _refresh_projection_capture: bool = False,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
@@ -840,6 +841,8 @@ def _run_model_and_save_specified_outs(
             legacy output-parent payload rule.
         _resolved_layer_nums_to_save: Internal refresh-only raw operation numbers
             already resolved against the original Trace.
+        _resolved_grad_layer_nums_to_save: Internal refresh-only gradient operation
+            numbers already resolved against the original Trace.
         _refresh_projection_capture: Whether this run supplies a RefreshProjector.
 
     Returns
@@ -921,6 +924,8 @@ def _run_model_and_save_specified_outs(
     )
     if _resolved_layer_nums_to_save is not None:
         trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
+    if _resolved_grad_layer_nums_to_save is not None:
+        trace._refresh_resolved_grad_layer_nums_to_save = _resolved_grad_layer_nums_to_save
     if _refresh_projection_capture:
         trace._refresh_projection_capture = True
     _capture_output_metadata_from_model_config(trace, model)

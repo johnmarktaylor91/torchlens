@@ -78,6 +78,7 @@ class RefreshProjector:
 
     target: Any
     layer_nums_to_save: str | tuple[int, ...] = "all"
+    grad_layer_nums_to_save: str | tuple[int, ...] = "all"
 
     _DYNAMIC_OP_FIELDS = frozenset(
         {
@@ -158,6 +159,7 @@ class RefreshProjector:
                     layer._internal_set(field_name, value)
         refreshed._refresh_projection_target_ref = weakref.ref(self.target)
         _REFRESH_SOURCES[self.target] = refreshed
+        self.target._grad_op_nums_to_save = self.grad_layer_nums_to_save
         self._rebind_backward_hooks()
         self._separate_output_payloads()
         if self.layer_nums_to_save != "all":

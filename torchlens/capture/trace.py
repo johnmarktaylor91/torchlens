@@ -524,6 +524,7 @@ def save_new_outs(
 
     save_grads_policy = getattr(self, "save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
+    grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     refresh_seed = self.random_seed if random_seed is None else random_seed
     resolved_layer_nums: tuple[int, ...] | None = None
     if layer_nums_to_save != "all":
@@ -565,12 +566,26 @@ def save_new_outs(
         save_raw_output=getattr(self, "save_raw_output", "small"),
         retain_output_parents_for_layers_to_save=True,
         _resolved_layer_nums_to_save=resolved_layer_nums,
+        _resolved_grad_layer_nums_to_save=(
+            grad_layer_nums_to_save
+            if grad_layer_nums_to_save == "all"
+            else tuple(cast(list[int], grad_layer_nums_to_save))
+        ),
         _refresh_projection_capture=True,
     )
     projected_layer_nums = (
         "all" if layer_nums_to_save == "all" else tuple(cast(list[int], layer_nums_to_save))
     )
-    RefreshProjector(self, projected_layer_nums).project(refreshed)
+    projected_grad_layer_nums = (
+        "all"
+        if grad_layer_nums_to_save == "all"
+        else tuple(cast(list[int], grad_layer_nums_to_save))
+    )
+    RefreshProjector(
+        self,
+        projected_layer_nums,
+        projected_grad_layer_nums,
+    ).project(refreshed)
     if self.save_arg_values:
         self._replay_arg_version_data_complete = True
 
@@ -925,12 +940,17 @@ def run_and_log_inputs_through_model(
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
         self._grad_op_nums_to_save = []
-    elif hasattr(self, "_refresh_resolved_layer_nums_to_save"):
-        self._layer_nums_to_save = self.__dict__.pop("_refresh_resolved_layer_nums_to_save")
-        self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     else:
-        self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-        self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
+        if hasattr(self, "_refresh_resolved_layer_nums_to_save"):
+            self._layer_nums_to_save = self.__dict__.pop("_refresh_resolved_layer_nums_to_save")
+        else:
+            self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
+        if hasattr(self, "_refresh_resolved_grad_layer_nums_to_save"):
+            self._grad_op_nums_to_save = self.__dict__.pop(
+                "_refresh_resolved_grad_layer_nums_to_save"
+            )
+        else:
+            self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
 
     # Selective captures retain output-layer parents so output payloads remain
     # available when the synthetic output node itself is requested (#46).
