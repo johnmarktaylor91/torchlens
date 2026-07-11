@@ -83,43 +83,13 @@ class GraphvizRenderer:
         for statement in statements:
             kwargs: dict[str, Any] = dict(statement.attrs)
             if statement.kind == "node":
-                args = statement.args
-                if args:
-                    args = (_escape_identifier(str(args[0])), *args[1:])
-                if "name" in kwargs:
-                    kwargs["name"] = _escape_identifier(str(kwargs["name"]))
-                dot.node(*args, **kwargs)
+                dot.node(*statement.args, **kwargs)
             elif statement.kind == "edge":
-                args = statement.args
-                if len(args) >= 2:
-                    args = (
-                        _escape_identifier(str(args[0])),
-                        _escape_identifier(str(args[1])),
-                        *args[2:],
-                    )
-                for endpoint in ("tail_name", "head_name"):
-                    if endpoint in kwargs:
-                        kwargs[endpoint] = _escape_identifier(str(kwargs[endpoint]))
-                dot.edge(*args, **kwargs)
+                # Edge endpoints may contain intentional Graphviz port separators.
+                # Their node-name portions are resolved before this boundary.
+                dot.edge(*statement.args, **kwargs)
             elif statement.kind == "attr":
                 dot.attr(*statement.args, **kwargs)
             else:
                 with dot.subgraph(*statement.args, **kwargs) as subgraph:
                     self._emit_statements(subgraph, statement.children)
-
-
-def _escape_identifier(identifier: str) -> str:
-    """Escape a renderer-neutral identifier for Graphviz port syntax.
-
-    Parameters
-    ----------
-    identifier:
-        Renderer-neutral node identifier, possibly pass-qualified with ``:``.
-
-    Returns
-    -------
-    str
-        Graphviz-safe identifier preserving the historical ``:`` to ``pass`` rewrite.
-    """
-
-    return identifier.replace(":", "pass")
