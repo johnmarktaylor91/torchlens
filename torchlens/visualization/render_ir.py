@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 from .request import RenderContext
 
@@ -192,7 +192,7 @@ def build_render_ir(
         _node_from_emission(trace, emission, resolved_context, universe, repeat_folds, segments)
         for emission in emissions
     )
-    edges = _edges_from_universe(universe)
+    edges = _build_forward_edges_from_universe(universe)
     clusters = _build_clusters(nodes, edges)
     return RenderIR(
         context=resolved_context,
@@ -203,8 +203,8 @@ def build_render_ir(
     )
 
 
-def _edges_from_universe(universe: Any) -> tuple[RenderIREdge, ...]:
-    """Adapt projected universe occurrences to the temporary render-IR edge type.
+def _build_forward_edges_from_universe(universe: Any) -> tuple[RenderIREdge, ...]:
+    """Build forward IR edges from projected universe occurrences.
 
     Parameters
     ----------
@@ -214,7 +214,7 @@ def _edges_from_universe(universe: Any) -> tuple[RenderIREdge, ...]:
     Returns
     -------
     tuple[RenderIREdge, ...]
-        Projected edge records used by Phase 2 anti-parallel analysis.
+        Projected forward edges in source traversal order.
     """
 
     edges: list[RenderIREdge] = []
@@ -398,237 +398,6 @@ def _resolve_node_decision(
     spec = resolved_specs[0] if resolved_specs else None
     spans = tuple(str(line) for line in spec.lines) if spec is not None else ()
     return tuple(recorder.calls), owned, color, spec, spans
-
-
-def _build_forward_edges(
-    trace: "Trace",
-    collapse_fn: "Callable[[Module], bool] | None",
-    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
-    context: RenderContext,
-) -> tuple[RenderIREdge, ...]:
-    """Build renderer-faithful forward edge records for the IR slice.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    collapse_fn:
-        Active collapse predicate.
-    repeat_folds:
-        Active repeat-fold descriptors.
-    context:
-        Render context that controls visibility and endpoint projection.
-
-    Returns
-    -------
-    tuple[RenderIREdge, ...]
-        Forward edge records in deterministic renderer traversal order.
-    """
-
-    from .rendering import (
-        RenderEdge as LegacyRenderEdge,
-        _build_skip_filtered_edge_map,
-        _collapsed_container_leaf_nodes,
-        _collapsed_endpoint_for_emission,
-        _edge_touches_run_fold,
-        _entries_to_plot_for_context,
-        _get_lowest_module_for_two_nodes,
-        _get_node_by_label,
-        _is_buffer_visible,
-        _normalize_buffer_visibility,
-        _render_node_label,
-        _run_fold_ellipsis_node_name,
-        _run_fold_graph_node_name,
-        _run_fold_hidden_endpoint,
-    )
-
-    show_buffer_layers = _normalize_buffer_visibility(context.show_buffer_layers)
-    entries_to_plot = _entries_to_plot_for_context(trace, context.vis_mode)
-    skipped_labels: set[str] = set()
-    edge_map: dict[str, list[LegacyRenderEdge]] = {}
-    if repeat_folds or context.skip_fn is not None:
-        edge_map, skipped_labels = _build_skip_filtered_edge_map(
-            trace,
-            entries_to_plot,
-            vis_mode=context.vis_mode,
-            show_buffer_layers=show_buffer_layers,
-            skip_fn=context.skip_fn,
-        )
-    collapsed_container_nodes = _collapsed_container_leaf_nodes(
-        trace,
-        entries_to_plot,
-        vis_mode=context.vis_mode,
-        show_containers=context.show_containers,
-        container_max_inline=12,
-        pending_nodes=[],
-    )
-    edges: list[RenderIREdge] = []
-    seen: set[tuple[str, str, tuple[Any, ...]]] = set()
-    for parent_node in entries_to_plot.values():
-        parent_render_label = _render_node_label(parent_node, context.vis_mode)
-        if parent_render_label in skipped_labels:
-            continue
-        if parent_node.is_buffer and not _is_buffer_visible(parent_node, show_buffer_layers):
-            continue
-        render_edges = edge_map.get(parent_render_label)
-        if render_edges is None:
-            render_edges = [
-                LegacyRenderEdge(
-                    target=_get_node_by_label(trace, child_label, context.vis_mode),
-                    metadata_child=None,
-                    occurrence_key=("edge", parent_node.layer_label, child_label),
-                )
-                for child_label in parent_node.children
-            ]
-        for render_edge in render_edges:
-            child_node = render_edge.target
-            if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
-                continue
-            source_unit = _projected_endpoint(
-                trace,
-                parent_node,
-                context,
-                collapse_fn,
-                repeat_folds,
-                collapsed_container_nodes,
-            )
-            target_unit = _projected_endpoint(
-                trace,
-                child_node,
-                context,
-                collapse_fn,
-                repeat_folds,
-                collapsed_container_nodes,
-            )
-            source_fold = _run_fold_hidden_endpoint(
-                _collapsed_endpoint_for_emission(
-                    trace,
-                    parent_node,
-                    vis_mode=context.vis_mode,
-                    vis_call_depth=1000,
-                    collapse_fn=collapse_fn,
-                    repeat_folds=repeat_folds,
-                ),
-                repeat_folds,
-            )
-            target_fold = _run_fold_hidden_endpoint(
-                _collapsed_endpoint_for_emission(
-                    trace,
-                    child_node,
-                    vis_mode=context.vis_mode,
-                    vis_call_depth=1000,
-                    collapse_fn=collapse_fn,
-                    repeat_folds=repeat_folds,
-                ),
-                repeat_folds,
-            )
-            if source_fold is not None and target_fold is source_fold:
-                continue
-            fold = source_fold or target_fold
-            projection_reason: Literal[
-                "direct",
-                "source_projected",
-                "target_projected",
-                "both_projected",
-                "run_fold_ellipsis",
-            ] = _projection_reason(
-                _render_node_label(parent_node, context.vis_mode).replace(":", "pass"),
-                _render_node_label(child_node, context.vis_mode).replace(":", "pass"),
-                source_unit,
-                target_unit,
-            )
-            if fold is not None:
-                representative_name = _run_fold_graph_node_name(
-                    f"{fold.representative}:1",
-                    context.vis_mode,
-                    {fold.representative: fold},
-                )
-                ellipsis_name = _run_fold_ellipsis_node_name(representative_name)
-                if source_fold is not None:
-                    source_unit = ellipsis_name
-                if target_fold is not None:
-                    target_unit = ellipsis_name
-                projection_reason = "run_fold_ellipsis"
-            if source_unit == target_unit and not _edge_touches_run_fold(
-                source_unit, target_unit, repeat_folds, context.vis_mode
-            ):
-                continue
-            dedupe_key = (source_unit, target_unit, render_edge.occurrence_key)
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            module_key = _get_lowest_module_for_two_nodes(
-                cast(Any, parent_node),
-                cast(Any, child_node),
-                source_unit
-                != _render_node_label(parent_node, context.vis_mode).replace(":", "pass")
-                and target_unit
-                != _render_node_label(child_node, context.vis_mode).replace(":", "pass"),
-                1000,
-            )
-            edges.append(
-                RenderIREdge(
-                    source_unit=source_unit,
-                    target_unit=target_unit,
-                    source_originals=(parent_node.layer_label,),
-                    target_originals=(child_node.layer_label,),
-                    owner_cluster=None if module_key == -1 else str(module_key),
-                    occurrence_key=render_edge.occurrence_key,
-                    projection_reason=projection_reason,
-                )
-            )
-    return tuple(edges)
-
-
-def _projected_endpoint(
-    trace: "Trace",
-    node: Any,
-    context: RenderContext,
-    collapse_fn: "Callable[[Module], bool] | None",
-    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
-    collapsed_container_nodes: "Mapping[str, str]",
-) -> str:
-    """Return the non-ellipsis projected endpoint name for one node.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    node:
-        Graph node whose endpoint should be resolved.
-    context:
-        Render context that controls visibility.
-    collapse_fn:
-        Active collapse predicate.
-    repeat_folds:
-        Active repeat-fold descriptors.
-    collapsed_container_nodes:
-        Mapping from container leaf node names to collapsed container nodes.
-
-    Returns
-    -------
-    str
-        Rendered endpoint name before hidden-member ellipsis projection.
-    """
-
-    from .rendering import (
-        _collapsed_endpoint_for_emission,
-        _render_node_label,
-        _run_fold_graph_node_name,
-    )
-
-    render_name = _render_node_label(node, context.vis_mode).replace(":", "pass")
-    endpoint = _collapsed_endpoint_for_emission(
-        trace,
-        node,
-        vis_mode=context.vis_mode,
-        vis_call_depth=1000,
-        collapse_fn=collapse_fn,
-        repeat_folds=repeat_folds,
-    )
-    if endpoint is not None:
-        return _run_fold_graph_node_name(endpoint, context.vis_mode, repeat_folds)
-    return collapsed_container_nodes.get(render_name, render_name)
 
 
 def _projection_reason(
