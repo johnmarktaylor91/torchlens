@@ -368,6 +368,7 @@ def _add_node_to_graphviz(
     segments: Mapping[str, SegmentDescriptor] | None = None,
     emitted_segment_nodes: set[str] | None = None,
     antiparallel_projected_edges: frozenset[tuple[str, str]] = frozenset(),
+    node_decision: Any | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -406,7 +407,14 @@ def _add_node_to_graphviz(
         and not _is_run_fold_representative(collapse_address, repeat_folds)
     )
 
-    if segment is not None:
+    if node_decision is not None:
+        cast(Any, graphviz_graph).calls.extend(node_decision.node_calls)
+        for owner_key, node_args in node_decision.owned_node_args:
+            module_edge_dict[owner_key].setdefault("nodes", []).append(dict(node_args))
+        node_color = node_decision.node_color
+        if is_collapsed_module and not is_hidden_run_member:
+            collapsed_modules.add(node_decision.name)
+    elif segment is not None:
         node_color = "black"
     elif is_collapsed_module and not is_hidden_run_member:
         _build_collapsed_module_node(
@@ -489,6 +497,7 @@ def _build_layer_node(
     show_containers: ShowContainersLiteral = False,
     collapsed_container_nodes: Mapping[str, str] | None = None,
     show_input_transform_summary: bool = False,
+    resolved_specs: list[NodeSpec] | None = None,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
@@ -515,6 +524,8 @@ def _build_layer_node(
         )
         if theme is not None:
             spec = apply_theme_to_spec(spec, theme)
+        if resolved_specs is not None:
+            resolved_specs.append(spec)
         node_args = _node_spec_to_graphviz_args(spec)
         node_args["name"] = node.layer_label
         graphviz_graph.node(**node_args)
@@ -582,6 +593,8 @@ def _build_layer_node(
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
+    if resolved_specs is not None:
+        resolved_specs.append(spec)
 
     # Graphviz node names can't contain colons (used for port syntax), so
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
@@ -1192,6 +1205,7 @@ def _build_collapsed_module_node(
     theme: VisualizationTheme | None = None,
     repeat_folds: Mapping[str, "ModuleRepeatFold"] | None = None,
     collapse_fn: CollapseFn | None = None,
+    resolved_specs: list[NodeSpec] | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -1338,6 +1352,8 @@ def _build_collapsed_module_node(
         spec = mode_spec if result is None else result
     else:
         spec = mode_spec
+    if resolved_specs is not None:
+        resolved_specs.append(spec)
 
     node_args = _node_spec_to_graphviz_args(spec)
     node_args["name"] = graph_node_label

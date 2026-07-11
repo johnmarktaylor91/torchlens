@@ -40,6 +40,11 @@ class RenderIRNode:
     owner_cluster: str | None
     source_label: str | None
     hidden_originals: tuple[str, ...] = ()
+    label_spans: tuple[str, ...] = ()
+    node_calls: tuple[Any, ...] = ()
+    owned_node_args: tuple[tuple[str, dict[str, Any]], ...] = ()
+    node_color: str = "black"
+    node_spec: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -153,6 +158,7 @@ def build_render_ir(
     repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
     context: RenderContext | None = None,
     universe: Any | None = None,
+    segments: "Mapping[str, Any] | None" = None,
 ) -> RenderIR:
     """Build the first render-IR slice from current renderer-faithful emissions.
 
@@ -182,7 +188,10 @@ def build_render_ir(
             build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
         )
     emissions = universe.emissions
-    nodes = tuple(_node_from_emission(trace, emission, resolved_context) for emission in emissions)
+    nodes = tuple(
+        _node_from_emission(trace, emission, resolved_context, universe, repeat_folds, segments)
+        for emission in emissions
+    )
     edges = _edges_from_universe(universe)
     clusters = _build_clusters(nodes, edges)
     return RenderIR(
@@ -238,6 +247,9 @@ def _node_from_emission(
     trace: "Trace",
     emission: "RenderedNodeEmission",
     context: RenderContext,
+    universe: Any,
+    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
+    segments: "Mapping[str, Any] | None",
 ) -> RenderIRNode:
     """Convert a legacy node emission into a render-IR node."""
 
@@ -260,13 +272,132 @@ def _node_from_emission(
         from .rendering import _run_fold_ellipsis_owner_key
 
         owner_cluster = _run_fold_ellipsis_owner_key(trace, emission.fold, context.vis_mode)
+    node_calls: tuple[Any, ...] = ()
+    owned_node_args: tuple[tuple[str, dict[str, Any]], ...] = ()
+    node_color = "black"
+    label_spans: tuple[str, ...] = ()
+    node_spec: Any | None = None
+    if emission.node is not None:
+        node_calls, owned_node_args, node_color, node_spec, label_spans = _resolve_node_decision(
+            trace, emission, context, universe, repeat_folds, segments
+        )
     return RenderIRNode(
         name=emission.name,
         kind=emission.kind,
         owner_cluster=owner_cluster,
         source_label=source_label,
         hidden_originals=hidden_originals,
+        label_spans=label_spans,
+        node_calls=node_calls,
+        owned_node_args=owned_node_args,
+        node_color=node_color,
+        node_spec=node_spec,
     )
+
+
+def _resolve_node_decision(
+    trace: "Trace",
+    emission: "RenderedNodeEmission",
+    context: RenderContext,
+    universe: Any,
+    repeat_folds: "Mapping[str, ModuleRepeatFold] | None",
+    segments: "Mapping[str, Any] | None",
+) -> tuple[
+    tuple[Any, ...], tuple[tuple[str, dict[str, Any]], ...], str, Any | None, tuple[str, ...]
+]:
+    """Resolve one visible node's complete presentation decision.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the source node.
+    emission:
+        Visible structural emission being decorated.
+    context:
+        Fully resolved render request.
+    universe:
+        Presentation-free universe that selected the node.
+
+    Returns
+    -------
+    tuple
+        Recorded top-level calls, owned node arguments, edge color, and structured label spans.
+    """
+    from collections import defaultdict
+
+    from .rendering import (
+        _ForwardDotRecorder,
+        _build_collapsed_module_node,
+        _build_layer_node,
+        _collapsed_container_leaf_nodes,
+        _normalize_buffer_visibility,
+        _segment_for_node,
+        resolve_theme,
+    )
+
+    node = emission.node
+    if node is None:
+        return (), (), "black", None, ()
+    if _segment_for_node(node, segments) is not None:
+        return (), (), "black", None, ()
+    recorder = _ForwardDotRecorder()
+    module_nodes: dict[str, Any] = defaultdict(dict)
+    show_buffers = _normalize_buffer_visibility(context.show_buffer_layers)
+    collapsed_containers = _collapsed_container_leaf_nodes(
+        trace,
+        universe.source_graph.entries_to_plot,
+        vis_mode=context.vis_mode,
+        show_containers=context.show_containers,
+        container_max_inline=context.container_max_inline,
+        pending_nodes=[],
+    )
+    theme = resolve_theme(context.theme, for_paper=context.for_paper)
+    resolved_specs: list[Any] = []
+    if emission.kind == "module_box":
+        _build_collapsed_module_node(
+            trace,
+            node,
+            recorder,
+            module_nodes,
+            set(),
+            context.vis_mode,
+            context.vis_call_depth,
+            emission.call,
+            context.overrides,
+            context.node_mode,
+            context.collapsed_node_spec_fn,
+            theme,
+            repeat_folds,
+            context.collapse_fn,
+            resolved_specs,
+        )
+        color = "black"
+    else:
+        color = _build_layer_node(
+            trace,
+            node,
+            recorder,
+            show_buffers,
+            context.vis_mode,
+            context.overrides,
+            context.node_mode,
+            context.node_spec_fn,
+            theme,
+            context.node_overlay,
+            list(context.node_label_fields) if context.node_label_fields is not None else None,
+            context.show_containers,
+            collapsed_containers,
+            context.show_input_transform_summary,
+            resolved_specs,
+        )
+    owned = tuple(
+        (owner, dict(args))
+        for owner, payload in module_nodes.items()
+        for args in payload.get("nodes", ())
+    )
+    spec = resolved_specs[0] if resolved_specs else None
+    spans = tuple(str(line) for line in spec.lines) if spec is not None else ()
+    return tuple(recorder.calls), owned, color, spec, spans
 
 
 def _build_forward_edges(

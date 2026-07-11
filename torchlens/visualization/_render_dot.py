@@ -3,6 +3,7 @@
 # ruff: noqa: F403, F405
 
 import warnings
+from dataclasses import replace
 
 from ._render_common import *
 from ._render_leaf import *
@@ -371,6 +372,7 @@ def draw(
         graph_overrides=vis_graph_overrides,
         user_node_spec_fn=node_spec_fn,
     )
+    request = replace(request, node_spec_fn=intervention_node_spec_fn)
 
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")
@@ -611,11 +613,14 @@ def draw(
         repeat_folds=repeat_folds,
         context=request,
         universe=node_universe,
+        segments=segments,
     )
     antiparallel_projected_edges = projected_antiparallel_endpoint_pairs(forward_render_ir)
 
+    decisions_by_name = {node.name: node for node in forward_render_ir.nodes}
     for unit in node_universe.units:
-        for node in unit.source_nodes:
+        decision = decisions_by_name[unit.unit_id]
+        for source_index, node in enumerate(unit.source_nodes):
             _add_node_to_graphviz(
                 self,
                 node,
@@ -647,6 +652,9 @@ def draw(
                 segments,
                 emitted_segment_nodes,
                 antiparallel_projected_edges,
+                decision
+                if source_index == 0
+                else replace(decision, node_calls=(), owned_node_args=()),
             )
 
     for node_args in pending_container_collapse_nodes:
