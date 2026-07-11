@@ -150,6 +150,7 @@ from ...capture.predicates import (
     _is_halt_only_capture,
     build_op_record_context,
 )
+from ...capture.kernel import OpObservation
 from ...capture.stop import evaluate_halt_stop, stop_directive_for_trace
 
 from ...capture.projections import (
@@ -1496,7 +1497,7 @@ def _emit_operation_events(
     if capture_session is not None:
         capture_session.note_legacy_emission()
 
-    policy.emit(
+    producer_args = (
         self,
         func,
         func_name,
@@ -1509,6 +1510,10 @@ def _emit_operation_events(
         is_bottom_level_func,
         func_call_id,
     )
+    if capture_session is None:
+        policy.emit(*producer_args)
+        return
+    capture_session.kernel.emit(func_name, policy.emit, *producer_args)
 
 
 def apply_live_hooks_to_outputs(
@@ -1561,6 +1566,59 @@ def apply_live_hooks_to_outputs(
         Output object with hooked tensors replaced in place where possible.
         Fired hook results are stored temporarily on the tensor being logged.
     """
+
+    predicate_intervene_active = _trace_intervene_options(self) is not None
+    intervention_active = bool(_st._active_hook_plan) or predicate_intervene_active
+    if not intervention_active or self.capture_mode not in {"exhaustive", "predicate"}:
+        return out_orig
+    capture_session = capture_session_for(self)
+    if capture_session is not None:
+        observation = OpObservation(operation_key=func_name, value=out_orig)
+        return capture_session.kernel.apply_intervention(
+            observation,
+            lambda value: _apply_live_hooks_to_outputs_legacy(
+                self,
+                func,
+                func_name,
+                args,
+                kwargs,
+                value,
+                exec_ctx,
+                is_bottom_level_func,
+                func_call_id,
+                call_input_snapshots,
+                record_is_inplace,
+            ),
+        )
+    return _apply_live_hooks_to_outputs_legacy(
+        self,
+        func,
+        func_name,
+        args,
+        kwargs,
+        out_orig,
+        exec_ctx,
+        is_bottom_level_func,
+        func_call_id,
+        call_input_snapshots,
+        record_is_inplace,
+    )
+
+
+def _apply_live_hooks_to_outputs_legacy(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
+    record_is_inplace: bool = False,
+) -> Any:
+    """Run the byte-compatible live-hook implementation for the kernel."""
 
     predicate_intervene_active = _trace_intervene_options(self) is not None
     if (

@@ -9,6 +9,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.capture.kernel import OpObservation
+from torchlens.capture.plan import CapturePlan, EnrichmentLevel
+from torchlens.capture.session import CaptureSession
 from torchlens.fastlog import RecordContext
 
 
@@ -81,6 +84,40 @@ class IntegerSelectorToy(nn.Module):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         return self.fc3(x)
+
+
+def test_capture_kernel_compiles_away_disabled_enrichment_tiers() -> None:
+    """A shell-only sparse operation enters neither metadata nor payload work."""
+
+    plan = CapturePlan.compile(
+        projection_target="recording",
+        available_capabilities=(),
+        default_enrichment=EnrichmentLevel.SHELL,
+    )
+    session = CaptureSession(plan=plan)
+    emitted: list[str] = []
+
+    session.kernel.emit("relu", emitted.append, "event")
+
+    assert emitted == ["event"]
+    assert session.counters["kernel_observations"] == 1
+    assert "kernel_metadata" not in session.counters
+    assert "kernel_payload" not in session.counters
+
+
+def test_capture_kernel_intervenes_on_live_value_before_emission() -> None:
+    """A live replacement reaches the producer before its durable append."""
+
+    plan = CapturePlan.compile(projection_target="trace", available_capabilities=())
+    session = CaptureSession(plan=plan)
+    observation = OpObservation(operation_key="add", value=torch.tensor(1.0))
+    replacement = session.kernel.apply_intervention(observation, lambda value: value + 2)
+    emitted: list[torch.Tensor] = []
+
+    session.kernel.emit("add", emitted.append, replacement)
+
+    assert replacement.item() == 3.0
+    assert emitted[0] is replacement
 
 
 def _pseudo_random_subset(ctx: RecordContext) -> bool:

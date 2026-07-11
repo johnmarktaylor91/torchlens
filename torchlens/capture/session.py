@@ -7,6 +7,7 @@ from typing import Any, Callable, Literal
 from weakref import ReferenceType, WeakKeyDictionary, ref
 
 from ..ir.events import OpEvent
+from .kernel import CaptureKernel
 from .ledgers import CompletenessManifest, DecisionLedger, EventJournal, PayloadLedger
 from .plan import CapturePlan, EnrichmentLevel
 
@@ -90,6 +91,12 @@ class CaptureSession:
     builders: dict[str, object] = field(default_factory=dict)
     cleanup_stack: list[_CleanupEntry] = field(default_factory=list)
     outcome: RunOutcome | None = None
+    kernel: CaptureKernel = field(init=False)
+
+    def __post_init__(self) -> None:
+        """Compile the session's fixed-order capture kernel."""
+
+        self.kernel = CaptureKernel(self)
 
     def release(self) -> None:
         """Release all run-local compatibility sidecars.
