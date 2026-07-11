@@ -151,6 +151,7 @@ from ...capture.predicates import (
     build_op_record_context,
 )
 from ...capture.kernel import OpObservation
+from ...capture.plan import EnrichmentLevel
 from ...capture.stop import evaluate_halt_stop, stop_directive_for_trace
 
 from ...capture.projections import (
@@ -2234,16 +2235,27 @@ def _emit_predicate_operation_events(
                 continue
             if out.grad_fn is not None:
                 state.grad_fn_to_context[out.grad_fn] = ctx
-            spec = _evaluate_keep_op(ctx, state.options)
-            if isinstance(spec, RetroactiveCaptureDecision):
-                raise PredicateError(
-                    "tl.followed_by(...) retroactive save is only supported by trace"
-                )
-            ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
-            grad_fn_handle = out.grad_fn if isinstance(out, torch.Tensor) else None
-            backend_semantics = None
-            keep_alias_contract = _should_keep_alias_mutation_contract(self)
-            if spec.save_out or spec.save_metadata or keep_alias_contract:
+            observation = OpObservation(operation_key=func_name, value=out)
+
+            def select(current: OpObservation) -> EnrichmentLevel:
+                """Resolve the predicate into the minimum demanded tier."""
+
+                spec = _evaluate_keep_op(ctx, state.options)
+                if isinstance(spec, RetroactiveCaptureDecision):
+                    raise PredicateError(
+                        "tl.followed_by(...) retroactive save is only supported by trace"
+                    )
+                current.facts["spec"] = spec
+                if spec.save_out:
+                    return EnrichmentLevel.PAYLOAD
+                if spec.save_metadata:
+                    return EnrichmentLevel.METADATA
+                return EnrichmentLevel.SHELL
+
+            def normalize_metadata(current: OpObservation) -> None:
+                """Compute semantics and immutable function metadata on demand."""
+
+                grad_fn_handle = out.grad_fn if isinstance(out, torch.Tensor) else None
                 func_event_input = FunctionEventInput(
                     func=func,
                     func_name=func_name,
@@ -2260,10 +2272,10 @@ def _emit_predicate_operation_events(
                 )
                 detect_backend_semantics = (
                     detect_torch_alias_contract
-                    if keep_alias_contract
+                    if _should_keep_alias_mutation_contract(self)
                     else detect_torch_output_alias_contract
                 )
-                backend_semantics = detect_backend_semantics(
+                current.facts["backend_semantics"] = detect_backend_semantics(
                     func_event_input,
                     backend_grad_handle=grad_fn_handle,
                     grad_fn_class_name=type(grad_fn_handle).__name__
@@ -2272,44 +2284,79 @@ def _emit_predicate_operation_events(
                     autograd_memory=None,
                     num_autograd_tensors=None,
                 )
-            function_ref = FunctionCallRef(
-                func=func,
-                func_name=func_name,
-                func_qualname=getattr(func, "__qualname__", None),
-                func_call_id=func_call_id,
-                code_context=(),
-                func_duration=None,
-                flops_forward=None,
-                flops_backward=None,
-                func_rng_states=None,
-                func_autocast_state=None,
-                arg_names=(),
-                num_args_total=len(args) + len(kwargs),
-                num_pos_args=len(args),
-                num_kwargs=len(kwargs),
-                non_tensor_pos_args=(),
-                non_tensor_kwargs=tuple(
-                    (key, value)
-                    for key, value in kwargs.items()
-                    if not isinstance(value, torch.Tensor)
-                ),
-                func_non_tensor_args=(),
-                is_inplace=False,
-                func_config=(),
-            )
-            append_projected_event(
-                self,
-                ctx,
-                spec,
-                tensor=out,
-                ram_payload=ram_payload,
-                transformed_ram_payload=transformed_ram_payload,
-                predicate_matched=spec.save_out or spec.save_metadata,
-                backend_semantics=backend_semantics,
-                function=function_ref,
-                container_path=container_path,
-            )
-            evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
+                current.facts["function"] = FunctionCallRef(
+                    func=func,
+                    func_name=func_name,
+                    func_qualname=getattr(func, "__qualname__", None),
+                    func_call_id=func_call_id,
+                    code_context=(),
+                    func_duration=None,
+                    flops_forward=None,
+                    flops_backward=None,
+                    func_rng_states=None,
+                    func_autocast_state=None,
+                    arg_names=(),
+                    num_args_total=len(args) + len(kwargs),
+                    num_pos_args=len(args),
+                    num_kwargs=len(kwargs),
+                    non_tensor_pos_args=(),
+                    non_tensor_kwargs=tuple(
+                        (key, value)
+                        for key, value in kwargs.items()
+                        if not isinstance(value, torch.Tensor)
+                    ),
+                    func_non_tensor_args=(),
+                    is_inplace=False,
+                    func_config=(),
+                )
+
+            def retain_payload(current: OpObservation) -> None:
+                """Retain the selected payload through the configured storage lease."""
+
+                spec = cast(CaptureSpec, current.facts["spec"])
+                ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
+                current.facts["ram_payload"] = ram_payload
+                current.facts["transformed_ram_payload"] = transformed_ram_payload
+
+            def append(current: OpObservation) -> None:
+                """Freeze and append the immutable event and its sidecars."""
+
+                spec = cast(CaptureSpec, current.facts["spec"])
+                append_projected_event(
+                    self,
+                    ctx,
+                    spec,
+                    tensor=out,
+                    ram_payload=current.facts.get("ram_payload"),
+                    transformed_ram_payload=current.facts.get("transformed_ram_payload"),
+                    predicate_matched=spec.save_out or spec.save_metadata,
+                    backend_semantics=current.facts.get("backend_semantics"),
+                    function=current.facts.get("function"),
+                    container_path=container_path,
+                )
+
+            def evaluate_nonfinite_halt(current: OpObservation) -> None:
+                """Evaluate the operation halt directive after durable append."""
+
+                del current
+                evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
+
+            observation.select = select
+            observation.normalize_metadata = normalize_metadata
+            observation.retain_payload = retain_payload
+            observation.append = append
+            observation.evaluate_nonfinite_halt = evaluate_nonfinite_halt
+            capture_session = capture_session_for(self)
+            if capture_session is None:
+                demanded = select(observation)
+                if demanded in {EnrichmentLevel.METADATA, EnrichmentLevel.PAYLOAD}:
+                    normalize_metadata(observation)
+                if demanded is EnrichmentLevel.PAYLOAD:
+                    retain_payload(observation)
+                append(observation)
+                evaluate_nonfinite_halt(observation)
+            else:
+                capture_session.kernel.process(observation)
         except HaltSignal:
             raise
         except (TorchLensPostfuncError, TrainingModeConfigError):
@@ -2330,10 +2377,8 @@ def _emit_predicate_operation_events(
             state.handle_predicate_exception(ctx, exc)
         finally:
             if not halt_only:
-                if not any(
-                    event.raw_index == raw_index
-                    for event in getattr(getattr(self, "capture_events", None), "op_events", ())
-                ):
+                capture_events = getattr(self, "capture_events", None)
+                if capture_events is None or _label_raw not in capture_events.op_event_by_label_raw:
                     append_projected_event(
                         self,
                         ctx,

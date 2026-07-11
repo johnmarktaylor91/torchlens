@@ -105,6 +105,30 @@ def test_capture_kernel_compiles_away_disabled_enrichment_tiers() -> None:
     assert "kernel_payload" not in session.counters
 
 
+def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unselected sparse operations never enter metadata or payload machinery."""
+
+    from torchlens.backends.torch import ops, wrappers
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        """Fail if shell-only capture enters an exhaustive enrichment helper."""
+
+        del args, kwargs
+        raise AssertionError("shell-only sparse capture entered enrichment work")
+
+    monkeypatch.setattr(ops, "detect_torch_alias_contract", forbidden)
+    monkeypatch.setattr(ops, "detect_torch_output_alias_contract", forbidden)
+    monkeypatch.setattr(ops, "_record_predicate_output", forbidden)
+    monkeypatch.setattr(wrappers, "copy_arg_tree", forbidden)
+    monkeypatch.setattr(wrappers, "log_current_rng_states", forbidden)
+
+    recording = tl.record(PredicateToy(), torch.randn(2, 4), save=tl.func("never_matches"))
+
+    assert not recording.records
+
+
 def test_capture_kernel_intervenes_on_live_value_before_emission() -> None:
     """A live replacement reaches the producer before its durable append."""
 

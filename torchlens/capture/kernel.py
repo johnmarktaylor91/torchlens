@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
 
 from .plan import EnrichmentLevel
@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 InterventionTarget = Callable[[Any], Any]
 ProducerTarget = Callable[..., None]
+ObservationTarget = Callable[["OpObservation"], None]
+SelectionTarget = Callable[["OpObservation"], EnrichmentLevel]
 
 
 @dataclass(slots=True)
@@ -28,15 +30,22 @@ class OpObservation:
 
     operation_key: str
     value: Any
+    normalize_metadata: ObservationTarget | None = None
+    select: SelectionTarget | None = None
+    retain_payload: ObservationTarget | None = None
+    append: ObservationTarget | None = None
+    update_indexes_history: ObservationTarget | None = None
+    evaluate_nonfinite_halt: ObservationTarget | None = None
+    facts: dict[str, Any] = field(default_factory=dict)
 
 
 class CaptureKernel:
     """Run one statically ordered operation pipeline.
 
-    The producer targets remain compatibility adapters in Stage 4a: they build
-    the exact legacy immutable events, while this controller fixes the order in
-    which intervention and production are entered.  Tier targets are compiled
-    once per operation key and disabled tiers are represented by ``None``.
+    Backend producers supply transient observations and backend-native work
+    targets.  This controller owns whether and when those targets run.  Tier
+    targets are compiled once per operation key and disabled tiers are never
+    called.
     """
 
     __slots__ = ("_session", "_default_metadata", "_default_payload")
@@ -110,6 +119,37 @@ class CaptureKernel:
         producer(*producer_args)
         self._append_facts_and_sidecars()
         self._update_indexes_history()
+        self._evaluate_nonfinite_halt()
+
+    def process(self, observation: OpObservation) -> None:
+        """Process one backend observation in the fixed kernel order.
+
+        Parameters
+        ----------
+        observation
+            Transient live observation and backend-native stage targets.
+        """
+
+        self._reserve_identity_context(observation.operation_key)
+        demanded = self._session.plan.enrichment_for(observation.operation_key)
+        if observation.select is not None:
+            demanded = observation.select(observation)
+        metadata_enabled = demanded in {EnrichmentLevel.METADATA, EnrichmentLevel.PAYLOAD}
+        payload_enabled = demanded is EnrichmentLevel.PAYLOAD
+        if metadata_enabled and observation.normalize_metadata is not None:
+            self._normalize_metadata()
+            observation.normalize_metadata(observation)
+        if payload_enabled and observation.retain_payload is not None:
+            self._retain_payload()
+            observation.retain_payload(observation)
+        if observation.append is not None:
+            observation.append(observation)
+        self._append_facts_and_sidecars()
+        if observation.update_indexes_history is not None:
+            observation.update_indexes_history(observation)
+        self._update_indexes_history()
+        if observation.evaluate_nonfinite_halt is not None:
+            observation.evaluate_nonfinite_halt(observation)
         self._evaluate_nonfinite_halt()
 
     def _enrichment_gates(self, operation_key: str) -> tuple[bool, bool]:
