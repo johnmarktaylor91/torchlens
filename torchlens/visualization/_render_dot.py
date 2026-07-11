@@ -515,36 +515,6 @@ def draw(
             "Direct writes detected - recipe propagation will overlay<br align='left'/>>"
         )
 
-    # Rank fast path: skip graphviz.Digraph construction entirely.
-    # Generates DOT directly with topological-rank positions and cluster boxes.
-    if engine == "rank":
-        from ._rank_layout_internal.layout import render_rank_layout
-
-        with _timed_phase(self, "render:graphviz:forward"):
-            result = render_rank_layout(
-                self,
-                entries_to_plot,
-                vis_mode,
-                vis_call_depth,
-                show_buffer_layers,
-                overrides,
-                node_mode,
-                intervention_node_spec_fn,
-                collapsed_node_spec_fn,
-                collapse_fn,
-                skip_fn,
-                edge_map,
-                skipped_labels,
-                vis_outpath,
-                vis_fileformat,
-                vis_save_only,
-                graph_caption,
-                rankdir,
-                source_text,
-            )
-        _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
-        return result
-
     dot = graphviz.Digraph(
         name=self.model_class_name,
         comment="Computational graph for the feedforward sweep",
@@ -753,6 +723,22 @@ def draw(
         forward_render_ir,
         dot_statements=tuple(forward_ir_builder.calls),
     )
+    if engine == "rank":
+        from ._rank_layout_internal.layout import render_rank_layout
+
+        with _timed_phase(self, "render:graphviz:forward"):
+            result = render_rank_layout(
+                forward_render_ir,
+                vis_mode,
+                vis_outpath,
+                vis_fileformat,
+                vis_save_only,
+                graph_caption,
+                rankdir,
+                source_text,
+            )
+        _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
+        return result
     GraphvizRenderer().emit(forward_render_ir, dot)
     for overlay_edge in container_overlay_edges:
         dot.edge(

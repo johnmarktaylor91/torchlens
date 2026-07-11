@@ -46,6 +46,7 @@ class RenderIRNode:
     owned_node_args: tuple[tuple[str, dict[str, Any]], ...] = ()
     node_color: str = "black"
     node_spec: Any | None = None
+    region_path: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -374,10 +375,19 @@ def _node_from_emission(
     node_color = "black"
     label_spans: tuple[str, ...] = ()
     node_spec: Any | None = None
+    region_path: tuple[str, ...] = ()
     if emission.node is not None:
         node_calls, owned_node_args, node_color, node_spec, label_spans = _resolve_node_decision(
             trace, emission, context, universe, repeat_folds, segments
         )
+        modules = list(emission.node.modules)
+        if emission.kind == "module_box":
+            modules = modules[: context.vis_call_depth - 1]
+        if context.vis_mode == "rolled":
+            modules = list(dict.fromkeys(module.split(":")[0] for module in modules))
+        region_path = tuple(modules)
+        if region_path:
+            owner_cluster = region_path[-1]
     return RenderIRNode(
         name=emission.name,
         kind=emission.kind,
@@ -389,6 +399,7 @@ def _node_from_emission(
         owned_node_args=owned_node_args,
         node_color=node_color,
         node_spec=node_spec,
+        region_path=region_path,
     )
 
 
@@ -678,8 +689,7 @@ def finalize_forward_regions(
     )
     region_keys = set(module_payloads)
     for node in render_ir.nodes:
-        if node.owner_cluster is not None:
-            region_keys.add(node.owner_cluster)
+        region_keys.update(node.region_path)
     module_children, top_modules = _region_module_hierarchy(trace, vis_mode)
     max_depth = _get_max_call_depth(top_modules, module_payloads, module_children)
     regions: list[RenderIRRegion] = []
@@ -709,7 +719,7 @@ def finalize_forward_regions(
         node_names += tuple(
             node.name
             for node in render_ir.nodes
-            if node.owner_cluster == key and node.name not in node_names
+            if node.region_path and node.region_path[-1] == key and node.name not in node_names
         )
         regions.append(
             RenderIRRegion(

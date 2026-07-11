@@ -14,9 +14,10 @@ import warnings
 from collections import defaultdict, deque
 from typing import Any
 
-from .._label_format import format_memory, format_shape
 from .._render_utils import _open_file_quietly, html_escape
+from .._render_utils import compute_module_penwidth
 from ..code_panel import _code_panel_label
+from ..render_ir import RenderIR, RenderIRDotStatement
 
 SPAN_LOCAL = 12
 # Calibrated 2026-06-11: local 5k-node chains cost about 5k and dot rendered
@@ -383,20 +384,17 @@ def _dot_id(name: str) -> str:
     return f'"{_dot_escape(name)}"'
 
 
+def _rank_node_statement(
+    statements: tuple[RenderIRDotStatement, ...],
+) -> RenderIRDotStatement | None:
+    """Return the resolved node statement used by the rank renderer."""
+
+    return next((statement for statement in statements if statement.kind == "node"), None)
+
+
 def render_rank_layout(
-    trace: Any,
-    entries_to_plot: dict[str, Any],
+    ir: RenderIR,
     vis_mode: str,
-    vis_call_depth: int,
-    show_buffer_layers: Any,
-    overrides: Any,
-    node_mode: Any,
-    node_spec_fn: Any,
-    collapsed_node_spec_fn: Any,
-    collapse_fn: Any,
-    skip_fn: Any,
-    edge_map: dict[str, Any] | None,
-    skipped_labels: set[str],
     vis_outpath: str,
     vis_fileformat: str,
     vis_save_only: bool,
@@ -417,13 +415,8 @@ def render_rank_layout(
     Renders with ``neato -n`` (pre-positioned layout that respects clusters).
 
     Args:
-        trace: The Trace instance.
-        entries_to_plot: Dict of node_barcode -> Op/Layer.
+        ir: Decision-complete render IR.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
-        vis_call_depth: Module nesting depth for collapsed modules.
-        show_buffer_layers: Whether to include buffer layers.
-        overrides: VisualizationOverrides instance.
-        node_mode: Node-mode preset name.
         vis_outpath: Output file path (without extension).
         vis_fileformat: Output format (pdf, png, svg, etc.).
         vis_save_only: If True, don't open viewer.
@@ -437,289 +430,62 @@ def render_rank_layout(
     Raises:
         RuntimeError: If neato rendering fails.
     """
-    from collections import defaultdict
-
-    # Late imports to avoid circular dependency
-    from ..rendering import (
-        _collapse_address_for_node,
-        _get_node_address_shape_color,
-        _get_node_bg_color,
-        _apply_node_spec_fn,
-        _node_spec_to_graphviz_args,
-        compute_default_node_lines,
-        TRAINABLE_PARAMS_BG_COLOR,
-        FROZEN_PARAMS_BG_COLOR,
-        DEFAULT_BG_COLOR,
-        COMMUTE_FUNCS,
-        _render_node_label,
-        _is_buffer_visible,
-        _is_hidden_buffer_update_node,
-        format_collapsed_module_contents,
-    )
-    from .._render_utils import compute_module_penwidth
-    from ..modes import COLLAPSED_MODE_REGISTRY
-    from ..node_spec import NodeSpec
-
     # ── Phase 1: Collect node styling, module assignments, and edges ──
-
-    # graph_node_label -> {"attrs": {dot attrs}, "node_label": layer_label}
     node_data: dict[str, dict[str, Any]] = {}
-    # module_key -> [node_names directly in this module (not nested deeper)]
+    rank_names: dict[str, str] = {}
     module_direct_nodes: dict[str, list[str]] = defaultdict(list)
-    # module_key -> set of child module_keys
     module_child_map: dict[str, set[str]] = defaultdict(set)
-    # module_key -> True if any contained node has input_ancestor
     module_has_ancestor: dict[str, bool] = defaultdict(bool)
-    # Nodes not inside any module
     root_node_names: list[str] = []
-    # Edge data: list of dicts with tail_name, head_name, color, style, ...
     all_edges: list[dict[str, Any]] = []
-    collapsed_set: set[str] = set()
-    edges_used: set[tuple[str, str, tuple[Any, ...]]] = set()
-
-    def _module_keys_for_node(node: Any, is_collapsed_mod: bool) -> list[str]:
-        """Get module hierarchy keys for a node."""
-        if is_collapsed_mod:
-            mods = list(node.modules[: vis_call_depth - 1])
+    for node in ir.nodes:
+        statement = _rank_node_statement(node.node_calls)
+        if statement is None and node.owned_node_args:
+            _, raw_attrs = node.owned_node_args[0]
+            attrs = dict(raw_attrs)
+            name = str(attrs.pop("name", node.name))
+        elif statement is not None:
+            attrs = dict(statement.attrs)
+            name = str(attrs.pop("name", statement.args[0] if statement.args else node.name))
         else:
-            mods = list(node.modules)
-        if vis_mode == "rolled":
-            return list(dict.fromkeys(m.split(":")[0] for m in mods))
-        return mods
-
-    def _assign_to_hierarchy(
-        graph_node_label: str, mod_keys: list[str], has_ancestor: bool
-    ) -> None:
-        """Place a node into the module tree."""
-        if mod_keys:
-            module_direct_nodes[mod_keys[-1]].append(graph_node_label)
-            for i in range(len(mod_keys) - 1):
-                module_child_map[mod_keys[i]].add(mod_keys[i + 1])
-            # Propagate has_input_ancestor up
-            if has_ancestor:
-                for mk in mod_keys:
-                    module_has_ancestor[mk] = True
-        else:
-            root_node_names.append(graph_node_label)
-
-    for _barcode, node in entries_to_plot.items():
-        if _render_node_label(node, vis_mode) in skipped_labels:
             continue
-        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
-            continue
-        if _is_hidden_buffer_update_node(
-            trace,
-            node,
-            entries_to_plot,
-            show_buffer_layers,
-            vis_mode,
-        ):
-            continue
-
-        collapse_address = _collapse_address_for_node(
-            trace,
-            node,
-            collapse_fn=collapse_fn,
-            max_module_depth=vis_call_depth,
+        rank_name = (
+            (node.source_label or name).replace(":", "pass") if node.kind != "module_box" else name
         )
-        is_collapsed = collapse_address is not None
+        rank_names[node.name] = rank_name
+        node_data[rank_name] = {"attrs": attrs, "node_label": node.source_label or rank_name}
+        if "solid" in str(attrs.get("style", "")):
+            for region_key in node.region_path:
+                module_has_ancestor[region_key] = True
 
-        if is_collapsed:
-            mod_w_pass = collapse_address
-            if mod_w_pass is None:
-                continue
-            mod_parts = mod_w_pass.rsplit(":", 1)
-            mod_addr, call_index = mod_parts
-            graph_node_label = "pass".join(mod_parts) if vis_mode == "unrolled" else mod_addr
-            node_label = node.layer_label
+    region_keys = {region.key for region in ir.regions if region.kind == "module"}
+    region_by_key = {region.key: region for region in ir.regions if region.kind == "module"}
+    owned_names: set[str] = set()
+    for region in ir.regions:
+        if region.kind != "module":
+            continue
+        if region.parent_key in region_keys:
+            module_child_map[region.parent_key].add(region.key)
+        for name in region.node_names:
+            rank_name = rank_names.get(name, name)
+            if rank_name in node_data:
+                module_direct_nodes[region.key].append(rank_name)
+                owned_names.add(rank_name)
+    root_node_names.extend(name for name in node_data if name not in owned_names)
 
-            if graph_node_label not in collapsed_set:
-                collapsed_set.add(graph_node_label)
-                ml = trace.modules[mod_addr]
-                mod_out = trace[mod_w_pass]
-
-                if vis_mode == "unrolled":
-                    mpl = trace.modules[mod_w_pass]
-                    n_tensors = mpl.num_layers
-                    n_buffers = sum(trace[la].is_buffer for la in mpl.ops)
-                    has_anc = any(trace[la].has_input_ancestor for la in mpl.ops)
-                else:
-                    n_tensors = ml.num_layers
-                    n_buffers = sum(trace[la].is_buffer for la in ml.layer_labels)
-                    has_anc = any(trace[la].has_input_ancestor for la in ml.layer_labels)
-
-                np_ = ml.num_calls
-                if np_ == 1:
-                    title = f"<b>@{mod_addr}</b>"
-                elif vis_mode == "unrolled":
-                    title = f"<b>@{mod_addr}:{call_index}</b>"
-                else:
-                    title = f"<b>@{mod_addr} (x{np_})</b>"
-
-                out_shape: tuple[Any, ...] = mod_out.shape or ()
-                ss = format_shape(out_shape)
-
-                npar = ml.num_params
-                npt = ml.num_params_trainable
-                npf = ml.num_params_frozen
-                if npar > 0:
-                    bg = (
-                        TRAINABLE_PARAMS_BG_COLOR
-                        if npf == 0
-                        else FROZEN_PARAMS_BG_COLOR
-                        if npt == 0
-                        else f"{TRAINABLE_PARAMS_BG_COLOR}:{FROZEN_PARAMS_BG_COLOR}"
-                    )
-                else:
-                    bg = DEFAULT_BG_COLOR
-
-                if npar == 0:
-                    pd = "0 parameters"
-                elif npf == 0:
-                    pd = f"{npar} params (all trainable)"
-                elif npt == 0:
-                    pd = f"{npar} params (all frozen)"
-                else:
-                    pd = f"{npar} params ({npt} trainable, {npf} frozen)"
-
-                ls = "solid" if has_anc else "dashed"
-                default_spec = NodeSpec(
-                    lines=[
-                        title.replace("<b>", "").replace("</b>", ""),
-                        ml.class_name,
-                        f"{ss}, {format_memory(mod_out.activation_memory)}",
-                        format_collapsed_module_contents(n_tensors, n_buffers),
-                        pd,
-                    ],
-                    shape="box3d",
-                    fillcolor=bg,
-                    fontcolor="black",
-                    color="black",
-                    style=f"filled,{ls}",
-                    extra_attrs={"ordering": "out"},
-                )
-                mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
-                mode_result = mode_fn(ml, default_spec)
-                mode_spec = default_spec if mode_result is None else mode_result
-                if collapsed_node_spec_fn is not None:
-                    result = collapsed_node_spec_fn(ml, mode_spec)
-                    spec = mode_spec if result is None else result
-                else:
-                    spec = mode_spec
-                attrs = _node_spec_to_graphviz_args(spec)
-                if spec.fillcolor is not None and ":" in spec.fillcolor:
-                    attrs["gradangle"] = "0"
-
-                node_data[graph_node_label] = {"attrs": attrs, "node_label": node_label}
-                mod_keys = _module_keys_for_node(node, True)
-                _assign_to_hierarchy(graph_node_label, mod_keys, has_anc)
-
-            node_color = "black"
-        else:
-            # Regular layer node
-            graph_node_label = node.layer_label.replace(":", "pass")
-            node_label = node.layer_label
-
-            addr, shape, node_color = _get_node_address_shape_color(trace, node, show_buffer_layers)
-            bg = _get_node_bg_color(trace, node)
-            ls = "solid" if node.has_input_ancestor else "dashed"
-            default_spec = NodeSpec(
-                lines=compute_default_node_lines(node, addr, vis_mode),
-                shape=shape,
-                fillcolor=bg,
-                fontcolor=node_color,
-                color=node_color,
-                style=f"filled,{ls}",
-                extra_attrs={"ordering": "out"},
-            )
-            spec = _apply_node_spec_fn(trace, node, default_spec, node_mode, node_spec_fn)
-            attrs = _node_spec_to_graphviz_args(spec)
-            if spec.fillcolor is not None and ":" in spec.fillcolor:
-                attrs["gradangle"] = "0"
-
-            node_data[graph_node_label] = {"attrs": attrs, "node_label": node_label}
-            mod_keys = _module_keys_for_node(node, False)
-            _assign_to_hierarchy(graph_node_label, mod_keys, node.has_input_ancestor)
-
-        # ── Collect edges (this node -> skip-filtered children) ──
-        for render_edge in (edge_map or {}).get(_render_node_label(node, vis_mode), []):
-            child_node = render_edge.target
-            metadata_child = render_edge.metadata_child
-            if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
-                continue
-
-            # Resolve tail name
-            if is_collapsed:
-                tail_name = graph_node_label
-            else:
-                tail_name = node.layer_label.replace(":", "pass")
-
-            # Resolve head name
-            child_collapse_address = _collapse_address_for_node(
-                trace,
-                child_node,
-                collapse_fn=collapse_fn,
-                max_module_depth=vis_call_depth,
-            )
-            child_is_collapsed = child_collapse_address is not None
-            if child_is_collapsed:
-                c_mod_w_pass = child_collapse_address
-                if c_mod_w_pass is None:
-                    continue
-                c_parts = c_mod_w_pass.rsplit(":", 1)
-                head_name = "pass".join(c_parts) if vis_mode == "unrolled" else c_parts[0]
-            else:
-                head_name = child_node.layer_label.replace(":", "pass")
-
-            # Intra-module skip for two collapsed nodes in the same module
-            if is_collapsed and child_is_collapsed and tail_name != head_name:
-                p_mods = node.modules[:]
-                c_mods = child_node.modules[:]
-                if node.is_atomic_module:
-                    p_mods = p_mods[:-1]
-                if child_node.is_atomic_module:
-                    c_mods = c_mods[:-1]
-                if p_mods[:vis_call_depth] == c_mods[:vis_call_depth]:
-                    continue
-
-            dedupe_key = (tail_name, head_name, render_edge.occurrence_key)
-            if dedupe_key in edges_used:
-                continue
-            if tail_name == head_name and metadata_child is not child_node:
-                continue
-            edges_used.add(dedupe_key)
-
-            edge_style = "solid" if node.has_input_ancestor else "dashed"
-            edge = {
-                "tail_name": tail_name,
-                "head_name": head_name,
-                "color": node_color,
-                "style": edge_style,
-                "arrowsize": ".7",
+    for edge in ir.edges:
+        attrs = dict(edge.attrs)
+        attrs.pop("tail_name", None)
+        attrs.pop("head_name", None)
+        attrs.pop("fontcolor", None)
+        attrs.pop("labelfontsize", None)
+        all_edges.append(
+            {
+                "tail_name": rank_names.get(edge.source_unit, edge.tail_name or edge.source_unit),
+                "head_name": rank_names.get(edge.target_unit, edge.head_name or edge.target_unit),
+                **attrs,
             }
-
-            # Arg labels for non-commutative ops with multiple parents
-            if (
-                not child_is_collapsed
-                and metadata_child is not None
-                and metadata_child.layer_type not in COMMUTE_FUNCS
-            ):
-                _add_arg_label(
-                    node,
-                    metadata_child,
-                    edge,
-                    trace,
-                    show_buffer_layers,
-                    render_edge.argument_label,
-                )
-
-            for k, v in (overrides.edge or {}).items():
-                if callable(v):
-                    edge[k] = str(v(trace, node, metadata_child or child_node))
-                else:
-                    edge[k] = str(v)
-
-            all_edges.append(edge)
+        )
 
     # ── Phase 2: Rank layout ──
     node_label_sizes: dict[str, tuple[float, float]] = {}
@@ -759,24 +525,19 @@ def render_rank_layout(
     # Compute max module depth for penwidth scaling
     all_mod_keys = set(module_direct_nodes.keys()) | set(module_child_map.keys())
 
-    def _max_depth(mod_key: str, depth: int = 0, visited: set[str] | None = None) -> int:
-        if visited is None:
-            visited = set()
-        if mod_key in visited:
-            return depth
-        visited.add(mod_key)
-        children = module_child_map.get(mod_key, set())
-        if not children:
-            return depth
-        return max(_max_depth(c, depth + 1, visited) for c in children)
-
     # Find top-level modules (not children of any other)
     all_children = set()
     for children in module_child_map.values():
         all_children.update(children)
     top_modules = sorted(all_mod_keys - all_children)
 
-    max_nest = max((_max_depth(m) for m in top_modules), default=0) + 1
+    def _max_depth(mod_key: str, depth: int = 0) -> int:
+        """Return maximum descendant depth for rank cluster pen widths."""
+
+        children = module_child_map.get(mod_key, set())
+        return max((_max_depth(child, depth + 1) for child in children), default=depth)
+
+    max_nest = max((_max_depth(module) for module in top_modules), default=0) + 1
 
     def _write_cluster(mod_key: str, depth: int, indent: int) -> None:
         """Recursively write a cluster subgraph with its nodes and children."""
@@ -794,43 +555,11 @@ def render_rank_layout(
         lines.append(f"{prefix}subgraph {_dot_id(f'cluster_{safe}')} {{")
 
         mod_addr = mod_key.split(":")[0] if ":" in mod_key else mod_key
-        try:
-            ml = trace.modules[mod_addr]
-        except (KeyError, IndexError):
-            ml = None
-        mod_type = ml.class_name if ml else "Module"
-        np_ = ml.num_calls if ml else 1
-
-        if vis_mode == "unrolled" and np_ > 1 and ":" in mod_key:
-            title = mod_key
-        elif vis_mode == "rolled" and np_ > 1:
-            title = f"{mod_addr} (x{np_})"
-        else:
-            title = mod_addr
-
-        pw = compute_module_penwidth(depth, max_nest)
-        ls = "solid" if module_has_ancestor.get(mod_key) else "dashed"
-
-        # ``title`` is derived from the module address, which can contain
-        # arbitrary user text (e.g. an ``nn.ModuleDict`` key like
-        # ``"score & rank"``) -- escape both it and the class name before
-        # they land in the Graphviz HTML-like label.
-        escaped_title = html_escape(title)
-        escaped_mod_type = html_escape(mod_type)
-        cluster_label = (
-            f'<<B>@{escaped_title}</B><br align="left"/>({escaped_mod_type})<br align="left"/>>'
-        )
-
-        # Apply module overrides
-        mod_attrs = {
-            "label": cluster_label,
-            "labelloc": "b",
-            "style": f"filled,{ls}",
-            "fillcolor": "white",
-            "penwidth": f"{pw:.1f}",
-        }
-        for k, v in (overrides.module or {}).items():
-            mod_attrs[k] = str(v(trace, mod_key)) if callable(v) else str(v)
+        mod_attrs = dict(region_by_key[mod_key].style)
+        mod_attrs["label"] = str(mod_attrs["label"]).replace("align='left'", 'align="left"')
+        mod_attrs["style"] = "filled,solid" if module_has_ancestor.get(mod_key) else "filled,dashed"
+        mod_attrs["penwidth"] = f"{compute_module_penwidth(depth, max_nest):.1f}"
+        mod_attrs.pop("margin", None)
 
         group_id = f"group_{mod_addr}"
         if group_id in compound_bboxes:
