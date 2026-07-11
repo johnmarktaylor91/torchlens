@@ -80,6 +80,8 @@ class RecordingProjection:
     output_tensors: tuple[object, ...]
     output_tensor_addresses: tuple[str, ...]
     trace_facts: dict[str, object]
+    buffer_layers: tuple[str, ...]
+    internal_source_ops: tuple[str, ...]
 
 
 class RecordingProjector:
@@ -159,4 +161,10 @@ class RecordingProjector:
             tuple(last_facts.get("output_tensors", ())),
             tuple(last_facts.get("output_tensor_addresses", ())),
             dict(last_facts),
+            tuple(event.label_raw for event in all_events if event.layer_type == "buffer"),
+            tuple(
+                event.label_raw
+                for event in all_events
+                if event.layer_type != "input" and not event.parents
+            ),
         )

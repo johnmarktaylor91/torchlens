@@ -767,6 +767,8 @@ class Recording(CapturedRun):
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
+        trace.buffer_layers = list(projection.buffer_layers)
+        trace.internal_source_ops = list(projection.internal_source_ops)
         # Complete the special-layer-list backfill for the remaining two of the
         # five (list <-> per-Op-flag) pairs the `special_layer_lists` invariant
         # checks (torchlens/validation/invariants.py `_SPECIAL_LIST_FLAG_PAIRS`:
@@ -799,15 +801,6 @@ class Recording(CapturedRun):
         # <- layer_type != "input" and no parents (postprocess/_materialize.py,
         # capture/projections.py -- note buffers are ALSO internal-source ops, so
         # they legitimately appear in both lists, matching exhaustive tl.trace()).
-        trace.buffer_layers = [
-            event.label_raw for event in projection.events if event.layer_type == "buffer"
-        ]
-        trace.internal_source_ops = [
-            event.label_raw
-            for event in projection.events
-            if event.layer_type != "input" and not event.parents
-        ]
-
         # The live capture path (torchlens/capture/trace.py) sets
         # capture_start_time/setup_duration/forward_duration/forward_peak_memory/
         # forward_memory_backend on the Trace it builds *during* the forward
