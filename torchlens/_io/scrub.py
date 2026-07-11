@@ -373,7 +373,6 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_capture_config",
         "_stop_directive",
         "_retain_layers_to_save_output_parents",
-        "_fast_raw_index_lookup",
         "_keep_outs_in_memory",
         "_capture_container_structure",
         "_capture_output_structure",

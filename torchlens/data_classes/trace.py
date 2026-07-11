@@ -13,9 +13,7 @@ Key design patterns:
   model's tensors are keyed by their raw internal barcodes in
   transient raw graph state. After postprocessing flips ``_tracing_finished=True``,
   the friendly ``layer_list`` / ``layer_dict_all_keys`` / ``layer_logs``
-  structures are populated and used instead.  ``_tracing_finished`` also
-  persists across the fast pass on purpose: fast-path postprocessing
-  relies on the fully-populated lookup dicts from the exhaustive pass.
+  structures are populated and used instead.
 
 * **Explicit Trace custom_methods** - Public custom_methods are defined directly on
   ``Trace``. Heavier implementations may delegate into subpackages
@@ -1337,12 +1335,8 @@ class Trace(
         # _tracing_finished is the master behavioural switch: False during logging,
         # True after postprocessing.  Many custom_methods (len, getitem, str, iter)
         # branch on this flag to choose raw-barcode vs final-label access.
-        # It intentionally persists across the fast pass so fast-path
-        # postprocessing can use the exhaustive pass's lookup dicts.
         self._tracing_finished = False
-        # "exhaustive" captures all metadata; "fast" reuses exhaustive-pass
-        # structure, only re-capturing tensor contents.
-        self.capture_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
+        self.capture_mode: Literal["exhaustive", "predicate"] = "exhaustive"
         self.halted = False
         self.halt_reason: str | None = None
         self.halt_frontier: str | None = None

@@ -461,8 +461,6 @@ def _ensure_observer(ledger: PreHookProvenanceLedger, module: nn.Module) -> None
             or _state._active_trace is not ledger.trace
         ):
             return prior_call_impl(*args, **kwargs)
-        if getattr(ledger.trace, "capture_mode", None) == "fast":
-            return prior_call_impl(*args, **kwargs)
         refresh_registration_bypasses(ledger.trace, module)
         with _paused_logging():
             before_observation = _observe_state(args, kwargs)

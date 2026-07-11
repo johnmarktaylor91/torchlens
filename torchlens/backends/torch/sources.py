@@ -6,7 +6,7 @@ payloads, and preserves source equivalence metadata for postprocessing.
 
 from collections import defaultdict
 import time
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -14,7 +14,6 @@ from ..._errors import TorchLensPostfuncError
 from ...fastlog.exceptions import PredicateError
 from ...fastlog._halt import HaltSignal
 from ...ir.predicate import RetroactiveCaptureDecision
-from ...quantities import Bytes
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
 from . import module_stack as _mstack
@@ -72,8 +71,6 @@ def log_source_tensor(
     """
     if self.capture_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
-    elif self.capture_mode == "fast":
-        log_source_tensor_fast(self, t, source)
     elif self.capture_mode == "predicate":
         log_source_tensor_predicate(self, t, source, extra_address)
 
@@ -486,53 +483,3 @@ def log_source_tensor_exhaustive(
             sample_id=None,
         )
         _evaluate_halt(halt_ctx, options, frontier_output=t)
-
-
-def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
-    """Fast-path source tensor logging: save new out into existing entry.
-
-    Mirrors the exhaustive pass's counter increments for alignment, then
-    saves the tensor value and updates shape/dtype/size metadata.  Does NOT
-    rebuild the fields_dict or create new log entries.
-    """
-    layer_type = source
-    # Fetch counters and increment to be ready for next tensor to be logged
-    self._layer_counter += 1
-    self._raw_layer_type_counter[layer_type] += 1
-    type_index = self._raw_layer_type_counter[layer_type]
-
-    # Source tensor raw labels omit the realtime_num component (unlike function
-    # outputs) because source tensors are identified only by type and type_num.
-    _label_raw = f"{layer_type}_{type_index}_raw"
-    # Tag tensor for downstream fast-path ops to identify it.
-    set_tensor_label(t, _label_raw)
-    if _label_raw in self._orphan_labels:
-        return
-    orig_tensor_label = self._raw_to_final_layer_labels.get(_label_raw)
-    if orig_tensor_label is None:
-        raise ValueError(
-            f"Fast-path label '{_label_raw}' has no mapping in _raw_to_final_layer_labels. "
-            f"This usually means the computational graph changed between the exhaustive pass "
-            f"and this fast pass (e.g., dynamic control flow). Use trace() instead."
-        )
-    orig_layer_entry = cast(Any, self.layer_dict_all_keys[orig_tensor_label])
-    previous_shape = orig_layer_entry.shape
-    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    if (layer_nums_to_save == "all") or (orig_layer_entry.raw_index in layer_nums_to_save):
-        orig_layer_entry.save_activation(t, [], {}, self.save_arg_values, self.activation_transform)
-
-    # Minimal graph consistency validation (#99)
-    new_shape = tuple(t.shape)
-    if previous_shape is not None and new_shape != previous_shape:
-        import warnings
-
-        warnings.warn(
-            f"Tensor shape changed for '{orig_tensor_label}': "
-            f"expected {previous_shape}, got {new_shape}. "
-            f"The computational graph may have changed between ops."
-        )
-    orig_layer_entry.shape = new_shape
-    orig_layer_entry.dtype = t.dtype
-    new_dtype = t.dtype
-    memory = get_memory_amount_from_metadata(t, new_shape, new_dtype)
-    orig_layer_entry.activation_memory = Bytes(memory)

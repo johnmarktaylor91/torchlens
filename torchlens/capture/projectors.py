@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Iterable, cast
+import warnings
 
 from ..ir.events import OpEvent
 from .session import CapturedRunCore
@@ -64,6 +65,143 @@ class TraceProjector:
 
         return tuple(
             _event_from_core(self.core, index) for index in range(len(self.core.event_facts))
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class RefreshProjector:
+    """Project a same-graph captured rerun onto an existing Trace."""
+
+    target: Any
+    layer_nums_to_save: str | tuple[int, ...] = "all"
+
+    def project(self, refreshed: Any) -> None:
+        """Validate and apply refreshed payloads without replacing graph containers.
+
+        Parameters
+        ----------
+        refreshed
+            Fully postprocessed Trace captured by the fixed-order kernel.
+
+        Raises
+        ------
+        ValueError
+            If the refreshed computational graph differs from the target graph.
+        """
+
+        target_signature = self._graph_signature(self.target)
+        refreshed_signature = self._graph_signature(refreshed)
+        if target_signature != refreshed_signature:
+            raise ValueError(
+                "The computational graph changed for this forward pass compared to the original "
+                "call to trace (either due to different inputs or a different "
+                "random seed), so save_new_outs failed. Please re-run "
+                "trace with the desired inputs."
+            )
+        refreshed_by_raw = {layer._layer_label_raw: layer for layer in refreshed.layer_list}
+        for layer in self.target.layer_list:
+            new_shape = refreshed_by_raw[layer._layer_label_raw].shape
+            if layer.shape is not None and new_shape != layer.shape:
+                warnings.warn(
+                    f"Tensor shape changed for '{layer.layer_label}': "
+                    f"expected {layer.shape}, got {new_shape}. "
+                    "The computational graph may have changed between ops."
+                )
+        if not self.target._refresh_matching_rerun_state_from(refreshed):
+            raise ValueError(
+                "The computational graph changed for this forward pass compared to the original "
+                "call to trace (either due to different inputs or a different "
+                "random seed), so save_new_outs failed. Please re-run "
+                "trace with the desired inputs."
+            )
+        self._rebind_backward_hooks()
+        self._separate_output_payloads()
+        if self.layer_nums_to_save != "all":
+            selected = set(self.layer_nums_to_save)
+            for output_label in self.target.output_layers:
+                output = self.target.layer_dict_all_keys[output_label]
+                selected.add(output.raw_index)
+                selected.update(
+                    self.target.layer_dict_all_keys[parent].raw_index for parent in output.parents
+                )
+            for layer in self.target.layer_list:
+                if layer.raw_index not in selected:
+                    self._clear_payload(layer)
+
+    def _rebind_backward_hooks(self) -> None:
+        """Bind refreshed live tensors and grad-fn registry entries to the target Trace."""
+
+        from ..backends.torch.backward import _register_forward_grad_fn
+        from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
+
+        self.target.__dict__["_tl_backward_hooked_tensor_keys"] = set()
+        for layer in self.target.layer_list:
+            _register_forward_grad_fn(
+                self.target,
+                layer.grad_fn_handle,
+                layer._layer_label_raw,
+            )
+            if layer.out is not None:
+                _add_tensor_backward_hook(self.target, layer.out, layer._layer_label_raw)
+
+    def _separate_output_payloads(self) -> None:
+        """Copy output-node payloads so they do not alias their parent payloads."""
+
+        from ..utils.tensor_utils import safe_copy
+
+        for output_label in self.target.output_layers:
+            output = self.target.layer_dict_all_keys[output_label]
+            if not output.parents or output.out is None:
+                continue
+            output._internal_set(
+                "out",
+                safe_copy(
+                    output.out,
+                    detach_tensor=self.target.detach_saved_activations,
+                ),
+            )
+
+    @staticmethod
+    def _clear_payload(layer: Any) -> None:
+        """Clear refresh payload fields for one unselected operation.
+
+        Parameters
+        ----------
+        layer
+            Existing operation whose refreshed payload was not requested.
+        """
+
+        layer._internal_set("out", None)
+        layer._internal_set("transformed_out", None)
+        layer.transformed_out_shape = None
+        layer.transformed_out_dtype = None
+        layer.transformed_activation_memory = None
+        layer.has_saved_activation = False
+        layer.has_out_variations = False
+        layer.out_versions_by_child = {}
+
+    @staticmethod
+    def _graph_signature(trace: Any) -> tuple[tuple[Any, ...], ...]:
+        """Return the refresh graph-change tripwire signature for a Trace.
+
+        Parameters
+        ----------
+        trace
+            Completed Trace whose operation topology should be summarized.
+
+        Returns
+        -------
+        tuple[tuple[Any, ...], ...]
+            Ordered raw identity, type, and parent facts for every operation.
+        """
+
+        return tuple(
+            (
+                layer._layer_label_raw,
+                layer.layer_type,
+                tuple(sorted(layer.parents)),
+            )
+            for layer in trace.layer_list
         )
 
 

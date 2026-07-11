@@ -398,8 +398,6 @@ def compile_legacy_capture_plan(
 
     capture_mode = str(getattr(trace, "capture_mode", "exhaustive"))
     projection_target = "trace" if postprocess else "recording"
-    if capture_mode == "fast":
-        projection_target = "refresh"
     # This is a compatibility-only demand declaration.  Existing producers
     # continue to choose their historical work; no extra metadata or payload
     # work is requested from them in Stage 2.

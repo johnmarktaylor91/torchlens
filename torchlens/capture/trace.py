@@ -8,13 +8,8 @@ model outs:
    parent-child relationships, module context, etc.) into Op entries.
    This builds the complete computational graph.
 
-2. **Fast pass** (``capture_mode="fast"``): Re-runs the model using the graph
-   structure from the exhaustive pass, only saving new out values.
-   Much faster because it skips all metadata collection.  Used by
-   ``save_new_outs()`` to refresh outs for new inputs without
-   rebuilding the entire graph. Public selective saves usually use predicate-time
-   filtering in the primary pass and only reach this path when finalized labels or
-   gradient-specific selections require replay.
+2. **Predicate pass** (``capture_mode="predicate"``): Captures selectively
+   while preserving the shared event journal and fixed-order kernel.
 
 Key ordering constraint:
     RNG state must be captured/restored BEFORE ``active_logging()`` is entered,
@@ -32,7 +27,6 @@ import contextlib
 import random
 import sys
 import time
-from collections import defaultdict
 from collections.abc import Callable, Iterator
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
@@ -144,10 +138,6 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     None
         Context body in which the model forward executes.
     """
-
-    if getattr(trace, "capture_mode", None) == "fast":
-        yield
-        return
 
     device_type = getattr(device, "type", None)
     torch_module: Any = None
@@ -471,17 +461,16 @@ def save_new_outs(
     random_seed: int | None = None,
     backward_ready: bool | None = None,
 ) -> None:
-    """Re-run the model with new inputs, saving only outs (fast pass).
+    """Re-run the model with new inputs, saving refreshed outs.
 
     This is the public API for refreshing outs without rebuilding the
     computational graph.  Much faster than ``trace`` because all
     metadata (graph structure, labels, module context) was captured in the
     original exhaustive pass and is reused here.
 
-    The fast pass assumes the computational graph is identical to the exhaustive
-    pass.  If the model has dynamic control flow that changes between inputs,
-    the counter-alignment checks in ``log_function_output_tensors_fast`` will
-    detect the mismatch and raise ``ValueError``.
+    The refresh assumes the computational graph is identical to the original
+    pass. The refresh projector validates the captured graph and raises
+    ``ValueError`` when dynamic control flow changes it.
 
     Parameters
 
@@ -530,64 +519,47 @@ def save_new_outs(
                 layer_log_entry.detach_saved_activations = detach_saved_activations
         return
 
-    # Switch to fast mode: reuse graph structure, only capture new outs.
-    self.capture_mode = "fast"
-    backend = _capture_backend_from_registry(
-        _backend_name_for_trace(self),
-        model,
-        input_args,
-        input_kwargs,
+    from ..user_funcs import _run_model_and_save_specified_outs
+    from .projectors import RefreshProjector
+
+    save_grads_policy = getattr(self, "save_grads", None)
+    layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
+    refresh_seed = self.random_seed if random_seed is None else random_seed
+    refreshed = _run_model_and_save_specified_outs(
+        model=model,
+        input_args=input_args,
+        input_kwargs=input_kwargs or {},
+        layers_to_save="all",
+        output_device=getattr(self, "output_device", "same"),
+        activation_transform=getattr(self, "activation_transform", None),
+        grad_transform=getattr(self, "grad_transform", None),
+        save_raw_activations=getattr(self, "save_raw_activations", True),
+        save_raw_gradients=getattr(self, "save_raw_gradients", True),
+        save_mode=getattr(self, "save_mode", "copy"),
+        capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
+        keep_orphans=getattr(self, "keep_orphans", False),
+        mark_layer_depths=getattr(self, "mark_layer_depths", False),
+        detach_saved_activations=getattr(self, "detach_saved_activations", False),
+        save_arg_values=getattr(self, "save_arg_values", False),
+        save_grads=save_grads_policy not in (None, False),
+        grads_to_save=grad_layers_to_save,
+        random_seed=refresh_seed,
+        num_context_lines=getattr(self, "num_context_lines", 7),
+        optimizer=getattr(self, "_optimizer", None),
+        save_code_context=getattr(self, "save_code_context", False),
+        save_rng_states=getattr(self, "save_rng_states", False),
+        recurrence_detection=getattr(self, "recurrence_detection", True),
+        verbose=getattr(self, "verbose", False),
+        backward_ready=getattr(self, "backward_ready", False),
+        inference_only=getattr(self, "inference_only", False),
+        output_transform=getattr(self, "_output_transform", None),
+        save_raw_output=getattr(self, "save_raw_output", "small"),
+        retain_output_parents_for_layers_to_save=True,
     )
-    backend.set_capture_producer_policy(self, "fast")
-    self._in_exhaustive_pass = False
-
-    # Clear all existing outs from the previous pass.
-    for layer_log_entry in self:
-        layer_log_entry._internal_set("out", None)
-        layer_log_entry._internal_set("transformed_out", None)
-        layer_log_entry.transformed_out_shape = None
-        layer_log_entry.transformed_out_dtype = None
-        layer_log_entry.transformed_activation_memory = None
-        layer_log_entry.has_saved_activation = False
-        layer_log_entry.has_grad = False
-        layer_log_entry._internal_set("grad", None)
-        layer_log_entry._internal_set("transformed_grad", None)
-        layer_log_entry.transformed_grad_shape = None
-        layer_log_entry.transformed_grad_dtype = None
-        layer_log_entry.transformed_gradient_memory = None
-        layer_log_entry.has_out_variations = False
-        # Fast capture rebuilds any needed entries during replay via
-        # _track_fast_parent_output_versions; this reset only clears stale
-        # exhaustive-pass child snapshots.
-        layer_log_entry.out_versions_by_child = {}
-    self._replay_arg_version_data_complete = False
-
-    # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
-    # num_tensors) are NOT reset — they describe the static graph structure.
-    self._saved_grad_labels = set()
-    self.has_gradients = False
-    self.num_saved_ops = 0
-    self.saved_activation_memory = Bytes(0)
-    self.total_gradient_memory = Bytes(0)
-    self.saved_gradient_memory = Bytes(0)
-    self.func_calls_duration = Duration(0)  # #87: reset timing
-    # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
-    # Counter alignment is the mechanism that lets the fast pass verify the graph
-    # hasn't changed: same counter value → same raw label → same operation.
-    self._layer_counter = 0
-    self._raw_layer_type_counter = defaultdict(lambda: 0)
-    # #97: clear stale internal lookup caches.  User-facing dicts
-    # (layer_dict_all_keys, _lookup_keys_to_layer_num_dict) are NOT cleared
-    # because _get_op_nums_from_user_labels needs them for layers_to_save lookup
-    # before the new forward pass populates them.  They're rebuilt in postprocessing.
-    if hasattr(self, "_tensor_num_to_lookup_keys_dict"):
-        self._tensor_num_to_lookup_keys_dict.clear()
-
-    # Now run and log the new inputs.
-    _vprint(self, "Running fast pass (saving requested outs)")
-    self._run_and_log_inputs_through_model(
-        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, random_seed
+    projected_layer_nums = (
+        "all" if layer_nums_to_save == "all" else tuple(cast(list[int], layer_nums_to_save))
     )
+    RefreshProjector(self, projected_layer_nums).project(refreshed)
     if self.save_arg_values:
         self._replay_arg_version_data_complete = True
 
@@ -599,7 +571,7 @@ def _get_op_nums_from_user_labels(
 
     Supports exact key match, substring match across all lookup keys, and the
     special sentinel ``"all"`` (which ops through as-is).  Returns sorted
-    unique tensor numbers so the fast pass can check membership efficiently.
+    unique raw operation numbers for refresh projection.
     """
     if which_layers == "all":
         return which_layers  # type: ignore[return-value]
@@ -905,7 +877,7 @@ def run_and_log_inputs_through_model(
       2. Resolve ``layers_to_save`` to internal tensor numbers.
       3. Normalize/copy inputs, detect device.
       4. Move inputs to model device.
-      5. Capture/restore RNG state for fast-pass reproducibility.
+      5. Capture RNG state for explicit-refresh reproducibility.
       6. Prepare model (one-time decoration + per-session hooks).
       7. Enter ``active_logging()`` context — toggles ``_state._logging_enabled``.
       8. Log source tensors (inputs), then run ``model(*args, **kwargs)``.
@@ -946,9 +918,8 @@ def run_and_log_inputs_through_model(
         self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
         self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
 
-    # In fast mode, output layers' out are derived from their parents
-    # (see postprocess_fast).  If the user requested a subset of layers, we must
-    # also include output-layer parents so their outs are available (#46).
+    # Selective captures retain output-layer parents so output payloads remain
+    # available when the synthetic output node itself is requested (#46).
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     if layer_nums_to_save != "all" and self._tracing_finished:
         output_parent_nums = set()
@@ -1003,14 +974,10 @@ def run_and_log_inputs_through_model(
         self._input_tensor_addresses = list(input_tensor_addresses)
         self._output_attribution_input_tensors = input_tensors
 
-        # RNG state snapshot/restore for two-pass consistency (#58).
-        # Exhaustive pass: snapshot state BEFORE forward so fast pass can replay.
-        # Fast pass: restore the snapshot so dropout masks, etc. are identical,
-        # ensuring the same computational graph (counter alignment depends on this).
+        # RNG state snapshot for deterministic explicit refreshes and legacy
+        # two-pass consistency (#58).
         if self.capture_mode == "exhaustive":
             self._pre_forward_rng_states = backend.snapshot_rng(self)  # type: ignore[attr-defined]
-        elif self.capture_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
-            backend.restore_rng(self, self._pre_forward_rng_states)
 
         from ..ir import CaptureEvents
 

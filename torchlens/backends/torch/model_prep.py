@@ -24,7 +24,6 @@ from ...fastlog._halt import HaltSignal
 from ._tl import (
     clear_meta,
     get_buffer_address,
-    get_label_list,
     get_live_tensor_label,
     get_module_meta,
     get_tensor_label,
@@ -573,19 +572,6 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     if not hasattr(trace, "_param_log_by_pid"):
         raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
 
-    # Fast (save_new_outs / second-pass) capture reuses the exhaustive-pass
-    # graph, so the Param log objects -- and the cross-reference metadata
-    # populated on them during the exhaustive pass (used_by_ops, used_by_layers,
-    # num_calls, co_parent_params) -- must be preserved. Rebuilding fresh Param
-    # objects here would (a) drop that metadata, leaving used_by_layers empty,
-    # and (b) desync trace.param_logs from the Op._param_logs that still point at
-    # the exhaustive-pass objects -- exactly the asymmetry the param
-    # cross-reference invariant flags. Re-tag the live tensors with their
-    # existing barcode/address instead of allocating new logs.
-    if trace.capture_mode == "fast" and len(trace.param_logs):
-        _retag_existing_session_param_logs(trace, model)
-        return
-
     optimized_param_ids: set[int] = set()
     if optimizer is not None:
         for group in optimizer.param_groups:
@@ -654,63 +640,6 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
 
     trace._param_log_by_pid = param_id_to_address
     trace.param_logs = ParamAccessor(param_logs)
-
-
-def _retag_existing_session_param_logs(trace: "Trace", model: nn.Module) -> None:
-    """Re-tag live parameters for a fast pass without rebuilding Param logs.
-
-    Mirrors the live-tensor side effects of :func:`_create_session_param_logs`
-    (force ``requires_grad`` outside ``backward_ready``, set ``_tl`` param meta,
-    refresh ``Param._param_ref``, rebuild ``_param_log_by_pid``) but keeps the
-    existing :class:`Param` objects so their exhaustive-pass cross-reference
-    metadata survives the second pass. Aliased/shared parameters resolve through
-    each Param's ``all_addresses``.
-    """
-
-    existing_by_address: dict[str, Param] = {pl.address: pl for pl in trace.param_logs}
-    alias_to_primary: dict[str, str] = {}
-    for primary_address, param_log in existing_by_address.items():
-        for alias in getattr(param_log, "all_addresses", []) or [primary_address]:
-            alias_to_primary[alias] = primary_address
-
-    param_id_to_address: dict[int, str] = {}
-    seen_param_ids: set[int] = set()
-    for module in model.modules():
-        address = _module_address(module)
-        for param_name, param in module._parameters.items():
-            if param is None:
-                continue
-            pid = id(param)
-            param_address = f"{address}.{param_name}" if address else param_name
-            primary_address = alias_to_primary.get(param_address, param_address)
-            # Distinct local for the ``Param | None`` lookup so the loop variable
-            # ``param_log`` (bound non-optional in the ``existing_by_address``
-            # iteration above) keeps its narrowed ``Param`` type after the
-            # ``is None`` guard -- avoids a mypy variable-reuse narrowing error.
-            existing_param_log = existing_by_address.get(primary_address)
-            if existing_param_log is None:
-                # Unexpected new parameter on the fast pass: the graph changed.
-                # Leave it untagged; downstream fast-pass alignment checks will
-                # surface the divergence rather than silently mis-saving.
-                continue
-            param_log = existing_param_log
-            if pid not in seen_param_ids:
-                seen_param_ids.add(pid)
-                param_id_to_address[pid] = primary_address
-                requires_grad_before = param.requires_grad
-                if not getattr(trace, "backward_ready", False) and (
-                    torch.is_floating_point(param) or torch.is_complex(param)
-                ):
-                    param.requires_grad = True
-                set_param_meta(
-                    param,
-                    barcode=param_log.barcode,
-                    address=primary_address,
-                    requires_grad_before=requires_grad_before,
-                )
-                param_log._param_ref = param
-
-    trace._param_log_by_pid = param_id_to_address
 
 
 # ---------------------------------------------------------------------------
@@ -1865,21 +1794,13 @@ def module_forward_decorator(
     necessary because the same wrapper persists across multiple ``trace``
     calls with different Trace instances.
 
-    **Three execution modes**:
+    **Execution modes**:
 
     1. **Logging off** (``_state._logging_enabled is False``): Pass through to
        ``orig_forward`` with zero overhead beyond one bool check. This is the
        normal production path.
 
-    2. **Fast mode** (``trace.capture_mode == "fast"``): Runs ``orig_forward``
-       first, then handles ``nn.Identity`` and pass-through detection ONLY.
-       Skips ``_record_module_entry_metadata``/``_record_module_exit_metadata`` entirely — the fast
-       path doesn't track module nesting metadata. The ``torch.identity()`` call
-       for nn.Identity/pass-through is still needed to keep tensor counters
-       aligned with the exhaustive pass (which already ran and established the
-       counter sequence).
-
-    3. **Exhaustive mode**: Full entry/exit bookkeeping via
+    2. **Exhaustive mode**: Full entry/exit bookkeeping via
        ``_record_module_entry_metadata`` and ``_record_module_exit_metadata``.
        Wrapped in try/except for **exception safety**:
        if ``orig_forward`` raises, the module pass label is popped from the stack
@@ -1901,33 +1822,6 @@ def module_forward_decorator(
             return orig_forward(*args, **kwargs)
 
         trace = _state._active_trace
-
-        # ---- Fast mode: skip module entry/exit tracking ----
-        # Only nn.Identity and pass-through detection is needed to keep
-        # tensor counters aligned with the exhaustive pass.
-        if trace.capture_mode == "fast":
-            input_tensors_fast = get_vars_of_type_from_obj(
-                [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
-            )
-            input_tensor_labels = set(get_label_list(input_tensors_fast))
-            if (
-                _state._escape_detector_mode == "shadow"
-                or _state._completeness_witness_mode == "shadow"
-            ):
-                with expected_original_call(orig_forward, "module_forward:fast"):
-                    out = orig_forward(*args, **kwargs)
-            else:
-                out = orig_forward(*args, **kwargs)
-            output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
-            for t in output_tensors:
-                # Force _decorated_identity() for nn.Identity modules and pass-throughs
-                # to create a new tensor entry, matching what exhaustive mode does.
-                tensor_label = get_tensor_label(t)
-                if (_module_type(module).lower() == "identity") or (
-                    tensor_label is not None and tensor_label in input_tensor_labels
-                ):
-                    t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
-            return out
 
         if trace.capture_mode == "predicate":
             from ...capture.predicates import (

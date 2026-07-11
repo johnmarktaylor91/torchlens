@@ -778,10 +778,6 @@ def _build_module_logs(self: "Trace") -> None:
     - ModuleLogs for each submodule with ModuleCallLogs for each pass.
     - ModuleAccessor and BufferAccessor for user-facing access.
 
-    MUST NOT be called in fast mode (postprocess_fast) because _module_build_data
-    is not repopulated when Step 9 is skipped. Existing module logs from the
-    exhaustive pass remain valid (#108).
-
     Handles shared modules (same nn.Module registered under multiple addresses)
     via an alias-to-metadata map. Computes nesting depths via BFS from root.
     Clears temporary state (_module_metadata, _module_forward_args, _module_build_data)

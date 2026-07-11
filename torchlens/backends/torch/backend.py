@@ -730,7 +730,6 @@ class TorchBackend:
         attributable_output_tensors: list[torch.Tensor] = []
         attributable_output_tensor_addresses: list[str] = []
         for t, output_address in zip(output_tensors, output_tensor_addresses):
-            # Only record output_layers during exhaustive pass; fast pass reuses the list.
             _label_raw = _tl.get_tensor_label(t)
             if _label_raw is None:
                 if _is_direct_registered_buffer_output(self_trace, t):
