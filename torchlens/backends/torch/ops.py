@@ -2322,6 +2322,33 @@ def _emit_predicate_operation_events(
                 """Freeze and append the immutable event and its sidecars."""
 
                 spec = cast(CaptureSpec, current.facts["spec"])
+                function_ref = current.facts.get("function")
+                if function_ref is None:
+                    function_ref = FunctionCallRef(
+                        func=func,
+                        func_name=func_name,
+                        func_qualname=getattr(func, "__qualname__", None),
+                        func_call_id=func_call_id,
+                        code_context=(),
+                        func_duration=None,
+                        flops_forward=None,
+                        flops_backward=None,
+                        func_rng_states=None,
+                        func_autocast_state=None,
+                        arg_names=(),
+                        num_args_total=len(args) + len(kwargs),
+                        num_pos_args=len(args),
+                        num_kwargs=len(kwargs),
+                        non_tensor_pos_args=(),
+                        non_tensor_kwargs=tuple(
+                            (key, value)
+                            for key, value in kwargs.items()
+                            if not isinstance(value, torch.Tensor)
+                        ),
+                        func_non_tensor_args=(),
+                        is_inplace=False,
+                        func_config=(),
+                    )
                 append_projected_event(
                     self,
                     ctx,
@@ -2331,7 +2358,7 @@ def _emit_predicate_operation_events(
                     transformed_ram_payload=current.facts.get("transformed_ram_payload"),
                     predicate_matched=spec.save_out or spec.save_metadata,
                     backend_semantics=current.facts.get("backend_semantics"),
-                    function=current.facts.get("function"),
+                    function=function_ref,
                     container_path=container_path,
                 )
 
