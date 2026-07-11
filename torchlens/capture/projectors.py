@@ -159,6 +159,7 @@ class RefreshProjector:
                     layer._internal_set(field_name, value)
         refreshed._refresh_projection_target_ref = weakref.ref(self.target)
         _REFRESH_SOURCES[self.target] = refreshed
+        self.target._layer_nums_to_save = self.layer_nums_to_save
         self.target._grad_op_nums_to_save = self.grad_layer_nums_to_save
         self._rebind_backward_hooks()
         self._separate_output_payloads()
