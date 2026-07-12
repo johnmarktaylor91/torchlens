@@ -77,6 +77,20 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
 module_scores = torch_trace.module_collapse_order
+
+# Influence geometry follows the real captured DAG in both directions.
+op = torch_trace["relu_1_2"]
+rf_box = op.receptive_field.at((10, 10))
+unit = op.receptive_field.center_unit(batch_index=0)
+rf_gradient = op.receptive_field.gradient(unit)
+rf_check = op.receptive_field.check(unit)
+rf_image = op.receptive_field.show(unit, gradient=True)
+outgoing_box = op.projective_field.at((10, 10))
+layer_to_layer = op.receptive_field.at((10, 10), source=torch_trace.input_ops[0])
+rf_table = torch_trace.receptive_fields(level="layer")
+pf_table = torch_trace.projective_fields(level="layer")
+rf_results = tl.receptive_field.verify(torch_trace, units="center")
+# tl.validate(model, x, scope="receptive_field") runs the sampled RF scope.
 ```
 
 ## Conventions
@@ -95,6 +109,8 @@ module_scores = torch_trace.module_collapse_order
 - Type hints on all functions
 - Import order: stdlib -> third-party -> local (enforced by ruff)
 - Line length: 100
+- `tl.receptive_field` is lazy; entity-level `receptive_field` / `projective_field` siblings
+  pair with `Trace.receptive_fields()` / `Trace.projective_fields()` tables.
 
 ## Quality Gates
 Every task must pass before completion unless the task explicitly narrows verification:
