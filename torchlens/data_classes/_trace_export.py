@@ -223,6 +223,9 @@ class TraceExportMixin(_TraceMixinBase):
             If an exported field such as ``grad`` is ambiguous across multiple
             backward passes and must be accessed through a pass-specific record.
         """
+        from ..runnable import refuse_poisoned_trace
+
+        refuse_poisoned_trace(self, "tabular export")
         if not self._tracing_finished:
             raise RuntimeError(
                 "to_pandas() cannot be called before the forward pass is complete. "

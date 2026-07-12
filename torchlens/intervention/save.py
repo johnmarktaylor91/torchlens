@@ -159,6 +159,9 @@ def save_intervention(
         Test injection hook used to simulate tensor-write crashes.
     """
 
+    from ..runnable import refuse_poisoned_trace
+
+    refuse_poisoned_trace(log, "intervention export")
     save_level = _coerce_save_level(level)
     _enforce_direct_write_policy(log, save_level, allow_direct_writes=allow_direct_writes)
     target_path = Path(path)

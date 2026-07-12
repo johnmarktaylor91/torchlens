@@ -206,6 +206,9 @@ def save(
     sources. Loading an untrusted bundle can execute arbitrary code.
     """
 
+    from ..runnable import refuse_poisoned_trace
+
+    refuse_poisoned_trace(trace, "export")
     save_level = coerce_tlspec_save_level(level)
     sparse_run_descriptor = None
     sparse_run_json = None

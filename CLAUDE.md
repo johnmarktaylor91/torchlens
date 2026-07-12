@@ -237,7 +237,11 @@ on a fork to the existing `save_new_outs` fast capture path; a loaded sparse Tra
 input leaves plus staged/random state and executes its resolved taken-path DAG under
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
 unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5 populates
-`report.path_faithfulness`; Stage 6 owns divergence enforcement and poison semantics.
+`report.path_faithfulness`; Stage 6 enforces the three-layer honesty transaction. Divergence raises
+and rolls back by default; `return_diverged` is the sole opt-in and returns a monotonic poisoned
+Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
+Incomplete witness coverage is `unverifiable`, never `verified`, and sparse-only numeric attestation
+is `not_applicable`.
 
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 

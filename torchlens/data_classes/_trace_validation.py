@@ -148,7 +148,9 @@ class TraceValidationMixin(_TraceMixinBase):
             unavailable status instead of a pass/fail bool.
         """
         from ..backends import get_backend_spec
+        from ..runnable import refuse_poisoned_trace
 
+        refuse_poisoned_trace(self, "validation")
         status = self.validation_replay_status
         if bool(getattr(self, "_loaded_from_bundle", False)) and not status.available:
             setattr(self, "_validation_replay_status", status)
@@ -342,8 +344,7 @@ class TraceValidationMixin(_TraceMixinBase):
         seed:
             Optional deterministic live refresh, random-state, and runtime RNG seed.
         on_divergence:
-            Frozen divergence policy. Stage 5 populates faithfulness but defers
-            policy enforcement to Stage 6.
+            Strict divergence behavior or the sole poison-return opt-in.
         append:
             If true, append a compatible chunk along batch dimension 0.
         chunk_size:

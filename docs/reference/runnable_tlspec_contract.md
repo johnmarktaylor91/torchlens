@@ -518,9 +518,9 @@ There are exactly two independent reproduction oracles:
    saved selected activation byte-exactly before exposure. First mismatch is
    `numeric_attestation_failed`, identifies slot/call/digest, and rolls back. Blobs never seed run.
 
-Changed-input/random-state activation runs are `not_applicable`; no activation layer is
-`not_present`. Unsaved slots have no numeric claim. Sparse-only promises contract/witness honesty,
-not numerical reproduction.
+Changed-input/random-state activation runs and sparse-only runs are `not_applicable`; no sparse run
+silently claims a numeric pass. Unsaved slots have no numeric claim. Sparse-only promises
+contract/witness honesty, not numerical reproduction.
 
 ## 12. Parked API spelling and docs lockstep
 
@@ -532,7 +532,8 @@ behavior is sparse default, independent layers, and reuse of capture-time `save=
 Stage 0 introduced public error names and an importable schema/type module. Stage 4 documents
 `load_state_dict`, transient state sources, and initializer reporting. Stage 5 implements `run`,
 `RunResult`, transactional run forks, sparse input/call/output reconstruction, and populated
-three-state `path_faithfulness`. Stage 6 remains responsible for strict divergence raising and
-poisoned opt-in results. This contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API
+three-state `path_faithfulness`. Stage 6 implements strict divergence raising, transactional
+rollback, incomplete-coverage `unverifiable`, and monotonically poisoned opt-in results plus
+downstream refusal gates. This contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API
 tests move together. Until a curated public glossary ships, this document is the authoritative
 public glossary entry for sparse runnable execution.
