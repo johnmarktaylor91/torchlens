@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from fractions import Fraction
-from typing import TYPE_CHECKING, Literal, Mapping
+from typing import TYPE_CHECKING, Literal, Mapping, cast
 
 from ._errors import ReceptiveFieldError, ReceptiveFieldValidationError
 
@@ -197,19 +197,19 @@ class ReceptiveField:
             If this descriptor has no windowed axes.
         """
 
-        return self._windowed_values("size")
+        return cast("tuple[int, ...]", self._windowed_values("size"))
 
     @property
     def jump(self) -> tuple[Fraction, ...]:
         """Return effective jumps over windowed input axes."""
 
-        return self._windowed_values("jump")
+        return cast("tuple[Fraction, ...]", self._windowed_values("jump"))
 
     @property
     def center0(self) -> tuple[Fraction, ...]:
         """Return output-zero centers over windowed input axes."""
 
-        return self._windowed_values("center0")
+        return cast("tuple[Fraction, ...]", self._windowed_values("center0"))
 
     def _windowed_values(
         self, field_name: Literal["size", "jump", "center0"]
