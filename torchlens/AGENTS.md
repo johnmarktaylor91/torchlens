@@ -51,7 +51,13 @@ patched = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
+live_result = relu_trace.run(inputs=x, seed=42)
+loaded_result = tl.load("architecture.tlspec").run(inputs=x, seed=42)
 ```
+
+The unified `inputs=` run surface returns `RunResult(output, trace, report)` without mutating its
+source. Live traces use the existing fast refresh projector; loaded runnable traces execute the
+resolved sparse DAG with staged or N1-a state. Analysis-only loads cannot run.
 
 Provisional semantic I/O examples (review-day names):
 

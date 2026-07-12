@@ -421,7 +421,7 @@ and never call those values original/recovered/reconstructed/trained/capture-tim
 
 ## 9. Runtime API and state lifecycle
 
-Stage 4 adds `load_state_dict`; Stage 5 must add `run` with exactly these public signatures:
+Stage 4 adds `load_state_dict`; Stage 5 adds the unified transactional `run` provider surface:
 
 ```python
 def run(
@@ -442,6 +442,11 @@ sparse Trace binds new inputs/state and executes the taken-path DAG. Both return
 mutating the source. Analysis-only loaded Trace raises `RunCapabilityUnavailableError` with
 `run_capability_unavailable`. This is not module/model reconstruction, source emission, or execution
 of untaken branches.
+
+For migration compatibility, the older intervention spelling `run(model, x, ...)` continues to
+return its in-place rerun Trace. New provider-neutral code uses the explicit `inputs=` keyword;
+loaded sparse traces always dispatch to the sparse provider. The live provider forks first and then
+delegates unchanged to `save_new_outs`, retaining its graph-alignment tripwire.
 
 Inputs require the recorded tree, leaf paths, shapes, and dtypes. Binding follows model site,
 container record, and path, never display order. Seeds are cloned before in-place calls. Call
@@ -525,8 +530,9 @@ not numerical reproduction.
 behavior is sparse default, independent layers, and reuse of capture-time `save=` for activations.
 
 Stage 0 introduced public error names and an importable schema/type module. Stage 4 documents
-`load_state_dict`, transient state sources, and initializer reporting in this glossary-facing
-contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API tests together. Stage 5 must
-complete the same lockstep sweep for `run`, `RunResult`, faithfulness, and poison vocabulary. Until
-a curated public glossary ships, this document is the authoritative public glossary entry for
-sparse runnable state binding.
+`load_state_dict`, transient state sources, and initializer reporting. Stage 5 implements `run`,
+`RunResult`, transactional run forks, sparse input/call/output reconstruction, and populated
+three-state `path_faithfulness`. Stage 6 remains responsible for strict divergence raising and
+poisoned opt-in results. This contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API
+tests move together. Until a curated public glossary ships, this document is the authoritative
+public glossary entry for sparse runnable execution.

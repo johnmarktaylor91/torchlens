@@ -230,6 +230,15 @@ or writes tensor payloads into the sparse descriptor. Run preflight selects expl
 state, then the future embedded capture-state hook, then the versioned
 `torchlens_role_init_v1` fallback; random reports name every initialized slot.
 
+### Sparse runnable execution
+
+`trace.run(inputs=x, seed=...)` is the provider-neutral execution spelling. A live Trace delegates
+on a fork to the existing `save_new_outs` fast capture path; a loaded sparse Trace binds cloned
+input leaves plus staged/random state and executes its resolved taken-path DAG under
+`pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
+unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5 populates
+`report.path_faithfulness`; Stage 6 owns divergence enforcement and poison semantics.
+
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
 `johnmarktaylor91/torchlens` is a **public** GitHub repo. Internal planning, riffing, sprint

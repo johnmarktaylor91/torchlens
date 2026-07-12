@@ -75,6 +75,8 @@ patched = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
+run_result = torch_trace.run(inputs=x, seed=42)
+loaded_result = tl.load("architecture.tlspec").run(inputs=x, seed=42)
 overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
 module_scores = torch_trace.module_collapse_order
 ```
@@ -145,8 +147,11 @@ pytest tests/ -m "not slow" -x --tb=short
     `Trace.module_collapse_order`, and `Trace.collapse_order(weights=..., mode=...)` must stay
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 17. `Trace.load_state_dict(sd)` on a loaded sparse runnable Trace validates and stages state only;
-    it never executes the DAG or writes values into the sparse core. User staging overrides the
-    future embedded-state hook, and N1-a random fallback must name every initialized slot.
+   it never executes the DAG or writes values into the sparse core. User staging overrides the
+   future embedded-state hook, and N1-a random fallback must name every initialized slot.
+18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
+    internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
+    Stage 5 populates `path_faithfulness`; Stage 6 enforces divergence/poison policy.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing
