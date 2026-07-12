@@ -6,8 +6,8 @@ import dataclasses
 import time
 import warnings
 from collections import OrderedDict, deque
-from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
@@ -52,6 +52,65 @@ if TYPE_CHECKING:
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from .selectors import SelectorLike
+
+
+class _CallConeNode(Protocol):
+    """Dependency fields required by the shared call-cone scheduler."""
+
+    call_id: str
+    parent_call_ids: tuple[str, ...]
+
+
+def _walk_call_cone(
+    calls: Sequence[_CallConeNode],
+    execute_call: Callable[[_CallConeNode], None],
+) -> None:
+    """Execute a dependency-complete call cone in stable recorded order.
+
+    Parameters
+    ----------
+    calls:
+        Recorded call nodes whose parent IDs define the runnable cone.
+    execute_call:
+        Transaction-local callback that executes and stages one ready node.
+
+    Raises
+    ------
+    ReplayPreconditionError
+        If the recorded cone has a missing parent or cyclic dependency.
+
+    Notes
+    -----
+    The caller owns transaction commit. Sparse runnable execution uses an
+    unexposed Trace fork, while intervention replay uses pending update maps.
+    """
+
+    call_ids = {call.call_id for call in calls}
+    missing = {
+        parent_id
+        for call in calls
+        for parent_id in call.parent_call_ids
+        if parent_id not in call_ids
+    }
+    if missing:
+        raise ReplayPreconditionError(
+            "Recorded call cone references missing parents: " + ", ".join(sorted(missing))
+        )
+    pending = list(calls)
+    completed: set[str] = set()
+    while pending:
+        ready_index = next(
+            (index for index, call in enumerate(pending) if set(call.parent_call_ids) <= completed),
+            None,
+        )
+        if ready_index is None:
+            blocked = ", ".join(call.call_id for call in pending)
+            raise ReplayPreconditionError(
+                f"Recorded call cone contains a dependency cycle among: {blocked}."
+            )
+        call = pending.pop(ready_index)
+        execute_call(call)
+        completed.add(call.call_id)
 
 
 def push(

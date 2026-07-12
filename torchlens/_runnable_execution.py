@@ -16,6 +16,7 @@ from .errors import (
     RunPreconditionError,
     RuntimeSignatureDriftError,
 )
+from .intervention.replay import _CallConeNode, _walk_call_cone
 from .runnable import (
     ContractCheck,
     ControlWitnessKind,
@@ -92,9 +93,15 @@ def run_loaded_sparse_trace(
     with rng_context, _state.pause_logging():
         if seed is not None:
             torch.manual_seed(seed)
-        for call in descriptor.calls:
+
+        def execute_call(call_node: _CallConeNode) -> None:
+            """Execute and stage one dependency-ready sparse call."""
+
+            call = cast(RunnableCallDescriptor, call_node)
             output = _execute_sparse_call(call, callables[call.call_id], slot_values)
             contract_checks.extend(_bind_call_outputs(descriptor, call, output, slot_values, fork))
+
+        _walk_call_cone(descriptor.calls, execute_call)
 
     output = _reconstruct_output(descriptor, slot_values, fork)
     path_faithfulness, mismatch = _path_faithfulness(
