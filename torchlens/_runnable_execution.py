@@ -320,19 +320,25 @@ def _execute_sparse_call(
 
     args: list[Any] = [None] * call.num_positional_args
     kwargs: dict[str, Any] = {}
-    for argument in call.literal_arguments:
-        _write_argument(args, kwargs, argument.argument_path, _decode_literal(argument.value))
-    for argument in call.tensor_arguments:
+    for literal_argument in call.literal_arguments:
+        _write_argument(
+            args,
+            kwargs,
+            literal_argument.argument_path,
+            _decode_literal(literal_argument.value),
+        )
+    for tensor_argument in call.tensor_arguments:
         try:
-            value = slot_values[argument.slot_id]
+            value = slot_values[tensor_argument.slot_id]
         except KeyError as exc:
             raise RunPreconditionError(
-                f"Sparse call {call.call_id!r} references unavailable slot {argument.slot_id!r}.",
+                f"Sparse call {call.call_id!r} references unavailable slot "
+                f"{tensor_argument.slot_id!r}.",
                 code=RunnableErrorCode.MISSING_TENSOR_SLOT.value,
                 call_id=call.call_id,
-                slot_id=argument.slot_id,
+                slot_id=tensor_argument.slot_id,
             ) from exc
-        _write_argument(args, kwargs, argument.argument_path, value)
+        _write_argument(args, kwargs, tensor_argument.argument_path, value)
     try:
         return func(*args, **kwargs)
     except (TypeError, AttributeError) as exc:
