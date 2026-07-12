@@ -27,6 +27,7 @@ from ._types import (
 )
 from ._rules import ReceptiveFieldRule, ReceptiveFieldRuleContext, register_rf_rule, rules
 from ._view import ReceptiveFieldView
+from ._viz import node_spec
 
 
 __all__ = [
@@ -53,5 +54,6 @@ __all__ = [
     "ReceptiveFieldView",
     "ReceptiveFieldViolation",
     "register_rf_rule",
+    "node_spec",
     "rules",
 ]
