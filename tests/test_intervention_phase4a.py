@@ -71,20 +71,6 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
 
 
 @pytest.mark.smoke
-def test_intervention_ready_supports_nonempty_layers_to_save_list() -> None:
-    """Predicate-backed selective saves compose with intervention readiness."""
-
-    trace = tl.trace(
-        _TinyInterventionModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True, layers_to_save=["relu"]),
-    )
-
-    assert trace.intervention_ready is True
-    assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
-
-
-@pytest.mark.smoke
 def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     """Only non-empty list selections conflict with intervention readiness."""
 

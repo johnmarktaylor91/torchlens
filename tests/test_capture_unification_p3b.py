@@ -310,31 +310,46 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
     )
 
 
-def test_layers_to_save_supports_intervention_ready_and_hooks() -> None:
-    """Selective layers_to_save composes with intervention-ready and live hooks."""
-
+@pytest.mark.parametrize(
+    "feature",
+    ["intervention_ready", "hooks_tap"],
+    ids=["intervention_ready", "hooks_tap"],
+)
+def test_selective_save_with_intervention_features(feature: str) -> None:
+    """Legacy selective lists compose with readiness and live tap hooks."""
     x = torch.randn(2, 4)
-    intervention_ready = tl.trace(
-        TinyLinear(),
-        x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save=["linear"],
-            intervention_ready=True,
-        ),
-    )
-    observer = tl.tap(tl.func("relu"))
-    hooked = tl.trace(
-        TinyLinear(),
-        x,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"], hooks=observer),
-    )
-    assert any(
-        op.has_saved_activation and op.layer_type == "linear"
-        for op in intervention_ready.layer_list
-    )
-    assert any(op.has_saved_activation and op.layer_type == "linear" for op in hooked.layer_list)
-    assert observer.records
-    assert all(record.site_label is not None for record in observer.records)
+    if feature == "intervention_ready":
+        trace = tl.trace(
+            TinyLinear(),
+            x,
+            capture=tl.options.CaptureOptions(
+                intervention_ready=True,
+                layers_to_save=["relu"],
+            ),
+        )
+        assert trace.intervention_ready is True
+        assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
+        linear_trace = tl.trace(
+            TinyLinear(),
+            x,
+            capture=tl.options.CaptureOptions(
+                layers_to_save=["linear"],
+                intervention_ready=True,
+            ),
+        )
+        assert any(
+            op.has_saved_activation and op.layer_type == "linear" for op in linear_trace.layer_list
+        )
+    else:
+        observer = tl.tap(tl.func("relu"))
+        trace = tl.trace(
+            TinyLinear(),
+            x,
+            capture=tl.options.CaptureOptions(layers_to_save=["linear"], hooks=observer),
+        )
+        assert any(op.has_saved_activation and op.layer_type == "linear" for op in trace.layer_list)
+        assert observer.records
+        assert all(record.site_label is not None for record in observer.records)
 
 
 def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:
