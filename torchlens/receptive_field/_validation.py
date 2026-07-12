@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 
@@ -13,12 +13,19 @@ from ..backends import BackendUnsupportedError
 from . import _engine
 from ._errors import ReceptiveFieldError
 from ._gradient import gradient_for_unit
+from ._gradient_forward import _select_targets, projective_gradient_for_unit
+from ._path import resolve_graph_point
+from ._query import box_for_unit
+from ._forward_query import box_for_source_unit
+from ._engine_forward import solve_projective
 from ._types import (
     GradientReceptiveField,
     ReceptiveField,
+    ReceptiveFieldAlignment,
     ReceptiveFieldBox,
     ReceptiveFieldBoxAxis,
     ReceptiveFieldStatus,
+    ReceptiveFieldDirection,
     ReceptiveFieldValidation,
     ReceptiveFieldValidationStatus,
     ReceptiveFieldViolation,
@@ -96,20 +103,30 @@ def _selected_descriptors(
 
 
 def _box_for_descriptor(
-    view: ReceptiveFieldView,
+    solution: object,
+    owner: Op,
     descriptor: ReceptiveField,
     complete_unit: tuple[int, ...],
+    *,
+    direction: ReceptiveFieldDirection,
+    endpoint: Op | None,
 ) -> ReceptiveFieldBox:
     """Resolve a geometric box from a complete output index.
 
     Parameters
     ----------
-    view:
-        Target operation receptive-field view.
+    solution:
+        Direction-specific geometric solution.
+    owner:
+        Operation owning the seeded unit.
     descriptor:
         Eligible descriptor for one input role.
     complete_unit:
-        Complete target output index.
+        Complete seed-owner output index.
+    direction:
+        Influence direction selecting the geometric walker.
+    endpoint:
+        Explicit opposite endpoint, when one was supplied.
 
     Returns
     -------
@@ -124,7 +141,18 @@ def _box_for_descriptor(
         if axis.kind == "windowed"
     )
     if windowed:
-        return view.at(windowed, input=descriptor.io_role, clip=True)
+        if direction is ReceptiveFieldDirection.RECEPTIVE:
+            return box_for_unit(
+                cast(Any, solution),
+                owner,
+                windowed,
+                input=None if endpoint is not None else descriptor.io_role,
+                source=endpoint,
+                clip=True,
+            )
+        return box_for_source_unit(
+            cast(Any, solution), owner, windowed, target=descriptor.io_role, clip=True
+        )
     axes = tuple(
         ReceptiveFieldBoxAxis(
             input_axis=axis.input_axis,
@@ -149,6 +177,8 @@ def _box_for_descriptor(
         clipped=False,
         empty=False,
         covers_input=all(axis.kind in {"pointwise", "full"} for axis in axes),
+        direction=direction,
+        unit_shape=tuple(owner.shape),
     )
 
 
@@ -291,6 +321,7 @@ def _validation_result(
     geometric: dict[str, ReceptiveFieldBox],
     gradients: Mapping[str, GradientReceptiveField],
     gradient_error: str | None,
+    direction: ReceptiveFieldDirection,
 ) -> ReceptiveFieldValidation:
     """Assemble the tri-state result and its exact diagnostics.
 
@@ -304,6 +335,8 @@ def _validation_result(
         Successfully materialized geometric and empirical results.
     gradient_error:
         Gradient unavailability diagnostic, when probing failed.
+    direction:
+        Direction shared by the paired geometric and empirical results.
 
     Returns
     -------
@@ -372,12 +405,16 @@ def _validation_result(
             )
         per_axis_excess = _merge_diagnostic_rows(excess_rows, maximum=True)
         slack_per_axis = None
-    elif gradient_error is not None or indeterminate_roles or nonfinite:
+    elif gradient_error is not None or not descriptors or indeterminate_roles or nonfinite:
         status = ReceptiveFieldValidationStatus.INDETERMINATE
         details = gradient_error or (
             "non-finite gradient contamination"
             if nonfinite
-            else f"ineligible geometry for roles {', '.join(indeterminate_roles)}"
+            else (
+                f"ineligible geometry for roles {', '.join(indeterminate_roles)}"
+                if indeterminate_roles
+                else "no eligible geometric endpoint"
+            )
         )
         message = f"Receptive-field validation is indeterminate for {target.label!r}: {details}."
         per_axis_excess = None
@@ -403,6 +440,8 @@ def _validation_result(
         cross_batch=cross_batch,
         checked_input_roles=tuple(descriptors),
         message=message,
+        direction=direction,
+        unit_shape=tuple(target.shape),
     )
 
 
@@ -411,6 +450,9 @@ def _check_for_unit(
     unit: Sequence[int],
     *,
     input: Op | str | None,
+    source: object | None,
+    direction: ReceptiveFieldDirection | str,
+    result_target: object | None,
     atol: float,
     rtol: float,
     retain_graph: bool,
@@ -419,25 +461,65 @@ def _check_for_unit(
 
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
+    normalized_direction = ReceptiveFieldDirection(direction)
+    if normalized_direction is ReceptiveFieldDirection.RECEPTIVE and result_target is not None:
+        raise TypeError("target= is only valid with direction='projective'.")
+    if normalized_direction is ReceptiveFieldDirection.PROJECTIVE and (
+        input is not None or source is not None
+    ):
+        raise TypeError("input= and source= are only valid with direction='receptive'.")
     complete_unit = _normalize_complete_unit(target, unit)
-    solution = _engine.solve(target.source_trace)
-    view = ReceptiveFieldView(target, solution)
-    descriptors = _selected_descriptors(view, input)
+    endpoint: Op | None = None
+    solution: Any
+    if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
+        if input is not None and source is not None:
+            raise TypeError("input= and source= cannot be used together.")
+        if source is None:
+            solution = _engine.solve(target.source_trace)
+            view = ReceptiveFieldView(target, solution)
+            descriptors = _selected_descriptors(view, input)
+        else:
+            endpoint = resolve_graph_point(target.source_trace, source)
+            solution = _engine.solve_from(target.source_trace, endpoint)
+            descriptors = solution.per_op.get(target.label, MappingProxyType({}))
+    else:
+        targets, _ = _select_targets(target, result_target)
+        endpoint = targets[0] if len(targets) == 1 else None
+        solution = solve_projective(target.source_trace, targets)
+        descriptors = solution.per_op.get(target.label, MappingProxyType({}))
     geometric: dict[str, ReceptiveFieldBox] = {}
     for role, descriptor in descriptors.items():
         if descriptor.status not in _TAINTED_STATUSES and descriptor.axes is not None:
-            geometric[role] = _box_for_descriptor(view, descriptor, complete_unit)
+            geometric[role] = _box_for_descriptor(
+                solution,
+                target,
+                descriptor,
+                complete_unit,
+                direction=normalized_direction,
+                endpoint=endpoint,
+            )
     gradient_error: str | None = None
     gradients: Mapping[str, GradientReceptiveField]
     try:
-        probed = gradient_for_unit(
-            target,
-            complete_unit,
-            input=input,
-            atol=atol,
-            rtol=rtol,
-            retain_graph=retain_graph,
-        )
+        if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
+            probed = gradient_for_unit(
+                target,
+                complete_unit,
+                input=input,
+                source=source,
+                atol=atol,
+                rtol=rtol,
+                retain_graph=retain_graph,
+            )
+        else:
+            probed = projective_gradient_for_unit(
+                target,
+                complete_unit,
+                target=result_target,
+                atol=atol,
+                rtol=rtol,
+                retain_graph=retain_graph,
+            )
         if isinstance(probed, GradientReceptiveField):
             gradients = MappingProxyType({probed.io_role: probed})
         else:
@@ -452,14 +534,18 @@ def _check_for_unit(
         geometric=geometric,
         gradients=gradients,
         gradient_error=gradient_error,
+        direction=normalized_direction,
     )
 
 
 def check_for_unit(
-    target: Op,
+    owner: Op,
     unit: Sequence[int],
     *,
     input: Op | str | None = None,
+    source: object | None = None,
+    direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
+    target: object | None = None,
     atol: float = 0.0,
     rtol: float = 0.0,
 ) -> ReceptiveFieldValidation:
@@ -467,10 +553,16 @@ def check_for_unit(
 
     Parameters
     ----------
-    target, unit:
-        Target operation and complete output-element index.
+    owner, unit:
+        Seed-owner operation and complete output-element index.
     input:
         Optional model-input operation or exact IO role.
+    source:
+        Optional receptive-direction ancestor graph point.
+    direction:
+        Receptive or projective containment direction.
+    target:
+        Optional projective-direction descendant graph point.
     atol, rtol:
         Gradient support thresholds; these never relax geometric containment.
 
@@ -480,7 +572,17 @@ def check_for_unit(
         Tri-state exact-containment result.
     """
 
-    return _check_for_unit(target, unit, input=input, atol=atol, rtol=rtol, retain_graph=False)
+    return _check_for_unit(
+        owner,
+        unit,
+        input=input,
+        source=source,
+        direction=direction,
+        result_target=target,
+        atol=atol,
+        rtol=rtol,
+        retain_graph=False,
+    )
 
 
 def check(
@@ -488,6 +590,9 @@ def check(
     unit: Sequence[int],
     *,
     input: Op | str | None = None,
+    source: object | None = None,
+    direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
+    target: object | None = None,
     atol: float = 0.0,
     rtol: float = 0.0,
 ) -> ReceptiveFieldValidation:
@@ -499,6 +604,12 @@ def check(
         Receptive-field view and complete output-element index.
     input:
         Optional model-input operation or exact IO role.
+    source:
+        Optional receptive-direction ancestor graph point.
+    direction:
+        Receptive or projective containment direction.
+    target:
+        Optional projective-direction descendant graph point.
     atol, rtol:
         Gradient support thresholds; these never relax geometric containment.
 
@@ -508,10 +619,23 @@ def check(
         Tri-state exact-containment result.
     """
 
-    return check_for_unit(view._op, unit, input=input, atol=atol, rtol=rtol)
+    return check_for_unit(
+        view._op,
+        unit,
+        input=input,
+        source=source,
+        direction=direction,
+        target=target,
+        atol=atol,
+        rtol=rtol,
+    )
 
 
-def _resolve_ops(trace: Trace, ops: Sequence[Op | str] | None) -> tuple[Op, ...]:
+def _resolve_ops(
+    trace: Trace,
+    ops: Sequence[Op | str] | None,
+    direction: ReceptiveFieldDirection = ReceptiveFieldDirection.RECEPTIVE,
+) -> tuple[Op, ...]:
     """Resolve explicit operations or the eligible default sweep."""
 
     if ops is not None:
@@ -531,33 +655,53 @@ def _resolve_ops(trace: Trace, ops: Sequence[Op | str] | None) -> tuple[Op, ...]
     return tuple(
         op
         for op in trace.layer_list
-        if not op.is_input
+        if (direction is ReceptiveFieldDirection.PROJECTIVE or not op.is_input)
         and not op.is_output
-        and op.has_saved_activation
-        and any(
-            descriptor.status not in _TAINTED_STATUSES
-            for descriptor in solution.per_op.get(op.label, {}).values()
+        and (op.is_input or op.has_saved_activation)
+        and (
+            op.is_input
+            or any(
+                descriptor.status not in _TAINTED_STATUSES
+                for descriptor in solution.per_op.get(op.label, {}).values()
+            )
         )
     )
 
 
 def _preset_units(
-    view: ReceptiveFieldView,
+    owner: Op,
+    descriptor: ReceptiveField,
     preset: Literal["center", "corners"],
     batch_index: int,
-    selected_input: Op | str | None,
 ) -> tuple[tuple[int, ...], ...]:
     """Resolve a named unit preset to complete output indices."""
 
-    center = view.center_unit(batch_index=batch_index, input=selected_input)
+    center_values = [int(extent) // 2 for extent in owner.shape]
+    if center_values:
+        batch_output_axis = next(
+            (
+                axis.output_axis
+                for axis in descriptor.axes or ()
+                if axis.input_axis == 0 and axis.output_axis is not None
+            ),
+            0,
+        )
+        if batch_index < 0 or batch_index >= int(owner.shape[batch_output_axis]):
+            raise ReceptiveFieldError(
+                f"batch_index {batch_index} is out of bounds for extent "
+                f"{int(owner.shape[batch_output_axis])}."
+            )
+        center_values[batch_output_axis] = batch_index
+    center = tuple(center_values)
     if preset == "center":
         return (center,)
-    descriptor = view._descriptor(selected_input)
     assert descriptor.axes is not None
     windowed_output_axes = tuple(
-        cast(int, axis.output_axis) for axis in descriptor.axes if axis.kind == "windowed"
+        cast(int, axis.output_axis)
+        for axis in descriptor.axes
+        if axis.kind == "windowed" and axis.output_axis is not None
     )
-    choices = tuple((0, int(view._op.shape[axis]) - 1) for axis in windowed_output_axes)
+    choices = tuple((0, int(owner.shape[axis]) - 1) for axis in windowed_output_axes)
     units: list[tuple[int, ...]] = []
     for corner in product(*choices):
         resolved = list(center)
@@ -567,6 +711,229 @@ def _preset_units(
     return tuple(dict.fromkeys(units)) or (center,)
 
 
+def _selectors(value: object | Sequence[object] | None) -> tuple[object | None, ...]:
+    """Normalize one optional endpoint selector or selector sequence."""
+
+    if value is None or isinstance(value, str) or hasattr(value, "source_trace"):
+        return (value,)
+    if not isinstance(value, Sequence):
+        return (value,)
+    return tuple(value)
+
+
+def _indeterminate_unit(owner: Op, batch_index: int) -> tuple[int, ...]:
+    """Return a deterministic complete unit when grid metadata is unavailable."""
+
+    unit = [int(extent) // 2 for extent in owner.shape]
+    if unit and 0 <= batch_index < int(owner.shape[0]):
+        unit[0] = batch_index
+    return tuple(unit)
+
+
+def _expected_status(descriptor: ReceptiveField) -> ReceptiveFieldStatus:
+    """Derive the required certainty status from public geometric axes."""
+
+    assert descriptor.axes is not None
+    if any(axis.kind == "unknown" for axis in descriptor.axes):
+        return ReceptiveFieldStatus.UNKNOWN
+    non_pointwise = tuple(axis for axis in descriptor.axes if axis.kind != "pointwise")
+    if non_pointwise and all(axis.kind == "full" and axis.exact for axis in non_pointwise):
+        return ReceptiveFieldStatus.WHOLE_INPUT
+    if descriptor.batch_coupled or any(not axis.exact for axis in descriptor.axes):
+        return ReceptiveFieldStatus.UPPER_BOUND
+    return ReceptiveFieldStatus.EXACT
+
+
+def _check_solution_metadata(
+    trace: Trace,
+    solution: Any,
+    direction: ReceptiveFieldDirection,
+) -> None:
+    """Check cheap descriptor and box invariants for one directional solution."""
+
+    ops_by_label = {op.label: op for op in trace.layer_list}
+    for (op_label, role), descriptor in solution.descriptors.items():
+        state = solution.states[(op_label, role)]
+        if state.taint is not None:
+            if descriptor.status is not state.taint or descriptor.axes is not None:
+                raise ReceptiveFieldError(
+                    f"taint propagation failed for {op_label!r}, role {role!r}."
+                )
+            if descriptor.alignment is not ReceptiveFieldAlignment.NOT_APPLICABLE:
+                raise ReceptiveFieldError(
+                    f"tainted descriptor {op_label!r}, role {role!r} has an alignment."
+                )
+            continue
+        if descriptor.axes is None:
+            raise ReceptiveFieldError(
+                f"untainted descriptor {op_label!r}, role {role!r} has no axes."
+            )
+        expected_status = _expected_status(descriptor)
+        if descriptor.status is not expected_status:
+            raise ReceptiveFieldError(
+                f"status monotonicity failed for {op_label!r}, role {role!r}: "
+                f"expected {expected_status.value}, got {descriptor.status.value}."
+            )
+        if descriptor.batch_coupled and descriptor.status is ReceptiveFieldStatus.EXACT:
+            raise ReceptiveFieldError(
+                f"batch-coupled descriptor {op_label!r}, role {role!r} is incorrectly exact."
+            )
+        expected_alignment = ReceptiveFieldAlignment.NOT_APPLICABLE
+        if state.merge_seen:
+            expected_alignment = (
+                ReceptiveFieldAlignment.ALIGNED
+                if all(axis.aligned for axis in descriptor.axes)
+                else ReceptiveFieldAlignment.MISALIGNED
+            )
+        if descriptor.alignment is not expected_alignment:
+            raise ReceptiveFieldError(
+                f"alignment coherence failed for {op_label!r}, role {role!r}."
+            )
+
+        owner = ops_by_label[op_label]
+        unit = _indeterminate_unit(owner, 0)
+        try:
+            box = _box_for_descriptor(
+                solution,
+                owner,
+                descriptor,
+                unit,
+                direction=direction,
+                endpoint=None,
+            )
+        except ReceptiveFieldError:
+            continue
+        for axis, extent in zip(box.axes, box.input_shape, strict=True):
+            if axis.clipped_start is None or axis.clipped_stop is None:
+                continue
+            if not 0 <= axis.clipped_start <= axis.clipped_stop <= extent:
+                raise ReceptiveFieldError(
+                    f"box bounds for {op_label!r}, role {role!r}, axis "
+                    f"{axis.input_axis} escape [0, {extent})."
+                )
+
+
+def check_geometric_metadata_invariants(trace: Trace) -> bool:
+    """Run always-on, autograd-free receptive-field metadata invariants."""
+
+    receptive_solution = _engine.solve(trace)
+    _check_solution_metadata(trace, receptive_solution, ReceptiveFieldDirection.RECEPTIVE)
+    output_ops = tuple(trace.output_ops)
+    if output_ops:
+        projective_solution = solve_projective(trace, output_ops)
+        _check_solution_metadata(trace, projective_solution, ReceptiveFieldDirection.PROJECTIVE)
+    return True
+
+
+def validate_receptive_field_trace(
+    trace: Trace,
+    *,
+    ops: Sequence[Op | str] | None = None,
+    units: Literal["center", "corners"] | Sequence[int] | Sequence[Sequence[int]] = "center",
+    batch_index: int = 0,
+    inputs: Op | str | Sequence[Op | str] | None = None,
+    source: object | Sequence[object] | None = None,
+    direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
+    target: object | Sequence[object] | None = None,
+    atol: float = 0.0,
+    rtol: float = 0.0,
+    raise_on_failure: bool = False,
+) -> list[ReceptiveFieldValidation]:
+    """Run the shared receptive-field validation scope on an existing trace."""
+
+    if atol < 0 or rtol < 0:
+        raise ValueError("atol and rtol must be non-negative.")
+    normalized_direction = ReceptiveFieldDirection(direction)
+    if normalized_direction is ReceptiveFieldDirection.RECEPTIVE and target is not None:
+        raise TypeError("target= is only valid with direction='projective'.")
+    if normalized_direction is ReceptiveFieldDirection.PROJECTIVE and (
+        inputs is not None or source is not None
+    ):
+        raise TypeError("inputs= and source= are only valid with direction='receptive'.")
+    if inputs is not None and source is not None:
+        raise TypeError("inputs= and source= cannot be used together.")
+
+    owners = _resolve_ops(trace, ops, normalized_direction)
+    receptive_endpoints = _selectors(source) if source is not None else _selectors(inputs)
+    projective_endpoints = _selectors(target)
+    endpoints = (
+        receptive_endpoints
+        if normalized_direction is ReceptiveFieldDirection.RECEPTIVE
+        else projective_endpoints
+    )
+    results: list[ReceptiveFieldValidation] = []
+    for owner in owners:
+        for selected_endpoint in endpoints:
+            solution: Any
+            selected_input = (
+                selected_endpoint
+                if normalized_direction is ReceptiveFieldDirection.RECEPTIVE and source is None
+                else None
+            )
+            selected_source = (
+                selected_endpoint
+                if normalized_direction is ReceptiveFieldDirection.RECEPTIVE and source is not None
+                else None
+            )
+            if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
+                if selected_source is None:
+                    solution = _engine.solve(trace)
+                    descriptors = _selected_descriptors(
+                        ReceptiveFieldView(owner, solution), cast("Op | str | None", selected_input)
+                    )
+                else:
+                    source_op = resolve_graph_point(trace, selected_source)
+                    solution = _engine.solve_from(trace, source_op)
+                    descriptors = solution.per_op.get(owner.label, MappingProxyType({}))
+            else:
+                target_ops, _ = _select_targets(owner, selected_endpoint)
+                solution = solve_projective(trace, target_ops)
+                descriptors = solution.per_op.get(owner.label, MappingProxyType({}))
+
+            if isinstance(units, str):
+                eligible = next(
+                    (
+                        descriptor
+                        for descriptor in descriptors.values()
+                        if descriptor.axes is not None
+                    ),
+                    None,
+                )
+                resolved_units = (
+                    (_indeterminate_unit(owner, batch_index),)
+                    if eligible is None
+                    else _preset_units(owner, eligible, units, batch_index)
+                )
+            elif units and all(
+                isinstance(value, int) and not isinstance(value, bool) for value in units
+            ):
+                resolved_units = (tuple(cast("Sequence[int]", units)),)
+            else:
+                resolved_units = tuple(
+                    tuple(unit) for unit in cast("Sequence[Sequence[int]]", units)
+                )
+            for unit in resolved_units:
+                result = _check_for_unit(
+                    owner,
+                    unit,
+                    input=cast("Op | str | None", selected_input),
+                    source=selected_source,
+                    direction=normalized_direction,
+                    result_target=(
+                        selected_endpoint
+                        if normalized_direction is ReceptiveFieldDirection.PROJECTIVE
+                        else None
+                    ),
+                    atol=atol,
+                    rtol=rtol,
+                    retain_graph=True,
+                )
+                if raise_on_failure:
+                    result.assert_valid()
+                results.append(result)
+    return results
+
+
 def cross_validate(
     trace: Trace,
     *,
@@ -574,6 +941,9 @@ def cross_validate(
     units: Literal["center", "corners"] | Sequence[int] | Sequence[Sequence[int]] = "center",
     batch_index: int = 0,
     inputs: Op | str | Sequence[Op | str] | None = None,
+    source: object | Sequence[object] | None = None,
+    direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
+    target: object | Sequence[object] | None = None,
     atol: float = 0.0,
     rtol: float = 0.0,
     raise_on_failure: bool = False,
@@ -592,6 +962,12 @@ def cross_validate(
         Explicit seeded batch index used by named presets.
     inputs:
         Optional input selector or selectors.
+    source:
+        Optional receptive-direction ancestor selector or selectors.
+    direction:
+        Receptive or projective containment direction.
+    target:
+        Optional projective-direction descendant selector or selectors.
     atol, rtol:
         Gradient support thresholds; these never relax geometric containment.
     raise_on_failure:
@@ -603,41 +979,24 @@ def cross_validate(
         One tri-state result per operation, unit, and explicit input selector.
     """
 
-    if atol < 0 or rtol < 0:
-        raise ValueError("atol and rtol must be non-negative.")
-    targets = _resolve_ops(trace, ops)
-    selected_inputs: tuple[Op | str | None, ...]
-    if inputs is None or isinstance(inputs, (str,)) or hasattr(inputs, "source_trace"):
-        selected_inputs = (cast("Op | str | None", inputs),)
-    else:
-        selected_inputs = tuple(inputs)
-    results: list[ReceptiveFieldValidation] = []
-    for target in targets:
-        view = ReceptiveFieldView(target, _engine.solve(trace))
-        for selected_input in selected_inputs:
-            if isinstance(units, str):
-                resolved_units = _preset_units(view, units, batch_index, selected_input)
-            elif units and all(
-                isinstance(value, int) and not isinstance(value, bool) for value in units
-            ):
-                resolved_units = (tuple(cast("Sequence[int]", units)),)
-            else:
-                resolved_units = tuple(
-                    tuple(unit) for unit in cast("Sequence[Sequence[int]]", units)
-                )
-            for unit in resolved_units:
-                result = _check_for_unit(
-                    target,
-                    unit,
-                    input=selected_input,
-                    atol=atol,
-                    rtol=rtol,
-                    retain_graph=True,
-                )
-                if raise_on_failure:
-                    result.assert_valid()
-                results.append(result)
-    return results
+    return validate_receptive_field_trace(
+        trace,
+        ops=ops,
+        units=units,
+        batch_index=batch_index,
+        inputs=inputs,
+        source=source,
+        direction=direction,
+        target=target,
+        atol=atol,
+        rtol=rtol,
+        raise_on_failure=raise_on_failure,
+    )
 
 
-__all__ = ["check", "check_for_unit", "cross_validate"]
+__all__ = [
+    "check",
+    "check_for_unit",
+    "cross_validate",
+    "validate_receptive_field_trace",
+]

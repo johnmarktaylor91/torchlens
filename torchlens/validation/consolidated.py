@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import torch
 from torch import nn
 
 from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from ..options import CaptureOptions
 from .backward import validate_backward_pass
+
+
+if TYPE_CHECKING:
+    from ..receptive_field._types import ReceptiveFieldValidation
 
 
 @dataclass(frozen=True)
@@ -201,6 +206,89 @@ def _intervention_report(
     )
 
 
+def _gradient_ready_value(value: Any) -> Any:
+    """Clone floating tensor inputs with autograd enabled for RF probing.
+
+    Parameters
+    ----------
+    value:
+        Arbitrarily nested model input value.
+
+    Returns
+    -------
+    Any
+        Structure-equivalent input with floating tensors made gradient-ready.
+    """
+
+    if isinstance(value, torch.Tensor):
+        cloned = value.detach().clone()
+        if torch.is_floating_point(cloned) or torch.is_complex(cloned):
+            cloned.requires_grad_(True)
+        return cloned
+    if isinstance(value, tuple):
+        return tuple(_gradient_ready_value(item) for item in value)
+    if isinstance(value, list):
+        return [_gradient_ready_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _gradient_ready_value(item) for key, item in value.items()}
+    return value
+
+
+def _validate_receptive_field_scope(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[str, Any] | None,
+    *,
+    random_seed: int | None,
+    validate_metadata: bool,
+    backend: BackendName | None,
+) -> list["ReceptiveFieldValidation"]:
+    """Capture and sample both RF containment directions at layer centers.
+
+    Parameters
+    ----------
+    model:
+        Model to capture.
+    input_args, input_kwargs:
+        Model inputs.
+    random_seed:
+        Optional deterministic capture seed.
+    validate_metadata:
+        Whether always-on metadata contracts should run on the captured trace.
+    backend:
+        Explicit backend selector.
+
+    Returns
+    -------
+    list[ReceptiveFieldValidation]
+        Sampled receptive and projective tri-state results.
+    """
+
+    from ..user_funcs import trace
+    from ..receptive_field._validation import validate_receptive_field_trace
+    from .invariants import check_metadata_invariants
+
+    ready_args = _gradient_ready_value(input_args)
+    ready_kwargs = _gradient_ready_value(input_kwargs)
+    captured = trace(
+        model,
+        ready_args,
+        input_kwargs=ready_kwargs,
+        save_mode="reference",
+        capture=CaptureOptions(
+            layers_to_save="all",
+            backward_ready=True,
+            random_seed=random_seed,
+        ),
+        backend=backend,
+    )
+    if validate_metadata:
+        check_metadata_invariants(captured)
+    receptive = validate_receptive_field_trace(captured, direction="receptive")
+    projective = validate_receptive_field_trace(captured, direction="projective")
+    return [*receptive, *projective]
+
+
 def validate(
     model: nn.Module,
     input_args: Any,
@@ -218,7 +306,7 @@ def validate(
     layer_grad_atol: float | None = None,
     layer_grad_rtol: float | None = None,
     backend: BackendName | None = None,
-) -> bool | InterventionValidationReport:
+) -> bool | InterventionValidationReport | list["ReceptiveFieldValidation"]:
     """Validate a model/input pair for a requested TorchLens scope.
 
     Parameters
@@ -230,8 +318,8 @@ def validate(
     input_kwargs:
         Keyword model input.
     scope:
-        Validation scope: ``"forward"``, ``"backward"``, ``"saved"``, or
-        ``"intervention"``.
+        Validation scope: ``"forward"``, ``"backward"``, ``"saved"``,
+        ``"intervention"``, or ``"receptive_field"``.
     random_seed:
         Optional random seed for forward-like validation.
     verbose:
@@ -257,13 +345,13 @@ def validate(
 
     Returns
     -------
-    bool | InterventionValidationReport
+    bool | InterventionValidationReport | list[ReceptiveFieldValidation]
         Validation pass/fail for forward, backward, and saved scopes, or an
         intervention validation report for ``scope="intervention"``.
     """
 
     normalized_scope = scope.lower()
-    valid_scopes = {"forward", "backward", "saved", "intervention"}
+    valid_scopes = {"forward", "backward", "saved", "intervention", "receptive_field"}
     if normalized_scope not in valid_scopes:
         raise ValueError(f"scope must be one of {sorted(valid_scopes)!r}.")
     _validate_scope_keywords(
@@ -295,6 +383,20 @@ def validate(
             validate_layer_grads=validate_layer_grads,
             layer_grad_atol=layer_grad_atol,
             layer_grad_rtol=layer_grad_rtol,
+        )
+    if normalized_scope == "receptive_field":
+        spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+        if not spec.capabilities.backward_capture:
+            raise BackendUnsupportedError(
+                f"Backend {spec.name!r} does not support receptive-field validation."
+            )
+        return _validate_receptive_field_scope(
+            model,
+            input_args,
+            input_kwargs,
+            random_seed=random_seed,
+            validate_metadata=validate_metadata,
+            backend=backend,
         )
 
     from ..user_funcs import validate_forward_pass
