@@ -57,8 +57,17 @@ if TYPE_CHECKING:
 class _CallConeNode(Protocol):
     """Dependency fields required by the shared call-cone scheduler."""
 
-    call_id: str
-    parent_call_ids: tuple[str, ...]
+    @property
+    def call_id(self) -> str:
+        """Return the stable call identifier."""
+
+        ...
+
+    @property
+    def parent_call_ids(self) -> tuple[str, ...]:
+        """Return stable identifiers for dependency-parent calls."""
+
+        ...
 
 
 def _walk_call_cone(
