@@ -1330,9 +1330,19 @@ def _json_value(value: Any) -> Any:
     raise TypeError(f"Sparse descriptor contains non-JSON value {type(value).__qualname__}.")
 
 
+from .runnable_load import (  # noqa: E402 - keep producer helpers grouped above
+    attach_sparse_run_readiness,
+    parse_sparse_run_descriptor,
+    preflight_sparse_run_descriptor,
+)
+
+
 __all__ = [
     "assert_sparse_core_has_no_tensor_payload",
+    "attach_sparse_run_readiness",
     "build_sparse_run_descriptor",
+    "parse_sparse_run_descriptor",
+    "preflight_sparse_run_descriptor",
     "require_sparse_run_descriptor",
     "sparse_descriptor_to_json",
 ]

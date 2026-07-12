@@ -354,6 +354,20 @@ class TraceValidationMixin(_TraceMixinBase):
             This model log, mutated in place after a validated atomic swap.
         """
 
+        from ..runnable import RunProvider
+
+        readiness = self.__dict__.get("_runnable_readiness")
+        if readiness is not None and readiness.provider is RunProvider.LOADED_SPARSE:
+            from ..errors import ReattachError
+
+            raise ReattachError(
+                "Sparse DAG execution is not available until Stage 5; callable reattachment "
+                "completed as a single load-time preflight. See error.fields['readiness'] for "
+                "the complete report.",
+                readiness=readiness,
+                diagnostics=readiness.diagnostics,
+            )
+
         run_model: nn.Module | None
         if isinstance(model, nn.Module):
             run_model = model

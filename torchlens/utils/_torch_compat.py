@@ -39,6 +39,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 import ctypes
+from dataclasses import dataclass
 import importlib
 import os
 import sys
@@ -64,6 +65,7 @@ __all__ = [
     "HAS_TORCH_VF",
     "HAS_VARIABLE_FUNCTIONS",
     "TorchCapabilitySnapshot",
+    "RunnableTorchAlias",
     "autocast_get_dtype",
     "autocast_is_enabled",
     "get_accumulate_grad_class",
@@ -82,6 +84,7 @@ __all__ = [
     "get_variable_function_names",
     "fix_tensor_sequence_slot",
     "mark_torch_capability_missing",
+    "resolve_runnable_torch_alias",
 ]
 
 
@@ -90,6 +93,108 @@ TorchCapabilitySnapshot = dict[str, bool]
 
 _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
+
+
+@dataclass(frozen=True, slots=True)
+class RunnableTorchAlias:
+    """One monotonic callable move used by sparse runnable reattachment.
+
+    The table is capability-bounded rather than selected by parsing
+    ``torch.__version__``: an entry applies only when its source is absent and
+    its target exists in the current runtime. This makes an added entry able to
+    turn an unresolved reference into a resolved alias without ever
+    reinterpreting an exact current-runtime binding.
+    """
+
+    source: str
+    target_namespace: str
+    target_qualname: str | None
+    provenance: str
+
+
+_RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
+    RunnableTorchAlias(
+        "torch._C._nn.linear",
+        "torch.nn.functional",
+        "linear",
+        "private_to_public:_C._nn.linear->torch.nn.functional.linear",
+    ),
+    RunnableTorchAlias(
+        "_C._nn.linear",
+        "torch.nn.functional",
+        "linear",
+        "private_to_public:_C._nn.linear->torch.nn.functional.linear",
+    ),
+    RunnableTorchAlias(
+        "torch._VF.linear",
+        "torch.nn.functional",
+        "linear",
+        "private_to_public:_VF.linear->torch.nn.functional.linear",
+    ),
+    RunnableTorchAlias(
+        "_VF.linear",
+        "torch.nn.functional",
+        "linear",
+        "private_to_public:_VF.linear->torch.nn.functional.linear",
+    ),
+    RunnableTorchAlias(
+        "torch._C._TensorBase.*",
+        "torch.Tensor",
+        None,
+        "tensor_base_drift:torch._C._TensorBase->torch.Tensor",
+    ),
+    RunnableTorchAlias(
+        "torch._C.TensorBase.*",
+        "torch.Tensor",
+        None,
+        "tensor_base_drift:torch._C.TensorBase->torch.Tensor",
+    ),
+    RunnableTorchAlias(
+        "torch.TensorBase.*",
+        "torch.Tensor",
+        None,
+        "tensor_base_drift:torch.TensorBase->torch.Tensor",
+    ),
+    RunnableTorchAlias(
+        "torch._C._VariableFunctions.*",
+        "torch",
+        None,
+        "private_to_public:torch._C._VariableFunctions->torch",
+    ),
+)
+
+
+def resolve_runnable_torch_alias(
+    source_qualname: str,
+) -> tuple[str, str, str] | None:
+    """Return an explicit current-runtime successor for a recorded torch path.
+
+    Parameters
+    ----------
+    source_qualname:
+        Fully qualified recorded callable path.
+
+    Returns
+    -------
+    tuple[str, str, str] | None
+        Target namespace, target qualname, and stable provenance, or ``None``
+        when the path has no explicit monotonic alias.
+    """
+
+    for alias in _RUNNABLE_TORCH_ALIASES:
+        if alias.source.endswith(".*"):
+            prefix = alias.source[:-1]
+            if not source_qualname.startswith(prefix):
+                continue
+            target_qualname = source_qualname[len(prefix) :]
+        elif alias.source == source_qualname:
+            target_qualname = alias.target_qualname
+        else:
+            continue
+        if not target_qualname:
+            return None
+        return alias.target_namespace, target_qualname, alias.provenance
+    return None
 
 
 def _probe_device_type_arg_supported() -> bool:
