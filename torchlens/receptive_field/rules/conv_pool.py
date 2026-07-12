@@ -139,6 +139,7 @@ def pool(context: ReceptiveFieldRuleContext) -> _RuleResult:
         dilation=dilation,
         exact=not ceil_mode,
         note="ceil_mode uses a final-window envelope" if ceil_mode else None,
+        channel_dependency="pointwise",
     )
 
 

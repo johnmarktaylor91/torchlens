@@ -170,20 +170,24 @@ class ReceptiveFieldRuleContext:
         padding: object = 0,
         dilation: object = 1,
         exact: bool = True,
+        channel_dependency: str | None = None,
         note: str | None = None,
         **callbacks: RuleCallback,
     ) -> _RuleResult:
         """Construct a windowed-operation result specification."""
 
+        values = {
+            "kernel": kernel,
+            "stride": stride,
+            "padding": padding,
+            "dilation": dilation,
+            "exact": exact,
+        }
+        if channel_dependency is not None:
+            values["channel_dependency"] = channel_dependency
         return self._result(
             "window",
-            {
-                "kernel": kernel,
-                "stride": stride,
-                "padding": padding,
-                "dilation": dilation,
-                "exact": exact,
-            },
+            values,
             note,
             callbacks,
         )

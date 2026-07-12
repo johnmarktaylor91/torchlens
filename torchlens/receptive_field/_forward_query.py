@@ -43,6 +43,7 @@ def box_for_source_unit(
     *,
     target: Op | str | None = None,
     clip: bool = True,
+    complete_unit: Sequence[int] | None = None,
 ) -> ReceptiveFieldBox:
     """Compute one source unit's projective support by forward index-set propagation.
 
@@ -58,6 +59,8 @@ def box_for_source_unit(
         Optional target operation, exact target role, or operation label.
     clip:
         Whether returned bounds are intersected with captured target extents.
+    complete_unit:
+        Optional complete source index used internally to route structural axes.
 
     Returns
     -------
@@ -73,7 +76,7 @@ def box_for_source_unit(
     descriptor = _select_target_descriptor(descriptors, target)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
-    initial = _initial_axis_sets(op, descriptor, coordinates)
+    initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
     trace = op.source_trace
     operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
     by_reference = {
@@ -164,6 +167,10 @@ def _walk_to_target(
     for child in children:
         result, rule_name = _engine._rule_result(child)
         child_sets, hop_exact = _map_to_child(op, child, input_sets, result, rule_name)
+        if isinstance(result.values.get("concatenate_axis"), int) and any(
+            item is not None and item.is_empty for item in child_sets
+        ):
+            continue
         bounded = (
             child_sets
             if child.label == target_label

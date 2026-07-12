@@ -206,7 +206,11 @@ def _select_full_axes(raw_axes: object, parent: Op, op: Op) -> set[int]:
     del op
     parent_rank = len(parent.shape)
     if isinstance(raw_axes, Mapping):
-        raw_axes = raw_axes.get("axes", raw_axes.get("full_axes", "all"))
+        parent_references = (parent.label, parent.layer_label, parent._layer_label_raw)
+        raw_axes = next(
+            (raw_axes[reference] for reference in parent_references if reference in raw_axes),
+            raw_axes.get("axes", raw_axes.get("full_axes", raw_axes.get("default", "all"))),
+        )
     if raw_axes in {None, "all", "all_nonmatched"}:
         return set(range(parent_rank))
     if isinstance(raw_axes, int):

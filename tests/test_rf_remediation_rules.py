@@ -187,6 +187,40 @@ def test_branch_merge_unions_convolution_fields(concatenate: bool, name: str) ->
     assert result.status is ReceptiveFieldValidationStatus.PASS
 
 
+def test_channel_cat_routes_each_output_channel_to_its_exact_branch_field() -> None:
+    """Use the selected channel segment's 3x3 or 5x5 receptive field."""
+
+    trace = _trace(
+        _TwoBranchMerge(concatenate=True),
+        torch.ones(1, 1, 9, 9, requires_grad=True),
+    )
+    target = _op(trace, "cat")
+    results = tl.receptive_field.cross_validate(
+        trace,
+        ops=[target],
+        units=[(0, 0, 4, 4), (0, 1, 4, 4)],
+    )
+
+    assert len(results) == 2
+    expected_spatial_bounds = (((3, 6), (3, 6)), ((2, 7), (2, 7)))
+    for result, expected in zip(results, expected_spatial_bounds, strict=True):
+        box = next(iter(result.geometric.values()))
+        actual = tuple((axis.clipped_start, axis.clipped_stop) for axis in box.axes[-2:])
+        assert box.status is ReceptiveFieldStatus.EXACT
+        assert actual == expected
+        assert result.status is ReceptiveFieldValidationStatus.PASS
+
+    source = trace.input_ops[0]  # type: ignore[union-attr]
+    projective = tl.receptive_field.cross_validate(
+        trace,
+        ops=[source],
+        units=(0, 0, 4, 4),
+        direction="projective",
+        target=target,
+    )[0]
+    assert projective.status is ReceptiveFieldValidationStatus.PASS
+
+
 class _SpatialConcatenation(nn.Module):
     """Two positive convolution branches concatenated along the height axis."""
 

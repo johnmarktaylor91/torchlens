@@ -11,7 +11,7 @@ import torch
 
 from ..backends import BackendUnsupportedError
 from . import _engine
-from ._errors import ReceptiveFieldError
+from ._errors import ReceptiveFieldError, ReceptiveFieldUnavailableError
 from ._gradient import gradient_for_unit
 from ._gradient_forward import _select_targets, projective_gradient_for_unit
 from ._path import resolve_graph_point
@@ -149,9 +149,15 @@ def _box_for_descriptor(
                 input=None if endpoint is not None else descriptor.io_role,
                 source=endpoint,
                 clip=True,
+                complete_unit=complete_unit,
             )
         return box_for_source_unit(
-            cast(Any, solution), owner, windowed, target=descriptor.io_role, clip=True
+            cast(Any, solution),
+            owner,
+            windowed,
+            target=descriptor.io_role,
+            clip=True,
+            complete_unit=complete_unit,
         )
     axes = tuple(
         ReceptiveFieldBoxAxis(
@@ -478,22 +484,33 @@ def _check_for_unit(
     complete_unit = _normalize_complete_unit(target, unit)
     endpoint: Op | None = None
     solution: Any
-    if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
-        if input is not None and source is not None:
-            raise TypeError("input= and source= cannot be used together.")
-        if source is None:
-            solution = _engine.solve(target.source_trace)
-            view = ReceptiveFieldView(target, solution)
-            descriptors = _selected_descriptors(view, input)
+    try:
+        if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
+            if input is not None and source is not None:
+                raise TypeError("input= and source= cannot be used together.")
+            if source is None:
+                solution = _engine.solve(target.source_trace)
+                view = ReceptiveFieldView(target, solution)
+                descriptors = _selected_descriptors(view, input)
+            else:
+                endpoint = resolve_graph_point(target.source_trace, source)
+                solution = _engine.solve_from(target.source_trace, endpoint)
+                descriptors = solution.per_op.get(target.label, MappingProxyType({}))
         else:
-            endpoint = resolve_graph_point(target.source_trace, source)
-            solution = _engine.solve_from(target.source_trace, endpoint)
+            targets, _ = _select_targets(target, result_target)
+            endpoint = targets[0] if len(targets) == 1 else None
+            solution = solve_projective(target.source_trace, targets)
             descriptors = solution.per_op.get(target.label, MappingProxyType({}))
-    else:
-        targets, _ = _select_targets(target, result_target)
-        endpoint = targets[0] if len(targets) == 1 else None
-        solution = solve_projective(target.source_trace, targets)
-        descriptors = solution.per_op.get(target.label, MappingProxyType({}))
+    except ReceptiveFieldUnavailableError as exc:
+        return _validation_result(
+            target=target,
+            unit=complete_unit,
+            descriptors=MappingProxyType({}),
+            geometric={},
+            gradients=MappingProxyType({}),
+            gradient_error=str(exc),
+            direction=normalized_direction,
+        )
     geometric: dict[str, ReceptiveFieldBox] = {}
     for role, descriptor in descriptors.items():
         if descriptor.status not in _TAINTED_STATUSES and descriptor.axes is not None:
@@ -895,9 +912,12 @@ def validate_receptive_field_trace(
                     solution = _engine.solve_from(trace, source_op)
                     descriptors = solution.per_op.get(owner.label, MappingProxyType({}))
             else:
-                target_ops, _ = _select_targets(owner, selected_endpoint)
-                solution = solve_projective(trace, target_ops)
-                descriptors = solution.per_op.get(owner.label, MappingProxyType({}))
+                try:
+                    target_ops, _ = _select_targets(owner, selected_endpoint)
+                    solution = solve_projective(trace, target_ops)
+                    descriptors = solution.per_op.get(owner.label, MappingProxyType({}))
+                except ReceptiveFieldUnavailableError:
+                    descriptors = MappingProxyType({})
 
             if isinstance(units, str):
                 eligible = next(

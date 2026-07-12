@@ -156,6 +156,7 @@ def box_for_unit(
     input: Op | str | None = None,
     source: Op | None = None,
     clip: bool = True,
+    complete_unit: Sequence[int] | None = None,
 ) -> ReceptiveFieldBox:
     """Compute one per-unit receptive-field box by reverse index-set propagation.
 
@@ -174,6 +175,8 @@ def box_for_unit(
         coordinate space of the returned box.
     clip:
         Whether ``clipped_*`` bounds are intersected with captured input extents.
+    complete_unit:
+        Optional complete target index used internally to route structural axes.
 
     """
     if input is not None and source is not None:
@@ -187,7 +190,7 @@ def box_for_unit(
     descriptor = _select_descriptor(descriptors, source if source is not None else input)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
-    initial = _initial_axis_sets(op, descriptor, coordinates)
+    initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
     trace = op.source_trace
     operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
     by_reference = {
@@ -263,11 +266,19 @@ def _normalize_unit(op: Op, descriptor: ReceptiveField, unit: Sequence[int]) -> 
 
 
 def _initial_axis_sets(
-    op: Op, descriptor: ReceptiveField, coordinates: tuple[int, ...]
+    op: Op,
+    descriptor: ReceptiveField,
+    coordinates: tuple[int, ...],
+    *,
+    complete_unit: Sequence[int] | None = None,
 ) -> _AxisSets:
-    """Seed singleton sets on the target axes named by the derived layout."""
+    """Seed singleton sets on derived axes and optional structural coordinates."""
     assert descriptor.axes is not None
     result: list[_IndexSet | None] = [None] * len(op.shape)
+    if complete_unit is not None:
+        if len(complete_unit) != len(op.shape):
+            raise ReceptiveFieldError("complete_unit rank does not match the target operation.")
+        result = [_IndexSet.singleton(int(coordinate)) for coordinate in complete_unit]
     for axis, coordinate in zip(
         (item for item in descriptor.axes if item.kind == "windowed"), coordinates, strict=True
     ):
@@ -324,6 +335,10 @@ def _walk_to_input(
     terminals: list[_TerminalState] = []
     for parent in parents:
         parent_sets, hop_exact = _map_to_parent(op, parent, output_sets, result)
+        if isinstance(result.values.get("concatenate_axis"), int) and any(
+            item is not None and item.is_empty for item in parent_sets
+        ):
+            continue
         bounded = (
             parent_sets
             if parent.label == input_label

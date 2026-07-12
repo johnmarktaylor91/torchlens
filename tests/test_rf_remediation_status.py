@@ -101,6 +101,49 @@ def test_depthwise_convolution_has_tight_exact_channel_and_spatial_geometry() ->
     assert result.status is ReceptiveFieldValidationStatus.PASS
 
 
+@pytest.mark.parametrize("pool", [nn.MaxPool2d(2), nn.AvgPool2d(2)])
+def test_pooling_preserves_exact_pointwise_channels(pool: nn.Module) -> None:
+    """Keep bare max and average pooling channel-pointwise and gradient-valid."""
+
+    trace = _trace(pool, torch.randn(1, 3, 6, 6, requires_grad=True))
+    target = next(item for item in trace.layer_list if "pool2d" in str(item.func_name))
+    descriptor = target.receptive_field._descriptor()
+
+    assert descriptor.status is ReceptiveFieldStatus.EXACT
+    assert tuple(axis.kind for axis in descriptor.axes) == (
+        "pointwise",
+        "pointwise",
+        "windowed",
+        "windowed",
+    )
+    result = cross_validate(trace, ops=[target], units=(0, 2, 1, 1))[0]
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
+def test_depthwise_convolution_then_pooling_remains_channel_pointwise() -> None:
+    """Preserve a single-channel route through depthwise convolution and max pooling."""
+
+    model = nn.Sequential(
+        nn.Conv2d(3, 3, 3, padding=1, groups=3, bias=False),
+        nn.MaxPool2d(2),
+    )
+    with torch.no_grad():
+        model[0].weight.fill_(1.0)
+    trace = _trace(model, torch.randn(1, 3, 6, 6, requires_grad=True))
+    target = next(item for item in trace.layer_list if item.func_name == "max_pool2d")
+    descriptor = target.receptive_field._descriptor()
+
+    assert descriptor.status is ReceptiveFieldStatus.EXACT
+    assert tuple(axis.kind for axis in descriptor.axes) == (
+        "pointwise",
+        "pointwise",
+        "windowed",
+        "windowed",
+    )
+    result = cross_validate(trace, ops=[target], units=(0, 2, 1, 1))[0]
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
 def test_grouped_convolution_keeps_spatial_windows_with_channel_upper_bound() -> None:
     """Limit grouped-convolution degradation to a containing channel-axis bound."""
 
@@ -133,6 +176,15 @@ class _DistinctAttention(nn.Module):
         return functional.scaled_dot_product_attention(query, key, value)
 
 
+class _GroupedQueryAttention(nn.Module):
+    """Scaled dot-product attention with fewer key/value heads than query heads."""
+
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
+        """Apply grouped-query scaled dot-product attention."""
+
+        return functional.scaled_dot_product_attention(query, key, value, enable_gqa=True)
+
+
 def test_sdpa_feature_axis_upper_bound_contains_query_gradients() -> None:
     """Include every query feature contributing through attention-score dot products."""
 
@@ -161,6 +213,95 @@ def test_sdpa_feature_axis_upper_bound_contains_query_gradients() -> None:
     )
     assert len(results) == 3
     assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
+
+
+def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
+    """Contain key/value support when grouped-query attention reuses fewer heads."""
+
+    inputs = (
+        torch.randn(1, 4, 3, 2, requires_grad=True),
+        torch.randn(1, 2, 3, 2, requires_grad=True),
+        torch.randn(1, 2, 3, 2, requires_grad=True),
+    )
+    trace = tl.trace(
+        _GroupedQueryAttention(),
+        inputs,
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save_mode="reference",
+    )
+    target = _op(trace, "scaled_dot_product_attention")
+    key_value_inputs = list(trace.input_ops)[1:]
+
+    for source in key_value_inputs:
+        descriptor = target.receptive_field._descriptor(source)
+        assert tuple(axis.kind for axis in descriptor.axes) == (
+            "pointwise",
+            "full",
+            "full",
+            "full",
+        )
+    results = cross_validate(
+        trace,
+        ops=[target],
+        units=(0, 3, 1, 0),
+        inputs=key_value_inputs,
+    )
+    assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
+
+
+def test_sdpa_broadcast_widens_key_value_batch_and_head_axes() -> None:
+    """Contain key/value support broadcast across query batches and heads."""
+
+    inputs = (
+        torch.randn(2, 4, 3, 2, requires_grad=True),
+        torch.randn(1, 1, 3, 2, requires_grad=True),
+        torch.randn(1, 1, 3, 2, requires_grad=True),
+    )
+    trace = tl.trace(
+        _DistinctAttention(),
+        inputs,
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save_mode="reference",
+    )
+    target = _op(trace, "scaled_dot_product_attention")
+    key_value_inputs = list(trace.input_ops)[1:]
+
+    for source in key_value_inputs:
+        descriptor = target.receptive_field._descriptor(source)
+        assert tuple(axis.kind for axis in descriptor.axes) == (
+            "full",
+            "full",
+            "full",
+            "full",
+        )
+    results = cross_validate(
+        trace,
+        ops=[target],
+        units=(1, 3, 1, 0),
+        inputs=key_value_inputs,
+    )
+    assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
+
+
+def test_embedding_bag_validation_returns_tri_state_rows_without_raising() -> None:
+    """Report integer-index EmbeddingBag validation as honest indeterminate rows."""
+
+    rows = tl.validate(
+        nn.EmbeddingBag(10, 4, mode="mean"),
+        (torch.tensor([1, 2, 4, 5, 3]), torch.tensor([0, 3])),
+        scope="receptive_field",
+    )
+
+    assert rows
+    assert all(
+        row.status
+        in {
+            ReceptiveFieldValidationStatus.PASS,
+            ReceptiveFieldValidationStatus.INDETERMINATE,
+        }
+        for row in rows
+    )
+    assert any(row.status is ReceptiveFieldValidationStatus.INDETERMINATE for row in rows)
 
 
 class _TrailingReduction(nn.Module):
