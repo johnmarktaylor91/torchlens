@@ -348,8 +348,10 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
             trace = trace_ref()
             if trace is None or not hasattr(trace, "layer_list"):
                 stale_ids.append(grad_fn_object_id)
-            elif id(trace) not in matched_ids and not getattr(
-                trace, "_tl_backward_triggers_disarmed", False
+            elif (
+                id(trace) not in matched_ids
+                and not getattr(trace, "_tl_backward_triggers_disarmed", False)
+                and not getattr(trace, "_tl_rf_probe_active", False)
             ):
                 matched.append(trace)
                 matched_ids.add(id(trace))
