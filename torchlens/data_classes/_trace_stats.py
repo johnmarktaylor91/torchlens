@@ -1,11 +1,12 @@
 """Trace computed stats mixin."""
 
 from collections import OrderedDict
-from collections.abc import Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, TextIO, Tuple, cast
 
 
 if TYPE_CHECKING:
+    from ..receptive_field._types import ReceptiveFieldProfile, ReceptiveFieldStatus
     from ..report._profile import TraceProfile
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from .buffer import BufferAccessor
@@ -554,6 +555,47 @@ class TraceStatsMixin(_TraceMixinBase):
         from ..report._profile import build_profile
 
         return build_profile(self, level=level, sort_by=sort_by, ascending=ascending)
+
+    def receptive_fields(
+        self: "Trace",
+        level: Literal["op", "layer", "call", "module"] = "op",
+        *,
+        input: "Op | None" = None,
+        statuses: "Collection[ReceptiveFieldStatus] | None" = None,
+        sort_by: str | None = None,
+        ascending: bool = True,
+    ) -> "ReceptiveFieldProfile":
+        """Return the trace-wide geometric receptive-field table.
+
+        Parameters
+        ----------
+        level:
+            Table granularity: operation, layer, module invocation, or module.
+        input:
+            Optional model-input ``Op`` handle. String layer names are rejected.
+        statuses:
+            Optional typed receptive-field-status filter.
+        sort_by:
+            Optional table column used for stable sorting.
+        ascending:
+            Whether an explicit ``sort_by`` sorts ascending.
+
+        Returns
+        -------
+        torchlens.receptive_field.ReceptiveFieldProfile
+            Frozen table wrapper exposing ``to_pandas()``.
+        """
+
+        from ..receptive_field._table import build_rf_profile
+
+        return build_rf_profile(
+            self,
+            level=level,
+            input=input,
+            statuses=statuses,
+            sort_by=sort_by,
+            ascending=ascending,
+        )
 
     @property
     def layers(self: "Trace") -> "LayerAccessor":
