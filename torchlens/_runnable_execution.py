@@ -399,7 +399,9 @@ def _input_tree_contract_checks(
         for slot in descriptor.tensor_slots
         if slot.role is TensorSlotRole.MODEL_INPUT and slot.input_binding is not None
     )
-    positions = {slot.input_binding.model_site_position for slot in slots}
+    positions = {
+        slot.input_binding.model_site_position for slot in slots if slot.input_binding is not None
+    }
     expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {}
     for slot in slots:
         assert slot.input_binding is not None
@@ -558,8 +560,8 @@ def _pre_call_contract_checks(
         and registry_entry is not None
         and registry_entry.key.dispatch_kind == call.dispatch_kind
     )
-    referenced_paths = [
-        argument.argument_path for argument in (*call.tensor_arguments, *call.literal_arguments)
+    referenced_paths = [argument.argument_path for argument in call.tensor_arguments] + [
+        argument.argument_path for argument in call.literal_arguments
     ]
     positional_indices = {
         cast(int, path[1])
