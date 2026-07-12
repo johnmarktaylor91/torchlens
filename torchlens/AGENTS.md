@@ -57,7 +57,10 @@ loaded_result = tl.load("architecture.tlspec").run(inputs=x, seed=42)
 
 The unified `inputs=` run surface returns `RunResult(output, trace, report)` without mutating its
 source. Live traces use the existing fast refresh projector; loaded runnable traces execute the
-resolved sparse DAG with staged or N1-a state. Analysis-only loads cannot run.
+resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only loads cannot run.
+Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
+`state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
+family, not part of the tensor-value-free sparse core or a reconstructed model.
 
 Provisional semantic I/O examples (review-day names):
 

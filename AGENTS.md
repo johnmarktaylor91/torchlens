@@ -148,7 +148,11 @@ pytest tests/ -m "not slow" -x --tb=short
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 17. `Trace.load_state_dict(sd)` on a loaded sparse runnable Trace validates and stages state only;
    it never executes the DAG or writes values into the sparse core. User staging overrides the
-   future embedded-state hook, and N1-a random fallback must name every initialized slot.
+   optional embedded capture state, and N1-a random fallback must name every initialized slot.
+17a. `include_weights=True` is runnable-save-only and bundles the full capture-time `state_dict`
+    (named parameters plus persistent buffers) in a separate `state_dict_v1` blob family. The
+    sparse core remains tensor-value-free; load uses the ordinary strict binder and reports
+    `embedded_capture_state`, never a reconstructed model.
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
