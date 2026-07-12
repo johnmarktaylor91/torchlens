@@ -7,8 +7,8 @@ over the captured DAG using exact rational arithmetic.
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
-from collections.abc import Mapping, Sequence
+from collections import OrderedDict, defaultdict, deque
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from types import MappingProxyType
@@ -51,6 +51,8 @@ _TAINT_ORDER = {
     ReceptiveFieldStatus.UNSUPPORTED: 2,
 }
 
+_SOURCE_SOLUTION_CACHE_SIZE = 8
+
 
 @dataclass(frozen=True)
 class _ReceptiveFieldSolution:
@@ -61,6 +63,12 @@ class _ReceptiveFieldSolution:
     descriptors: Mapping[tuple[str, str], ReceptiveField]
     per_op: Mapping[str, Mapping[str, ReceptiveField]]
     states: Mapping[tuple[str, str], _InputState]
+
+
+def _is_input_seed(op: Op) -> bool:
+    """Return whether an operation is a default model-input seed."""
+
+    return op.is_input
 
 
 def solve(trace: Trace) -> _ReceptiveFieldSolution:
@@ -89,8 +97,55 @@ def solve(trace: Trace) -> _ReceptiveFieldSolution:
     ):
         return cached
 
-    solution = _solve_uncached(trace, epoch, graph_revision)
+    solution = _solve_uncached(trace, epoch, graph_revision, _is_input_seed)
     trace.__dict__["_receptive_field_solution"] = solution
+    return solution
+
+
+def solve_from(trace: Trace, source: Op) -> _ReceptiveFieldSolution:
+    """Solve geometric receptive fields seeded at one captured source operation.
+
+    Parameters
+    ----------
+    trace:
+        Captured TorchLens trace.
+    source:
+        Operation whose output grid is the receptive-field source.
+
+    Returns
+    -------
+    _ReceptiveFieldSolution
+        Immutable solution containing descriptors for the source and its descendants.
+
+    Raises
+    ------
+    ValueError
+        If ``source`` does not belong to ``trace``.
+    """
+
+    if source.source_trace is not trace or not _operation_is_live(source):
+        raise ValueError("Receptive-field source operation does not belong to the supplied trace.")
+
+    _ensure_trace_cache_policy(trace)
+    epoch = _rf_rules_epoch()
+    graph_revision = _graph_revision(trace)
+    cache = trace.__dict__.get("_rf_source_solutions")
+    if not isinstance(cache, OrderedDict):
+        cache = OrderedDict()
+        trace.__dict__["_rf_source_solutions"] = cache
+
+    cached = cache.get(source.label)
+    if cached is not None:
+        cached_epoch, cached_revision, cached_solution = cached
+        if cached_epoch == epoch and cached_revision == graph_revision:
+            cache.move_to_end(source.label)
+            return cached_solution
+
+    solution = _solve_uncached(trace, epoch, graph_revision, lambda op: op.label == source.label)
+    cache[source.label] = (epoch, graph_revision, solution)
+    cache.move_to_end(source.label)
+    while len(cache) > _SOURCE_SOLUTION_CACHE_SIZE:
+        cache.popitem(last=False)
     return solution
 
 
@@ -104,6 +159,7 @@ def _ensure_trace_cache_policy(trace: Trace) -> None:
     """
 
     type(trace).PORTABLE_STATE_SPEC.setdefault("_receptive_field_solution", FieldPolicy.DROP)
+    type(trace).PORTABLE_STATE_SPEC.setdefault("_rf_source_solutions", FieldPolicy.DROP)
 
 
 def lookup(trace: Trace, op: Op | str) -> Mapping[str, ReceptiveField]:
@@ -127,7 +183,10 @@ def lookup(trace: Trace, op: Op | str) -> Mapping[str, ReceptiveField]:
 
 
 def _solve_uncached(
-    trace: Trace, epoch: int, graph_revision: tuple[object, ...]
+    trace: Trace,
+    epoch: int,
+    graph_revision: tuple[object, ...],
+    seed_predicate: Callable[[Op], bool] = _is_input_seed,
 ) -> _ReceptiveFieldSolution:
     """Compute a fresh trace-wide solution.
 
@@ -139,6 +198,9 @@ def _solve_uncached(
         Registry epoch recorded on the solution.
     graph_revision:
         Structural graph fingerprint recorded on the solution.
+    seed_predicate:
+        Predicate selecting operations that terminate the reverse solve. The default selects
+        model-input operations and preserves the input receptive-field behavior.
 
     Returns
     -------
@@ -155,7 +217,7 @@ def _solve_uncached(
     states_by_op: dict[str, dict[str, _InputState]] = {}
 
     for op in _topological_operations(operations, by_reference):
-        if op.is_input:
+        if seed_predicate(op):
             seed = _seed_input(op)
             states_by_op[op.label] = {seed.io_role: seed}
             continue
