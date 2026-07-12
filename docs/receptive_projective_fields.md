@@ -123,7 +123,10 @@ view type is `ReceptiveFieldView`.
 For extension, use `register_rf_rule()` and `rules()`; `ReceptiveFieldRule` and
 `ReceptiveFieldRuleContext` are the corresponding rule types, and `rules()` is a read-only
 snapshot. `node_spec()` creates a `Trace.draw(node_spec_fn=...)` callback. `verify()` and
-`self_check()` run the model-facing diagnostics, while `cross_validate()` gives the batch sweep.
+`self_check()` run the model-facing diagnostics: each returns a `ReceptiveFieldVerification` that
+pairs geometric containment checks with sampled `EmpiricalAdjointCheck` comparisons (the
+receptive/projective empirical derivatives at a shared unit), and its `.passed` property is true
+only when both the containment and the adjoint samples hold. `cross_validate()` gives the batch sweep.
 The typed error surface is `ReceptiveFieldError`, `ReceptiveFieldUnavailableError`,
 `ReceptiveFieldValidationError`, `AmbiguousInputError`, `AmbiguousPassError`,
 `AmbiguousCallError`, `AmbiguousTargetError`, `NoInfluencePathError`, and
