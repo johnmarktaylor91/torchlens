@@ -154,6 +154,7 @@ def box_for_unit(
     unit: Sequence[int],
     *,
     input: Op | str | None = None,
+    source: Op | None = None,
     clip: bool = True,
 ) -> ReceptiveFieldBox:
     """Compute one per-unit receptive-field box by reverse index-set propagation.
@@ -168,14 +169,22 @@ def box_for_unit(
         Coordinates over the target's derived windowed output axes.
     input:
         Optional input operation or exact IO role/operation label.
+    source:
+        Optional source operation for a source-seeded solution. Its output grid is the
+        coordinate space of the returned box.
     clip:
         Whether ``clipped_*`` bounds are intersected with captured input extents.
 
     """
+    if input is not None and source is not None:
+        raise TypeError("input and source cannot be supplied together.")
     descriptors = solution.per_op.get(op.label)
     if not descriptors:
-        raise ReceptiveFieldError(f"No receptive-field solution is available for {op.label}.")
-    descriptor = _select_descriptor(descriptors, input)
+        endpoint = source.label if source is not None else op.label
+        raise ReceptiveFieldError(
+            f"No receptive-field solution is available from {endpoint} to {op.label}."
+        )
+    descriptor = _select_descriptor(descriptors, source if source is not None else input)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates)

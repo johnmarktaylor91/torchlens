@@ -185,9 +185,10 @@ class ReceptiveFieldView:
         unit: tuple[int, ...] | Literal["center"],
         *,
         input: Op | str | None = None,
+        source: object | None = None,
         clip: bool = True,
     ) -> ReceptiveFieldBox:
-        """Return geometric input bounds for one windowed-grid output unit.
+        """Return geometric source bounds for one windowed-grid output unit.
 
         Parameters
         ----------
@@ -195,6 +196,9 @@ class ReceptiveFieldView:
             Windowed-axis coordinates, or ``"center"`` for their midpoint.
         input:
             Optional exact IO role or model-input operation.
+        source:
+            Optional ancestor graph point. The returned box is in this operation's
+            output-grid coordinate space.
         clip:
             Whether bounds are clipped to captured input extents.
 
@@ -204,11 +208,45 @@ class ReceptiveFieldView:
             Per-unit theoretical and clipped receptive-field bounds.
         """
 
+        if input is not None and source is not None:
+            raise TypeError("input and source cannot be supplied together.")
+
+        from . import _engine
+        from ._path import require_path, resolve_graph_point
         from ._query import box_for_unit
+
+        source_op: Op | None = None
+        solution = self._solution
+        selected_input = input
+        if source is not None:
+            source_op = resolve_graph_point(self._op.source_trace, source)
+            require_path(source_op, self._op, "receptive")
+            solution = _engine.solve_from(self._op.source_trace, source_op)
+            selected_input = None
 
         selected: tuple[int, ...]
         if unit == "center":
-            descriptor = self._descriptor(input)
+            descriptors = solution.per_op.get(self._op.label, {})
+            descriptor = (
+                self._descriptor(selected_input)
+                if source_op is None
+                else next(
+                    (
+                        item
+                        for item in descriptors.values()
+                        if item.input_op_label == source_op.label
+                    ),
+                    None,
+                )
+            )
+            if descriptor is None:
+                if source_op is None:
+                    raise ReceptiveFieldError(
+                        f"No receptive-field descriptor is available for target {self._op.label!r}."
+                    )
+                raise ReceptiveFieldError(
+                    f"Source {source_op.label!r} is not reachable from target {self._op.label!r}."
+                )
             if descriptor.axes is None:
                 raise ReceptiveFieldError(
                     "Geometric axes are unavailable; use .gradient() instead."
@@ -220,10 +258,11 @@ class ReceptiveFieldView:
         else:
             selected = unit
         return box_for_unit(
-            self._solution,
+            solution,
             self._op,
             selected,
-            input=input,
+            input=selected_input,
+            source=source_op,
             clip=clip,
         )
 
@@ -232,6 +271,7 @@ class ReceptiveFieldView:
         unit: tuple[int, ...],
         *,
         input: Op | str | None = None,
+        source: object | None = None,
         atol: float = 0.0,
         rtol: float = 0.0,
         retain_graph: bool = False,
@@ -244,6 +284,8 @@ class ReceptiveFieldView:
             Complete target output-element index.
         input:
             Optional exact IO role or model-input operation.
+        source:
+            Reserved ancestor graph point for layer-to-layer receptive probes.
         atol, rtol:
             Non-negative gradient support thresholds.
         retain_graph:
@@ -257,6 +299,20 @@ class ReceptiveFieldView:
 
         from ._gradient import gradient_for_unit
 
+        if input is not None and source is not None:
+            raise TypeError("input and source cannot be supplied together.")
+        if source is not None:
+            return cast(
+                GradientReceptiveField | Mapping[str, GradientReceptiveField],
+                cast(Any, gradient_for_unit)(
+                    self._op,
+                    unit,
+                    source=source,
+                    atol=atol,
+                    rtol=rtol,
+                    retain_graph=retain_graph,
+                ),
+            )
         return gradient_for_unit(
             self._op,
             unit,
@@ -271,6 +327,7 @@ class ReceptiveFieldView:
         unit: tuple[int, ...],
         *,
         input: Op | str | None = None,
+        source: object | None = None,
         atol: float = 0.0,
         rtol: float = 0.0,
     ) -> ReceptiveFieldValidation:
@@ -282,6 +339,8 @@ class ReceptiveFieldView:
             Complete target output-element index.
         input:
             Optional exact IO role or model-input operation.
+        source:
+            Reserved ancestor graph point for layer-to-layer receptive validation.
         atol, rtol:
             Non-negative gradient support thresholds.
 
@@ -291,7 +350,14 @@ class ReceptiveFieldView:
             Tri-state containment result.
         """
 
+        if input is not None and source is not None:
+            raise TypeError("input and source cannot be supplied together.")
         check_for_unit = _optional_callable("._validation", "check_for_unit", "Task T9")
+        if source is not None:
+            return cast(
+                ReceptiveFieldValidation,
+                check_for_unit(self._op, unit, source=source, atol=atol, rtol=rtol),
+            )
         return cast(
             ReceptiveFieldValidation,
             check_for_unit(self._op, unit, input=input, atol=atol, rtol=rtol),
