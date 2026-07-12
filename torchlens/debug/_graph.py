@@ -189,6 +189,10 @@ def compare(
         One row per pass-qualified op with summary counts in ``df.attrs``.
     """
 
+    from torchlens.runnable import refuse_poisoned_trace
+
+    refuse_poisoned_trace(trace_a, "faithful comparison")
+    refuse_poisoned_trace(trace_b, "faithful comparison")
     pd = _require_pandas()
     ops_a = {_op_label(op): op for op in _compute_ops(trace_a)}
     ops_b = {_op_label(op): op for op in _compute_ops(trace_b)}

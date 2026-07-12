@@ -151,7 +151,10 @@ pytest tests/ -m "not slow" -x --tb=short
    future embedded-state hook, and N1-a random fallback must name every initialized slot.
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
-    Stage 5 populates `path_faithfulness`; Stage 6 enforces divergence/poison policy.
+    Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
+    default divergence raises with rollback, while `return_diverged` is the sole monotonic poisoned
+    opt-in. Incomplete witness coverage is `unverifiable`, and sparse-only numeric attestation is
+    `not_applicable`.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing

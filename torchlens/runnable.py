@@ -551,6 +551,78 @@ class RunnableTraceProtocol(Protocol):
         ...
 
 
+def mark_trace_path_status(
+    trace: Any,
+    status: PathFaithfulness,
+    first_mismatch: RunnableDiagnostic | None,
+) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
+    """Apply a monotonic non-faithful path mark to a Trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving the run-status mark.
+    status:
+        Faithfulness status observed by the current sparse run.
+    first_mismatch:
+        First structured contradiction, when one was observed.
+
+    Returns
+    -------
+    tuple[PathFaithfulness, RunnableDiagnostic | None]
+        Effective monotonic status and retained first mismatch.
+    """
+
+    previous = trace.__dict__.get("_runnable_path_faithfulness")
+    previous_mismatch = trace.__dict__.get("_runnable_first_mismatch")
+    if previous is PathFaithfulness.DIVERGED:
+        effective = PathFaithfulness.DIVERGED
+    elif status is PathFaithfulness.DIVERGED:
+        effective = PathFaithfulness.DIVERGED
+    elif previous is PathFaithfulness.UNVERIFIABLE or status is PathFaithfulness.UNVERIFIABLE:
+        effective = PathFaithfulness.UNVERIFIABLE
+    else:
+        effective = PathFaithfulness.VERIFIED
+    retained = (
+        previous_mismatch if isinstance(previous_mismatch, RunnableDiagnostic) else first_mismatch
+    )
+    trace.__dict__["_runnable_path_faithfulness"] = effective
+    trace.__dict__["_runnable_first_mismatch"] = retained
+    trace.__dict__["_runnable_poisoned"] = effective is not PathFaithfulness.VERIFIED
+    return effective, retained
+
+
+def refuse_poisoned_trace(trace: Any, operation: str) -> None:
+    """Refuse a downstream operation that assumes model-faithful path identity.
+
+    Parameters
+    ----------
+    trace:
+        Trace being consumed.
+    operation:
+        Human-readable faithful consumer name.
+
+    Raises
+    ------
+    PoisonedRunError
+        If the Trace carries a monotonic non-faithful sparse-run mark.
+    """
+
+    if not bool(trace.__dict__.get("_runnable_poisoned", False)):
+        return
+    from .errors import PoisonedRunError
+
+    status = trace.__dict__.get("_runnable_path_faithfulness")
+    mismatch = trace.__dict__.get("_runnable_first_mismatch")
+    raise PoisonedRunError(
+        f"{operation} refused a poison-marked sparse run Trace.",
+        code=RunnableErrorCode.POISONED_RUN_REFUSED.value,
+        operation=operation,
+        path_faithfulness=status,
+        first_mismatch=mismatch,
+    )
+
+
 __all__ = [
     "CANONICAL_INITIALIZER_BY_ROLE",
     "RUNNABLE_CALLABLE_REF_SCHEMA_VERSION",
@@ -599,4 +671,6 @@ __all__ = [
     "TensorSlotRole",
     "TensorUseSite",
     "WitnessCompleteness",
+    "mark_trace_path_status",
+    "refuse_poisoned_trace",
 ]

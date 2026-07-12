@@ -11,6 +11,7 @@ import torch
 from . import _state
 from ._runnable_state import PreparedRunnableState, prepare_runnable_state
 from .errors import (
+    PathDivergenceError,
     ReattachError,
     RunCapabilityUnavailableError,
     RunPreconditionError,
@@ -19,6 +20,7 @@ from .errors import (
 from .intervention.replay import _CallConeNode, _walk_call_cone
 from .runnable import (
     ContractCheck,
+    ControlWitness,
     ControlWitnessKind,
     DivergencePolicy,
     LiteralAtom,
@@ -39,10 +41,12 @@ from .runnable import (
     RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
+    StateSlotRole,
     StateSource,
     TensorSlotDescriptor,
     TensorSlotRole,
     WitnessCompleteness,
+    mark_trace_path_status,
 )
 
 
@@ -73,14 +77,25 @@ def run_loaded_sparse_trace(
         Structured output, run fork, and execution report.
     """
 
-    del on_divergence
+    try:
+        divergence_policy = DivergencePolicy(on_divergence)
+    except ValueError as exc:
+        raise ValueError(
+            "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
+        ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
-    prepared_state = prepare_runnable_state(trace, seed=seed)
     slot_values, input_checks = _bind_runtime_inputs(descriptor, inputs)
+    _raise_first_divergence(input_checks, divergence_policy, fork=None)
+    prepared_state = prepare_runnable_state(trace, seed=seed)
     slot_values.update(_clone_state_values(prepared_state.slot_values))
     fork = trace._fork_trace(name=_run_fork_name(trace))
     _populate_source_slots(fork, descriptor, slot_values)
-    contract_checks: list[ContractCheck] = list(input_checks)
+    contract_checks: list[ContractCheck] = [
+        *input_checks,
+        *_state_contract_checks(descriptor, slot_values),
+    ]
+    _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+    call_outputs: dict[str, Any] = {}
 
     devices = sorted(
         {
@@ -98,16 +113,53 @@ def run_loaded_sparse_trace(
             """Execute and stage one dependency-ready sparse call."""
 
             call = cast(RunnableCallDescriptor, call_node)
+            call_checks, before_versions = _pre_call_contract_checks(
+                descriptor,
+                call,
+                slot_values,
+            )
+            contract_checks.extend(call_checks)
+            _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
             output = _execute_sparse_call(call, callables[call.call_id], slot_values)
-            contract_checks.extend(_bind_call_outputs(descriptor, call, output, slot_values, fork))
+            call_outputs[call.call_id] = output
+            contract_checks.extend(
+                _bind_call_outputs(
+                    descriptor,
+                    call,
+                    output,
+                    slot_values,
+                    fork,
+                    before_versions=before_versions,
+                )
+            )
+            contract_checks.extend(_call_witness_checks(descriptor, call, slot_values))
+            _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
 
         _walk_call_cone(descriptor.calls, execute_call)
 
     output = _reconstruct_output(descriptor, slot_values, fork)
-    path_faithfulness, mismatch = _path_faithfulness(
-        descriptor,
-        slot_values,
-        contract_checks,
+    contract_checks.extend(
+        _post_execution_contract_checks(
+            descriptor,
+            inputs=inputs,
+            output=output,
+            call_outputs=call_outputs,
+            slot_values=slot_values,
+            fork=fork,
+        )
+    )
+    _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+    path_faithfulness, mismatch = _path_faithfulness(descriptor, contract_checks)
+    path_faithfulness, mismatch = mark_trace_path_status(
+        fork,
+        path_faithfulness,
+        mismatch,
+    )
+    _raise_monotonic_divergence(
+        fork,
+        path_faithfulness,
+        mismatch,
+        divergence_policy,
     )
     report = _run_report(
         readiness,
@@ -267,20 +319,38 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
-        if tuple(value.shape) != slot.shape:
-            raise _input_error(
-                RunnableErrorCode.INPUT_SHAPE_MISMATCH,
-                slot,
-                f"Runtime input shape {tuple(value.shape)} does not match {slot.shape}.",
-            )
-        if str(value.dtype) != slot.dtype:
-            raise _input_error(
-                RunnableErrorCode.INPUT_DTYPE_MISMATCH,
-                slot,
-                f"Runtime input dtype {value.dtype} does not match {slot.dtype}.",
-            )
         values[slot.slot_id] = value.detach().clone()
-        checks.append(ContractCheck(f"input:{slot.slot_id}", True, None))
+        shape_ok = tuple(value.shape) == slot.shape
+        dtype_ok = str(value.dtype) == slot.dtype
+        checks.append(
+            _contract_check(
+                f"input_shape:{slot.slot_id}",
+                shape_ok,
+                RunnableErrorCode.INPUT_SHAPE_MISMATCH,
+                f"Runtime input shape {tuple(value.shape)} does not match {slot.shape}.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_shape", repr(slot.shape)),
+                    ("actual_shape", repr(tuple(value.shape))),
+                ),
+            )
+        )
+        checks.append(
+            _contract_check(
+                f"input_dtype:{slot.slot_id}",
+                dtype_ok,
+                RunnableErrorCode.INPUT_DTYPE_MISMATCH,
+                f"Runtime input dtype {value.dtype} does not match {slot.dtype}.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_dtype", slot.dtype),
+                    ("actual_dtype", str(value.dtype)),
+                ),
+            )
+        )
+    checks.extend(_input_tree_contract_checks(descriptor, inputs))
     return values, tuple(checks)
 
 
@@ -316,6 +386,223 @@ def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
                 raise TypeError("keyword model sites require a mapping input")
             return inputs[key]
     return _value_at_path(inputs, position if isinstance(position, tuple) else (position,))
+
+
+def _input_tree_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+) -> tuple[ContractCheck, ...]:
+    """Compare the runtime tensor-leaf tree with every recorded input site."""
+
+    slots = tuple(
+        slot
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.MODEL_INPUT and slot.input_binding is not None
+    )
+    positions = {slot.input_binding.model_site_position for slot in slots}
+    expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {}
+    for slot in slots:
+        assert slot.input_binding is not None
+        expected_by_position.setdefault(slot.input_binding.model_site_position, set()).add(
+            slot.input_binding.container_path
+        )
+    checks: list[ContractCheck] = []
+    for position, expected in expected_by_position.items():
+        try:
+            root = _input_site_value(inputs, position, positions)
+            actual = set(_tensor_leaf_paths(root))
+        except (KeyError, IndexError, TypeError):
+            actual = set()
+        checks.append(
+            _contract_check(
+                f"input_tree:{position!r}",
+                actual == expected,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime input tensor-leaf paths disagree with the recorded input tree.",
+                details=(
+                    ("model_site_position", repr(position)),
+                    ("expected_paths", repr(sorted(expected, key=repr))),
+                    ("actual_paths", repr(sorted(actual, key=repr))),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
+def _state_contract_checks(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> tuple[ContractCheck, ...]:
+    """Recheck state tensor and alias contracts inside the DAG transaction."""
+
+    checks: list[ContractCheck] = []
+    aliases: dict[str, list[TensorSlotDescriptor]] = {}
+    for slot in descriptor.tensor_slots:
+        if slot.role not in {TensorSlotRole.PARAMETER, TensorSlotRole.BUFFER}:
+            continue
+        binding = slot.state_binding
+        value = slot_values.get(slot.slot_id)
+        present = isinstance(value, torch.Tensor)
+        checks.append(
+            _contract_check(
+                f"state_slot:{slot.slot_id}",
+                present,
+                RunnableErrorCode.MISSING_TENSOR_SLOT,
+                f"State slot {slot.slot_id!r} was not bound for execution.",
+                details=(("slot_id", slot.slot_id),),
+            )
+        )
+        if not present:
+            continue
+        assert value is not None
+        checks.append(
+            _contract_check(
+                f"state_shape:{slot.slot_id}",
+                tuple(value.shape) == slot.shape,
+                RunnableErrorCode.STATE_SHAPE_MISMATCH,
+                f"State slot {slot.slot_id!r} has a runtime shape mismatch.",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_shape", repr(slot.shape)),
+                    ("actual_shape", repr(tuple(value.shape))),
+                ),
+            )
+        )
+        checks.append(
+            _contract_check(
+                f"state_dtype:{slot.slot_id}",
+                str(value.dtype) == slot.dtype,
+                RunnableErrorCode.STATE_DTYPE_MISMATCH,
+                f"State slot {slot.slot_id!r} has a runtime dtype mismatch.",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_dtype", slot.dtype),
+                    ("actual_dtype", str(value.dtype)),
+                ),
+            )
+        )
+        if binding is not None and binding.alias_group is not None:
+            aliases.setdefault(binding.alias_group, []).append(slot)
+        if binding is not None:
+            module_path, separator, leaf_name = binding.state_dict_name.rpartition(".")
+            canonical_module = module_path if separator else "self"
+            allowed_roles = _allowed_state_roles(leaf_name, slot.role)
+            checks.append(
+                _contract_check(
+                    f"state_name_role:{slot.slot_id}",
+                    bool(binding.state_dict_name)
+                    and binding.module_path == canonical_module
+                    and binding.semantic_role in allowed_roles,
+                    RunnableErrorCode.STATE_ROLE_MISMATCH,
+                    f"State slot {slot.slot_id!r} has an inconsistent name/role contract.",
+                    details=(
+                        ("slot_id", slot.slot_id),
+                        ("state_dict_name", binding.state_dict_name),
+                        ("recorded_module_path", binding.module_path),
+                        ("canonical_module_path", canonical_module),
+                        ("semantic_role", binding.semantic_role.value),
+                    ),
+                )
+            )
+    for alias_group, members in sorted(aliases.items()):
+        values = [slot_values[slot.slot_id] for slot in members if slot.slot_id in slot_values]
+        checks.append(
+            _contract_check(
+                f"state_alias:{alias_group}",
+                bool(values) and all(value is values[0] for value in values[1:]),
+                RunnableErrorCode.STATE_ALIAS_CONFLICT,
+                f"State alias group {alias_group!r} did not retain one shared tensor.",
+                details=(
+                    ("alias_group", alias_group),
+                    ("slot_ids", repr(tuple(slot.slot_id for slot in members))),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
+def _allowed_state_roles(
+    leaf_name: str,
+    slot_role: TensorSlotRole,
+) -> frozenset[StateSlotRole]:
+    """Return canonical semantic roles for a state-dict leaf name."""
+
+    if leaf_name == "weight":
+        return frozenset({StateSlotRole.WEIGHT, StateSlotRole.NORM_SCALE})
+    if leaf_name == "bias":
+        return frozenset({StateSlotRole.BIAS, StateSlotRole.NORM_OFFSET})
+    if leaf_name == "running_mean":
+        return frozenset({StateSlotRole.RUNNING_MEAN})
+    if leaf_name == "running_var":
+        return frozenset({StateSlotRole.RUNNING_VAR})
+    if leaf_name in {"num_batches_tracked", "counter"}:
+        return frozenset({StateSlotRole.COUNTER})
+    if slot_role is TensorSlotRole.BUFFER:
+        return frozenset({StateSlotRole.GENERIC_BUFFER})
+    return frozenset({StateSlotRole.WEIGHT})
+
+
+def _pre_call_contract_checks(
+    descriptor: SparseRunDescriptor,
+    call: RunnableCallDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> tuple[tuple[ContractCheck, ...], dict[str, int]]:
+    """Validate callable dispatch/arity metadata and snapshot input versions."""
+
+    registry_entry = next(
+        (entry for entry in descriptor.callable_registry if entry.registry_id == call.registry_id),
+        None,
+    )
+    valid_dispatch = (
+        call.dispatch_kind in {"function", "method", "dunder", "namespace_alias"}
+        and registry_entry is not None
+        and registry_entry.key.dispatch_kind == call.dispatch_kind
+    )
+    referenced_paths = [
+        argument.argument_path for argument in (*call.tensor_arguments, *call.literal_arguments)
+    ]
+    positional_indices = {
+        cast(int, path[1])
+        for path in referenced_paths
+        if len(path) >= 2 and path[0] == "args" and isinstance(path[1], int)
+    }
+    keyword_names = {
+        cast(str, path[1])
+        for path in referenced_paths
+        if len(path) >= 2 and path[0] == "kwargs" and isinstance(path[1], str)
+    }
+    arity_ok = positional_indices == set(range(call.num_positional_args)) and (
+        len(keyword_names) == call.num_keyword_args
+    )
+    checks = (
+        _contract_check(
+            f"call_dispatch:{call.call_id}",
+            valid_dispatch,
+            RunnableErrorCode.CALL_STRUCTURE_MISMATCH,
+            f"Call {call.call_id!r} has an unsupported dispatch contract.",
+            affected_op_labels=call.op_labels,
+            details=(("dispatch_kind", call.dispatch_kind),),
+        ),
+        _contract_check(
+            f"call_arity:{call.call_id}",
+            arity_ok,
+            RunnableErrorCode.CALL_ARITY_MISMATCH,
+            f"Call {call.call_id!r} argument leaves do not satisfy its recorded arity.",
+            affected_op_labels=call.op_labels,
+            details=(
+                ("expected_positional", str(call.num_positional_args)),
+                ("actual_positional_sites", repr(sorted(positional_indices))),
+                ("expected_keyword", str(call.num_keyword_args)),
+                ("actual_keyword_names", repr(sorted(keyword_names))),
+            ),
+        ),
+    )
+    versions = {
+        argument.slot_id: slot_values[argument.slot_id]._version
+        for argument in call.tensor_arguments
+        if argument.slot_id in slot_values
+    }
+    return checks, versions
 
 
 def _execute_sparse_call(
@@ -416,27 +703,57 @@ def _bind_call_outputs(
     output: Any,
     slot_values: dict[str, torch.Tensor],
     fork: Any,
+    *,
+    before_versions: Mapping[str, int],
 ) -> tuple[ContractCheck, ...]:
     """Slice, validate, and stage one grouped call's tensor outputs."""
 
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
     checks: list[ContractCheck] = []
+    expected_paths = tuple(slots[slot_id].output_path or () for slot_id in call.output_slot_ids)
+    actual_paths = _tensor_leaf_paths(output)
+    checks.append(
+        _contract_check(
+            f"output_structure:{call.call_id}",
+            len(call.output_slot_ids) == len(call.op_labels)
+            and tuple(actual_paths) == expected_paths,
+            RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
+            f"Call {call.call_id!r} output tensor paths disagree with the recorded container.",
+            affected_op_labels=call.op_labels,
+            details=(
+                ("expected_paths", repr(expected_paths)),
+                ("actual_paths", repr(tuple(actual_paths))),
+            ),
+        )
+    )
     for slot_id, op_label in zip(call.output_slot_ids, call.op_labels):
         slot = slots[slot_id]
         try:
             value = _value_at_path(output, slot.output_path or ())
         except (KeyError, IndexError, TypeError) as exc:
-            raise RunPreconditionError(
-                f"Call {call.call_id!r} output lacks path {slot.output_path!r}: {exc}",
-                code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
-                call_id=call.call_id,
-            ) from exc
-        if not isinstance(value, torch.Tensor):
-            raise RunPreconditionError(
-                f"Call {call.call_id!r} output is not a tensor at {slot.output_path!r}.",
-                code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
-                call_id=call.call_id,
+            checks.append(
+                _contract_check(
+                    f"slot_production:{slot_id}",
+                    False,
+                    RunnableErrorCode.SLOT_PRODUCTION_MISMATCH,
+                    f"Call {call.call_id!r} output lacks path {slot.output_path!r}: {exc}",
+                    affected_op_labels=call.op_labels,
+                    details=(("slot_id", slot_id),),
+                )
             )
+            continue
+        if not isinstance(value, torch.Tensor):
+            checks.append(
+                _contract_check(
+                    f"slot_production:{slot_id}",
+                    False,
+                    RunnableErrorCode.SLOT_PRODUCTION_MISMATCH,
+                    f"Call {call.call_id!r} output is not a tensor at {slot.output_path!r}.",
+                    affected_op_labels=call.op_labels,
+                    details=(("slot_id", slot_id),),
+                )
+            )
+            continue
         slot_values[slot_id] = value
         for version in descriptor.tensor_slots:
             if version.version_of == slot_id and version.producer_slot_id == slot_id:
@@ -446,9 +763,108 @@ def _bind_call_outputs(
             op._internal_set("out", value)
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
-        checks.append(ContractCheck(f"output_shape:{slot_id}", shape_ok, None))
-        checks.append(ContractCheck(f"output_dtype:{slot_id}", dtype_ok, None))
+        checks.append(
+            _contract_check(
+                f"slot_production:{slot_id}",
+                True,
+                RunnableErrorCode.SLOT_PRODUCTION_MISMATCH,
+                f"Call {call.call_id!r} did not produce slot {slot_id!r}.",
+                affected_op_labels=(op_label,),
+            )
+        )
+        checks.append(
+            _contract_check(
+                f"output_shape:{slot_id}",
+                shape_ok,
+                RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                f"Output slot {slot_id!r} has shape {tuple(value.shape)}, expected {slot.shape}.",
+                affected_op_labels=(op_label,),
+                details=(
+                    ("slot_id", slot_id),
+                    ("expected_shape", repr(slot.shape)),
+                    ("actual_shape", repr(tuple(value.shape))),
+                ),
+            )
+        )
+        checks.append(
+            _contract_check(
+                f"output_dtype:{slot_id}",
+                dtype_ok,
+                RunnableErrorCode.OUTPUT_DTYPE_MISMATCH,
+                f"Output slot {slot_id!r} has dtype {value.dtype}, expected {slot.dtype}.",
+                affected_op_labels=(op_label,),
+                details=(
+                    ("slot_id", slot_id),
+                    ("expected_dtype", slot.dtype),
+                    ("actual_dtype", str(value.dtype)),
+                ),
+            )
+        )
+    checks.extend(_mutation_contract_checks(call, output, slot_values, before_versions))
     return tuple(checks)
+
+
+def _mutation_contract_checks(
+    call: RunnableCallDescriptor,
+    output: Any,
+    slot_values: Mapping[str, torch.Tensor],
+    before_versions: Mapping[str, int],
+) -> tuple[ContractCheck, ...]:
+    """Validate recorded in-place aliasing and tensor-version expectations."""
+
+    changed = {
+        slot_id
+        for slot_id, before in before_versions.items()
+        if slot_id in slot_values and slot_values[slot_id]._version != before
+    }
+    if not call.is_inplace:
+        return (
+            _contract_check(
+                f"mutation:{call.call_id}",
+                not changed,
+                RunnableErrorCode.MUTATION_VERSION_MISMATCH,
+                f"Non-mutating call {call.call_id!r} changed an input tensor version.",
+                affected_op_labels=call.op_labels,
+                details=(("changed_slot_ids", repr(tuple(sorted(changed)))),),
+            ),
+        )
+    if not call.tensor_arguments or not call.output_slot_ids:
+        return (
+            _contract_check(
+                f"mutation:{call.call_id}",
+                False,
+                RunnableErrorCode.MUTATION_VERSION_MISMATCH,
+                f"In-place call {call.call_id!r} lacks an input/output version relation.",
+                affected_op_labels=call.op_labels,
+            ),
+        )
+    input_slot_id = call.tensor_arguments[0].slot_id
+    input_value = slot_values.get(input_slot_id)
+    try:
+        output_value = _value_at_path(output, ()) if len(call.output_slot_ids) == 1 else output
+        if len(call.output_slot_ids) > 1:
+            output_value = _value_at_path(output, (0,))
+    except (KeyError, IndexError, TypeError):
+        output_value = None
+    aliases = (
+        isinstance(input_value, torch.Tensor)
+        and isinstance(output_value, torch.Tensor)
+        and (input_value is output_value or input_value.data_ptr() == output_value.data_ptr())
+    )
+    return (
+        _contract_check(
+            f"mutation:{call.call_id}",
+            input_slot_id in changed and aliases,
+            RunnableErrorCode.MUTATION_VERSION_MISMATCH,
+            f"In-place call {call.call_id!r} violated its alias/version expectation.",
+            affected_op_labels=call.op_labels,
+            details=(
+                ("input_slot_id", input_slot_id),
+                ("version_changed", repr(input_slot_id in changed)),
+                ("output_aliases_input", repr(aliases)),
+            ),
+        ),
+    )
 
 
 def _reconstruct_output(
@@ -534,54 +950,290 @@ def _write_output_path(root: Any, path: tuple[str | int, ...], value: Any) -> No
             current = current.setdefault(component, [] if isinstance(path[index + 1], int) else {})
 
 
+def _call_witness_checks(
+    descriptor: SparseRunDescriptor,
+    call: RunnableCallDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> tuple[ContractCheck, ...]:
+    """Compare scalar-bool and loop witnesses immediately after their call."""
+
+    checks: list[ContractCheck] = []
+    for witness in sorted(descriptor.control_witnesses, key=lambda item: item.order):
+        if witness.call_id != call.call_id or witness.kind not in {
+            ControlWitnessKind.SCALAR_BOOL,
+            ControlWitnessKind.LOOP_PREDICATE,
+        }:
+            continue
+        values = [
+            slot_values[slot_id] for slot_id in call.output_slot_ids if slot_id in slot_values
+        ]
+        expected = bool(_decode_literal(witness.observed_value))
+        scalar = values[0] if values else None
+        actual: bool | None = None
+        if isinstance(scalar, torch.Tensor) and scalar.numel() == 1:
+            actual = bool(scalar.item())
+        code = (
+            RunnableErrorCode.LOOP_PREDICATE_DIVERGENCE
+            if witness.kind is ControlWitnessKind.LOOP_PREDICATE
+            else RunnableErrorCode.SCALAR_BOOL_DIVERGENCE
+        )
+        checks.append(
+            _contract_check(
+                f"control_witness:{witness.witness_id}",
+                actual is not None and actual == expected,
+                code,
+                f"Control witness {witness.witness_id!r} disagreed with the recorded path.",
+                affected_op_labels=(witness.site_label,),
+                details=(
+                    ("witness_id", witness.witness_id),
+                    ("expected", repr(expected)),
+                    ("actual", repr(actual)),
+                    ("order", str(witness.order)),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
+def _post_execution_contract_checks(
+    descriptor: SparseRunDescriptor,
+    *,
+    inputs: Any,
+    output: Any,
+    call_outputs: Mapping[str, Any],
+    slot_values: Mapping[str, torch.Tensor],
+    fork: Any,
+) -> tuple[ContractCheck, ...]:
+    """Validate final slot production, arm identity, and structure witnesses."""
+
+    checks: list[ContractCheck] = []
+    for call in descriptor.calls:
+        missing = tuple(slot_id for slot_id in call.output_slot_ids if slot_id not in slot_values)
+        checks.append(
+            _contract_check(
+                f"call_slot_production:{call.call_id}",
+                not missing,
+                RunnableErrorCode.SLOT_PRODUCTION_MISMATCH,
+                f"Call {call.call_id!r} did not produce every recorded output slot.",
+                affected_op_labels=call.op_labels,
+                details=(("missing_slot_ids", repr(missing)),),
+            )
+        )
+    for witness in sorted(descriptor.control_witnesses, key=lambda item: item.order):
+        if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
+            checks.append(_conditional_arm_check(witness, fork))
+        elif witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            checks.append(
+                _structure_witness_check(
+                    witness,
+                    descriptor,
+                    inputs=inputs,
+                    output=output,
+                    call_outputs=call_outputs,
+                )
+            )
+        elif (
+            witness.kind
+            in {
+                ControlWitnessKind.SCALAR_BOOL,
+                ControlWitnessKind.LOOP_PREDICATE,
+            }
+            and witness.call_id is None
+        ):
+            checks.append(
+                _contract_check(
+                    f"control_witness:{witness.witness_id}",
+                    False,
+                    RunnableErrorCode.SLOT_PRODUCTION_MISMATCH,
+                    f"Control witness {witness.witness_id!r} has no recomputable call.",
+                    affected_op_labels=(witness.site_label,),
+                )
+            )
+    return tuple(checks)
+
+
+def _conditional_arm_check(witness: ControlWitness, fork: Any) -> ContractCheck:
+    """Validate that one recorded conditional arm-entry edge was produced."""
+
+    edge_text = witness.site_label.rsplit(":", 1)[-1]
+    parent, separator, child = edge_text.partition("->")
+    parent_op = _op_for_label(fork, parent) if separator else None
+    child_op = _op_for_label(fork, child) if separator else None
+    passed = (
+        parent_op is not None
+        and child_op is not None
+        and isinstance(getattr(parent_op, "out", None), torch.Tensor)
+        and isinstance(getattr(child_op, "out", None), torch.Tensor)
+    )
+    affected = tuple(label for label in (parent, child) if label)
+    return _contract_check(
+        f"control_witness:{witness.witness_id}",
+        passed,
+        RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+        f"Conditional arm witness {witness.witness_id!r} did not enter its recorded edge.",
+        affected_op_labels=affected or (witness.site_label,),
+        details=(("recorded_edge", edge_text), ("order", str(witness.order))),
+    )
+
+
+def _structure_witness_check(
+    witness: ControlWitness,
+    descriptor: SparseRunDescriptor,
+    *,
+    inputs: Any,
+    output: Any,
+    call_outputs: Mapping[str, Any],
+) -> ContractCheck:
+    """Compare a model-boundary container witness with runtime structure."""
+
+    expected = _decode_literal(witness.observed_value)
+    expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
+    role = expected.get("role")
+    runtime_value = (
+        _runtime_input_for_structure_witness(descriptor, expected, inputs)
+        if role == "model_input"
+        else _raw_runtime_output(descriptor, output, call_outputs)
+    )
+    actual_paths = tuple(_container_leaf_paths(runtime_value))
+    expected_kind = str(expected.get("kind", "unknown"))
+    actual_kind = _container_kind(runtime_value)
+    kind_matches = expected_kind in {"unknown", actual_kind}
+    passed = expected_paths == actual_paths and kind_matches
+    return _contract_check(
+        f"control_witness:{witness.witness_id}",
+        passed,
+        RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
+        f"Structure witness {witness.witness_id!r} disagreed with the runtime container.",
+        affected_op_labels=(witness.site_label,),
+        details=(
+            ("role", repr(role)),
+            ("expected_kind", expected_kind),
+            ("actual_kind", actual_kind),
+            ("expected_paths", repr(expected_paths)),
+            ("actual_paths", repr(actual_paths)),
+        ),
+    )
+
+
+def _runtime_input_for_structure_witness(
+    descriptor: SparseRunDescriptor,
+    expected: Mapping[str, Any],
+    inputs: Any,
+) -> Any:
+    """Select the runtime input site named by a container structure witness."""
+
+    record_id = expected.get("record_id")
+    bindings = [
+        slot.input_binding
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.MODEL_INPUT
+        and slot.input_binding is not None
+        and slot.input_binding.container_record_id == record_id
+    ]
+    positions = {binding.model_site_position for binding in bindings}
+    if len(positions) == 1:
+        return _input_site_value(inputs, next(iter(positions)), positions)
+    return inputs
+
+
+def _raw_runtime_output(
+    descriptor: SparseRunDescriptor,
+    reconstructed_output: Any,
+    call_outputs: Mapping[str, Any],
+) -> Any:
+    """Return the raw final call container when one call owns every model output."""
+
+    output_sources = {
+        slot.producer_slot_id or slot.version_of
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.OUTPUT
+    }
+    owner_ids = {
+        call.call_id
+        for call in descriptor.calls
+        if output_sources and output_sources.issubset(set(call.output_slot_ids))
+    }
+    if len(owner_ids) == 1:
+        return call_outputs.get(next(iter(owner_ids)), reconstructed_output)
+    return reconstructed_output
+
+
+def _tensor_leaf_paths(
+    value: Any, path: tuple[str | int, ...] = ()
+) -> tuple[tuple[str | int, ...], ...]:
+    """Return ordered tensor-leaf paths for a runtime container."""
+
+    if isinstance(value, torch.Tensor):
+        return (path,)
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        paths: list[tuple[str | int, ...]] = []
+        for name in value._fields:
+            paths.extend(_tensor_leaf_paths(getattr(value, name), (*path, str(name))))
+        return tuple(paths)
+    if isinstance(value, Mapping):
+        paths = []
+        for key, child in value.items():
+            if isinstance(key, (str, int)):
+                paths.extend(_tensor_leaf_paths(child, (*path, key)))
+        return tuple(paths)
+    if isinstance(value, (list, tuple)):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(_tensor_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    return ()
+
+
+def _container_leaf_paths(
+    value: Any,
+    path: tuple[str | int, ...] = (),
+) -> tuple[tuple[str | int, ...], ...]:
+    """Return ordered paths for every leaf in a runtime boundary container."""
+
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        paths: list[tuple[str | int, ...]] = []
+        for name in value._fields:
+            paths.extend(_container_leaf_paths(getattr(value, name), (*path, str(name))))
+        return tuple(paths)
+    if isinstance(value, Mapping):
+        paths = []
+        for key, child in value.items():
+            if isinstance(key, (str, int)):
+                paths.extend(_container_leaf_paths(child, (*path, key)))
+        return tuple(paths)
+    if isinstance(value, (list, tuple)):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(_container_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    return (path,)
+
+
+def _container_kind(value: Any) -> str:
+    """Return the sparse witness vocabulary name for a runtime container."""
+
+    if isinstance(value, torch.Tensor):
+        return "tensor"
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        return "namedtuple"
+    if isinstance(value, tuple):
+        return "tuple"
+    if isinstance(value, list):
+        return "list"
+    if isinstance(value, Mapping):
+        return "dict"
+    return type(value).__name__
+
+
 def _path_faithfulness(
     descriptor: SparseRunDescriptor,
-    slot_values: Mapping[str, torch.Tensor],
     checks: Sequence[ContractCheck],
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
-    """Classify witness and contract agreement without Stage-6 enforcement."""
+    """Classify exact three-state path faithfulness after all honesty checks."""
 
     failed = next((check for check in checks if not check.passed), None)
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
-    call_slots = {call.call_id: call.output_slot_ids for call in descriptor.calls}
-    for witness in sorted(descriptor.control_witnesses, key=lambda item: item.order):
-        if (
-            witness.kind
-            not in {
-                ControlWitnessKind.SCALAR_BOOL,
-                ControlWitnessKind.LOOP_PREDICATE,
-            }
-            or witness.call_id is None
-        ):
-            continue
-        expected = _decode_literal(witness.observed_value)
-        actual_values = [
-            slot_values[slot_id]
-            for slot_id in call_slots.get(witness.call_id, ())
-            if slot_id in slot_values
-        ]
-        if actual_values and bool(actual_values[0].item()) != bool(expected):
-            diagnostic = RunnableDiagnostic(
-                code=(
-                    RunnableErrorCode.LOOP_PREDICATE_DIVERGENCE
-                    if witness.kind is ControlWitnessKind.LOOP_PREDICATE
-                    else RunnableErrorCode.SCALAR_BOOL_DIVERGENCE
-                ),
-                message=f"Control witness {witness.witness_id!r} disagreed with the recipe.",
-                registry_id=None,
-                affected_op_labels=(witness.site_label,),
-                recorded_runtime=descriptor.compatibility.backend_version,
-                current_runtime=str(torch.__version__),
-                detection_stage="run_control_witness",
-                resolver_provenance=None,
-                analysis_load_available=True,
-                details=(
-                    ("expected", repr(expected)),
-                    ("actual", repr(bool(actual_values[0].item()))),
-                ),
-            )
-            return PathFaithfulness.DIVERGED, diagnostic
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
         return PathFaithfulness.UNVERIFIABLE, None
     return PathFaithfulness.VERIFIED, None
@@ -606,8 +1258,86 @@ def _run_report(
         contract_checks=contract_checks,
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,
-        numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
-        poisoned=False,
+        numeric_attestation=NumericAttestationStatus.NOT_APPLICABLE,
+        poisoned=path_faithfulness is not PathFaithfulness.VERIFIED,
+    )
+
+
+def _contract_check(
+    name: str,
+    passed: bool,
+    code: RunnableErrorCode,
+    message: str,
+    *,
+    affected_op_labels: tuple[str, ...] = (),
+    details: tuple[tuple[str, str], ...] = (),
+) -> ContractCheck:
+    """Build one honesty check with a diagnostic only on contradiction."""
+
+    diagnostic = None
+    if not passed:
+        diagnostic = RunnableDiagnostic(
+            code=code,
+            message=message,
+            registry_id=None,
+            affected_op_labels=affected_op_labels,
+            recorded_runtime=None,
+            current_runtime=str(torch.__version__),
+            detection_stage="run_honesty_contract",
+            resolver_provenance=None,
+            analysis_load_available=True,
+            details=details,
+        )
+    return ContractCheck(name=name, passed=passed, diagnostic=diagnostic)
+
+
+def _raise_first_divergence(
+    checks: Sequence[ContractCheck],
+    policy: DivergencePolicy,
+    *,
+    fork: Any | None,
+) -> None:
+    """Raise and discard transactional state at the first observed contradiction."""
+
+    failed = next((check for check in checks if not check.passed), None)
+    if failed is None or policy is DivergencePolicy.RETURN_DIVERGED:
+        return
+    if fork is not None:
+        _state._unregister_log(fork)
+    diagnostic = failed.diagnostic
+    raise PathDivergenceError(
+        diagnostic.message if diagnostic is not None else "Sparse run path diverged.",
+        code=(
+            diagnostic.code.value
+            if diagnostic is not None
+            else RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
+        ),
+        path_faithfulness=PathFaithfulness.DIVERGED,
+        first_mismatch=diagnostic,
+        contract_check=failed,
+    )
+
+
+def _raise_monotonic_divergence(
+    fork: Any,
+    status: PathFaithfulness,
+    mismatch: RunnableDiagnostic | None,
+    policy: DivergencePolicy,
+) -> None:
+    """Enforce strict policy for an inherited monotonic divergence mark."""
+
+    if status is not PathFaithfulness.DIVERGED or policy is DivergencePolicy.RETURN_DIVERGED:
+        return
+    _state._unregister_log(fork)
+    raise PathDivergenceError(
+        "Sparse run Trace retains a prior path divergence and cannot become faithful.",
+        code=(
+            mismatch.code.value
+            if mismatch is not None
+            else RunnableErrorCode.POISONED_RUN_REFUSED.value
+        ),
+        path_faithfulness=status,
+        first_mismatch=mismatch,
     )
 
 

@@ -145,6 +145,23 @@ def _register_log(log: "Trace") -> None:
     _log_registry.add(log)
 
 
+def _unregister_log(log: "Trace") -> None:
+    """Remove an unexposed transactional Trace from the live registry.
+
+    Parameters
+    ----------
+    log:
+        Transactional model log that must no longer be discoverable.
+
+    Returns
+    -------
+    None
+        The weak registry is updated in place.
+    """
+
+    _log_registry.discard(log)
+
+
 def list_logs() -> tuple["Trace", ...]:
     """Return a snapshot of currently live ``Trace`` objects.
 

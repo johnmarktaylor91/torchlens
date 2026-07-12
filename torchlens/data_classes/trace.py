@@ -54,7 +54,12 @@ from torch import nn
 if TYPE_CHECKING:
     from ..debug._audit import TraceAudit
     from .._io.streaming import BundleStreamWriter
-    from ..runnable import ReadinessReport, SparseRunDescriptor
+    from ..runnable import (
+        PathFaithfulness,
+        ReadinessReport,
+        RunnableDiagnostic,
+        SparseRunDescriptor,
+    )
     from .func_call_location import FuncCallLocation
 
 from .. import _state
@@ -974,6 +979,9 @@ class Trace(
     _runnable_readiness: "ReadinessReport | None"
     _runnable_staged_user_state: Mapping[str, torch.Tensor] | None
     _runnable_embedded_state: Mapping[str, torch.Tensor] | None
+    _runnable_path_faithfulness: "PathFaithfulness | None"
+    _runnable_first_mismatch: "RunnableDiagnostic | None"
+    _runnable_poisoned: bool | None
     backward_root_grad_fn_object_ids: list[int]
     backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
@@ -1017,6 +1025,9 @@ class Trace(
         "_runnable_readiness": FieldPolicy.DROP,
         "_runnable_staged_user_state": FieldPolicy.DROP,
         "_runnable_embedded_state": FieldPolicy.DROP,
+        "_runnable_path_faithfulness": FieldPolicy.DROP,
+        "_runnable_first_mismatch": FieldPolicy.DROP,
+        "_runnable_poisoned": FieldPolicy.DROP,
         "detached_patch_policy": FieldPolicy.DROP,
         "detached_patch_epoch": FieldPolicy.DROP,
         "escape_detector_mode": FieldPolicy.DROP,

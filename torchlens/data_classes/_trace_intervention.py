@@ -100,7 +100,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         from ..intervention.save import save_intervention
+        from ..runnable import refuse_poisoned_trace
 
+        refuse_poisoned_trace(self, "intervention export")
         save_intervention(
             self,
             path,

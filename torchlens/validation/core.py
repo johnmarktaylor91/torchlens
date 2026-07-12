@@ -534,6 +534,9 @@ def validate_saved_outs(
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
+    from ..runnable import refuse_poisoned_trace
+
+    refuse_poisoned_trace(self, "validation")
     _raise_if_portable_bundle_log(self)
 
     # Diagnostics side-channel: clear any stale failure from a prior run so a

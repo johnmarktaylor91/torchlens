@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,21 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._runnable_state import prepare_runnable_state
-from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.errors import (
+    PathDivergenceError,
+    PoisonedRunError,
+    RunCapabilityUnavailableError,
+)
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunProvider, RunResult, StateSource
+from torchlens.runnable import (
+    DivergencePolicy,
+    NumericAttestationStatus,
+    PathFaithfulness,
+    RunProvider,
+    RunResult,
+    StateSource,
+    WitnessCompleteness,
+)
 
 
 class RunnableExecutionModel(nn.Module):
@@ -31,6 +44,19 @@ class RunnableExecutionModel(nn.Module):
         """Apply the recorded static path."""
 
         return torch.relu(self.linear(value)) * self.scale
+
+
+class HonestyControlModel(nn.Module):
+    """Same-shape model with observable loop and conditional witnesses."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Execute one recorded straight-line control-flow schedule."""
+
+        while value.sum() < 0:
+            value = value + 1
+        if value.sum() > 0:
+            value = value * 2
+        return value
 
 
 @pytest.fixture(scope="module")
@@ -55,6 +81,24 @@ def runnable_execution_artifact(
     return path, model, trace
 
 
+@pytest.fixture(scope="module")
+def honesty_artifact(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build a sparse artifact carrying complete control witnesses."""
+
+    trace = tl.trace(
+        HonestyControlModel(),
+        torch.ones(2),
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path_factory.mktemp("runnable-honesty") / "control.tlspec"
+    trace.save(path, level="runnable")
+    return path
+
+
 @pytest.mark.smoke
 def test_loaded_sparse_run_with_user_state_matches_live_values_and_is_transactional(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
@@ -76,6 +120,8 @@ def test_loaded_sparse_run_with_user_state_matches_live_values_and_is_transactio
     assert result.report.readiness.provider is RunProvider.LOADED_SPARSE
     assert result.report.state_source is StateSource.USER_STATE_DICT
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+    assert not result.report.poisoned
     assert result.report.contract_checks
     assert all(check.passed for check in result.report.contract_checks)
 
@@ -174,6 +220,117 @@ def test_analysis_only_loaded_trace_raises_typed_capability_error(tmp_path: Path
 
     assert captured.value.fields["code"] == "run_capability_unavailable"
     assert captured.value.fields["readiness"] is loaded.readiness
+
+
+@pytest.mark.smoke
+def test_witness_divergence_raises_and_rolls_back_by_default(honesty_artifact: Path) -> None:
+    """Stop at the first flipped witness without exposing transactional updates."""
+
+    loaded = tl.load(honesty_artifact)
+    source_outs = _clone_outs(loaded)
+
+    with pytest.raises(PathDivergenceError) as captured:
+        loaded.run(inputs=-torch.ones(2), seed=19)
+
+    mismatch = captured.value.fields["first_mismatch"]
+    assert mismatch.code.value == "loop_predicate_divergence"
+    assert mismatch.affected_op_labels
+    _assert_outs_equal(loaded, source_outs)
+    assert not bool(loaded.__dict__.get("_runnable_poisoned", False))
+
+
+def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
+    honesty_artifact: Path,
+) -> None:
+    """Finish an executable mismatch only under the sole explicit poison opt-in."""
+
+    loaded = tl.load(honesty_artifact)
+    source_outs = _clone_outs(loaded)
+    result = loaded.run(
+        inputs=torch.ones(3),
+        seed=23,
+        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+    )
+
+    assert result.output.shape == (3,)
+    assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
+    assert result.report.poisoned
+    assert result.report.first_mismatch is not None
+    assert result.report.first_mismatch.code.value == "input_shape_mismatch"
+    assert result.trace.__dict__["_runnable_poisoned"] is True
+    assert result.trace.__dict__["_runnable_path_faithfulness"] is PathFaithfulness.DIVERGED
+    _assert_outs_equal(loaded, source_outs)
+
+
+def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
+    honesty_artifact: Path,
+    tmp_path: Path,
+) -> None:
+    """Refuse every frozen downstream surface that assumes path identity."""
+
+    poisoned = (
+        tl.load(honesty_artifact)
+        .run(
+            inputs=torch.zeros(2),
+            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        )
+        .trace
+    )
+
+    with pytest.raises(PoisonedRunError):
+        poisoned.validate_forward_pass([])
+    with pytest.raises(PoisonedRunError):
+        poisoned.save(tmp_path / "poisoned.tlspec", level="runnable")
+    with pytest.raises(PoisonedRunError):
+        poisoned.to_pandas()
+    with pytest.raises(PoisonedRunError):
+        tl.debug.compare(poisoned, poisoned)
+    with pytest.raises(PoisonedRunError):
+        poisoned.push_from(poisoned.layer_list[0])
+    with pytest.raises(PoisonedRunError):
+        poisoned.save_intervention(tmp_path / "poisoned-intervention.tlspec")
+
+
+def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
+    honesty_artifact: Path,
+) -> None:
+    """Never promote absence of an observed mismatch to verified without coverage."""
+
+    loaded = tl.load(honesty_artifact)
+    descriptor = loaded.__dict__["_runnable_descriptor"]
+    loaded.__dict__["_runnable_descriptor"] = replace(
+        descriptor,
+        witness_completeness=WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE,
+    )
+
+    result = loaded.run(inputs=torch.ones(2), seed=29)
+
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.first_mismatch is None
+    assert result.report.poisoned
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+    assert result.trace.__dict__["_runnable_poisoned"] is True
+
+
+def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) -> None:
+    """Retain divergence across a later matching run instead of rehabilitating the Trace."""
+
+    first = tl.load(honesty_artifact).run(
+        inputs=torch.zeros(2),
+        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+    )
+    first_mismatch = first.report.first_mismatch
+
+    second = first.trace.run(
+        inputs=torch.ones(2),
+        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+    )
+
+    assert second.report.path_faithfulness is PathFaithfulness.DIVERGED
+    assert second.report.first_mismatch == first_mismatch
+    assert second.report.poisoned
+    with pytest.raises(PathDivergenceError):
+        first.trace.run(inputs=torch.ones(2))
 
 
 def _clone_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
