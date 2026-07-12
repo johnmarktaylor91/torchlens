@@ -22,13 +22,13 @@ def softmax(context: ReceptiveFieldRuleContext) -> _RuleResult:
 
 @register_rf_rule("scaled_dot_product_attention")
 def scaled_dot_product_attention(context: ReceptiveFieldRuleContext) -> _RuleResult:
-    """Globalize only the sequence axis without coupling batches or heads."""
+    """Globalize key/value sequence and feature axes without coupling batches or heads."""
 
     mask = context.arg("attn_mask", None)
     causal = context.arg("is_causal", False)
     masked = mask is not None or causal is True
     return context.full(
-        axes=(-2,),
+        axes=(-2, -1),
         exact=False,
         note=(
             "attention sequence dependence uses a containing mask-aware envelope"

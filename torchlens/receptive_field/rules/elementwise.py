@@ -111,6 +111,28 @@ def reduction(context: ReceptiveFieldRuleContext) -> _RuleResult:
 
 @register_rf_rule("embedding")
 def embedding(context: ReceptiveFieldRuleContext) -> _RuleResult:
-    """Pass index-tensor coordinates through an embedding lookup exactly."""
+    """Map every index-tensor axis to the matching embedding output axis exactly."""
 
-    return context.passthrough(note="embedding preserves the coordinates of its index tensor")
+    if not context.in_shapes:
+        return context.unknown("embedding is missing its index-tensor shape")
+    input_rank = len(context.in_shapes[0])
+    if len(context.out_shape) != input_rank + 1:
+        return context.unknown("embedding output rank does not append one feature axis")
+    return context.axis_map(
+        {axis: axis for axis in range(input_rank)},
+        note="embedding gathers one feature vector at each index-tensor position",
+    )
+
+
+@register_rf_rule("embedding_bag")
+def embedding_bag(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """Use a containing whole-index bound for bag-dependent embedding gathers."""
+
+    if not context.in_shapes:
+        return context.unknown("embedding_bag is missing its index-tensor shape")
+    input_rank = len(context.in_shapes[0])
+    return _RuleResult(
+        "full",
+        {"axes": tuple(range(input_rank)), "exact": False, "axis_alignment": "trailing"},
+        "embedding_bag uses a containing bound over captured index positions",
+    )

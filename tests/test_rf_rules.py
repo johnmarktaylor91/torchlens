@@ -138,7 +138,7 @@ def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> Non
 
 
 def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
-    """Bound attention on sequence only, preserving pointwise batch and head axes."""
+    """Bound attention on sequence and feature axes, preserving batch and head locality."""
 
     class Attention(nn.Module):
         """Small scaled-dot-product attention fixture."""
@@ -167,7 +167,7 @@ def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
             "pointwise",
             "pointwise",
             "full",
-            "pointwise",
+            "full",
         )
         assert descriptor.batch_coupled is False
 

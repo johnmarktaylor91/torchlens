@@ -354,14 +354,14 @@ def _map_to_parent(
     if result.kind == "window_edges":
         return _map_window_edges(op, parent, output_sets, result)
     if result.kind == "full":
-        mapped = list(_map_passthrough(op, parent, output_sets))
+        mapped = list(_map_passthrough(op, parent, output_sets, result))
         for axis in _select_full_axes(result.values.get("axes"), parent, op):
             mapped[axis] = _IndexSet.interval(0, int(parent.shape[axis]) - 1)
         return tuple(mapped), bool(result.values.get("exact", True))
     if result.kind == "axis_map":
         return _map_axis_mapping(parent, output_sets, result), True
     if result.kind == "passthrough":
-        return _map_passthrough(op, parent, output_sets), True
+        return _map_passthrough(op, parent, output_sets, result), True
     return _map_composed_envelope(op, parent, output_sets), False
 
 
@@ -401,6 +401,14 @@ def _map_window(
             callback_exact = True
         parent_sets[parent_start + local_axis] = mapped
         exact = exact and callback_exact
+    channel_dependency = str(result.values.get("channel_dependency", "full_exact"))
+    channel_axis = parent_start - 1
+    if channel_axis >= 0 and channel_dependency != "pointwise":
+        channel_exact = channel_dependency == "full_exact"
+        parent_sets[channel_axis] = _IndexSet.interval(
+            0, int(parent.shape[channel_axis]) - 1, exact=channel_exact
+        )
+        exact = exact and channel_exact
     return tuple(parent_sets), exact
 
 
@@ -416,12 +424,31 @@ def _standard_window_index_set(
     return _IndexSet.from_values(values, exact=output_set.exact)
 
 
-def _map_passthrough(op: Op, parent: Op, output_sets: _AxisSets) -> _AxisSets:
-    """Map identity/broadcast coordinates across right-aligned tensor ranks."""
-    offset = len(op.shape) - len(parent.shape)
+def _map_passthrough(
+    op: Op,
+    parent: Op,
+    output_sets: _AxisSets,
+    result_spec: _RuleResult | None = None,
+) -> _AxisSets:
+    """Map identity, reduction, broadcast, and concatenation coordinates to one parent."""
+
+    parent_to_child: Mapping[int, int] | None = None
+    if result_spec is not None:
+        surviving = result_spec.values.get("surviving_parent_axes")
+        if isinstance(surviving, Sequence) and not isinstance(surviving, (str, bytes)):
+            surviving_axes = tuple(int(axis) for axis in surviving)
+            if len(op.shape) == len(surviving_axes):
+                parent_to_child = {
+                    parent_axis: child_axis for child_axis, parent_axis in enumerate(surviving_axes)
+                }
+        if parent_to_child is None:
+            parent_to_child = _engine._passthrough_axis_map(op, parent, result_spec)
+    if parent_to_child is None:
+        offset = len(op.shape) - len(parent.shape)
+        parent_to_child = {axis: axis + offset for axis in range(len(parent.shape))}
     result: list[_IndexSet | None] = [None] * len(parent.shape)
     for parent_axis in range(len(parent.shape)):
-        output_axis = parent_axis + offset
+        output_axis = parent_to_child.get(parent_axis, -1)
         if output_axis < 0 or output_axis >= len(output_sets):
             continue
         output_set = output_sets[output_axis]
@@ -431,6 +458,35 @@ def _map_passthrough(op: Op, parent: Op, output_sets: _AxisSets) -> _AxisSets:
             result[parent_axis] = _IndexSet.singleton(0)
         else:
             result[parent_axis] = output_set
+    if result_spec is None:
+        return tuple(result)
+    concat_axis = result_spec.values.get("concatenate_axis")
+    if not isinstance(concat_axis, int):
+        return tuple(result)
+    offsets = _engine._concatenation_offsets(op, parent, result_spec)
+    selected = output_sets[concat_axis]
+    if selected is None:
+        return tuple(result)
+    if bool(result_spec.values.get("stack", False)):
+        routed = any(index in offsets for index in selected.values())
+        if not routed:
+            empty_axis = next((axis for axis, value in enumerate(result) if value is not None), 0)
+            result[empty_axis] = _IndexSet.empty()
+        return tuple(result)
+    routed_parent_axis = next(
+        (axis for axis, child_axis in parent_to_child.items() if child_axis == concat_axis),
+        None,
+    )
+    if routed_parent_axis is None:
+        return tuple(result)
+    extent = int(parent.shape[routed_parent_axis])
+    values = (
+        child_index - offset
+        for offset in offsets
+        for child_index in selected.values()
+        if offset <= child_index < offset + extent
+    )
+    result[routed_parent_axis] = _IndexSet.from_values(values, exact=selected.exact)
     return tuple(result)
 
 

@@ -16,11 +16,6 @@ def convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
     groups = context.cfg("groups", 1)
     if not isinstance(groups, int) or groups <= 0:
         return context.unknown("convolution has malformed groups")
-    if groups > 1:
-        return context.full(
-            exact=False,
-            note="grouped convolution uses a containing whole-input envelope",
-        )
     raw_kernel = context.cfg("kernel_size")
     rank = spatial_rank(context, raw_kernel)
     if raw_kernel is None or rank is None:
@@ -31,11 +26,30 @@ def convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
     dilation = int_config(context, "dilation", rank, default=1)
     if kernel is None or stride is None or padding is None or dilation is None:
         return context.unknown("convolution has malformed spatial parameters")
-    return context.window(
-        kernel=kernel,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
+    output_channels = int(context.out_shape[-rank - 1])
+    if groups == 1:
+        channel_dependency = "full_exact"
+        exact = True
+        note = None
+    elif context.in_shapes and groups == int(context.in_shapes[0][-rank - 1]) == output_channels:
+        channel_dependency = "pointwise"
+        exact = True
+        note = "depthwise convolution preserves exact per-channel spatial windows"
+    else:
+        channel_dependency = "full_upper"
+        exact = False
+        note = "grouped convolution keeps exact spatial windows with a containing channel bound"
+    return _RuleResult(
+        "window",
+        {
+            "kernel": kernel,
+            "stride": stride,
+            "padding": padding,
+            "dilation": dilation,
+            "exact": exact,
+            "channel_dependency": channel_dependency,
+        },
+        note,
     )
 
 

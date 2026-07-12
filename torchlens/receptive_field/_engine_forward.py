@@ -377,10 +377,13 @@ def _transpose_passthrough(
                 aligned=len(concat_offsets) == 1,
                 sparse=len(concat_offsets) > 1,
             )
+        composed = _compose(geometry, local)
+        if isinstance(concat_axis, int) and isinstance(composed, _Mapped):
+            composed = replace(composed, exact=False)
         axes.append(
             replace(
                 axis,
-                geometry=_compose(geometry, local),
+                geometry=composed,
                 output_axis=parent_axis,
                 kind=axis.kind if axis.kind != "unknown" else "pointwise",
                 provenance=child.label if axis.kind == "unknown" else axis.provenance,
@@ -416,7 +419,15 @@ def _transpose_window(
             kernels, strides, paddings, dilations, strict=True
         )
     )
-    return _transpose_window_maps(child, parent, state, local_maps, rule_name, notes)
+    return _transpose_window_maps(
+        child,
+        parent,
+        state,
+        local_maps,
+        rule_name,
+        notes,
+        channel_dependency=str(result.values.get("channel_dependency", "full_exact")),
+    )
 
 
 def _transpose_window_edges(
@@ -483,6 +494,7 @@ def _transpose_window_maps(
     notes: tuple[str, ...],
     *,
     preserve_non_window_axes: bool = False,
+    channel_dependency: str = "full_exact",
 ) -> _InputState:
     """Transpose local window maps and mirror semantic axis inference."""
 
@@ -527,11 +539,12 @@ def _transpose_window_maps(
             child_axis == child_channel_axis
             and parent_channel_axis >= 0
             and not preserve_non_window_axes
+            and channel_dependency != "pointwise"
         ):
             axes.append(
                 replace(
                     axis,
-                    geometry=_Full(exact=True),
+                    geometry=_Full(exact=channel_dependency == "full_exact"),
                     output_axis=None,
                     kind="full",
                     provenance=child.label,

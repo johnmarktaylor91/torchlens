@@ -7,6 +7,7 @@ import importlib
 
 import pytest
 import torch
+import torch.nn.functional as functional
 from torch import nn
 
 import torchlens as tl
@@ -74,8 +75,8 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     )
 
 
-def test_depthwise_convolution_uses_containing_upper_bound() -> None:
-    """Never label a channel-global depthwise descriptor exact."""
+def test_depthwise_convolution_has_tight_exact_channel_and_spatial_geometry() -> None:
+    """Keep depthwise channels pointwise and spatial support exactly windowed."""
 
     model = nn.Conv2d(4, 4, 3, padding=1, groups=4, bias=False)
     with torch.no_grad():
@@ -84,8 +85,13 @@ def test_depthwise_convolution_uses_containing_upper_bound() -> None:
     target = _op(trace, "conv2d")
     descriptor = target.receptive_field._descriptor()
 
-    assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
-    assert all(axis.kind == "full" and not axis.exact for axis in descriptor.axes)
+    assert descriptor.status is ReceptiveFieldStatus.EXACT
+    assert tuple(axis.kind for axis in descriptor.axes) == (
+        "pointwise",
+        "pointwise",
+        "windowed",
+        "windowed",
+    )
     result = cross_validate(
         trace,
         ops=[target],
@@ -93,6 +99,139 @@ def test_depthwise_convolution_uses_containing_upper_bound() -> None:
         inputs=_input_op(trace),
     )[0]
     assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
+def test_grouped_convolution_keeps_spatial_windows_with_channel_upper_bound() -> None:
+    """Limit grouped-convolution degradation to a containing channel-axis bound."""
+
+    model = nn.Conv2d(4, 4, 3, padding=1, groups=2, bias=False)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    trace = _trace(model, torch.ones(1, 4, 5, 5, requires_grad=True))
+    target = _op(trace, "conv2d")
+    descriptor = target.receptive_field._descriptor()
+
+    assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
+    assert tuple(axis.kind for axis in descriptor.axes) == (
+        "pointwise",
+        "full",
+        "windowed",
+        "windowed",
+    )
+    assert descriptor.axes[1].exact is False
+    assert descriptor.axes[2].size == 3
+    result = target.receptive_field.check((0, 1, 2, 2))
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
+class _DistinctAttention(nn.Module):
+    """Scaled dot-product attention with separately traceable Q, K, and V inputs."""
+
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
+        """Apply unmasked scaled dot-product attention."""
+
+        return functional.scaled_dot_product_attention(query, key, value)
+
+
+def test_sdpa_feature_axis_upper_bound_contains_query_gradients() -> None:
+    """Include every query feature contributing through attention-score dot products."""
+
+    inputs = tuple(torch.randn(1, 2, 4, 3, requires_grad=True) for _ in range(3))
+    trace = tl.trace(
+        _DistinctAttention(),
+        inputs,
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save_mode="reference",
+    )
+    target = _op(trace, "scaled_dot_product_attention")
+    descriptor = target.receptive_field._descriptor(trace.input_ops[0])
+
+    assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
+    assert tuple(axis.kind for axis in descriptor.axes) == (
+        "pointwise",
+        "pointwise",
+        "full",
+        "full",
+    )
+    results = cross_validate(
+        trace,
+        ops=[target],
+        units=(0, 0, 1, 0),
+        inputs=list(trace.input_ops),
+    )
+    assert len(results) == 3
+    assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
+
+
+class _TrailingReduction(nn.Module):
+    """Convolution followed by a reduction after one surviving spatial axis."""
+
+    def __init__(self) -> None:
+        """Create a positive convolution for exact empirical support."""
+
+        super().__init__()
+        self.convolution = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        with torch.no_grad():
+            self.convolution.weight.fill_(1.0)
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Reduce the final spatial dimension after convolution."""
+
+        return self.convolution(value).mean(dim=-1)
+
+
+class _PaddedConvolution(nn.Module):
+    """Positive convolution with an explicitly empty constant-pad corner."""
+
+    def __init__(self) -> None:
+        """Create a positive convolution for exact empirical support."""
+
+        super().__init__()
+        self.convolution = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        with torch.no_grad():
+            self.convolution.weight.fill_(1.0)
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Pad the convolution result by one cell on every spatial side."""
+
+        return functional.pad(self.convolution(value), (1, 1, 1, 1))
+
+
+def test_trailing_reduction_and_pad_corner_validate_without_raising() -> None:
+    """Return bounded PASS results for reduced-window and empty-pad geometries."""
+
+    reduction_results = tl.validate(
+        _TrailingReduction(), torch.ones(1, 1, 8, 8), scope="receptive_field"
+    )
+    assert reduction_results
+    assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in reduction_results)
+
+    trace = _trace(_PaddedConvolution(), torch.ones(1, 1, 5, 5, requires_grad=True))
+    target = _op(trace, "pad")
+    box = target.receptive_field.at((0, 0))
+    assert box.empty
+    result = target.receptive_field.check((0, 0, 0, 0))
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+    padded_results = tl.validate(
+        _PaddedConvolution(), torch.ones(1, 1, 5, 5), scope="receptive_field"
+    )
+    assert padded_results
+    assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in padded_results)
+
+
+def test_embedding_resolves_exact_index_position_geometry() -> None:
+    """Resolve embedding rank expansion without unknown passthrough taint."""
+
+    trace = tl.trace(nn.Embedding(10, 4), torch.tensor([[1, 2, 3], [4, 5, 6]]))
+    target = _op(trace, "embedding")
+    descriptor = target.receptive_field._descriptor()
+
+    assert descriptor.status is ReceptiveFieldStatus.EXACT
+    assert tuple((axis.kind, axis.output_axis) for axis in descriptor.axes) == (
+        ("pointwise", 0),
+        ("pointwise", 1),
+    )
 
 
 class _Reduction(nn.Module):

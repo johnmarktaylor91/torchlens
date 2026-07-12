@@ -205,6 +205,8 @@ def _allowed_bounds(
     """
 
     assert descriptor.axes is not None
+    if box.empty:
+        return tuple((0, 0) for _ in descriptor.axes)
     bounds: list[tuple[int, int]] = []
     for axis_descriptor, box_axis in zip(descriptor.axes, box.axes, strict=True):
         if box_axis.kind == "pointwise":

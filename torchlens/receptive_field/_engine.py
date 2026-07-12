@@ -455,6 +455,8 @@ def _apply_passthrough(
         else:
             local = _identity_map()
         geometry = _compose(axis.geometry, local)
+        if isinstance(concat_axis, int) and isinstance(geometry, _Mapped):
+            geometry = replace(geometry, exact=False)
         kind = axis.kind if axis.kind != "unknown" else "pointwise"
         axes.append(
             replace(
@@ -523,12 +525,13 @@ def _concatenation_offsets(op: Op, parent: Op, result: _RuleResult) -> tuple[int
     raw_axis = result.values.get("concatenate_axis")
     if not isinstance(raw_axis, int):
         return ()
+    parent_references = {parent.label, parent.layer_label, parent._layer_label_raw}
     if bool(result.values.get("stack", False)):
-        return tuple(index for index, label in enumerate(op.parents) if label == parent.label)
+        return tuple(index for index, label in enumerate(op.parents) if label in parent_references)
     starts: list[int] = []
     offset = 0
     for label, shape in zip(op.parents, op.input_shapes, strict=False):
-        if label == parent.label:
+        if label in parent_references:
             starts.append(offset)
         if shape is not None:
             offset += int(shape[raw_axis])
@@ -560,7 +563,15 @@ def _apply_window(
         )
         for kernel, stride, padding, dilation in zip(kernels, strides, paddings, dilations)
     )
-    return _compose_window_maps(op, parent, state, local_maps, rule_name, notes)
+    return _compose_window_maps(
+        op,
+        parent,
+        state,
+        local_maps,
+        rule_name,
+        notes,
+        channel_dependency=str(result.values.get("channel_dependency", "full_exact")),
+    )
 
 
 def _apply_window_edges(
@@ -622,6 +633,7 @@ def _compose_window_maps(
     notes: tuple[str, ...],
     *,
     preserve_non_window_axes: bool = False,
+    channel_dependency: str = "full_exact",
 ) -> _InputState:
     """Compose window maps and derive axis roles from their registered semantics."""
 
@@ -657,11 +669,15 @@ def _compose_window_maps(
                     provenance=op.label,
                 )
             )
-        elif parent_axis == channel_axis and not preserve_non_window_axes:
+        elif (
+            parent_axis == channel_axis
+            and not preserve_non_window_axes
+            and channel_dependency != "pointwise"
+        ):
             axes.append(
                 replace(
                     axis,
-                    geometry=_Full(exact=True),
+                    geometry=_Full(exact=channel_dependency == "full_exact"),
                     output_axis=None,
                     kind="full",
                     provenance=op.label,

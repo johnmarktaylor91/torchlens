@@ -209,7 +209,7 @@ def _map_to_child(
     if result.kind == "axis_map":
         return _map_axis_forward(parent, child, parent_sets, result), True
     if result.kind == "passthrough":
-        return _map_passthrough_forward(parent, child, parent_sets), True
+        return _map_passthrough_forward(parent, child, parent_sets, result), True
     _ = rule_name
     return _whole_child_envelope(child, parent_sets), False
 
@@ -263,6 +263,20 @@ def _map_window_forward(
             callback_exact = callback_exact and exact
         mapped[child_start + local_axis] = image
         exact = exact and callback_exact and image.exact
+    channel_dependency = str(result.values.get("channel_dependency", "full_exact"))
+    parent_channel_axis = parent_start - 1
+    child_channel_axis = child_start - 1
+    if (
+        parent_channel_axis >= 0
+        and child_channel_axis >= 0
+        and parent_sets[parent_channel_axis] is not None
+        and channel_dependency != "pointwise"
+    ):
+        channel_exact = channel_dependency == "full_exact"
+        mapped[child_channel_axis] = _IndexSet.interval(
+            0, int(child.shape[child_channel_axis]) - 1, exact=channel_exact
+        )
+        exact = exact and channel_exact
     return tuple(mapped), exact
 
 
@@ -361,21 +375,57 @@ def _index_set_size(index_set: _IndexSet) -> int:
     return sum(progression.count for progression in index_set.progressions)
 
 
-def _map_passthrough_forward(parent: Op, child: Op, parent_sets: _AxisSets) -> _AxisSets:
-    """Map identity and broadcast relations from parent axes to child axes."""
+def _map_passthrough_forward(
+    parent: Op,
+    child: Op,
+    parent_sets: _AxisSets,
+    result_spec: _RuleResult | None = None,
+) -> _AxisSets:
+    """Map identity, reduction, broadcast, and concatenation relations to a child."""
 
-    offset = len(child.shape) - len(parent.shape)
+    parent_to_child: Mapping[int, int] | None = None
+    if result_spec is not None:
+        surviving = result_spec.values.get("surviving_parent_axes")
+        if isinstance(surviving, Sequence) and not isinstance(surviving, (str, bytes)):
+            surviving_axes = tuple(int(axis) for axis in surviving)
+            if len(child.shape) == len(surviving_axes):
+                parent_to_child = {
+                    parent_axis: child_axis for child_axis, parent_axis in enumerate(surviving_axes)
+                }
+        if parent_to_child is None:
+            parent_to_child = _engine._passthrough_axis_map(child, parent, result_spec)
+    if parent_to_child is None:
+        offset = len(child.shape) - len(parent.shape)
+        parent_to_child = {axis: axis + offset for axis in range(len(parent.shape))}
     result: list[_IndexSet | None] = [None] * len(child.shape)
     for parent_axis, source_set in enumerate(parent_sets):
         if source_set is None:
             continue
-        child_axis = parent_axis + offset
+        child_axis = parent_to_child.get(parent_axis, -1)
         if child_axis < 0 or child_axis >= len(child.shape):
             continue
         if int(parent.shape[parent_axis]) == 1 and int(child.shape[child_axis]) != 1:
             result[child_axis] = _IndexSet.interval(0, int(child.shape[child_axis]) - 1)
         else:
             result[child_axis] = source_set
+    if result_spec is None:
+        return tuple(result)
+    concat_axis = result_spec.values.get("concatenate_axis")
+    if not isinstance(concat_axis, int):
+        return tuple(result)
+    source_axis = next(
+        (axis for axis, child_axis in parent_to_child.items() if child_axis == concat_axis),
+        None,
+    )
+    offsets = _engine._concatenation_offsets(child, parent, result_spec)
+    if bool(result_spec.values.get("stack", False)):
+        result[concat_axis] = _IndexSet.from_values(offsets)
+    elif source_axis is not None and parent_sets[source_axis] is not None:
+        source_set = cast(_IndexSet, parent_sets[source_axis])
+        result[concat_axis] = _IndexSet.from_values(
+            (source_index + offset for offset in offsets for source_index in source_set.values()),
+            exact=source_set.exact,
+        )
     return tuple(result)
 
 
@@ -400,11 +450,23 @@ def _map_full_forward(
 ) -> tuple[_AxisSets, bool]:
     """Transpose exact whole-parent-axis dependence to the whole child extent."""
 
-    mapped = list(_map_passthrough_forward(parent, child, parent_sets))
+    mapped = list(_map_passthrough_forward(parent, child, parent_sets, result))
     selected = _select_full_axes(result.values.get("axes"), parent, child)
-    offset = len(child.shape) - len(parent.shape)
+    surviving = result.values.get("surviving_parent_axes")
+    parent_to_child = (
+        {
+            int(parent_axis): child_axis
+            for child_axis, parent_axis in enumerate(cast(Sequence[int], surviving))
+        }
+        if isinstance(surviving, Sequence)
+        and not isinstance(surviving, (str, bytes))
+        and len(child.shape) == len(surviving)
+        else {
+            axis: axis + len(child.shape) - len(parent.shape) for axis in range(len(parent.shape))
+        }
+    )
     for parent_axis in selected:
-        child_axis = parent_axis + offset
+        child_axis = parent_to_child.get(parent_axis, -1)
         if parent_sets[parent_axis] is not None and 0 <= child_axis < len(child.shape):
             mapped[child_axis] = _IndexSet.interval(0, int(child.shape[child_axis]) - 1)
     exact = bool(result.values.get("exact", True))

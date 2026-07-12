@@ -176,11 +176,86 @@ def test_branch_merge_unions_convolution_fields(concatenate: bool, name: str) ->
     merge = _op(trace, name)
     descriptor = merge.receptive_field._descriptor()  # type: ignore[union-attr]
 
-    assert descriptor.status is ReceptiveFieldStatus.EXACT
+    expected_status = (
+        ReceptiveFieldStatus.UPPER_BOUND if concatenate else ReceptiveFieldStatus.EXACT
+    )
+    assert descriptor.status is expected_status
     assert descriptor.size == (5, 5)
     assert descriptor.batch_coupled is False
     channel = 1 if concatenate else 0
     result = merge.receptive_field.check((0, channel, 5, 5))  # type: ignore[union-attr]
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
+class _SpatialConcatenation(nn.Module):
+    """Two positive convolution branches concatenated along the height axis."""
+
+    def __init__(self, *, uneven: bool) -> None:
+        """Create equal or uneven concatenation segments.
+
+        Parameters
+        ----------
+        uneven:
+            Whether to crop the first branch to three rows.
+        """
+
+        super().__init__()
+        self.uneven = uneven
+        self.first = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        self.second = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        _fill_convolutions(self)
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Concatenate the optionally cropped first branch before the second branch."""
+
+        first = self.first(value)
+        second = self.second(value)
+        if self.uneven:
+            first = first[:, :, :3]
+        return torch.cat((first, second), dim=2)
+
+
+@pytest.mark.parametrize(
+    ("uneven", "unit", "expected_height"),
+    [
+        (True, (0, 0, 5, 4), (1, 4)),
+        (False, (0, 0, 12, 4), (3, 6)),
+    ],
+)
+def test_spatial_cat_routes_second_segment_exactly(
+    uneven: bool,
+    unit: tuple[int, int, int, int],
+    expected_height: tuple[int, int],
+) -> None:
+    """Apply segment offsets for uneven and even concatenation without crashes."""
+
+    trace = _trace(
+        _SpatialConcatenation(uneven=uneven),
+        torch.ones(1, 1, 8, 8, requires_grad=True),
+    )
+    target = _op(trace, "cat")
+    box = target.receptive_field.at(unit[-2:])  # type: ignore[union-attr]
+
+    assert target.receptive_field.status is ReceptiveFieldStatus.UPPER_BOUND  # type: ignore[union-attr]
+    assert (box.axes[2].clipped_start, box.axes[2].clipped_stop) == expected_height
+    assert box.exact
+    result = target.receptive_field.check(unit)  # type: ignore[union-attr]
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
+def test_spatial_cat_projective_offsets_route_into_target_segments() -> None:
+    """Apply the shared concatenation offsets in the projective direction."""
+
+    trace = _trace(
+        _SpatialConcatenation(uneven=True),
+        torch.ones(1, 1, 8, 8, requires_grad=True),
+    )
+    source = trace.input_ops[0]  # type: ignore[union-attr]
+    target = _op(trace, "cat")
+    box = source.projective_field.at((4, 4), target=target)
+
+    assert (box.axes[2].clipped_start, box.axes[2].clipped_stop) == (6, 9)
+    result = source.projective_field.check((0, 0, 4, 4), target=target)
     assert result.status is ReceptiveFieldValidationStatus.PASS
 
 
