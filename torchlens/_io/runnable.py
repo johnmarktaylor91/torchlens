@@ -545,7 +545,7 @@ def _build_call_arguments(
     non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
 
     for index, component in enumerate(template.args):
-        path = ("args", index)
+        path: tuple[str | int, ...] = ("args", index)
         override = None
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
