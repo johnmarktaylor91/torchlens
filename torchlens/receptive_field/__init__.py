@@ -26,6 +26,7 @@ from ._types import (
     ReceptiveFieldView,
     ReceptiveFieldViolation,
 )
+from ._rules import ReceptiveFieldRule, ReceptiveFieldRuleContext, register_rf_rule, rules
 
 
 __all__ = [
@@ -42,6 +43,8 @@ __all__ = [
     "ReceptiveFieldBoxAxis",
     "ReceptiveFieldError",
     "ReceptiveFieldProfile",
+    "ReceptiveFieldRule",
+    "ReceptiveFieldRuleContext",
     "ReceptiveFieldStatus",
     "ReceptiveFieldUnavailableError",
     "ReceptiveFieldValidation",
@@ -49,4 +52,6 @@ __all__ = [
     "ReceptiveFieldValidationStatus",
     "ReceptiveFieldView",
     "ReceptiveFieldViolation",
+    "register_rf_rule",
+    "rules",
 ]
