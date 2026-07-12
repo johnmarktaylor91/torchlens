@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
 from ._errors import (
@@ -18,6 +18,7 @@ from ._types import ReceptiveFieldDirection
 if TYPE_CHECKING:
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
+    from ._query import _IndexSet
 
 
 def resolve_graph_point(trace: Trace, handle: object) -> Op:
@@ -213,6 +214,42 @@ def require_path(
     if source.label in descendant_labels(trace, target):
         message += " A reverse path exists; swap the source and target endpoints."
     raise NoInfluencePathError(message)
+
+
+def forward_index_image(
+    source_set: _IndexSet,
+    candidates: _IndexSet,
+    backward_map: Callable[[_IndexSet], tuple[_IndexSet, bool]],
+) -> tuple[_IndexSet, bool]:
+    """Transpose an integer relation by querying its backward membership oracle.
+
+    Parameters
+    ----------
+    source_set:
+        Parent indices whose forward image is requested.
+    candidates:
+        Sound child-index envelope to test.
+    backward_map:
+        Sealed backward set callback specialized to one operation axis.
+
+    Returns
+    -------
+    tuple[_IndexSet, bool]
+        Candidate child indices whose backward image intersects ``source_set``, followed by
+        whether every oracle answer and both supplied sets were exact.
+    """
+
+    from ._query import _IndexSet
+
+    source_values = frozenset(source_set.values())
+    reached: list[int] = []
+    exact = source_set.exact and candidates.exact
+    for candidate in candidates.values():
+        backward_set, callback_exact = backward_map(_IndexSet.singleton(candidate))
+        exact = exact and callback_exact and backward_set.exact
+        if source_values.intersection(backward_set.values()):
+            reached.append(candidate)
+    return _IndexSet.from_values(reached, exact=exact), exact
 
 
 def _require_trace_owner(trace: Trace, owner: object, label: str) -> None:

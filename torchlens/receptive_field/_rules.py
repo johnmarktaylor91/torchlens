@@ -19,7 +19,14 @@ if TYPE_CHECKING:
 
 
 RuleCallback: TypeAlias = Callable[..., object]
-"""Callback optionally attached to a receptive-field rule result."""
+"""Callback optionally attached to a receptive-field rule result.
+
+``map_index_set`` is the authoritative backward relation. A ``map_index_set_forward``
+accelerator must be accompanied by an exhaustive small-case duality golden proving equality
+with its membership transpose. A rule exposing only ``unit_box`` receives an inexact transposed
+envelope in projective per-unit queries; authors needing exact forward support must provide one
+of the index-set callbacks.
+"""
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,7 @@ class _RuleResult:
     values: Mapping[str, object]
     note: str | None = None
     map_index_set: RuleCallback | None = None
+    map_index_set_forward: RuleCallback | None = None
     map_interval: RuleCallback | None = None
     unit_box: RuleCallback | None = None
 
@@ -265,7 +273,12 @@ class ReceptiveFieldRuleContext:
     ) -> _RuleResult:
         """Build one immutable opaque result specification."""
 
-        allowed_callbacks = {"map_index_set", "map_interval", "unit_box"}
+        allowed_callbacks = {
+            "map_index_set",
+            "map_index_set_forward",
+            "map_interval",
+            "unit_box",
+        }
         unknown_callbacks = set(callbacks).difference(allowed_callbacks)
         if unknown_callbacks:
             names = ", ".join(sorted(unknown_callbacks))
@@ -275,6 +288,7 @@ class ReceptiveFieldRuleContext:
             values=MappingProxyType(dict(values)),
             note=note,
             map_index_set=callbacks.get("map_index_set"),
+            map_index_set_forward=callbacks.get("map_index_set_forward"),
             map_interval=callbacks.get("map_interval"),
             unit_box=callbacks.get("unit_box"),
         )
