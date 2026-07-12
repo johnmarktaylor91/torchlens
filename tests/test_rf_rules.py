@@ -199,3 +199,24 @@ def test_roll_is_fail_closed_and_never_pointwise() -> None:
 
     assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
     assert descriptor.axes[-1].kind == "full"
+
+
+def test_pointwise_activations_pass_receptive_field_through_exactly() -> None:
+    """relu and shape-preserving activations are pointwise: the RF composes through them EXACTLY.
+
+    Regression: the elementwise rule used to mark activations whole-input, which silently degraded
+    the receptive field for every CNN with an activation between convolutions.
+    """
+
+    model = nn.Sequential(
+        nn.Conv2d(3, 8, 3, padding=1),
+        nn.ReLU(),
+        nn.Conv2d(8, 8, 3, padding=1),
+    )
+    trace = tl.trace(model, torch.randn(1, 3, 16, 16))
+    deep_conv = [op for op in trace.layer_list if "conv" in str(op.func_name).lower()][-1]
+    descriptor = deep_conv.receptive_field._descriptor()
+
+    assert descriptor.status is ReceptiveFieldStatus.EXACT
+    assert descriptor.layout.axis_kinds == ("pointwise", "full", "windowed", "windowed")
+    assert descriptor.size == (5, 5)  # two 3x3 convs; the ReLU passes the field through unchanged

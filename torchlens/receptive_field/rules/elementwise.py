@@ -22,6 +22,22 @@ from ._utils import int_tuple
     "detach",
     "to",
     "contiguous",
+    "abs",
+    "neg",
+)
+def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """Shape-preserving pointwise ops leave the receptive field unchanged (exact).
+
+    Each output element depends only on the input element at the same position, so
+    the receptive field passes through these ops untouched.
+    """
+
+    return context.passthrough(
+        note="pointwise: each output element depends only on the same input element"
+    )
+
+
+@register_rf_rule(
     "add",
     "sub",
     "mul",
@@ -29,14 +45,16 @@ from ._utils import int_tuple
     "maximum",
     "minimum",
     "pow",
-    "abs",
-    "neg",
     "where",
 )
-def elementwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
-    """Return a sound whole-input envelope pending individual family goldens."""
+def elementwise_binary(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """Binary/n-ary elementwise: parents merge at the engine level.
 
-    return context.full(exact=False, note="elementwise family awaits a focused exactness golden")
+    Broadcast-axis exactness awaits a focused family golden; a sound whole-input
+    envelope is returned meanwhile.
+    """
+
+    return context.full(exact=False, note="elementwise binary/broadcast awaits a focused golden")
 
 
 @register_rf_rule("mean", "sum", "amax", "amin", "var", "std")
