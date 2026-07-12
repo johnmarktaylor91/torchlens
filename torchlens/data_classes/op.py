@@ -68,7 +68,11 @@ from .._errors import MutatedReferenceError, TorchLensPostfuncError
 from .._trace_state import TraceState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER, RAW_LABEL_SUFFIX
-from ..intervention.types import EdgeUseRecord, LAYER_PASS_LOG_FIELD_FORK_POLICY
+from ..intervention.types import (
+    EdgeUseRecord,
+    FunctionRegistryKey,
+    LAYER_PASS_LOG_FIELD_FORK_POLICY,
+)
 from ..ir.refs import DeviceRef, DtypeRef
 from ..intervention.errors import DirectActivationWriteWarning
 from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
@@ -135,6 +139,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "transformed_grad_dtype": None,
     "transformed_gradient_memory": None,
     "func_call_id": None,
+    "func_id": None,
     "container_path": (),
     "multi_output_name": None,
     "intervention_replaced": False,
@@ -1011,6 +1016,7 @@ class Op:
         "gradient_memory": FieldPolicy.KEEP,
         "transformed_gradient_memory": FieldPolicy.KEEP,
         "func": FieldPolicy.DROP,
+        "func_id": FieldPolicy.KEEP,
         "func_call_id": FieldPolicy.KEEP,
         "func_name": FieldPolicy.KEEP,
         "func_qualname": FieldPolicy.KEEP,
@@ -1405,6 +1411,7 @@ class Op:
 
         # Function call info:
         self.func = fields_dict["func"]
+        self.func_id: FunctionRegistryKey | None = fields_dict["func_id"]
         self.func_call_id = fields_dict["func_call_id"]
         self.func_name = fields_dict["func_name"]
         self.func_qualname = fields_dict["func_qualname"]

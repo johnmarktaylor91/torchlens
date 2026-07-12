@@ -342,6 +342,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "transformed_gradient_memory",
     # Function call info
     "func",
+    "func_id",
     "func_call_id",
     "func_name",
     "func_qualname",

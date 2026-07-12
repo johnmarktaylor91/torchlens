@@ -45,6 +45,7 @@
       "transformed_grad_dtype",
       "gradient_memory",
       "transformed_gradient_memory",
+      "func_id",
       "func_call_id",
       "func_name",
       "func_qualname",
@@ -440,6 +441,7 @@
       "gradient_memory",
       "transformed_gradient_memory",
       "func",
+      "func_id",
       "func_call_id",
       "func_name",
       "func_qualname",
@@ -618,6 +620,7 @@
       "func_call_id",
       "func_config",
       "func_duration",
+      "func_id",
       "func_name",
       "func_non_tensor_args",
       "func_qualname",
@@ -1151,13 +1154,13 @@
     ]
   },
   "sha256_chunks": [
-    "85bbf51d",
-    "09d88c43",
-    "220dd57e",
-    "abd87012",
-    "779d5a52",
-    "55efadbb",
-    "31a3a8d1",
-    "a8752108"
+    "88287b16",
+    "6a3d7868",
+    "0d15a3e7",
+    "e936adfd",
+    "ecb1e964",
+    "694c0d85",
+    "3f900c9b",
+    "d49f96d4"
   ]
 }

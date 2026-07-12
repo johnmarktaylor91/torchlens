@@ -434,6 +434,7 @@ def _fields_from_event(
             "gradient_memory": 0,
             "transformed_gradient_memory": None,
             "func": function.func,
+            "func_id": function.func_id,
             "func_call_id": function.func_call_id,
             "func_name": function.func_name,
             "func_qualname": function.func_qualname,
