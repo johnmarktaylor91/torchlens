@@ -25,7 +25,9 @@ if TYPE_CHECKING:
     from ._types import ReceptiveField
 
 
-_RECAPTURE_RECIPE = "tl.trace(model, x, backward_ready=True, save=...)"
+_RECAPTURE_RECIPE = (
+    "tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True), save=...)"
+)
 
 
 @dataclass(frozen=True)

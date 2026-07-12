@@ -62,7 +62,8 @@ def test_conv_support_is_exact_and_matches_geometric_hull() -> None:
     with torch.no_grad():
         model.weight.fill_(1.0)
     inputs = torch.randn(2, 1, 7, 7, requires_grad=True)
-    trace = tl.trace(model, inputs, backward_ready=True, save_mode="reference")
+    capture = tl.options.CaptureOptions(backward_ready=True)
+    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "conv2d")
     input_op = next(op for op in trace.layer_list if op.is_input)
 
@@ -99,7 +100,8 @@ def test_effective_mask_and_indices_use_deterministic_flat_ties() -> None:
     with torch.no_grad():
         model.weight.fill_(1.0)
     inputs = torch.randn(1, 1, 5, 5, requires_grad=True)
-    trace = tl.trace(model, inputs, backward_ready=True, save_mode="reference")
+    capture = tl.options.CaptureOptions(backward_ready=True)
+    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "conv2d")
     input_op = next(op for op in trace.layer_list if op.is_input)
     result = gradient_for_unit(target, (0, 0, 1, 1), input=input_op)
@@ -136,7 +138,8 @@ def test_training_batchnorm_reports_cross_batch_influence() -> None:
         [[[[0.0, 1.0], [2.0, 4.0]]], [[[5.0, 7.0], [8.0, 11.0]]]],
         requires_grad=True,
     )
-    trace = tl.trace(model, inputs, backward_ready=True, save_mode="reference")
+    capture = tl.options.CaptureOptions(backward_ready=True)
+    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "batch_norm")
     input_op = next(op for op in trace.layer_list if op.is_input)
 
@@ -167,7 +170,8 @@ def test_reachable_but_none_gradient_raises_typed_error() -> None:
     """Reject a detached reachable path instead of reporting silent empty support."""
 
     inputs = torch.randn(1, 3, requires_grad=True)
-    trace = tl.trace(_DetachedPath(), inputs, backward_ready=True, save_mode="reference")
+    capture = tl.options.CaptureOptions(backward_ready=True)
+    trace = tl.trace(_DetachedPath(), inputs, capture=capture, save_mode="reference")
     target = next(op for op in reversed(trace.layer_list) if not op.is_output)
     input_op = next(op for op in trace.layer_list if op.is_input)
 

@@ -12,7 +12,12 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import FieldPolicy
 from torchlens.intervention.errors import MultiOutputModuleError
-from torchlens.receptive_field import ReceptiveFieldStatus, ReceptiveFieldView, _rules
+from torchlens.receptive_field import (
+    ReceptiveFieldStatus,
+    ReceptiveFieldValidationStatus,
+    ReceptiveFieldView,
+    _rules,
+)
 from torchlens.receptive_field._errors import (
     AmbiguousCallError,
     AmbiguousInputError,
@@ -159,26 +164,30 @@ def test_view_mapping_passthrough_at_and_center_unit() -> None:
     assert view.center_unit(batch_index=1) == (1, 2, 3, 3)
 
 
-def test_landed_gradient_is_wired_and_check_is_typed_unavailable() -> None:
-    """Expose the landed gradient core and retain the typed T9 wiring point."""
+def test_landed_gradient_and_check_are_wired_with_typed_precondition_errors() -> None:
+    """Exercise gradient validation and retain typed errors for missing capture state."""
 
     _register_rules()
     inputs = torch.randn(1, 2, 8, 8, requires_grad=True)
     trace = tl.trace(
         nn.Conv2d(2, 4, 3),
         inputs,
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
         save_mode="reference",
     )
     target = next(op for op in trace.layer_list if op.func_name == "conv2d")
     input_op = next(op for op in trace.layer_list if op.is_input)
     view = target.receptive_field
 
-    gradient = view.gradient((0, 0, 2, 2), input=input_op)
+    gradient = view.gradient((0, 0, 2, 2), input=input_op, retain_graph=True)
     assert gradient.op_label == target.label
+    validation = view.check((0, 0, 2, 2), input=input_op)
+    assert validation.status is ReceptiveFieldValidationStatus.PASS
 
-    with pytest.raises(ReceptiveFieldUnavailableError, match="Task T9"):
-        view.check((0, 0, 2, 2))
+    unavailable_trace = tl.trace(nn.Conv2d(2, 4, 3), torch.randn(1, 2, 8, 8))
+    unavailable_target = next(op for op in unavailable_trace.layer_list if op.func_name == "conv2d")
+    with pytest.raises(ReceptiveFieldUnavailableError, match="backward_ready=True"):
+        unavailable_target.receptive_field.gradient((0, 0, 2, 2))
 
 
 def test_multi_input_passthrough_names_roles_and_explicit_selection_works() -> None:

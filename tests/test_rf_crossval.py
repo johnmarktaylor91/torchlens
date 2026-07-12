@@ -29,7 +29,10 @@ def built_in_rule_pack() -> Iterator[None]:
     original_epoch = _rules._RF_RULES_EPOCH
     _rules._RF_RULES.clear()
     if _PACK is None:
-        importlib.import_module("torchlens.receptive_field.rules")
+        module = importlib.import_module("torchlens.receptive_field.rules")
+        if not _rules._RF_RULES:
+            for name in module.__all__:
+                importlib.reload(getattr(module, name))
         _PACK = dict(_rules._RF_RULES)
     else:
         _rules._RF_RULES.update(_PACK)
@@ -58,7 +61,8 @@ def _input_op(trace: object) -> object:
 def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     """Capture a graph-connected model suitable for repeated RF probes."""
 
-    return tl.trace(model, inputs, backward_ready=True, save_mode="reference")
+    capture = tl.options.CaptureOptions(backward_ready=True)
+    return tl.trace(model, inputs, capture=capture, save_mode="reference")
 
 
 def test_positive_conv_is_contained_and_tight() -> None:

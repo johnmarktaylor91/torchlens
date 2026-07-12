@@ -27,7 +27,10 @@ def built_in_rule_pack() -> Iterator[None]:
     original_epoch = _rules._RF_RULES_EPOCH
     _rules._RF_RULES.clear()
     if _PACK is None:
-        importlib.import_module("torchlens.receptive_field.rules")
+        module = importlib.import_module("torchlens.receptive_field.rules")
+        if not _rules._RF_RULES:
+            for name in module.__all__:
+                importlib.reload(getattr(module, name))
         _PACK = dict(_rules._RF_RULES)
     else:
         _rules._RF_RULES.update(_PACK)

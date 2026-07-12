@@ -15,13 +15,16 @@ def _conv_trace() -> tuple[nn.Conv2d, object, object, object]:
 
     model = nn.Conv2d(1, 1, 3, padding=1)
     inputs = torch.randn(2, 1, 5, 5, requires_grad=True)
+    capture = tl.options.CaptureOptions(
+        backward_ready=True,
+        save_grads="all",
+        capture_tensor_grad_hooks=True,
+    )
     trace = tl.trace(
         model,
         inputs,
-        backward_ready=True,
+        capture=capture,
         save_mode="reference",
-        save_grads="all",
-        capture_tensor_grad_hooks=True,
     )
     target = next(op for op in trace.layer_list if op.func_name == "conv2d")
     input_op = next(op for op in trace.layer_list if op.is_input)
