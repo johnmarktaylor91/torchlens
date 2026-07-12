@@ -700,6 +700,11 @@ def test_loaded_custom_key_is_denied_at_execution_until_trusted(
         encoding="utf-8",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
+    # The temp module has a fixed name and an import-time side effect (writes the
+    # marker). Ensure it is NOT already cached so this run imports it fresh, and let
+    # monkeypatch drop it at teardown (restoring the absent state) so the test is
+    # order-independent -- otherwise a cached module makes the trusted import a no-op.
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
 
     path = tmp_path / "execution_gate.tlspec"
     _log().save_intervention(path, level="audit")
