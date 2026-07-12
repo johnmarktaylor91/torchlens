@@ -150,32 +150,6 @@ def _identity_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
 
 
 @pytest.mark.smoke
-def test_live_func_hook_replaces_returned_and_saved_out() -> None:
-    """Live post-hooks run before saving so returned and saved outs match."""
-
-    model = _ReluReturnModel()
-    log = tl.trace(
-        model,
-        torch.randn(2, 3),
-        capture=CaptureOptions(
-            intervention_ready=True,
-            hooks={tl.func("relu"): _zero_hook},
-        ),
-    )
-
-    relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
-
-    assert log.state is TraceState.LIVE_CAPTURED
-    assert model.latest is not None
-    assert relu_layer.out is not None
-    assert torch.equal(model.latest, relu_layer.out)
-    assert torch.count_nonzero(relu_layer.out) == 0
-    assert len(relu_layer.interventions) == 1
-    assert relu_layer.interventions[0].timing == "post"
-    assert relu_layer.interventions[0].direction == "forward"
-
-
-@pytest.mark.smoke
 def test_live_label_error_for_finalized_style_label() -> None:
     """Finalized postprocess labels fail loudly in live capture."""
 

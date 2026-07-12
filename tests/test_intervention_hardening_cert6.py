@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 import torch
 
 import torchlens as tl
@@ -188,20 +189,29 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     assert len(composed) >= 1
 
 
-def test_relative_l1_scalar_rejects_mismatched_numel() -> None:
-    """MAJOR-4: the scalar fallback refuses to truncate a longer vector."""
+@pytest.mark.parametrize(
+    ("left", "right", "check_scalar_control"),
+    [
+        (
+            torch.tensor(1.0),
+            torch.tensor([1.0, 2.0, 3.0, 4.0, 100000.0]),
+            True,
+        ),
+        (torch.tensor([1.0, 2.0, 3.0]), torch.tensor([1.0]), False),
+    ],
+    ids=["scalar_to_vector", "vector_to_singleton"],
+)
+def test_relative_l1_scalar_rejects_numel_mismatch(
+    left: torch.Tensor,
+    right: torch.Tensor,
+    check_scalar_control: bool,
+) -> None:
+    """The scalar fallback rejects both mismatch orientations without truncation."""
+    with pytest.raises(ValueError, match="equal element counts"):
+        relative_l1_scalar(left, right)
 
-    scalar = torch.tensor(1.0)
-    vector = torch.tensor([1.0, 2.0, 3.0, 4.0, 100000.0])
-    try:
-        relative_l1_scalar(scalar, vector)
-    except ValueError:
-        pass
-    else:  # pragma: no cover - failure path
-        raise AssertionError("expected ValueError for a scalar-vs-vector relative_l1_scalar")
-
-    # Genuine scalar-vs-scalar comparisons still work.
-    assert float(relative_l1_scalar(torch.tensor(1.0), torch.tensor(2.0))) == 1.0
+    if check_scalar_control:
+        assert float(relative_l1_scalar(torch.tensor(1.0), torch.tensor(2.0))) == 1.0
 
 
 def test_diff_row_scalar_vs_vector_member_raises_not_truncates() -> None:

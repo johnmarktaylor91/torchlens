@@ -79,6 +79,11 @@ def _layer_by_func(log, func_substring: str):
     return log[labels[0]]
 
 
+def _warm_torchlens_wrapping() -> None:
+    """Establish local wrapper state before exercising meta factory injection."""
+    tl.trace(_CpuFactoryModel(), torch.randn(2, 4))
+
+
 @pytest.mark.smoke
 def test_meta_device_context_untraced_baseline() -> None:
     """Sanity: without TorchLens, the context produces meta tensors."""
@@ -128,11 +133,13 @@ def test_meta_factory_output_metadata_with_selective_save() -> None:
     With the meta op excluded from activation saving, the trace completes and
     the captured metadata reflects the post-injection (meta-device) tensor.
     """
+    _warm_torchlens_wrapping()
     model = _MetaFactoryOutputModel()
     log = tl.trace(model, torch.randn(2, 4), save=tl.func("mul"))
 
     assert model.seen_devices == ["meta"]
     zeros_layer = _layer_by_func(log, "zeros")
+    assert zeros_layer.func_name == "zeros"
     # Shape/dtype come from the post-injection meta tensor: torch.zeros(3, 4)
     # under the meta context (a CPU tensor would have identical shape only if
     # injection worked — device parity is asserted via seen_devices above).

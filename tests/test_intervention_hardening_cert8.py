@@ -154,17 +154,6 @@ def test_no_unguarded_relative_l1_scalar_call_site_remains() -> None:
             )
 
 
-def test_relative_l1_scalar_itself_rejects_numel_mismatch() -> None:
-    """BLOCKER-1 defense-in-depth: the scalar fallback refuses to truncate."""
-
-    try:
-        relative_l1_scalar(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([1.0]))
-    except ValueError as exc:
-        assert "equal element counts" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("relative_l1_scalar must reject mismatched numel")
-
-
 def test_distance_value_multi_element_matches_cosine() -> None:
     """BLOCKER-1 sibling: _distance_value routes multi-element through cosine."""
 

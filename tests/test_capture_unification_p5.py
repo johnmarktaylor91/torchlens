@@ -9,7 +9,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._trace_state import TraceState
 from torchlens.fastlog import RecordContext, Recording
+from torchlens.options import CaptureOptions
 
 
 class LinearRelu(nn.Module):
@@ -73,6 +75,26 @@ class InplaceVersionModel(nn.Module):
         return parent * 2
 
 
+class _ReluReturnModel(nn.Module):
+    """Model that exposes a hookable ReLU output for retention checks."""
+
+    def __init__(self) -> None:
+        """Initialize the model with no retained return value."""
+        super().__init__()
+        self.latest: torch.Tensor | None = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the ReLU output that a post hook may replace."""
+        self.latest = torch.relu(x)
+        return self.latest
+
+
+def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+    """Replace a live hook output with zeros."""
+    del hook
+    return out * 0
+
+
 def _linear_op(log: tl.Trace) -> tl.Op:
     """Return the first linear op in a trace."""
 
@@ -91,36 +113,75 @@ def _save_only_mul(ctx: RecordContext) -> bool:
     return ctx.func_name in {"__mul__", "mul"}
 
 
-def test_intervene_save_captures_post_hook_tensor_and_is_deterministic() -> None:
-    """Saved payload at an intervened op equals the hook-returned tensor."""
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "entrypoint",
+    ["trace_when", "capture_options_hooks", "record"],
+    ids=["trace_when", "capture_options_hooks", "record"],
+)
+def test_live_intervention_retention_contract(entrypoint: str) -> None:
+    """Live intervention replacements precede payload retention for every API spelling."""
+    if entrypoint == "trace_when":
+        captured: list[torch.Tensor] = []
 
-    captured: list[torch.Tensor] = []
+        def add_marker(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+            """Return and retain the marker payload expected by the assertion."""
+            del hook
+            result = out + 7
+            captured.append(result.detach().clone())
+            return result
 
-    def add_marker(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        """Return a marked tensor and retain the exact expected payload."""
-
-        del hook
-        result = out + 7
-        captured.append(result.detach().clone())
-        return result
-
-    x = torch.ones(1, 4)
-    log = tl.trace(
-        LinearRelu(),
-        x,
-        intervene=tl.when(tl.func("linear"), add_marker),
-        save=tl.func("linear"),
-    )
-    rerun = tl.trace(
-        LinearRelu(),
-        x,
-        intervene=tl.when(tl.func("linear"), add_marker),
-        save=tl.func("linear"),
-    )
-
-    assert torch.equal(_linear_op(log).out, captured[0])
-    assert torch.equal(_linear_op(log).out, _linear_op(rerun).out)
-    assert _linear_op(log).intervention_replaced
+        x = torch.ones(1, 4)
+        log = tl.trace(
+            LinearRelu(),
+            x,
+            intervene=tl.when(tl.func("linear"), add_marker),
+            save=tl.func("linear"),
+        )
+        rerun = tl.trace(
+            LinearRelu(),
+            x,
+            intervene=tl.when(tl.func("linear"), add_marker),
+            save=tl.func("linear"),
+        )
+        assert torch.equal(_linear_op(log).out, captured[0])
+        assert torch.equal(_linear_op(log).out, _linear_op(rerun).out)
+        assert _linear_op(log).intervention_replaced
+    elif entrypoint == "capture_options_hooks":
+        model = _ReluReturnModel()
+        log = tl.trace(
+            model,
+            torch.randn(2, 3),
+            capture=CaptureOptions(
+                intervention_ready=True,
+                hooks={tl.func("relu"): _zero_hook},
+            ),
+        )
+        relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
+        assert log.state is TraceState.LIVE_CAPTURED
+        assert model.latest is not None
+        assert relu_layer.out is not None
+        assert torch.equal(model.latest, relu_layer.out)
+        assert torch.count_nonzero(relu_layer.out) == 0
+        assert len(relu_layer.interventions) == 1
+        assert relu_layer.interventions[0].timing == "post"
+        assert relu_layer.interventions[0].direction == "forward"
+    else:
+        output, recording = cast(
+            tuple[torch.Tensor, Recording],
+            tl.fastlog.record(
+                LinearRelu(),
+                torch.ones(1, 4),
+                keep_op=tl.func("linear"),
+                intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
+                return_output=True,
+            ),
+        )
+        assert torch.equal(output, torch.zeros_like(output))
+        assert len(recording.records) == 1
+        payload = recording.records[0].ram_payload
+        assert isinstance(payload, torch.Tensor)
+        assert torch.equal(payload, torch.zeros_like(payload))
 
 
 def test_intervene_and_save_compose_with_downstream_saved_child() -> None:
@@ -233,27 +294,3 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
     assert all(not op.out_versions_by_child for op in log.layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         log.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
-
-
-def test_fastlog_record_intervene_save_captures_post_hook_payload() -> None:
-    """``fastlog.record`` composes intervention and save in one predicate pass."""
-
-    output, recording = cast(
-        tuple[torch.Tensor, Recording],
-        tl.fastlog.record(
-            LinearRelu(),
-            torch.ones(1, 4),
-            keep_op=tl.func("linear"),
-            intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-            return_output=True,
-        ),
-    )
-
-    assert torch.equal(output, torch.zeros_like(output))
-    assert len(recording.records) == 1
-    payload = recording.records[0].ram_payload
-    assert isinstance(payload, torch.Tensor)
-    assert torch.equal(
-        payload,
-        torch.zeros_like(payload),
-    )

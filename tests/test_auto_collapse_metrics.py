@@ -2509,6 +2509,7 @@ def test_max_child_segment_decomposes_ops_and_buffers(
 
 
 @pytest.mark.serial
+@pytest.mark.slow
 def test_signal_tally_latency_under_budget() -> None:
     """Signal tally stays under a load-scaled per-3k-node budget."""
 

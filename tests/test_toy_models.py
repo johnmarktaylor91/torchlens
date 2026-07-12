@@ -23,7 +23,7 @@ from torchlens.visualization import show_model_graph
 # =============================================================================
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy
 def test_model_simple_ff(default_input1):
     model = example_models.SimpleFF()
     assert validate_forward_pass(model, default_input1)
