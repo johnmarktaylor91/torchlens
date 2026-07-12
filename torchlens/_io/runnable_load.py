@@ -668,7 +668,7 @@ def _best_ranked_candidates(
 ) -> tuple[_ReverseCandidate, ...]:
     """Keep only candidates at the best deterministic namespace rank."""
 
-    expected_namespace = key.namespace
+    expected_namespace: str = key.namespace
     if stock_path is not None:
         expected_namespace = stock_path.rpartition(".")[0]
     public_rank = {
@@ -704,12 +704,14 @@ def _signature_accepts_call(
     except (TypeError, ValueError):
         return True
     placeholders = (object(),) * call.num_positional_args
+    argument_paths = (
+        *(argument.argument_path for argument in call.tensor_arguments),
+        *(argument.argument_path for argument in call.literal_arguments),
+    )
     keyword_names = {
-        argument.argument_path[1]
-        for argument in (*call.tensor_arguments, *call.literal_arguments)
-        if len(argument.argument_path) >= 2
-        and argument.argument_path[0] == "kwargs"
-        and isinstance(argument.argument_path[1], str)
+        path[1]
+        for path in argument_paths
+        if len(path) >= 2 and path[0] == "kwargs" and isinstance(path[1], str)
     }
     keyword_placeholders = {name: object() for name in keyword_names}
     try:

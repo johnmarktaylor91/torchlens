@@ -182,6 +182,7 @@ def resolve_runnable_torch_alias(
     """
 
     for alias in _RUNNABLE_TORCH_ALIASES:
+        target_qualname: str | None
         if alias.source.endswith(".*"):
             prefix = alias.source[:-1]
             if not source_qualname.startswith(prefix):
