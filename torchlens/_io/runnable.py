@@ -665,6 +665,11 @@ def _append_argument_component(
             return
         parameter_candidates.remove(param)
         slot_id = f"state:{param.address}"
+        draft = slot_drafts.get(slot_id)
+        if draft is not None:
+            draft.device_type, draft.device_index = _device_parts(
+                getattr(component.value, "device", None)
+            )
         _append_tensor_argument(
             tensor_args,
             path,
