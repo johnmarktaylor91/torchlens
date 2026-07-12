@@ -113,23 +113,34 @@ def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> Non
             return functional.group_norm(value, 2)
 
     trace = tl.trace(Norms(), torch.randn(2, 4, 3, 3))
-    for name in ("instance_norm", "group_norm"):
+    for name, first_full_axis in (("instance_norm", 2), ("group_norm", 1)):
         descriptor = _descriptor(_op(trace, name))
         assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
-        assert all(axis.kind == "full" for axis in descriptor.axes[1:])
+        assert all(axis.kind == "full" for axis in descriptor.axes[first_full_axis:])
 
 
 def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
     """Keep unmasked structural attention exact and masked attention explicitly bounded."""
 
+    class Attention(nn.Module):
+        """Small scaled-dot-product attention fixture."""
+
+        def __init__(self, *, causal: bool) -> None:
+            """Store whether the attention call is causal."""
+
+            super().__init__()
+            self.causal = causal
+
+        def forward(self, value: torch.Tensor) -> torch.Tensor:
+            """Apply self-attention with the configured mask behavior."""
+
+            return functional.scaled_dot_product_attention(
+                value, value, value, is_causal=self.causal
+            )
+
     query = torch.randn(1, 1, 3, 2)
-    unmasked = tl.trace(
-        lambda value: functional.scaled_dot_product_attention(value, value, value), query
-    )
-    masked = tl.trace(
-        lambda value: functional.scaled_dot_product_attention(value, value, value, is_causal=True),
-        query,
-    )
+    unmasked = tl.trace(Attention(causal=False), query)
+    masked = tl.trace(Attention(causal=True), query)
 
     assert (
         _descriptor(_op(unmasked, "scaled_dot_product_attention")).status
@@ -153,7 +164,15 @@ def test_interpolation_branch_goldens_are_unit_exact(
 ) -> None:
     """Exercise size/scale source branches and exact unit tap selection."""
 
-    trace = tl.trace(lambda value: functional.interpolate(value, **kwargs), torch.randn(1, 1, 3))
+    class Interpolation(nn.Module):
+        """Small interpolation fixture with captured keyword arguments."""
+
+        def forward(self, value: torch.Tensor) -> torch.Tensor:
+            """Interpolate the input with the parametrized branch arguments."""
+
+            return functional.interpolate(value, **kwargs)
+
+    trace = tl.trace(Interpolation(), torch.randn(1, 1, 3))
     op = _op(trace, "interpolate")
     assert _descriptor(op).status is ReceptiveFieldStatus.UPPER_BOUND
     box = _query.box_for_unit(_engine.solve(trace), op, (3,))
@@ -164,7 +183,15 @@ def test_interpolation_branch_goldens_are_unit_exact(
 def test_roll_is_fail_closed_and_never_pointwise() -> None:
     """Reject the tempting but unsound identity rule for circular shifts."""
 
-    trace = tl.trace(lambda value: torch.roll(value, shifts=1, dims=-1), torch.randn(1, 1, 5))
+    class Roll(nn.Module):
+        """Small circular-shift fixture."""
+
+        def forward(self, value: torch.Tensor) -> torch.Tensor:
+            """Shift the final input axis circularly."""
+
+            return torch.roll(value, shifts=1, dims=-1)
+
+    trace = tl.trace(Roll(), torch.randn(1, 1, 5))
     descriptor = _descriptor(_op(trace, "roll"))
 
     assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND

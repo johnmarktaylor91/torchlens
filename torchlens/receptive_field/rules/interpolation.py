@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from .._query import map_interpolation_index_set
+from .._query import _IndexSet, map_interpolation_index_set
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
+from ._utils import number_tuple
 
 
 @register_rf_rule(
@@ -49,7 +50,11 @@ def interpolate(context: ReceptiveFieldRuleContext) -> _RuleResult:
         for input_size, output_size in zip(inputs, outputs, strict=True)
     )
 
-    def map_index_set(axis: int, output_set: object) -> tuple[object, bool]:
+    scale_factor = None if scale is None else number_tuple(scale, rank)
+    if scale is not None and scale_factor is None:
+        return context.unknown("interpolation scale_factor was malformed")
+
+    def map_index_set(axis: int, output_set: _IndexSet) -> tuple[_IndexSet, bool]:
         """Map one output progression through branch-correct interpolation taps."""
 
         return map_interpolation_index_set(
@@ -59,7 +64,7 @@ def interpolate(context: ReceptiveFieldRuleContext) -> _RuleResult:
             input_extent=inputs,
             output_extent=outputs,
             align_corners=align_corners if isinstance(align_corners, bool) else None,
-            scale_factor=scale,
+            scale_factor=scale_factor,
             recompute_scale_factor=recompute if isinstance(recompute, bool) else None,
         )
 

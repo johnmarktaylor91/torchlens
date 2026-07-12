@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
+from ._utils import int_tuple
 
 
 @register_rf_rule(
@@ -46,10 +47,11 @@ def reduction(context: ReceptiveFieldRuleContext) -> _RuleResult:
     raw = context.arg("dim", context.cfg("dim", None))
     if raw is None:
         axes = tuple(range(rank))
-    elif isinstance(raw, (tuple, list)):
-        axes = tuple(int(axis) % rank for axis in raw)
     else:
-        axes = (int(raw) % rank,)
+        dimensions = int_tuple(raw)
+        if dimensions is None:
+            return context.unknown("reduction dimensions were not captured as integers")
+        axes = tuple(axis % rank for axis in dimensions)
     return context.full(
         axes=axes, exact=False, note="reduction family awaits a focused exactness golden"
     )

@@ -31,14 +31,11 @@ def batch_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
 def instance_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Distinguish current-stat instance normalization from running-stat evaluation."""
 
-    use_input_stats = _bool_arg(context, "use_input_stats", 0)
+    use_input_stats = _bool_arg(context, "use_input_stats", 4)
     if use_input_stats is None:
         return context.unknown("instance_norm statistics switch was not captured")
     if not use_input_stats:
-        return context.full(
-            exact=False,
-            note="running-stat instance_norm awaits a focused exactness golden",
-        )
+        return context.passthrough()
     rank = len(context.in_shapes[0]) if context.in_shapes else len(context.out_shape)
     return context.full(axes=tuple(range(2, rank)))
 

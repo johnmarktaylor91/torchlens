@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
+from ._utils import int_tuple
 
 
 @register_rf_rule("roll")
@@ -13,8 +14,9 @@ def roll(context: ReceptiveFieldRuleContext) -> _RuleResult:
     dims = context.arg("dims", context.arg("dimension", None))
     if dims is None:
         axes = tuple(range(rank))
-    elif isinstance(dims, (tuple, list)):
-        axes = tuple(int(axis) % rank for axis in dims)
     else:
-        axes = (int(dims) % rank,)
+        dimensions = int_tuple(dims)
+        if dimensions is None:
+            return context.unknown("roll dimensions were not captured as integers")
+        axes = tuple(axis % rank for axis in dimensions)
     return context.full(axes=axes, exact=False, note="roll is circular and not pointwise")
