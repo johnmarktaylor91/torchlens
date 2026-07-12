@@ -95,6 +95,86 @@ def _compose(parent: _Mapped, local: _Mapped) -> _Mapped:
     )
 
 
+def _transpose_mapped(mapping: _Mapped, out_extent: int) -> _Mapped:
+    """Transpose one windowed two-edge relation into its sound forward envelope.
+
+    Parameters
+    ----------
+    mapping:
+        Backward map from an output coordinate to an input-coordinate interval.
+    out_extent:
+        Finite extent of the backward map's output axis.
+
+    Returns
+    -------
+    _Mapped
+        Forward map from an input coordinate to the reached output-coordinate envelope.
+
+    Raises
+    ------
+    ValueError
+        If ``out_extent`` is not positive.
+    """
+
+    if out_extent <= 0:
+        raise ValueError("A transposed window map requires a positive output extent.")
+
+    lo = mapping.lo
+    hi = mapping.hi
+    last = Fraction(out_extent - 1)
+    if lo.a == hi.a and lo.a > 0:
+        inverse_slope = Fraction(1, 1) / lo.a
+        return _Mapped(
+            _Affine(inverse_slope, -hi.b / hi.a),
+            _Affine(inverse_slope, -lo.b / lo.a),
+            exact=mapping.exact,
+            aligned=mapping.aligned,
+            sparse=mapping.sparse or inverse_slope.denominator != 1,
+        )
+    if lo.a == hi.a and lo.a < 0:
+        inverse_slope = Fraction(1, 1) / lo.a
+        return _Mapped(
+            _Affine(inverse_slope, -lo.b / lo.a),
+            _Affine(inverse_slope, -hi.b / hi.a),
+            exact=mapping.exact,
+            aligned=mapping.aligned,
+            sparse=mapping.sparse or inverse_slope.denominator != 1,
+        )
+    if lo.a == hi.a == 0:
+        return _Mapped(
+            _Affine(Fraction(0), Fraction(0)),
+            _Affine(Fraction(0), last),
+            exact=mapping.exact and lo.b == hi.b,
+            aligned=mapping.aligned,
+            sparse=mapping.sparse,
+        )
+    if lo.a == 0 and hi.a > 0:
+        inverse_slope = Fraction(1, 1) / hi.a
+        return _Mapped(
+            _Affine(inverse_slope, -hi.b / hi.a),
+            _Affine(Fraction(0), last),
+            exact=mapping.exact,
+            aligned=mapping.aligned,
+            sparse=mapping.sparse or inverse_slope.denominator != 1,
+        )
+    if lo.a > 0 and hi.a == 0:
+        inverse_slope = Fraction(1, 1) / lo.a
+        return _Mapped(
+            _Affine(Fraction(0), Fraction(0)),
+            _Affine(inverse_slope, -lo.b / lo.a),
+            exact=mapping.exact,
+            aligned=mapping.aligned,
+            sparse=mapping.sparse or inverse_slope.denominator != 1,
+        )
+    return _Mapped(
+        _Affine(Fraction(0), Fraction(0)),
+        _Affine(Fraction(0), last),
+        exact=False,
+        aligned=False,
+        sparse=True,
+    )
+
+
 def _endpoint_chord(branches: Sequence[_Mapped], extent: int, *, lower: bool) -> _Affine:
     """Build the sound endpoint chord for a min-lower or max-upper envelope."""
 
