@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from importlib import import_module
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, Mapping, cast
 
 from ._errors import AmbiguousInputError, ReceptiveFieldError, ReceptiveFieldUnavailableError
@@ -13,6 +14,7 @@ from ._types import (
     ReceptiveField,
     ReceptiveFieldAxis,
     ReceptiveFieldBox,
+    ReceptiveFieldDirection,
     ReceptiveFieldStatus,
     ReceptiveFieldValidation,
 )
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
 
     from ..data_classes.op import Op
     from ._engine import _ReceptiveFieldSolution
+    from ._engine_forward import _ProjectiveFieldSolution
 
 
 def _optional_callable(module_name: str, function_name: str, task: str) -> Any:
@@ -60,9 +63,14 @@ def _optional_callable(module_name: str, function_name: str, task: str) -> Any:
 class ReceptiveFieldView:
     """Lazy query surface for one operation's per-input receptive fields."""
 
-    __slots__ = ("_op", "_solution", "per_input")
+    __slots__ = ("_op", "_solution", "_direction", "per_input")
 
-    def __init__(self, op: Op, solution: _ReceptiveFieldSolution) -> None:
+    def __init__(
+        self,
+        op: Op,
+        solution: _ReceptiveFieldSolution | _ProjectiveFieldSolution,
+        direction: ReceptiveFieldDirection = ReceptiveFieldDirection.RECEPTIVE,
+    ) -> None:
         """Initialize an operation view from one trace-owned solution.
 
         Parameters
@@ -75,7 +83,54 @@ class ReceptiveFieldView:
 
         self._op = op
         self._solution = solution
+        self._direction = direction
         self.per_input: Mapping[str, ReceptiveField] = solution.per_op.get(op.label, {})
+
+    @classmethod
+    def projective(cls, op: Op) -> "ReceptiveFieldView":
+        """Build the source-anchored projective sibling view.
+
+        Parameters
+        ----------
+        op:
+            Source operation whose output grid owns ``unit`` coordinates.
+
+        Returns
+        -------
+        ReceptiveFieldView
+            Projective view targeting all reachable model outputs by default.
+        """
+
+        from ._engine_forward import solve_projective
+
+        return cls(
+            op,
+            solve_projective(op.source_trace, op.source_trace.output_ops),
+            ReceptiveFieldDirection.PROJECTIVE,
+        )
+
+    def _direction_for(
+        self, direction: ReceptiveFieldDirection | str | None
+    ) -> ReceptiveFieldDirection:
+        """Resolve a per-call direction without changing the view's binding."""
+
+        return self._direction if direction is None else ReceptiveFieldDirection(direction)
+
+    def _projective_solution(self, target: object | None) -> _ProjectiveFieldSolution:
+        """Return a target-anchored solution for a projective query."""
+
+        from ._engine_forward import solve_projective
+        from ._path import resolve_graph_point
+
+        if target is None:
+            return (
+                cast("_ProjectiveFieldSolution", self._solution)
+                if self._direction is ReceptiveFieldDirection.PROJECTIVE
+                else solve_projective(self._op.source_trace, self._op.source_trace.output_ops)
+            )
+        return solve_projective(
+            self._op.source_trace, (resolve_graph_point(self._op.source_trace, target),)
+        )
 
     def __getitem__(self, key: str | Op) -> ReceptiveField:
         """Return a descriptor by exact IO role or model-input operation.
@@ -186,6 +241,8 @@ class ReceptiveFieldView:
         *,
         input: Op | str | None = None,
         source: object | None = None,
+        direction: ReceptiveFieldDirection | str | None = None,
+        target: object | None = None,
         clip: bool = True,
     ) -> ReceptiveFieldBox:
         """Return geometric source bounds for one windowed-grid output unit.
@@ -208,8 +265,25 @@ class ReceptiveFieldView:
             Per-unit theoretical and clipped receptive-field bounds.
         """
 
+        resolved_direction = self._direction_for(direction)
         if input is not None and source is not None:
             raise TypeError("input and source cannot be supplied together.")
+        if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
+            if input is not None or source is not None:
+                raise TypeError("Projective queries select their far endpoint with target=.")
+            from ._forward_query import box_for_source_unit
+
+            return box_for_source_unit(
+                self._projective_solution(target),
+                self._op,
+                cast(Sequence[int], unit),
+                target=cast("Op | str | None", target),
+                clip=clip,
+            )
+        if target is not None:
+            if source is not None:
+                raise TypeError("source and target cannot be supplied together.")
+            source = target
 
         from . import _engine
         from ._path import require_path, resolve_graph_point
@@ -258,7 +332,7 @@ class ReceptiveFieldView:
         else:
             selected = unit
         return box_for_unit(
-            solution,
+            cast("_ReceptiveFieldSolution", solution),
             self._op,
             selected,
             input=selected_input,
@@ -272,6 +346,8 @@ class ReceptiveFieldView:
         *,
         input: Op | str | None = None,
         source: object | None = None,
+        direction: ReceptiveFieldDirection | str | None = None,
+        target: object | None = None,
         atol: float = 0.0,
         rtol: float = 0.0,
         retain_graph: bool = False,
@@ -297,10 +373,28 @@ class ReceptiveFieldView:
             One selected result, or the mapping over all reachable inputs.
         """
 
-        from ._gradient import gradient_for_unit
+        resolved_direction = self._direction_for(direction)
 
         if input is not None and source is not None:
             raise TypeError("input and source cannot be supplied together.")
+        if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
+            if input is not None or source is not None:
+                raise TypeError("Projective queries select their far endpoint with target=.")
+            projective_gradient = _optional_callable(
+                "._gradient_forward", "projective_gradient_for_unit", "Task T19"
+            )
+            return cast(
+                GradientReceptiveField | Mapping[str, GradientReceptiveField],
+                projective_gradient(
+                    self._op, unit, target=target, atol=atol, rtol=rtol, retain_graph=retain_graph
+                ),
+            )
+        from ._gradient import gradient_for_unit
+
+        if target is not None:
+            if source is not None:
+                raise TypeError("source and target cannot be supplied together.")
+            source = target
         if source is not None:
             return cast(
                 GradientReceptiveField | Mapping[str, GradientReceptiveField],
@@ -328,6 +422,8 @@ class ReceptiveFieldView:
         *,
         input: Op | str | None = None,
         source: object | None = None,
+        direction: ReceptiveFieldDirection | str | None = None,
+        target: object | None = None,
         atol: float = 0.0,
         rtol: float = 0.0,
     ) -> ReceptiveFieldValidation:
@@ -340,7 +436,11 @@ class ReceptiveFieldView:
         input:
             Optional exact IO role or model-input operation.
         source:
-            Reserved ancestor graph point for layer-to-layer receptive validation.
+            Optional ancestor graph point for layer-to-layer receptive validation.
+        direction:
+            Receptive or projective containment direction.
+        target:
+            Optional descendant graph point for projective validation.
         atol, rtol:
             Non-negative gradient support thresholds.
 
@@ -350,17 +450,22 @@ class ReceptiveFieldView:
             Tri-state containment result.
         """
 
+        resolved_direction = self._direction_for(direction)
         if input is not None and source is not None:
             raise TypeError("input and source cannot be supplied together.")
-        check_for_unit = _optional_callable("._validation", "check_for_unit", "Task T9")
-        if source is not None:
-            return cast(
-                ReceptiveFieldValidation,
-                check_for_unit(self._op, unit, source=source, atol=atol, rtol=rtol),
-            )
+        check_for_unit = _optional_callable("._validation", "check_for_unit", "Task T20")
         return cast(
             ReceptiveFieldValidation,
-            check_for_unit(self._op, unit, input=input, atol=atol, rtol=rtol),
+            check_for_unit(
+                self._op,
+                unit,
+                input=input,
+                source=source,
+                direction=resolved_direction,
+                target=target,
+                atol=atol,
+                rtol=rtol,
+            ),
         )
 
     def center_unit(
@@ -422,6 +527,8 @@ class ReceptiveFieldView:
         unit: tuple[int, ...] | None = None,
         *,
         input: Op | str | None = None,
+        direction: ReceptiveFieldDirection | str | None = None,
+        target: object | None = None,
         image: object | None = None,
         gradient: bool = False,
         slice: object | None = None,
@@ -464,6 +571,8 @@ class ReceptiveFieldView:
                 self,
                 unit,
                 input=input,
+                direction=self._direction_for(direction),
+                target=target,
                 image=cast("Image.Image | None", image),
                 gradient=gradient,
                 slice=cast("tuple[int, int] | None", slice),

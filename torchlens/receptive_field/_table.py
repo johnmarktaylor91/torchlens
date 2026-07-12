@@ -6,12 +6,19 @@ from collections.abc import Collection, Iterable
 from typing import TYPE_CHECKING, Any, Literal
 
 from ._engine import solve
-from ._types import ReceptiveField, ReceptiveFieldProfile, ReceptiveFieldStatus
+from ._types import (
+    ReceptiveField,
+    ReceptiveFieldDirection,
+    ReceptiveFieldProfile,
+    ReceptiveFieldStatus,
+)
 
 
 if TYPE_CHECKING:
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
+    from ._engine import _ReceptiveFieldSolution
+    from ._engine_forward import _ProjectiveFieldSolution
 
 
 ReceptiveFieldProfileLevel = Literal["op", "layer", "call", "module"]
@@ -223,6 +230,7 @@ def build_rf_profile(
     statuses: Collection[ReceptiveFieldStatus] | None = None,
     sort_by: str | None = None,
     ascending: bool = True,
+    direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
 ) -> ReceptiveFieldProfile:
     """Build a geometric receptive-field table for a completed trace.
 
@@ -249,6 +257,7 @@ def build_rf_profile(
 
     if level not in {"op", "layer", "call", "module"}:
         raise ValueError("level must be 'op', 'layer', 'call', or 'module'.")
+    resolved_direction = ReceptiveFieldDirection(direction)
     requested_role = _require_input_role(trace, input)
     status_filter = None if statuses is None else frozenset(statuses)
     if status_filter is not None and not all(
@@ -257,7 +266,12 @@ def build_rf_profile(
         raise TypeError("statuses must contain only ReceptiveFieldStatus values.")
 
     pd = _require_pandas()
-    solution = solve(trace)
+    if resolved_direction is ReceptiveFieldDirection.RECEPTIVE:
+        solution: _ReceptiveFieldSolution | _ProjectiveFieldSolution = solve(trace)
+    else:
+        from ._engine_forward import solve_projective
+
+        solution = solve_projective(trace, trace.output_ops)
     rows: list[dict[str, Any]] = []
     for name, kind, output_index, output_op in _entity_outputs(trace, level):
         for role, descriptor in solution.per_op.get(output_op, {}).items():
@@ -265,7 +279,16 @@ def build_rf_profile(
                 continue
             if status_filter is not None and descriptor.status not in status_filter:
                 continue
-            rows.append(_row(name, kind, output_index, output_op, descriptor))
+            row = _row(name, kind, output_index, output_op, descriptor)
+            if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
+                row.update(
+                    {
+                        "projective_target": descriptor.io_role,
+                        "projective_target_op": descriptor.input_op_label,
+                        "projective_direction": descriptor.direction,
+                    }
+                )
+            rows.append(row)
 
     columns = [
         "name",
@@ -288,6 +311,8 @@ def build_rf_profile(
         "exact",
         "layout",
     ]
+    if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
+        columns.extend(["projective_target", "projective_target_op", "projective_direction"])
     if sort_by is not None and sort_by not in columns:
         raise ValueError(f"sort_by must be one of: {', '.join(columns)}.")
     frame = pd.DataFrame(rows, columns=columns)
@@ -301,6 +326,7 @@ def build_rf_profile(
             "statuses": status_filter,
             "sort_by": sort_by,
             "ascending": ascending,
+            "direction": resolved_direction,
         }
     )
     return ReceptiveFieldProfile(frame=frame, level=level)

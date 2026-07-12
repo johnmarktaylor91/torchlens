@@ -34,6 +34,18 @@ from ._view import ReceptiveFieldView
 from ._viz import node_spec
 
 
+def verify(*args: object, **kwargs: object) -> object:
+    """Run the model-facing receptive-field self-consistency checks."""
+
+    return cross_validate(*args, **kwargs)  # type: ignore[arg-type]
+
+
+def self_check(*args: object, **kwargs: object) -> object:
+    """Alias :func:`verify` for interactive receptive-field diagnostics."""
+
+    return verify(*args, **kwargs)
+
+
 __all__ = [
     "AmbiguousCallError",
     "AmbiguousInputError",
@@ -63,5 +75,7 @@ __all__ = [
     "register_rf_rule",
     "cross_validate",
     "node_spec",
+    "self_check",
+    "verify",
     "rules",
 ]

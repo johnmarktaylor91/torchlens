@@ -822,6 +822,19 @@ class Layer:
         return self.ops[0].receptive_field
 
     @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the only pass's projective field or reject pass ambiguity."""
+
+        if self.num_passes != 1 or len(self.ops) != 1:
+            from ..receptive_field._errors import AmbiguousPassError
+
+            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops.keys())
+            raise AmbiguousPassError(
+                f"Layer {self.layer_label!r} has {self.num_passes} passes: {passes}."
+            )
+        return self.ops[0].projective_field
+
+    @property
     def out(self) -> Any:
         """Return the saved out for a single-pass layer.
 

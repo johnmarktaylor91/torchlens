@@ -9,7 +9,13 @@ import torch
 from PIL import Image, ImageDraw
 
 from ._errors import AmbiguousInputError, ReceptiveFieldError
-from ._types import GradientReceptiveField, ReceptiveField, ReceptiveFieldBox, ReceptiveFieldStatus
+from ._types import (
+    GradientReceptiveField,
+    ReceptiveField,
+    ReceptiveFieldBox,
+    ReceptiveFieldDirection,
+    ReceptiveFieldStatus,
+)
 from ..viz.node_plots import render_heatmap
 from ..visualization.node_spec import NodeSpec, NodeSpecFn
 
@@ -27,6 +33,8 @@ def show(
     unit: Sequence[int] | None = None,
     *,
     input: Any | None = None,
+    direction: ReceptiveFieldDirection = ReceptiveFieldDirection.RECEPTIVE,
+    target: Any | None = None,
     image: Image.Image | None = None,
     gradient: bool = False,
     slice: tuple[int, int] | None = None,
@@ -72,11 +80,12 @@ def show(
 
     if not 0.0 <= alpha <= 1.0:
         raise ValueError("alpha must be between 0 and 1.")
-    descriptor = _select_descriptor(view, input)
+    selected = target if direction is ReceptiveFieldDirection.PROJECTIVE else input
+    descriptor = _select_descriptor(view, selected)
     if gradient and unit is None:
         raise ReceptiveFieldError("gradient=True requires an explicit complete output unit.")
-    box = None if unit is None else _view_box(view, unit, descriptor, input)
-    gradient_result = _view_gradient(view, unit, input) if gradient else None
+    box = None if unit is None else _view_box(view, unit, descriptor, selected, direction)
+    gradient_result = _view_gradient(view, unit, selected, direction) if gradient else None
     spatial_axes = _spatial_axes(descriptor, gradient_result)
     rendered_axes = _rendered_axes(spatial_axes, slice)
     base = _base_image(view, descriptor, image, rendered_axes)
@@ -103,6 +112,8 @@ def node_spec(
     *,
     unit: Sequence[int] | None = None,
     input: Any | None = None,
+    direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
+    target: Any | None = None,
     cone: bool = True,
     overlay: bool = True,
     gradient: bool = False,
@@ -133,9 +144,17 @@ def node_spec(
     """
 
     _ = overlay, gradient, box_color, alpha, cmap
-    descriptor = _descriptor_for_op(op, input)
+    resolved_direction = ReceptiveFieldDirection(direction)
+    selected = target if resolved_direction is ReceptiveFieldDirection.PROJECTIVE else input
+    descriptor = _descriptor_for_op(op, selected, resolved_direction)
     trace = op.source_trace
-    cone_labels = _ancestor_cone(op, descriptor.io_role) if cone else frozenset()
+    cone_labels = (
+        _projective_cone(op, descriptor.input_op_label)
+        if cone and resolved_direction is ReceptiveFieldDirection.PROJECTIVE
+        else _ancestor_cone(op, descriptor.io_role)
+        if cone
+        else frozenset()
+    )
 
     def node_spec_fn(layer: Any, spec: NodeSpec) -> NodeSpec | None:
         """Style one rendered layer according to on-demand cone membership."""
@@ -174,6 +193,7 @@ def _view_box(
     unit: Sequence[int],
     descriptor: ReceptiveField,
     selected: Any | None,
+    direction: ReceptiveFieldDirection,
 ) -> ReceptiveFieldBox:
     """Project a complete output unit to ``at()`` windowed coordinates."""
 
@@ -184,7 +204,13 @@ def _view_box(
         raise ReceptiveFieldError("The derived layout is ambiguous; use .gradient() instead.")
     coordinates = tuple(unit[cast(int, axis)] for axis in windowed_axes)
     try:
-        return cast(ReceptiveFieldBox, view.at(coordinates, input=selected))
+        if direction is ReceptiveFieldDirection.RECEPTIVE:
+            return cast(ReceptiveFieldBox, view.at(coordinates, input=selected))
+        if direction is ReceptiveFieldDirection.PROJECTIVE:
+            return cast(
+                ReceptiveFieldBox, view.at(coordinates, direction=direction, target=selected)
+            )
+        return cast(ReceptiveFieldBox, view.at(coordinates, direction=direction, input=selected))
     except TypeError as exc:
         raise ReceptiveFieldError(
             "ReceptiveFieldView.at() must support the complete-unit show() contract."
@@ -192,12 +218,18 @@ def _view_box(
 
 
 def _view_gradient(
-    view: "ReceptiveFieldView", unit: Sequence[int] | None, selected: Any | None
+    view: "ReceptiveFieldView",
+    unit: Sequence[int] | None,
+    selected: Any | None,
+    direction: ReceptiveFieldDirection,
 ) -> GradientReceptiveField:
     """Obtain and disambiguate one empirical gradient result."""
 
     assert unit is not None
-    result = view.gradient(tuple(unit), input=selected)
+    if direction is ReceptiveFieldDirection.RECEPTIVE:
+        result = view.gradient(tuple(unit), input=selected)
+    else:
+        result = view.gradient(tuple(unit), direction=direction, target=selected)
     if isinstance(result, Mapping):
         if len(result) != 1:
             raise AmbiguousInputError("Select one reachable input before rendering a gradient.")
@@ -387,8 +419,14 @@ def _dashed_rectangle(
             )
 
 
-def _descriptor_for_op(op: "Op", selected: Any | None) -> ReceptiveField:
+def _descriptor_for_op(
+    op: "Op", selected: Any | None, direction: ReceptiveFieldDirection
+) -> ReceptiveField:
     """Resolve an RF descriptor for one target operation."""
+
+    if direction is ReceptiveFieldDirection.PROJECTIVE:
+        view = op.projective_field
+        return _select_descriptor(view, selected)
 
     from ._engine import lookup
 
@@ -403,6 +441,14 @@ def _descriptor_for_op(op: "Op", selected: Any | None) -> ReceptiveField:
     if role not in descriptors:
         raise ReceptiveFieldError(f"Input {role!r} is not reachable from this target.")
     return descriptors[cast(str, role)]
+
+
+def _projective_cone(op: "Op", target_label: str) -> frozenset[str]:
+    """Return the source-to-target path slice for a projective graph cone."""
+
+    from ._path import between_labels
+
+    return between_labels(op.source_trace, op, target_label)
 
 
 def _ancestor_cone(op: "Op", io_role: str) -> frozenset[str]:
@@ -457,12 +503,22 @@ def _tooltip(descriptor: ReceptiveField) -> str:
     """Format a concise honest RF descriptor tooltip."""
 
     if descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT:
-        return f"WHOLE_INPUT ({descriptor.notes[0] if descriptor.notes else 'global dependence'})"
+        return f"{_whole_endpoint_caption(descriptor)} (status=WHOLE_INPUT)"
     if descriptor.axes is None:
         return descriptor.status.value.upper()
     sizes = "x".join(str(axis.size) for axis in descriptor.axes if axis.kind == "windowed")
     jumps = "x".join(str(axis.jump) for axis in descriptor.axes if axis.kind == "windowed")
     return f"RF {sizes or 'non-grid'}, jump {jumps or 'n/a'}, {descriptor.status.value.upper()}"
+
+
+def _whole_endpoint_caption(descriptor: ReceptiveField) -> str:
+    """Return the direction-aware caption for a whole far-end result grid."""
+
+    if descriptor.direction is ReceptiveFieldDirection.RECEPTIVE:
+        return "whole input"
+    if descriptor.io_role.startswith("output"):
+        return "whole output"
+    return f"whole {descriptor.input_op_label}"
 
 
 __all__ = ["node_spec", "show"]

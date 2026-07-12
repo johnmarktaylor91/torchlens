@@ -234,6 +234,7 @@ _OP_DYNAMIC_SLOT_NAMES = (
     "_grad_records",
     "_facets_cache",
     "_receptive_field_cache",
+    "_projective_field_cache",
     "_arg_expressions_cache",
     "_is_in_conditional_body",
     "_construction_done",
@@ -1132,6 +1133,7 @@ class Op:
         "grad_ref": FieldPolicy.DROP,
         "_grad_records": FieldPolicy.BLOB_RECURSIVE,
         "_receptive_field_cache": FieldPolicy.DROP,
+        "_projective_field_cache": FieldPolicy.DROP,
         "_arg_expressions_cache": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
@@ -2649,6 +2651,7 @@ class Op:
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
         state.pop("_receptive_field_cache", None)
+        state.pop("_projective_field_cache", None)
         state["func"] = None
         state["grad_fn_handle"] = None
         state["tlspec_version"] = TLSPEC_VERSION
@@ -2807,6 +2810,28 @@ class Op:
 
         try:
             object.__delattr__(self, "_receptive_field_cache")
+        except AttributeError:
+            pass
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the lazy source-anchored projective-field query view."""
+
+        from ..receptive_field._view import ReceptiveFieldView
+
+        cache = self._slot("_projective_field_cache")
+        current = ReceptiveFieldView.projective(self)
+        if cache is None or cache._solution is not current._solution:
+            cache = current
+            object.__setattr__(self, "_projective_field_cache", cache)
+        return cache
+
+    @projective_field.deleter
+    def projective_field(self) -> None:
+        """Drop the cached source-anchored projective-field query view."""
+
+        try:
+            object.__delattr__(self, "_projective_field_cache")
         except AttributeError:
             pass
 

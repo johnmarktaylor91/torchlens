@@ -1106,6 +1106,21 @@ class ModuleCall:
         return trace.ops[self.output_ops[0]].receptive_field
 
     @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the projective field of this call's only output operation."""
+
+        if len(self.output_ops) != 1:
+            from ..intervention.errors import MultiOutputModuleError
+
+            raise MultiOutputModuleError(
+                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops."
+            )
+        trace = self._source_trace
+        if trace is None:
+            raise RuntimeError("ModuleCall not bound to a Trace")
+        return trace.ops[self.output_ops[0]].projective_field
+
+    @property
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this module call."""
 
@@ -2326,6 +2341,19 @@ class Module:
                 f"Module {self.address!r} has {self.num_calls} calls: {calls}."
             )
         return self.calls[0].receptive_field
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the only call's projective field or reject call ambiguity."""
+
+        if self.num_calls != 1 or len(self.calls) != 1:
+            from ..receptive_field._errors import AmbiguousCallError
+
+            calls = ", ".join(f"module.calls[{index}]" for index in self.calls.keys())
+            raise AmbiguousCallError(
+                f"Module {self.address!r} has {self.num_calls} calls: {calls}."
+            )
+        return self.calls[0].projective_field
 
     @property
     def calls(self) -> ModuleCallAccessor:

@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, TextIO, Tuple, cast
 
 
 if TYPE_CHECKING:
-    from ..receptive_field._types import ReceptiveFieldProfile, ReceptiveFieldStatus
+    from ..receptive_field._types import (
+        ReceptiveFieldDirection,
+        ReceptiveFieldProfile,
+        ReceptiveFieldStatus,
+    )
     from ..report._profile import TraceProfile
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from .buffer import BufferAccessor
@@ -564,6 +568,7 @@ class TraceStatsMixin(_TraceMixinBase):
         statuses: "Collection[ReceptiveFieldStatus] | None" = None,
         sort_by: str | None = None,
         ascending: bool = True,
+        direction: "ReceptiveFieldDirection | str" = "receptive",
     ) -> "ReceptiveFieldProfile":
         """Return the trace-wide geometric receptive-field table.
 
@@ -595,6 +600,27 @@ class TraceStatsMixin(_TraceMixinBase):
             statuses=statuses,
             sort_by=sort_by,
             ascending=ascending,
+            direction=direction,
+        )
+
+    def projective_fields(
+        self: "Trace",
+        level: Literal["op", "layer", "call", "module"] = "op",
+        *,
+        input: "Op | None" = None,
+        statuses: "Collection[ReceptiveFieldStatus] | None" = None,
+        sort_by: str | None = None,
+        ascending: bool = True,
+    ) -> "ReceptiveFieldProfile":
+        """Return the trace-wide source-anchored projective-field table."""
+
+        return self.receptive_fields(
+            level=level,
+            input=input,
+            statuses=statuses,
+            sort_by=sort_by,
+            ascending=ascending,
+            direction="projective",
         )
 
     @property
