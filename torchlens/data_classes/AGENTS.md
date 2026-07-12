@@ -29,9 +29,11 @@ layer.ops             # dict[int, Op]
 ## Trace Gotchas
 - `_tracing_finished` changes `__len__`, `__getitem__`, iteration, and display behavior.
 - Fast-pass postprocess relies on `_tracing_finished` staying true between ops.
-- Methods such as `save`, `load`, `find_sites`, `fork`, `replay`, `rerun`, and
+- Methods such as `save`, `load`, `find_sites`, `fork`, `replay`, `rerun`, `run`, and
   `preview_fastlog` bridge into other subpackages; avoid importing them at module top if it
   creates cycles.
+- `run(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
+  legacy `run(model, x, ...)` remains the intervention-rerun compatibility path.
 - `graph_shape_hash` is computed before `_set_tracing_finished`.
 
 ## Op Gotchas
