@@ -7,9 +7,9 @@ definitions in `torchlens.runnable` are its behavior-free typed mirror. A disagr
 document and those types is a release-blocking schema defect. Neither may change without an explicit,
 versioned contract amendment.
 
-This freeze makes no artifact runnable. It adds no producer, loader, resolver, state binder,
-executor, `Trace.run`, or `Trace.load_state_dict` behavior and changes no capture path, analysis save
-level, bundle, or validation result.
+Stages 2--4 now provide the sparse producer, safe loader/resolver, and non-executing state binder.
+There is still no DAG executor or `Trace.run` behavior, and these stages change no capture path,
+analysis save level, bundle, or validation result.
 
 ## 1. Versions and enum vocabularies
 
@@ -421,7 +421,7 @@ and never call those values original/recovered/reconstructed/trained/capture-tim
 
 ## 9. Runtime API and state lifecycle
 
-Stage 5 must add exactly:
+Stage 4 adds `load_state_dict`; Stage 5 must add `run` with exactly these public signatures:
 
 ```python
 def run(
@@ -524,9 +524,9 @@ not numerical reproduction.
 `tl.save`/`Trace.save` are proposals, not frozen. Stages 7/8 must not treat them as settled. Frozen
 behavior is sparse default, independent layers, and reuse of capture-time `save=` for activations.
 
-Stage 0 introduces public error names and an importable schema/type module, but no Trace methods or
-top-level aliases. The curated public glossary and release API reference must add the errors and
-schema constant before advertisement. At Stage 5, glossary, `CLAUDE.md`/`AGENTS.md`, audit notebooks,
-examples, FIELD_ORDER/schema gates, and API docs must add `run`, `load_state_dict`, `RunResult`,
-readiness, state source, faithfulness, and poison vocabulary together. Until then, this document is
-the sole authoritative reference for those future names.
+Stage 0 introduced public error names and an importable schema/type module. Stage 4 documents
+`load_state_dict`, transient state sources, and initializer reporting in this glossary-facing
+contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API tests together. Stage 5 must
+complete the same lockstep sweep for `run`, `RunResult`, faithfulness, and poison vocabulary. Until
+a curated public glossary ships, this document is the authoritative public glossary entry for
+sparse runnable state binding.

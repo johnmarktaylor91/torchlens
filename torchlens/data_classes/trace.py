@@ -791,6 +791,30 @@ class Trace(
 
         return cast("SparseRunDescriptor | None", self.__dict__.get("_runnable_descriptor"))
 
+    def load_state_dict(self, sd: Mapping[str, Any]) -> None:
+        """Strictly validate and atomically stage sparse-run state.
+
+        Parameters
+        ----------
+        sd:
+            Canonically named parameter and persistent-buffer tensor mapping.
+
+        Raises
+        ------
+        StateBindingError
+            If names, module paths, roles, shapes, dtypes, or aliases violate
+            the recorded state-slot contract.
+
+        Notes
+        -----
+        This method stages transient run state only. It does not execute the
+        graph or write tensor values into the sparse descriptor.
+        """
+
+        from .._runnable_state import load_trace_state_dict
+
+        load_trace_state_dict(self, sd)
+
     def find_nan(self) -> Any:
         """Return the first NaN or Inf among saved outputs in execution order.
 
@@ -948,6 +972,8 @@ class Trace(
     capture_end_time: float
     _runnable_descriptor: "SparseRunDescriptor | None"
     _runnable_readiness: "ReadinessReport | None"
+    _runnable_staged_user_state: Mapping[str, torch.Tensor] | None
+    _runnable_embedded_state: Mapping[str, torch.Tensor] | None
     backward_root_grad_fn_object_ids: list[int]
     backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
@@ -989,6 +1015,8 @@ class Trace(
         "capture_mode": FieldPolicy.KEEP,
         "_runnable_descriptor": FieldPolicy.DROP,
         "_runnable_readiness": FieldPolicy.DROP,
+        "_runnable_staged_user_state": FieldPolicy.DROP,
+        "_runnable_embedded_state": FieldPolicy.DROP,
         "detached_patch_policy": FieldPolicy.DROP,
         "detached_patch_epoch": FieldPolicy.DROP,
         "escape_detector_mode": FieldPolicy.DROP,
