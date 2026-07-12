@@ -5,9 +5,11 @@ from __future__ import annotations
 from ._errors import (
     AmbiguousCallError,
     AmbiguousInputError,
+    AmbiguousTargetError,
     AmbiguousPassError,
     BackendUnsupportedError,
     ReceptiveFieldError,
+    NoInfluencePathError,
     ReceptiveFieldUnavailableError,
     ReceptiveFieldValidationError,
 )
@@ -19,6 +21,7 @@ from ._types import (
     ReceptiveFieldAxis,
     ReceptiveFieldBox,
     ReceptiveFieldBoxAxis,
+    ReceptiveFieldDirection,
     ReceptiveFieldProfile,
     ReceptiveFieldStatus,
     ReceptiveFieldValidation,
@@ -34,6 +37,7 @@ from ._viz import node_spec
 __all__ = [
     "AmbiguousCallError",
     "AmbiguousInputError",
+    "AmbiguousTargetError",
     "AmbiguousPassError",
     "BackendUnsupportedError",
     "GradientReceptiveField",
@@ -43,7 +47,9 @@ __all__ = [
     "ReceptiveFieldAxis",
     "ReceptiveFieldBox",
     "ReceptiveFieldBoxAxis",
+    "ReceptiveFieldDirection",
     "ReceptiveFieldError",
+    "NoInfluencePathError",
     "ReceptiveFieldProfile",
     "ReceptiveFieldRule",
     "ReceptiveFieldRuleContext",
