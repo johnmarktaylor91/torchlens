@@ -168,7 +168,7 @@ def save(
         Output bundle directory path.
     level:
         Public ``.tlspec`` save level: ``"audit"``,
-        ``"executable_with_callables"``, or ``"portable"``.
+        ``"executable_with_callables"``, ``"portable"``, or ``"runnable"``.
     include_outs:
         Whether outs should be saved as blobs.
     include_grads:
@@ -207,6 +207,17 @@ def save(
     """
 
     save_level = coerce_tlspec_save_level(level)
+    sparse_run_descriptor = None
+    sparse_run_json = None
+    if save_level == "runnable":
+        from .runnable import require_sparse_run_descriptor, sparse_descriptor_to_json
+
+        sparse_run_descriptor = require_sparse_run_descriptor(trace)
+        sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
+        include_outs = False
+        include_grads = False
+        include_saved_args = False
+        include_rng_states = False
     if save_level == "audit":
         include_outs = False
         include_grads = False
@@ -250,7 +261,17 @@ def save(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            sparse_runnable=sparse_run_descriptor is not None,
         )
+        if sparse_run_descriptor is not None:
+            from .runnable import assert_sparse_core_has_no_tensor_payload
+
+            scrubbed_state["_buffer_initial_values"] = {}
+            assert_sparse_core_has_no_tensor_payload(scrubbed_state)
+            if blob_specs:
+                raise TorchLensIOError(
+                    "Sparse runnable scrub produced tensor blob specs; refusing runnable label."
+                )
         _apply_visualization_save_policy(
             trace,
             scrubbed_state=scrubbed_state,
@@ -330,6 +351,7 @@ def save(
             trace=trace,
             legacy_manifest=manifest,
             save_level=save_level,
+            sparse_run=sparse_run_json,
         )
         with (tmp_path / "metadata.pkl").open("wb") as handle:
             pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -1313,6 +1335,7 @@ def _scrub_trace_for_bundle(
     include_grads: bool,
     include_saved_args: bool,
     include_rng_states: bool,
+    sparse_runnable: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
 
@@ -1328,6 +1351,8 @@ def _scrub_trace_for_bundle(
         Whether nested captured args should be blobified.
     include_rng_states:
         Whether nested RNG states should be blobified.
+    sparse_runnable:
+        Whether all sparse-core tensor payload families must be dropped.
 
     Returns
     -------
@@ -1354,6 +1379,7 @@ def _scrub_trace_for_bundle(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            sparse_runnable=sparse_runnable,
             backend_name=str(getattr(trace, "backend", "torch")),
             payload_materialization=get_backend_spec(
                 str(getattr(trace, "backend", "torch"))

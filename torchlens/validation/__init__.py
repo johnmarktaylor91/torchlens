@@ -187,7 +187,13 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     _require_str_enum(manifest, "body_format", body_formats)
     _validate_body_index(manifest.get("body_index"), schema_version=schema_version)
     _validate_backward_summary(manifest.get("backward_summary"), schema_version=schema_version)
-    _require_str_enum(manifest, "save_level", {"audit", "executable_with_callables", "portable"})
+    _require_str_enum(
+        manifest,
+        "save_level",
+        {"audit", "executable_with_callables", "portable", "runnable"},
+    )
+    if manifest["save_level"] == "runnable":
+        _validate_sparse_run_descriptor(manifest.get("run"))
     _validate_optional_dependencies(manifest.get("optional_dependencies"))
 
     kind = manifest["kind"]
@@ -205,6 +211,88 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
             raise ValueError(
                 "Non-intervention .tlspec manifests require null intervention_compat_metadata."
             )
+
+
+def _validate_sparse_run_descriptor(value: Any) -> None:
+    """Validate the frozen top-level sparse runnable descriptor contract.
+
+    Parameters
+    ----------
+    value:
+        Decoded ``manifest.run`` value.
+
+    Raises
+    ------
+    ValueError
+        If required versions, collections, preflight, or payload exclusions
+        contradict the Stage-0 runnable schema.
+    """
+
+    from ..runnable import (
+        RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
+        RUNNABLE_CALL_RECIPE_VERSION,
+        RUNNABLE_INITIALIZER_POLICY_VERSION,
+        RUNNABLE_TLSPEC_SCHEMA_VERSION,
+    )
+
+    if not isinstance(value, dict):
+        raise ValueError("Runnable .tlspec manifests require object run descriptor.")
+    required = {
+        "capability",
+        "backend",
+        "call_recipe",
+        "callable_ref_schema",
+        "state_binding",
+        "input_binding",
+        "control_witness",
+        "initializer_policy_version",
+        "payload_layers",
+        "callable_registry",
+        "calls",
+        "tensor_slots",
+        "control_witnesses",
+        "witness_completeness",
+        "compatibility",
+        "preflight",
+        "unsupported_sites",
+    }
+    if set(value) != required:
+        missing = sorted(required - set(value))
+        extra = sorted(set(value) - required)
+        raise ValueError(
+            f"Runnable run descriptor fields mismatch; missing={missing}, extra={extra}."
+        )
+    expected_versions = {
+        "capability": RUNNABLE_TLSPEC_SCHEMA_VERSION,
+        "call_recipe": RUNNABLE_CALL_RECIPE_VERSION,
+        "callable_ref_schema": RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
+        "initializer_policy_version": RUNNABLE_INITIALIZER_POLICY_VERSION,
+        "state_binding": "module_path_role_v1",
+        "input_binding": "model_site_io_role_v1",
+        "control_witness": "scalar_bool_and_arm_entry_v1",
+    }
+    for field_name, expected in expected_versions.items():
+        if value[field_name] != expected:
+            raise ValueError(
+                f"Runnable descriptor {field_name} must be {expected!r}; got {value[field_name]!r}."
+            )
+    for field_name in ("callable_registry", "calls", "tensor_slots", "control_witnesses"):
+        if not isinstance(value[field_name], list):
+            raise ValueError(f"Runnable descriptor {field_name} must be an array.")
+    payload_layers = value["payload_layers"]
+    if not isinstance(payload_layers, dict):
+        raise ValueError("Runnable descriptor payload_layers must be an object.")
+    for layer_name in ("weights", "activations"):
+        layer = payload_layers.get(layer_name)
+        if not isinstance(layer, dict) or layer.get("present") is not False:
+            raise ValueError(
+                f"Stage 2b sparse descriptor requires payload_layers.{layer_name}.present=false."
+            )
+    preflight = value["preflight"]
+    if not isinstance(preflight, dict) or preflight.get("passed") is not True:
+        raise ValueError("Runnable descriptor must carry a passed producer preflight.")
+    if value["unsupported_sites"] != []:
+        raise ValueError("Runnable descriptor must not claim unsupported producer sites.")
 
 
 def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:

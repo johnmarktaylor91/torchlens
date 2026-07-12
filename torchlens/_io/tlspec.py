@@ -28,9 +28,9 @@ from ..backends import get_backend_spec
 # clobbering the correct value in ``write_trace_manifest`` below.
 TLSPEC_SCHEMA_VERSION = 1
 TLSPEC_MANIFEST_FILENAME = "manifest.json"
-TLSPEC_VALID_SAVE_LEVELS = ("audit", "executable_with_callables", "portable")
+TLSPEC_VALID_SAVE_LEVELS = ("audit", "executable_with_callables", "portable", "runnable")
 TlspecKind = Literal["intervention", "trace", "bundle"]
-TlspecSaveLevel = Literal["audit", "executable_with_callables", "portable"]
+TlspecSaveLevel = Literal["audit", "executable_with_callables", "portable", "runnable"]
 
 _EMPTY_META_HASH = sha256(repr([]).encode("utf-8")).hexdigest()
 
@@ -66,6 +66,7 @@ class _TlSpecWriter:
         trace: Any,
         legacy_manifest: Manifest,
         save_level: str,
+        sparse_run: dict[str, Any] | None = None,
     ) -> None:
         """Write a unified manifest for a saved ``Trace`` payload.
 
@@ -79,6 +80,9 @@ class _TlSpecWriter:
             Existing portable-I/O manifest fields required by the loader.
         save_level:
             Save level recorded in the public schema.
+        sparse_run:
+            Authoritative sparse runnable descriptor, or ``None`` for all
+            pre-existing analysis save levels.
         """
 
         manifest = legacy_manifest.to_dict()
@@ -98,14 +102,14 @@ class _TlSpecWriter:
         unified_fields.pop("tlspec_version", None)
         manifest.update(unified_fields)
         backend_name = str(getattr(trace, "backend", "torch"))
-        if backend_name != "torch":
+        if backend_name != "torch" or sparse_run is not None:
             spec = get_backend_spec(backend_name)
             manifest.update(
                 {
                     "schema_version": 2,
                     "backend": backend_name,
                     "backend_runtime": cls._backend_runtime(trace, backend_name=backend_name),
-                    "torch_version": None,
+                    "torch_version": torch.__version__ if backend_name == "torch" else None,
                     "model_fingerprint": cls._backend_model_fingerprint(
                         trace,
                         backend_name=backend_name,
@@ -119,6 +123,8 @@ class _TlSpecWriter:
                     ),
                 }
             )
+        if sparse_run is not None:
+            manifest["run"] = sparse_run
         cls.write_json(path, manifest)
 
     @classmethod
@@ -150,6 +156,8 @@ class _TlSpecWriter:
             Save level recorded in the public schema.
         """
 
+        if save_level == "runnable":
+            raise ValueError("save_level='runnable' is supported only for Trace artifacts.")
         intervention_metadata = cls._intervention_compat_metadata(spec_json)
         manifest = {
             "format_version": legacy_format_version,
@@ -191,6 +199,8 @@ class _TlSpecWriter:
         """
 
         level = coerce_tlspec_save_level(save_level)
+        if level == "runnable":
+            raise ValueError("save_level='runnable' is supported only for Trace artifacts.")
         target_path = Path(path)
         _reject_symlink_path(target_path, context="bundle tlspec target")
         tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"

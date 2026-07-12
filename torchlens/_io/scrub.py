@@ -84,6 +84,7 @@ class _ScrubOptions:
     include_grads: bool
     include_saved_args: bool
     include_rng_states: bool
+    sparse_runnable: bool = False
     backend_name: str = "torch"
     payload_materialization: bool = True
     payload_codec: PayloadCodec = field(default_factory=lambda: get_payload_codec("torch"))
@@ -99,6 +100,7 @@ def scrub_for_save(
     include_rng_states: bool = False,
     backend_name: str | None = None,
     payload_materialization: bool = True,
+    sparse_runnable: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
@@ -121,6 +123,8 @@ def scrub_for_save(
         ``trace.backend`` when present.
     payload_materialization:
         Whether this backend can serialize materialized tensor payloads.
+    sparse_runnable:
+        Whether to apply the runnable sparse-core payload exclusion policy.
 
     Returns
     -------
@@ -134,6 +138,7 @@ def scrub_for_save(
         include_grads=include_grads,
         include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
+        sparse_runnable=sparse_runnable,
         backend_name=str(backend_name or getattr(trace, "backend", "torch")),
         payload_materialization=payload_materialization,
     )
@@ -408,6 +413,35 @@ def _effective_policy(
     options: _ScrubOptions,
 ) -> FieldPolicy:
     """Resolve the runtime policy for a field after include-flag overrides."""
+
+    if options.sparse_runnable and field_name in {
+        "_annotation_blobs",
+        "_args",
+        "_buffer_initial_values",
+        "_derived_grad_payload",
+        "_kwargs",
+        "custom_attributes",
+        "forward_args",
+        "forward_kwargs",
+        "func_config",
+        "func_rng_states",
+        "grad",
+        "grad_inputs",
+        "grad_outputs",
+        "input_activations",
+        "orphan_records",
+        "out",
+        "out_versions_by_child",
+        "parent_params",
+        "payload",
+        "raw_input",
+        "raw_output",
+        "saved_args",
+        "saved_kwargs",
+        "transformed_grad",
+        "transformed_out",
+    }:
+        return FieldPolicy.DROP
 
     if field_name in {"out", "transformed_out"} and not options.include_outs:
         return FieldPolicy.DROP

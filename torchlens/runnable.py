@@ -10,20 +10,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Literal, Protocol, TypeAlias
+from typing import Any, Final, Literal, Protocol, TypeAlias
 
 from .intervention.types import FunctionRegistryKey
 
-RUNNABLE_TLSPEC_SCHEMA_VERSION = "sparse_recorded_taken_path_v1"
+RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v1"
 """Frozen sparse runnable descriptor capability/version string."""
 
-RUNNABLE_CALL_RECIPE_VERSION = "non_tensor_args_and_tensor_slots_v1"
+RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_and_tensor_slots_v1"
 """Frozen sparse call-recipe version string."""
 
-RUNNABLE_CALLABLE_REF_SCHEMA_VERSION = 1
+RUNNABLE_CALLABLE_REF_SCHEMA_VERSION: Final = 1
 """Frozen ``FunctionRegistryKey`` schema version accepted by rung 1."""
 
-RUNNABLE_INITIALIZER_POLICY_VERSION = "torchlens_role_init_v1"
+RUNNABLE_INITIALIZER_POLICY_VERSION: Final = "torchlens_role_init_v1"
 """Frozen canonical role-based random-initializer policy version."""
 
 
