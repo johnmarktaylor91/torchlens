@@ -827,6 +827,11 @@ class TraceInterventionMixin(_TraceMixinBase):
             Field value for the fork.
         """
 
+        if field_name in {"_runnable_staged_user_state", "_runnable_embedded_state"}:
+            # These bindings are immutable mapping proxies. Run execution only
+            # reads them, and mappingproxy does not implement the pickle hooks
+            # used by copy/deepcopy.
+            return value
         policy = MODEL_LOG_FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
