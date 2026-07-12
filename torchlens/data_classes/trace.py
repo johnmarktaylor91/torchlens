@@ -45,6 +45,7 @@ from typing import (
     Optional,
     TYPE_CHECKING,
     Tuple,
+    cast,
 )
 
 import torch
@@ -53,6 +54,7 @@ from torch import nn
 if TYPE_CHECKING:
     from ..debug._audit import TraceAudit
     from .._io.streaming import BundleStreamWriter
+    from ..runnable import ReadinessReport, SparseRunDescriptor
     from .func_call_location import FuncCallLocation
 
 from .. import _state
@@ -764,6 +766,31 @@ class Trace(
     integer index, layer label, module address, or substring.
     """
 
+    @property
+    def readiness(self) -> "ReadinessReport | None":
+        """Return non-executing sparse-run readiness for a loaded artifact.
+
+        Returns
+        -------
+        ReadinessReport | None
+            Structured load-time report, or ``None`` for a live Trace.
+        """
+
+        return cast("ReadinessReport | None", self.__dict__.get("_runnable_readiness"))
+
+    @property
+    def runnable_descriptor(self) -> "SparseRunDescriptor | None":
+        """Return the parsed sparse descriptor retained by a loaded artifact.
+
+        Returns
+        -------
+        SparseRunDescriptor | None
+            Parsed descriptor, or ``None`` for analysis-only/live traces and
+            structurally unparseable runnable descriptors.
+        """
+
+        return cast("SparseRunDescriptor | None", self.__dict__.get("_runnable_descriptor"))
+
     def find_nan(self) -> Any:
         """Return the first NaN or Inf among saved outputs in execution order.
 
@@ -919,6 +946,8 @@ class Trace(
     last_run: Any | None
     capture_start_time: float
     capture_end_time: float
+    _runnable_descriptor: "SparseRunDescriptor | None"
+    _runnable_readiness: "ReadinessReport | None"
     backward_root_grad_fn_object_ids: list[int]
     backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
@@ -958,6 +987,8 @@ class Trace(
         "tlspec_version": FieldPolicy.KEEP,
         "_tracing_finished": FieldPolicy.KEEP,
         "capture_mode": FieldPolicy.KEEP,
+        "_runnable_descriptor": FieldPolicy.DROP,
+        "_runnable_readiness": FieldPolicy.DROP,
         "detached_patch_policy": FieldPolicy.DROP,
         "detached_patch_epoch": FieldPolicy.DROP,
         "escape_detector_mode": FieldPolicy.DROP,

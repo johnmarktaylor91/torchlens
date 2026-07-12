@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from pathlib import Path
@@ -24,7 +25,11 @@ from .status import ValidationReplayState, ValidationReplayStatus
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
-def validate_tlspec(path: str | Path) -> None:
+def validate_tlspec(
+    path: str | Path,
+    *,
+    allow_unsupported_runnable_versions: bool = False,
+) -> None:
     """Validate a unified ``.tlspec`` manifest against its manifest schema.
 
     Legacy TorchLens 2.16 formats are intentionally accepted without schema
@@ -34,6 +39,10 @@ def validate_tlspec(path: str | Path) -> None:
     ----------
     path:
         ``.tlspec`` directory path.
+    allow_unsupported_runnable_versions:
+        Preserve structural validation while deferring runnable descriptor
+        version ceilings to the structured readiness report. Public callers
+        should retain the default tripwire behavior.
 
     Raises
     ------
@@ -74,7 +83,11 @@ def validate_tlspec(path: str | Path) -> None:
     manifest = inspect_tlspec(tlspec_path)
     schema_version = _manifest_schema_version(manifest)
     schema = _load_tlspec_manifest_schema(schema_version)
-    _validate_manifest_against_schema(manifest, schema)
+    _validate_manifest_against_schema(
+        manifest,
+        schema,
+        allow_unsupported_runnable_versions=allow_unsupported_runnable_versions,
+    )
 
 
 def _manifest_schema_version(manifest: dict[str, Any]) -> int:
@@ -130,7 +143,12 @@ def _load_tlspec_manifest_schema(schema_version: int) -> dict[str, Any]:
     return schema
 
 
-def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str, Any]) -> None:
+def _validate_manifest_against_schema(
+    manifest: dict[str, Any],
+    schema: dict[str, Any],
+    *,
+    allow_unsupported_runnable_versions: bool = False,
+) -> None:
     """Validate the schema subset TorchLens relies on at runtime.
 
     Parameters
@@ -139,6 +157,8 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
         Decoded manifest object.
     schema:
         Decoded schema object.
+    allow_unsupported_runnable_versions:
+        Whether runnable version equality is deferred to readiness preflight.
 
     Raises
     ------
@@ -162,7 +182,10 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     # (``pyproject.toml``'s ``schemas/*.json`` package-data entry), so its
     # declared ``properties`` constraints must match what TorchLens itself
     # enforces.
-    _validate_schema_properties(manifest, schema, path="manifest")
+    schema_for_validation = schema
+    if allow_unsupported_runnable_versions and manifest.get("save_level") == "runnable":
+        schema_for_validation = _schema_with_deferred_runnable_version_consts(schema)
+    _validate_schema_properties(manifest, schema_for_validation, path="manifest")
 
     schema_version = _manifest_schema_version(manifest)
     # ``tlspec_version`` tracks the portable scrub/state format
@@ -193,7 +216,10 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
         {"audit", "executable_with_callables", "portable", "runnable"},
     )
     if manifest["save_level"] == "runnable":
-        _validate_sparse_run_descriptor(manifest.get("run"))
+        _validate_sparse_run_descriptor(
+            manifest.get("run"),
+            allow_unsupported_versions=allow_unsupported_runnable_versions,
+        )
     _validate_optional_dependencies(manifest.get("optional_dependencies"))
 
     kind = manifest["kind"]
@@ -213,13 +239,51 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
             )
 
 
-def _validate_sparse_run_descriptor(value: Any) -> None:
+def _schema_with_deferred_runnable_version_consts(schema: dict[str, Any]) -> dict[str, Any]:
+    """Copy a manifest schema while deferring only runnable version constants.
+
+    Parameters
+    ----------
+    schema:
+        Bundled manifest schema used by the public strict validator.
+
+    Returns
+    -------
+    dict[str, Any]
+        Deep copy retaining every structural constraint while removing the
+        exact-value checks reported by load-time structured readiness.
+    """
+
+    deferred = copy.deepcopy(schema)
+    run_schema = deferred.get("properties", {}).get("run", {}).get("properties", {})
+    for field_name in (
+        "capability",
+        "call_recipe",
+        "callable_ref_schema",
+        "state_binding",
+        "input_binding",
+        "control_witness",
+        "initializer_policy_version",
+    ):
+        field_schema = run_schema.get(field_name)
+        if isinstance(field_schema, dict):
+            field_schema.pop("const", None)
+    return deferred
+
+
+def _validate_sparse_run_descriptor(
+    value: Any,
+    *,
+    allow_unsupported_versions: bool = False,
+) -> None:
     """Validate the frozen top-level sparse runnable descriptor contract.
 
     Parameters
     ----------
     value:
         Decoded ``manifest.run`` value.
+    allow_unsupported_versions:
+        Whether exact descriptor version checks are deferred to readiness.
 
     Raises
     ------
@@ -272,6 +336,8 @@ def _validate_sparse_run_descriptor(value: Any) -> None:
         "control_witness": "scalar_bool_and_arm_entry_v1",
     }
     for field_name, expected in expected_versions.items():
+        if allow_unsupported_versions:
+            continue
         if value[field_name] != expected:
             raise ValueError(
                 f"Runnable descriptor {field_name} must be {expected!r}; got {value[field_name]!r}."

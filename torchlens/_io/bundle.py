@@ -10,7 +10,7 @@ by partial saves. The bundle format is intentionally a plain directory with
 from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 import json
 import platform
@@ -21,7 +21,7 @@ import uuid
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import torch
 from safetensors import SafetensorError
@@ -652,6 +652,7 @@ def _load_trace_payload(
     map_location: str | torch.device,
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | None,
+    sparse_run: Mapping[str, Any] | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a portable Trace payload after manifest dispatch.
 
@@ -669,6 +670,8 @@ def _load_trace_payload(
         Whether nested blob refs should be materialized when ``lazy=True``.
     payload_hints:
         Optional backend payload hints used during materialization.
+    sparse_run:
+        Structurally validated public sparse descriptor, when present.
 
     Returns
     -------
@@ -718,6 +721,9 @@ def _load_trace_payload(
     setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
     setattr(trace, "_source_bundle_path", bundle_path)
     setattr(trace, "_source_bundle_created_at", manifest.created_at)
+    from .runnable_load import attach_sparse_run_readiness
+
+    attach_sparse_run_readiness(trace, sparse_run)
     return trace
 
 
@@ -782,6 +788,7 @@ def _load_unified_tlspec(
             map_location=map_location,
             materialize_nested=materialize_nested,
             payload_hints=payload_hints,
+            sparse_run=cast(Mapping[str, Any] | None, manifest.get("run")),
         )
     if kind == "bundle":
         return _load_unified_bundle(bundle_path)
@@ -813,7 +820,7 @@ def _preflight_unified_trace_manifest(
     from ..validation import validate_tlspec
 
     try:
-        validate_tlspec(bundle_path)
+        validate_tlspec(bundle_path, allow_unsupported_runnable_versions=True)
     except ValueError as exc:
         raise TorchLensIOError(f"Invalid unified trace manifest: {exc}") from exc
 
