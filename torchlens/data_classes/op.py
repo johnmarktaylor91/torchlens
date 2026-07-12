@@ -233,6 +233,7 @@ _OP_DYNAMIC_SLOT_NAMES = (
     "_pending_transformed_grad_blob_id",
     "_grad_records",
     "_facets_cache",
+    "_receptive_field_cache",
     "_arg_expressions_cache",
     "_is_in_conditional_body",
     "_construction_done",
@@ -909,6 +910,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from .._io.lazy import LazyActivationRef
+    from ..receptive_field._view import ReceptiveFieldView
     from .func_call_location import FuncCallLocation
     from .layer import Layer
     from .layer import OpAccessor
@@ -1129,6 +1131,7 @@ class Op:
         "out_ref": FieldPolicy.DROP,
         "grad_ref": FieldPolicy.DROP,
         "_grad_records": FieldPolicy.BLOB_RECURSIVE,
+        "_receptive_field_cache": FieldPolicy.DROP,
         "_arg_expressions_cache": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
@@ -2645,6 +2648,7 @@ class Op:
         state = dict(state_items(self))
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
+        state.pop("_receptive_field_cache", None)
         state["func"] = None
         state["grad_fn_handle"] = None
         state["tlspec_version"] = TLSPEC_VERSION
@@ -2770,6 +2774,39 @@ class Op:
 
         try:
             object.__delattr__(self, "_facets_cache")
+        except AttributeError:
+            pass
+
+    @property
+    def receptive_field(self) -> "ReceptiveFieldView":
+        """Return the lazy receptive-field query view for this Op."""
+
+        from ..receptive_field import _engine
+        from ..receptive_field._view import ReceptiveFieldView
+
+        trace = self.source_trace
+        solution = _engine.solve(trace)
+        cache = self._slot("_receptive_field_cache")
+        if cache is not None and cache._solution is not solution:
+            for op in trace.layer_list:
+                if op._slot("_receptive_field_cache") is not None:
+                    object.__setattr__(
+                        op,
+                        "_receptive_field_cache",
+                        ReceptiveFieldView(op, solution),
+                    )
+            cache = self._slot("_receptive_field_cache")
+        if cache is None:
+            cache = ReceptiveFieldView(self, solution)
+            object.__setattr__(self, "_receptive_field_cache", cache)
+        return cache
+
+    @receptive_field.deleter
+    def receptive_field(self) -> None:
+        """Drop the cached receptive-field query view for this Op."""
+
+        try:
+            object.__delattr__(self, "_receptive_field_cache")
         except AttributeError:
             pass
 

@@ -23,10 +23,10 @@ from ._types import (
     ReceptiveFieldStatus,
     ReceptiveFieldValidation,
     ReceptiveFieldValidationStatus,
-    ReceptiveFieldView,
     ReceptiveFieldViolation,
 )
 from ._rules import ReceptiveFieldRule, ReceptiveFieldRuleContext, register_rf_rule, rules
+from ._view import ReceptiveFieldView
 
 
 __all__ = [

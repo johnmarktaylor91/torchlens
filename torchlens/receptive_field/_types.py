@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import torch
 
+    from ._view import ReceptiveFieldView as ReceptiveFieldView
 
 AxisKind = Literal["windowed", "pointwise", "full", "unknown"]
 """Supported derived input-axis roles."""
@@ -374,42 +375,6 @@ class GradientReceptiveField:
             raise ValueError("support_ranges must contain non-negative half-open bounds.")
 
 
-class ReceptiveFieldView:
-    """Lazy per-operation receptive-field view interface.
-
-    The query methods are attached by later receptive-field implementation
-    phases; this scaffold owns only the public result type.
-    """
-
-    def __init__(self, per_input: Mapping[str, ReceptiveField]) -> None:
-        """Initialize a view over insertion-ordered per-input descriptors.
-
-        Parameters
-        ----------
-        per_input:
-            Mapping from input IO roles to geometric descriptors.
-        """
-
-        self.per_input = per_input
-
-    def __getitem__(self, key: str | object) -> ReceptiveField:
-        """Return a descriptor by IO role or input-operation handle.
-
-        Parameters
-        ----------
-        key:
-            Exact IO-role string or an object exposing ``io_role``.
-
-        Returns
-        -------
-        ReceptiveField
-            Matching descriptor.
-        """
-
-        io_role = key if isinstance(key, str) else getattr(key, "io_role")
-        return self.per_input[io_role]
-
-
 class ReceptiveFieldValidationStatus(str, Enum):
     """Tri-state result of geometric and gradient containment checking."""
 
@@ -510,6 +475,5 @@ __all__ = [
     "ReceptiveFieldStatus",
     "ReceptiveFieldValidation",
     "ReceptiveFieldValidationStatus",
-    "ReceptiveFieldView",
     "ReceptiveFieldViolation",
 ]
