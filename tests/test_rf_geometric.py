@@ -21,10 +21,16 @@ from torchlens.receptive_field._types import (
 
 @pytest.fixture(autouse=True)
 def isolated_rule_registry() -> Iterator[None]:
-    """Restore the process-global RF rule registry after every golden."""
+    """Give each golden an isolated, minimal RF rule registry.
+
+    These focused goldens register only the operation families they prove, so the
+    auto-installed built-in pack is cleared for the test body and restored afterward.
+    """
 
     saved_rules = dict(_rules._RF_RULES)
     saved_epoch = _rules._RF_RULES_EPOCH
+    _rules._RF_RULES.clear()
+    _rules._RF_RULES_EPOCH += 1
     yield
     _rules._RF_RULES.clear()
     _rules._RF_RULES.update(saved_rules)

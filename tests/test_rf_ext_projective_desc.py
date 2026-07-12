@@ -31,6 +31,8 @@ def isolated_rule_registry() -> Iterator[None]:
 
     saved_rules = dict(_rules._RF_RULES)
     saved_epoch = _rules._RF_RULES_EPOCH
+    _rules._RF_RULES.clear()
+    _rules._RF_RULES_EPOCH += 1
     yield
     _rules._RF_RULES.clear()
     _rules._RF_RULES.update(saved_rules)
@@ -182,7 +184,12 @@ def test_projective_global_rule_uses_frozen_whole_input_status() -> None:
 
 
 def test_projective_data_dependent_rule_refuses_static_geometry() -> None:
-    """Return UNKNOWN rather than over-claiming a static forward routing descriptor."""
+    """Preserve DATA_DEPENDENT (not UNKNOWN) while refusing a static forward routing descriptor.
+
+    A data-dependent routing family has no static transpose geometry (axes stay None), but the
+    public status must keep the "routing depends on runtime data" distinction rather than collapsing
+    to "facts were not captured" (UNKNOWN).
+    """
 
     @_rules.register_rf_rule("relu")
     def routed(context: ReceptiveFieldRuleContext) -> _RuleResult:
@@ -198,7 +205,7 @@ def test_projective_data_dependent_rule_refuses_static_geometry() -> None:
     )
 
     assert descriptor.axes is None
-    assert descriptor.status is ReceptiveFieldStatus.UNKNOWN
+    assert descriptor.status is ReceptiveFieldStatus.DATA_DEPENDENT
     assert any("no static transpose" in note for note in descriptor.notes)
 
 

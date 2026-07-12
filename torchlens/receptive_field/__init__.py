@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 
@@ -33,10 +33,22 @@ from ._types import (
     ReceptiveFieldValidationStatus,
     ReceptiveFieldViolation,
 )
-from ._rules import ReceptiveFieldRule, ReceptiveFieldRuleContext, register_rf_rule, rules
+from ._rules import (
+    ReceptiveFieldRule,
+    ReceptiveFieldRuleContext,
+    register_rf_rule,
+    rules as _registered_rules,
+)
+
+# Importing the package executes built-in rule decorators once, before any public
+# descriptor, projective, or validation path can reach the geometry engines.
+from .rules import __all__ as _builtin_rule_modules  # noqa: F401
 from ._validation import cross_validate
 from ._view import ReceptiveFieldView
 from ._viz import node_spec
+
+
+rules = _registered_rules
 
 
 if TYPE_CHECKING:
@@ -173,13 +185,17 @@ def _empirical_adjoint_checks(
                     )
                     receptive_probe = receptive
                 else:
-                    receptive_probe = gradient_for_unit(
-                        target,
-                        target_unit,
-                        source=source,
-                        atol=0.0,
-                        rtol=0.0,
-                        retain_graph=True,
+                    # A single source selects a single field, never the role mapping.
+                    receptive_probe = cast(
+                        GradientReceptiveField,
+                        gradient_for_unit(
+                            target,
+                            target_unit,
+                            source=source,
+                            atol=0.0,
+                            rtol=0.0,
+                            retain_graph=True,
+                        ),
                     )
                     projective = receptive
             except (BackendUnsupportedError, ReceptiveFieldError) as exc:

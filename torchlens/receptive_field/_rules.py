@@ -296,6 +296,7 @@ class ReceptiveFieldRuleContext:
 
 _RF_RULES: dict[str, ReceptiveFieldRule] = {}
 _RF_RULES_EPOCH = 0
+_BUILTIN_RF_RULES: Mapping[str, ReceptiveFieldRule] | None = None
 
 
 def register_rf_rule(
@@ -354,6 +355,35 @@ def _rf_rules_epoch() -> int:
     """Return the registry epoch used to invalidate cached RF solutions."""
 
     return _RF_RULES_EPOCH
+
+
+def _install_builtin_rule_pack() -> None:
+    """Record or restore the built-in rule pack without replacing custom rules.
+
+    The first call follows the built-in modules' decorator registrations and
+    records their canonical rules. Later imports are idempotent: missing
+    built-ins are restored, while existing registrations (including intentional
+    custom replacements) are left untouched. Restoring one or more entries
+    advances the registry epoch once so cached trace solutions are invalidated.
+
+    Returns
+    -------
+    None
+        The process-global registry is updated only when a built-in entry is
+        absent.
+    """
+
+    global _BUILTIN_RF_RULES, _RF_RULES_EPOCH
+    if _BUILTIN_RF_RULES is None:
+        _BUILTIN_RF_RULES = MappingProxyType(dict(_RF_RULES))
+        return
+
+    missing_rules = {
+        name: rule for name, rule in _BUILTIN_RF_RULES.items() if name not in _RF_RULES
+    }
+    if missing_rules:
+        _RF_RULES.update(missing_rules)
+        _RF_RULES_EPOCH += 1
 
 
 def _normalize_rule_name(func_name: str) -> str:

@@ -19,31 +19,18 @@ from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleRes
 from torchlens.receptive_field._types import ReceptiveFieldDirection, ReceptiveFieldStatus
 
 
-_PACK: dict[str, object] | None = None
-
-
 @pytest.fixture(autouse=True)
 def isolated_rule_registry() -> Iterator[None]:
-    """Install the built-in RF rules per test and restore the registry afterward."""
+    """Restore custom rule changes while retaining the installed built-in pack."""
 
-    import importlib
-
-    global _PACK
     saved_rules = dict(_rules._RF_RULES)
     saved_epoch = _rules._RF_RULES_EPOCH
-    _rules._RF_RULES.clear()
-    if _PACK is None:
-        module = importlib.import_module("torchlens.receptive_field.rules")
-        if not _rules._RF_RULES:
-            for name in module.__all__:
-                importlib.reload(getattr(module, name))
-        _PACK = dict(_rules._RF_RULES)
-    else:
-        _rules._RF_RULES.update(_PACK)
-    yield
-    _rules._RF_RULES.clear()
-    _rules._RF_RULES.update(saved_rules)
-    _rules._RF_RULES_EPOCH = saved_epoch
+    try:
+        yield
+    finally:
+        _rules._RF_RULES.clear()
+        _rules._RF_RULES.update(saved_rules)
+        _rules._RF_RULES_EPOCH = saved_epoch
 
 
 def _spatial_bounds(box: object) -> tuple[int | None, int | None]:

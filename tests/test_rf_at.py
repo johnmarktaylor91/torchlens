@@ -23,6 +23,8 @@ def isolated_rule_registry() -> Iterator[None]:
 
     saved_rules = dict(_rules._RF_RULES)
     saved_epoch = _rules._RF_RULES_EPOCH
+    _rules._RF_RULES.clear()
+    _rules._RF_RULES_EPOCH += 1
     yield
     _rules._RF_RULES.clear()
     _rules._RF_RULES.update(saved_rules)
