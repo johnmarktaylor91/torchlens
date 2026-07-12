@@ -17,6 +17,7 @@ Covers the tensor-variant subset of the catalog:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 
 import pytest
 import torch
@@ -31,6 +32,7 @@ from torchlens._robustness import (
     check_model_and_input_variants,
 )
 from torchlens.options import CaptureOptions
+from torchlens.backends.torch.wrappers import unwrap_torch
 from torchlens.utils.tensor_utils import safe_copy
 
 
@@ -60,34 +62,34 @@ def test_meta_tensor_input_raises_with_clear_message() -> None:
         tl.trace(model, meta_x, capture=CaptureOptions(layers_to_save="none"))
 
 
-def test_meta_tensor_parameter_raises() -> None:
-    """A model created under ``torch.device('meta')`` cannot be logged."""
-    with torch.device("meta"):
-        meta_model = _Tiny()
-    x = torch.randn(2, 4)
+@pytest.fixture(params=["cold", "wrapped"], ids=["cold", "wrapped"])
+def explicit_wrapper_state(request: pytest.FixtureRequest) -> Iterator[str]:
+    """Establish one deliberate TorchLens wrapper state and restore wrapping.
 
-    with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
-        tl.trace(meta_model, x, capture=CaptureOptions(layers_to_save="none"))
-
-
-def test_meta_tensor_parameter_raises_after_prior_normal_traces() -> None:
-    """The meta guard must fire even after normal models were traced first.
-
-    Regression: torchlens's Python factory wrappers bypass torch's C-level
-    ``DeviceContext`` dispatch, so the wrapper re-injects the active device kwarg
-    itself. That injection skipped an EXPLICIT ``device=None`` (which ``nn.Linear``
-    forwards via ``factory_kwargs``), so once torch was wrapped by an earlier
-    trace, a model built under ``torch.device('meta')`` came out on CPU instead of
-    meta -- and the meta guard silently did not fire. Pin the in-session sequence
-    (normal traces THEN a meta model) rather than relying on test collection order.
+    Yields
+    ------
+    str
+        The explicitly constructed wrapper state for the meta-parameter guard.
     """
-    for _ in range(3):
+    state = str(request.param)
+    if state == "cold":
+        unwrap_torch()
+    else:
+        tl.trace(_Tiny(), torch.randn(2, 4))
+    try:
+        yield state
+    finally:
         tl.trace(_Tiny(), torch.randn(2, 4))
 
+
+def test_meta_tensor_parameter_rejected_in_explicit_wrapper_state(
+    explicit_wrapper_state: str,
+) -> None:
+    """Meta parameters are rejected in deliberate cold and wrapped states."""
+    del explicit_wrapper_state
     with torch.device("meta"):
         meta_model = _Tiny()
-    # The context must actually have produced meta params (the bug's real cause).
-    assert all(p.is_meta for p in meta_model.parameters())
+    assert all(parameter.is_meta for parameter in meta_model.parameters())
 
     with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
         tl.trace(meta_model, torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
