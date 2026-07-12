@@ -109,6 +109,28 @@
         "input_binding": {"const": "model_site_io_role_v1"},
         "control_witness": {"const": "scalar_bool_and_arm_entry_v1"},
         "initializer_policy_version": {"const": "torchlens_role_init_v1"},
+        "payload_layers": {
+          "type": "object",
+          "required": ["weights", "activations"],
+          "properties": {
+            "weights": {
+              "type": "object",
+              "required": ["present", "schema"],
+              "properties": {
+                "present": {"type": "boolean"},
+                "schema": {"const": "state_dict_v1"}
+              }
+            },
+            "activations": {
+              "type": "object",
+              "required": ["present", "schema"],
+              "properties": {
+                "present": {"const": false},
+                "schema": {"const": "selected_activation_v1"}
+              }
+            }
+          }
+        },
         "callable_registry": {"type": "array"},
         "calls": {"type": "array"},
         "tensor_slots": {"type": "array"},

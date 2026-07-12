@@ -48,10 +48,12 @@ from ..data_classes.trace import Trace
 if TYPE_CHECKING:
     from ..bundle import Bundle
     from ..intervention.types import InterventionSpec
+    from ..runnable import SparseRunDescriptor
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
+_RUNNABLE_WEIGHT_KIND = "runnable_weight"
 
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ("torchlens.data_classes.model_log", "ModelLog"): (
@@ -155,6 +157,7 @@ def save(
     include_grads: bool = True,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
+    include_weights: bool = False,
     strict: bool = True,
     overwrite: bool = False,
 ) -> None:
@@ -177,6 +180,11 @@ def save(
         Whether captured args/kwargs and related tensor payloads should be saved.
     include_rng_states:
         Whether per-layer RNG state tensors should be saved.
+    include_weights:
+        Whether a runnable save should bundle the full capture-time
+        ``state_dict``: all named parameters and persistent buffers. This
+        state-only payload contains no model object, gradients, RNG state,
+        callables, or per-call snapshots. Valid only with ``level="runnable"``.
     strict:
         Whether unsupported tensors should abort the save instead of being skipped.
     overwrite:
@@ -212,10 +220,23 @@ def save(
     save_level = coerce_tlspec_save_level(level)
     sparse_run_descriptor = None
     sparse_run_json = None
+    weight_blob_specs: list[BlobSpec] = []
+    if include_weights and save_level != "runnable":
+        raise ValueError("include_weights=True requires level='runnable'.")
     if save_level == "runnable":
-        from .runnable import require_sparse_run_descriptor, sparse_descriptor_to_json
+        from .runnable import (
+            require_sparse_run_descriptor,
+            sparse_descriptor_to_json,
+            with_weight_payload,
+        )
 
         sparse_run_descriptor = require_sparse_run_descriptor(trace)
+        if include_weights:
+            weight_blob_specs = _capture_weight_blob_specs(
+                trace,
+                sparse_run_descriptor,
+            )
+            sparse_run_descriptor = with_weight_payload(sparse_run_descriptor)
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
         include_outs = False
         include_grads = False
@@ -275,6 +296,7 @@ def save(
                 raise TorchLensIOError(
                     "Sparse runnable scrub produced tensor blob specs; refusing runnable label."
                 )
+            blob_specs.extend(weight_blob_specs)
         _apply_visualization_save_policy(
             trace,
             scrubbed_state=scrubbed_state,
@@ -410,6 +432,58 @@ def save(
         if isinstance(exc, Exception):
             raise TorchLensIOError(f"Failed to save bundle at {bundle_path}.") from exc
         raise
+
+
+def _capture_weight_blob_specs(
+    trace: Trace,
+    descriptor: SparseRunDescriptor,
+) -> list[BlobSpec]:
+    """Collect one full source-model state dict as runnable weight blobs.
+
+    Parameters
+    ----------
+    trace:
+        Live capture Trace retaining a weak reference to its source model.
+    descriptor:
+        Sparse descriptor whose canonical names, roles, and aliases define the
+        strict state contract.
+
+    Returns
+    -------
+    list[BlobSpec]
+        Separately named state-only blobs ordered by canonical state name.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the live source model or its state mapping is unavailable.
+    StateBindingError
+        If the full state dict disagrees with the descriptor contract.
+    """
+
+    from .._runnable_state import validate_state_mapping_for_descriptor
+
+    source_ref = getattr(trace, "_source_model_ref", None)
+    model = source_ref() if callable(source_ref) else None
+    state_dict_method = getattr(model, "state_dict", None)
+    if not callable(state_dict_method):
+        raise TorchLensIOError(
+            "include_weights=True requires the live source model retained by the capture Trace."
+        )
+    state = state_dict_method()
+    if not isinstance(state, Mapping):
+        raise TorchLensIOError("The capture source model did not return a state_dict mapping.")
+    validate_state_mapping_for_descriptor(descriptor, state)
+    return [
+        BlobSpec(
+            blob_id=f"runnable_weight_{index:05d}",
+            value=state[name].detach().clone(),
+            kind=_RUNNABLE_WEIGHT_KIND,
+            label=name,
+            logical_backend="torch",
+        )
+        for index, name in enumerate(sorted(cast(Mapping[str, torch.Tensor], state)))
+    ]
 
 
 def _reject_audit_only_materialized_payload_save(
@@ -727,7 +801,84 @@ def _load_trace_payload(
     from .runnable_load import attach_sparse_run_readiness
 
     attach_sparse_run_readiness(trace, sparse_run)
+    _bind_embedded_weight_payload(
+        trace,
+        manifest=manifest,
+        bundle_path=bundle_path,
+        map_location=map_location,
+    )
     return trace
+
+
+def _bind_embedded_weight_payload(
+    trace: Trace,
+    *,
+    manifest: Manifest,
+    bundle_path: Path,
+    map_location: str | torch.device,
+) -> None:
+    """Decode and strictly bind the optional runnable state-dict blob family.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated Trace with its sparse descriptor and readiness attached.
+    manifest:
+        Parsed tensor manifest containing the separately named weight entries.
+    bundle_path:
+        Artifact root used to resolve blob paths safely.
+    map_location:
+        Device selected for loaded state tensors.
+
+    Raises
+    ------
+    TorchLensIOError
+        If descriptor flags and blob-family membership disagree or a blob is
+        corrupt.
+    StateBindingError
+        If the decoded state violates the shared strict binding contract.
+    """
+
+    descriptor = trace.runnable_descriptor
+    weight_entries = tuple(
+        entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
+    )
+    if descriptor is None:
+        if weight_entries:
+            raise TorchLensIOError(
+                "Weight payload blobs require a parsed sparse runnable descriptor."
+            )
+        return
+    declared = descriptor.payload_layers.weights
+    if not declared.present:
+        if weight_entries:
+            raise TorchLensIOError(
+                "Runnable weight blobs are present while payload_layers.weights.present is false."
+            )
+        return
+    if declared.schema != "state_dict_v1":
+        raise TorchLensIOError(f"Unsupported runnable weight payload schema {declared.schema!r}.")
+    embedded: dict[str, torch.Tensor] = {}
+    for entry in weight_entries:
+        if entry.label in embedded:
+            raise TorchLensIOError(
+                f"Runnable weight payload repeats canonical state name {entry.label!r}."
+            )
+        blob_path = resolve_bundle_blob_path(bundle_path, entry.relative_path)
+        observed_sha256 = sha256_of_file(blob_path)
+        if observed_sha256 != entry.sha256:
+            raise TorchLensIOError(
+                f"Checksum mismatch for embedded state blob_id={entry.blob_id} at {blob_path}."
+            )
+        tensor_map = _load_safetensors_file(blob_path, map_location)
+        tensor = tensor_map.get(_BLOB_TENSOR_KEY)
+        if tensor is None:
+            raise TorchLensIOError(f"Embedded state blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
+        embedded[entry.label] = tensor
+
+    from .._runnable_state import bind_embedded_trace_state
+
+    bind_embedded_trace_state(trace, embedded)
 
 
 def _load_unified_tlspec(

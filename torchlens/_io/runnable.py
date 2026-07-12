@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 from hashlib import sha256
 import json
 import platform
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -143,6 +143,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     _build_child_version_slot_drafts(trace, ops, slot_drafts, slot_for_op)
     state_slots = _build_parameter_slot_drafts(trace)
     slot_drafts.update(state_slots)
+    _add_persistent_buffer_slot_drafts(trace, slot_drafts)
 
     registry_entries: list[CallableRegistryEntry] = []
     registry_id_by_key: dict[FunctionRegistryKey, str] = {}
@@ -294,6 +295,30 @@ def require_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     return descriptor
 
 
+def with_weight_payload(descriptor: SparseRunDescriptor) -> SparseRunDescriptor:
+    """Return a descriptor declaring the optional state-dict payload present.
+
+    Parameters
+    ----------
+    descriptor:
+        Value-free sparse descriptor produced for the runnable artifact.
+
+    Returns
+    -------
+    SparseRunDescriptor
+        Descriptor with only the separately stored weight-layer presence flag
+        changed; the sparse tensor-slot recipe remains value-free.
+    """
+
+    return replace(
+        descriptor,
+        payload_layers=replace(
+            descriptor.payload_layers,
+            weights=replace(descriptor.payload_layers.weights, present=True),
+        ),
+    )
+
+
 def sparse_descriptor_to_json(descriptor: SparseRunDescriptor) -> dict[str, Any]:
     """Convert a frozen sparse descriptor to deterministic JSON values.
 
@@ -440,31 +465,114 @@ def _build_parameter_slot_drafts(trace: Any) -> dict[str, _SlotDraft]:
     param_logs = getattr(trace, "param_logs", {})
     values = getattr(param_logs, "values", lambda: ())()
     for param in values:
-        address = str(param.address)
-        slot_id = f"state:{address}"
         device_type, device_index = _device_parts(getattr(param, "device_ref", None))
+        addresses = tuple(str(address) for address in getattr(param, "all_addresses", ()))
+        if not addresses:
+            addresses = (str(param.address),)
+        alias_group = f"alias:{param.barcode}" if len(addresses) > 1 else None
+        for address in addresses:
+            module_path, separator, _name = address.rpartition(".")
+            slot_id = f"state:{address}"
+            drafts[slot_id] = _SlotDraft(
+                slot_id=slot_id,
+                role=TensorSlotRole.PARAMETER,
+                shape=tuple(int(dim) for dim in param.shape),
+                dtype=str(param.dtype),
+                device_type=device_type,
+                device_index=device_index,
+                state_binding=StateSlotBinding(
+                    module_path=module_path if separator else "self",
+                    state_dict_name=address,
+                    semantic_role=_parameter_role(param),
+                    trainable=bool(param.is_trainable),
+                    persistent=True,
+                    alias_group=alias_group,
+                ),
+                use_sites=[],
+            )
+    return drafts
+
+
+def _add_persistent_buffer_slot_drafts(
+    trace: Any,
+    drafts: dict[str, _SlotDraft],
+) -> None:
+    """Add every persistent source-model buffer to the value-free state map.
+
+    Parameters
+    ----------
+    trace:
+        Live cooked Trace whose weak source-model reference is inspection-only.
+    drafts:
+        Mutable descriptor slots, including any buffers already represented by
+        graph source ops.
+    """
+
+    source_ref = getattr(trace, "_source_model_ref", None)
+    model = source_ref() if callable(source_ref) else None
+    state_dict_method = getattr(model, "state_dict", None)
+    named_parameters_method = getattr(model, "named_parameters", None)
+    named_buffers_method = getattr(model, "named_buffers", None)
+    if (
+        not callable(state_dict_method)
+        or not callable(named_parameters_method)
+        or not callable(named_buffers_method)
+    ):
+        return
+    state = state_dict_method()
+    if not isinstance(state, Mapping):
+        return
+    parameter_names = {
+        str(name) for name, _value in named_parameters_method(remove_duplicate=False)
+    }
+    buffers = {str(name): value for name, value in named_buffers_method(remove_duplicate=False)}
+    buffer_names = tuple(
+        name
+        for name, value in state.items()
+        if name not in parameter_names and name in buffers and isinstance(value, torch.Tensor)
+    )
+    names_by_object: dict[int, list[str]] = defaultdict(list)
+    for name in buffer_names:
+        names_by_object[id(buffers[name])].append(name)
+    alias_by_name = {
+        name: (f"buffer_alias:{min(names)}" if len(names) > 1 else None)
+        for names in names_by_object.values()
+        for name in names
+    }
+    existing_by_name = {
+        draft.state_binding.state_dict_name: draft
+        for draft in drafts.values()
+        if draft.state_binding is not None
+    }
+    for name in buffer_names:
+        alias_group = alias_by_name[name]
+        existing = existing_by_name.get(name)
+        if existing is not None:
+            binding = existing.state_binding
+            assert binding is not None
+            existing.state_binding = replace(binding, alias_group=alias_group)
+            continue
+        value = cast(torch.Tensor, state[name])
+        module_path, separator, leaf_name = name.rpartition(".")
+        device_type, device_index = _device_parts(value.device)
+        slot_id = f"state:{name}"
         drafts[slot_id] = _SlotDraft(
             slot_id=slot_id,
-            role=TensorSlotRole.PARAMETER,
-            shape=tuple(int(dim) for dim in param.shape),
-            dtype=str(param.dtype),
+            role=TensorSlotRole.BUFFER,
+            shape=tuple(int(dim) for dim in value.shape),
+            dtype=str(value.dtype),
             device_type=device_type,
             device_index=device_index,
             state_binding=StateSlotBinding(
-                module_path=str(param.module_address),
-                state_dict_name=address,
-                semantic_role=_parameter_role(param),
-                trainable=bool(param.is_trainable),
+                module_path=module_path if separator else "self",
+                state_dict_name=name,
+                semantic_role=_buffer_role(leaf_name or name),
+                trainable=False,
                 persistent=True,
-                alias_group=(
-                    f"alias:{param.barcode}"
-                    if len(getattr(param, "all_addresses", ())) > 1
-                    else None
-                ),
+                alias_group=alias_group,
             ),
             use_sites=[],
         )
-    return drafts
 
 
 def _build_child_version_slot_drafts(

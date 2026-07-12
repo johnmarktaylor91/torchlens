@@ -2299,6 +2299,15 @@ class Trace(
     def save(self, path: str | Path, **kwargs: Any) -> None:
         """Call :func:`torchlens.save` for this model log.
 
+        Parameters
+        ----------
+        path:
+            Destination bundle directory.
+        **kwargs:
+            Portable save options. For runnable saves, ``include_weights=True``
+            bundles the full capture-time ``state_dict``: all named parameters
+            and persistent buffers, as state rather than a reconstructed model.
+
         Warning
         -------
         Portable bundles contain a pickle file. Only load bundles from trusted
