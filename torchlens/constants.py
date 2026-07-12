@@ -52,6 +52,8 @@ MODEL_LOG_FIELD_ORDER = [
     "capture_mode",
     "_runnable_descriptor",
     "_runnable_readiness",
+    "_runnable_staged_user_state",
+    "_runnable_embedded_state",
     "detached_patch_policy",
     "detached_patch_epoch",
     "escape_detector_mode",

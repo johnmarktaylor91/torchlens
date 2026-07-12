@@ -1,7 +1,8 @@
 """Frozen type contracts for sparse runnable ``.tlspec`` artifacts.
 
-This module contains schema and API shapes only. It intentionally performs no
-capture, serialization, callable resolution, state binding, or execution.
+This module contains schema and API shapes only. Runtime state binding lives in
+``torchlens._runnable_state``; this module intentionally performs no capture,
+serialization, callable resolution, state binding, or execution.
 """
 
 from __future__ import annotations
@@ -512,7 +513,7 @@ class RunResult:
 
 
 class RunnableTraceProtocol(Protocol):
-    """Stage-0-only type contract for future ``Trace`` runnable methods."""
+    """Frozen type contract for ``Trace`` runnable methods across implementation stages."""
 
     def run(
         self,

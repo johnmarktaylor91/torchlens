@@ -222,6 +222,14 @@ default because module imports execute top-level code. Trusted execution may opt
 trust. TorchLens-owned `torchlens.*` custom callables and the fixed `torch`, `torch.Tensor`,
 `torch.nn.functional`, and `operator` namespaces always resolve.
 
+### Sparse runnable state binding
+
+Loaded sparse runnable traces accept `trace.load_state_dict(sd)` to strictly validate and atomically
+stage canonically named parameter and persistent-buffer tensors. The method never executes the DAG
+or writes tensor payloads into the sparse descriptor. Run preflight selects explicitly staged user
+state, then the future embedded capture-state hook, then the versioned
+`torchlens_role_init_v1` fallback; random reports name every initialized slot.
+
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
 `johnmarktaylor91/torchlens` is a **public** GitHub repo. Internal planning, riffing, sprint

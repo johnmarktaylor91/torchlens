@@ -144,6 +144,9 @@ pytest tests/ -m "not slow" -x --tb=short
 16. Smart-collapse metadata is computed, not serialized: `Module.collapse_score`,
     `Trace.module_collapse_order`, and `Trace.collapse_order(weights=..., mode=...)` must stay
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
+17. `Trace.load_state_dict(sd)` on a loaded sparse runnable Trace validates and stages state only;
+    it never executes the DAG or writes values into the sparse core. User staging overrides the
+    future embedded-state hook, and N1-a random fallback must name every initialized slot.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing
