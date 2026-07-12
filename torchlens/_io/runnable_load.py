@@ -704,8 +704,16 @@ def _signature_accepts_call(
     except (TypeError, ValueError):
         return True
     placeholders = (object(),) * call.num_positional_args
+    keyword_names = {
+        argument.argument_path[1]
+        for argument in (*call.tensor_arguments, *call.literal_arguments)
+        if len(argument.argument_path) >= 2
+        and argument.argument_path[0] == "kwargs"
+        and isinstance(argument.argument_path[1], str)
+    }
+    keyword_placeholders = {name: object() for name in keyword_names}
     try:
-        signature.bind_partial(*placeholders)
+        signature.bind_partial(*placeholders, **keyword_placeholders)
     except TypeError:
         return False
     return True

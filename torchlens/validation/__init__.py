@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from pathlib import Path
@@ -181,7 +182,10 @@ def _validate_manifest_against_schema(
     # (``pyproject.toml``'s ``schemas/*.json`` package-data entry), so its
     # declared ``properties`` constraints must match what TorchLens itself
     # enforces.
-    _validate_schema_properties(manifest, schema, path="manifest")
+    schema_for_validation = schema
+    if allow_unsupported_runnable_versions and manifest.get("save_level") == "runnable":
+        schema_for_validation = _schema_with_deferred_runnable_version_consts(schema)
+    _validate_schema_properties(manifest, schema_for_validation, path="manifest")
 
     schema_version = _manifest_schema_version(manifest)
     # ``tlspec_version`` tracks the portable scrub/state format
@@ -233,6 +237,38 @@ def _validate_manifest_against_schema(
             raise ValueError(
                 "Non-intervention .tlspec manifests require null intervention_compat_metadata."
             )
+
+
+def _schema_with_deferred_runnable_version_consts(schema: dict[str, Any]) -> dict[str, Any]:
+    """Copy a manifest schema while deferring only runnable version constants.
+
+    Parameters
+    ----------
+    schema:
+        Bundled manifest schema used by the public strict validator.
+
+    Returns
+    -------
+    dict[str, Any]
+        Deep copy retaining every structural constraint while removing the
+        exact-value checks reported by load-time structured readiness.
+    """
+
+    deferred = copy.deepcopy(schema)
+    run_schema = deferred.get("properties", {}).get("run", {}).get("properties", {})
+    for field_name in (
+        "capability",
+        "call_recipe",
+        "callable_ref_schema",
+        "state_binding",
+        "input_binding",
+        "control_witness",
+        "initializer_policy_version",
+    ):
+        field_schema = run_schema.get(field_name)
+        if isinstance(field_schema, dict):
+            field_schema.pop("const", None)
+    return deferred
 
 
 def _validate_sparse_run_descriptor(
