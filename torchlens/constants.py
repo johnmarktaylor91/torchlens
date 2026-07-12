@@ -50,6 +50,8 @@ MODEL_LOG_FIELD_ORDER = [
     "param_source",
     "derived_grads",
     "capture_mode",
+    "_runnable_descriptor",
+    "_runnable_readiness",
     "detached_patch_policy",
     "detached_patch_epoch",
     "escape_detector_mode",

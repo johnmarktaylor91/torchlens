@@ -946,6 +946,8 @@ class Trace(
     last_run: Any | None
     capture_start_time: float
     capture_end_time: float
+    _runnable_descriptor: "SparseRunDescriptor | None"
+    _runnable_readiness: "ReadinessReport | None"
     backward_root_grad_fn_object_ids: list[int]
     backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
@@ -985,6 +987,8 @@ class Trace(
         "tlspec_version": FieldPolicy.KEEP,
         "_tracing_finished": FieldPolicy.KEEP,
         "capture_mode": FieldPolicy.KEEP,
+        "_runnable_descriptor": FieldPolicy.DROP,
+        "_runnable_readiness": FieldPolicy.DROP,
         "detached_patch_policy": FieldPolicy.DROP,
         "detached_patch_epoch": FieldPolicy.DROP,
         "escape_detector_mode": FieldPolicy.DROP,
