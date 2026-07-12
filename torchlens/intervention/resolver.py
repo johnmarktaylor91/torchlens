@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from dataclasses import dataclass
 import importlib
 import operator
@@ -16,6 +16,7 @@ from .errors import (
     ReplayPreconditionError,
     SiteAmbiguityError,
     SiteResolutionError,
+    UntrustedCallableError,
 )
 from .selectors import (
     BaseSelector,
@@ -102,13 +103,30 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
     return FunctionRegistryKey("custom", str(qualname), dispatch_kind, import_path=import_path)
 
 
-def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any]:
-    """Resolve a saved function registry key to a runtime callable.
+def resolve_function_registry_key(
+    key: FunctionRegistryKey,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> Callable[..., Any]:
+    """Resolve a saved function registry key at the execution boundary.
+
+    Loading a saved spec may retain an untrusted foreign custom key for safe
+    analysis without importing it. Resolving that key for execution denies the
+    import unless the caller opts into broad trust or supplies a matching
+    module allowlist. TorchLens-owned custom callables are always trusted.
 
     Parameters
     ----------
     key:
         Saved function registry key.
+    trust_custom_callables:
+        Explicit execution-time permission to import a foreign custom callable
+        when no allowlist is supplied. Only enable for specs from a trusted
+        source.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names. When supplied,
+        custom imports must be listed even if ``trust_custom_callables=True``.
 
     Returns
     -------
@@ -119,6 +137,9 @@ def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any
     ------
     ReplayPreconditionError
         If the namespace or qualified name cannot be resolved.
+    UntrustedCallableError
+        If execution attempts to resolve a foreign custom callable import that
+        has not been explicitly trusted.
     """
 
     try:
@@ -134,6 +155,33 @@ def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any
             if not key.import_path:
                 raise AttributeError("custom key is missing import_path")
             module_name, _, qualname = key.import_path.partition(":")
+            # TorchLens's own callables (built-in intervention helpers such as
+            # zero_ablate/scale, keyed as "custom" because they live outside the
+            # torch namespaces) are NOT foreign arbitrary code: the library is
+            # already imported and trusted, so importing a ``torchlens.*`` module
+            # runs only TorchLens's own already-installed code. The RCE risk is
+            # bundle-supplied FOREIGN modules, so those still default-deny; only
+            # torchlens-internal callables are auto-trusted (regardless of the
+            # allowlist, so a user's own bundle with a built-in intervention loads).
+            _is_torchlens_internal = module_name == "torchlens" or module_name.startswith(
+                "torchlens."
+            )
+            if not _is_torchlens_internal:
+                if allowed_custom_callable_modules is not None:
+                    if module_name not in allowed_custom_callable_modules:
+                        raise UntrustedCallableError(
+                            "Refusing to import bundle-supplied custom callable "
+                            f"module {module_name!r}; it is not in "
+                            "allowed_custom_callable_modules. Importing a custom "
+                            "callable can execute arbitrary code."
+                        )
+                elif not trust_custom_callables:
+                    raise UntrustedCallableError(
+                        "Refusing to import bundle-supplied custom callable because "
+                        "importing it can execute arbitrary code. Pass "
+                        "trust_custom_callables=True only for a trusted spec, or "
+                        "supply allowed_custom_callable_modules."
+                    )
             module = importlib.import_module(module_name)
             obj: Any = module
             for part in qualname.split("."):

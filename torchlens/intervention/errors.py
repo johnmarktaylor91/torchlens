@@ -122,6 +122,10 @@ class ReplayPreconditionError(TorchLensInterventionError):
     """Raised when replay cannot satisfy its future execution preconditions."""
 
 
+class UntrustedCallableError(ReplayPreconditionError):
+    """Raised when a loaded spec requests an untrusted custom callable import."""
+
+
 class OpaqueCallableInExecutableSaveError(ConfigurationError, ValueError):
     """Raised when an executable intervention save would require opaque code."""
 
@@ -340,6 +344,7 @@ __all__ = [
     "NonExecutableSpecError",
     "OpaqueCallableInExecutableSaveError",
     "UnserializableDictKeyError",
+    "UntrustedCallableError",
     "RecursiveTracingError",
     "ReplayPreconditionError",
     "Severity",

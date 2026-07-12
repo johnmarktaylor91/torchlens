@@ -146,6 +146,12 @@ pytest tests/ -m "not slow" -x --tb=short
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 
 ## Known Gotchas
+- Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing
+  their modules. Resolving one for execution denies by default because imports execute top-level code;
+  trusted execution may use `trust_custom_callables=True`, while
+  `allowed_custom_callable_modules={"my_trusted_module"}` is narrower and remains restrictive even if
+  the boolean is also true. TorchLens-owned `torchlens.*` custom callables and the fixed trusted
+  namespaces resolve without an opt-in.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
 - Fast-path module decoration skips `_handle_module_entry`; alignment state must be

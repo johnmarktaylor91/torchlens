@@ -212,6 +212,16 @@ The glossary is the **canonical** API spec (vault `brain/projects/torchlens/repo
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
 - After a rename/conformance sprint: re-file the updated glossary to the vault (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
 
+### Trusted custom callable imports
+
+Intervention-spec loads tolerate foreign `custom` callable keys for safe structural and metadata
+analysis without importing their modules. Resolution for execution denies those foreign imports by
+default because module imports execute top-level code. Trusted execution may opt in with
+`trust_custom_callables=True`; prefer the narrower
+`allowed_custom_callable_modules={"my_trusted_module"}`, which remains enforced even alongside broad
+trust. TorchLens-owned `torchlens.*` custom callables and the fixed `torch`, `torch.Tensor`,
+`torch.nn.functional`, and `operator` namespaces always resolve.
+
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
 `johnmarktaylor91/torchlens` is a **public** GitHub repo. Internal planning, riffing, sprint

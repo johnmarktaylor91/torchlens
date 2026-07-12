@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum
 import importlib
@@ -30,6 +30,7 @@ from .errors import (
     ReplayPreconditionError,
     SiteResolutionError,
     UnserializableDictKeyError,
+    UntrustedCallableError,
 )
 from .helpers import HELPER_REGISTRY_VERSION, helper_from_serialized
 from .resolver import (
@@ -216,13 +217,24 @@ def save_intervention(
         raise
 
 
-def load_intervention_spec(path: str | Path) -> InterventionSpec:
+def load_intervention_spec(
+    path: str | Path,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> InterventionSpec:
     """Load an intervention spec from a ``.tlspec`` directory.
 
     Parameters
     ----------
     path:
         Directory containing ``spec.json`` and tensor sidecars.
+    trust_custom_callables:
+        Explicit permission to import custom callables recorded in the spec
+        when no allowlist is supplied. Enable only for trusted specs.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names. When supplied,
+        custom imports must be listed even if ``trust_custom_callables=True``.
 
     Returns
     -------
@@ -253,7 +265,11 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
         }
     )
     spec.metadata = metadata
-    _verify_loaded_function_keys(data.get("function_registry_keys", []))
+    _verify_loaded_function_keys(
+        data.get("function_registry_keys", []),
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
     return spec
 
 
@@ -1457,19 +1473,44 @@ def _function_key_for_layer(layer: Any) -> FunctionRegistryKey | None:
     return function_registry_key_from_callable(func)
 
 
-def _verify_loaded_function_keys(entries: Iterable[dict[str, Any]]) -> None:
-    """Fail closed when saved function keys are unresolvable.
+def _verify_loaded_function_keys(
+    entries: Iterable[dict[str, Any]],
+    *,
+    trust_custom_callables: bool,
+    allowed_custom_callable_modules: Collection[str] | None,
+) -> None:
+    """Validate resolvable saved keys without importing untrusted foreign code.
+
+    Load-time analysis tolerates a well-formed foreign custom key when its trust
+    gate denies resolution. Malformed and otherwise unresolvable keys still fail
+    closed. The foreign custom key is resolved only at execution, where the trust
+    gate is enforced again.
 
     Parameters
     ----------
     entries:
         Serialized function key entries.
+    trust_custom_callables:
+        Whether foreign custom callable imports may be verified when no
+        allowlist is supplied.
+    allowed_custom_callable_modules:
+        Optional custom callable module allowlist.
     """
 
     for entry in entries:
         key_data = entry.get("key", {})
         key = FunctionRegistryKey(**key_data)
-        resolve_function_registry_key(key)
+        try:
+            resolve_function_registry_key(
+                key,
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_custom_callable_modules,
+            )
+        except UntrustedCallableError:
+            # An untrusted custom key can be inspected without importing its module.
+            # Resolution for execution applies the same trust gate and still denies
+            # foreign code by default.
+            continue
 
 
 def _write_tensor_sidecars(

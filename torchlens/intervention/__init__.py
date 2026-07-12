@@ -126,6 +126,7 @@ from .errors import (
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
     UnclassifiedSelectorError,
+    UntrustedCallableError,
 )
 from .types import (
     ArgComponent,
@@ -300,6 +301,7 @@ __all__ = [
     "when",
     "without_op",
     "UnclassifiedSelectorError",
+    "UntrustedCallableError",
     "zero_ablate",
     "rebuild_container_from_spec",
 ]

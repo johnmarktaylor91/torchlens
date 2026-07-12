@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from collections.abc import Collection
 from typing import Any
 
 from .._io import JaxPayloadLoadHint, PayloadLoadHints, rehydrate_nested
@@ -148,13 +149,24 @@ def inspect_tlspec(path: str | Path) -> dict[str, Any]:
     raise FileNotFoundError(f"No TorchLens .tlspec manifest found at {tlspec_path}.")
 
 
-def load_intervention_spec(path: str | Path) -> InterventionSpec:
+def load_intervention_spec(
+    path: str | Path,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> InterventionSpec:
     """Load an intervention spec through the canonical polymorphic loader.
 
     Parameters
     ----------
     path:
         Directory containing an intervention ``.tlspec``.
+    trust_custom_callables:
+        Explicit permission to import custom callables when no allowlist is
+        supplied. Enable only for specs from a trusted source.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names. When supplied,
+        custom imports must be listed even if ``trust_custom_callables=True``.
 
     Returns
     -------
@@ -167,7 +179,11 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
         If ``path`` does not load as an intervention spec.
     """
 
-    loaded = load(path)
+    loaded = load(
+        path,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
     if not isinstance(loaded, InterventionSpec):
         raise TypeError("torchlens.io.load_intervention_spec expected an intervention spec.")
     return loaded
