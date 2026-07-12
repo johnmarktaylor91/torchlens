@@ -84,6 +84,41 @@ def test_conv_support_is_exact_and_matches_geometric_hull() -> None:
     assert tuple(stop - start for start, stop in result.support_ranges[-2:]) == descriptor.size
 
 
+def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
+    """Accept the public Trace.input_ops accessor wherever an input is selected."""
+
+    _register_conv_rule()
+    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
+    capture = tl.options.CaptureOptions(backward_ready=True)
+    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    target = _op(trace, "conv2d")
+    accessor_input = trace.input_ops[0]
+
+    gradient = target.receptive_field.gradient(
+        (0, 0, 2, 2), input=accessor_input, retain_graph=True
+    )
+    checked = target.receptive_field.check((0, 0, 2, 2), input=accessor_input)
+
+    assert gradient.support_mask.sum().item() == 9
+    assert checked.passed
+
+    source_trace = tl.trace(
+        model,
+        torch.ones(1, 1, 5, 5, requires_grad=True),
+        capture=capture,
+        save_mode="reference",
+    )
+    source_target = _op(source_trace, "conv2d")
+    source_gradient = source_target.receptive_field.gradient(
+        (0, 0, 2, 2), source=source_trace.input_ops[0]
+    )
+
+    assert source_gradient.support_mask.sum().item() == 9
+
+
 def _rules_mapping(trace: object, target: object) -> object:
     """Return geometric descriptors without importing the engine at module import time."""
 

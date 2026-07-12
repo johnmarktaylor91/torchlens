@@ -201,6 +201,23 @@ def test_unit_box_only_rule_degrades_to_upper_bound() -> None:
     assert not box.exact
 
 
+def test_projective_data_dependent_rule_preserves_its_status() -> None:
+    """Keep runtime-routed projective geometry distinct from missing facts."""
+
+    @_rules.register_rf_rule("add", replace=True)
+    def runtime_routed(context: ReceptiveFieldRuleContext) -> _RuleResult:
+        """Model a route whose destination depends on captured runtime data."""
+
+        return context.data_dependent("destination depends on runtime data")
+
+    trace = tl.trace(_AddZero(), torch.ones(1, 1, 8))
+    source = trace.input_ops[0]
+    target = trace.output_ops[0]
+    descriptors = solve_projective(trace, [target]).per_op[source.label]
+
+    assert next(iter(descriptors.values())).status is ReceptiveFieldStatus.DATA_DEPENDENT
+
+
 def test_forward_accelerator_has_exhaustive_membership_duality_golden() -> None:
     """Require an optional accelerator to equal membership transpose on small extents."""
 

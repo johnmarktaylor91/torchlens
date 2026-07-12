@@ -442,7 +442,8 @@ class ReceptiveFieldView:
         target:
             Optional descendant graph point for projective validation.
         atol, rtol:
-            Non-negative gradient support thresholds.
+            Accepted for compatibility and ignored. Validation always uses exact
+            finite nonzero gradient support.
 
         Returns
         -------

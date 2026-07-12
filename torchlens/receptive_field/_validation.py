@@ -457,7 +457,12 @@ def _check_for_unit(
     rtol: float,
     retain_graph: bool,
 ) -> ReceptiveFieldValidation:
-    """Run one validation with explicit graph-retention control."""
+    """Run one validation with explicit graph-retention control.
+
+    Validation always probes exact finite nonzero support. ``atol`` and
+    ``rtol`` remain accepted by the public compatibility surface but are not
+    forwarded to the empirical probe, so they cannot suppress a violation.
+    """
 
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
@@ -507,8 +512,8 @@ def _check_for_unit(
                 complete_unit,
                 input=input,
                 source=source,
-                atol=atol,
-                rtol=rtol,
+                atol=0.0,
+                rtol=0.0,
                 retain_graph=retain_graph,
             )
         else:
@@ -516,8 +521,8 @@ def _check_for_unit(
                 target,
                 complete_unit,
                 target=result_target,
-                atol=atol,
-                rtol=rtol,
+                atol=0.0,
+                rtol=0.0,
                 retain_graph=retain_graph,
             )
         if isinstance(probed, GradientReceptiveField):
@@ -564,7 +569,8 @@ def check_for_unit(
     target:
         Optional projective-direction descendant graph point.
     atol, rtol:
-        Gradient support thresholds; these never relax geometric containment.
+        Accepted for compatibility and ignored. Validation always uses exact
+        finite nonzero gradient support.
 
     Returns
     -------
@@ -611,7 +617,8 @@ def check(
     target:
         Optional projective-direction descendant graph point.
     atol, rtol:
-        Gradient support thresholds; these never relax geometric containment.
+        Accepted for compatibility and ignored. Validation always uses exact
+        finite nonzero gradient support.
 
     Returns
     -------
@@ -969,7 +976,8 @@ def cross_validate(
     target:
         Optional projective-direction descendant selector or selectors.
     atol, rtol:
-        Gradient support thresholds; these never relax geometric containment.
+        Accepted for compatibility and ignored. Validation always uses exact
+        finite nonzero gradient support.
     raise_on_failure:
         Raise on ``FAIL`` only.
 

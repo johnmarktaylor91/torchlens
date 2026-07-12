@@ -14,7 +14,7 @@ import torchlens as tl
 from torchlens.receptive_field import _rules
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import ReceptiveFieldValidationStatus
-from torchlens.receptive_field._validation import cross_validate
+from torchlens.receptive_field._validation import cross_validate, validate_receptive_field_trace
 
 
 _PACK: dict[str, object] | None = None
@@ -68,7 +68,7 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
 def test_positive_conv_is_contained_and_tight() -> None:
     """Require exact support equality so gratuitously loose rules cannot pass."""
 
-    @_rules.register_rf_rule("softplus")
+    @_rules.register_rf_rule("softplus", replace=True)
     def softplus_passthrough(context: ReceptiveFieldRuleContext) -> _RuleResult:
         """Describe the smooth pointwise activation used by the tightness oracle."""
 
@@ -112,6 +112,74 @@ def test_deliberately_undersized_rule_fires_negative_tripwire() -> None:
     assert len(result.violations) == 8
     assert result.per_axis_excess == (0, 0, 1, 1)
     assert result.slack_per_axis is None
+
+
+@pytest.mark.parametrize("validation_surface", ["check", "cross_validate", "validate_trace"])
+def test_validation_thresholds_cannot_suppress_real_support(validation_surface: str) -> None:
+    """Keep a false convolution rule failing despite caller-supplied thresholds."""
+
+    @_rules.register_rf_rule("conv2d", replace=True)
+    def undersized_convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
+        """Deliberately report a one-by-one field for a positive three-by-three kernel."""
+
+        return context.window(kernel=(1, 1), stride=(1, 1), padding=(0, 0), dilation=(1, 1))
+
+    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
+    target = _op(trace, "conv2d")
+    input_op = _input_op(trace)
+    kwargs = {"atol": 2.0, "rtol": 2.0}
+    if validation_surface == "check":
+        results = [target.receptive_field.check((0, 0, 2, 2), input=input_op, **kwargs)]
+    elif validation_surface == "cross_validate":
+        results = cross_validate(trace, ops=[target], units=(0, 0, 2, 2), inputs=input_op, **kwargs)
+    else:
+        results = validate_receptive_field_trace(
+            trace,
+            ops=[target],
+            units=(0, 0, 2, 2),
+            inputs=input_op,
+            **kwargs,
+        )
+
+    assert len(results) == 1
+    assert results[0].status is ReceptiveFieldValidationStatus.FAIL
+    assert results[0].n_violations == 8
+
+
+@pytest.mark.parametrize("direction", ["receptive", "projective"])
+def test_verify_reports_containment_and_empirical_adjoint_equality(direction: str) -> None:
+    """Compose both model-facing RF diagnostics in the consolidated verifier."""
+
+    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
+    target = _op(trace, "conv2d")
+
+    if direction == "receptive":
+        report = tl.receptive_field.verify(
+            trace,
+            ops=[target],
+            units=(0, 0, 2, 2),
+            inputs=_input_op(trace),
+        )
+    else:
+        report = tl.receptive_field.verify(
+            trace,
+            ops=[_input_op(trace)],
+            units=(0, 0, 2, 2),
+            direction=direction,
+            target=target,
+        )
+
+    assert len(report.containment) == 1
+    assert report.containment[0].status is ReceptiveFieldValidationStatus.PASS
+    assert len(report.empirical_adjoint) == 1
+    assert report.empirical_adjoint[0].passed
+    assert report.passed
 
 
 class _InstanceNorm(nn.Module):
@@ -273,7 +341,7 @@ class _SmallConvNet(nn.Module):
 def test_cross_validate_small_model_center_and_corners() -> None:
     """Sweep complete center and corner indices while retaining the backward graph."""
 
-    @_rules.register_rf_rule("softplus")
+    @_rules.register_rf_rule("softplus", replace=True)
     def softplus_passthrough(context: ReceptiveFieldRuleContext) -> _RuleResult:
         """Preserve geometry through the model-zoo fixture's smooth activation."""
 

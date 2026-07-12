@@ -11,9 +11,11 @@ from typing import TYPE_CHECKING
 
 from .._io import FieldPolicy
 from ._engine import (
+    _concatenation_offsets,
     _graph_revision,
     _merge_states,
     _operation_is_live,
+    _passthrough_axis_map,
     _rule_result,
     _topological_operations,
 )
@@ -248,7 +250,7 @@ def _transpose_rule(
     notes = state.notes + ((f"{child.label}: {result.note}",) if result.note else ())
     if result.kind in {"data_dependent", "unknown", "unsupported"}:
         status = {
-            "data_dependent": ReceptiveFieldStatus.UNKNOWN,
+            "data_dependent": ReceptiveFieldStatus.DATA_DEPENDENT,
             "unknown": ReceptiveFieldStatus.UNKNOWN,
             "unsupported": ReceptiveFieldStatus.UNSUPPORTED,
         }[result.kind]
@@ -292,20 +294,38 @@ def _transpose_rule(
             for axis in state.axes
         )
         return replace(state, axes=axes, notes=notes + (degradation,), rule=rule_name)
-    return _transpose_passthrough(child, parent, state, rule_name, notes)
+    return _transpose_passthrough(child, parent, state, result, rule_name, notes)
 
 
 def _transpose_passthrough(
     child: Op,
     parent: Op,
     state: _InputState,
+    result: _RuleResult,
     rule_name: str,
     notes: tuple[str, ...],
+    *,
+    child_to_parent: Mapping[int, int] | None = None,
 ) -> _InputState:
-    """Transpose identity and broadcast passthrough relations."""
+    """Transpose identity and broadcast relations with explicit axis alignment."""
 
     assert state.axes is not None
-    offset = len(child.shape) - len(parent.shape)
+    if child_to_parent is None:
+        parent_to_child = _passthrough_axis_map(child, parent, result)
+        if parent_to_child is not None:
+            child_to_parent = {
+                child_axis: parent_axis for parent_axis, child_axis in parent_to_child.items()
+            }
+    if child_to_parent is None:
+        return replace(
+            state,
+            axes=None,
+            taint=ReceptiveFieldStatus.UNKNOWN,
+            notes=notes + (f"{child.label}: rank-changing passthrough lacks an explicit axis map",),
+            rule=rule_name,
+        )
+    concat_axis = result.values.get("concatenate_axis")
+    concat_offsets = _concatenation_offsets(child, parent, result)
     axes: list[_AxisState] = []
     for axis in state.axes:
         geometry = axis.geometry
@@ -324,8 +344,8 @@ def _transpose_passthrough(
         if child_axis is None or isinstance(geometry, _Full):
             axes.append(axis)
             continue
-        parent_axis = child_axis - offset
-        if parent_axis < 0 or parent_axis >= len(parent.shape):
+        parent_axis = child_to_parent.get(child_axis)
+        if parent_axis is None or parent_axis < 0 or parent_axis >= len(parent.shape):
             axes.append(
                 replace(
                     axis,
@@ -348,10 +368,19 @@ def _transpose_passthrough(
                 )
             )
             continue
+        local = _identity_map()
+        if child_axis == concat_axis and concat_offsets:
+            local = _Mapped(
+                _Affine(Fraction(1), Fraction(min(concat_offsets))),
+                _Affine(Fraction(1), Fraction(max(concat_offsets))),
+                exact=len(concat_offsets) == 1 and axis.kind != "windowed",
+                aligned=len(concat_offsets) == 1,
+                sparse=len(concat_offsets) > 1,
+            )
         axes.append(
             replace(
                 axis,
-                geometry=_compose(geometry, _identity_map()),
+                geometry=_compose(geometry, local),
                 output_axis=parent_axis,
                 kind=axis.kind if axis.kind != "unknown" else "pointwise",
                 provenance=child.label if axis.kind == "unknown" else axis.provenance,
@@ -417,7 +446,15 @@ def _transpose_window_edges(
             )
         except (IndexError, TypeError, ValueError, ZeroDivisionError):
             return _malformed_window_state(child, state, rule_name, notes)
-    return _transpose_window_maps(child, parent, state, tuple(maps), rule_name, notes)
+    return _transpose_window_maps(
+        child,
+        parent,
+        state,
+        tuple(maps),
+        rule_name,
+        notes,
+        preserve_non_window_axes=bool(result.values.get("preserve_non_window_axes", False)),
+    )
 
 
 def _malformed_window_state(
@@ -444,6 +481,8 @@ def _transpose_window_maps(
     local_maps: tuple[_Mapped, ...],
     rule_name: str,
     notes: tuple[str, ...],
+    *,
+    preserve_non_window_axes: bool = False,
 ) -> _InputState:
     """Transpose local window maps and mirror semantic axis inference."""
 
@@ -484,7 +523,11 @@ def _transpose_window_maps(
                     provenance=child.label,
                 )
             )
-        elif child_axis == child_channel_axis and parent_channel_axis >= 0:
+        elif (
+            child_axis == child_channel_axis
+            and parent_channel_axis >= 0
+            and not preserve_non_window_axes
+        ):
             axes.append(
                 replace(
                     axis,
@@ -551,7 +594,27 @@ def _transpose_full(
     assert state.axes is not None
     selected = _select_full_axes(result.values.get("axes"), parent, child)
     exact = bool(result.values.get("exact", True))
-    passthrough = _transpose_passthrough(child, parent, state, rule_name, notes)
+    parent_rank = len(parent.shape)
+    child_rank = len(child.shape)
+    surviving = result.values.get("surviving_parent_axes")
+    child_to_parent: Mapping[int, int] | None = None
+    if isinstance(surviving, Sequence) and not isinstance(surviving, (str, bytes)):
+        surviving_axes = tuple(int(axis) for axis in surviving)
+        if child_rank == parent_rank:
+            child_to_parent = {axis: axis for axis in range(child_rank)}
+        elif child_rank == len(surviving_axes):
+            child_to_parent = {
+                child_axis: parent_axis for child_axis, parent_axis in enumerate(surviving_axes)
+            }
+    passthrough = _transpose_passthrough(
+        child,
+        parent,
+        state,
+        result,
+        rule_name,
+        notes,
+        child_to_parent=child_to_parent,
+    )
     assert passthrough.axes is not None
     axes: list[_AxisState] = []
     batch_axis = passthrough.batch_axis
@@ -560,7 +623,11 @@ def _transpose_full(
     ):
         child_axis = old_axis.output_axis
         parent_axis = (
-            None if child_axis is None else child_axis - (len(child.shape) - len(parent.shape))
+            None
+            if child_axis is None
+            else child_to_parent.get(child_axis)
+            if child_to_parent
+            else child_axis
         )
         if parent_axis in selected:
             axes.append(
@@ -614,7 +681,7 @@ def _transpose_axis_map(
             axes.append(
                 replace(
                     axis,
-                    geometry=_Full(exact=False),
+                    geometry=_Full(exact=int(child.shape[axis.output_axis]) == 1),
                     output_axis=None,
                     kind="full",
                     provenance=child.label,

@@ -364,9 +364,22 @@ def _select_inputs(
         role = input
         op = inputs_by_role.get(role)
     else:
-        op = input
-        role = str(getattr(op, "io_role", None) or getattr(op, "label", ""))
-    if op is None or inputs_by_role.get(role) is not op:
+        requested = input
+        role = str(getattr(requested, "io_role", None) or getattr(requested, "label", ""))
+        requested_label = str(getattr(requested, "label", ""))
+        candidate = inputs_by_role.get(role)
+        if (
+            getattr(requested, "source_trace", None) is not trace
+            or candidate is None
+            or candidate.label != requested_label
+        ):
+            op = None
+        else:
+            # Trace accessors intentionally expose lightweight layer handles rather
+            # than the canonical Op in layer_list. Resolve that handle by the
+            # trace-owned input role and label before reading saved payloads.
+            op = candidate
+    if op is None:
         raise ReceptiveFieldError(
             "input must be an input Op from this trace or its exact io_role mapping key."
         )
