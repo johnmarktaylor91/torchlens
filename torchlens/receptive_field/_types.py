@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
-from typing import TYPE_CHECKING, Literal, Mapping, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, Mapping, cast
 
 from ._errors import ReceptiveFieldError, ReceptiveFieldValidationError
 
@@ -63,6 +63,38 @@ class ReceptiveFieldAlignment(str, Enum):
     ALIGNED = "aligned"
     MISALIGNED = "misaligned"
     NOT_APPLICABLE = "not_applicable"
+
+
+class ReceptiveFieldDirection(str, Enum):
+    """Direction of influence geometry between a source and target graph point."""
+
+    RECEPTIVE = "receptive"
+    PROJECTIVE = "projective"
+
+
+def _restore_legacy_receptive_field_state(instance: object, state: object) -> None:
+    """Restore a result object while filling fields absent from legacy pickles.
+
+    Parameters
+    ----------
+    instance:
+        Newly unpickled frozen result instance.
+    state:
+        Serialized instance dictionary from pickle.
+
+    Raises
+    ------
+    TypeError
+        If the pickle payload does not contain the expected dictionary state.
+    """
+
+    if not isinstance(state, dict):
+        raise TypeError("Receptive-field pickle state must be a dictionary.")
+    restored_state = dict(state)
+    restored_state.setdefault("direction", ReceptiveFieldDirection.RECEPTIVE)
+    restored_state.setdefault("unit_shape", ())
+    for name, value in restored_state.items():
+        object.__setattr__(instance, name, value)
 
 
 @dataclass(frozen=True)
@@ -145,6 +177,20 @@ class ReceptiveFieldAxis:
 class ReceptiveField:
     """Per-operation, per-input geometric receptive-field descriptor."""
 
+    __match_args__: ClassVar[tuple[str, ...]] = (
+        "op_label",
+        "io_role",
+        "input_op_label",
+        "input_shape",
+        "layout",
+        "axes",
+        "status",
+        "alignment",
+        "batch_coupled",
+        "rule",
+        "notes",
+    )
+
     op_label: str
     io_role: str
     input_op_label: str
@@ -156,6 +202,10 @@ class ReceptiveField:
     batch_coupled: bool
     rule: str
     notes: tuple[str, ...]
+    direction: ReceptiveFieldDirection = field(
+        default=ReceptiveFieldDirection.RECEPTIVE, repr=False, kw_only=True
+    )
+    unit_shape: tuple[int, ...] = field(default=(), repr=False, kw_only=True)
 
     def __post_init__(self) -> None:
         """Validate descriptor structure without deriving geometry.
@@ -240,6 +290,43 @@ class ReceptiveField:
             raise ReceptiveFieldError("No windowed axes are available; use .gradient() instead.")
         return values
 
+    @property
+    def source_key(self) -> str:
+        """Return the direction-stable key of the source graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.io_role
+        return self.op_label
+
+    @property
+    def target_key(self) -> str:
+        """Return the direction-stable key of the target graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.op_label
+        return self.io_role
+
+    @property
+    def source_op_label(self) -> str:
+        """Return the pass-qualified label of the source graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.input_op_label
+        return self.op_label
+
+    @property
+    def target_op_label(self) -> str:
+        """Return the pass-qualified label of the target graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.op_label
+        return self.input_op_label
+
+    def __setstate__(self, state: object) -> None:
+        """Restore this descriptor from current or pre-extension pickle state."""
+
+        _restore_legacy_receptive_field_state(self, state)
+
 
 @dataclass(frozen=True)
 class ReceptiveFieldBoxAxis:
@@ -280,6 +367,19 @@ class ReceptiveFieldBoxAxis:
 class ReceptiveFieldBox:
     """Concrete per-unit geometric receptive-field answer."""
 
+    __match_args__: ClassVar[tuple[str, ...]] = (
+        "op_label",
+        "io_role",
+        "unit",
+        "axes",
+        "input_shape",
+        "status",
+        "exact",
+        "clipped",
+        "empty",
+        "covers_input",
+    )
+
     op_label: str
     io_role: str
     unit: tuple[int, ...]
@@ -290,6 +390,10 @@ class ReceptiveFieldBox:
     clipped: bool
     empty: bool
     covers_input: bool
+    direction: ReceptiveFieldDirection = field(
+        default=ReceptiveFieldDirection.RECEPTIVE, repr=False, kw_only=True
+    )
+    unit_shape: tuple[int, ...] = field(default=(), repr=False, kw_only=True)
 
     def __post_init__(self) -> None:
         """Validate concrete box dimensions and axis ordering.
@@ -337,10 +441,47 @@ class ReceptiveFieldBox:
                 result.append(slice(axis.clipped_start, axis.clipped_stop))
         return tuple(result)
 
+    @property
+    def source_key(self) -> str:
+        """Return the direction-stable key of the source graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.io_role
+        return self.op_label
+
+    @property
+    def target_key(self) -> str:
+        """Return the direction-stable key of the target graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.op_label
+        return self.io_role
+
+    def __setstate__(self, state: object) -> None:
+        """Restore this box from current or pre-extension pickle state."""
+
+        _restore_legacy_receptive_field_state(self, state)
+
 
 @dataclass(frozen=True)
 class GradientReceptiveField:
     """Empirical receptive-field influence set measured by autograd."""
+
+    __match_args__: ClassVar[tuple[str, ...]] = (
+        "op_label",
+        "io_role",
+        "unit",
+        "grad",
+        "support_mask",
+        "support_ranges",
+        "spatial_support_mask",
+        "batch_support",
+        "cross_batch_influence",
+        "atol",
+        "rtol",
+        "nonfinite_count",
+        "warnings",
+    )
 
     op_label: str
     io_role: str
@@ -355,6 +496,10 @@ class GradientReceptiveField:
     rtol: float
     nonfinite_count: int
     warnings: tuple[str, ...]
+    direction: ReceptiveFieldDirection = field(
+        default=ReceptiveFieldDirection.RECEPTIVE, repr=False, kw_only=True
+    )
+    unit_shape: tuple[int, ...] = field(default=(), repr=False, kw_only=True)
 
     def __post_init__(self) -> None:
         """Validate scalar threshold and support metadata.
@@ -373,6 +518,27 @@ class GradientReceptiveField:
             start < 0 or stop < start for start, stop in self.support_ranges
         ):
             raise ValueError("support_ranges must contain non-negative half-open bounds.")
+
+    @property
+    def source_key(self) -> str:
+        """Return the direction-stable key of the source graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.io_role
+        return self.op_label
+
+    @property
+    def target_key(self) -> str:
+        """Return the direction-stable key of the target graph point."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.op_label
+        return self.io_role
+
+    def __setstate__(self, state: object) -> None:
+        """Restore this gradient result from current or pre-extension pickle state."""
+
+        _restore_legacy_receptive_field_state(self, state)
 
 
 class ReceptiveFieldValidationStatus(str, Enum):
@@ -398,6 +564,21 @@ class ReceptiveFieldViolation:
 class ReceptiveFieldValidation:
     """Tri-state receptive-field geometric-versus-gradient validation result."""
 
+    __match_args__: ClassVar[tuple[str, ...]] = (
+        "status",
+        "op_label",
+        "unit",
+        "geometric",
+        "gradient",
+        "violations",
+        "n_violations",
+        "per_axis_excess",
+        "slack_per_axis",
+        "cross_batch",
+        "checked_input_roles",
+        "message",
+    )
+
     status: ReceptiveFieldValidationStatus
     op_label: str
     unit: tuple[int, ...]
@@ -410,6 +591,10 @@ class ReceptiveFieldValidation:
     cross_batch: Literal["none", "geometric", "undeclared"]
     checked_input_roles: tuple[str, ...]
     message: str
+    direction: ReceptiveFieldDirection = field(
+        default=ReceptiveFieldDirection.RECEPTIVE, repr=False, kw_only=True
+    )
+    unit_shape: tuple[int, ...] = field(default=(), repr=False, kw_only=True)
 
     def __post_init__(self) -> None:
         """Validate exact violation accounting.
@@ -443,6 +628,27 @@ class ReceptiveFieldValidation:
         if self.status is ReceptiveFieldValidationStatus.FAIL:
             raise ReceptiveFieldValidationError(self.message)
 
+    @property
+    def source_keys(self) -> tuple[str, ...]:
+        """Return all direction-stable source endpoint keys checked by validation."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return self.checked_input_roles
+        return (self.op_label,)
+
+    @property
+    def target_keys(self) -> tuple[str, ...]:
+        """Return all direction-stable target endpoint keys checked by validation."""
+
+        if self.direction == ReceptiveFieldDirection.RECEPTIVE:
+            return (self.op_label,)
+        return self.checked_input_roles
+
+    def __setstate__(self, state: object) -> None:
+        """Restore this validation result from current or pre-extension pickle state."""
+
+        _restore_legacy_receptive_field_state(self, state)
+
 
 @dataclass(frozen=True)
 class ReceptiveFieldProfile:
@@ -471,6 +677,7 @@ __all__ = [
     "ReceptiveFieldAxis",
     "ReceptiveFieldBox",
     "ReceptiveFieldBoxAxis",
+    "ReceptiveFieldDirection",
     "ReceptiveFieldProfile",
     "ReceptiveFieldStatus",
     "ReceptiveFieldValidation",

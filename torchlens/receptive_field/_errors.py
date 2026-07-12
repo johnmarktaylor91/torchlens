@@ -14,6 +14,14 @@ class AmbiguousInputError(ReceptiveFieldError, ValueError):
     """Raised when a query has more than one reachable model input."""
 
 
+class NoInfluencePathError(ReceptiveFieldError, ValueError):
+    """Raised when two graph points have no directed influence path."""
+
+
+class AmbiguousTargetError(ReceptiveFieldError, ValueError):
+    """Raised when a projective query has more than one reachable target."""
+
+
 class AmbiguousPassError(ReceptiveFieldError, ValueError):
     """Raised when a layer-level query has multiple executed passes."""
 
@@ -33,8 +41,10 @@ class ReceptiveFieldValidationError(ReceptiveFieldError, AssertionError):
 __all__ = [
     "AmbiguousCallError",
     "AmbiguousInputError",
+    "AmbiguousTargetError",
     "AmbiguousPassError",
     "BackendUnsupportedError",
+    "NoInfluencePathError",
     "ReceptiveFieldError",
     "ReceptiveFieldUnavailableError",
     "ReceptiveFieldValidationError",
