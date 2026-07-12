@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+import importlib
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 import warnings
@@ -14,8 +15,10 @@ import torch
 from .._io import FieldPolicy
 from ..backends import BackendUnsupportedError, get_backend_spec
 from . import _engine
+from . import _rules
 from ._errors import ReceptiveFieldError, ReceptiveFieldUnavailableError
-from ._types import GradientReceptiveField, GridLayout
+from ._path import require_path, resolve_graph_point
+from ._types import GradientReceptiveField, GridLayout, ReceptiveFieldDirection
 
 
 if TYPE_CHECKING:
@@ -28,6 +31,31 @@ if TYPE_CHECKING:
 _RECAPTURE_RECIPE = (
     "tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True), save=...)"
 )
+
+
+@contextmanager
+def _builtin_rules_when_registry_empty() -> Iterator[None]:
+    """Install built-in geometry rules transiently when no registry was configured.
+
+    Yields
+    ------
+    None
+        Control while the built-in rule pack is available to the geometric solver.
+    """
+
+    if _rules._RF_RULES:
+        yield
+        return
+    original_epoch = _rules._RF_RULES_EPOCH
+    module = importlib.import_module(f"{__package__}.rules")
+    if not _rules._RF_RULES:
+        for name in module.__all__:
+            importlib.reload(getattr(module, name))
+    try:
+        yield
+    finally:
+        _rules._RF_RULES.clear()
+        _rules._RF_RULES_EPOCH = original_epoch
 
 
 @dataclass(frozen=True)
@@ -381,6 +409,65 @@ def _saved_tensor(op: Op, purpose: str) -> torch.Tensor:
     return value
 
 
+def _source_recapture_recipe(source: Op, target: Op) -> str:
+    """Build the escrowed capture recipe for a layer-to-layer probe.
+
+    Parameters
+    ----------
+    source:
+        Source operation whose activation gradient is requested.
+    target:
+        Target operation supplying the seeded output element.
+
+    Returns
+    -------
+    str
+        A real TorchLens selector recipe retaining both endpoint payloads.
+    """
+
+    return (
+        "tl.trace(model, x, backward_ready=True, save="
+        f"tl.label({source.layer_label_short!r}) | tl.label({target.layer_label_short!r}))"
+    )
+
+
+def _saved_source_tensor(source: Op, target: Op) -> torch.Tensor:
+    """Return a grad-connected source payload or raise its escrowed diagnostic.
+
+    Parameters
+    ----------
+    source:
+        Resolved source operation.
+    target:
+        Resolved target operation.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved source activation usable as an autograd input.
+
+    Raises
+    ------
+    ReceptiveFieldUnavailableError
+        If the source payload was not retained or is detached from autograd.
+    """
+
+    recipe = _source_recapture_recipe(source, target)
+    try:
+        tensor = _saved_tensor(source, "source")
+    except ReceptiveFieldUnavailableError as exc:
+        raise ReceptiveFieldUnavailableError(
+            f"Source op {source.label!r} has no retained activation payload. "
+            f"Recapture with {recipe}."
+        ) from exc
+    if not tensor.requires_grad:
+        message = f"Source op {source.label!r} is not graph-connected. Recapture with {recipe}."
+        if bool(getattr(source, "is_input", False)):
+            message += " Pass a floating or complex input with requires_grad=True."
+        raise ReceptiveFieldUnavailableError(message)
+    return tensor
+
+
 def _support_ranges(mask: torch.Tensor) -> tuple[tuple[int, int], ...] | None:
     """Compute a tight half-open bounding box around a Boolean support mask.
 
@@ -474,6 +561,7 @@ def _build_result(
     state: _InputState | None,
     atol: float,
     rtol: float,
+    unit_shape: tuple[int, ...],
 ) -> GradientReceptiveField:
     """Build the immutable empirical RF result for one full input gradient.
 
@@ -493,6 +581,8 @@ def _build_result(
         Internal engine state used only for derived batch semantics.
     atol, rtol:
         Support thresholds.
+    unit_shape:
+        Complete shape of the target grid indexed by ``unit``.
 
     Returns
     -------
@@ -531,6 +621,8 @@ def _build_result(
         rtol=rtol,
         nonfinite_count=nonfinite_count,
         warnings=result_warnings,
+        direction=ReceptiveFieldDirection.RECEPTIVE,
+        unit_shape=unit_shape,
     )
 
 
@@ -539,11 +631,12 @@ def gradient_for_unit(
     unit: Sequence[int],
     *,
     input: Op | str | None = None,
+    source: object | None = None,
     atol: float = 0.0,
     rtol: float = 0.0,
     retain_graph: bool = False,
 ) -> GradientReceptiveField | Mapping[str, GradientReceptiveField]:
-    """Probe exactly one target output element against selected model inputs.
+    """Probe exactly one target output element against a selected source.
 
     Parameters
     ----------
@@ -554,6 +647,9 @@ def gradient_for_unit(
     input:
         Optional model-input Op or exact IO role. ``None`` probes every
         geometrically reachable model input in one autograd call.
+    source:
+        Optional earlier captured graph point. When supplied, return the
+        gradient with respect to its retained activation instead of model inputs.
     atol, rtol:
         Non-negative support thresholds. Defaults select exact finite nonzero entries.
     retain_graph:
@@ -576,7 +672,16 @@ def gradient_for_unit(
 
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
+    if input is not None and source is not None:
+        raise TypeError("input= and source= cannot be used together.")
     trace = target.source_trace
+    if source is not None:
+        _source_op = resolve_graph_point(trace, source)
+        if bool(getattr(_source_op, "is_input", False)):
+            # A model input passed as source= is exactly the legacy input query;
+            # route it through the input path so the result is byte-identical.
+            input = _source_op
+            source = None
     spec = get_backend_spec(str(getattr(trace, "backend", "torch")))
     if not spec.capabilities.backward_capture:
         raise BackendUnsupportedError(
@@ -601,8 +706,51 @@ def gradient_for_unit(
             f"{_RECAPTURE_RECIPE}."
         )
 
-    solution = _engine.solve(trace)
-    descriptors = _engine.lookup(trace, target)
+    if source is not None:
+        source_op = resolve_graph_point(trace, source)
+        require_path(source_op, target, ReceptiveFieldDirection.RECEPTIVE)
+        source_tensor = _saved_source_tensor(source_op, target)
+        source_key = str(source_op.io_role or source_op.label)
+        with _builtin_rules_when_registry_empty():
+            solution = _engine.solve_from(trace, source_op)
+            _target_descriptors = solution.per_op.get(target.label, {})
+        descriptor = _target_descriptors.get(source_key) or next(
+            (
+                item
+                for item in _target_descriptors.values()
+                if item.input_op_label == source_op.label
+            ),
+            None,
+        )
+        state = solution.states.get((target.label, source_key))
+        with _probe_suppressed(trace):
+            grad = torch.autograd.grad(
+                seed,
+                source_tensor,
+                retain_graph=retain_graph,
+                allow_unused=True,
+            )[0]
+        if grad is None:
+            raise ReceptiveFieldUnavailableError(
+                f"Source {source_op.label!r} is reachable from {target.label!r} in the captured "
+                "DAG, but autograd returned no gradient. The saved tensor identity may be stale "
+                f"or the path may have been detached; recapture with {_source_recapture_recipe(source_op, target)}."
+            )
+        return _build_result(
+            target=target,
+            role=source_key,
+            unit=normalized_unit,
+            grad=grad,
+            descriptor=descriptor,
+            state=state,
+            atol=atol,
+            rtol=rtol,
+            unit_shape=tuple(target_tensor.shape),
+        )
+
+    with _builtin_rules_when_registry_empty():
+        solution = _engine.solve(trace)
+        descriptors = _engine.lookup(trace, target)
     selected = _select_inputs(trace, descriptors, input)
     if not selected:
         raise ReceptiveFieldUnavailableError(
@@ -642,6 +790,7 @@ def gradient_for_unit(
             state=state,
             atol=atol,
             rtol=rtol,
+            unit_shape=tuple(target_tensor.shape),
         )
 
     if input is not None:
