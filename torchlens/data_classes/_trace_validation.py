@@ -370,10 +370,14 @@ class TraceValidationMixin(_TraceMixinBase):
 
         readiness = self.__dict__.get("_runnable_readiness")
         loaded_provider = getattr(readiness, "provider", None)
-        use_unified_provider = inputs is not MISSING or loaded_provider in {
-            RunProvider.LOADED_SPARSE,
-            RunProvider.LOADED_ANALYSIS,
-        }
+        use_unified_provider = inputs is not MISSING or (
+            not isinstance(model, nn.Module)
+            and loaded_provider
+            in {
+                RunProvider.LOADED_SPARSE,
+                RunProvider.LOADED_ANALYSIS,
+            }
+        )
         if use_unified_provider:
             if inputs is not MISSING:
                 if model is not None or x is not None:
