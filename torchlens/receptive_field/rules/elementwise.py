@@ -15,6 +15,12 @@ from ._utils import int_tuple
     "leaky_relu",
     "elu",
     "selu",
+    "relu6",
+    "hardswish",
+    "hardsigmoid",
+    "hardtanh",
+    "mish",
+    "softplus",
     "dropout",
     "dropout2d",
     "dropout3d",
@@ -24,6 +30,18 @@ from ._utils import int_tuple
     "contiguous",
     "abs",
     "neg",
+    "clamp",
+    "clip",
+    "exp",
+    "log",
+    "log1p",
+    "sqrt",
+    "rsqrt",
+    "sin",
+    "cos",
+    "floor",
+    "ceil",
+    "round",
 )
 def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Shape-preserving pointwise ops leave the receptive field unchanged (exact).
@@ -39,9 +57,15 @@ def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
 
 @register_rf_rule(
     "add",
+    "iadd",
     "sub",
+    "isub",
     "mul",
+    "imul",
     "div",
+    "idiv",
+    "truediv",
+    "itruediv",
     "maximum",
     "minimum",
     "pow",
@@ -50,11 +74,16 @@ def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
 def elementwise_binary(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Binary/n-ary elementwise: parents merge at the engine level.
 
-    Broadcast-axis exactness awaits a focused family golden; a sound whole-input
-    envelope is returned meanwhile.
+    Each parent uses a trailing-aligned identity map. Extent-one broadcast axes
+    become slope-zero maps in the engine, and the parent branches are then
+    unioned by the ordinary merge machinery.
     """
 
-    return context.full(exact=False, note="elementwise binary/broadcast awaits a focused golden")
+    return _RuleResult(
+        "passthrough",
+        {"axis_alignment": "trailing"},
+        "elementwise parents contribute same-position or broadcast coordinates",
+    )
 
 
 @register_rf_rule("mean", "sum", "amax", "amin", "var", "std")
@@ -70,8 +99,13 @@ def reduction(context: ReceptiveFieldRuleContext) -> _RuleResult:
         if dimensions is None:
             return context.unknown("reduction dimensions were not captured as integers")
         axes = tuple(axis % rank for axis in dimensions)
-    return context.full(
-        axes=axes, exact=False, note="reduction family awaits a focused exactness golden"
+    return _RuleResult(
+        "full",
+        {
+            "axes": axes,
+            "surviving_parent_axes": tuple(axis for axis in range(rank) if axis not in axes),
+        },
+        "reduced axes depend on their complete captured extent",
     )
 
 
@@ -79,4 +113,4 @@ def reduction(context: ReceptiveFieldRuleContext) -> _RuleResult:
 def embedding(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Pass index-tensor coordinates through an embedding lookup exactly."""
 
-    return context.full(exact=False, note="embedding family awaits a focused exactness golden")
+    return context.passthrough(note="embedding preserves the coordinates of its index tensor")

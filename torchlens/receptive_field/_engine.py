@@ -374,8 +374,7 @@ def _apply_rule(
     if result.kind == "full":
         return _apply_full(op, parent, state, result, rule_name, notes)
     if result.kind == "axis_map":
-        mapping = result.values.get("out_to_parent_axis", {})
-        return _apply_axis_map(op, parent, state, mapping, rule_name, notes)
+        return _apply_axis_map(op, parent, state, result, rule_name, notes)
     if result.kind == "dissolve":
         axes = tuple(
             replace(
@@ -397,22 +396,35 @@ def _apply_rule(
             for axis in state.axes
         )
         return replace(state, axes=axes, notes=notes + (degradation,), rule=rule_name)
-    return _apply_passthrough(op, parent, state, rule_name, notes)
+    return _apply_passthrough(op, parent, state, result, rule_name, notes)
 
 
 def _apply_passthrough(
     op: Op,
     parent: Op,
     state: _InputState,
+    result: _RuleResult,
     rule_name: str,
     notes: tuple[str, ...],
+    *,
+    parent_to_child: Mapping[int, int] | None = None,
 ) -> _InputState:
-    """Compose identity or broadcast geometry for a parent branch."""
+    """Compose identity or broadcast geometry using an explicit axis correspondence."""
 
     assert state.axes is not None
-    parent_rank = len(parent.shape)
     child_rank = len(op.shape)
-    offset = child_rank - parent_rank
+    if parent_to_child is None:
+        parent_to_child = _passthrough_axis_map(op, parent, result)
+    if parent_to_child is None:
+        return replace(
+            state,
+            axes=None,
+            taint=ReceptiveFieldStatus.UNKNOWN,
+            notes=notes + (f"{op.label}: rank-changing passthrough lacks an explicit axis map",),
+            rule=rule_name,
+        )
+    concat_axis = result.values.get("concatenate_axis")
+    concat_offsets = _concatenation_offsets(op, parent, result)
     axes: list[_AxisState] = []
     for axis in state.axes:
         if isinstance(axis.geometry, _Dissolved):
@@ -423,12 +435,25 @@ def _apply_passthrough(
         if axis.output_axis is None or isinstance(axis.geometry, _Full):
             axes.append(axis)
             continue
-        child_axis = axis.output_axis + offset
-        if child_axis < 0 or child_axis >= child_rank:
+        parent_axis = axis.output_axis
+        child_axis = parent_to_child.get(parent_axis)
+        if child_axis is None or child_axis < 0 or child_axis >= child_rank:
             axes.append(replace(axis, geometry=_Full(exact=False), output_axis=None, kind="full"))
             continue
-        broadcast = parent.shape[axis.output_axis] == 1 and op.shape[child_axis] != 1
-        local = _constant_map() if broadcast else _identity_map()
+        broadcast = parent.shape[parent_axis] == 1 and op.shape[child_axis] != 1
+        if broadcast:
+            local = _constant_map()
+        elif child_axis == concat_axis and concat_offsets:
+            starts = tuple(-offset for offset in concat_offsets)
+            local = _Mapped(
+                _Affine(Fraction(1), Fraction(min(starts))),
+                _Affine(Fraction(1), Fraction(max(starts))),
+                exact=len(starts) == 1 and axis.kind != "windowed",
+                aligned=len(starts) == 1,
+                sparse=len(starts) > 1,
+            )
+        else:
+            local = _identity_map()
         geometry = _compose(axis.geometry, local)
         kind = axis.kind if axis.kind != "unknown" else "pointwise"
         axes.append(
@@ -441,6 +466,73 @@ def _apply_passthrough(
             )
         )
     return replace(state, axes=tuple(axes), notes=notes, rule=rule_name)
+
+
+def _passthrough_axis_map(op: Op, parent: Op, result: _RuleResult) -> Mapping[int, int] | None:
+    """Resolve a parent-to-child map for one passthrough-like relation.
+
+    Parameters
+    ----------
+    op:
+        Child operation.
+    parent:
+        Parent branch being composed.
+    result:
+        Registered local rule result.
+
+    Returns
+    -------
+    collections.abc.Mapping[int, int] | None
+        Explicit parent-to-child correspondence, or ``None`` when ambiguous.
+    """
+
+    parent_rank = len(parent.shape)
+    child_rank = len(op.shape)
+    concat_axis = result.values.get("concatenate_axis")
+    if isinstance(concat_axis, int) and bool(result.values.get("stack", False)):
+        return {
+            parent_axis: parent_axis if parent_axis < concat_axis else parent_axis + 1
+            for parent_axis in range(parent_rank)
+        }
+    if parent_rank == child_rank:
+        return {axis: axis for axis in range(parent_rank)}
+    if result.values.get("axis_alignment") == "trailing":
+        offset = child_rank - parent_rank
+        return {axis: axis + offset for axis in range(parent_rank)}
+    return None
+
+
+def _concatenation_offsets(op: Op, parent: Op, result: _RuleResult) -> tuple[int, ...]:
+    """Return slice starts for every occurrence of a concatenated parent.
+
+    Parameters
+    ----------
+    op:
+        Concatenation operation.
+    parent:
+        Parent branch being composed.
+    result:
+        Concatenation rule result.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Captured child-axis slice starts for the parent occurrence(s).
+    """
+
+    raw_axis = result.values.get("concatenate_axis")
+    if not isinstance(raw_axis, int):
+        return ()
+    if bool(result.values.get("stack", False)):
+        return tuple(index for index, label in enumerate(op.parents) if label == parent.label)
+    starts: list[int] = []
+    offset = 0
+    for label, shape in zip(op.parents, op.input_shapes, strict=False):
+        if label == parent.label:
+            starts.append(offset)
+        if shape is not None:
+            offset += int(shape[raw_axis])
+    return tuple(starts)
 
 
 def _apply_window(
@@ -510,7 +602,15 @@ def _apply_window_edges(
                 notes=notes + (f"{op.label}: malformed window_edges rule result",),
                 rule=rule_name,
             )
-    return _compose_window_maps(op, parent, state, tuple(maps), rule_name, notes)
+    return _compose_window_maps(
+        op,
+        parent,
+        state,
+        tuple(maps),
+        rule_name,
+        notes,
+        preserve_non_window_axes=bool(result.values.get("preserve_non_window_axes", False)),
+    )
 
 
 def _compose_window_maps(
@@ -520,6 +620,8 @@ def _compose_window_maps(
     local_maps: tuple[_Mapped, ...],
     rule_name: str,
     notes: tuple[str, ...],
+    *,
+    preserve_non_window_axes: bool = False,
 ) -> _InputState:
     """Compose window maps and derive axis roles from their registered semantics."""
 
@@ -555,7 +657,7 @@ def _compose_window_maps(
                     provenance=op.label,
                 )
             )
-        elif parent_axis == channel_axis:
+        elif parent_axis == channel_axis and not preserve_non_window_axes:
             axes.append(
                 replace(
                     axis,
@@ -603,7 +705,27 @@ def _apply_full(
     assert state.axes is not None
     selected = _select_full_axes(result.values.get("axes"), parent, op)
     exact = bool(result.values.get("exact", True))
-    passthrough = _apply_passthrough(op, parent, state, rule_name, notes)
+    parent_rank = len(parent.shape)
+    child_rank = len(op.shape)
+    surviving = result.values.get("surviving_parent_axes")
+    parent_to_child: Mapping[int, int] | None = None
+    if isinstance(surviving, Sequence) and not isinstance(surviving, (str, bytes)):
+        surviving_axes = tuple(int(axis) for axis in surviving)
+        if child_rank == parent_rank:
+            parent_to_child = {axis: axis for axis in range(parent_rank)}
+        elif child_rank == len(surviving_axes):
+            parent_to_child = {
+                parent_axis: child_axis for child_axis, parent_axis in enumerate(surviving_axes)
+            }
+    passthrough = _apply_passthrough(
+        op,
+        parent,
+        state,
+        result,
+        rule_name,
+        notes,
+        parent_to_child=parent_to_child,
+    )
     assert passthrough.axes is not None
     axes = []
     for old_axis, mapped_axis in zip(state.axes, passthrough.axes):
@@ -626,12 +748,13 @@ def _apply_axis_map(
     op: Op,
     parent: Op,
     state: _InputState,
-    raw_mapping: object,
+    result: _RuleResult,
     rule_name: str,
     notes: tuple[str, ...],
 ) -> _InputState:
     """Apply an exact registered output-to-parent axis remapping."""
 
+    raw_mapping = result.values.get("out_to_parent_axis", {})
     if not isinstance(raw_mapping, Mapping):
         return replace(
             state,
@@ -641,13 +764,29 @@ def _apply_axis_map(
             rule=rule_name,
         )
     inverse = {int(parent_axis): int(out_axis) for out_axis, parent_axis in raw_mapping.items()}
+    selected = result.values.get("selected_parent_axes", ())
+    selected_axes = (
+        {int(axis) for axis in selected}
+        if isinstance(selected, Sequence) and not isinstance(selected, (str, bytes))
+        else set()
+    )
     assert state.axes is not None
     axes = []
     for axis in state.axes:
         if axis.output_axis is None:
             axes.append(axis)
         elif axis.output_axis not in inverse:
-            axes.append(replace(axis, geometry=_Full(exact=False), output_axis=None, kind="full"))
+            axes.append(
+                replace(
+                    axis,
+                    geometry=_Full(
+                        exact=axis.output_axis in selected_axes
+                        and int(parent.shape[axis.output_axis]) == 1
+                    ),
+                    output_axis=None,
+                    kind="full",
+                )
+            )
         else:
             axes.append(
                 replace(
