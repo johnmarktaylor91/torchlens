@@ -27,6 +27,7 @@ from ._models import build_model_case
 
 _SEED = 20260710
 _MEASUREMENT_REPETITIONS = 3
+_GROUND_TRUTH_EXCLUDED_POPULATION_PATHS = frozenset({"function.func_id"})
 
 _PREDICATE_WART_PREFIXES = (
     "parents[",
@@ -271,6 +272,8 @@ def _event_population(event: OpEvent) -> dict[str, str]:
             _flatten_nested_population(value, field_info.name, result)
         else:
             result[field_info.name] = _population_state(value)
+    for path in _GROUND_TRUTH_EXCLUDED_POPULATION_PATHS:
+        result.pop(path, None)
     return dict(sorted(result.items()))
 
 

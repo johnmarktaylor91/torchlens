@@ -607,6 +607,7 @@ def _op_event_from_log(
             func_non_tensor_args=tuple(fields_dict["func_non_tensor_args"]),
             is_inplace=fields_dict["is_inplace"],
             func_config=tuple(fields_dict["func_config"].items()),
+            func_id=fields_dict.get("func_id"),
         ),
         output=OutputRef(
             tensor=tensor_ref,
@@ -2644,9 +2645,11 @@ def _build_shared_fields_dict(
         captured_template = _build_args_template(func, args, kwargs, self)
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if kwargs else None
+        fields_dict["func_id"] = captured_template.func_id
     else:
         fields_dict["args_template"] = None
         fields_dict["kwargs_template"] = None
+        fields_dict["func_id"] = None
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None

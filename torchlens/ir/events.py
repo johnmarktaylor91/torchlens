@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .container import ContainerSpec
 
 if TYPE_CHECKING:
+    from ..intervention.types import FunctionRegistryKey
     from .intervention import FireResult, InterventionTemplateRef
     from .refs import ParamRef, TensorRef
     from .semantics import BackendSemantics, CapturePolicy
@@ -172,6 +173,7 @@ class FunctionCallRef:
     func_non_tensor_args: tuple[object, ...]
     is_inplace: bool
     func_config: tuple[tuple[str, object], ...]
+    func_id: FunctionRegistryKey | None = None
 
 
 @dataclass(frozen=True, slots=True)
