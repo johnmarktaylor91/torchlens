@@ -26,6 +26,7 @@ from ._types import (
     ReceptiveFieldViolation,
 )
 from ._rules import ReceptiveFieldRule, ReceptiveFieldRuleContext, register_rf_rule, rules
+from ._validation import cross_validate
 from ._view import ReceptiveFieldView
 from ._viz import node_spec
 
@@ -54,6 +55,7 @@ __all__ = [
     "ReceptiveFieldView",
     "ReceptiveFieldViolation",
     "register_rf_rule",
+    "cross_validate",
     "node_spec",
     "rules",
 ]

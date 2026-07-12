@@ -104,6 +104,7 @@ _LAZY_ATTRS = {
     "push_from": ("torchlens.intervention", "push_from"),
     "record": ("torchlens.fastlog", "record"),
     "record_kpi_in_graph": ("torchlens.user_funcs", "record_kpi_in_graph"),
+    "receptive_field": ("torchlens.receptive_field", None),
     "regex": ("torchlens.intervention", "regex"),
     "register_tensor_connection": ("torchlens.user_funcs", "register_tensor_connection"),
     "replace_with": ("torchlens.intervention", "replace_with"),
