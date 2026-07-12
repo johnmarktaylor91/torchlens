@@ -13,6 +13,14 @@ from ._utils import int_config, int_tuple, spatial_rank
 def convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Emit the exact standard convolution window recurrence."""
 
+    groups = context.cfg("groups", 1)
+    if not isinstance(groups, int) or groups <= 0:
+        return context.unknown("convolution has malformed groups")
+    if groups > 1:
+        return context.full(
+            exact=False,
+            note="grouped convolution uses a containing whole-input envelope",
+        )
     raw_kernel = context.cfg("kernel_size")
     rank = spatial_rank(context, raw_kernel)
     if raw_kernel is None or rank is None:
@@ -35,6 +43,14 @@ def convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
 def transposed_convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Emit phase-aware transposed-convolution geometry and its exact set callback."""
 
+    groups = context.cfg("groups", 1)
+    if not isinstance(groups, int) or groups <= 0:
+        return context.unknown("transposed convolution has malformed groups")
+    if groups > 1:
+        return context.full(
+            exact=False,
+            note="grouped transposed convolution uses a containing whole-input envelope",
+        )
     raw_kernel = context.cfg("kernel_size")
     rank = spatial_rank(context, raw_kernel)
     if raw_kernel is None or rank is None or not context.in_shapes:

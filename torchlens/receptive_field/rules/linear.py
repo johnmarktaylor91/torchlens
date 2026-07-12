@@ -23,10 +23,14 @@ def matrix_multiply(context: ReceptiveFieldRuleContext) -> _RuleResult:
 
 @register_rf_rule("cumsum", "cummax")
 def cumulative(context: ReceptiveFieldRuleContext) -> _RuleResult:
-    """Emit the exact non-uniform two-edge prefix recurrence on the final axis."""
+    """Bound cumulative dependence on the captured dimension only."""
 
-    return context.window_edges(
-        (((0, 0), (1, 0)),),
+    rank = len(context.in_shapes[0]) if context.in_shapes else len(context.out_shape)
+    dim = context.arg("dim", context.cfg("dim", None))
+    if not isinstance(dim, int) or rank == 0:
+        return context.unknown("cumulative dimension was not captured")
+    return context.full(
+        axes=(dim % rank,),
         exact=False,
-        note="cumulative family awaits a focused exactness golden",
+        note="cumulative prefix uses a containing selected-axis envelope",
     )

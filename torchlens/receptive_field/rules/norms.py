@@ -5,20 +5,28 @@ from __future__ import annotations
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
 
 
-def _bool_arg(context: ReceptiveFieldRuleContext, name: str, position: int) -> bool | None:
-    """Read a required raw boolean argument without guessing an absent switch."""
+def _bool_arg(context: ReceptiveFieldRuleContext, name: str) -> bool | None:
+    """Read a normalization-mode switch from filtered capture metadata.
+
+    Tensor arguments are omitted from ``non_tensor_pos_args``, while positional ``None``
+    placeholders remain. For BatchNorm and InstanceNorm the statistics switch is therefore
+    the first boolean in that filtered sequence, regardless of the tensor placeholders.
+    """
 
     value = context.op.non_tensor_kwargs.get(name)
-    if value is None and position < len(context.op.non_tensor_pos_args):
-        value = context.op.non_tensor_pos_args[position]
-    return value if isinstance(value, bool) else None
+    if isinstance(value, bool):
+        return value
+    return next(
+        (item for item in context.op.non_tensor_pos_args if isinstance(item, bool)),
+        None,
+    )
 
 
 @register_rf_rule("batch_norm")
 def batch_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Represent captured batch-stat coupling as full batch and spatial geometry."""
 
-    training = _bool_arg(context, "training", 0)
+    training = _bool_arg(context, "training")
     if training is None:
         return context.unknown("batch_norm statistics switch was not captured")
     if not training:
@@ -31,7 +39,7 @@ def batch_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
 def instance_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Distinguish current-stat instance normalization from running-stat evaluation."""
 
-    use_input_stats = _bool_arg(context, "use_input_stats", 4)
+    use_input_stats = _bool_arg(context, "use_input_stats")
     if use_input_stats is None:
         return context.unknown("instance_norm statistics switch was not captured")
     if not use_input_stats:
@@ -42,10 +50,19 @@ def instance_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
 
 @register_rf_rule("group_norm")
 def group_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
-    """Mark channel and spatial group statistics as exact whole dependencies."""
+    """Represent group statistics without claiming cross-group channel dependence."""
 
     rank = len(context.in_shapes[0]) if context.in_shapes else len(context.out_shape)
-    return context.full(axes=tuple(range(1, rank)))
+    groups = context.cfg("num_groups", context.arg("num_groups", None))
+    if not isinstance(groups, int) or groups <= 0:
+        return context.unknown("group_norm num_groups was not captured")
+    if groups == 1:
+        return context.full(axes=tuple(range(1, rank)))
+    return context.full(
+        axes=tuple(range(1, rank)),
+        exact=False,
+        note="group slices use a containing channel-and-spatial envelope",
+    )
 
 
 @register_rf_rule("layer_norm")

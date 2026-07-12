@@ -61,7 +61,10 @@ def _descriptor(op: Op, state: _InputState) -> ReceptiveField:
         source="derived",
         provenance=tuple(axis.provenance for axis in state.axes),
     )
-    batch_coupled = state.batch_axis is not None and public_axes[state.batch_axis].kind == "full"
+    batch_axis = state.batch_axis
+    if batch_axis is None and state.rule in {"batch_norm", "batchnorm"} and public_axes:
+        batch_axis = 0
+    batch_coupled = batch_axis is not None and public_axes[batch_axis].kind == "full"
     status = _derive_status(public_axes, batch_coupled)
     alignment = ReceptiveFieldAlignment.NOT_APPLICABLE
     if state.merge_seen:

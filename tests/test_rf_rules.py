@@ -87,15 +87,26 @@ def test_transposed_convolution_descriptor_and_unit_golden(
 
 
 @pytest.mark.parametrize(
-    "training,status,batch_coupled",
-    [(False, ReceptiveFieldStatus.EXACT, False), (True, ReceptiveFieldStatus.WHOLE_INPUT, True)],
+    "training,track_running_stats,status,batch_coupled",
+    [
+        (False, True, ReceptiveFieldStatus.EXACT, False),
+        (True, True, ReceptiveFieldStatus.WHOLE_INPUT, True),
+        (True, False, ReceptiveFieldStatus.WHOLE_INPUT, True),
+    ],
 )
 def test_batch_norm_mode_matrix(
-    training: bool, status: ReceptiveFieldStatus, batch_coupled: bool
+    training: bool,
+    track_running_stats: bool,
+    status: ReceptiveFieldStatus,
+    batch_coupled: bool,
 ) -> None:
     """Use the captured functional statistics switch, never a transparent training rule."""
 
-    model = nn.Sequential(nn.Conv2d(2, 2, 1), nn.BatchNorm2d(2)).train(training)
+    model = nn.BatchNorm2d(
+        2,
+        affine=False,
+        track_running_stats=track_running_stats,
+    ).train(training)
     trace = tl.trace(model, torch.randn(3, 2, 4, 4))
     descriptor = _descriptor(_op(trace, "batch_norm"))
 
@@ -104,7 +115,7 @@ def test_batch_norm_mode_matrix(
 
 
 def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> None:
-    """Represent statistics-dependent normalization as exact whole normalized extents."""
+    """Keep InstanceNorm exact while bounding GroupNorm to its group envelope."""
 
     class Norms(nn.Module):
         """Small current-stat normalization fixture."""
@@ -116,14 +127,18 @@ def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> Non
             return functional.group_norm(value, 2)
 
     trace = tl.trace(Norms(), torch.randn(2, 4, 3, 3))
-    for name, first_full_axis in (("instance_norm", 2), ("group_norm", 1)):
-        descriptor = _descriptor(_op(trace, name))
-        assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
-        assert all(axis.kind == "full" for axis in descriptor.axes[first_full_axis:])
+    instance = _descriptor(_op(trace, "instance_norm"))
+    assert instance.status is ReceptiveFieldStatus.WHOLE_INPUT
+    assert all(axis.kind == "full" for axis in instance.axes[2:])
+
+    group = _descriptor(_op(trace, "group_norm"))
+    assert group.status is ReceptiveFieldStatus.UPPER_BOUND
+    assert all(axis.kind == "full" for axis in group.axes[1:])
+    assert group.axes[1].exact is False
 
 
 def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
-    """Keep unmasked structural attention exact and masked attention explicitly bounded."""
+    """Bound attention on sequence only, preserving pointwise batch and head axes."""
 
     class Attention(nn.Module):
         """Small scaled-dot-product attention fixture."""
@@ -141,18 +156,20 @@ def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
                 value, value, value, is_causal=self.causal
             )
 
-    query = torch.randn(1, 1, 3, 2)
+    query = torch.randn(2, 2, 3, 2)
     unmasked = tl.trace(Attention(causal=False), query)
     masked = tl.trace(Attention(causal=True), query)
 
-    assert (
-        _descriptor(_op(unmasked, "scaled_dot_product_attention")).status
-        is ReceptiveFieldStatus.WHOLE_INPUT
-    )
-    assert (
-        _descriptor(_op(masked, "scaled_dot_product_attention")).status
-        is ReceptiveFieldStatus.UPPER_BOUND
-    )
+    for trace in (unmasked, masked):
+        descriptor = _descriptor(_op(trace, "scaled_dot_product_attention"))
+        assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
+        assert tuple(axis.kind for axis in descriptor.axes) == (
+            "pointwise",
+            "pointwise",
+            "full",
+            "pointwise",
+        )
+        assert descriptor.batch_coupled is False
 
 
 @pytest.mark.parametrize(
@@ -160,6 +177,7 @@ def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
     [
         ({"size": (5,), "mode": "linear", "align_corners": True}, (1, 3)),
         ({"scale_factor": 1.5, "mode": "linear", "align_corners": False}, (1, 3)),
+        ({"size": (2,), "mode": "linear", "align_corners": True}, (9, 10)),
     ],
 )
 def test_interpolation_branch_goldens_are_unit_exact(
@@ -175,12 +193,18 @@ def test_interpolation_branch_goldens_are_unit_exact(
 
             return functional.interpolate(value, **kwargs)
 
-    trace = tl.trace(Interpolation(), torch.randn(1, 1, 3))
+    input_extent = 10 if kwargs.get("size") == (2,) else 3
+    trace = tl.trace(Interpolation(), torch.randn(1, 1, input_extent))
     op = _op(trace, "interpolate")
-    assert _descriptor(op).status is ReceptiveFieldStatus.UPPER_BOUND
-    box = _query.box_for_unit(_engine.solve(trace), op, (3,))
+    descriptor = _descriptor(op)
+    assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
+    unit = (1,) if kwargs.get("size") == (2,) else (3,)
+    box = _query.box_for_unit(_engine.solve(trace), op, unit)
     assert box.status is ReceptiveFieldStatus.EXACT
     assert (box.axes[-1].clipped_start, box.axes[-1].clipped_stop) == expected
+    if kwargs.get("size") == (2,):
+        assert descriptor.axes[-1].jump == 9
+        assert descriptor.axes[-1].center0 == 0
 
 
 def test_roll_is_fail_closed_and_never_pointwise() -> None:
