@@ -14,6 +14,7 @@ from typing import Any, cast
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
+from ..data_classes._state_adapter import state_items
 from ..errors import RunnablePreflightError
 from ..intervention.types import (
     CapturedArgTemplate,
@@ -420,7 +421,11 @@ def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
         seen.add(node_id)
         if is_dataclass(node) and not isinstance(node, type):
             for field in fields(node):
-                visit(getattr(node, field.name), (*path, field.name))
+                try:
+                    field_value = getattr(node, field.name)
+                except AttributeError:
+                    continue
+                visit(field_value, (*path, field.name))
             return
         if isinstance(node, Mapping):
             for key, item in node.items():
@@ -430,6 +435,9 @@ def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
         if isinstance(node, (list, tuple, set, frozenset)):
             for index, item in enumerate(node):
                 visit(item, (*path, str(index)))
+            return
+        for field_name, field_value in state_items(node):
+            visit(field_value, (*path, str(field_name)))
 
     visit(value, ())
 

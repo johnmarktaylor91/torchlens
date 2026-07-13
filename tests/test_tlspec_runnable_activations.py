@@ -263,8 +263,10 @@ def test_random_state_changed_input_and_non_equivalent_state_are_not_applicable(
     assert different_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-def test_transformed_outputs_are_archived_for_inspection(tmp_path: Path) -> None:
-    """Include both retained raw and transformed payload fields without executing transforms."""
+def test_transformed_outputs_are_archived_without_overclaiming_attestation(
+    tmp_path: Path,
+) -> None:
+    """Keep mixed raw/transformed archives inspectable but outside attestation scope."""
 
     model = ActivationPayloadModel().eval()
     trace = tl.trace(
@@ -278,8 +280,16 @@ def test_transformed_outputs_are_archived_for_inspection(tmp_path: Path) -> None
         ),
     )
     path = tmp_path / "transformed.tlspec"
-    trace.save(path, level="runnable", include_activations=True)
+    trace.save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
     loaded = tl.load(path)
 
     fields = {record.field for record in loaded.archived_activations.values()}
     assert fields == {"out", "transformed_out"}
+    result = loaded.run(inputs=torch.ones(2, 3))
+
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

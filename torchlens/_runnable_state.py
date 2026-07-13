@@ -669,7 +669,7 @@ def _diagnostic(
 
 
 def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
-    """Return a SHA-256 digest of one tensor's exact logical bytes.
+    """Return a SHA-256 digest of one tensor's exact logical value.
 
     Parameters
     ----------
@@ -679,13 +679,15 @@ def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
     Returns
     -------
     str
-        Lowercase SHA-256 hexadecimal digest of the contiguous CPU bytes.
+        Lowercase SHA-256 hexadecimal digest of dtype, shape, and contiguous
+        CPU bytes.
     """
 
     with _state.pause_logging():
         cpu_value = value.detach().cpu().contiguous()
         payload = cpu_value.reshape(-1).view(torch.uint8).numpy().tobytes()
-    return sha256(payload).hexdigest()
+        logical_prefix = f"{cpu_value.dtype}|{tuple(cpu_value.shape)}|".encode("utf-8")
+    return sha256(logical_prefix + payload).hexdigest()
 
 
 __all__ = [
