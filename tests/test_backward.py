@@ -12,6 +12,7 @@ import torchlens.validation as tl_validation
 import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
 from torchlens.data_classes.grad_fn import GradFn
+from torchlens.ir.events import BackwardPassStart
 from torchlens.options import CaptureOptions, SaveOptions
 
 
@@ -157,6 +158,31 @@ def _logged_model(
 def _output_loss(trace: tl.Trace) -> torch.Tensor:
     """Return scalar sum loss from the logged output out."""
     return trace[trace.output_layers[0]].out.sum()
+
+
+def test_detached_log_backward_does_not_poison_later_capture() -> None:
+    """Reject detached losses without leaking capture state or a start event."""
+    model = nn.Linear(2, 1)
+    trace = tl.trace(model, torch.ones(1, 2))
+
+    with pytest.raises(ValueError, match="loss has no grad_fn / is detached"):
+        trace.log_backward(torch.tensor(1.0))
+
+    assert not any(isinstance(event, BackwardPassStart) for event in trace.backward_events)
+    fresh_trace = tl.trace(model, torch.ones(1, 2))
+    assert fresh_trace.output_layers
+
+    recording = tl.record(model, torch.ones(1, 2), save=tl.func("linear"))
+    sparse_trace = recording.to_trace()
+    detached_output = sparse_trace[sparse_trace.output_layers[0]].out
+    assert detached_output is not None
+    assert detached_output.grad_fn is None
+
+    with pytest.raises(ValueError, match="loss has no grad_fn / is detached"):
+        sparse_trace.log_backward(detached_output)
+
+    assert not any(isinstance(event, BackwardPassStart) for event in sparse_trace.backward_events)
+    assert tl.trace(model, torch.ones(1, 2)).output_layers
 
 
 @pytest.mark.smoke
