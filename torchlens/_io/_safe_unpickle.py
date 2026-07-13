@@ -19,11 +19,24 @@ loader -- raises :class:`pickle.UnpicklingError` and executes nothing.
 Allowlist policy (fail-closed):
 
 * Objects resolved from the ``torchlens`` package are admitted when they are a
-  ``type`` (the metadata dataclasses / enums / accessors), plus a small curated
-  set of ``torchlens`` modules whose module-level *functions* are legitimately
-  serialized (the semantic facet recipes and ``torchlens.utils.display.identity``).
-  A ``torchlens`` name that is neither is denied. This deliberately admits our own
-  trusted classes without admitting an arbitrary callable gadget.
+  ``type`` (the metadata dataclasses / enums / accessors), or a callable whose
+  RESOLVED real ``__module__`` is genuinely ``torchlens.*`` (a first-party facet
+  recipe / transform such as ``torchlens.utils.display.identity``). Trust is
+  decided by the resolved object's real module, never the pickled path, so a key
+  that walks attributes off a torchlens module to reach ``os.system`` (real module
+  ``posix``) is denied. This admits our own trusted code without admitting a gadget.
+* A FOREIGN facet-recipe callable (a user/test ``@tl.facets.register`` recipe
+  embedded by identity in a ``FacetRegistrySnapshot``) is handled DETERMINISTICALLY
+  by the same trust model the resolver uses. Known-dangerous modules (``os`` /
+  ``sys`` / ``subprocess`` / ``pickle`` / ``builtins`` / ``importlib`` / ...) are
+  hard-denied unconditionally. Otherwise, under an explicit trust opt-in
+  (``trust_custom_callables`` / ``allowed_custom_callable_modules``) the module is
+  imported and the real callable resolved; by default it is LOAD-TOLERATED as an
+  inert ``_DeferredForeignCallable`` placeholder -- the foreign module is NEVER
+  imported at unpickle, the trace still loads structurally, and any attempt to CALL
+  the recipe (facet computation, or a ``__reduce__`` gadget) fails closed. Admission
+  depends only on ``(module, name)`` + trust flags, never on process state (an
+  import-time / live-registry snapshot was the ordering-dependent load-failure bug).
 * A curated set of safe stdlib data/value types (``collections.OrderedDict``, the
   pure-data builtin container types plus ``object``, and the NumPy numeric-array
   reconstruction helpers).
@@ -53,11 +66,128 @@ from __future__ import annotations
 
 import io
 import pickle
-from typing import Any, BinaryIO, Mapping
+from dataclasses import dataclass
+from typing import Any, BinaryIO, Collection, Mapping
 
 import torch
 
 __all__ = ["SafeBundleUnpickler"]
+
+
+# Known side-effecting / code-exec module identities that must NEVER resolve from
+# an untrusted bundle, regardless of trust flags. This mirrors
+# ``torchlens.utils._callable_safety._DENIED_MODULES`` (the resolver's denylist)
+# and is duplicated here -- rather than imported -- to keep this security
+# front-door free of any import-order coupling (it is imported very early during
+# ``torchlens`` startup). Serialization, code execution, imports, and process /
+# OS / filesystem I/O are all hard-denied here BEFORE the deferred-reference
+# fallback below can ever apply.
+_DENIED_FOREIGN_MODULES: frozenset[str] = frozenset(
+    {
+        # Serialization: unpickle (RCE) and arbitrary-path tensor writes.
+        "torch.serialization",
+        "torch.jit",
+        "torch.package",
+        "torch.hub",
+        "torch.storage",
+        "torch.multiprocessing",
+        "torch.distributed",
+        "torch._utils_internal",
+        "pickle",
+        "_pickle",
+        "marshal",
+        # Code execution / imports.
+        "builtins",
+        "importlib",
+        "runpy",
+        "code",
+        "codeop",
+        "ctypes",
+        # Process / OS / filesystem I/O.
+        "os",
+        "posix",
+        "nt",
+        "sys",
+        "subprocess",
+        "shutil",
+        "socket",
+        "pty",
+        "signal",
+        "threading",
+        "multiprocessing",
+        "glob",
+        "tempfile",
+        "pathlib",
+    }
+)
+
+
+def _module_denied(module: str) -> bool:
+    """Return whether ``module`` is (nested under) a hard-denied dangerous module."""
+
+    return any(
+        module == denied or module.startswith(denied + ".") for denied in _DENIED_FOREIGN_MODULES
+    )
+
+
+@dataclass(frozen=True)
+class _DeferredForeignCallable:
+    """Inert placeholder for a foreign recipe callable retained on an untrusted load.
+
+    A saved ``FacetRegistrySnapshot`` may reference a user/test-registered facet
+    recipe by identity (``@tl.facets.register``). Importing that foreign module at
+    unpickle time would execute its top-level code -- exactly the load-time RCE
+    surface this module closes. So under a default (untrusted) load the reference
+    is LOAD-TOLERATED as this placeholder instead of imported: the trace loads
+    structurally (the recipe reference is preserved for inspection / re-save), but
+    the foreign module is NEVER imported and any attempt to CALL the recipe (facet
+    computation, or a ``__reduce__`` construction gadget) fails closed.
+
+    This mirrors the resolver's load-tolerate / execute-deny least-privilege split
+    (``resolve_function_registry_key``): a foreign custom callable is retained as an
+    unresolved reference on load and only imported+resolved under an explicit trust
+    opt-in (``trust_custom_callables`` / ``allowed_custom_callable_modules``).
+
+    Admission here is DETERMINISTIC: it depends only on the pickled ``(module,
+    name)`` and the caller's trust flags -- never on process state (whether the
+    module happens to be imported, or whether the recipe is currently in the live
+    registry), which was the ordering-dependent load-failure bug.
+    """
+
+    module: str
+    qualname: str
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Fail closed: an untrusted foreign recipe is never executed.
+
+        Raises
+        ------
+        pickle.UnpicklingError
+            Always. If invoked during unpickle (a ``__reduce__`` gadget) the load
+            fails closed; if invoked later (facet computation) it signals that a
+            trust opt-in is required to run the foreign recipe.
+        """
+
+        raise pickle.UnpicklingError(
+            "Refusing to execute foreign custom callable "
+            f"{self.module}:{self.qualname} resolved from an untrusted bundle. "
+            "Pass trust_custom_callables=True or allowed_custom_callable_modules "
+            "to import and run a trusted foreign recipe."
+        )
+
+
+def _is_torchlens_owned(obj: Any) -> bool:
+    """Return whether a resolved object genuinely lives under the ``torchlens`` package.
+
+    Trust for a callable is decided by the RESOLVED object's real ``__module__``,
+    never by the pickled import path. This closes the "walk ``os.system`` off a
+    torchlens module" pivot (``getattr(torchlens._io.tlspec, 'os').system`` has
+    ``__module__ == 'posix'`` and is therefore denied) -- mirroring the resolver's
+    identically-named check.
+    """
+
+    owner = str(getattr(obj, "__module__", "") or "")
+    return owner == "torchlens" or owner.startswith("torchlens.")
 
 
 # Exact (module, name) globals resolved directly. Every entry is either a pure
@@ -109,21 +239,6 @@ _SAFE_EXPLICIT_GLOBALS: frozenset[tuple[str, str]] = frozenset(
 # admitted (MLX / Paddle / JAX numeric array + dtype reconstruction). Only ``type``
 # objects and framework dtype-like instances are admitted; callables are not.
 _PREVIEW_ARRAY_MODULE_ROOTS: tuple[str, ...] = ("mlx.core",)
-
-# ``torchlens`` modules whose module-level *functions* are legitimately pickled
-# into bundle metadata (semantic facet recipes and the identity transform). Every
-# other ``torchlens`` name must resolve to a ``type`` to be admitted.
-_ALLOWED_TORCHLENS_CALLABLE_MODULES: frozenset[str] = frozenset(
-    {
-        "torchlens.utils.display",
-        "torchlens.semantic.facets",
-        "torchlens.semantic.recipes.attention",
-        "torchlens.semantic.recipes.embedding",
-        "torchlens.semantic.recipes.mlp",
-        "torchlens.semantic.recipes.norm",
-        "torchlens.semantic.recipes.residual",
-    }
-)
 
 
 def _build_allowed_getattr_objects() -> frozenset[Any]:
@@ -232,6 +347,8 @@ class SafeBundleUnpickler(pickle.Unpickler):
         file: BinaryIO,
         *,
         rename_map: Mapping[tuple[str, str], tuple[str, str]] | None = None,
+        trust_custom_callables: bool = False,
+        allowed_custom_callable_modules: Collection[str] | None = None,
     ) -> None:
         """Initialize the restricted unpickler.
 
@@ -242,10 +359,43 @@ class SafeBundleUnpickler(pickle.Unpickler):
         rename_map:
             Optional ``(module, name) -> (module, name)`` remapping applied before
             allowlist resolution, preserving load of legitimately-renamed classes.
+        trust_custom_callables:
+            Whether to admit a foreign (non-torch/torchlens/numpy) callable by
+            importing and resolving it. Mirrors the intervention-resolver contract:
+            ``False`` (default) denies unless the callable is already registered in
+            the live facet registry (a positive allowlist against trusted live
+            state that never triggers a fresh import).
+        allowed_custom_callable_modules:
+            Optional narrow allowlist of foreign module names whose callables may be
+            imported and resolved even when ``trust_custom_callables`` is ``False``.
         """
 
         super().__init__(file)
         self._rename_map: Mapping[tuple[str, str], tuple[str, str]] = rename_map or {}
+        self._trust_custom_callables = trust_custom_callables
+        self._allowed_custom_callable_modules = (
+            frozenset(allowed_custom_callable_modules)
+            if allowed_custom_callable_modules is not None
+            else None
+        )
+
+    def _custom_module_trusted(self, module: str) -> bool:
+        """Return whether a foreign module may be imported+resolved via trust flags.
+
+        Parameters
+        ----------
+        module:
+            Foreign pickled module path.
+
+        Returns
+        -------
+        bool
+            ``True`` if the module is explicitly allowlisted, or broad trust is on.
+        """
+
+        if self._allowed_custom_callable_modules is not None:
+            return module in self._allowed_custom_callable_modules
+        return self._trust_custom_callables
 
     def find_class(self, module: str, name: str) -> Any:  # noqa: C901 -- explicit policy
         """Resolve a pickled global only if it is on the metadata allowlist.
@@ -322,20 +472,46 @@ class SafeBundleUnpickler(pickle.Unpickler):
                 f"unpickle: {module}.{name}."
             )
 
-        # TorchLens-owned metadata: admit classes always, and functions only from
-        # the curated recipe/display modules. Importing a torchlens submodule runs
-        # only trusted first-party code.
+        # TorchLens-owned metadata: admit classes always, and any callable whose
+        # RESOLVED real module is genuinely ``torchlens.*`` (a first-party facet
+        # recipe / transform). Importing a torchlens submodule runs only trusted
+        # first-party code, so it is safe to import + inspect the resolved object's
+        # true owner. Trust is decided by the resolved ``__module__``, NEVER by the
+        # pickled path: a key like ``torchlens._io.tlspec`` / ``os.system`` walks
+        # attributes off a torchlens module to reach ``os.system`` (real module
+        # ``posix``), which is NOT torchlens-owned and is therefore denied.
         if module == "torchlens" or module.startswith("torchlens."):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
                 return obj
-            if module in _ALLOWED_TORCHLENS_CALLABLE_MODULES and callable(obj):
+            if callable(obj) and _is_torchlens_owned(obj):
                 return obj
             raise pickle.UnpicklingError(
                 "Blocked disallowed torchlens global during bundle metadata "
                 f"unpickle: {module}.{name}."
             )
 
-        raise pickle.UnpicklingError(
-            f"Blocked disallowed global during bundle metadata unpickle: {module}.{name}."
-        )
+        # Foreign global -- e.g. a user/test-registered ``@tl.facets.register``
+        # recipe embedded by identity in a FacetRegistrySnapshot. Admission here is
+        # DETERMINISTIC: it depends ONLY on the pickled ``(module, name)`` and the
+        # caller's trust flags -- never on process state (whether the module is
+        # already imported, or whether the recipe is in the live registry). Keying
+        # off live state was the ordering-dependent load-failure bug.
+        #
+        # 1. Hard-deny known dangerous modules (os / sys / subprocess / pickle /
+        #    builtins / importlib / ...) unconditionally -- they are never a
+        #    legitimate metadata global and importing / resolving them is the RCE.
+        if _module_denied(module):
+            raise pickle.UnpicklingError(
+                f"Blocked dangerous global during bundle metadata unpickle: {module}.{name}."
+            )
+        # 2. Explicit trust opt-in: import + resolve the real foreign callable,
+        #    mirroring ``resolve_function_registry_key`` under trust. Importing the
+        #    module executes its top-level code, so this is gated behind the flags.
+        if self._custom_module_trusted(module):
+            return super().find_class(module, name)
+        # 3. Default (untrusted): LOAD-TOLERATE as an inert deferred reference. The
+        #    foreign module is NEVER imported here (import executes code); the recipe
+        #    reference is preserved so the trace loads structurally, and any attempt
+        #    to CALL it (facet computation, or a ``__reduce__`` gadget) fails closed.
+        return _DeferredForeignCallable(module, name)

@@ -27,6 +27,7 @@ import torchlens as tl
 from torchlens._io import TorchLensIOError
 from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
+    _DeferredForeignCallable,
     _safe_getattr,
     _safe_load_from_bytes,
 )
@@ -284,3 +285,151 @@ def test_safe_load_from_bytes_round_trips_a_real_tensor() -> None:
     torch.save(tensor, buffer)
     restored = _safe_load_from_bytes(buffer.getvalue())
     assert torch.equal(restored, tensor)
+
+
+# --------------------------------------------------------------------------- #
+# Widened-allowlist regressions and the foreign custom-callable trust policy.
+# --------------------------------------------------------------------------- #
+
+
+def test_allowlist_admits_inert_stdlib_and_numpy_globals() -> None:
+    """``builtins.object`` and NumPy numeric reconstruction remain resolvable."""
+
+    import numpy as np
+
+    for module, name in (("builtins", "object"), ("numpy", "dtype")):
+        blob = io.BytesIO()
+        pickle.dump(("marker",), blob)  # ensure a valid stream to attach unpickler
+        unpickler = SafeBundleUnpickler(io.BytesIO(blob.getvalue()))
+        assert unpickler.find_class(module, name) is (object if name == "object" else np.dtype)
+
+
+def _benign_module_level_callable(value: str) -> str:
+    """A benign module-level callable used to exercise foreign-callable gating."""
+
+    return f"resolved:{value}"
+
+
+class _ForeignCallableGadget:
+    """``__reduce__`` referencing a benign, NON-registered foreign callable."""
+
+    def __reduce__(self):  # type: ignore[no-untyped-def]
+        return (_benign_module_level_callable, ("ok",))
+
+
+def _dump(obj: object) -> bytes:
+    """Pickle an object to bytes."""
+
+    return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def test_foreign_callable_denied_by_default() -> None:
+    """A foreign callable that is not a live registered recipe is denied by default."""
+
+    data = _dump(_ForeignCallableGadget())
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(io.BytesIO(data)).load()
+
+
+def test_foreign_callable_admitted_with_trust_flag() -> None:
+    """``trust_custom_callables=True`` admits a foreign already-imported callable."""
+
+    data = _dump(_ForeignCallableGadget())
+    result = SafeBundleUnpickler(io.BytesIO(data), trust_custom_callables=True).load()
+    assert result == "resolved:ok"
+
+
+def test_foreign_callable_admitted_with_module_allowlist() -> None:
+    """A narrow ``allowed_custom_callable_modules`` admits only the listed module."""
+
+    data = _dump(_ForeignCallableGadget())
+    result = SafeBundleUnpickler(
+        io.BytesIO(data), allowed_custom_callable_modules={__name__}
+    ).load()
+    assert result == "resolved:ok"
+
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(
+            io.BytesIO(data), allowed_custom_callable_modules={"some.other.module"}
+        ).load()
+
+
+def _global_ref_pickle(module: str, name: str) -> bytes:
+    """Build a minimal pickle that is a bare GLOBAL reference to ``module.name``.
+
+    A ``FacetRegistrySnapshot`` pickles its recipe funcs by identity, i.e. as a bare
+    GLOBAL (not a called ``__reduce__``). This hand-writes that opcode so the load
+    can be exercised for a module that is deliberately NOT importable, proving no
+    import occurs at unpickle.
+    """
+
+    return b"c" + module.encode() + b"\n" + name.encode() + b"\n."
+
+
+def test_foreign_recipe_bare_reference_load_tolerated_without_import() -> None:
+    """A foreign recipe bare reference load-tolerates as a placeholder, no import.
+
+    This is the exact ordering-dependent failure surface: a saved snapshot embeds a
+    foreign (user/test) recipe by identity. Under a default untrusted load the
+    foreign module MUST NOT be imported (the RCE surface), yet the trace must still
+    load structurally -- the reference resolves to an inert deferred placeholder.
+    """
+
+    import sys
+
+    module_name = "torchlens_r4_absent_recipe_module"
+    assert module_name not in sys.modules
+    blob = _global_ref_pickle(module_name, "_probe_recipe")
+
+    resolved = SafeBundleUnpickler(io.BytesIO(blob)).load()
+    assert isinstance(resolved, _DeferredForeignCallable)
+    assert resolved.module == module_name
+    assert resolved.qualname == "_probe_recipe"
+    # The foreign module was NEVER imported at unpickle time.
+    assert module_name not in sys.modules
+    # Execute-deny: calling the deferred recipe fails closed.
+    with pytest.raises(pickle.UnpicklingError):
+        resolved("record")
+
+
+def test_torchlens_owned_recipe_admitted_without_trust() -> None:
+    """A torchlens-owned recipe/transform resolves to the real callable, no trust."""
+
+    from torchlens.utils.display import identity
+
+    blob = _global_ref_pickle("torchlens.utils.display", "identity")
+    resolved = SafeBundleUnpickler(io.BytesIO(blob)).load()
+    assert resolved is identity
+
+
+def test_foreign_recipe_admission_ignores_live_registry() -> None:
+    """Admission is DETERMINISTIC: a live registration does not change the outcome.
+
+    The removed live-registry snapshot made loads ordering-dependent (pass alone,
+    fail in smoke). A foreign recipe reference now resolves to the same inert
+    placeholder whether or not the recipe is currently registered.
+    """
+
+    from torchlens.semantic import facets
+
+    module_name = "torchlens_r4_registry_probe_module"
+    blob = _global_ref_pickle(module_name, "_reg_probe")
+
+    def _reg_probe(value: object) -> dict:
+        return {"seen": value}
+
+    _reg_probe.__module__ = module_name  # simulate a foreign-module recipe
+
+    entry = facets._RegisteredRecipe(
+        public=None,  # type: ignore[arg-type]
+        func=_reg_probe,
+        predicate=None,
+        declared_facets=(),
+        order=-1,
+    )
+    facets._REGISTRY.append(entry)
+    try:
+        resolved = SafeBundleUnpickler(io.BytesIO(blob)).load()
+    finally:
+        facets._REGISTRY.remove(entry)
+    assert isinstance(resolved, _DeferredForeignCallable)

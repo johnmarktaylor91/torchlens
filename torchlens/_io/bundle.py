@@ -121,16 +121,31 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
     is still gated through the allowlist.
     """
 
-    def __init__(self, file: Any) -> None:
+    def __init__(
+        self,
+        file: Any,
+        *,
+        trust_custom_callables: bool = False,
+        allowed_custom_callable_modules: Collection[str] | None = None,
+    ) -> None:
         """Initialize the restricted unpickler with the rename remapping.
 
         Parameters
         ----------
         file:
             Binary file object positioned at the start of a pickle stream.
+        trust_custom_callables:
+            Whether to import+resolve foreign custom callables (default deny).
+        allowed_custom_callable_modules:
+            Optional narrow allowlist of foreign modules whose callables may load.
         """
 
-        super().__init__(file, rename_map=_RENAMED_PICKLE_GLOBALS)
+        super().__init__(
+            file,
+            rename_map=_RENAMED_PICKLE_GLOBALS,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
 
 
 @dataclass(frozen=True)
@@ -874,6 +889,8 @@ def load(
         map_location=map_location,
         materialize_nested=materialize_nested,
         payload_hints=payload_hints,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
 
 
@@ -886,6 +903,8 @@ def _load_trace_payload(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | None,
     sparse_run: Mapping[str, Any] | None = None,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a portable Trace payload after manifest dispatch.
 
@@ -925,7 +944,11 @@ def _load_trace_payload(
 
         python_major_mismatch = _python_major_mismatch(manifest)
         with metadata_path.open("rb") as handle:
-            scrubbed_state = _RenameAwareUnpickler(handle).load()
+            scrubbed_state = _RenameAwareUnpickler(
+                handle,
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_custom_callable_modules,
+            ).load()
     except TorchLensIOError:
         raise
     except (pickle.UnpicklingError, EOFError) as exc:
@@ -1193,6 +1216,8 @@ def _load_unified_tlspec(
             materialize_nested=materialize_nested,
             payload_hints=payload_hints,
             sparse_run=cast(Mapping[str, Any] | None, manifest.get("run")),
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
     if kind == "bundle":
         return _load_unified_bundle(bundle_path)
