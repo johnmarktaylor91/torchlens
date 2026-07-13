@@ -253,6 +253,8 @@ class CaptureSession:
                     evicted = self.activation_escrow.pop(next(iter(self.activation_escrow)))
                     if evicted.tensor is not None:
                         self.activation_escrow_ram_bytes -= evicted.nbytes
+                    elif evicted.spill_path is not None:
+                        evicted.spill_path.unlink(missing_ok=True)
             self._spill_activation_escrow_to_budget()
         if profile.gradient_kind is RetentionKind.GRADIENT_REFERENCE:
             self.gradient_reference_escrow[raw_index] = tensor

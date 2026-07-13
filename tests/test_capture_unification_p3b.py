@@ -283,6 +283,34 @@ def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None
     assert not spill_path.exists()
 
 
+def test_windowed_activation_escrow_deletes_evicted_spill_files() -> None:
+    """Spilled window eviction unlinks payloads as soon as they leave escrow."""
+
+    session = _retention_session(
+        RetentionProfile(
+            activation_kind=RetentionKind.ACTIVATION,
+            activation_window=1,
+            spillable=True,
+            activation_ram_budget_bytes=1,
+        )
+    )
+    evicted_paths: list[Path] = []
+    previous_path: Path | None = None
+    for raw_index in range(1, 5):
+        session.escrow_candidate(raw_index, torch.full((8,), float(raw_index)))
+        current_payload = session.activation_escrow[raw_index]
+        assert current_payload.spill_path is not None
+        if previous_path is not None:
+            evicted_paths.append(previous_path)
+        previous_path = current_payload.spill_path
+        assert session._activation_spill_dir is not None
+        spill_files = list(Path(session._activation_spill_dir.name).glob("*.pt"))
+        assert spill_files == [current_payload.spill_path]
+
+    assert all(not path.exists() for path in evicted_paths)
+    session.release()
+
+
 def test_gradient_retention_warning_is_extreme_unwindowable_only() -> None:
     """The graph-retention warning excludes windowed and spillable profiles."""
 
