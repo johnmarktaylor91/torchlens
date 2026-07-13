@@ -1546,7 +1546,7 @@ def _tensor_leaf_paths(
         return tuple(paths)
     field_names = _container_field_names(value)
     if field_names:
-        paths: list[tuple[str | int, ...]] = []
+        paths = []
         for name in field_names:
             paths.extend(_tensor_leaf_paths(getattr(value, name), (*path, str(name))))
         return tuple(paths)
@@ -1579,7 +1579,7 @@ def _container_leaf_paths(
         return tuple(paths)
     field_names = _container_field_names(value)
     if field_names:
-        paths: list[tuple[str | int, ...]] = []
+        paths = []
         for name in field_names:
             paths.extend(_container_leaf_paths(getattr(value, name), (*path, str(name))))
         return tuple(paths)
