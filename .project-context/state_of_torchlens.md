@@ -235,15 +235,19 @@ contradictory detach or disk-only settings.
 Appliance packages reserve user-facing namespaces by extra group. They should not import heavy
 optional dependencies unless the corresponding namespace is imported.
 
-## Shipped vs Stubbed Appliances
+## Appliance Packages
+
+Two appliance namespaces ship in the 2.x layout. Both reserve a user-facing namespace by extra
+group and enforce it by importing the required dependencies at import time, but export no public
+objects yet.
 
 | Appliance | Extra | Docstring intent | Current state |
 |-----------|-------|------------------|---------------|
-| `torchlens.viewer` | `viewer` | Interactive HTML viewer, side panel, lazy expansion, search | Stub, `__all__ = []`, no dependencies |
-| `torchlens.paper` | `paper` | Publication figures and 3D cuboid renderers | Stub, `__all__ = []`, no dependencies |
 | `torchlens.notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
-| `torchlens.llm` | `llm` | Attention diagrams, logit lens, sequence selectors | Stub, `__all__ = []`, no dependencies |
 | `torchlens.neuro` | `neuro` | RDM, CKA, Brain-Score, representation helpers | Import gate for `rsatoolbox` and `brainscore_core`, no public objects |
+
+The earlier empty `viewer`, `paper`, and `llm` stub packages were removed (`chore: remove empty
+stub packages`); those namespaces are not shipped, so importing them raises `ModuleNotFoundError`.
 
 Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profiler`,
 `lightning`, `wandb`, `hf`, `gradcam`, `shap`, `inseq`, `steering`, `repeng`, `dialz`,
