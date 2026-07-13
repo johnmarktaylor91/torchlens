@@ -273,32 +273,40 @@ def run_live_trace(
             code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
             provider=RunProvider.LIVE,
         )
+    prior_log_ids = {id(log) for log in _state.list_logs()}
     fork = trace._fork_trace(name=_run_fork_name(trace))
-    fork.save_new_outs(model, inputs, random_seed=seed)
-    output = _reconstruct_live_output(fork)
-    readiness = ReadinessReport(
-        status=ReadinessStatus.READY,
-        provider=RunProvider.LIVE,
-        backend=str(getattr(trace, "backend", "torch")),
-        capability="live_model_fast_capture",
-        resolver_records=(),
-        state_sources_available=(StateSource.LIVE_MODEL_STATE,),
-        witness_completeness=None,
-        diagnostics=(),
-    )
-    report = RunReport(
-        readiness=readiness,
-        state_source=StateSource.LIVE_MODEL_STATE,
-        initializer_policy_version=None,
-        seed=seed,
-        random_filled_slot_ids=(),
-        contract_checks=(ContractCheck("live_graph_alignment", True, None),),
-        path_faithfulness=PathFaithfulness.VERIFIED,
-        first_mismatch=None,
-        numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
-        poisoned=False,
-    )
-    return RunResult(output=output, trace=fork, report=report)
+    try:
+        fork.save_new_outs(model, inputs, random_seed=seed)
+        output = _reconstruct_live_output(fork)
+        readiness = ReadinessReport(
+            status=ReadinessStatus.READY,
+            provider=RunProvider.LIVE,
+            backend=str(getattr(trace, "backend", "torch")),
+            capability="live_model_fast_capture",
+            resolver_records=(),
+            state_sources_available=(StateSource.LIVE_MODEL_STATE,),
+            witness_completeness=None,
+            diagnostics=(),
+        )
+        report = RunReport(
+            readiness=readiness,
+            state_source=StateSource.LIVE_MODEL_STATE,
+            initializer_policy_version=None,
+            seed=seed,
+            random_filled_slot_ids=(),
+            contract_checks=(ContractCheck("live_graph_alignment", True, None),),
+            path_faithfulness=PathFaithfulness.VERIFIED,
+            first_mismatch=None,
+            numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
+            poisoned=False,
+        )
+        return RunResult(output=output, trace=fork, report=report)
+    except BaseException:
+        _state._unregister_log(fork)
+        for log in _state.list_logs():
+            if id(log) not in prior_log_ids:
+                _state._unregister_log(log)
+        raise
 
 
 def raise_analysis_run_unavailable(trace: Any) -> None:

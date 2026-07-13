@@ -73,6 +73,34 @@ class InplaceActivationModel(nn.Module):
         return preserved + activated
 
 
+class FailingLiveRunModel(nn.Module):
+    """Model whose live refresh forward can deliberately raise."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Raise after one captured operation for negative inputs.
+
+        Parameters
+        ----------
+        value:
+            Input that selects the successful or failing path.
+
+        Returns
+        -------
+        torch.Tensor
+            Deterministic successful-path output.
+
+        Raises
+        ------
+        RuntimeError
+            If the input sum is negative.
+        """
+
+        staged = value + 1
+        if bool(value.sum() < 0):
+            raise RuntimeError("intentional live rerun failure")
+        return staged * 2
+
+
 class RunnableNamedOutput(NamedTuple):
     """Named output container used to verify portable kind reconstruction."""
 
@@ -350,6 +378,25 @@ def test_live_run_returns_unified_result_and_matches_save_new_outs_exactly(
             assert actual_op.out is None
         else:
             assert torch.equal(actual_op.out, expected_op.out)
+
+
+def test_live_run_forward_failure_unregisters_transactional_fork() -> None:
+    """Discard a registered live-run fork when refresh forward escapes."""
+
+    model = FailingLiveRunModel()
+    trace = tl.trace(model, torch.ones(3))
+    prior_log_ids = {id(log) for log in _state.list_logs()}
+
+    with pytest.raises(RuntimeError, match="intentional live rerun failure"):
+        trace.run(inputs=-torch.ones(3))
+
+    transactional_forks = tuple(
+        log
+        for log in _state.list_logs()
+        if callable(getattr(log, "parent_run", None)) and log.parent_run() is trace
+    )
+    assert transactional_forks == ()
+    assert {id(log) for log in _state.list_logs()} <= prior_log_ids
 
 
 def test_analysis_only_loaded_trace_raises_typed_capability_error(tmp_path: Path) -> None:
