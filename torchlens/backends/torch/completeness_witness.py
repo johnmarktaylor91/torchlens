@@ -189,6 +189,7 @@ class _DispatchEvent:
     owner: ExpectedOriginalToken | None
     callsite: _DispatchCallsite | None
     in_replacement_hook: bool = False
+    mutates: bool = False
 
 
 @dataclass
@@ -240,6 +241,43 @@ def _is_aten_operator(func: Any) -> bool:
     if isinstance(namespace, str):
         return namespace == "aten"
     return _operator_name(func).startswith("aten.")
+
+
+def _is_mutating_operator(func: Any) -> bool:
+    """Return whether a dispatcher operator writes to any of its arguments.
+
+    Mutation is read from the operator's own ``FunctionSchema`` (torch ground
+    truth), never a name-string heuristic: ``schema.is_mutable`` covers every
+    in-place operator (trailing-underscore names such as ``mul_``/``copy_``) as
+    well as ``out=`` overloads whose name does NOT end in an underscore. Per-arg
+    ``alias_info.is_write`` is used as a robust fallback when the schema flag is
+    unavailable. Pure reads such as ``aten.equal`` / ``aten.allclose`` return
+    ``False``, which is exactly why benign ``owner_not_captured`` control-flow
+    comparisons are never mistaken for value-affecting drops.
+
+    Parameters
+    ----------
+    func:
+        Dispatcher callable received by ``__torch_dispatch__``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the operator mutates (writes) at least one argument.
+    """
+
+    schema = getattr(func, "_schema", None)
+    if schema is None:
+        return False
+    is_mutable = getattr(schema, "is_mutable", None)
+    if isinstance(is_mutable, bool):
+        return is_mutable
+    arguments = getattr(schema, "arguments", ()) or ()
+    for argument in arguments:
+        alias_info = getattr(argument, "alias_info", None)
+        if alias_info is not None and getattr(alias_info, "is_write", False):
+            return True
+    return False
 
 
 def _dispatch_callsite() -> _DispatchCallsite:
@@ -351,8 +389,15 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                     _dispatch_callsite() if owner is None or owner.func_call_id is None else None
                 )
                 in_replacement_hook = _in_replacement_hook_frame()
+                mutates = _is_mutating_operator(func)
                 self.state.events.append(
-                    _DispatchEvent(_operator_name(func), owner, callsite, in_replacement_hook)
+                    _DispatchEvent(
+                        _operator_name(func),
+                        owner,
+                        callsite,
+                        in_replacement_hook,
+                        mutates,
+                    )
                 )
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
@@ -445,6 +490,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "scope": "active_logging",
                 "enforced": False,
                 "in_replacement_hook": event.in_replacement_hook,
+                "mutates": event.mutates,
             }
         )
     decompositions = trace.__dict__.setdefault("completeness_decompositions", [])

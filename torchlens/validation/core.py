@@ -435,7 +435,11 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     * ``layer_list`` -- the captured computational ops (``func_call_id``).
     * ``completeness_diagnostics`` -- one entry per UNACCOUNTED aten dispatch,
       including ``unowned_dispatch`` (a real aten op with NO capturing owner --
-      a directly-dispatched ``torch.ops.aten.*`` call or an unwrapped route).
+      a directly-dispatched ``torch.ops.aten.*`` call or an unwrapped route) and
+      ``owner_not_captured`` (a WRAPPED op with a live owner that emitted no
+      captured op). Each diagnostic also carries ``mutates`` -- whether the aten
+      operator writes to any argument, read from the operator's own
+      ``FunctionSchema`` (not a name heuristic).
 
     **Captured census** = captured ops that OWN an accounted aten dispatch
     (``captured_fcids & accounted_owner_fcids``). A captured op that legitimately
@@ -455,6 +459,27 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
       captured owner -- a silent capture drop. Each one is added to the dispatch
       census so it fails ``CHECK_COMPLETENESS``. This is exactly the tripwire the
       backstop exists to arm, and NOTHING in the carve-outs relaxes it.
+    * An ``owner_not_captured`` aten dispatch is a WRAPPED op whose owner emitted
+      no captured op. On correct models this is benign PURE-READ control flow
+      (``torch.equal`` / ``torch.allclose`` deciding a branch), so it is NOT
+      counted -- masking that would false-fail correct models. But an
+      ``owner_not_captured`` dispatch that MUTATES an argument (``mutates=True``)
+      is a value-affecting drop the graph missed: a real completeness failure,
+      NOT benign control flow. Each such mutating drop (outside a replacement
+      hook) IS added to the dispatch census so the backstop fails. This is the
+      sound, narrow strengthening added for the round-3 hidden-mutation hunt.
+
+    OBSERVATIONAL BOUNDARY (documented, not papered over): the witness is a
+    ``TorchDispatchMode`` and can only census aten dispatches it actually
+    observes. A tensor subclass whose ``__torch_dispatch__`` performs a mutation
+    under ``torch._C._DisableTorchDispatch()`` hides that nested aten op from the
+    dispatcher entirely (PyTorch suppresses mode re-entry while a subclass handles
+    an op), so the mutation is INVISIBLE to the witness and cannot be counted.
+    This is the cooperative-model boundary: the witness assumes standard dispatch
+    and cannot see ops a subclass deliberately executes with dispatch disabled.
+    The strengthening above closes every OBSERVABLE uncaptured mutation; a
+    mutation deliberately hidden under disabled dispatch remains out of reach and
+    is documented in ``docs/reference`` rather than silently claimed as caught.
     * A genuine output-replacement ``register_forward_hook`` builds its
       replacement with untraceable dispatch -- raw-aten calls (unowned) and
       python-wrapped calls (accounted owners) -- all of which fire inside the
@@ -519,8 +544,23 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
         if entry.get("reason") == "unowned_dispatch"
         and entry.get("in_replacement_hook") is not True
     )
+    # An owner_not_captured dispatch that MUTATES an argument is a value-affecting
+    # capture drop, distinct from benign pure-read equal/allclose control flow
+    # (which never mutates). It is added to the census so the backstop fails --
+    # the sound strengthening for the round-3 hidden-mutation hunt. Benign
+    # owner_not_captured entries have mutates != True and are still excluded.
+    owner_not_captured_mutation_count = sum(
+        1
+        for entry in diagnostics
+        if entry.get("reason") == "owner_not_captured"
+        and entry.get("mutates") is True
+        and entry.get("in_replacement_hook") is not True
+    )
     dispatch_census_count = (
-        len(accounted_owner_fcids) - len(excused_orphan_fcids) + unowned_gap_dispatch_count
+        len(accounted_owner_fcids)
+        - len(excused_orphan_fcids)
+        + unowned_gap_dispatch_count
+        + owner_not_captured_mutation_count
     )
     return dispatch_census_count, len(captured_census)
 

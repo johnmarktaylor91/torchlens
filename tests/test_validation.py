@@ -1790,10 +1790,15 @@ def _backstop_dec(
     }
 
 
-def _backstop_diag(*, reason: str = "unowned_dispatch", in_replacement_hook: bool = False) -> dict:
+def _backstop_diag(
+    *,
+    reason: str = "unowned_dispatch",
+    in_replacement_hook: bool = False,
+    mutates: bool = False,
+) -> dict:
     """Build a minimal unaccounted-dispatch witness diagnostic record."""
 
-    return {"reason": reason, "in_replacement_hook": in_replacement_hook}
+    return {"reason": reason, "in_replacement_hook": in_replacement_hook, "mutates": mutates}
 
 
 def _backstop_trace(
@@ -1993,6 +1998,72 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
         )
     )
     assert dispatch != captured
+
+
+def test_completeness_backstop_mutating_owner_not_captured_fails_the_gate() -> None:
+    """An uncaptured MUTATING owner_not_captured dispatch is a value-affecting drop.
+
+    Round-3 strengthening: a benign ``owner_not_captured`` diagnostic (a wrapped
+    op whose owner emitted no captured op) is legitimate PURE-READ control flow
+    (``torch.equal`` / ``torch.allclose`` deciding a branch) and must NOT fail.
+    But an ``owner_not_captured`` dispatch that MUTATES an argument is a
+    value-affecting op the graph missed -- a genuine completeness failure that
+    must inflate the dispatch census. The mutation signal (``mutates``) comes from
+    the operator's own schema, so a pure-read comparison never trips it.
+    """
+
+    # Benign pure-read owner_not_captured (equal/allclose control flow) -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="owner_not_captured", mutates=False)],
+        )
+    )
+    assert dispatch == captured
+
+    # A MUTATING owner_not_captured drop (e.g. an uncaptured in-place op that still
+    # surfaced to the witness) is value-affecting -> mismatch -> FAIL.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="owner_not_captured", mutates=True)],
+        )
+    )
+    assert dispatch != captured
+
+    # A mutating drop alongside a benign captured no-op still fails (no cancel).
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2), _backstop_op(3, func_name="broadcast_tensors")],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="owner_not_captured", mutates=True)],
+        )
+    )
+    assert dispatch != captured
+
+    # A mutating owner_not_captured INSIDE a genuine replacement hook is
+    # replacement construction, not a plain-capture drop -> excused -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="owner_not_captured", mutates=True, in_replacement_hook=True)],
+        )
+    )
+    assert dispatch == captured
+
+    # A legacy diagnostic dict with NO ``mutates`` key is treated as non-mutating
+    # (benign) and must not spuriously fail -- backward compatibility.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [{"reason": "owner_not_captured", "in_replacement_hook": False}],
+        )
+    )
+    assert dispatch == captured
 
 
 def test_replay_validation_checks_every_recurrent_pass() -> None:
