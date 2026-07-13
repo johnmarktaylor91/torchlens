@@ -217,6 +217,16 @@ def resolver_coverage_report() -> dict[str, Any]:
         "unique_registry_keys": len(records_by_key),
         "resolved_exact": counts[ResolverStatus.RESOLVED_EXACT.value],
         "resolved_alias": counts[ResolverStatus.RESOLVED_ALIAS.value],
+        "resolved_exact_keys": sorted(
+            _key_label(key)
+            for key, record in records_by_key.items()
+            if record.status is ResolverStatus.RESOLVED_EXACT
+        ),
+        "resolved_alias_keys": sorted(
+            _key_label(key)
+            for key, record in records_by_key.items()
+            if record.status is ResolverStatus.RESOLVED_ALIAS
+        ),
         "unresolved_count": len(unresolved),
         "ambiguous_count": len(ambiguous),
         "unresolved_keys": unresolved,
@@ -225,7 +235,10 @@ def resolver_coverage_report() -> dict[str, Any]:
     }
 
 
-def classics_resolver_coverage_report(max_models: int = 300) -> dict[str, Any]:
+def classics_resolver_coverage_report(
+    max_models: int = 300,
+    start_index: int = 0,
+) -> dict[str, Any]:
     """Run reattachment readiness over direct-build menagerie classics.
 
     Parameters
@@ -233,6 +246,9 @@ def classics_resolver_coverage_report(max_models: int = 300) -> dict[str, Any]:
     max_models:
         Maximum number of sorted classic source modules to attempt. Every
         attempted failure is retained in the returned report.
+    start_index:
+        Zero-based sorted candidate offset. This permits process-isolated
+        shards so one hostile legacy module cannot terminate the corpus run.
 
     Returns
     -------
@@ -246,7 +262,7 @@ def classics_resolver_coverage_report(max_models: int = 300) -> dict[str, Any]:
         source = path.read_text(encoding="utf-8", errors="replace")
         if "def build(" in source and "def example_input(" in source:
             candidates.append(path)
-    selected = candidates[:max_models]
+    selected = candidates[start_index : start_index + max_models]
     records_by_key: dict[FunctionRegistryKey, ResolverRecord] = {}
     failures: list[dict[str, str]] = []
     registry_occurrences = 0
@@ -316,6 +332,16 @@ def classics_resolver_coverage_report(max_models: int = 300) -> dict[str, Any]:
         "unique_registry_keys": len(records_by_key),
         "resolved_exact": counts[ResolverStatus.RESOLVED_EXACT.value],
         "resolved_alias": counts[ResolverStatus.RESOLVED_ALIAS.value],
+        "resolved_exact_keys": sorted(
+            _key_label(key)
+            for key, record in records_by_key.items()
+            if record.status is ResolverStatus.RESOLVED_EXACT
+        ),
+        "resolved_alias_keys": sorted(
+            _key_label(key)
+            for key, record in records_by_key.items()
+            if record.status is ResolverStatus.RESOLVED_ALIAS
+        ),
         "unresolved_count": len(unresolved),
         "ambiguous_count": len(ambiguous),
         "unresolved_keys": unresolved,
