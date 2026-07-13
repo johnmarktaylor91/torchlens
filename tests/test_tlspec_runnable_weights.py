@@ -102,6 +102,7 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     weight_entries = [
         entry for entry in weighted_manifest["tensors"] if entry["kind"] == "runnable_weight"
     ]
+    assert {entry["kind"] for entry in weighted_manifest["tensors"]} == {"runnable_weight"}
     expected_state = model.state_dict()
     assert {entry["label"] for entry in weight_entries} == set(expected_state)
     assert "scratch" not in {entry["label"] for entry in weight_entries}
@@ -114,6 +115,7 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     assert_sparse_core_has_no_tensor_payload(weighted_manifest["run"])
     assert_sparse_core_has_no_tensor_payload(metadata)
     assert metadata["_buffer_initial_values"] == {}
+    assert all(op.func is None for op in metadata["layer_list"])
     tl.validation.validate_tlspec(weighted_path)
 
 

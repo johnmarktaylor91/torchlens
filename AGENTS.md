@@ -77,6 +77,9 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 run_result = torch_trace.run(inputs=x, seed=42)
 loaded_result = tl.load("architecture.tlspec").run(inputs=x, seed=42)
+runnable_path = "architecture.tlspec"
+tl.save(torch_trace, runnable_path, level="runnable", include_weights=True)
+verified = tl.load(runnable_path).run(inputs=x, seed=42, on_divergence="raise")
 overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
 module_scores = torch_trace.module_collapse_order
 ```
@@ -165,6 +168,12 @@ pytest tests/ -m "not slow" -x --tb=short
     default divergence raises with rollback, while `return_diverged` is the sole monotonic poisoned
     opt-in. Incomplete witness coverage is `unverifiable`; sparse-only and ineligible activation
     runs report numeric attestation as `not_applicable`.
+19. Runnable public vocabulary is frozen in `torchlens.runnable`: readiness is `ready|unavailable`,
+    faithfulness is `verified|diverged|unverifiable`, state source is
+    `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
+    and divergence policy is `raise|return_diverged`. Error handling uses `RunnableErrorCode`, never
+    exception-message matching. The complete taxonomy and payload rules live in
+    `docs/reference/runnable_tlspec_contract.md`.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing

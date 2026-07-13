@@ -66,6 +66,11 @@ selection as `selected_activation_v1`. Inspect it through `Trace.archived_activa
 those blobs as DAG inputs. Eligible original-input/capture-equivalent-state runs byte-attest raw
 saved slots (`attested` or transactional `numeric_attestation_failed`), while changed-input or
 random/non-equivalent-state runs are `not_applicable`.
+`trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
+`verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
+Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
+through `RunnableErrorCode`; the complete frozen taxonomy is in
+`docs/reference/runnable_tlspec_contract.md`.
 
 Provisional semantic I/O examples (review-day names):
 

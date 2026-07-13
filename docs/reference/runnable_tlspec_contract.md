@@ -2,14 +2,14 @@
 
 Status: **AUTHORITATIVE AND FROZEN** for `sparse_recorded_taken_path_v1`.
 
-This is the single implementation contract for sparse runnable `.tlspec` Stages 2 and later. The
+This is the single implementation contract for the complete sparse runnable `.tlspec` surface. The
 definitions in `torchlens.runnable` are its behavior-free typed mirror. A disagreement between this
 document and those types is a release-blocking schema defect. Neither may change without an explicit,
 versioned contract amendment.
 
-Stages 2--4 now provide the sparse producer, safe loader/resolver, and non-executing state binder.
-There is still no DAG executor or `Trace.run` behavior, and these stages change no capture path,
-analysis save level, bundle, or validation result.
+The shipped surface includes the sparse producer, safe loader/resolver, state binder, transactional
+executor, control-flow honesty checks, optional weight payloads, and optional selected-activation
+attestation. It does not change the ordinary capture path or analysis save levels.
 
 ## 1. Versions and enum vocabularies
 
@@ -286,9 +286,9 @@ The torch ladder is fixed:
 
 1. Exact `getattr` on allowlisted roots only: `torch`, `torch.Tensor`, `torch.nn.functional`,
    `operator`, and explicitly enumerated stock namespaces; prefer public surfaces.
-2. Explicit version-bounded aliases in `utils/_torch_compat.py`, including
+2. Explicit producer-version-bounded aliases in `utils/_torch_compat.py`, including
    `Tensor`/`_TensorBase`/`TensorBase` and enumerated private-to-public mappings. Aliases never
-   reinterpret exact matches.
+   reinterpret exact matches. Current-runtime target availability remains capability-detected.
 3. Cached reverse-index diagnostics over `get_orig_torch_funcs()` for supported bare forms, ranked
    by namespace and guarded by function name/recorded arity; ambiguity hard-fails.
 4. Translate through `_state._decorated_to_orig`; a wrapper result is an invariant failure. Resolve
@@ -429,7 +429,7 @@ and never call those values original/recovered/reconstructed/trained/capture-tim
 
 ## 9. Runtime API and state lifecycle
 
-Stage 4 adds `load_state_dict`; Stage 5 adds the unified transactional `run` provider surface:
+The unified transactional `run` provider and staged-state surface is:
 
 ```python
 def run(
@@ -552,13 +552,24 @@ contract/witness honesty, not numerical reproduction.
 (named parameters plus persistent buffers), not only trainable weights. Activations mean exactly the
 already-retained capture-time `save=` selection, not a second selector.
 
-Stage 0 introduced public error names and an importable schema/type module. Stage 4 documents
-`load_state_dict`, transient state sources, and initializer reporting. Stage 5 implements `run`,
-`RunResult`, transactional run forks, sparse input/call/output reconstruction, and populated
-three-state `path_faithfulness`. Stage 6 implements strict divergence raising, transactional
-rollback, incomplete-coverage `unverifiable`, and monotonically poisoned opt-in results plus
-downstream refusal gates. Stage 7 adds the optional external weight family and embedded-state
-binding. Stage 8 adds inspection-only selected activation blobs and eligible byte-exact numeric
-attestation without changing capture or the sparse core. This contract plus `CLAUDE.md`/`AGENTS.md`,
-FIELD_ORDER, schema, and API tests move together. Until a curated public glossary ships, this
-document is the authoritative public glossary entry for sparse runnable execution.
+The complete implementation includes `load_state_dict`, transient state sources, initializer
+reporting, `run`, `RunResult`, transactional run forks, sparse input/call/output reconstruction,
+three-state `path_faithfulness`, strict divergence rollback, monotonically poisoned opt-in results,
+the external weight family, and inspection-only selected activation attestation. This contract plus
+`CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API tests move together. Until a curated public
+glossary ships, this document is the authoritative public glossary entry for sparse runnable
+execution.
+
+## 13. Resolver compatibility release gate
+
+Every release runs readiness over a representative torch corpus covering the menagerie classics and
+test-suite model families, deduplicates by complete `FunctionRegistryKey`, and reports exact, alias,
+unresolved, and ambiguous counts. The threshold is **zero unresolved or ambiguous torch keys**. A
+nonzero result is release-blocking unless each key is explicitly documented here with a bounded
+compatibility disposition; filtering, skipping, or reporting only successful keys is forbidden.
+
+The checked-in fast gate covers linear, convolution, normalization, pooling, embedding, recurrent,
+attention, Tensor-method, operator, and special-function families. The Stage 9 release report records
+the expanded classics run, including all unsuccessful model attempts as well as every unavailable
+unique key. A sweep of the entire 10,000+ menagerie catalog is deliberately separate and deferred;
+the classics plus test-suite corpus is the runnable release gate.

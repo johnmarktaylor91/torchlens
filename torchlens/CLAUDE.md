@@ -176,6 +176,9 @@ contract used by `Trace.load_state_dict()`, while explicit user state overrides 
 scheduler never consumes them. Original-input, capture-equivalent real-state runs report
 `attested` or fail transactionally with `numeric_attestation_failed`; changed-input/random-state
 runs report `not_applicable`.
+The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
+`NumericAttestationStatus`, and `RunnableErrorCode` vocabularies live in `torchlens.runnable` and are
+documented exhaustively in `docs/reference/runnable_tlspec_contract.md`.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
 `uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward

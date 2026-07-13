@@ -110,9 +110,11 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
         f"slot:{label}" for label in selected_labels
     }
     entries = [entry for entry in manifest["tensors"] if entry["kind"] == "runnable_activation"]
+    assert {entry["kind"] for entry in manifest["tensors"]} == {"runnable_activation"}
     assert {entry["blob_id"] for entry in entries} == {member["blob_id"] for member in members}
     assert_sparse_core_has_no_tensor_payload(manifest["run"])
     assert_sparse_core_has_no_tensor_payload(_metadata(path))
+    assert all(op.func is None for op in _metadata(path)["layer_list"])
     tl.validation.validate_tlspec(path)
 
 

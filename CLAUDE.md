@@ -257,6 +257,12 @@ Trace refused by validation, export, faithful comparison, and path-assuming inte
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs.
 
+The frozen runnable enums live in `torchlens.runnable`: `ReadinessStatus`, `RunProvider`,
+`StateSource`, `PathFaithfulness`, `DivergencePolicy`, `NumericAttestationStatus`, and
+`RunnableErrorCode`. Public code branches on these values or the structured report, not exception
+text. The exhaustive error vocabulary and release threshold are maintained in
+`docs/reference/runnable_tlspec_contract.md`.
+
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
 `johnmarktaylor91/torchlens` is a **public** GitHub repo. Internal planning, riffing, sprint

@@ -28,6 +28,7 @@ from .selectors import (
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..ir.container_registry import Role
+from ..utils._torch_compat import resolve_runnable_torch_alias
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -94,6 +95,17 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
         return FunctionRegistryKey("torch.nn.functional", str(name), dispatch_kind)
     if module == "operator":
         return FunctionRegistryKey("operator", str(name), dispatch_kind)
+    stock_alias = resolve_runnable_torch_alias(f"{module}.{name}", str(torch.__version__))
+    if stock_alias is not None:
+        namespace, alias_qualname, _provenance = stock_alias
+        alias_dispatch: Literal["function", "method", "dunder"] = (
+            "method" if namespace == "torch.Tensor" else dispatch_kind
+        )
+        return FunctionRegistryKey(
+            cast(Any, namespace),
+            alias_qualname,
+            alias_dispatch,
+        )
     if module in {"torch._tensor", "torch.Tensor"} or (
         hasattr(torch.Tensor, str(name)) and "Tensor" in str(qualname)
     ):
