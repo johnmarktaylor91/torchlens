@@ -357,10 +357,20 @@ def _validate_sparse_run_descriptor(
     }
     for layer_name, expected_schema in expected_payload_schemas.items():
         layer = payload_layers.get(layer_name)
-        if not isinstance(layer, dict) or set(layer) != {"present", "schema"}:
-            raise ValueError(
-                f"Runnable descriptor payload_layers.{layer_name} must declare present/schema."
-            )
+        layer_present = layer.get("present") if isinstance(layer, dict) else None
+        required_layer_fields = (
+            {"present", "schema"}
+            if layer_name == "weights" or layer_present is False
+            else {
+                "present",
+                "schema",
+                "members",
+                "original_input_digests",
+                "capture_state_digests",
+            }
+        )
+        if not isinstance(layer, dict) or set(layer) != required_layer_fields:
+            raise ValueError(f"Runnable descriptor payload_layers.{layer_name} fields mismatch.")
         if not isinstance(layer.get("present"), bool):
             raise ValueError(
                 f"Runnable descriptor payload_layers.{layer_name}.present must be boolean."
@@ -370,8 +380,13 @@ def _validate_sparse_run_descriptor(
                 f"Runnable descriptor payload_layers.{layer_name}.schema must be "
                 f"{expected_schema!r}."
             )
-    if payload_layers["activations"]["present"] is not False:
-        raise ValueError("Stage 7 does not support activation payloads.")
+    activations = payload_layers["activations"]
+    if activations["present"]:
+        for field_name in ("members", "original_input_digests", "capture_state_digests"):
+            if not isinstance(activations[field_name], list):
+                raise ValueError(
+                    f"Runnable descriptor payload_layers.activations.{field_name} must be an array."
+                )
     preflight = value["preflight"]
     if not isinstance(preflight, dict) or preflight.get("passed") is not True:
         raise ValueError("Runnable descriptor must carry a passed producer preflight.")
@@ -395,6 +410,7 @@ def _validate_runnable_payload_entries(manifest: dict[str, Any]) -> None:
 
     run = manifest["run"]
     weights_present = run["payload_layers"]["weights"]["present"]
+    activations = run["payload_layers"]["activations"]
     tensors = manifest.get("tensors")
     if not isinstance(tensors, list):
         raise ValueError("Runnable manifests require a tensors array.")
@@ -413,6 +429,114 @@ def _validate_runnable_payload_entries(manifest: dict[str, Any]) -> None:
         if label in labels:
             raise ValueError(f"Runnable weight payload repeats canonical state name {label!r}.")
         labels.add(label)
+    activation_entries = [
+        entry
+        for entry in tensors
+        if isinstance(entry, dict) and entry.get("kind") == "runnable_activation"
+    ]
+    if activation_entries and not activations["present"]:
+        raise ValueError(
+            "Runnable activation blobs require payload_layers.activations.present=true."
+        )
+    entries_by_blob_id = {entry.get("blob_id"): entry for entry in activation_entries}
+    valid_slot_ids = {
+        slot.get("slot_id")
+        for slot in run.get("tensor_slots", [])
+        if isinstance(slot, dict) and isinstance(slot.get("slot_id"), str)
+    }
+    valid_call_ids = {
+        call.get("call_id")
+        for call in run.get("calls", [])
+        if isinstance(call, dict) and isinstance(call.get("call_id"), str)
+    }
+    member_blob_ids: set[str] = set()
+    for index, member in enumerate(activations.get("members", [])):
+        if not isinstance(member, dict):
+            raise ValueError(f"Runnable activation member {index} must be an object.")
+        required = {"blob_id", "slot_id", "call_id", "op_label", "field", "byte_digest"}
+        if set(member) != required:
+            raise ValueError(f"Runnable activation member {index} fields mismatch.")
+        blob_id = member.get("blob_id")
+        if not isinstance(blob_id, str) or blob_id == "" or blob_id in member_blob_ids:
+            raise ValueError(f"Runnable activation member {index} has invalid/repeated blob_id.")
+        if blob_id not in entries_by_blob_id:
+            raise ValueError(f"Runnable activation member {index} has no matching tensor entry.")
+        if member.get("field") not in {"out", "transformed_out"}:
+            raise ValueError(f"Runnable activation member {index} has invalid field.")
+        for field_name in ("slot_id", "op_label", "byte_digest"):
+            if not isinstance(member.get(field_name), str) or member[field_name] == "":
+                raise ValueError(
+                    f"Runnable activation member {index} requires non-empty {field_name}."
+                )
+        if member["slot_id"] not in valid_slot_ids:
+            raise ValueError(f"Runnable activation member {index} references an unknown slot.")
+        if _SHA256_RE.fullmatch(member["byte_digest"]) is None:
+            raise ValueError(f"Runnable activation member {index} byte_digest must be SHA-256.")
+        call_id = member.get("call_id")
+        if call_id is not None and not isinstance(call_id, str):
+            raise ValueError(f"Runnable activation member {index} call_id must be string/null.")
+        if call_id is not None and call_id not in valid_call_ids:
+            raise ValueError(f"Runnable activation member {index} references an unknown call.")
+        if entries_by_blob_id[blob_id].get("label") != member["op_label"]:
+            raise ValueError(f"Runnable activation member {index} label disagrees with its blob.")
+        member_blob_ids.add(blob_id)
+    if member_blob_ids != set(entries_by_blob_id):
+        raise ValueError("Runnable activation tensor entries and declared members disagree.")
+    _validate_runnable_digest_records(
+        activations.get("original_input_digests", []),
+        key_name="slot_id",
+        valid_keys=valid_slot_ids,
+    )
+    state_names = {
+        binding.get("state_dict_name")
+        for slot in run.get("tensor_slots", [])
+        if isinstance(slot, dict)
+        and isinstance((binding := slot.get("state_binding")), dict)
+        and isinstance(binding.get("state_dict_name"), str)
+    }
+    _validate_runnable_digest_records(
+        activations.get("capture_state_digests", []),
+        key_name="state_dict_name",
+        valid_keys=state_names,
+    )
+
+
+def _validate_runnable_digest_records(
+    records: Any,
+    *,
+    key_name: str,
+    valid_keys: set[Any],
+) -> None:
+    """Validate one unique key-to-byte-digest runnable metadata array.
+
+    Parameters
+    ----------
+    records:
+        JSON-decoded digest record array.
+    key_name:
+        Record key field to validate.
+    valid_keys:
+        Descriptor keys that records may reference.
+
+    Raises
+    ------
+    ValueError
+        If record shape, membership, uniqueness, or digest syntax is invalid.
+    """
+
+    if not isinstance(records, list):
+        raise ValueError("Runnable digest records must be an array.")
+    seen: set[str] = set()
+    for index, record in enumerate(records):
+        if not isinstance(record, dict) or set(record) != {key_name, "byte_digest"}:
+            raise ValueError(f"Runnable digest record {index} fields mismatch.")
+        key = record.get(key_name)
+        digest = record.get("byte_digest")
+        if not isinstance(key, str) or key == "" or key in seen or key not in valid_keys:
+            raise ValueError(f"Runnable digest record {index} has invalid/repeated {key_name}.")
+        if not isinstance(digest, str) or _SHA256_RE.fullmatch(digest) is None:
+            raise ValueError(f"Runnable digest record {index} byte_digest must be SHA-256.")
+        seen.add(key)
 
 
 def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
@@ -747,6 +871,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
         "jax_equation_out",
         "jax_input_leaf",
         "jax_param_leaf",
+        "runnable_activation",
         "runnable_weight",
     }
     allowed_intended_uses = v1_intended_uses if schema_version == 1 else v2_intended_uses

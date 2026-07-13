@@ -55,6 +55,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "_output_transform",
                 "_runnable_descriptor",
                 "_runnable_embedded_state",
+                "_runnable_archived_activations",
                 "_runnable_first_mismatch",
                 "_runnable_path_faithfulness",
                 "_runnable_poisoned",

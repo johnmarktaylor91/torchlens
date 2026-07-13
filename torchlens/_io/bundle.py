@@ -48,12 +48,18 @@ from ..data_classes.trace import Trace
 if TYPE_CHECKING:
     from ..bundle import Bundle
     from ..intervention.types import InterventionSpec
-    from ..runnable import SparseRunDescriptor
+    from ..runnable import (
+        ActivationPayloadMember,
+        SlotByteDigest,
+        SparseRunDescriptor,
+        StateByteDigest,
+    )
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
 _RUNNABLE_WEIGHT_KIND = "runnable_weight"
+_RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ("torchlens.data_classes.model_log", "ModelLog"): (
@@ -158,6 +164,7 @@ def save(
     include_saved_args: bool = False,
     include_rng_states: bool = False,
     include_weights: bool = False,
+    include_activations: bool = False,
     strict: bool = True,
     overwrite: bool = False,
 ) -> None:
@@ -185,6 +192,10 @@ def save(
         ``state_dict``: all named parameters and persistent buffers. This
         state-only payload contains no model object, gradients, RNG state,
         callables, or per-call snapshots. Valid only with ``level="runnable"``.
+    include_activations:
+        Whether a runnable save should archive exactly the ``save=``-selected
+        ``out``/``transformed_out`` payloads for offline inspection and eligible
+        original-input, real-state numeric attestation. The payloads never seed execution.
     strict:
         Whether unsupported tensors should abort the save instead of being skipped.
     overwrite:
@@ -221,12 +232,16 @@ def save(
     sparse_run_descriptor = None
     sparse_run_json = None
     weight_blob_specs: list[BlobSpec] = []
+    activation_blob_specs: list[BlobSpec] = []
     if include_weights and save_level != "runnable":
         raise ValueError("include_weights=True requires level='runnable'.")
+    if include_activations and save_level != "runnable":
+        raise ValueError("include_activations=True requires level='runnable'.")
     if save_level == "runnable":
         from .runnable import (
             require_sparse_run_descriptor,
             sparse_descriptor_to_json,
+            with_activation_payload,
             with_weight_payload,
         )
 
@@ -237,6 +252,19 @@ def save(
                 sparse_run_descriptor,
             )
             sparse_run_descriptor = with_weight_payload(sparse_run_descriptor)
+        if include_activations:
+            (
+                activation_blob_specs,
+                activation_members,
+                original_input_digests,
+                capture_state_digests,
+            ) = _capture_activation_blob_specs(trace, sparse_run_descriptor)
+            sparse_run_descriptor = with_activation_payload(
+                sparse_run_descriptor,
+                members=activation_members,
+                original_input_digests=original_input_digests,
+                capture_state_digests=capture_state_digests,
+            )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
         include_outs = False
         include_grads = False
@@ -297,6 +325,7 @@ def save(
                     "Sparse runnable scrub produced tensor blob specs; refusing runnable label."
                 )
             blob_specs.extend(weight_blob_specs)
+            blob_specs.extend(activation_blob_specs)
         _apply_visualization_save_policy(
             trace,
             scrubbed_state=scrubbed_state,
@@ -463,16 +492,7 @@ def _capture_weight_blob_specs(
 
     from .._runnable_state import validate_state_mapping_for_descriptor
 
-    source_ref = getattr(trace, "_source_model_ref", None)
-    model = source_ref() if callable(source_ref) else None
-    state_dict_method = getattr(model, "state_dict", None)
-    if not callable(state_dict_method):
-        raise TorchLensIOError(
-            "include_weights=True requires the live source model retained by the capture Trace."
-        )
-    state = state_dict_method()
-    if not isinstance(state, Mapping):
-        raise TorchLensIOError("The capture source model did not return a state_dict mapping.")
+    state = _capture_source_state(trace, option_name="include_weights")
     validate_state_mapping_for_descriptor(descriptor, state)
     return [
         BlobSpec(
@@ -484,6 +504,141 @@ def _capture_weight_blob_specs(
         )
         for index, name in enumerate(sorted(cast(Mapping[str, torch.Tensor], state)))
     ]
+
+
+def _capture_activation_blob_specs(
+    trace: Trace,
+    descriptor: SparseRunDescriptor,
+) -> tuple[
+    list[BlobSpec],
+    tuple[ActivationPayloadMember, ...],
+    tuple[SlotByteDigest, ...],
+    tuple[StateByteDigest, ...],
+]:
+    """Collect capture-selected activation blobs and attestation eligibility digests.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture retaining the existing ``save=`` payload decisions.
+    descriptor:
+        Sparse descriptor whose slots and calls identify archived membership.
+
+    Returns
+    -------
+    tuple
+        Blob specs, exact activation membership, original-input digests available
+        from selected input payloads, and capture-state digests.
+
+    Raises
+    ------
+    TorchLensIOError
+        If a selected payload is unavailable or is not a dense torch tensor.
+    """
+
+    from .._runnable_state import runnable_tensor_byte_digest
+    from ..runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
+
+    slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
+    call_id_by_label = {
+        op_label: call.call_id for call in descriptor.calls for op_label in call.op_labels
+    }
+    blob_specs: list[BlobSpec] = []
+    members: list[ActivationPayloadMember] = []
+    input_digests: list[SlotByteDigest] = []
+    for op in trace.layer_list:
+        op_label = str(op.label)
+        slot_id = f"slot:{op_label}"
+        if slot_id not in slot_ids:
+            continue
+        out = _physical_op_payload(op, "out")
+        if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
+            input_digests.append(
+                SlotByteDigest(
+                    slot_id=slot_id,
+                    byte_digest=runnable_tensor_byte_digest(out),
+                )
+            )
+        if not bool(getattr(op, "has_saved_activation", False)):
+            continue
+        found_payload = False
+        for field_name in ("out", "transformed_out"):
+            payload = _physical_op_payload(op, field_name)
+            if payload is None:
+                continue
+            found_payload = True
+            if not isinstance(payload, torch.Tensor) or payload.layout is not torch.strided:
+                raise TorchLensIOError(
+                    "include_activations=True requires every selected out/transformed_out "
+                    f"payload to be a dense torch.Tensor; {op_label}.{field_name} is "
+                    f"{type(payload).__name__}."
+                )
+            blob_id = f"runnable_activation_{len(blob_specs):05d}"
+            digest = runnable_tensor_byte_digest(payload)
+            blob_specs.append(
+                BlobSpec(
+                    blob_id=blob_id,
+                    value=payload,
+                    kind=_RUNNABLE_ACTIVATION_KIND,
+                    label=op_label,
+                    logical_backend="torch",
+                )
+            )
+            members.append(
+                ActivationPayloadMember(
+                    blob_id=blob_id,
+                    slot_id=slot_id,
+                    call_id=call_id_by_label.get(op_label),
+                    op_label=op_label,
+                    field=cast(Any, field_name),
+                    byte_digest=digest,
+                )
+            )
+        if not found_payload:
+            raise TorchLensIOError(
+                "include_activations=True found a capture-selected activation without a "
+                f"materialized out/transformed_out payload at {op_label!r}."
+            )
+
+    state = _capture_source_state(trace, option_name="include_activations")
+    state_digests = tuple(
+        StateByteDigest(
+            state_dict_name=name,
+            byte_digest=runnable_tensor_byte_digest(value),
+        )
+        for name, value in sorted(cast(Mapping[str, torch.Tensor], state).items())
+    )
+    return blob_specs, tuple(members), tuple(input_digests), state_digests
+
+
+def _physical_op_payload(op: Any, field_name: str) -> Any:
+    """Read one stored Op payload without invoking missing-payload access errors."""
+
+    slot = getattr(op, "_slot", None)
+    if callable(slot):
+        return slot(field_name)
+    return getattr(op, field_name, None)
+
+
+def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, torch.Tensor]:
+    """Return the capture source model's full state mapping for one payload option."""
+
+    source_ref = getattr(trace, "_source_model_ref", None)
+    model = source_ref() if callable(source_ref) else None
+    state_dict_method = getattr(model, "state_dict", None)
+    if not callable(state_dict_method):
+        raise TorchLensIOError(
+            f"{option_name}=True requires the live source model retained by the capture Trace."
+        )
+    state = state_dict_method()
+    if not isinstance(state, Mapping) or any(
+        not isinstance(name, str) or not isinstance(value, torch.Tensor)
+        for name, value in state.items()
+    ):
+        raise TorchLensIOError(
+            "The capture source model did not return a tensor state_dict mapping."
+        )
+    return cast(Mapping[str, torch.Tensor], state)
 
 
 def _reject_audit_only_materialized_payload_save(
@@ -807,6 +962,12 @@ def _load_trace_payload(
         bundle_path=bundle_path,
         map_location=map_location,
     )
+    _bind_archived_activation_payload(
+        trace,
+        manifest=manifest,
+        bundle_path=bundle_path,
+        map_location=map_location,
+    )
     return trace
 
 
@@ -879,6 +1040,94 @@ def _bind_embedded_weight_payload(
     from .._runnable_state import bind_embedded_trace_state
 
     bind_embedded_trace_state(trace, embedded)
+
+
+def _bind_archived_activation_payload(
+    trace: Trace,
+    *,
+    manifest: Manifest,
+    bundle_path: Path,
+    map_location: str | torch.device,
+) -> None:
+    """Load the inspection-only selected-activation family without seeding execution.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated Trace receiving the separate archive inspection mapping.
+    manifest:
+        Parsed tensor manifest containing activation-family entries.
+    bundle_path:
+        Artifact root used to resolve blob paths safely.
+    map_location:
+        Device selected for loaded activation tensors.
+
+    Raises
+    ------
+    TorchLensIOError
+        If descriptor membership, blob entries, or file checksums disagree.
+    """
+
+    from ..runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
+
+    descriptor = trace.runnable_descriptor
+    activation_entries = {
+        entry.blob_id: entry
+        for entry in manifest.tensors
+        if entry.kind == _RUNNABLE_ACTIVATION_KIND
+    }
+    if descriptor is None:
+        if activation_entries:
+            raise TorchLensIOError(
+                "Activation payload blobs require a parsed sparse runnable descriptor."
+            )
+        return
+    declared = descriptor.payload_layers.activations
+    if not declared.present:
+        if activation_entries:
+            raise TorchLensIOError(
+                "Runnable activation blobs are present while their payload flag is false."
+            )
+        trace.__dict__["_runnable_archived_activations"] = {}
+        return
+    if not isinstance(declared, ActivationPayloadLayerDescriptor):
+        raise TorchLensIOError("Runnable activation payload metadata is incomplete.")
+    if declared.schema != "selected_activation_v1":
+        raise TorchLensIOError(
+            f"Unsupported runnable activation payload schema {declared.schema!r}."
+        )
+    archived: dict[str, ArchivedActivation] = {}
+    for member in declared.members:
+        entry = activation_entries.get(member.blob_id)
+        if entry is None:
+            raise TorchLensIOError(
+                f"Runnable activation member {member.blob_id!r} has no tensor entry."
+            )
+        blob_path = resolve_bundle_blob_path(bundle_path, entry.relative_path)
+        observed_sha256 = sha256_of_file(blob_path)
+        if observed_sha256 != entry.sha256:
+            raise TorchLensIOError(
+                f"Checksum mismatch for archived activation blob_id={entry.blob_id} at {blob_path}."
+            )
+        tensor = _load_safetensors_file(blob_path, map_location).get(_BLOB_TENSOR_KEY)
+        if tensor is None:
+            raise TorchLensIOError(
+                f"Archived activation blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}."
+            )
+        archive_key = f"{member.slot_id}:{member.field}"
+        if archive_key in archived:
+            raise TorchLensIOError(f"Runnable activation payload repeats {archive_key!r}.")
+        archived[archive_key] = ArchivedActivation(
+            slot_id=member.slot_id,
+            call_id=member.call_id,
+            op_label=member.op_label,
+            field=member.field,
+            byte_digest=member.byte_digest,
+            value=tensor,
+        )
+    if set(activation_entries) != {member.blob_id for member in declared.members}:
+        raise TorchLensIOError("Runnable activation blobs and declared membership disagree.")
+    trace.__dict__["_runnable_archived_activations"] = archived
 
 
 def _load_unified_tlspec(

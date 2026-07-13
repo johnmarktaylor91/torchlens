@@ -9,8 +9,13 @@ from typing import Any, cast
 import torch
 
 from . import _state
-from ._runnable_state import PreparedRunnableState, prepare_runnable_state
+from ._runnable_state import (
+    PreparedRunnableState,
+    prepare_runnable_state,
+    runnable_tensor_byte_digest,
+)
 from .errors import (
+    NumericAttestationError,
     PathDivergenceError,
     ReattachError,
     RunCapabilityUnavailableError,
@@ -19,6 +24,7 @@ from .errors import (
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
 from .runnable import (
+    ActivationPayloadLayerDescriptor,
     ContractCheck,
     ControlWitness,
     ControlWitnessKind,
@@ -149,6 +155,16 @@ def run_loaded_sparse_trace(
         )
     )
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+    numeric_attestation, attestation_check = _numeric_attestation_check(
+        descriptor,
+        prepared_state,
+        slot_values=slot_values,
+        trace=trace,
+    )
+    if attestation_check is not None:
+        contract_checks.append(attestation_check)
+        if not attestation_check.passed:
+            _raise_numeric_attestation_failure(fork, attestation_check)
     path_faithfulness, mismatch = _path_faithfulness(descriptor, contract_checks)
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
@@ -167,6 +183,7 @@ def run_loaded_sparse_trace(
         contract_checks=tuple(contract_checks),
         path_faithfulness=path_faithfulness,
         first_mismatch=mismatch,
+        numeric_attestation=numeric_attestation,
     )
     return RunResult(output=output, trace=fork, report=report)
 
@@ -1248,8 +1265,9 @@ def _run_report(
     contract_checks: tuple[ContractCheck, ...],
     path_faithfulness: PathFaithfulness,
     first_mismatch: RunnableDiagnostic | None,
+    numeric_attestation: NumericAttestationStatus,
 ) -> RunReport:
-    """Build the settled Stage-5 run-report surface."""
+    """Build the settled sparse run-report surface."""
 
     return RunReport(
         readiness=readiness,
@@ -1260,8 +1278,153 @@ def _run_report(
         contract_checks=contract_checks,
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,
-        numeric_attestation=NumericAttestationStatus.NOT_APPLICABLE,
+        numeric_attestation=numeric_attestation,
         poisoned=path_faithfulness is not PathFaithfulness.VERIFIED,
+    )
+
+
+def _numeric_attestation_check(
+    descriptor: SparseRunDescriptor,
+    state: PreparedRunnableState,
+    *,
+    slot_values: Mapping[str, torch.Tensor],
+    trace: Any,
+) -> tuple[NumericAttestationStatus, ContractCheck | None]:
+    """Compare recomputed saved slots with the independent activation archive.
+
+    Parameters
+    ----------
+    descriptor:
+        Runnable descriptor declaring activation membership and eligibility digests.
+    state:
+        Bound state used by this run.
+    slot_values:
+        Fresh scheduler outputs and source slots from this transaction.
+    trace:
+        Loaded source Trace retaining inspection-only archived activations.
+
+    Returns
+    -------
+    tuple[NumericAttestationStatus, ContractCheck | None]
+        Applicability/result status and the aggregate byte-exact tripwire check.
+    """
+
+    layer = descriptor.payload_layers.activations
+    if not layer.present:
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if not isinstance(layer, ActivationPayloadLayerDescriptor):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    raw_members = tuple(member for member in layer.members if member.field == "out")
+    if not raw_members or not _attestation_inputs_match(descriptor, layer, slot_values):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if not _attestation_state_matches(descriptor, layer, state, slot_values):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    archived = trace.__dict__.get("_runnable_archived_activations")
+    if not isinstance(archived, Mapping):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    for member in raw_members:
+        archive_key = f"{member.slot_id}:{member.field}"
+        archived_record = archived.get(archive_key)
+        recomputed = slot_values.get(member.slot_id)
+        archived_value = getattr(archived_record, "value", None)
+        recomputed_digest = (
+            runnable_tensor_byte_digest(recomputed)
+            if isinstance(recomputed, torch.Tensor)
+            else "missing"
+        )
+        archived_digest = (
+            runnable_tensor_byte_digest(archived_value)
+            if isinstance(archived_value, torch.Tensor)
+            else "missing"
+        )
+        passed = recomputed_digest == member.byte_digest and archived_digest == member.byte_digest
+        if not passed:
+            return (
+                NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED,
+                _contract_check(
+                    f"numeric_attestation:{member.slot_id}",
+                    False,
+                    RunnableErrorCode.NUMERIC_ATTESTATION_FAILED,
+                    f"Byte-exact numeric attestation failed for {member.slot_id!r}.",
+                    affected_op_labels=(member.op_label,),
+                    details=(
+                        ("slot_id", member.slot_id),
+                        ("call_id", repr(member.call_id)),
+                        ("field", member.field),
+                        ("expected_digest", member.byte_digest),
+                        ("archived_digest", archived_digest),
+                        ("recomputed_digest", recomputed_digest),
+                    ),
+                ),
+            )
+    return (
+        NumericAttestationStatus.ATTESTED,
+        ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
+    )
+
+
+def _attestation_inputs_match(
+    descriptor: SparseRunDescriptor,
+    layer: Any,
+    slot_values: Mapping[str, torch.Tensor],
+) -> bool:
+    """Return whether every available capture-input digest matches this run."""
+
+    expected_slot_ids = {
+        slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
+    }
+    observed_slot_ids = {digest.slot_id for digest in layer.original_input_digests}
+    if not expected_slot_ids or observed_slot_ids != expected_slot_ids:
+        return False
+    return all(
+        digest.slot_id in slot_values
+        and runnable_tensor_byte_digest(slot_values[digest.slot_id]) == digest.byte_digest
+        for digest in layer.original_input_digests
+    )
+
+
+def _attestation_state_matches(
+    descriptor: SparseRunDescriptor,
+    layer: Any,
+    state: PreparedRunnableState,
+    slot_values: Mapping[str, torch.Tensor],
+) -> bool:
+    """Return whether runtime state is capture-equivalent rather than random."""
+
+    state_slots = {
+        slot.state_binding.state_dict_name: slot
+        for slot in descriptor.tensor_slots
+        if slot.state_binding is not None
+    }
+    if not state_slots:
+        return True
+    if state.state_source not in {
+        StateSource.EMBEDDED_CAPTURE_STATE,
+        StateSource.USER_STATE_DICT,
+    }:
+        return False
+    expected = {item.state_dict_name: item.byte_digest for item in layer.capture_state_digests}
+    if set(expected) != set(state_slots):
+        return False
+    return all(
+        slot.slot_id in slot_values
+        and runnable_tensor_byte_digest(slot_values[slot.slot_id]) == expected[name]
+        for name, slot in state_slots.items()
+    )
+
+
+def _raise_numeric_attestation_failure(fork: Any, check: ContractCheck) -> None:
+    """Rollback and raise the mandatory saved-activation mismatch tripwire."""
+
+    _state._unregister_log(fork)
+    diagnostic = check.diagnostic
+    raise NumericAttestationError(
+        diagnostic.message if diagnostic is not None else "Numeric attestation failed.",
+        code=RunnableErrorCode.NUMERIC_ATTESTATION_FAILED.value,
+        path_faithfulness=PathFaithfulness.DIVERGED,
+        numeric_attestation=NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED,
+        first_mismatch=diagnostic,
+        contract_check=check,
     )
 
 

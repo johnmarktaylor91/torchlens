@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from ..debug._audit import TraceAudit
     from .._io.streaming import BundleStreamWriter
     from ..runnable import (
+        ArchivedActivation,
         PathFaithfulness,
         ReadinessReport,
         RunnableDiagnostic,
@@ -796,6 +797,22 @@ class Trace(
 
         return cast("SparseRunDescriptor | None", self.__dict__.get("_runnable_descriptor"))
 
+    @property
+    def archived_activations(self) -> Mapping[str, "ArchivedActivation"]:
+        """Return inspection-only activation payloads from a runnable archive.
+
+        Returns
+        -------
+        Mapping[str, ArchivedActivation]
+            Mapping keyed by ``"<slot_id>:<field>"``. Values are never read by
+            the sparse scheduler or used as intermediate execution inputs.
+        """
+
+        return cast(
+            Mapping[str, "ArchivedActivation"],
+            self.__dict__.get("_runnable_archived_activations", {}),
+        )
+
     def load_state_dict(self, sd: Mapping[str, Any]) -> None:
         """Strictly validate and atomically stage sparse-run state.
 
@@ -979,6 +996,7 @@ class Trace(
     _runnable_readiness: "ReadinessReport | None"
     _runnable_staged_user_state: Mapping[str, torch.Tensor] | None
     _runnable_embedded_state: Mapping[str, torch.Tensor] | None
+    _runnable_archived_activations: Mapping[str, "ArchivedActivation"] | None
     _runnable_path_faithfulness: "PathFaithfulness | None"
     _runnable_first_mismatch: "RunnableDiagnostic | None"
     _runnable_poisoned: bool | None
@@ -1025,6 +1043,7 @@ class Trace(
         "_runnable_readiness": FieldPolicy.DROP,
         "_runnable_staged_user_state": FieldPolicy.DROP,
         "_runnable_embedded_state": FieldPolicy.DROP,
+        "_runnable_archived_activations": FieldPolicy.DROP,
         "_runnable_path_faithfulness": FieldPolicy.DROP,
         "_runnable_first_mismatch": FieldPolicy.DROP,
         "_runnable_poisoned": FieldPolicy.DROP,
@@ -2307,6 +2326,9 @@ class Trace(
             Portable save options. For runnable saves, ``include_weights=True``
             bundles the full capture-time ``state_dict``: all named parameters
             and persistent buffers, as state rather than a reconstructed model.
+            Independently, ``include_activations=True`` archives exactly the
+            capture-time ``save=``-selected payloads for inspection and eligible
+            byte-exact attestation; those payloads never seed execution.
 
         Warning
         -------

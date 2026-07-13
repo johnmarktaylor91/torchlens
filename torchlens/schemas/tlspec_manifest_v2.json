@@ -125,8 +125,11 @@
               "type": "object",
               "required": ["present", "schema"],
               "properties": {
-                "present": {"const": false},
-                "schema": {"const": "selected_activation_v1"}
+                "present": {"type": "boolean"},
+                "schema": {"const": "selected_activation_v1"},
+                "members": {"type": "array"},
+                "original_input_digests": {"type": "array"},
+                "capture_state_digests": {"type": "array"}
               }
             }
           }

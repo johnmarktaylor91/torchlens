@@ -54,6 +54,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_runnable_readiness",
     "_runnable_staged_user_state",
     "_runnable_embedded_state",
+    "_runnable_archived_activations",
     "_runnable_path_faithfulness",
     "_runnable_first_mismatch",
     "_runnable_poisoned",
