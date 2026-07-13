@@ -993,11 +993,19 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
         )
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
+        reconstructable = True
         for key in keys:
-            child_spec = _try_build_container_spec(value[key])
+            child = value[key]
+            child_spec = _try_build_container_spec(child)
             if child_spec is not None:
                 child_specs.append((HFKey(key), child_spec))
+                if child_spec.kind == "opaque":
+                    reconstructable = False
+            elif not _leaf_is_reconstructable(child):
+                reconstructable = False
         module, qualname = _container_type_ref(value)
+        if not reconstructable:
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
         return ContainerSpec(
             kind="hf_model_output",
             length=len(keys),
@@ -1009,11 +1017,19 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
     torch_fields = _torch_return_type_fields(value)
     if _is_namedtuple_instance(value) or torch_fields:
         fields = torch_fields or tuple(value._fields)
+        reconstructable = True
         for field_name in fields:
-            child_spec = _try_build_container_spec(getattr(value, field_name))
+            child = getattr(value, field_name)
+            child_spec = _try_build_container_spec(child)
             if child_spec is not None:
                 child_specs.append((NamedField(field_name), child_spec))
+                if child_spec.kind == "opaque":
+                    reconstructable = False
+            elif not _leaf_is_reconstructable(child):
+                reconstructable = False
         module, qualname = _container_type_ref(value)
+        if not reconstructable:
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
         return ContainerSpec(
             kind="namedtuple",
             length=len(value),
@@ -1024,11 +1040,19 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
         )
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         fields = tuple(field.name for field in dataclasses.fields(value))
+        reconstructable = True
         for field_name in fields:
-            child_spec = _try_build_container_spec(getattr(value, field_name))
+            child = getattr(value, field_name)
+            child_spec = _try_build_container_spec(child)
             if child_spec is not None:
                 child_specs.append((DataclassField(field_name), child_spec))
+                if child_spec.kind == "opaque":
+                    reconstructable = False
+            elif not _leaf_is_reconstructable(child):
+                reconstructable = False
         module, qualname = _container_type_ref(value)
+        if not reconstructable:
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
         return ContainerSpec(
             kind="dataclass",
             length=len(fields),

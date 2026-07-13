@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -53,6 +54,55 @@ class _Pair(NamedTuple):
 
     value: torch.Tensor
     meta: int
+
+
+class _R7NamedOutput(NamedTuple):
+    """Namedtuple output used by the round-7 completeness regressions."""
+
+    value: torch.Tensor
+    meta: Any
+
+
+@dataclass
+class _R7DataclassOutput:
+    """Dataclass output used by the round-7 completeness regressions."""
+
+    value: torch.Tensor
+    meta: Any
+
+
+class _R7ModelOutput(dict[str, Any]):
+    """HuggingFace-style output used by the round-7 completeness regressions."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Store output fields with HuggingFace-style attribute access."""
+
+        super().__init__(kwargs)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class _R7ContainerOutputModel(nn.Module):
+    """Return one namedtuple, dataclass, or HuggingFace-style output contract."""
+
+    def __init__(self, kind: str, metadata: Any) -> None:
+        """Store the requested output kind and metadata leaf."""
+
+        super().__init__()
+        self.kind = kind
+        self.metadata = metadata
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Return a tensor plus the configured metadata leaf."""
+
+        value = x + 1
+        if self.kind == "namedtuple":
+            return _R7NamedOutput(value, self.metadata)
+        if self.kind == "dataclass":
+            return _R7DataclassOutput(value, self.metadata)
+        if self.kind == "hf_model_output":
+            return _R7ModelOutput(value=value, meta=self.metadata)
+        raise AssertionError(self.kind)
 
 
 class _F1Model(nn.Module):
@@ -227,6 +277,38 @@ def test_f5_memoryview_output_round_trips_or_rejects(tmp_path: Path) -> None:
         assert bytes(result.output[1]) == b"abc"
     else:
         assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+
+
+@pytest.mark.parametrize("kind", ["namedtuple", "dataclass", "hf_model_output"])
+def test_r7_nonreconstructable_class_output_is_unverifiable_or_rejected(
+    kind: str, tmp_path: Path
+) -> None:
+    """Class outputs with opaque metadata never advertise then crash."""
+
+    model = _R7ContainerOutputModel(kind, memoryview(b"opaque"))
+    x = torch.tensor([1.0, 2.0])
+    trace = _capture(model, x)
+
+    live_result = trace.run(inputs=x)
+    assert live_result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+
+    with pytest.raises(tl.errors.TorchLensError):
+        trace.save(tmp_path / f"{kind}_opaque.tlspec", level="runnable")
+
+
+@pytest.mark.parametrize("kind", ["namedtuple", "dataclass", "hf_model_output"])
+def test_r7_reconstructable_class_output_round_trips_verified(kind: str, tmp_path: Path) -> None:
+    """Class outputs with replay-safe metadata rebuild exactly without divergence."""
+
+    model = _R7ContainerOutputModel(kind, 7)
+    x = torch.tensor([1.0, 2.0])
+    result = _roundtrip(model, x, tmp_path / f"{kind}_faithful.tlspec")
+    live = model(x)
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is type(live)
+    assert result.output.meta == 7
+    assert torch.equal(result.output.value, live.value)
 
 
 def test_f7_custom_mapping_input_preflight_accepted(tmp_path: Path) -> None:
