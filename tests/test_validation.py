@@ -1652,6 +1652,110 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
         trace.cleanup()
 
 
+def test_validation_direct_aten_dispatch_drop_fails_the_public_gate() -> None:
+    """Bug 1: a directly-dispatched aten op TorchLens dropped fails validation.
+
+    ``torch.ops.aten.neg.default`` bypasses TorchLens wrapping, so ``neg`` is a
+    real op that never enters the captured trace (only the following ``+ 1`` is
+    captured). The completeness witness records it as an ``unowned_dispatch``; the
+    public ``validate_forward_pass`` boolean MUST return ``False`` -- a detected
+    real miss is exactly the silent drop the tripwire exists to catch.
+    """
+
+    class DirectAtenNeg(nn.Module):
+        """Drop an op by calling a raw aten overload directly."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return ``-x + 1`` with the negate hidden from capture."""
+
+            return torch.ops.aten.neg.default(x) + 1
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert validate_forward_pass(DirectAtenNeg(), torch.tensor([1.0, -2.0, 3.0])) is False
+
+
+def test_validation_same_shape_broadcast_tensors_validates() -> None:
+    """Bug 2: a captured op that legitimately dispatches no aten op validates.
+
+    ``torch.broadcast_tensors`` on already-equal shapes returns its inputs and
+    dispatches no aten op, yet TorchLens captures the variadic call. That captured
+    op has no dispatch counterpart by design; it must NOT be counted as a census
+    mismatch on this correct, deterministic model.
+    """
+
+    class BenignBroadcast(nn.Module):
+        """Broadcast two same-shape tensors (a dispatch-free capture)."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return the sum of two same-shape broadcast operands."""
+
+            left, right = torch.broadcast_tensors(x + 1, x + 2)
+            return left + right
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert validate_forward_pass(BenignBroadcast(), torch.arange(4.0)) is True
+
+
+def _raw_scale_replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
+    """Genuine raw output-replacement hook built from untraceable aten calls."""
+
+    return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+
+
+def test_validation_genuine_replacement_alone_validates() -> None:
+    """Bug 3 control: a genuine output-replacement hook alone validates cleanly.
+
+    The replacement's untraceable construction (raw ``aten.mul`` plus a
+    python-wrapped ``torch.tensor`` orphaned out of the trace) all fires inside
+    the torchlens ``wrapped_hook`` frame and is excused per-op, so a model whose
+    only completeness residual is a genuine replacement passes.
+    """
+
+    class _Mlp(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(4, 4)
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.relu(self.fc1(x))
+
+    model = _Mlp().eval()
+    model.relu.register_forward_hook(_raw_scale_replacement_hook)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert validate_forward_pass(model, [torch.randn(3, 4)], input_kwargs={}) is True
+
+
+def test_validation_genuine_replacement_plus_unrelated_drop_still_fails() -> None:
+    """Bug 3: a real drop alongside a genuine replacement STILL fails the gate.
+
+    The replacement carve-out is PER-OP scoped: it excuses only the untraceable
+    dispatch that fired inside the replacement hook. An UNRELATED directly-
+    dispatched aten drop in the forward body fires OUTSIDE the hook, so adding a
+    legitimate output-replacement hook must NEVER flip that FAIL into a PASS.
+    """
+
+    class _MlpWithDrop(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(4, 4)
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            # Unrelated real capture drop (raw aten in the forward body, NOT in a hook).
+            hidden = torch.ops.aten.neg.default(self.fc1(x))
+            return self.relu(hidden)
+
+    model = _MlpWithDrop().eval()
+    model.relu.register_forward_hook(_raw_scale_replacement_hook)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert validate_forward_pass(model, [torch.randn(3, 4)], input_kwargs={}) is False
+
+
 def _backstop_op(
     func_call_id: int | None,
     *,
@@ -1671,32 +1775,50 @@ def _backstop_op(
     )
 
 
-def _backstop_dec(owner_func_call_id: int, *, capture_accounted: bool = True) -> dict:
+def _backstop_dec(
+    owner_func_call_id: int,
+    *,
+    capture_accounted: bool = True,
+    in_replacement_hook: bool = False,
+) -> dict:
     """Build a minimal dispatcher-census decomposition record."""
 
-    return {"owner_func_call_id": owner_func_call_id, "capture_accounted": capture_accounted}
+    return {
+        "owner_func_call_id": owner_func_call_id,
+        "capture_accounted": capture_accounted,
+        "in_replacement_hook": in_replacement_hook,
+    }
 
 
-def _backstop_trace(layer_list: list, decompositions: list) -> SimpleNamespace:
+def _backstop_diag(*, reason: str = "unowned_dispatch", in_replacement_hook: bool = False) -> dict:
+    """Build a minimal unaccounted-dispatch witness diagnostic record."""
+
+    return {"reason": reason, "in_replacement_hook": in_replacement_hook}
+
+
+def _backstop_trace(
+    layer_list: list, decompositions: list, diagnostics: list | None = None
+) -> SimpleNamespace:
     """Wrap census inputs in a trace-shaped object for the backstop helper."""
 
     return SimpleNamespace(
         layer_list=layer_list,
         completeness_decompositions=decompositions,
+        completeness_diagnostics=diagnostics or [],
     )
 
 
-def test_completeness_backstop_transform_boundary_carveout_is_scoped() -> None:
-    """Carve-out A removes ONLY transform boundary nodes from the captured census.
+def test_completeness_backstop_dispatchless_captured_op_is_benign() -> None:
+    """A captured op with no owned aten dispatch is NOT a census mismatch (Bug 2).
 
-    A ``torch.func`` transform boundary node owns a captured ``func_call_id`` but
-    no accounted aten-dispatch owner, so it must be excluded from the captured
-    census. A NON-transform captured op with no dispatch owner must NOT be
-    excluded -- it is a genuine capture gap and must still produce a residual
-    mismatch, and a real gap alongside a transform must NOT be masked.
+    Both a ``torch.func`` transform boundary AND a benign no-op/view/meta call
+    (e.g. same-shape ``torch.broadcast_tensors``) own a captured ``func_call_id``
+    yet dispatch no aten op. Neither has a dispatch counterpart by design, so the
+    captured census must exclude them -- counting them as "extra captured ops"
+    false-fails a correct model.
     """
 
-    # Transform boundary (fcid=3) inflates the captured census by design -> match.
+    # A transform boundary (fcid=3) owns a captured id but no owned dispatch -> match.
     dispatch, captured = completeness_backstop_counts(
         _backstop_trace(
             [
@@ -1709,44 +1831,100 @@ def test_completeness_backstop_transform_boundary_carveout_is_scoped() -> None:
     )
     assert (dispatch, captured) == (2, 2)
 
-    # A NON-transform captured op with no dispatch owner is a real gap -> mismatch.
-    dispatch, captured = completeness_backstop_counts(
-        _backstop_trace(
-            [_backstop_op(1), _backstop_op(2), _backstop_op(3, transform_kind=None)],
-            [_backstop_dec(1), _backstop_dec(2)],
-        )
-    )
-    assert dispatch != captured
-
-    # A real gap (fcid=5) alongside a genuine transform boundary (fcid=3) still
-    # leaves a residual -- the transform carve-out never blanket-clears mismatches.
+    # A NON-transform captured op (fcid=3) that dispatched no owned aten op is a
+    # benign no-op (same-shape broadcast_tensors), NOT a gap -> match. This is the
+    # exact false-positive the census must not raise.
     dispatch, captured = completeness_backstop_counts(
         _backstop_trace(
             [
                 _backstop_op(1),
                 _backstop_op(2),
-                _backstop_op(3, transform_kind="vmap", func_name="vmap"),
-                _backstop_op(5),
+                _backstop_op(3, transform_kind=None, func_name="broadcast_tensors"),
             ],
             [_backstop_dec(1), _backstop_dec(2)],
         )
     )
-    assert dispatch != captured
+    assert dispatch == captured
 
 
-def test_completeness_backstop_intervention_carveout_does_not_disarm_plain_capture() -> None:
-    """Carve-out B is gated on a GENUINE replacement and never relaxes plain capture.
+def test_completeness_backstop_unowned_dispatch_fails_the_gate() -> None:
+    """An UNOWNED aten dispatch is a real silent drop and MUST fail (Bug 1).
 
-    A raw output-replacement hook may build its replacement with a python-wrapped
-    torch call whose accounted dispatch owner is orphaned out of the final trace;
-    when a genuine ``intervention_replacement`` placeholder is present, that
-    orphaned owner is excluded and the counts match. But the IDENTICAL
-    dispatch-vs-capture shape during PLAIN capture -- no genuine replacement
-    present -- must STILL fire the tripwire (an accounted op that dispatched yet
-    was silently dropped is exactly the capture gap the backstop must catch).
+    A directly-dispatched ``torch.ops.aten.*`` call has no capturing owner, so the
+    witness records an ``unowned_dispatch`` diagnostic. That real op is missing
+    from the captured trace and must inflate the dispatch census so the backstop
+    fails -- a captured op being present cannot mask it. An unowned dispatch that
+    fired inside a genuine replacement hook is replacement construction, not a
+    drop, and must NOT be counted.
     """
 
-    # Orphaned dispatch owner (fcid=4) WITH a genuine replacement placeholder -> match.
+    # A clean capture (no unowned dispatch) matches.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert dispatch == captured
+
+    # An unowned dispatch outside a replacement hook is a real drop -> mismatch,
+    # even though every captured op is accounted.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="unowned_dispatch", in_replacement_hook=False)],
+        )
+    )
+    assert dispatch != captured
+
+    # A real drop alongside a benign dispatchless captured op still fails (no
+    # cancellation: the benign op is excluded, the unowned drop inflates dispatch).
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2), _backstop_op(3, func_name="broadcast_tensors")],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="unowned_dispatch", in_replacement_hook=False)],
+        )
+    )
+    assert dispatch != captured
+
+    # An unowned dispatch INSIDE a genuine replacement hook is construction, not a
+    # drop -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="unowned_dispatch", in_replacement_hook=True)],
+        )
+    )
+    assert dispatch == captured
+
+    # A benign ``owner_not_captured`` diagnostic (e.g. torch.equal control flow)
+    # is NOT an unowned drop and must NOT fail the gate.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2)],
+            [_backstop_dec(1), _backstop_dec(2)],
+            [_backstop_diag(reason="owner_not_captured", in_replacement_hook=False)],
+        )
+    )
+    assert dispatch == captured
+
+
+def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
+    """The replacement carve-out is PER-OP scoped and never disarms plain capture.
+
+    A genuine raw output-replacement hook builds its replacement with untraceable
+    dispatch inside the torchlens ``wrapped_hook`` frame: python-wrapped calls
+    become accounted owners orphaned out of the final trace (tagged
+    ``in_replacement_hook``). Those exact orphaned owners are excused. But the
+    exemption is scoped to the replacement's OWN ops -- an unrelated orphaned
+    owner (a real silent drop) whose dispatch fired OUTSIDE the hook is NOT
+    excused, and plain capture with no replacement at all is never relaxed.
+    """
+
+    # Orphaned owner (fcid=4) tagged in_replacement_hook -> excused -> match.
     dispatch, captured = completeness_backstop_counts(
         _backstop_trace(
             [
@@ -1758,23 +1936,48 @@ def test_completeness_backstop_intervention_carveout_does_not_disarm_plain_captu
                     intervention_replaced=True,
                 ),
             ],
-            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=True)],
         )
     )
     assert (dispatch, captured) == (2, 2)
 
-    # SAME orphaned-dispatch shape during PLAIN capture (no genuine replacement)
-    # -> the tripwire STILL fires. The carve-out did not disarm it.
+    # Genuine replacement (orphan fcid=4 in-hook, excused) ALONGSIDE an UNRELATED
+    # real drop (orphan fcid=6 OUTSIDE any hook) -> the unrelated drop still fires.
+    # The presence of a replacement does NOT flip this FAIL to a PASS (Bug 3).
     dispatch, captured = completeness_backstop_counts(
         _backstop_trace(
-            [_backstop_op(1), _backstop_op(3, func_name="relu")],
-            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+            [
+                _backstop_op(1),
+                _backstop_op(3, func_name="relu"),
+                _backstop_op(
+                    None,
+                    func_name="intervention_replacement",
+                    intervention_replaced=True,
+                ),
+            ],
+            [
+                _backstop_dec(1),
+                _backstop_dec(3),
+                _backstop_dec(4, in_replacement_hook=True),
+                _backstop_dec(6, in_replacement_hook=False),
+            ],
         )
     )
     assert dispatch != captured
 
-    # A non-genuine op merely NAMED intervention_replacement (not flagged replaced)
-    # must NOT enable the carve-out -- the plain-capture drop still fires.
+    # SAME orphaned-dispatch shape during PLAIN capture (orphan not in any hook)
+    # -> the tripwire STILL fires.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(3, func_name="relu")],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=False)],
+        )
+    )
+    assert dispatch != captured
+
+    # A non-genuine op merely NAMED intervention_replacement (its orphan never ran
+    # in a real hook, so it is not tagged in_replacement_hook) does NOT enable the
+    # carve-out -- the plain-capture drop still fires.
     dispatch, captured = completeness_backstop_counts(
         _backstop_trace(
             [
@@ -1786,7 +1989,7 @@ def test_completeness_backstop_intervention_carveout_does_not_disarm_plain_captu
                     intervention_replaced=False,
                 ),
             ],
-            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=False)],
         )
     )
     assert dispatch != captured
