@@ -220,6 +220,7 @@ def _validate_manifest_against_schema(
             manifest.get("run"),
             allow_unsupported_versions=allow_unsupported_runnable_versions,
         )
+        _validate_runnable_payload_entries(manifest)
     _validate_optional_dependencies(manifest.get("optional_dependencies"))
 
     kind = manifest["kind"]
@@ -348,17 +349,70 @@ def _validate_sparse_run_descriptor(
     payload_layers = value["payload_layers"]
     if not isinstance(payload_layers, dict):
         raise ValueError("Runnable descriptor payload_layers must be an object.")
-    for layer_name in ("weights", "activations"):
+    if set(payload_layers) != {"weights", "activations"}:
+        raise ValueError("Runnable descriptor payload_layers fields mismatch.")
+    expected_payload_schemas = {
+        "weights": "state_dict_v1",
+        "activations": "selected_activation_v1",
+    }
+    for layer_name, expected_schema in expected_payload_schemas.items():
         layer = payload_layers.get(layer_name)
-        if not isinstance(layer, dict) or layer.get("present") is not False:
+        if not isinstance(layer, dict) or set(layer) != {"present", "schema"}:
             raise ValueError(
-                f"Stage 2b sparse descriptor requires payload_layers.{layer_name}.present=false."
+                f"Runnable descriptor payload_layers.{layer_name} must declare present/schema."
             )
+        if not isinstance(layer.get("present"), bool):
+            raise ValueError(
+                f"Runnable descriptor payload_layers.{layer_name}.present must be boolean."
+            )
+        if layer.get("schema") != expected_schema:
+            raise ValueError(
+                f"Runnable descriptor payload_layers.{layer_name}.schema must be "
+                f"{expected_schema!r}."
+            )
+    if payload_layers["activations"]["present"] is not False:
+        raise ValueError("Stage 7 does not support activation payloads.")
     preflight = value["preflight"]
     if not isinstance(preflight, dict) or preflight.get("passed") is not True:
         raise ValueError("Runnable descriptor must carry a passed producer preflight.")
     if value["unsupported_sites"] != []:
         raise ValueError("Runnable descriptor must not claim unsupported producer sites.")
+
+
+def _validate_runnable_payload_entries(manifest: dict[str, Any]) -> None:
+    """Cross-check optional runnable payload flags against body entries.
+
+    Parameters
+    ----------
+    manifest:
+        Decoded unified manifest already validated structurally.
+
+    Raises
+    ------
+    ValueError
+        If a weight blob appears without its flag or uses an invalid key.
+    """
+
+    run = manifest["run"]
+    weights_present = run["payload_layers"]["weights"]["present"]
+    tensors = manifest.get("tensors")
+    if not isinstance(tensors, list):
+        raise ValueError("Runnable manifests require a tensors array.")
+    weight_entries = [
+        entry
+        for entry in tensors
+        if isinstance(entry, dict) and entry.get("kind") == "runnable_weight"
+    ]
+    if weight_entries and not weights_present:
+        raise ValueError("Runnable weight blobs require payload_layers.weights.present=true.")
+    labels: set[str] = set()
+    for index, entry in enumerate(weight_entries):
+        label = entry.get("label")
+        if not isinstance(label, str) or label == "":
+            raise ValueError(f"Runnable weight tensor entry {index} requires a canonical label.")
+        if label in labels:
+            raise ValueError(f"Runnable weight payload repeats canonical state name {label!r}.")
+        labels.add(label)
 
 
 def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
@@ -693,6 +747,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
         "jax_equation_out",
         "jax_input_leaf",
         "jax_param_leaf",
+        "runnable_weight",
     }
     allowed_intended_uses = v1_intended_uses if schema_version == 1 else v2_intended_uses
     for index, entry in enumerate(value):

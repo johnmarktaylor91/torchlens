@@ -227,8 +227,14 @@ trust. TorchLens-owned `torchlens.*` custom callables and the fixed `torch`, `to
 Loaded sparse runnable traces accept `trace.load_state_dict(sd)` to strictly validate and atomically
 stage canonically named parameter and persistent-buffer tensors. The method never executes the DAG
 or writes tensor payloads into the sparse descriptor. Run preflight selects explicitly staged user
-state, then the future embedded capture-state hook, then the versioned
+state, then optional embedded capture state, then the versioned
 `torchlens_role_init_v1` fallback; random reports name every initialized slot.
+
+`tl.save(trace, path, level="runnable", include_weights=True)` bundles the full capture-time
+`state_dict` (all named parameters plus persistent buffers) as the separate, schema-versioned
+`state_dict_v1` blob family. The default is `include_weights=False`, so the sparse core stays
+tensor-value-free. Load validates embedded state through the same strict binder; run reports
+`embedded_capture_state`, never a reconstructed model, and a later `load_state_dict()` overrides it.
 
 ### Sparse runnable execution
 

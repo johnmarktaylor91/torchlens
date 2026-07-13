@@ -166,6 +166,10 @@ module-containment-refactor).
 ### Portable Artifacts
 `tl.save()` and `tl.load()` route through `_io/bundle.py`. Unified `.tlspec` directories have
 `manifest.json` plus safetensors blobs; public schema validation lives in `validation/__init__.py`.
+Runnable saves are sparse by default. `include_weights=True` bundles the full capture-time
+`state_dict` (named parameters plus persistent buffers) as a separate `state_dict_v1` blob family;
+the sparse core still contains no tensor values. Load binds it through the same strict state
+contract used by `Trace.load_state_dict()`, while explicit user state overrides it at run time.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
 `uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward

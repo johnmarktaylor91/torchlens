@@ -264,8 +264,11 @@ tensor versions, tensor args/templates, parameters, buffers, `state_dict`, state
 `_buffer_initial_values`, live handles/models, tensor RNG snapshots, callable pickles, executable
 code, and custom import paths.
 
-Optional weights/activations, when later implemented, are declared external blob families. Even
-then tensor arguments, RNG tensors, callables/code/imports remain forbidden. Payload-only runnable
+Optional weights are declared as the external `state_dict_v1` blob family. With
+`include_weights=True`, it contains one full capture-time `state_dict`: all named parameters and
+persistent buffers keyed by canonical state records. It contains no gradients, RNG state,
+callables, model handles, or per-call snapshots. Activations remain a later independent layer.
+Tensor arguments, RNG tensors, callables/code/imports remain forbidden, and payload-only runnable
 artifacts are invalid.
 
 ## 6. Resolver protocol
@@ -466,6 +469,13 @@ persistence/trainability, and alias coherence are verified. Missing, unexpected,
 module mismatches and alias conflicts are errors. Positional/shape-only matching is forbidden.
 Strict staging never silently random-fills a missing key. Intermediates are never initialized.
 
+`tl.save(trace, path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
+The default is false and writes no weight entries. When true, load decodes the schema-versioned
+weight family and validates it atomically through this same strict contract before returning the
+Trace. A run that uses it reports `embedded_capture_state` with no random-filled slots. Explicitly
+staged user state retains higher effective precedence. Neither source writes tensor values into the
+sparse core or presents a reconstructed model object.
+
 ## 10. N1-a initializer and seed
 
 `torchlens_role_init_v1` is:
@@ -522,18 +532,19 @@ Changed-input/random-state activation runs and sparse-only runs are `not_applica
 silently claims a numeric pass. Unsaved slots have no numeric claim. Sparse-only promises
 contract/witness honesty, not numerical reproduction.
 
-## 12. Parked API spelling and docs lockstep
+## 12. Optional-payload API spelling and docs lockstep
 
-**TODO — JMT confirmation at the optional-payload sprint kickoff:** public spellings including
-`include_weights=`, `include_activations=`, `level="runnable"`, `save_level`, and placement on
-`tl.save`/`Trace.save` are proposals, not frozen. Stages 7/8 must not treat them as settled. Frozen
-behavior is sparse default, independent layers, and reuse of capture-time `save=` for activations.
+`include_weights` is confirmed on `tl.save`/`Trace.save` with `level="runnable"`. It is false by
+default and means the full `state_dict` (named parameters plus persistent buffers), not only trainable
+weights. `include_activations` remains reserved for its independent later stage and will reuse
+capture-time `save=` rather than introduce another selector.
 
 Stage 0 introduced public error names and an importable schema/type module. Stage 4 documents
 `load_state_dict`, transient state sources, and initializer reporting. Stage 5 implements `run`,
 `RunResult`, transactional run forks, sparse input/call/output reconstruction, and populated
 three-state `path_faithfulness`. Stage 6 implements strict divergence raising, transactional
 rollback, incomplete-coverage `unverifiable`, and monotonically poisoned opt-in results plus
-downstream refusal gates. This contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API
-tests move together. Until a curated public glossary ships, this document is the authoritative
-public glossary entry for sparse runnable execution.
+downstream refusal gates. Stage 7 adds the optional external weight family and embedded-state
+binding without changing capture or the sparse core. This contract plus `CLAUDE.md`/`AGENTS.md`,
+FIELD_ORDER, schema, and API tests move together. Until a curated public glossary ships, this
+document is the authoritative public glossary entry for sparse runnable execution.

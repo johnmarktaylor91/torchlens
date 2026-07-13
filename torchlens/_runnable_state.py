@@ -71,6 +71,33 @@ def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:
         trace.__dict__["_runnable_readiness"] = updated_readiness
 
 
+def bind_embedded_trace_state(trace: Any, sd: Mapping[str, Any]) -> None:
+    """Validate and atomically bind an embedded capture-time state mapping.
+
+    Parameters
+    ----------
+    trace:
+        Loaded sparse Trace receiving the optional weight payload.
+    sd:
+        Canonically named parameter and persistent-buffer tensors decoded from
+        the runnable artifact.
+
+    Raises
+    ------
+    StateBindingError
+        If any embedded entry violates the ordinary strict state contract.
+    """
+
+    _validate_state_mapping(trace, sd)
+    trace.__dict__["_runnable_embedded_state"] = MappingProxyType(
+        {
+            name: value.detach().clone()
+            for name, value in sd.items()
+            if isinstance(name, str) and isinstance(value, torch.Tensor)
+        }
+    )
+
+
 def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunnableState:
     """Resolve and allocate all parameter/buffer slots without executing the DAG.
 
@@ -152,6 +179,33 @@ def _validate_state_mapping(trace: Any, sd: Mapping[str, Any]) -> Mapping[str, t
     """Validate one strict mapping and return detached slot-keyed values."""
 
     descriptor = _require_descriptor(trace)
+    return validate_state_mapping_for_descriptor(descriptor, sd)
+
+
+def validate_state_mapping_for_descriptor(
+    descriptor: SparseRunDescriptor,
+    sd: Mapping[str, Any],
+) -> Mapping[str, torch.Tensor]:
+    """Validate a strict state mapping against an explicit sparse descriptor.
+
+    Parameters
+    ----------
+    descriptor:
+        Runnable descriptor supplying canonical state slot contracts.
+    sd:
+        Mapping of canonical state names to tensor values.
+
+    Returns
+    -------
+    Mapping[str, torch.Tensor]
+        Detached, slot-keyed values suitable for one runnable execution.
+
+    Raises
+    ------
+    StateBindingError
+        If names, roles, aliases, shapes, or dtypes violate the contract.
+    """
+
     if not isinstance(sd, Mapping):
         raise TypeError("sd must be a mapping of canonical state_dict names to tensors.")
 
