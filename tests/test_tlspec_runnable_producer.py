@@ -382,3 +382,40 @@ def test_runnable_control_flow_emits_bool_loop_and_arm_entry_witnesses(
     assert [witness["order"] for witness in run["control_witnesses"]] == list(
         range(len(run["control_witnesses"]))
     )
+
+
+class MultiheadAttentionRunnableModel(nn.Module):
+    """Exercise functional attention with an uncalled ``out_proj`` child."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic attention without dropout."""
+
+        super().__init__()
+        self.attn = nn.MultiheadAttention(4, 2, batch_first=True, dropout=0.0)
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Return only the attention output tensor."""
+
+        return self.attn(value, value, value, need_weights=False)[0]
+
+
+def test_runnable_mha_uncalled_out_proj_parameters_remain_bound(tmp_path: Path) -> None:
+    """Keep functional-attention projection parameters in sparse state bindings."""
+
+    model = MultiheadAttentionRunnableModel().eval()
+    trace = _capture(model, torch.randn(2, 3, 4))
+    path = tmp_path / "mha.tlspec"
+
+    assert "attn.out_proj" not in trace.modules
+    trace.save(path, level="runnable", include_weights=True)
+    loaded = tl.load(path)
+    descriptor = loaded.runnable_descriptor
+    assert descriptor is not None
+    bound_names = {
+        slot.state_binding.state_dict_name
+        for slot in descriptor.tensor_slots
+        if slot.state_binding is not None
+    }
+
+    assert {"attn.out_proj.weight", "attn.out_proj.bias"} <= bound_names
+    loaded.load_state_dict(model.state_dict())

@@ -1285,8 +1285,11 @@ def _parameter_role(param: Any) -> StateSlotRole:
     """Classify one cooked parameter into the frozen initializer role table."""
 
     name = str(getattr(param, "name", ""))
-    module = getattr(param, "module", None)
-    class_name = str(getattr(module, "class_name", "")).lower()
+    module_address = str(getattr(param, "module_address", ""))
+    trace = getattr(param, "source_trace", None)
+    modules = getattr(trace, "modules", {}) if trace is not None else {}
+    module = modules.get(module_address) if isinstance(modules, Mapping) else None
+    class_name = str(getattr(module, "class_name", module_address)).lower()
     is_norm = "norm" in class_name
     if name == "weight":
         return StateSlotRole.NORM_SCALE if is_norm else StateSlotRole.WEIGHT
