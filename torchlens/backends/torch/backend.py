@@ -1035,6 +1035,11 @@ def _register_model_output_container_snapshot(
     spec = next((container_spec for _, _, container_spec in output_entries if container_spec), None)
     if spec is None:
         return
+    # An opaque model-output container (custom Mapping, unsafe defaultdict, unknown
+    # dict subclass, or an unrepresentable non-tensor leaf) is recorded but marked
+    # NON-reconstructable so producer preflight refuses to advertise it runnable and
+    # a live run reports UNVERIFIABLE -- never a silent bare-tensor/plain-dict.
+    reconstructable = spec.kind != "opaque"
     occurrences: list[ContainerLeafOccurrence] = []
     for occ_index, (tensor, path, _container_spec) in enumerate(output_entries):
         producer_label = _tl.get_tensor_label(tensor)
@@ -1055,7 +1060,7 @@ def _register_model_output_container_snapshot(
         observed_at_event_index=int(getattr(trace, "_layer_counter", 0)),
         spec=spec,
         leaf_occurrences=tuple(occurrences),
-        reconstructable=True,
+        reconstructable=reconstructable,
     )
     registry.register_snapshot(
         output,
@@ -1065,7 +1070,7 @@ def _register_model_output_container_snapshot(
         observed_at_event_index=int(getattr(trace, "_layer_counter", 0)),
         spec=spec,
         leaf_occurrences=tuple(occurrences),
-        reconstructable=True,
+        reconstructable=reconstructable,
     )
 
 

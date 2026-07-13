@@ -9,8 +9,8 @@ import dataclasses
 import re
 import time
 import warnings
-from collections import defaultdict, deque
-from collections.abc import Callable
+from collections import OrderedDict, defaultdict, deque
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from math import prod
 from types import SimpleNamespace
@@ -872,6 +872,92 @@ def _container_type_ref(value: Any) -> tuple[str | None, str | None]:
     return cls.__module__, cls.__qualname__
 
 
+# ``defaultdict`` factory callables we can faithfully restore on load WITHOUT
+# importing an arbitrary callable (which would execute foreign code). Anything
+# else makes the mapping non-reconstructable -> recorded opaquely -> UNVERIFIABLE.
+_SAFE_DEFAULT_FACTORIES: dict[str, Any] = {
+    "list": list,
+    "dict": dict,
+    "set": set,
+    "tuple": tuple,
+    "frozenset": frozenset,
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "bytes": bytes,
+    "bytearray": bytearray,
+    "complex": complex,
+}
+
+
+def _safe_default_factory_name(factory: Any) -> str | None:
+    """Return the allowlisted name of a defaultdict factory, or ``None``."""
+
+    for name, ctor in _SAFE_DEFAULT_FACTORIES.items():
+        if factory is ctor:
+            return name
+    return None
+
+
+def _mapping_reconstruction(
+    value: Mapping[Any, Any],
+) -> tuple[str | None, str | None, Any] | None:
+    """Return faithful-rebuild metadata for a mapping output container.
+
+    Returns ``(type_module, type_qualname, aux_data)`` for a mapping we can rebuild
+    with the EXACT type (plain ``dict`` -> no type ref; ``OrderedDict``;
+    ``defaultdict`` with an allowlisted factory). Returns ``None`` for a mapping we
+    cannot reconstruct exactly (custom ``Mapping``, unknown ``dict`` subclass,
+    unsafe ``defaultdict`` factory) so the caller records it opaquely rather than
+    silently collapsing it to a plain ``dict`` / bare tensor under a VERIFIED run.
+    """
+
+    if type(value) is dict:
+        return (None, None, None)
+    if type(value) is OrderedDict:
+        return ("collections", "OrderedDict", None)
+    if type(value) is defaultdict:
+        factory = value.default_factory
+        if factory is None:
+            return ("collections", "defaultdict", {"default_factory": None})
+        name = _safe_default_factory_name(factory)
+        if name is not None:
+            return ("collections", "defaultdict", {"default_factory": name})
+        return None
+    return None
+
+
+def _object_holds_tensor(value: Any) -> bool:
+    """Return whether ``value`` opaquely contains at least one tensor."""
+
+    for _tensor in get_vars_of_type_from_obj(
+        value,
+        which_type=torch.Tensor,
+        subclass_exceptions=[torch.nn.Parameter],
+        search_depth=5,
+    ):
+        return True
+    return False
+
+
+def _leaf_is_reconstructable(item: Any) -> bool:
+    """Return whether a childless (``_build_container_spec is None``) output leaf can be restored.
+
+    A tensor leaf is filled from the flat leaf stream; an opaque container that
+    still HOLDS tensors keeps the status-quo BFS capture. A pure non-tensor leaf we
+    cannot represent (``memoryview``, an arbitrary object with no tensors) makes the
+    enclosing container non-reconstructable so replay is honestly UNVERIFIABLE
+    instead of crashing on a missing leaf (advertise-then-crash).
+    """
+
+    if isinstance(item, torch.Tensor):
+        return True
+    if _literal_value_supported(item) or isinstance(item, torch.Size):
+        return True
+    return _object_holds_tensor(item)
+
+
 def _build_container_spec(value: Any) -> ContainerSpec | None:
     """Build a replay container spec for a supported output container.
 
@@ -951,35 +1037,73 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             type_qualname=qualname,
             child_specs=tuple(child_specs),
         )
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         keys = tuple(value.keys())
+        # A tensor leaf under a non-str/int key cannot be bound to the frozen
+        # runnable slot-path vocabulary, so such a mapping is not runnable; record
+        # it opaque (honest-reject at save) rather than crashing at descriptor build.
+        # ``bool`` keys are ``int`` subclasses and remain representable.
+        reconstructable = all(isinstance(key, (str, int)) for key in keys)
         for key in keys:
-            child_spec = _try_build_container_spec(value[key])
+            child = value[key]
+            child_spec = _try_build_container_spec(child)
             if child_spec is not None:
                 child_specs.append((DictKey(key), child_spec))
+                if child_spec.kind == "opaque":
+                    reconstructable = False
+            elif not _leaf_is_reconstructable(child):
+                reconstructable = False
+        recon = _mapping_reconstruction(value)
+        if recon is None or not reconstructable:
+            # A mapping we cannot faithfully rebuild (custom Mapping, unknown dict
+            # subclass, unsafe defaultdict factory, or an unrepresentable leaf).
+            # Record it opaquely so producer preflight refuses to advertise runnable
+            # and the run is UNVERIFIABLE, never a silent bare-tensor/plain-dict.
+            module, qualname = _container_type_ref(value)
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
+        type_module, type_qualname, aux = recon
         return ContainerSpec(
             kind="dict",
             length=len(keys),
             keys=keys,
+            type_module=type_module,
+            type_qualname=type_qualname,
             child_specs=tuple(child_specs),
+            aux_data=aux,
         )
     if isinstance(value, tuple):
         items = _iter_sequence_items(value)
         if items is None:
             return None
+        reconstructable = True
         for index, item in items:
             child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
+                if child_spec.kind == "opaque":
+                    reconstructable = False
+            elif not _leaf_is_reconstructable(item):
+                reconstructable = False
+        if not reconstructable:
+            module, qualname = _container_type_ref(value)
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
         return ContainerSpec(kind="tuple", length=len(value), child_specs=tuple(child_specs))
     if isinstance(value, list):
         items = _iter_sequence_items(value)
         if items is None:
             return None
+        reconstructable = True
         for index, item in items:
             child_spec = _try_build_container_spec(item)
             if child_spec is not None:
                 child_specs.append((TupleIndex(index), child_spec))
+                if child_spec.kind == "opaque":
+                    reconstructable = False
+            elif not _leaf_is_reconstructable(item):
+                reconstructable = False
+        if not reconstructable:
+            module, qualname = _container_type_ref(value)
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
         return ContainerSpec(kind="list", length=len(value), child_specs=tuple(child_specs))
     return None
 

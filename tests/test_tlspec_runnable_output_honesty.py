@@ -165,31 +165,44 @@ def test_f2_bytes_output_literal_round_trips_byte_exact(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.parametrize("kind", ["ordered", "defaultdict", "custom"])
-def test_f3_mapping_output_preserved_or_unverifiable(kind: str, tmp_path: Path) -> None:
-    """F3: a mapping-subtype output is preserved faithfully OR is UNVERIFIABLE.
-
-    It must NEVER collapse to a bare tensor / plain dict while reporting VERIFIED.
-    """
+@pytest.mark.parametrize("kind", ["ordered", "defaultdict"])
+def test_f3_reconstructable_mapping_output_preserved_exact(kind: str, tmp_path: Path) -> None:
+    """F3: OrderedDict/defaultdict outputs reconstruct to the EXACT type + fields."""
 
     model = _F3Model(kind)
     x = torch.tensor([1.0, 2.0])
     result = _roundtrip(model, x, tmp_path / f"{kind}.tlspec")
     live = model(x)
 
-    if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
-        # If blessed VERIFIED, the object must be exact: same type + fields.
-        assert type(result.output) is type(live)
-        assert set(result.output.keys()) == set(live.keys())
-        assert result.output["meta"] == 3
-        if kind == "defaultdict":
-            assert result.output.default_factory is live.default_factory
-    else:
-        assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-        assert result.report.numeric_attestation in {
-            NumericAttestationStatus.NOT_APPLICABLE,
-            NumericAttestationStatus.NOT_PRESENT,
-        }
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is type(live)
+    assert set(result.output.keys()) == set(live.keys())
+    assert result.output["meta"] == 3
+    if kind == "defaultdict":
+        assert result.output.default_factory is live.default_factory
+
+
+def test_f3_custom_mapping_output_never_bare_tensor_verified(tmp_path: Path) -> None:
+    """F3: a custom Mapping output honestly rejects at save OR is UNVERIFIABLE.
+
+    It must NEVER collapse to a bare tensor while reporting VERIFIED.
+    """
+
+    model = _F3Model("custom")
+    x = torch.tensor([1.0, 2.0])
+    trace = _capture(model, x)
+    path = tmp_path / "custom.tlspec"
+    try:
+        trace.save(path, level="runnable")
+    except tl.errors.TorchLensError:
+        # Honest producer-preflight rejection at save is the chosen contract.
+        return
+    result = tl.load(path).run(inputs=x)
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation in {
+        NumericAttestationStatus.NOT_APPLICABLE,
+        NumericAttestationStatus.NOT_PRESENT,
+    }
 
 
 def test_f5_memoryview_output_round_trips_or_rejects(tmp_path: Path) -> None:
@@ -205,7 +218,7 @@ def test_f5_memoryview_output_round_trips_or_rejects(tmp_path: Path) -> None:
     path = tmp_path / "memoryview.tlspec"
     try:
         trace.save(path, level="runnable")
-    except (ValueError, tl.errors.TorchLensIOError, tl.errors.RunnableError):
+    except (ValueError, tl.errors.TorchLensError):
         # Honest reject at save is acceptable.
         return
     # If save advertised runnable, the loaded run must NOT crash.
@@ -214,6 +227,23 @@ def test_f5_memoryview_output_round_trips_or_rejects(tmp_path: Path) -> None:
         assert bytes(result.output[1]) == b"abc"
     else:
         assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+
+
+def test_f7_custom_mapping_input_preflight_accepted(tmp_path: Path) -> None:
+    """F7: a custom Mapping model INPUT with tensor leaves passes producer preflight."""
+
+    from torchlens._io.runnable import build_sparse_run_descriptor
+
+    class Model(nn.Module):
+        def forward(self, cfg: Mapping[str, Any]) -> torch.Tensor:
+            return cfg["value"] + 1 if cfg["mode"] == 0 else cfg["value"] * 10
+
+    cfg = _CustomMapping({"value": torch.tensor([1.0, 2.0]), "mode": 0})
+    trace = _capture(Model(), cfg)
+    descriptor = build_sparse_run_descriptor(trace)
+    assert descriptor.preflight.passed
+    # And it must actually save runnable without a false rejection.
+    trace.save(tmp_path / "custom_input.tlspec", level="runnable")
 
 
 @pytest.mark.parametrize("key", [("value", 1), 1.5])

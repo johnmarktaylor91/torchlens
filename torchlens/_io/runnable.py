@@ -490,7 +490,23 @@ def _build_op_slot_drafts(
                         details=(("address", str(address)),),
                     )
                 )
-        output_path = _normalize_container_path(getattr(op, "container_path", ()))
+        try:
+            output_path = _normalize_container_path(getattr(op, "container_path", ()))
+        except ValueError:
+            # An output/container path with a non-str/int key (tuple, float, ...)
+            # cannot be represented in the frozen slot-path vocabulary. Reject
+            # honestly with a typed diagnostic instead of a raw ValueError crash;
+            # the run is refused rather than advertised-then-broken.
+            output_path = ()
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT,
+                    "Output container path uses a key that cannot be represented in the "
+                    "runnable slot-path vocabulary (only str/int keys are supported).",
+                    affected_ops=(str(op.label),),
+                    detection_stage="producer_output_binding",
+                )
+            )
         input_binding = None
         if role is TensorSlotRole.MODEL_INPUT:
             input_binding = _input_binding_for_op(trace, op, diagnostics)
@@ -1206,8 +1222,9 @@ def _container_structure_witnesses(trace: Any, *, start_order: int) -> list[Cont
                 "kind": getattr(spec, "kind", "unknown"),
                 "reconstructable": bool(getattr(snapshot, "reconstructable", False)),
                 "leaf_paths": [
-                    list(_normalize_container_path(occurrence.path))
+                    list(normalized)
                     for occurrence in getattr(snapshot, "leaf_occurrences", ())
+                    if (normalized := _safe_normalize_container_path(occurrence.path)) is not None
                 ],
             }
             try:
@@ -1320,16 +1337,38 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
 
     diagnostics: list[RunnableDiagnostic] = []
     output_ops = [op for op in ops if bool(getattr(op, "is_output", False))]
+    containers = getattr(trace, "__dict__", {}).get("_containers", {}) or {}
+    model_output_snapshots = [
+        snapshot
+        for record in containers.values()
+        for snapshot in getattr(record, "snapshots", ())
+        if getattr(snapshot, "role", None) is Role.MODEL_OUTPUT
+    ]
+    # A recorded model-output container that is non-reconstructable (opaque custom
+    # Mapping, unsafe defaultdict, unknown dict subclass, or an unrepresentable
+    # non-tensor leaf) must NOT advertise runnable regardless of how many tensors it
+    # holds: otherwise the loaded run silently returns a bare tensor / plain dict and
+    # reports VERIFIED. Honest-reject at save closes that class.
+    if any(
+        not getattr(snapshot, "reconstructable", True)
+        or getattr(getattr(snapshot, "spec", None), "kind", None) == "opaque"
+        for snapshot in model_output_snapshots
+    ):
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT,
+                "Model output is a non-reconstructable container; runnable replay cannot "
+                "restore its exact type and non-tensor leaves.",
+                affected_ops=tuple(str(op.label) for op in output_ops),
+                detection_stage="producer_output_binding",
+            )
+        )
+        return diagnostics
     if len(output_ops) <= 1:
         return diagnostics
     if any(getattr(op, "container_path", None) for op in output_ops):
         return diagnostics
-    containers = getattr(trace, "__dict__", {}).get("_containers", {}) or {}
-    has_model_output = any(
-        getattr(snapshot, "role", None) is Role.MODEL_OUTPUT
-        for record in containers.values()
-        for snapshot in getattr(record, "snapshots", ())
-    )
+    has_model_output = bool(model_output_snapshots)
     if not has_model_output:
         diagnostics.append(
             _diagnostic(
@@ -1673,6 +1712,21 @@ def _device_parts(value: Any) -> tuple[str, int | None]:
     text = "cpu" if value is None else str(value)
     device = torch.device(text)
     return device.type, device.index
+
+
+def _safe_normalize_container_path(path: Iterable[Any]) -> tuple[str | int, ...] | None:
+    """Return the frozen container path, or ``None`` when a key is unrepresentable.
+
+    Used where an unrepresentable output-container path (non-str/int key) must
+    degrade gracefully -- the enclosing container is recorded opaque and rejected
+    at preflight, so its leaf paths are advisory and must never crash descriptor
+    build with a raw ``ValueError``.
+    """
+
+    try:
+        return _normalize_container_path(path)
+    except ValueError:
+        return None
 
 
 def _normalize_container_path(path: Iterable[Any]) -> tuple[str | int, ...]:

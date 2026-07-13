@@ -2,12 +2,31 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 import importlib
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._io import FieldPolicy
+
+# ``defaultdict`` factory callables restorable on load WITHOUT importing an
+# arbitrary callable. Mirrors ``torchlens.backends.torch.ops._SAFE_DEFAULT_FACTORIES``;
+# a factory outside this allowlist is recorded opaque at capture, never here.
+_SAFE_DEFAULT_FACTORIES: dict[str, Any] = {
+    "list": list,
+    "dict": dict,
+    "set": set,
+    "tuple": tuple,
+    "frozenset": frozenset,
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "bytes": bytes,
+    "bytearray": bytearray,
+    "complex": complex,
+}
 
 
 @dataclass(frozen=True)
@@ -154,9 +173,12 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         ]
         return tuple(values) if spec.kind == "tuple" else values
     if spec.kind == "dict":
-        return {
+        rebuilt_items = {
             key: _rebuild_child_or_leaf(child_by_key, DictKey(key), leaf_iter) for key in spec.keys
         }
+        if spec.type_module is None or spec.type_qualname is None:
+            return rebuilt_items
+        return _rebuild_dict_subtype(spec, rebuilt_items)
     if spec.kind == "namedtuple":
         values = [
             _rebuild_child_or_leaf(child_by_key, NamedField(field_name), leaf_iter)
@@ -206,6 +228,47 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             )
         return registration.unflatten(spec.aux_data, values)
     raise ValueError(f"Unsupported ContainerSpec kind {spec.kind!r}.")
+
+
+def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
+    """Rebuild a faithfully reconstructable mapping subtype (OrderedDict/defaultdict).
+
+    Parameters
+    ----------
+    spec:
+        ``dict``-kind spec whose ``type_module``/``type_qualname`` name a concrete
+        mapping subclass and whose ``aux_data`` carries any reconstruction metadata.
+    items:
+        Already-rebuilt ``{key: value}`` pairs in captured order.
+
+    Returns
+    -------
+    Any
+        Instance of the exact mapping subtype.
+
+    Raises
+    ------
+    ValueError
+        If the subtype cannot be imported or a defaultdict factory is not on the
+        safe allowlist (should not occur: such mappings are recorded opaque at
+        capture and never reach reconstruction).
+    """
+
+    container_type = _import_container_type(spec)
+    if container_type is None:
+        raise ValueError(
+            f"Mapping type {spec.type_module}.{spec.type_qualname} could not be imported."
+        )
+    if issubclass(container_type, defaultdict):
+        aux = spec.aux_data if isinstance(spec.aux_data, dict) else {}
+        factory_name = aux.get("default_factory")
+        if factory_name is None:
+            return container_type(None, items)
+        factory = _SAFE_DEFAULT_FACTORIES.get(factory_name)
+        if factory is None:
+            raise ValueError(f"Unsafe defaultdict factory {factory_name!r} for reconstruction.")
+        return container_type(factory, items)
+    return container_type(items)
 
 
 def _rebuild_child_or_leaf(
