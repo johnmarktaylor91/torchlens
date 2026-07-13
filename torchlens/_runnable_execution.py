@@ -1336,6 +1336,8 @@ def _numeric_attestation_check(
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not isinstance(layer, ActivationPayloadLayerDescriptor):
         return NumericAttestationStatus.NOT_APPLICABLE, None
+    if _descriptor_has_nondeterministic_rng(descriptor):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = tuple(member for member in layer.members if member.field == "out")
     if not raw_members or not _attestation_inputs_match(descriptor, layer, slot_values):
         return NumericAttestationStatus.NOT_APPLICABLE, None
@@ -1382,6 +1384,41 @@ def _numeric_attestation_check(
     return (
         NumericAttestationStatus.ATTESTED,
         ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
+    )
+
+
+def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether replay contains an RNG source not tied to capture RNG state."""
+
+    if any(slot.role is TensorSlotRole.RNG_SOURCE for slot in descriptor.tensor_slots):
+        return True
+    rng_qualnames = {
+        "alpha_dropout",
+        "bernoulli",
+        "cauchy_",
+        "dropout",
+        "exponential_",
+        "feature_alpha_dropout",
+        "feature_dropout",
+        "geometric_",
+        "log_normal_",
+        "multinomial",
+        "native_dropout",
+        "normal",
+        "poisson",
+        "rand",
+        "rand_like",
+        "randint",
+        "randint_like",
+        "randn",
+        "randn_like",
+        "random_",
+        "rrelu",
+        "uniform_",
+    }
+    return any(
+        entry.key.qualname.rsplit(".", 1)[-1] in rng_qualnames
+        for entry in descriptor.callable_registry
     )
 
 

@@ -37,6 +37,15 @@ class ActivationPayloadModel(nn.Module):
         return torch.relu(self.linear(value)) * self.scale
 
 
+class DropoutActivationModel(nn.Module):
+    """Nondeterministic model whose replay is ineligible for byte attestation."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Apply training-mode dropout at a recorded RNG boundary."""
+
+        return torch.nn.functional.dropout(value, p=0.5, training=True)
+
+
 def _capture(
     model: nn.Module,
     inputs: torch.Tensor,
@@ -197,6 +206,26 @@ def test_original_input_real_state_attests_for_embedded_and_user_state(
     assert any(
         check.name.startswith("numeric_attestation") for check in user_result.report.contract_checks
     )
+
+
+def test_rng_model_activation_attestation_is_not_applicable_instead_of_failing(
+    tmp_path: Path,
+) -> None:
+    """Treat expected dropout nondeterminism as ineligible, not archive corruption."""
+
+    model = DropoutActivationModel()
+    inputs = torch.ones(32)
+    path = tmp_path / "dropout.tlspec"
+    _capture(model, inputs).save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
+
+    result = tl.load(path).run(inputs=inputs)
+
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -> None:
