@@ -2085,6 +2085,24 @@ def clear_hooks(hook_handles: list[Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _restore_session_param_state(model: nn.Module) -> None:
+    """Restore parameter grad flags and remove session-scoped parameter metadata.
+
+    This cleanup is deliberately independent of the exception that ended the
+    capture. Callers invoke it from teardown paths that may be handling any
+    ``BaseException`` raised by user code.
+
+    Parameters
+    ----------
+    model
+        Model whose parameters were prepared for the capture session.
+    """
+
+    for param in model.parameters():
+        restore_param_requires_grad(param)
+        clear_meta(param)
+
+
 def _cleanup_model_session(
     trace: "Trace",
     model: nn.Module,
@@ -2106,9 +2124,7 @@ def _cleanup_model_session(
         rollback_prehook_provenance(trace)
     finally:
         # Restore requires_grad and remove session-scoped param attributes
-        for param in model.parameters():
-            restore_param_requires_grad(param)
-            clear_meta(param)
+        _restore_session_param_state(model)
 
     # Session-scoped module tracking data lives in Trace dicts (not on
     # modules), so no per-module cleanup iteration is needed — the dicts

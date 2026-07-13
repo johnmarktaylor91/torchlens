@@ -1311,6 +1311,18 @@ def run_and_log_inputs_through_model(
             )
         raise e
 
+    except BaseException:
+        # ``except Exception`` above handles ordinary failed-forward diagnostics,
+        # but user code may raise e.g. KeyboardInterrupt or a custom BaseException.
+        # The torch session forces gradient-capable parameters to require grads, so
+        # its teardown must run before re-raising any such escape.
+        compiled_unwrap_exception = sys.exc_info()
+        backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
+        self.__dict__.pop("_capture_producer_policy", None)
+        if capture_session is not None:
+            capture_session.transition("failed")
+        raise
+
     finally:
         try:
             _clear_saved_activation_dedup_caches(self)
