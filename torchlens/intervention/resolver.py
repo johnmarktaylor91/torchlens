@@ -99,7 +99,7 @@ def _internal_torch_builtin_key(
         otherwise ``None``.
     """
 
-    internal = getattr(torch._C._VariableFunctionsClass, name, None)
+    internal = getattr(getattr(torch._C, "_VariableFunctionsClass", None), name, None)
     public = getattr(torch, name, None)
     if internal is not func or getattr(public, "__module__", None) == "torch":
         return None
@@ -137,7 +137,7 @@ def _resolve_internal_torch_builtin_key(
         or qualname != key.qualname
     ):
         return None
-    resolved = getattr(torch._C._VariableFunctionsClass, qualname, None)
+    resolved = getattr(getattr(torch._C, "_VariableFunctionsClass", None), qualname, None)
     return cast(Callable[..., Any], resolved) if callable(resolved) else None
 
 
