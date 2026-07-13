@@ -159,6 +159,7 @@ class CaptureSession:
     activation_escrow_ram_bytes: int = 0
     activation_escrow_peak_ram_bytes: int = 0
     activation_escrow_spilled_bytes: int = 0
+    _activation_escrow_spill_index: int = field(default=0, init=False, repr=False)
     gradient_reference_logical_bytes: int = 0
     gradient_reference_peak_count: int = 0
     live_gradient_labels: set[str] = field(default_factory=set)
@@ -201,6 +202,7 @@ class CaptureSession:
         self.activation_escrow_ram_bytes = 0
         self.activation_escrow_peak_ram_bytes = 0
         self.activation_escrow_spilled_bytes = 0
+        self._activation_escrow_spill_index = 0
         self.gradient_reference_logical_bytes = 0
         self.gradient_reference_peak_count = 0
         self.live_gradient_labels.clear()
@@ -291,8 +293,9 @@ class CaptureSession:
                     prefix="torchlens-activation-escrow-"
                 )
             spill_path = Path(self._activation_spill_dir.name) / (
-                f"payload-{self.activation_escrow_spilled_bytes:020d}.pt"
+                f"payload-{self._activation_escrow_spill_index:020d}.pt"
             )
+            self._activation_escrow_spill_index += 1
             import torch
 
             with _state.pause_logging():

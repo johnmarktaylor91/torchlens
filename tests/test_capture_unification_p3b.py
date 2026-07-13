@@ -283,6 +283,34 @@ def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None
     assert not spill_path.exists()
 
 
+def test_zero_byte_activation_spill_uses_a_distinct_next_spill_path() -> None:
+    """A zero-byte spill cannot make the next retained activation overwrite it."""
+
+    session = _retention_session(
+        RetentionProfile(
+            activation_kind=RetentionKind.ACTIVATION,
+            activation_window=None,
+            spillable=True,
+            activation_ram_budget_bytes=0,
+        )
+    )
+    empty = torch.empty(0)
+    nonempty = torch.arange(8, dtype=torch.float32)
+
+    session.escrow_candidate(1, empty)
+    session.escrow_candidate(2, nonempty)
+
+    first = session.activation_escrow[1]
+    second = session.activation_escrow[2]
+    assert first.spill_path is not None
+    assert second.spill_path is not None
+    assert first.spill_path != second.spill_path
+    assert torch.equal(first.materialize(), empty)
+    assert torch.equal(second.materialize(), nonempty)
+
+    session.release()
+
+
 def test_windowed_activation_escrow_deletes_evicted_spill_files() -> None:
     """Spilled window eviction unlinks payloads as soon as they leave escrow."""
 
