@@ -96,6 +96,41 @@ def run_loaded_sparse_trace(
     prepared_state = prepare_runnable_state(trace, seed=seed)
     slot_values.update(_clone_state_values(prepared_state.slot_values))
     fork = trace._fork_trace(name=_run_fork_name(trace))
+    try:
+        return _execute_loaded_sparse_transaction(
+            trace,
+            inputs,
+            seed=seed,
+            divergence_policy=divergence_policy,
+            descriptor=descriptor,
+            readiness=readiness,
+            callables=callables,
+            slot_values=slot_values,
+            input_checks=input_checks,
+            prepared_state=prepared_state,
+            fork=fork,
+        )
+    except BaseException:
+        _state._unregister_log(fork)
+        raise
+
+
+def _execute_loaded_sparse_transaction(
+    trace: Any,
+    inputs: Any,
+    *,
+    seed: int | None,
+    divergence_policy: DivergencePolicy,
+    descriptor: SparseRunDescriptor,
+    readiness: ReadinessReport,
+    callables: Mapping[str, Callable[..., Any]],
+    slot_values: dict[str, torch.Tensor],
+    input_checks: tuple[ContractCheck, ...],
+    prepared_state: PreparedRunnableState,
+    fork: Any,
+) -> RunResult:
+    """Execute one sparse transaction whose caller owns rollback on escape."""
+
     _populate_source_slots(fork, descriptor, slot_values)
     contract_checks: list[ContractCheck] = [
         *input_checks,
@@ -655,7 +690,7 @@ def _execute_sparse_call(
         _write_argument(args, kwargs, tensor_argument.argument_path, value)
     try:
         return func(*args, **kwargs)
-    except (TypeError, AttributeError) as exc:
+    except Exception as exc:
         raise RuntimeSignatureDriftError(
             f"Resolved callable rejected sparse recipe for {call.call_id!r}: {exc}",
             code=RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value,

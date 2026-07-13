@@ -18,6 +18,7 @@ from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
     RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
@@ -390,6 +391,26 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
     assert result.trace.__dict__["_runnable_poisoned"] is True
     assert result.trace.__dict__["_runnable_path_faithfulness"] is PathFaithfulness.DIVERGED
     _assert_outs_equal(loaded, source_outs)
+
+
+def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
+    runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
+) -> None:
+    """Rollback registry state when wrong-shape replay fails inside a native call."""
+
+    path, model, _ = runnable_execution_artifact
+    loaded = tl.load(path)
+    loaded.load_state_dict(model.state_dict())
+    logs_before = set(_state.list_logs())
+
+    with pytest.raises(RuntimeSignatureDriftError) as caught:
+        loaded.run(
+            inputs=torch.ones(2, 4),
+            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        )
+
+    assert caught.value.fields["code"] == "runtime_signature_drift"
+    assert set(_state.list_logs()) == logs_before
 
 
 def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
