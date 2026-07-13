@@ -23,6 +23,7 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
+from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ContractCheck,
@@ -912,7 +913,27 @@ def _reconstruct_output(
         if op is not None:
             op._internal_set("out", value.detach().clone())
         values.append((slot.output_path or (), value))
+    container_spec = _output_container_spec(fork)
+    if container_spec is not None:
+        try:
+            return rebuild_container_from_spec(container_spec, [value for _, value in values])
+        except ValueError as exc:
+            raise RunPreconditionError(
+                f"Recorded output container could not be reconstructed: {exc}",
+                code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
+            ) from exc
     return _container_from_paths(values)
+
+
+def _output_container_spec(trace: Any) -> ContainerSpec | None:
+    """Return the shared recorded model-output container specification."""
+
+    for label in getattr(trace, "output_layers", ()):
+        op = _op_for_label(trace, label)
+        spec = getattr(op, "container_spec", None)
+        if isinstance(spec, ContainerSpec):
+            return spec
+    return None
 
 
 def _reconstruct_live_output(trace: Any) -> Any:
@@ -1106,15 +1127,16 @@ def _structure_witness_check(
     """Compare a model-boundary container witness with runtime structure."""
 
     expected = _decode_literal(witness.observed_value)
-    expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
     role = expected.get("role")
-    runtime_value = (
-        _runtime_input_for_structure_witness(descriptor, expected, inputs)
-        if role == "model_input"
-        else _raw_runtime_output(descriptor, output, call_outputs)
-    )
+    if role == "model_input":
+        runtime_value = _runtime_input_for_structure_witness(descriptor, expected, inputs)
+        expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
+        expected_kind = str(expected.get("kind", "unknown"))
+    else:
+        runtime_value = _raw_runtime_output(descriptor, output, call_outputs)
+        expected_paths = tuple(_container_leaf_paths(output))
+        expected_kind = _container_kind(output)
     actual_paths = tuple(_container_leaf_paths(runtime_value))
-    expected_kind = str(expected.get("kind", "unknown"))
     actual_kind = _container_kind(runtime_value)
     kind_matches = expected_kind in {"unknown", actual_kind}
     passed = expected_paths == actual_paths and kind_matches

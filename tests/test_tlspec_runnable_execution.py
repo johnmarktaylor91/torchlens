@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import NamedTuple
 from typing import Any
 
 import pytest
@@ -69,6 +70,44 @@ class InplaceActivationModel(nn.Module):
         preserved = activated + 1
         activated.mul_(0)
         return preserved + activated
+
+
+class RunnableNamedOutput(NamedTuple):
+    """Named output container used to verify portable kind reconstruction."""
+
+    primary: torch.Tensor
+    score: float
+    activated: torch.Tensor
+
+
+class MixedTupleOutputModel(nn.Module):
+    """Model returning tensor leaves around a non-tensor literal."""
+
+    def forward(self, value: torch.Tensor) -> tuple[torch.Tensor, float, torch.Tensor]:
+        """Return a mixed tuple whose literal must survive sparse execution."""
+
+        shifted = value + 1
+        return shifted, 3.0, torch.relu(shifted)
+
+
+class ListOutputModel(nn.Module):
+    """Model returning a list rather than a tuple."""
+
+    def forward(self, value: torch.Tensor) -> list[torch.Tensor]:
+        """Return two tensor leaves in a list container."""
+
+        shifted = value + 1
+        return [shifted, torch.relu(shifted)]
+
+
+class NamedTupleOutputModel(nn.Module):
+    """Model returning a namedtuple with a literal field."""
+
+    def forward(self, value: torch.Tensor) -> RunnableNamedOutput:
+        """Return a namedtuple whose type and literal field must survive."""
+
+        shifted = value + 1
+        return RunnableNamedOutput(shifted, 3.0, torch.relu(shifted))
 
 
 @pytest.fixture(scope="module")
@@ -209,6 +248,54 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
     assert torch.equal(fork_relu.out, live_relu.out)
     result.output.zero_()
     assert torch.equal(fork_relu.out, fork_relu_before_output_edit)
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_type"),
+    [
+        (MixedTupleOutputModel(), tuple),
+        (ListOutputModel(), list),
+        (NamedTupleOutputModel(), RunnableNamedOutput),
+    ],
+)
+def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
+    tmp_path: Path,
+    model: nn.Module,
+    expected_type: type[Any],
+) -> None:
+    """Rebuild faithful mixed outputs without false structure divergence or holes."""
+
+    inputs = torch.tensor([-2.0, 0.0, 2.0])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / f"{expected_type.__name__}.tlspec"
+    trace.save(path, level="runnable")
+
+    loaded = tl.load(path)
+    result = loaded.run(inputs=inputs.clone())
+    expected = model(inputs)
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is expected_type
+    assert torch.equal(result.output[0], expected[0])
+    assert torch.equal(result.output[-1], expected[-1])
+    if expected_type is not list:
+        assert result.output[1] == 3.0
+    assert all(check.passed for check in result.report.contract_checks)
+    if expected_type is tuple:
+        poisoned = loaded.run(
+            inputs=torch.ones(4),
+            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        )
+        assert poisoned.report.path_faithfulness is PathFaithfulness.DIVERGED
+        assert poisoned.output[1] == 3.0
 
 
 def _logging_probe(func: Any, observed: list[bool]) -> Any:
