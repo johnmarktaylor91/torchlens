@@ -52,6 +52,7 @@ from ..runnable import (
     RunnableCompatibility,
     RunnableDiagnostic,
     RunnableErrorCode,
+    RunnableRngProfile,
     SparseRunDescriptor,
     SlotByteDigest,
     StateByteDigest,
@@ -159,6 +160,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         tensor_slots=slots,
         control_witnesses=witnesses,
         witness_completeness=WitnessCompleteness(_string(value, "witness_completeness")),
+        rng_profile=_parse_rng_profile(value.get("rng_profile")),
         compatibility=RunnableCompatibility(
             torchlens_version=_string(compatibility, "torchlens_version"),
             python_version=_string(compatibility, "python_version"),
@@ -177,6 +179,24 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         unsupported_sites=tuple(
             _parse_diagnostic(item) for item in _mapping_sequence(value, "unsupported_sites")
         ),
+    )
+
+
+def _parse_rng_profile(value: Any) -> RunnableRngProfile:
+    """Parse the optional host-RNG profile, defaulting legacy manifests to deterministic.
+
+    Manifests written before host-RNG honesty tracking omit this object; they are
+    treated as ``host_rng_consumed=False`` (deterministic) because their capture
+    predates the recorded signal and cannot be recovered.
+    """
+
+    if not isinstance(value, Mapping):
+        return RunnableRngProfile(host_rng_consumed=False, capture_seed=None)
+    consumed = value.get("host_rng_consumed")
+    seed = value.get("capture_seed")
+    return RunnableRngProfile(
+        host_rng_consumed=bool(consumed),
+        capture_seed=int(seed) if isinstance(seed, int) and not isinstance(seed, bool) else None,
     )
 
 

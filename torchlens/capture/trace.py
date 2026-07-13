@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _timed_phase, _vprint
+from ..utils.rng import host_rng_advanced, snapshot_host_rng
 
 _ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
 
@@ -1193,7 +1194,17 @@ def run_and_log_inputs_through_model(
                 with _timed_phase(self, "dispatch:forward_model"):
                     with _forward_peak_memory_bracket(self, model_device):
                         with backend.inference_context(self):
+                            # Bracket the user forward with host-RNG snapshots so a
+                            # runnable descriptor can honestly record whether Python
+                            # ``random`` / NumPy control flow (an unwitnessed branch)
+                            # ran. TorchLens itself never draws host RNG here (its only
+                            # host draw seeds before this point), so any advance is the
+                            # user's. Reads are side-effect free -> capture unchanged.
+                            _host_rng_before = snapshot_host_rng()
                             outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
+                            self._runnable_host_rng_consumed = host_rng_advanced(
+                                _host_rng_before, snapshot_host_rng()
+                            )
 
         backend.finalize_forward_session(self)
 

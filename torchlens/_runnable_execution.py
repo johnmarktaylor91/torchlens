@@ -28,6 +28,7 @@ from .errors import (
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
 from .ir.container import ContainerSpec, rebuild_container_from_spec
+from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     CallableRegistryEntry,
@@ -124,6 +125,37 @@ def run_loaded_sparse_trace(
         raise
 
 
+def _host_rng_unreproduced(descriptor: SparseRunDescriptor, seed: int | None) -> bool:
+    """Return whether a host-RNG (Python/NumPy) capture is being replayed off-seed.
+
+    A model whose traced forward consumed Python ``random`` / NumPy RNG chose an
+    unwitnessed branch. The sparse trace holds exactly one recorded path, so only a
+    run that reproduces the captured seed can honestly claim the recorded branch is
+    the one a fresh call takes. Any other seed (including ``None``, or a capture with
+    no identifiable seed) leaves the branch unverifiable -- never a false
+    VERIFIED/ATTESTED with a stale result.
+
+    Parameters
+    ----------
+    descriptor:
+        Loaded sparse descriptor carrying the host-RNG profile.
+    seed:
+        Seed supplied to :meth:`Trace.run`.
+
+    Returns
+    -------
+    bool
+        ``True`` when the recorded host-RNG branch cannot be honestly reproduced.
+    """
+
+    profile = descriptor.rng_profile
+    if not profile.host_rng_consumed:
+        return False
+    if profile.capture_seed is None or seed is None:
+        return True
+    return seed != profile.capture_seed
+
+
 def _execute_loaded_sparse_transaction(
     trace: Any,
     inputs: Any,
@@ -158,40 +190,55 @@ def _execute_loaded_sparse_transaction(
             if value.device.type == "cuda" and value.device.index is not None
         }
     )
+    host_rng_unreproduced = _host_rng_unreproduced(descriptor, seed)
+    # Faithful original replay of a host-RNG capture (matching seed): reseed every
+    # engine (torch + Python + NumPy) to the captured seed so the recorded taken
+    # path is reproduced exactly, not just torch's generator. Preserve and restore
+    # the caller's host RNG so run() never leaks a reseed into ambient global state.
+    reseed_host = (
+        seed is not None and descriptor.rng_profile.host_rng_consumed and not host_rng_unreproduced
+    )
+    host_rng_saved = snapshot_host_rng() if reseed_host else None
     rng_context = torch.random.fork_rng(devices=devices) if seed is not None else nullcontext()
-    with rng_context, _state.pause_logging():
-        if seed is not None:
-            torch.manual_seed(seed)
+    try:
+        with rng_context, _state.pause_logging():
+            if reseed_host:
+                set_random_seed(cast(int, seed))
+            elif seed is not None:
+                torch.manual_seed(seed)
 
-        def execute_call(call_node: _CallConeNode) -> None:
-            """Execute and stage one dependency-ready sparse call."""
+            def execute_call(call_node: _CallConeNode) -> None:
+                """Execute and stage one dependency-ready sparse call."""
 
-            call = cast(RunnableCallDescriptor, call_node)
-            call_checks, before_versions = _pre_call_contract_checks(
-                descriptor,
-                call,
-                slot_values,
-            )
-            contract_checks.extend(call_checks)
-            _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
-            output = _execute_sparse_call(call, callables[call.call_id], slot_values)
-            call_outputs[call.call_id] = output
-            contract_checks.extend(
-                _bind_call_outputs(
+                call = cast(RunnableCallDescriptor, call_node)
+                call_checks, before_versions = _pre_call_contract_checks(
                     descriptor,
                     call,
-                    output,
                     slot_values,
-                    fork,
-                    before_versions=before_versions,
-                    attestation_slot_ids=attestation_slot_ids,
-                    attestation_slot_values=attestation_slot_values,
                 )
-            )
-            contract_checks.extend(_call_witness_checks(descriptor, call, slot_values))
-            _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+                contract_checks.extend(call_checks)
+                _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+                output = _execute_sparse_call(call, callables[call.call_id], slot_values)
+                call_outputs[call.call_id] = output
+                contract_checks.extend(
+                    _bind_call_outputs(
+                        descriptor,
+                        call,
+                        output,
+                        slot_values,
+                        fork,
+                        before_versions=before_versions,
+                        attestation_slot_ids=attestation_slot_ids,
+                        attestation_slot_values=attestation_slot_values,
+                    )
+                )
+                contract_checks.extend(_call_witness_checks(descriptor, call, slot_values))
+                _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
 
-        _walk_call_cone(descriptor.calls, execute_call)
+            _walk_call_cone(descriptor.calls, execute_call)
+    finally:
+        if host_rng_saved is not None:
+            restore_host_rng(host_rng_saved)
 
     output = _reconstruct_output(descriptor, slot_values, fork, call_outputs=call_outputs)
     contract_checks.extend(
@@ -215,12 +262,15 @@ def _execute_loaded_sparse_transaction(
         input_byte_digests=input_byte_digests,
         trace=trace,
         nontensor_inputs_match=nontensor_inputs_match,
+        host_rng_unreproduced=host_rng_unreproduced,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
         if not attestation_check.passed:
             _raise_numeric_attestation_failure(fork, attestation_check)
-    path_faithfulness, mismatch = _path_faithfulness(descriptor, contract_checks)
+    path_faithfulness, mismatch = _path_faithfulness(
+        descriptor, contract_checks, host_rng_unreproduced=host_rng_unreproduced
+    )
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
         path_faithfulness,
@@ -1686,6 +1736,8 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
 def _path_faithfulness(
     descriptor: SparseRunDescriptor,
     checks: Sequence[ContractCheck],
+    *,
+    host_rng_unreproduced: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -1693,6 +1745,11 @@ def _path_faithfulness(
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+        return PathFaithfulness.UNVERIFIABLE, None
+    if host_rng_unreproduced:
+        # A Python/NumPy-RNG control-flow capture replayed off its captured seed:
+        # the single recorded branch may not be the one a fresh seeded call takes,
+        # so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     return PathFaithfulness.VERIFIED, None
 
@@ -1731,6 +1788,7 @@ def _numeric_attestation_check(
     input_byte_digests: Mapping[str, str],
     trace: Any,
     nontensor_inputs_match: bool = True,
+    host_rng_unreproduced: bool = False,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -1759,6 +1817,11 @@ def _numeric_attestation_check(
         Applicability/result status and the aggregate byte-exact tripwire check.
     """
 
+    if host_rng_unreproduced:
+        # Python/NumPy-RNG control flow replayed off its captured seed: the recorded
+        # taken path is not guaranteed to be the branch a fresh seeded call takes, so
+        # a byte-exact attestation would dishonestly bless a possibly-stale result.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     if not nontensor_inputs_match:
         # A changed non-tensor input means the recorded taken path may not apply,
         # so recomputed slots must never be attested against the capture archive.

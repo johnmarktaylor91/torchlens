@@ -54,6 +54,7 @@ from ..runnable import (
     RunnableCompatibility,
     RunnableDiagnostic,
     RunnableErrorCode,
+    RunnableRngProfile,
     SparseRunDescriptor,
     SlotByteDigest,
     StateByteDigest,
@@ -265,6 +266,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         tensor_slots=tuple(draft.freeze() for draft in slot_drafts.values()),
         control_witnesses=tuple(witnesses),
         witness_completeness=completeness,
+        rng_profile=_build_rng_profile(trace),
         compatibility=RunnableCompatibility(
             torchlens_version=TORCHLENS_VERSION,
             python_version=platform.python_version(),
@@ -279,6 +281,20 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     )
     assert_sparse_core_has_no_tensor_payload(descriptor)
     return descriptor
+
+
+def _build_rng_profile(trace: Any) -> RunnableRngProfile:
+    """Record host-RNG reproducibility metadata from the capture-time trace.
+
+    ``_runnable_host_rng_consumed`` is stamped during exhaustive capture by
+    bracketing the user forward with side-effect-free host-RNG snapshots;
+    ``random_seed`` is the concrete effective seed every capture is seeded with.
+    """
+
+    consumed = bool(getattr(trace, "_runnable_host_rng_consumed", False))
+    seed = getattr(trace, "random_seed", None)
+    capture_seed = int(seed) if isinstance(seed, int) and not isinstance(seed, bool) else None
+    return RunnableRngProfile(host_rng_consumed=consumed, capture_seed=capture_seed)
 
 
 def require_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
