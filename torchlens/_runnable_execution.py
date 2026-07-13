@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
 from itertools import count
+import re
 import struct
 from typing import Any, cast
 
@@ -191,13 +192,12 @@ def _execute_loaded_sparse_transaction(
 
         _walk_call_cone(descriptor.calls, execute_call)
 
-    output = _reconstruct_output(descriptor, slot_values, fork)
+    output = _reconstruct_output(descriptor, slot_values, fork, call_outputs=call_outputs)
     contract_checks.extend(
         _post_execution_contract_checks(
             descriptor,
             inputs=inputs,
             output=output,
-            call_outputs=call_outputs,
             slot_values=slot_values,
             fork=fork,
         )
@@ -954,7 +954,7 @@ def _bind_call_outputs(
         slot = slots[slot_id]
         try:
             value = _value_at_path(output, slot.output_path or ())
-        except (KeyError, IndexError, TypeError) as exc:
+        except (AttributeError, KeyError, IndexError, TypeError) as exc:
             checks.append(
                 _contract_check(
                     f"slot_production:{slot_id}",
@@ -1099,6 +1099,8 @@ def _reconstruct_output(
     descriptor: SparseRunDescriptor,
     slot_values: Mapping[str, torch.Tensor],
     fork: Any,
+    *,
+    call_outputs: Mapping[str, Any],
 ) -> Any:
     """Reconstruct the model-output container and populate synthetic output Ops."""
 
@@ -1123,9 +1125,15 @@ def _reconstruct_output(
         values.append((slot.output_path or (), value))
     container_spec = _output_container_spec(fork)
     if container_spec is not None:
+        raw_output = _raw_runtime_output(descriptor, None, call_outputs)
+        if (
+            container_spec.type_module == "torch.return_types"
+            and _torch_structseq_field_names(raw_output) == container_spec.fields
+        ):
+            return raw_output
         try:
             return rebuild_container_from_spec(container_spec, [value for _, value in values])
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise RunPreconditionError(
                 f"Recorded output container could not be reconstructed: {exc}",
                 code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
@@ -1248,7 +1256,6 @@ def _post_execution_contract_checks(
     *,
     inputs: Any,
     output: Any,
-    call_outputs: Mapping[str, Any],
     slot_values: Mapping[str, torch.Tensor],
     fork: Any,
 ) -> tuple[ContractCheck, ...]:
@@ -1281,7 +1288,6 @@ def _post_execution_contract_checks(
                     descriptor,
                     inputs=inputs,
                     output=output,
-                    call_outputs=call_outputs,
                 )
             )
         elif (
@@ -1334,7 +1340,6 @@ def _structure_witness_check(
     *,
     inputs: Any,
     output: Any,
-    call_outputs: Mapping[str, Any],
 ) -> ContractCheck:
     """Compare a model-boundary container witness with runtime structure."""
 
@@ -1345,9 +1350,9 @@ def _structure_witness_check(
         expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
         expected_kind = str(expected.get("kind", "unknown"))
     else:
-        runtime_value = _raw_runtime_output(descriptor, output, call_outputs)
-        expected_paths = tuple(_container_leaf_paths(output))
-        expected_kind = _container_kind(output)
+        runtime_value = output
+        expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
+        expected_kind = str(expected.get("kind", "unknown"))
     actual_paths = tuple(_container_leaf_paths(runtime_value))
     actual_kind = _container_kind(runtime_value)
     kind_matches = expected_kind in {"unknown", actual_kind}
@@ -1418,9 +1423,10 @@ def _tensor_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
-    if isinstance(value, tuple) and hasattr(value, "_fields"):
+    field_names = _container_field_names(value)
+    if field_names:
         paths: list[tuple[str | int, ...]] = []
-        for name in value._fields:
+        for name in field_names:
             paths.extend(_tensor_leaf_paths(getattr(value, name), (*path, str(name))))
         return tuple(paths)
     if isinstance(value, Mapping):
@@ -1441,11 +1447,14 @@ def _container_leaf_paths(
     value: Any,
     path: tuple[str | int, ...] = (),
 ) -> tuple[tuple[str | int, ...], ...]:
-    """Return ordered paths for every leaf in a runtime boundary container."""
+    """Return producer-compatible tensor-leaf paths for a boundary container."""
 
-    if isinstance(value, tuple) and hasattr(value, "_fields"):
+    if isinstance(value, torch.Tensor):
+        return (path,)
+    field_names = _container_field_names(value)
+    if field_names:
         paths: list[tuple[str | int, ...]] = []
-        for name in value._fields:
+        for name in field_names:
             paths.extend(_container_leaf_paths(getattr(value, name), (*path, str(name))))
         return tuple(paths)
     if isinstance(value, Mapping):
@@ -1459,7 +1468,7 @@ def _container_leaf_paths(
         for index, child in enumerate(value):
             paths.extend(_container_leaf_paths(child, (*path, index)))
         return tuple(paths)
-    return (path,)
+    return ()
 
 
 def _container_kind(value: Any) -> str:
@@ -1467,7 +1476,7 @@ def _container_kind(value: Any) -> str:
 
     if isinstance(value, torch.Tensor):
         return "tensor"
-    if isinstance(value, tuple) and hasattr(value, "_fields"):
+    if _container_field_names(value):
         return "namedtuple"
     if isinstance(value, tuple):
         return "tuple"
@@ -1476,6 +1485,56 @@ def _container_kind(value: Any) -> str:
     if isinstance(value, Mapping):
         return "dict"
     return type(value).__name__
+
+
+def _container_field_names(value: Any) -> tuple[str, ...]:
+    """Return the stable field names for namedtuple-like runtime containers.
+
+    Parameters
+    ----------
+    value:
+        Candidate runtime container.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Namedtuple fields or torch structseq fields; empty when ``value`` is
+        not a field-addressable container.
+    """
+
+    if not isinstance(value, tuple):
+        return ()
+    if hasattr(value, "_fields"):
+        return tuple(str(name) for name in value._fields)
+    return _torch_structseq_field_names(value)
+
+
+def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
+    """Return producer-compatible field names for a torch structseq value.
+
+    Parameters
+    ----------
+    value:
+        Candidate tuple-like torch return value.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Public structseq field names, or an empty tuple when ``value`` is not
+        a fully named ``torch.return_types`` value.
+    """
+
+    if not isinstance(value, tuple) or type(value).__module__ != "torch.return_types":
+        return ()
+    n_fields = getattr(value, "n_fields", None)
+    n_unnamed = getattr(value, "n_unnamed_fields", 0)
+    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
+        return ()
+    field_names = tuple(
+        match.group(1)
+        for match in re.finditer(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE)
+    )
+    return field_names if len(field_names) == n_fields else ()
 
 
 def _path_faithfulness(
