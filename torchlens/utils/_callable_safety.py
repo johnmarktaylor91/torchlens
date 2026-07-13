@@ -193,6 +193,84 @@ _DENIED_NAME_SUBSTRINGS: tuple[str, ...] = (
     "shelve",
 )
 
+# Process-global-state MUTATORS reachable in the allowlisted torch namespace
+# (round-6). These are NOT forward ops: they persistently flip interpreter /
+# torch global state (RNG seed + state, default dtype/device/tensor-type, thread
+# counts, autograd/anomaly/determinism/autocast/matmul-precision flags) that
+# OUTLIVES ``Trace.run()``. Their real ``__module__`` is the allowlisted torch
+# namespace (``torch``, ``torch.random``, ``torch.autograd.grad_mode``,
+# ``torch._tensor_str``), so the module gate admitted them and a crafted bundle
+# op keyed e.g. ``("torch", "set_default_dtype")`` resolved pure=True and was
+# CALLED at run() with attacker literals (persistent host-state corruption).
+# Enumerated by auditing every ``set_*`` / seed / rng callable reachable through
+# the allowlisted roots; the structural prefix guard below covers the whole
+# ``set_*`` class, so this set mainly documents the confirmed family and pins the
+# two non-``set_`` names (``manual_seed`` / ``seed``). GETTERS
+# (``get_rng_state`` / ``get_default_dtype`` / ``initial_seed`` /
+# ``get_num_threads``) are pure reads and STAY resolvable.
+_DENIED_STATE_MUTATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "manual_seed",
+        "seed",
+        "set_rng_state",
+        "set_default_dtype",
+        "set_default_device",
+        "set_default_tensor_type",
+        "set_num_threads",
+        "set_num_interop_threads",
+        "set_grad_enabled",
+        "set_deterministic_debug_mode",
+        "use_deterministic_algorithms",
+        "set_flush_denormal",
+        "set_anomaly_enabled",
+        "set_printoptions",
+        "set_float32_matmul_precision",
+        "set_warn_always",
+        "set_vital",
+    }
+)
+
+# Storage-unsafe in-place ops (round-6): they REBIND or REALLOCATE a tensor's
+# underlying storage rather than compute an elementwise result. ``resize_`` in
+# particular exposes UNINITIALIZED heap memory as a trace-output tensor
+# (info-leak / memory disclosure); ``set_`` / ``set_source_*`` repoint a tensor
+# at attacker-chosen storage. Denied by EXACT terminal name -- these are NOT
+# ordinary in-place ELEMENTWISE ops. C-level tensor methods report
+# ``__module__ is None`` and would otherwise be admitted as tensor descriptors,
+# so the name guard (which runs first) is what closes them.
+_STORAGE_UNSAFE_NAMES: frozenset[str] = frozenset(
+    {
+        "set_",
+        "set_source_Tensor",
+        "set_source_Storage",
+        "resize_",
+        "resize_as_",
+        "resize_as_sparse_",
+        "sparse_resize_",
+        "sparse_resize_and_clear_",
+    }
+)
+
+# Structural guard for the GLOBAL-STATE-SETTER prefix class (round-6). Verified
+# by EXHAUSTIVE enumeration across every allowlisted root + tensor-op namespace:
+# every ``set_*`` / ``_set_*`` callable reachable in the allowed surface is a
+# process-global-state setter (or the storage-unsafe ``Tensor.set_``) -- NONE is
+# a pure forward / elementwise op. THAT is what lets this be a leading-``set_``
+# prefix guard while ordinary in-place ELEMENTWISE ops -- ``add_`` / ``mul_`` /
+# ``sub_`` / ``div_`` / ``clamp_`` / ``relu_`` / ``sigmoid_`` / ``copy_`` /
+# ``zero_`` / ``fill_`` / ``normal_`` / ``uniform_`` and friends, which TRAIL an
+# underscore but never LEAD with ``set_`` -- stay resolvable. It is deliberately
+# NOT a blanket trailing-underscore deny (that would wrongly kill those forward
+# ops). ``_set_`` catches the ``torch._C._set_*`` private setter family;
+# ``use_deterministic`` catches the sole non-``set_`` global-determinism setter.
+# A future sibling setter (autocast / precision / backend flag) is thus denied by
+# pattern even if not enumerated above.
+_DENIED_STATE_SETTER_PREFIXES: tuple[str, ...] = (
+    "set_",
+    "_set_",
+    "use_deterministic",
+)
+
 
 def _terminal_callable_name(func: Callable[..., Any]) -> str:
     """Return a callable's terminal name (last ``__qualname__`` component fallback)."""
@@ -208,13 +286,29 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
     """Return whether a callable's name marks it as side-effecting.
 
     This is the QUALNAME-level guard layered on top of the module gate: it denies
-    file-I/O / serialization / import callables that live inside an allowlisted
-    module (``torch.from_file`` and its audited siblings), which a module-only
-    policy cannot distinguish from the pure tensor ops sharing that module.
+    callables that live inside an allowlisted module yet are not pure forward ops
+    -- which a module-only policy cannot distinguish from the pure tensor ops
+    sharing that module. It covers three classes:
+
+    * file-I/O / serialization / import gadgets (round-5): ``torch.from_file`` and
+      its audited siblings, plus the structural file/serial/import name guard;
+    * process-global-state MUTATORS (round-6): ``set_default_dtype`` /
+      ``manual_seed`` / ``set_num_threads`` and the whole ``set_*`` / ``_set_*``
+      setter class, caught by exact name AND leading-``set_`` prefix;
+    * storage-unsafe in-place ops (round-6): ``set_`` / ``resize_`` /
+      ``set_source_*`` (info-leak / storage rebind), caught by exact name.
+
+    The ``set_``-prefix guard is safe against legitimate in-place ELEMENTWISE
+    ops (``add_`` / ``mul_`` / ``clamp_`` ...): those TRAIL an underscore but
+    never LEAD with ``set_`` (verified by exhaustive enumeration).
     """
 
     name = _terminal_callable_name(func)
     if name in _DENIED_CALLABLE_NAMES or name in _DENIED_EXACT_NAMES:
+        return True
+    if name in _DENIED_STATE_MUTATOR_NAMES or name in _STORAGE_UNSAFE_NAMES:
+        return True
+    if any(name.startswith(prefix) for prefix in _DENIED_STATE_SETTER_PREFIXES):
         return True
     lowered = name.lower()
     return any(substring in lowered for substring in _DENIED_NAME_SUBSTRINGS)
@@ -284,13 +378,16 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     """Return whether a resolved callable is a pure, side-effect-free forward op.
 
     The callable is unwrapped to its real identity, then admitted only if (a) its
-    terminal NAME is not a side-effecting file-I/O / serialization / import callable
+    terminal NAME is not a side-effecting callable (file-I/O / serialization /
+    import gadget, process-global-state mutator, or storage-unsafe in-place op)
     and (b) its module is on the positive allowlist and off the side-effecting
     denylist. Module-less C tensor method descriptors are admitted when bound to a
     Tensor class. Anything else -- notably ``torch.load`` / ``torch.save`` /
-    ``torch.from_file`` and any ``os`` / ``pickle`` / ``subprocess`` callable -- is
-    refused. The name guard runs FIRST so a side-effecting builtin whose real module
-    is the allowlisted ``torch`` namespace (``from_file`` lives there) cannot slip
+    ``torch.from_file``, the state mutators ``set_default_dtype`` / ``manual_seed``
+    / ``set_num_threads``, the storage-unsafe ``resize_`` / ``set_``, and any
+    ``os`` / ``pickle`` / ``subprocess`` callable -- is refused. The name guard
+    runs FIRST so a side-effecting builtin or method whose real module is the
+    allowlisted ``torch`` namespace (or ``None`` for a C tensor method) cannot slip
     the module-granular gate.
     """
 
