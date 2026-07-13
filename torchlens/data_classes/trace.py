@@ -2423,6 +2423,21 @@ class Trace(
         state["_activation_transform_repr"] = (
             repr(self.activation_transform) if self.activation_transform is not None else None
         )
+        # Loaded runnable traces bind these as immutable MappingProxyType views, which
+        # cannot be pickled/deepcopied. The fork path special-cases them; the generic
+        # pickle path must neutralize them to a plain dict so a loaded runnable trace
+        # (embedded weights or staged load_state_dict) survives pickle/deepcopy and its
+        # poison flag round-trips. Run execution only reads these bindings.
+        state["_runnable_embedded_state"] = (
+            dict(self._runnable_embedded_state)
+            if self._runnable_embedded_state is not None
+            else None
+        )
+        state["_runnable_staged_user_state"] = (
+            dict(self._runnable_staged_user_state)
+            if self._runnable_staged_user_state is not None
+            else None
+        )
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 

@@ -280,3 +280,52 @@ def test_weight_payload_preserves_canonical_alias_records(tmp_path: Path) -> Non
     assert len({slot.state_binding.alias_group for slot in tied_slots}) == 1
     inputs = torch.tensor([[1.0, -2.0]])
     assert torch.equal(loaded.run(inputs=inputs).output, model(inputs))
+
+
+def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: Path) -> None:
+    """A loaded runnable trace with embedded state binds MappingProxyType views; the
+
+    generic pickle/deepcopy path must neutralize them so the trace (and any run fork
+    derived from it) round-trips instead of crashing on ``cannot pickle 'mappingproxy'``.
+    """
+    import copy
+
+    from torchlens.errors import PoisonedRunError
+    from torchlens.runnable import DivergencePolicy
+
+    class _M(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(3, 2)
+            with torch.no_grad():
+                self.lin.weight.fill_(1.0)
+                self.lin.bias.zero_()
+
+        def forward(self, v: torch.Tensor) -> torch.Tensor:
+            return torch.relu(self.lin(v))
+
+    model = _M().eval()
+    trace = tl.trace(
+        model,
+        torch.ones(2, 3),
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    path = tmp_path / "embedded.tlspec"
+    trace.save(path, level="runnable", include_weights=True)
+    loaded = tl.load(path)
+
+    # Successful run fork carries the embedded MappingProxyType state -> must pickle + deepcopy.
+    ok_fork = loaded.run(inputs=torch.ones(2, 3)).trace
+    assert pickle.loads(pickle.dumps(ok_fork)) is not None
+    assert copy.deepcopy(ok_fork) is not None
+
+    # A DIVERGED fork must round-trip its poison flag through pickle and deepcopy and stay refused.
+    diverged = loaded.run(
+        inputs=torch.ones(5, 3), on_divergence=DivergencePolicy.RETURN_DIVERGED
+    ).trace
+    for revived in (pickle.loads(pickle.dumps(diverged)), copy.deepcopy(diverged)):
+        assert revived.__dict__.get("_runnable_poisoned") is True
+        with pytest.raises(PoisonedRunError):
+            revived.to_pandas()
