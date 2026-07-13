@@ -132,7 +132,7 @@ def test_locked_ladder_exact_alias_reverse_and_decorated_rungs() -> None:
         record for record in report.resolver_records if record.recorded_key.qualname == "linear"
     )
     assert linear.status is ResolverStatus.RESOLVED_EXACT
-    assert "torch._C._nn.linear" in str(linear.resolved_qualname)
+    assert linear.resolved_qualname == "torch.nn.functional.linear"
     assert all(id(func) not in _state._decorated_to_orig for func in attachments.values())
 
     relu_id = _entry_for_name(descriptor, "relu")

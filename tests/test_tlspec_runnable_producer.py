@@ -148,6 +148,8 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
 
     registry_ids = [entry["registry_id"] for entry in run["callable_registry"]]
     assert len(registry_ids) == len(set(registry_ids))
+    assert all(entry["key"]["import_path"] is None for entry in run["callable_registry"])
+    assert all(entry["key"]["namespace"] != "custom" for entry in run["callable_registry"])
     add_calls = [
         call
         for call in run["calls"]
@@ -214,6 +216,7 @@ def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) 
     assert_sparse_core_has_no_tensor_payload(manifest["run"])
     assert_sparse_core_has_no_tensor_payload(metadata)
     assert metadata["_buffer_initial_values"] == {}
+    assert all(op.func is None for op in metadata["layer_list"])
     for op in metadata["layer_list"]:
         assert op.out is None
         assert op.transformed_out is None
