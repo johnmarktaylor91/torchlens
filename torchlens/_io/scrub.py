@@ -381,6 +381,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_keep_outs_in_memory",
         "_capture_container_structure",
         "_capture_output_structure",
+        "_runnable_input_nontensor_leaves",
         "_out_sink",
         "_out_writer",
         "_container_ordinals_by_output_op_label",

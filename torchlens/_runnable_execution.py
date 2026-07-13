@@ -202,6 +202,9 @@ def _execute_loaded_sparse_transaction(
         )
     )
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+    nontensor_inputs_match = all(
+        check.passed for check in contract_checks if check.name.startswith("input_literal:")
+    )
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
         prepared_state,
@@ -209,6 +212,7 @@ def _execute_loaded_sparse_transaction(
         attestation_slot_values=attestation_slot_values,
         input_byte_digests=input_byte_digests,
         trace=trace,
+        nontensor_inputs_match=nontensor_inputs_match,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
@@ -354,6 +358,134 @@ def _require_loaded_sparse_provider(
     return descriptor, readiness, cast(Mapping[str, Callable[..., Any]], callables)
 
 
+_MODEL_INPUT_LITERAL_SITE_PREFIX = "model_input_literal:"
+"""``site_label`` prefix marking a witnessed non-tensor model-input leaf."""
+
+_MODEL_INPUT_LITERAL_FACT_KEY = "model_input_literal"
+"""Discriminator key present in every non-tensor model-input leaf fact."""
+
+
+def _model_input_literal_facts(
+    descriptor: SparseRunDescriptor,
+) -> list[tuple[ControlWitness, Mapping[str, Any]]]:
+    """Decode every witnessed non-tensor model-input leaf fact."""
+
+    facts: list[tuple[ControlWitness, Mapping[str, Any]]] = []
+    for witness in descriptor.control_witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if not witness.site_label.startswith(_MODEL_INPUT_LITERAL_SITE_PREFIX):
+            continue
+        decoded = _decode_literal(witness.observed_value)
+        if isinstance(decoded, Mapping) and decoded.get(_MODEL_INPUT_LITERAL_FACT_KEY) is True:
+            facts.append((witness, decoded))
+    return facts
+
+
+def _is_model_input_literal_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records a non-tensor input leaf."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_MODEL_INPUT_LITERAL_SITE_PREFIX)
+    )
+
+
+def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
+    """Return every distinct model-input site position, tensor and non-tensor.
+
+    The tensor-slot positions alone undercount arity when a model site carries a
+    non-tensor Python argument (e.g. ``forward(x, flag)``): the single tensor
+    slot would falsely trigger the "single bare input" shortcut and bind the
+    whole runtime argument list as one tensor. Including witnessed non-tensor
+    leaf positions makes the shortcut fire only for a genuinely single-argument
+    model, so a mixed ``[tensor, python_arg]`` call binds each site correctly.
+    """
+
+    positions = {
+        slot.input_binding.model_site_position
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.MODEL_INPUT and slot.input_binding is not None
+    }
+    for _witness, fact in _model_input_literal_facts(descriptor):
+        position = fact.get("position")
+        if isinstance(position, (list, tuple)):
+            positions.add(tuple(position))
+        elif position is not None:
+            positions.add(position)
+    return positions
+
+
+def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
+    """Type-strict equality for recorded vs runtime non-tensor input leaves.
+
+    ``bool`` is a subclass of ``int`` and floats are distinct from ints, so a
+    changed control input like ``True`` -> ``1`` or ``2`` -> ``2.0`` must count as
+    a divergence rather than silently comparing equal.
+    """
+
+    if isinstance(recorded, bool) or isinstance(runtime, bool):
+        return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
+    if type(recorded) is not type(runtime):
+        return False
+    if isinstance(recorded, float):
+        if recorded != recorded and runtime != runtime:  # NaN compares equal here.
+            return True
+        return recorded == runtime
+    return bool(recorded == runtime)
+
+
+def _input_literal_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+    positions: set[Any],
+) -> tuple[ContractCheck, ...]:
+    """Compare runtime non-tensor input leaves with recorded capture-time values.
+
+    A differing non-tensor leaf means the recorded taken-path DAG may be wrong
+    for this input, so the check fails and the run diverges instead of silently
+    replaying a numerically wrong result.
+    """
+
+    checks: list[ContractCheck] = []
+    for witness, fact in _model_input_literal_facts(descriptor):
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = tuple(fact.get("path", ()) or ())
+        recorded = fact.get("value")
+        if not bool(fact.get("encodable", False)):
+            # Opaque capture-time leaf: not representable in the frozen literal
+            # grammar, so it cannot be compared across save/load. Its position
+            # still constrains arity; a value claim would be dishonest.
+            continue
+        try:
+            root = _input_site_value(inputs, position, positions)
+            runtime_leaf = _value_at_path(root, path)
+            resolved = True
+        except (KeyError, IndexError, TypeError, AttributeError):
+            runtime_leaf = None
+            resolved = False
+        passed = resolved and _literal_leaf_equal(recorded, runtime_leaf)
+        checks.append(
+            _contract_check(
+                f"input_literal:{position!r}:{path!r}",
+                passed,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime non-tensor input leaf differs from the recorded "
+                "capture-time value; the recorded taken path may not be valid "
+                "for this input.",
+                affected_op_labels=(witness.site_label,),
+                details=(
+                    ("model_site_position", repr(position)),
+                    ("container_path", repr(path)),
+                    ("recorded_value", repr(recorded)),
+                    ("runtime_value", repr(runtime_leaf) if resolved else "<unresolved>"),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
 def _bind_runtime_inputs(
     descriptor: SparseRunDescriptor,
     inputs: Any,
@@ -365,11 +497,7 @@ def _bind_runtime_inputs(
     )
     values: dict[str, torch.Tensor] = {}
     checks: list[ContractCheck] = []
-    positions = {
-        slot.input_binding.model_site_position
-        for slot in input_slots
-        if slot.input_binding is not None
-    }
+    positions = _model_input_arity_positions(descriptor)
     for slot in input_slots:
         binding = slot.input_binding
         if binding is None:
@@ -425,6 +553,7 @@ def _bind_runtime_inputs(
             )
         )
     checks.extend(_input_tree_contract_checks(descriptor, inputs))
+    checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
     return values, tuple(checks)
 
 
@@ -486,9 +615,7 @@ def _input_tree_contract_checks(
         for slot in descriptor.tensor_slots
         if slot.role is TensorSlotRole.MODEL_INPUT and slot.input_binding is not None
     )
-    positions = {
-        slot.input_binding.model_site_position for slot in slots if slot.input_binding is not None
-    }
+    positions = _model_input_arity_positions(descriptor)
     expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {}
     for slot in slots:
         assert slot.input_binding is not None
@@ -1135,6 +1262,10 @@ def _post_execution_contract_checks(
             )
         )
     for witness in sorted(descriptor.control_witnesses, key=lambda item: item.order):
+        if _is_model_input_literal_witness(witness):
+            # Non-tensor input leaves are compared in the input contract before
+            # execution; they are not runtime container-structure facts.
+            continue
         if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
             checks.append(_conditional_arm_check(witness, fork))
         elif witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
@@ -1388,6 +1519,7 @@ def _numeric_attestation_check(
     attestation_slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
     trace: Any,
+    nontensor_inputs_match: bool = True,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -1406,6 +1538,9 @@ def _numeric_attestation_check(
         Model-input byte digests captured before any in-place sparse call.
     trace:
         Loaded source Trace retaining inspection-only archived activations.
+    nontensor_inputs_match:
+        Whether every witnessed non-tensor input leaf matched its recorded
+        capture-time value. A changed non-tensor input forces ``not_applicable``.
 
     Returns
     -------
@@ -1413,6 +1548,10 @@ def _numeric_attestation_check(
         Applicability/result status and the aggregate byte-exact tripwire check.
     """
 
+    if not nontensor_inputs_match:
+        # A changed non-tensor input means the recorded taken path may not apply,
+        # so recomputed slots must never be attested against the capture archive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     layer = descriptor.payload_layers.activations
     if not layer.present:
         return NumericAttestationStatus.NOT_APPLICABLE, None
