@@ -15,7 +15,7 @@ import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens.errors import NumericAttestationError
 from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.runnable import NumericAttestationStatus, StateSource
+from torchlens.runnable import DivergencePolicy, NumericAttestationStatus, StateSource
 
 
 class ActivationPayloadModel(nn.Module):
@@ -54,6 +54,70 @@ class InplaceInputActivationModel(nn.Module):
 
         value.add_(1)
         return value * 2
+
+
+class SeededRngActivationModel(nn.Module):
+    """Model that exposes one PyTorch seeded-RNG operation per capture."""
+
+    def __init__(self, operation: str) -> None:
+        """Store the requested RNG operation name.
+
+        Parameters
+        ----------
+        operation:
+            Name of the seeded PyTorch operation to execute.
+        """
+
+        super().__init__()
+        self.operation = operation
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Run one seeded-RNG operation.
+
+        Parameters
+        ----------
+        value:
+            Tensor used to shape or parameterize the selected operation.
+
+        Returns
+        -------
+        torch.Tensor
+            The selected operation's tensor result.
+        """
+
+        if self.operation == "rand":
+            return torch.rand(value.shape, device=value.device)
+        if self.operation == "randn":
+            return torch.randn(value.shape, device=value.device)
+        if self.operation == "randint":
+            return torch.randint(0, 4, value.shape, device=value.device).to(value.dtype)
+        if self.operation == "randperm":
+            return value[torch.randperm(value.shape[0])]
+        if self.operation == "multinomial":
+            return value[torch.multinomial(torch.softmax(value, dim=0), 2, replacement=True)]
+        if self.operation == "bernoulli":
+            return torch.bernoulli(torch.sigmoid(value))
+        if self.operation == "poisson":
+            return torch.poisson(torch.ones_like(value))
+        if self.operation == "normal":
+            return torch.normal(torch.zeros_like(value), torch.ones_like(value))
+        if self.operation == "uniform_":
+            return value.clone().uniform_()
+        if self.operation == "rand_like":
+            return torch.rand_like(value)
+        if self.operation == "randn_like":
+            return torch.randn_like(value)
+        if self.operation == "randint_like":
+            return torch.randint_like(value, 4).to(value.dtype)
+        if self.operation == "dropout":
+            return torch.nn.functional.dropout(value, p=0.5, training=True)
+        if self.operation == "dropout3d":
+            return torch.nn.functional.dropout3d(value, p=0.5, training=True)
+        if self.operation == "rrelu":
+            return torch.nn.functional.rrelu(value, training=True)
+        if self.operation == "gumbel_softmax":
+            return torch.nn.functional.gumbel_softmax(value, tau=1.0, hard=False, dim=-1)
+        raise ValueError(f"Unsupported seeded RNG operation {self.operation!r}.")
 
 
 def _capture(
@@ -103,6 +167,25 @@ def _physical_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
         value = op._slot("out")
         values.append(value.detach().clone() if isinstance(value, torch.Tensor) else None)
     return tuple(values)
+
+
+def _seeded_rng_inputs(operation: str) -> torch.Tensor:
+    """Return a valid original input for one seeded-RNG model.
+
+    Parameters
+    ----------
+    operation:
+        Seeded-RNG operation selected for the parameterized test.
+
+    Returns
+    -------
+    torch.Tensor
+        Input with the rank required by the selected operation.
+    """
+
+    if operation == "dropout3d":
+        return torch.ones(1, 2, 2, 2, 2)
+    return torch.full((8,), 0.5)
 
 
 @pytest.mark.smoke
@@ -234,6 +317,50 @@ def test_rng_model_activation_attestation_is_not_applicable_instead_of_failing(
     )
 
     result = tl.load(path).run(inputs=inputs)
+
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+@pytest.mark.parametrize(
+    "operation",
+    (
+        "rand",
+        "randn",
+        "randint",
+        "randperm",
+        "multinomial",
+        "bernoulli",
+        "poisson",
+        "normal",
+        "uniform_",
+        "rand_like",
+        "randn_like",
+        "randint_like",
+        "dropout",
+        "dropout3d",
+        "rrelu",
+        "gumbel_softmax",
+    ),
+)
+def test_seeded_rng_operations_skip_original_input_numeric_attestation(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    """Use PyTorch's RNG tags instead of a fragile replay-name allowlist."""
+
+    inputs = _seeded_rng_inputs(operation)
+    path = tmp_path / f"{operation}.tlspec"
+    model = SeededRngActivationModel(operation)
+    _capture(model, inputs).save(
+        path,
+        level="runnable",
+        include_activations=True,
+    )
+
+    result = tl.load(path).run(
+        inputs=inputs.clone(),
+        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+    )
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 

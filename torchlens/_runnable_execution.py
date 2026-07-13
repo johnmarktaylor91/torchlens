@@ -27,6 +27,7 @@ from .intervention.replay import _CallConeNode, _walk_call_cone
 from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
     ActivationPayloadLayerDescriptor,
+    CallableRegistryEntry,
     ContractCheck,
     ControlWitness,
     ControlWitnessKind,
@@ -1454,38 +1455,55 @@ def _numeric_attestation_check(
 
 
 def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
-    """Return whether replay contains an RNG source not tied to capture RNG state."""
+    """Return whether replay contains a PyTorch seeded-RNG operation.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse runnable descriptor whose registry entries identify replayed
+        PyTorch operations.
+
+    Returns
+    -------
+    bool
+        Whether replay includes a captured RNG source or an ATen operation
+        marked by PyTorch as ``nondeterministic_seeded``.
+    """
 
     if any(slot.role is TensorSlotRole.RNG_SOURCE for slot in descriptor.tensor_slots):
         return True
-    rng_qualnames = {
-        "alpha_dropout",
-        "bernoulli",
-        "cauchy_",
-        "dropout",
-        "exponential_",
-        "feature_alpha_dropout",
-        "feature_dropout",
-        "geometric_",
-        "log_normal_",
-        "multinomial",
-        "native_dropout",
-        "normal",
-        "poisson",
-        "rand",
-        "rand_like",
-        "randint",
-        "randint_like",
-        "randn",
-        "randn_like",
-        "random_",
-        "rrelu",
-        "uniform_",
-    }
-    return any(
-        entry.key.qualname.rsplit(".", 1)[-1] in rng_qualnames
-        for entry in descriptor.callable_registry
-    )
+    return any(_registry_entry_has_seeded_rng_tag(entry) for entry in descriptor.callable_registry)
+
+
+def _registry_entry_has_seeded_rng_tag(entry: CallableRegistryEntry) -> bool:
+    """Return whether one portable callable maps to a seeded ATen RNG op.
+
+    Parameters
+    ----------
+    entry:
+        Portable callable identity recorded in a runnable descriptor.
+
+    Returns
+    -------
+    bool
+        Whether any matching ATen overload has PyTorch's maintained
+        ``nondeterministic_seeded`` tag.
+    """
+
+    if entry.key.namespace not in {"torch", "torch.Tensor", "torch.nn.functional"}:
+        return False
+    name = entry.key.qualname.rsplit(".", 1)[-1]
+    candidate_names = (name, name[:-1]) if name.endswith("_") else (name,)
+    for candidate_name in candidate_names:
+        packet = getattr(torch.ops.aten, candidate_name, None)
+        overloads = getattr(packet, "overloads", None)
+        if not callable(overloads):
+            continue
+        for overload_name in overloads():
+            overload = getattr(packet, overload_name)
+            if torch.Tag.nondeterministic_seeded in getattr(overload, "tags", ()):
+                return True
+    return False
 
 
 def _attestation_inputs_match(
