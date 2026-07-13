@@ -49,6 +49,7 @@ from torchlens.validation.core import (
     _restore_live_parameter_args_for_replay,
     _op_reduction_depth,
     _deep_numeric_replay_matches_saved,
+    completeness_backstop_counts,
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     ValidationDecisionRecorder,
     validate_parents_of_saved_layer,
@@ -1649,6 +1650,146 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
         )
     finally:
         trace.cleanup()
+
+
+def _backstop_op(
+    func_call_id: int | None,
+    *,
+    transform_kind: str | None = None,
+    func_name: str = "linear",
+    intervention_replaced: bool = False,
+    is_internal_source: bool = False,
+) -> SimpleNamespace:
+    """Build a minimal layer-op stand-in for the completeness backstop census."""
+
+    return SimpleNamespace(
+        func_call_id=func_call_id,
+        transform_kind=transform_kind,
+        func_name=func_name,
+        intervention_replaced=intervention_replaced,
+        is_internal_source=is_internal_source,
+    )
+
+
+def _backstop_dec(owner_func_call_id: int, *, capture_accounted: bool = True) -> dict:
+    """Build a minimal dispatcher-census decomposition record."""
+
+    return {"owner_func_call_id": owner_func_call_id, "capture_accounted": capture_accounted}
+
+
+def _backstop_trace(layer_list: list, decompositions: list) -> SimpleNamespace:
+    """Wrap census inputs in a trace-shaped object for the backstop helper."""
+
+    return SimpleNamespace(
+        layer_list=layer_list,
+        completeness_decompositions=decompositions,
+    )
+
+
+def test_completeness_backstop_transform_boundary_carveout_is_scoped() -> None:
+    """Carve-out A removes ONLY transform boundary nodes from the captured census.
+
+    A ``torch.func`` transform boundary node owns a captured ``func_call_id`` but
+    no accounted aten-dispatch owner, so it must be excluded from the captured
+    census. A NON-transform captured op with no dispatch owner must NOT be
+    excluded -- it is a genuine capture gap and must still produce a residual
+    mismatch, and a real gap alongside a transform must NOT be masked.
+    """
+
+    # Transform boundary (fcid=3) inflates the captured census by design -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(2),
+                _backstop_op(3, transform_kind="vmap", func_name="vmap"),
+            ],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert (dispatch, captured) == (2, 2)
+
+    # A NON-transform captured op with no dispatch owner is a real gap -> mismatch.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2), _backstop_op(3, transform_kind=None)],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert dispatch != captured
+
+    # A real gap (fcid=5) alongside a genuine transform boundary (fcid=3) still
+    # leaves a residual -- the transform carve-out never blanket-clears mismatches.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(2),
+                _backstop_op(3, transform_kind="vmap", func_name="vmap"),
+                _backstop_op(5),
+            ],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert dispatch != captured
+
+
+def test_completeness_backstop_intervention_carveout_does_not_disarm_plain_capture() -> None:
+    """Carve-out B is gated on a GENUINE replacement and never relaxes plain capture.
+
+    A raw output-replacement hook may build its replacement with a python-wrapped
+    torch call whose accounted dispatch owner is orphaned out of the final trace;
+    when a genuine ``intervention_replacement`` placeholder is present, that
+    orphaned owner is excluded and the counts match. But the IDENTICAL
+    dispatch-vs-capture shape during PLAIN capture -- no genuine replacement
+    present -- must STILL fire the tripwire (an accounted op that dispatched yet
+    was silently dropped is exactly the capture gap the backstop must catch).
+    """
+
+    # Orphaned dispatch owner (fcid=4) WITH a genuine replacement placeholder -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(3, func_name="relu"),
+                _backstop_op(
+                    None,
+                    func_name="intervention_replacement",
+                    intervention_replaced=True,
+                ),
+            ],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+        )
+    )
+    assert (dispatch, captured) == (2, 2)
+
+    # SAME orphaned-dispatch shape during PLAIN capture (no genuine replacement)
+    # -> the tripwire STILL fires. The carve-out did not disarm it.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(3, func_name="relu")],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+        )
+    )
+    assert dispatch != captured
+
+    # A non-genuine op merely NAMED intervention_replacement (not flagged replaced)
+    # must NOT enable the carve-out -- the plain-capture drop still fires.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(3, func_name="relu"),
+                _backstop_op(
+                    None,
+                    func_name="intervention_replacement",
+                    intervention_replaced=False,
+                ),
+            ],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+        )
+    )
+    assert dispatch != captured
 
 
 def test_replay_validation_checks_every_recurrent_pass() -> None:

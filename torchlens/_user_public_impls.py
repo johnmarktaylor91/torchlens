@@ -1296,20 +1296,12 @@ def _validate_forward_pass_torch(
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
-        trace._validation_dispatch_op_count = len(
-            {
-                entry.get("owner_func_call_id")
-                for entry in getattr(trace, "completeness_decompositions", ())
-                if entry.get("capture_accounted") is True
-            }
-        )
-        trace._validation_captured_dispatchable_op_count = len(
-            {
-                getattr(op, "func_call_id")
-                for op in getattr(trace, "layer_list", ())
-                if isinstance(getattr(op, "func_call_id", None), int)
-            }
-        )
+        from .validation.core import completeness_backstop_counts
+
+        (
+            trace._validation_dispatch_op_count,
+            trace._validation_captured_dispatchable_op_count,
+        ) = completeness_backstop_counts(trace)
         if validation_model_copied:
             _warn_if_validation_trace_not_reproducible(
                 trace,

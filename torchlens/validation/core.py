@@ -420,6 +420,107 @@ GROUND_TRUTH_OUTPUT_RTOL = 1e-6
 GROUND_TRUTH_OUTPUT_ATOL = 1e-8
 
 
+def _is_genuine_replacement_op(op: Any) -> bool:
+    """Return whether an op is a genuine functionless intervention replacement.
+
+    This is the SAME sanctioned shape the ``func_call_id`` metadata invariant
+    exempts: a raw output-replacement hook synthesizes a functionless
+    ``intervention_replacement`` placeholder (``func_call_id is None``). It is a
+    real user intervention, not a plain-capture synthesized placeholder (which
+    would be a capture gap and must never match this shape).
+
+    Parameters
+    ----------
+    op:
+        Captured op record.
+
+    Returns
+    -------
+    bool
+        ``True`` only for the exact genuine-replacement shape.
+    """
+
+    return (
+        getattr(op, "func_name", None) == "intervention_replacement"
+        and getattr(op, "intervention_replaced", False) is True
+        and getattr(op, "is_internal_source", False) is not True
+    )
+
+
+def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
+    """Return ``(dispatch_census, captured_census)`` for the completeness backstop.
+
+    Two independent censuses of "distinct captured operations" that must agree
+    1:1 EXCEPT in the two regions where TorchLens intentionally breaks that
+    correspondence. Both carve-outs are NARROW and provably scoped:
+
+    * **torch.func transform boundaries.** A ``vmap``/``grad``/... transform is
+      captured as a single boundary node whose interior aten dispatches are
+      opaque by design (documented anti-pattern; see the transform boundary
+      nodes in ``CLAUDE.md``). The boundary node therefore owns a captured
+      ``func_call_id`` but no accounted dispatch owner, inflating the captured
+      census. Boundary nodes (identified by ``transform_kind``) are removed from
+      the captured census so a transform region contributes no residual.
+
+    * **genuine output-replacement interventions.** A raw ``register_forward_hook``
+      that substitutes a module output may build its replacement with
+      python-wrapped torch calls (e.g. ``torch.tensor(...)``). Those calls
+      dispatch (accounted owners) but are orphaned out of the final trace because
+      their only consumer is the untraceable replacement tensor. They therefore
+      own an accounted dispatch owner with no surviving captured ``func_call_id``,
+      inflating the dispatch census. Such orphaned owners are removed from the
+      dispatch census ONLY when a genuine ``intervention_replacement`` placeholder
+      is present in the trace.
+
+    Every OTHER divergence remains a residual mismatch and hard-fails
+    ``CHECK_COMPLETENESS``:
+
+    * A captured op that never dispatched an accounted aten op (and is not a
+      transform boundary) stays in the captured census -> mismatch.
+    * An accounted dispatch owner absent from the captured trace during PLAIN
+      capture -- no genuine replacement present -- stays in the dispatch census
+      -> mismatch. This is exactly the silent-drop capture gap the tripwire
+      exists to catch, and the carve-out never relaxes it.
+
+    Parameters
+    ----------
+    trace:
+        Disposable validation-capture trace carrying the dispatcher census.
+
+    Returns
+    -------
+    tuple[int, int]
+        ``(dispatch_census_count, captured_census_count)``.
+    """
+
+    layer_list = getattr(trace, "layer_list", ())
+    dispatch_owner_fcids: Set[int] = {
+        entry.get("owner_func_call_id")
+        for entry in getattr(trace, "completeness_decompositions", ())
+        if entry.get("capture_accounted") is True
+        and isinstance(entry.get("owner_func_call_id"), int)
+    }
+    captured_fcids: Set[int] = {
+        op.func_call_id for op in layer_list if isinstance(getattr(op, "func_call_id", None), int)
+    }
+    transform_boundary_fcids: Set[int] = {
+        op.func_call_id
+        for op in layer_list
+        if isinstance(getattr(op, "func_call_id", None), int)
+        and getattr(op, "transform_kind", None) is not None
+    }
+    # Carve-out A: transform boundary nodes inflate the captured census.
+    captured_census = captured_fcids - transform_boundary_fcids
+    # Carve-out B: only a genuine output-replacement intervention may leave an
+    # accounted dispatch owner with no surviving captured op. During plain
+    # capture (no genuine replacement) such orphaned owners stay counted so the
+    # tripwire still fires on a silent capture drop.
+    dispatch_census = set(dispatch_owner_fcids)
+    if any(_is_genuine_replacement_op(op) for op in layer_list):
+        dispatch_census -= dispatch_owner_fcids - captured_census
+    return len(dispatch_census), len(captured_census)
+
+
 def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     """Check the validation replay's dispatcher census against captured ops.
 
