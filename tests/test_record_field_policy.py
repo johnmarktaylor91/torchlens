@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -37,6 +38,8 @@ from torchlens.data_classes.module import Module, ModuleCall
 from torchlens.data_classes.op import Op
 from torchlens.data_classes.param import Param
 from torchlens.data_classes.trace import Trace
+from torchlens.options import CaptureOptions
+from torchlens.runnable import PathFaithfulness, ReadinessStatus
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,32 @@ class _PolicyModel(nn.Module):
         """
 
         return torch.relu(self.bn(self.linear(x))).sum()
+
+
+class _RunnablePolicyModel(nn.Module):
+    """Minimal model that satisfies sparse runnable capture prerequisites."""
+
+    def __init__(self) -> None:
+        """Initialize the single deterministic layer."""
+
+        super().__init__()
+        self.linear = nn.Linear(3, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the recorded static path.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Activated output tensor.
+        """
+
+        return torch.relu(self.linear(x))
 
 
 def _policy_trace() -> Trace:
@@ -199,6 +228,54 @@ def test_record_field_order_attributes_are_live(case: RecordCase) -> None:
                 if field not in optional and not hasattr(record, field)
             ]
             assert not missing, f"{case.cls.__name__} missing FIELD_ORDER fields: {missing}"
+    finally:
+        trace.cleanup()
+
+
+def test_trace_runnable_field_order_slots_are_live_and_loaded_values_override(
+    tmp_path: Path,
+) -> None:
+    """Fresh Trace runnable slots are inert and runnable loads replace their defaults."""
+
+    trace = tl.trace(
+        _RunnablePolicyModel().eval(),
+        torch.randn(2, 3),
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    try:
+        expected_defaults = {
+            "_runnable_descriptor": None,
+            "_runnable_readiness": None,
+            "_runnable_staged_user_state": None,
+            "_runnable_embedded_state": None,
+            "_runnable_archived_activations": None,
+            "_runnable_path_faithfulness": None,
+            "_runnable_first_mismatch": None,
+            "_runnable_poisoned": False,
+        }
+        assert {field: getattr(trace, field) for field in expected_defaults} == expected_defaults
+
+        path = tmp_path / "trace.tlspec"
+        trace.save(path, level="runnable")
+        loaded = tl.load(path)
+        try:
+            assert loaded.runnable_descriptor is not None
+            assert loaded.readiness is not None
+            assert loaded.readiness.status is ReadinessStatus.READY
+            assert loaded._runnable_path_faithfulness is None
+            assert loaded._runnable_poisoned is False
+            result = loaded.run(inputs=torch.randn(2, 3), seed=11)
+            try:
+                assert result.trace._runnable_path_faithfulness is PathFaithfulness.VERIFIED
+                assert result.trace._runnable_poisoned is False
+            finally:
+                result.trace.cleanup()
+        finally:
+            loaded.cleanup()
     finally:
         trace.cleanup()
 

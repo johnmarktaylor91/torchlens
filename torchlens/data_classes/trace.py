@@ -164,6 +164,14 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "module_identity_mode": "torch_module",
     "param_source": "native-module",
     "derived_grads": DerivedGradAccessor(),
+    "_runnable_descriptor": None,
+    "_runnable_readiness": None,
+    "_runnable_staged_user_state": None,
+    "_runnable_embedded_state": None,
+    "_runnable_archived_activations": None,
+    "_runnable_path_faithfulness": None,
+    "_runnable_first_mismatch": None,
+    "_runnable_poisoned": False,
     "intervention_ready": False,
     "save_arg_templates": False,
     "raw_input": None,
@@ -999,7 +1007,7 @@ class Trace(
     _runnable_archived_activations: Mapping[str, "ArchivedActivation"] | None
     _runnable_path_faithfulness: "PathFaithfulness | None"
     _runnable_first_mismatch: "RunnableDiagnostic | None"
-    _runnable_poisoned: bool | None
+    _runnable_poisoned: bool
     backward_root_grad_fn_object_ids: list[int]
     backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
@@ -1426,6 +1434,14 @@ class Trace(
         # branch on this flag to choose raw-barcode vs final-label access.
         self._tracing_finished = False
         self.capture_mode: Literal["exhaustive", "predicate"] = "exhaustive"
+        self._runnable_descriptor: SparseRunDescriptor | None = None
+        self._runnable_readiness: ReadinessReport | None = None
+        self._runnable_staged_user_state: Mapping[str, torch.Tensor] | None = None
+        self._runnable_embedded_state: Mapping[str, torch.Tensor] | None = None
+        self._runnable_archived_activations: Mapping[str, ArchivedActivation] | None = None
+        self._runnable_path_faithfulness: PathFaithfulness | None = None
+        self._runnable_first_mismatch: RunnableDiagnostic | None = None
+        self._runnable_poisoned = False
         self.halted = False
         self.halt_reason: str | None = None
         self.halt_frontier: str | None = None
@@ -2543,6 +2559,8 @@ class Trace(
             state["inference_only"] = False
         if state["chunked_forward"] is None:
             state["chunked_forward"] = False
+        if state["_runnable_poisoned"] is None:
+            state["_runnable_poisoned"] = False
         for field_name in (
             "setup_duration",
             "forward_duration",
