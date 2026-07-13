@@ -236,6 +236,14 @@ state, then optional embedded capture state, then the versioned
 tensor-value-free. Load validates embedded state through the same strict binder; run reports
 `embedded_capture_state`, never a reconstructed model, and a later `load_state_dict()` overrides it.
 
+`tl.save(trace, path, level="runnable", include_activations=True)` independently archives exactly
+the activations already retained by the capture-time `save=` decision, including retained raw and
+transformed outputs, as `selected_activation_v1`. Load exposes them through
+`trace.archived_activations` for inspection. They never seed the sparse DAG. On original-input runs
+with embedded or capture-equivalent staged state, recomputed saved raw slots are compared by exact
+bytes and report `attested`; the first mismatch raises `numeric_attestation_failed` and rolls back.
+Changed-input, random-state, and non-equivalent-state runs report `not_applicable`.
+
 ### Sparse runnable execution
 
 `trace.run(inputs=x, seed=...)` is the provider-neutral execution spelling. A live Trace delegates
@@ -246,8 +254,8 @@ unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5
 `report.path_faithfulness`; Stage 6 enforces the three-layer honesty transaction. Divergence raises
 and rolls back by default; `return_diverged` is the sole opt-in and returns a monotonic poisoned
 Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
-Incomplete witness coverage is `unverifiable`, never `verified`, and sparse-only numeric attestation
-is `not_applicable`.
+Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
+`not_applicable` for sparse-only or ineligible activation-payload runs.
 
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 

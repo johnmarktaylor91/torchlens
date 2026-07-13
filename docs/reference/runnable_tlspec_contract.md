@@ -51,7 +51,7 @@ Other fixed sets are:
 | `ReadinessStatus` | `ready`, `unavailable` |
 | `RunProvider` | `live`, `loaded_sparse`, `loaded_analysis` |
 | `StateSource` | `live_model_state`, `embedded_capture_state`, `user_state_dict`, `random_initialization`, `not_applicable` |
-| `NumericAttestationStatus` | `passed`, `failed`, `not_applicable`, `not_present` |
+| `NumericAttestationStatus` | `attested`, `numeric_attestation_failed`, `not_applicable`, `not_present` |
 | `ResolverStatus` | `resolved_exact`, `resolved_alias`, `unavailable` |
 
 `loaded_analysis` only explains unavailability. Old or pre-descriptor bundles are never promoted.
@@ -131,10 +131,13 @@ fields.
 | `preflight` | `ProducerPreflight` |
 | `unsupported_sites` | tuple of `RunnableDiagnostic`; empty for a runnable claim |
 
-`PayloadLayersDescriptor` has exactly `weights` and `activations`. Each is
-`PayloadLayerDescriptor(present: bool, schema: str)`. Schemas are respectively `state_dict_v1` and
-`selected_activation_v1`, even when absent. Sparse default has both `present=false`; any payload
-bytes/references live outside the sparse core.
+`PayloadLayersDescriptor` has exactly `weights` and `activations`. Weights use
+`PayloadLayerDescriptor(present: bool, schema: str)`. Activations use that same two-field form while
+absent; when present, `ActivationPayloadLayerDescriptor` additionally carries exact
+`members`, `original_input_digests`, and `capture_state_digests`. Each member identifies its blob,
+slot, call, op label, `out`/`transformed_out` field, and logical byte digest. Schemas are respectively
+`state_dict_v1` and `selected_activation_v1`. Any payload bytes/references live outside the sparse
+core.
 
 `RunnableCompatibility` has exactly `torchlens_version: str`, `python_version: str`,
 `backend_version: str`, `descriptor_version: str`, `call_recipe_version: str`,
@@ -267,7 +270,9 @@ code, and custom import paths.
 Optional weights are declared as the external `state_dict_v1` blob family. With
 `include_weights=True`, it contains one full capture-time `state_dict`: all named parameters and
 persistent buffers keyed by canonical state records. It contains no gradients, RNG state,
-callables, model handles, or per-call snapshots. Activations remain a later independent layer.
+callables, model handles, or per-call snapshots. Optional activations are independently declared as
+`selected_activation_v1`: exactly the payloads retained by capture-time `save=`, never a new
+selector and never part of the sparse call recipe.
 Tensor arguments, RNG tensors, callables/code/imports remain forbidden, and payload-only runnable
 artifacts are invalid.
 
@@ -476,6 +481,14 @@ Trace. A run that uses it reports `embedded_capture_state` with no random-filled
 staged user state retains higher effective precedence. Neither source writes tensor values into the
 sparse core or presents a reconstructed model object.
 
+`include_activations=True` is independent and composes with `include_weights`. It writes exactly the
+capture-selected retained `out`/`transformed_out` payloads plus slot membership and byte digests.
+Load exposes immutable records through `Trace.archived_activations` for offline inspection. The
+scheduler never reads them. Original-input runs with embedded or byte-equivalent staged capture
+state compare freshly recomputed raw saved slots against the archive before exposure and report
+`attested`; first mismatch is `numeric_attestation_failed` and rolls back. Changed-input,
+random-state, and non-equivalent-state runs report `not_applicable`.
+
 ## 10. N1-a initializer and seed
 
 `torchlens_role_init_v1` is:
@@ -534,10 +547,10 @@ contract/witness honesty, not numerical reproduction.
 
 ## 12. Optional-payload API spelling and docs lockstep
 
-`include_weights` is confirmed on `tl.save`/`Trace.save` with `level="runnable"`. It is false by
-default and means the full `state_dict` (named parameters plus persistent buffers), not only trainable
-weights. `include_activations` remains reserved for its independent later stage and will reuse
-capture-time `save=` rather than introduce another selector.
+`include_weights` and `include_activations` are confirmed on `tl.save`/`Trace.save` with
+`level="runnable"`. Both default false and are independent. Weights mean the full `state_dict`
+(named parameters plus persistent buffers), not only trainable weights. Activations mean exactly the
+already-retained capture-time `save=` selection, not a second selector.
 
 Stage 0 introduced public error names and an importable schema/type module. Stage 4 documents
 `load_state_dict`, transient state sources, and initializer reporting. Stage 5 implements `run`,
@@ -545,6 +558,7 @@ Stage 0 introduced public error names and an importable schema/type module. Stag
 three-state `path_faithfulness`. Stage 6 implements strict divergence raising, transactional
 rollback, incomplete-coverage `unverifiable`, and monotonically poisoned opt-in results plus
 downstream refusal gates. Stage 7 adds the optional external weight family and embedded-state
-binding without changing capture or the sparse core. This contract plus `CLAUDE.md`/`AGENTS.md`,
+binding. Stage 8 adds inspection-only selected activation blobs and eligible byte-exact numeric
+attestation without changing capture or the sparse core. This contract plus `CLAUDE.md`/`AGENTS.md`,
 FIELD_ORDER, schema, and API tests move together. Until a curated public glossary ships, this
 document is the authoritative public glossary entry for sparse runnable execution.
