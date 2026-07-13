@@ -789,6 +789,83 @@ def _append_argument_component(
                 )
             )
         return
+    if isinstance(component, (list, tuple)):
+        try:
+            literal_args.append(LiteralArgumentRef(path, _tensor_container_skeleton(component)))
+        except _UnsupportedLiteralError as exc:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.CALL_STRUCTURE_MISMATCH,
+                    str(exc),
+                    registry_id=registry_id,
+                    affected_ops=(str(op.label),),
+                    detection_stage="producer_call_recipe",
+                    details=(("argument_path", repr(path)),),
+                )
+            )
+            return
+        for index, item in enumerate(component):
+            _append_argument_component(
+                item,
+                path=(*path, index),
+                literal_override=_NO_OVERRIDE,
+                op=op,
+                call_id=call_id,
+                registry_id=registry_id,
+                op_by_alias=op_by_alias,
+                slot_for_op=slot_for_op,
+                slot_drafts=slot_drafts,
+                parameter_candidates=parameter_candidates,
+                tensor_args=tensor_args,
+                literal_args=literal_args,
+                diagnostics=diagnostics,
+            )
+        return
+    if isinstance(component, Mapping):
+        try:
+            literal_args.append(LiteralArgumentRef(path, _tensor_container_skeleton(component)))
+        except _UnsupportedLiteralError as exc:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.CALL_STRUCTURE_MISMATCH,
+                    str(exc),
+                    registry_id=registry_id,
+                    affected_ops=(str(op.label),),
+                    detection_stage="producer_call_recipe",
+                    details=(("argument_path", repr(path)),),
+                )
+            )
+            return
+        for key, item in component.items():
+            if not isinstance(key, (str, int)):
+                diagnostics.append(
+                    _diagnostic(
+                        RunnableErrorCode.CALL_STRUCTURE_MISMATCH,
+                        "A tensor-containing mapping argument has a key outside the sparse "
+                        "argument-path grammar.",
+                        registry_id=registry_id,
+                        affected_ops=(str(op.label),),
+                        detection_stage="producer_call_recipe",
+                        details=(("argument_path", repr(path)),),
+                    )
+                )
+                continue
+            _append_argument_component(
+                item,
+                path=(*path, key),
+                literal_override=_NO_OVERRIDE,
+                op=op,
+                call_id=call_id,
+                registry_id=registry_id,
+                op_by_alias=op_by_alias,
+                slot_for_op=slot_for_op,
+                slot_drafts=slot_drafts,
+                parameter_candidates=parameter_candidates,
+                tensor_args=tensor_args,
+                literal_args=literal_args,
+                diagnostics=diagnostics,
+            )
+        return
     if isinstance(component, ParentRef):
         parent = op_by_alias.get(component.parent_label)
         if parent is None:
@@ -1258,7 +1335,55 @@ def _component_contains_tensor(component: Any) -> bool:
         return True
     if isinstance(component, tuple):
         return any(_component_contains_tensor(item) for item in component)
+    if isinstance(component, list):
+        return any(_component_contains_tensor(item) for item in component)
+    if isinstance(component, Mapping):
+        return any(_component_contains_tensor(item) for item in component.values())
     return False
+
+
+def _tensor_container_skeleton(component: Any) -> NonTensorLiteral:
+    """Encode a mutable sparse-call container shell without tensor values.
+
+    Tensor leaves are represented by ``None`` placeholders and overwritten
+    with ``ParentRef`` slots during sparse execution. Captured tensor
+    containers are projected as tuples by the eager capture layer, so their
+    runnable shell intentionally uses a list, which is accepted by the
+    relevant variadic torch operators and supports leaf replacement.
+
+    Parameters
+    ----------
+    component:
+        Captured argument component containing at least one tensor leaf.
+
+    Returns
+    -------
+    NonTensorLiteral
+        Value-free literal shell used to reconstruct the argument tree.
+    """
+
+    if isinstance(component, (ParentRef, LiteralTensor)):
+        return LiteralAtom(LiteralAtomKind.NONE, None)
+    if isinstance(component, LiteralValue):
+        return _encode_literal(component.value)
+    if isinstance(component, Unsupported):
+        raise _UnsupportedLiteralError(component.reason)
+    if isinstance(component, (list, tuple)):
+        return LiteralSequence(
+            LiteralSequenceKind.LIST,
+            tuple(_tensor_container_skeleton(item) for item in component),
+        )
+    if isinstance(component, Mapping):
+        return LiteralMapping(
+            tuple(
+                LiteralMappingEntry(
+                    _encode_literal_key(key),
+                    _tensor_container_skeleton(item),
+                )
+                for key, item in component.items()
+            )
+        )
+    return _encode_literal(component)
 
 
 def _encode_literal(value: Any) -> NonTensorLiteral:

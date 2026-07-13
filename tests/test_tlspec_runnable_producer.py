@@ -17,9 +17,11 @@ from torchlens._io.runnable import (
     build_sparse_run_descriptor,
 )
 from torchlens.errors import RunnablePreflightError
+from torchlens.intervention.types import CapturedArgTemplate, LiteralValue
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
     ControlWitnessKind,
+    PathFaithfulness,
     RunnableErrorCode,
     StateSlotRole,
     TensorSlotRole,
@@ -71,6 +73,37 @@ class ControlWitnessModel(nn.Module):
         if value.sum() > 0:
             value = value * 2
         return value
+
+
+class CatContainerModel(nn.Module):
+    """Use a list of tensors as a variadic ``torch.cat`` argument."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Concatenate two derived tensors along their final dimension."""
+
+        return torch.cat([value + 1, value * 2], dim=-1)
+
+
+class StackContainerModel(nn.Module):
+    """Use a tuple of tensors as a variadic ``torch.stack`` argument."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Stack two derived tensors on a new leading dimension."""
+
+        return torch.stack((value + 1, value * 2), dim=0)
+
+
+class EinsumContainerModel(nn.Module):
+    """Use multiple tensors through the variadic ``torch.einsum`` form."""
+
+    def forward(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        """Multiply two derived matrices through an einsum operand container."""
+
+        return torch.einsum("ij,jk->ik", left + 1, right * 2)
+
+
+class _OpaqueContainerMember:
+    """Represent an unsupported object embedded beside a tensor reference."""
 
 
 def _capture(model: nn.Module, value: Any) -> tl.Trace:
@@ -241,6 +274,92 @@ def test_runnable_preflight_rejects_unregistered_tensor_constant(tmp_path: Path)
     with pytest.raises(RunnablePreflightError, match="producer preflight failed"):
         trace.save(path, level="runnable")
     assert not path.exists()
+
+
+@pytest.mark.parametrize(
+    ("model", "inputs"),
+    (
+        (CatContainerModel(), torch.randn(2, 3)),
+        (StackContainerModel(), torch.randn(2, 3)),
+        (EinsumContainerModel(), (torch.randn(2, 3), torch.randn(3, 4))),
+    ),
+    ids=("cat_list", "stack_tuple", "einsum_operands"),
+)
+def test_runnable_container_tensor_arguments_save_load_and_run_verified(
+    tmp_path: Path,
+    model: nn.Module,
+    inputs: torch.Tensor | tuple[torch.Tensor, torch.Tensor],
+) -> None:
+    """Rebuild tensor-container call arguments from value-free parent slots."""
+
+    trace = _capture(model, inputs)
+    path = tmp_path / f"{type(model).__name__}.tlspec"
+    trace.save(path, level="runnable")
+
+    result = tl.load(path).run(inputs=inputs)
+    expected = model(*inputs) if isinstance(inputs, tuple) else model(inputs)
+
+    torch.testing.assert_close(result.output, expected)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_runnable_preflight_recurses_nested_mixed_mapping_tensor_container() -> None:
+    """Emit tensor leaves and a literal skeleton for nested mixed containers."""
+
+    trace = _capture(CatContainerModel(), torch.randn(2, 3))
+    target = next(op for op in trace.layer_list if op.func_name == "cat")
+    original = target.args_template
+    assert isinstance(original, CapturedArgTemplate)
+    parents = original.args[0]
+    assert isinstance(parents, tuple)
+    object.__setattr__(
+        target,
+        "args_template",
+        CapturedArgTemplate(
+            args=({"nested": [parents[0], LiteralValue(3), (parents[1],)]},),
+            kwargs=original.kwargs,
+            func_id=original.func_id,
+            notes=original.notes,
+        ),
+    )
+
+    descriptor = build_sparse_run_descriptor(trace)
+    call = next(call for call in descriptor.calls if target.label in call.op_labels)
+
+    assert descriptor.preflight.passed
+    assert {argument.argument_path for argument in call.tensor_arguments} == {
+        ("args", 0, "nested", 0),
+        ("args", 0, "nested", 2, 0),
+    }
+    assert any(argument.argument_path == ("args", 0) for argument in call.literal_arguments)
+
+
+def test_runnable_preflight_keeps_typed_rejection_for_opaque_tensor_container_member() -> None:
+    """Reject opaque members instead of treating tensor containers as literals."""
+
+    trace = _capture(CatContainerModel(), torch.randn(2, 3))
+    target = next(op for op in trace.layer_list if op.func_name == "cat")
+    original = target.args_template
+    assert isinstance(original, CapturedArgTemplate)
+    parents = original.args[0]
+    assert isinstance(parents, tuple)
+    object.__setattr__(
+        target,
+        "args_template",
+        CapturedArgTemplate(
+            args=((parents[0], _OpaqueContainerMember()),),
+            kwargs=original.kwargs,
+            func_id=original.func_id,
+            notes=original.notes,
+        ),
+    )
+
+    descriptor = build_sparse_run_descriptor(trace)
+
+    assert not descriptor.preflight.passed
+    assert RunnableErrorCode.CALL_STRUCTURE_MISMATCH in {
+        diagnostic.code for diagnostic in descriptor.preflight.diagnostics
+    }
 
 
 @pytest.mark.smoke
