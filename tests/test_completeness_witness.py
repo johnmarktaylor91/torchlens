@@ -253,6 +253,51 @@ def test_direct_aten_call_trips_non_vacuous_witness() -> None:
     assert report["reason"] == "unowned_dispatch"
     assert report["function"] == "forward"
     assert report["owner_wrapper"] is None
+    # A forward-body drop did NOT fire inside a replacement hook, so it is a real
+    # silent drop that the validation census must fail on (not excused).
+    assert report["in_replacement_hook"] is False
+
+
+@pytest.mark.smoke
+def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> None:
+    """A genuine raw replacement hook's untraceable dispatch is tagged per-event.
+
+    A raw ``register_forward_hook`` output replacement runs inside the torchlens
+    ``wrapped_hook`` frame. Its raw-aten call (unowned) and python-wrapped call
+    (an accounted owner orphaned out of the trace) must both carry
+    ``in_replacement_hook=True`` so the validation census can excuse ONLY genuine
+    replacement construction. This pins the frame-detection signal: a rename of
+    the ``wrapped_hook`` bracket would surface here first.
+    """
+
+    class _Mlp(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(4, 4)
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.relu(self.fc1(x))
+
+    def _replacement_hook(module, inputs, output):  # type: ignore[no-untyped-def]
+        return torch.ops.aten.mul.Tensor(output, torch.tensor(0.5))
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    model = _Mlp().eval()
+    model.relu.register_forward_hook(_replacement_hook)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.randn(3, 4))
+
+    # The raw-aten replacement call is unowned AND tagged as replacement construction.
+    unowned = [d for d in trace.completeness_diagnostics if d["reason"] == "unowned_dispatch"]
+    assert unowned, "expected the raw replacement aten call to be recorded as unowned"
+    assert all(d["in_replacement_hook"] is True for d in unowned)
+    # The python-wrapped construction owner (torch.tensor) is orphaned yet tagged.
+    hooked_owners = [
+        d for d in trace.completeness_decompositions if d.get("in_replacement_hook") is True
+    ]
+    assert hooked_owners, "expected a wrapped replacement owner tagged in_replacement_hook"
 
 
 @pytest.mark.smoke
