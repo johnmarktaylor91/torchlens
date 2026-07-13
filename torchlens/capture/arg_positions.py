@@ -267,6 +267,14 @@ _P0123 = ArgSpec(positions=(0, 1, 2, 3))
 _S0 = ArgSpec(positions=tuple(range(10)), tensor_kwargs=("tensors",))
 _NONE = ArgSpec()
 
+# ``min``/``max`` are optional tensor bounds for clamp-family APIs.  Keep the
+# generic binary keyword aliases as well because the Tensor method and torch
+# function forms use different spellings for the primary operand.
+_CLAMP_SPEC = ArgSpec(
+    positions=_P01_BINARY.positions,
+    tensor_kwargs=(*_P01_BINARY.tensor_kwargs, "min", "max"),
+)
+
 # ============================================================================
 # FUNC_ARG_SPECS — keyed by normalized func_name
 # ============================================================================
@@ -886,6 +894,9 @@ _BINARY_FUNCS = [
 for _name in _BINARY_FUNCS:
     FUNC_ARG_SPECS[_name] = _P01_BINARY
 
+for _name in ["clamp", "clampmin", "clampmax", "clip"]:
+    FUNC_ARG_SPECS[_name] = _CLAMP_SPEC
+
 # ---------------------------------------------------------------------------
 # Ternary: positions 0, 1, 2
 # ---------------------------------------------------------------------------
@@ -1184,8 +1195,8 @@ FUNC_ARG_SPECS["searchsorted"] = ArgSpec(
     positions=(0, 1), tensor_kwargs=("sorted_sequence", "input", "values")
 )
 FUNC_ARG_SPECS["bincount"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "weights"))
-FUNC_ARG_SPECS["histogram"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "weight"))
-FUNC_ARG_SPECS["histogramdd"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "weight"))
+FUNC_ARG_SPECS["histogram"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "bins", "weight"))
+FUNC_ARG_SPECS["histogramdd"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "bins", "weight"))
 FUNC_ARG_SPECS["stft"] = ArgSpec(positions=(0, 4), tensor_kwargs=("input", "window"))
 FUNC_ARG_SPECS["istft"] = ArgSpec(positions=(0, 4), tensor_kwargs=("input", "window"))
 FUNC_ARG_SPECS["maskedfill"] = ArgSpec(
@@ -1303,6 +1314,14 @@ for _name in [
     "varmean",
 ]:
     FUNC_ARG_SPECS[_name] = _P0_INPUT
+
+# ``spacing`` accepts a tensor or a sequence of tensors.  It is an input to
+# the numerical gradient computation, not display-only metadata, so it must
+# be included in parent extraction.
+FUNC_ARG_SPECS["gradient"] = ArgSpec(
+    positions=_P0_INPUT.positions,
+    tensor_kwargs=(*_P0_INPUT.tensor_kwargs, "spacing"),
+)
 
 _P0_A_SPEC = ArgSpec(positions=(0,), tensor_kwargs=("A",))
 for _name in [
