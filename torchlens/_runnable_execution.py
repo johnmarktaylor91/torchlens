@@ -676,7 +676,7 @@ def _populate_source_slots(
         value = slot_values.get(slot.slot_id)
         op = _op_for_slot(fork, slot.slot_id)
         if value is not None and op is not None:
-            op._internal_set("out", value)
+            op._internal_set("out", value.detach().clone())
 
 
 def _write_argument(
@@ -779,7 +779,7 @@ def _bind_call_outputs(
                 slot_values[version.slot_id] = value
         op = _op_for_label(fork, op_label)
         if op is not None:
-            op._internal_set("out", value)
+            op._internal_set("out", value.detach().clone())
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(

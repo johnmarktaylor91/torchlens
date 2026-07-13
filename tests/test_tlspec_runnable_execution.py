@@ -59,6 +59,18 @@ class HonestyControlModel(nn.Module):
         return value
 
 
+class InplaceActivationModel(nn.Module):
+    """Graph whose later in-place call must not rewrite staged activations."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Mutate a ReLU result only after another result has consumed it."""
+
+        activated = torch.relu(value)
+        preserved = activated + 1
+        activated.mul_(0)
+        return preserved + activated
+
+
 @pytest.fixture(scope="module")
 def runnable_execution_artifact(
     tmp_path_factory: pytest.TempPathFactory,
@@ -166,6 +178,37 @@ def test_loaded_sparse_execution_pauses_recursive_capture(
 
     assert observed
     assert not any(observed)
+
+
+def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
+    tmp_path: Path,
+) -> None:
+    """Keep VERIFIED fork payloads equal to capture-time pre-mutation values."""
+
+    model = InplaceActivationModel()
+    inputs = torch.tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / "inplace-activation.tlspec"
+    trace.save(path, level="runnable")
+
+    result = tl.load(path).run(inputs=inputs.clone())
+    live_relu = next(op for op in trace.layer_list if op.func_name == "relu")
+    fork_relu = next(op for op in result.trace.layer_list if op.func_name == "relu")
+    fork_relu_before_output_edit = fork_relu.out.detach().clone()
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(live_relu.out, torch.tensor([1.0, 0.0, 3.0]))
+    assert torch.equal(fork_relu.out, live_relu.out)
+    result.output.zero_()
+    assert torch.equal(fork_relu.out, fork_relu_before_output_edit)
 
 
 def _logging_probe(func: Any, observed: list[bool]) -> Any:
