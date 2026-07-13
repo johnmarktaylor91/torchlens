@@ -46,6 +46,16 @@ class DropoutActivationModel(nn.Module):
         return torch.nn.functional.dropout(value, p=0.5, training=True)
 
 
+class InplaceInputActivationModel(nn.Module):
+    """Deterministic model that mutates its model input during execution."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Mutate the input and return a deterministic downstream value."""
+
+        value.add_(1)
+        return value * 2
+
+
 def _capture(
     model: nn.Module,
     inputs: torch.Tensor,
@@ -226,6 +236,24 @@ def test_rng_model_activation_attestation_is_not_applicable_instead_of_failing(
     result = tl.load(path).run(inputs=inputs)
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_inplace_input_attestation_uses_pre_execution_input_digest(tmp_path: Path) -> None:
+    """Keep original-input attestation applicable when replay mutates its input slot."""
+
+    model = InplaceInputActivationModel()
+    capture_inputs = torch.ones(4)
+    path = tmp_path / "inplace-input.tlspec"
+    _capture(model, capture_inputs).save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
+
+    result = tl.load(path).run(inputs=torch.ones(4))
+
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
 def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -> None:

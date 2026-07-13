@@ -92,6 +92,7 @@ def run_loaded_sparse_trace(
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
     slot_values, input_checks = _bind_runtime_inputs(descriptor, inputs)
+    input_byte_digests = _snapshot_input_byte_digests(descriptor, slot_values)
     _raise_first_divergence(input_checks, divergence_policy, fork=None)
     prepared_state = prepare_runnable_state(trace, seed=seed)
     slot_values.update(_clone_state_values(prepared_state.slot_values))
@@ -106,6 +107,7 @@ def run_loaded_sparse_trace(
             readiness=readiness,
             callables=callables,
             slot_values=slot_values,
+            input_byte_digests=input_byte_digests,
             input_checks=input_checks,
             prepared_state=prepared_state,
             fork=fork,
@@ -125,6 +127,7 @@ def _execute_loaded_sparse_transaction(
     readiness: ReadinessReport,
     callables: Mapping[str, Callable[..., Any]],
     slot_values: dict[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
     input_checks: tuple[ContractCheck, ...],
     prepared_state: PreparedRunnableState,
     fork: Any,
@@ -195,6 +198,7 @@ def _execute_loaded_sparse_transaction(
         descriptor,
         prepared_state,
         slot_values=slot_values,
+        input_byte_digests=input_byte_digests,
         trace=trace,
     )
     if attestation_check is not None:
@@ -421,6 +425,19 @@ def _clone_state_values(
             clones_by_identity[id(value)] = clone
         cloned[slot_id] = clone
     return cloned
+
+
+def _snapshot_input_byte_digests(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> dict[str, str]:
+    """Digest cloned model inputs before sparse calls can mutate them in place."""
+
+    return {
+        slot.slot_id: runnable_tensor_byte_digest(slot_values[slot.slot_id])
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.MODEL_INPUT and slot.slot_id in slot_values
+    }
 
 
 def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
@@ -1345,6 +1362,7 @@ def _numeric_attestation_check(
     state: PreparedRunnableState,
     *,
     slot_values: Mapping[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
     trace: Any,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
@@ -1357,6 +1375,8 @@ def _numeric_attestation_check(
         Bound state used by this run.
     slot_values:
         Fresh scheduler outputs and source slots from this transaction.
+    input_byte_digests:
+        Model-input byte digests captured before any in-place sparse call.
     trace:
         Loaded source Trace retaining inspection-only archived activations.
 
@@ -1374,7 +1394,7 @@ def _numeric_attestation_check(
     if _descriptor_has_nondeterministic_rng(descriptor):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = tuple(member for member in layer.members if member.field == "out")
-    if not raw_members or not _attestation_inputs_match(descriptor, layer, slot_values):
+    if not raw_members or not _attestation_inputs_match(descriptor, layer, input_byte_digests):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not _attestation_state_matches(descriptor, layer, state, slot_values):
         return NumericAttestationStatus.NOT_APPLICABLE, None
@@ -1386,11 +1406,14 @@ def _numeric_attestation_check(
         archived_record = archived.get(archive_key)
         recomputed = slot_values.get(member.slot_id)
         archived_value = getattr(archived_record, "value", None)
-        recomputed_digest = (
-            runnable_tensor_byte_digest(recomputed)
-            if isinstance(recomputed, torch.Tensor)
-            else "missing"
-        )
+        if member.slot_id in input_byte_digests:
+            recomputed_digest = input_byte_digests[member.slot_id]
+        else:
+            recomputed_digest = (
+                runnable_tensor_byte_digest(recomputed)
+                if isinstance(recomputed, torch.Tensor)
+                else "missing"
+            )
         archived_digest = (
             runnable_tensor_byte_digest(archived_value)
             if isinstance(archived_value, torch.Tensor)
@@ -1460,7 +1483,7 @@ def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> boo
 def _attestation_inputs_match(
     descriptor: SparseRunDescriptor,
     layer: Any,
-    slot_values: Mapping[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
 ) -> bool:
     """Return whether every available capture-input digest matches this run."""
 
@@ -1471,8 +1494,7 @@ def _attestation_inputs_match(
     if not expected_slot_ids or observed_slot_ids != expected_slot_ids:
         return False
     return all(
-        digest.slot_id in slot_values
-        and runnable_tensor_byte_digest(slot_values[digest.slot_id]) == digest.byte_digest
+        input_byte_digests.get(digest.slot_id) == digest.byte_digest
         for digest in layer.original_input_digests
     )
 
