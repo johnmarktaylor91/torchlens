@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import replace
+import importlib
 import json
 from pathlib import Path
 from typing import Any, Iterator, cast
@@ -28,6 +29,7 @@ from torchlens.runnable import (
     RunnableErrorCode,
     SparseRunDescriptor,
 )
+from torchlens.utils._torch_compat import resolve_runnable_torch_alias
 
 
 class ResolverModel(nn.Module):
@@ -129,8 +131,8 @@ def test_locked_ladder_exact_alias_reverse_and_decorated_rungs() -> None:
     linear = next(
         record for record in report.resolver_records if record.recorded_key.qualname == "linear"
     )
-    assert linear.status is ResolverStatus.RESOLVED_ALIAS
-    assert "torch.nn.functional.linear" in str(linear.resolved_qualname)
+    assert linear.status is ResolverStatus.RESOLVED_EXACT
+    assert "torch._C._nn.linear" in str(linear.resolved_qualname)
     assert all(id(func) not in _state._decorated_to_orig for func in attachments.values())
 
     relu_id = _entry_for_name(descriptor, "relu")
@@ -151,6 +153,65 @@ def test_locked_ladder_exact_alias_reverse_and_decorated_rungs() -> None:
     assert reverse_report.status is ReadinessStatus.READY
     assert reverse_attachments is not None
     assert reverse_record.provenance.startswith("reverse_index:")
+
+
+def test_cross_version_alias_fixture_and_bounds() -> None:
+    """Resolve every cross-version golden alias only inside its recorded bounds."""
+
+    fixture_path = Path(__file__).parent / "fixtures" / "runnable_resolver_aliases.json"
+    fixtures = json.loads(fixture_path.read_text(encoding="utf-8"))
+    assert fixtures
+    for fixture in fixtures:
+        resolved = resolve_runnable_torch_alias(fixture["source"], fixture["recorded_version"])
+        assert resolved is not None, fixture
+        namespace, qualname, provenance = resolved
+        assert namespace == fixture["target_namespace"]
+        assert qualname == fixture["target_qualname"]
+        assert provenance
+        assert runnable_load._getattr_allowlisted(namespace, qualname) is not None
+
+    assert resolve_runnable_torch_alias("Tensor.add", "2.0.1") is None
+    assert resolve_runnable_torch_alias("Tensor.add", "2.13.0") is None
+
+
+def test_resolver_namespace_table_and_exact_binding_monotonicity() -> None:
+    """Cover every stock namespace and prove aliases never reinterpret exact keys."""
+
+    exact_cases = (
+        (FunctionRegistryKey("torch", "add", "function"), "torch.add"),
+        (FunctionRegistryKey("torch.Tensor", "add", "method"), "torch.Tensor.add"),
+        (
+            FunctionRegistryKey("torch.nn.functional", "relu", "function"),
+            "torch.nn.functional.relu",
+        ),
+        (FunctionRegistryKey("operator", "add", "function"), "operator.add"),
+        (
+            FunctionRegistryKey("custom", "linear", "function", import_path="torch._C._nn:linear"),
+            "torch._C._nn.linear",
+        ),
+        (
+            FunctionRegistryKey(
+                "custom", "special_erf", "function", import_path="torch._C._special:special_erf"
+            ),
+            "torch._C._special.special_erf",
+        ),
+    )
+    for key, expected_path in exact_cases:
+        resolved = runnable_load._resolve_exact_key(key, runnable_load._stock_path_from_key(key))
+        assert resolved is not None, key
+        assert resolved[1] == expected_path
+
+    descriptor = _descriptor()
+    linear_id = _entry_for_name(descriptor, "linear")
+    exact_private = _replace_key(
+        descriptor,
+        linear_id,
+        FunctionRegistryKey("custom", "linear", "function", import_path="torch._C._nn:linear"),
+    )
+    report, _ = preflight_sparse_run_descriptor(exact_private)
+    record = next(item for item in report.resolver_records if item.registry_id == linear_id)
+    assert record.status is ResolverStatus.RESOLVED_EXACT
+    assert record.provenance.startswith("exact_getattr:")
 
 
 @pytest.mark.smoke
@@ -280,6 +341,7 @@ def test_untrusted_custom_default_denies_without_import(monkeypatch: pytest.Monk
         ),
     )
     imported = False
+    importlib_called = False
     original_import = __import__
 
     def guarded_import(*args: Any, **kwargs: Any) -> Any:
@@ -292,8 +354,21 @@ def test_untrusted_custom_default_denies_without_import(monkeypatch: pytest.Monk
         return original_import(*args, **kwargs)
 
     monkeypatch.setattr("builtins.__import__", guarded_import)
+    original_import_module = importlib.import_module
+
+    def guarded_import_module(name: str, package: str | None = None) -> Any:
+        """Fail if readiness calls importlib for an artifact-selected module."""
+
+        nonlocal importlib_called
+        if name == "attacker_stage3_payload":
+            importlib_called = True
+            raise AssertionError("artifact-selected importlib call attempted")
+        return original_import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", guarded_import_module)
     assert RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT in _codes(crafted)
     assert not imported
+    assert not importlib_called
 
 
 def test_non_torch_backend_returns_structured_unsupported_readiness() -> None:
@@ -382,7 +457,18 @@ def test_load_time_failure_taxonomy_and_execution_skeletons(
     )
     assert len([item for item in ambiguous_diagnostic.details if item[0] == "candidate"]) == 2
 
-    assert RunnableErrorCode.CALLABLE_MOVED_OR_RENAMED in _codes(descriptor)
+    relu_id = _entry_for_name(descriptor, "relu")
+    moved = _replace_key(
+        descriptor,
+        relu_id,
+        FunctionRegistryKey(
+            "custom",
+            "relu",
+            "function",
+            import_path="torch._VariableFunctionsClass:relu",
+        ),
+    )
+    assert RunnableErrorCode.CALLABLE_MOVED_OR_RENAMED in _codes(moved)
     monkeypatch.setattr(runnable_load, "_unwrap_decorated", lambda func: func)
     assert RunnableErrorCode.WRAPPER_SHADOWED in _codes(descriptor)
     assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value == "runtime_signature_drift"

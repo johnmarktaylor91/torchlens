@@ -82,6 +82,11 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
         "torch.nn.functional",
         "torch.Tensor",
         "torch._C._nn",
+        "torch._C._special",
+        "torch._C._VariableFunctions",
+        "torch._C._VariableFunctionsClass",
+        "torch._C._TensorBase",
+        "torch._C.TensorBase",
         "torch._VF",
     }
 )
@@ -339,7 +344,24 @@ def _resolve_registry_entry(
         )
         return _unavailable_resolution(entry, diagnostic, "custom_import_default_deny")
 
-    alias = resolve_runnable_torch_alias(stock_path or _key_display_path(key))
+    exact = _resolve_exact_key(key, stock_path)
+    if exact is not None:
+        func, resolved_qualname = exact
+        return _resolved_callable(
+            entry,
+            func,
+            resolved_qualname=resolved_qualname,
+            provenance=f"exact_getattr:{resolved_qualname}",
+            status=ResolverStatus.RESOLVED_EXACT,
+            descriptor=descriptor,
+            affected_ops=affected_ops,
+            calls=calls,
+            moved=False,
+        )
+
+    alias = resolve_runnable_torch_alias(
+        stock_path or _key_display_path(key), descriptor.compatibility.backend_version
+    )
     if alias is not None:
         namespace, qualname, provenance = alias
         func = _getattr_allowlisted(namespace, qualname)
@@ -371,21 +393,6 @@ def _resolve_registry_entry(
             affected_ops=affected_ops,
             calls=calls,
             moved=True,
-        )
-
-    exact = _resolve_exact_key(key, stock_path)
-    if exact is not None:
-        func, resolved_qualname = exact
-        return _resolved_callable(
-            entry,
-            func,
-            resolved_qualname=resolved_qualname,
-            provenance=f"exact_getattr:{resolved_qualname}",
-            status=ResolverStatus.RESOLVED_EXACT,
-            descriptor=descriptor,
-            affected_ops=affected_ops,
-            calls=calls,
-            moved=False,
         )
 
     if (stock_path or _key_display_path(key)) in _REMOVED_TORCH_CALLABLES:

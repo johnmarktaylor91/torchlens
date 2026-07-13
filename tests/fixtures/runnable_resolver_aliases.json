@@ -1,0 +1,86 @@
+[
+  {
+    "recorded_version": "2.1.2",
+    "source": "torch._C._nn.linear",
+    "target_namespace": "torch.nn.functional",
+    "target_qualname": "linear"
+  },
+  {
+    "recorded_version": "2.3.1",
+    "source": "torch._C._nn.gelu",
+    "target_namespace": "torch.nn.functional",
+    "target_qualname": "gelu"
+  },
+  {
+    "recorded_version": "2.4.1",
+    "source": "torch._C._nn.softplus",
+    "target_namespace": "torch.nn.functional",
+    "target_qualname": "softplus"
+  },
+  {
+    "recorded_version": "2.5.1",
+    "source": "torch._C._nn.cross_entropy_loss",
+    "target_namespace": "torch.nn.functional",
+    "target_qualname": "cross_entropy"
+  },
+  {
+    "recorded_version": "2.6.0",
+    "source": "torch._C._special.special_erf",
+    "target_namespace": "torch.special",
+    "target_qualname": "erf"
+  },
+  {
+    "recorded_version": "2.7.1",
+    "source": "torch._C._special.special_gammaln",
+    "target_namespace": "torch.special",
+    "target_qualname": "gammaln"
+  },
+  {
+    "recorded_version": "2.8.0",
+    "source": "torch._C._VariableFunctions.add",
+    "target_namespace": "torch",
+    "target_qualname": "add"
+  },
+  {
+    "recorded_version": "2.9.0",
+    "source": "torch._C._VariableFunctionsClass.mul",
+    "target_namespace": "torch",
+    "target_qualname": "mul"
+  },
+  {
+    "recorded_version": "2.10.0",
+    "source": "torch._VariableFunctionsClass.sub",
+    "target_namespace": "torch",
+    "target_qualname": "sub"
+  },
+  {
+    "recorded_version": "2.11.0",
+    "source": "torch._C._TensorBase.add",
+    "target_namespace": "torch.Tensor",
+    "target_qualname": "add"
+  },
+  {
+    "recorded_version": "2.12.0",
+    "source": "torch._C.TensorBase.flatten",
+    "target_namespace": "torch.Tensor",
+    "target_qualname": "flatten"
+  },
+  {
+    "recorded_version": "2.2.2",
+    "source": "TensorBase.transpose",
+    "target_namespace": "torch.Tensor",
+    "target_qualname": "transpose"
+  },
+  {
+    "recorded_version": "2.1.0",
+    "source": "Tensor.reshape",
+    "target_namespace": "torch.Tensor",
+    "target_qualname": "reshape"
+  },
+  {
+    "recorded_version": "2.12.0",
+    "source": "torch._VF.linear",
+    "target_namespace": "torch.nn.functional",
+    "target_qualname": "linear"
+  }
+]

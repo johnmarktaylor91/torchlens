@@ -110,6 +110,9 @@ class RunnableTorchAlias:
     target_namespace: str
     target_qualname: str | None
     provenance: str
+    recorded_min_version: tuple[int, int]
+    recorded_max_version: tuple[int, int]
+    strip_target_prefix: str = ""
 
 
 _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
@@ -118,54 +121,160 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "torch.nn.functional",
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
+        (2, 1),
+        (2, 12),
     ),
     RunnableTorchAlias(
         "_C._nn.linear",
         "torch.nn.functional",
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
+        (2, 1),
+        (2, 12),
     ),
     RunnableTorchAlias(
         "torch._VF.linear",
         "torch.nn.functional",
         "linear",
         "private_to_public:_VF.linear->torch.nn.functional.linear",
+        (2, 1),
+        (2, 12),
     ),
     RunnableTorchAlias(
         "_VF.linear",
         "torch.nn.functional",
         "linear",
         "private_to_public:_VF.linear->torch.nn.functional.linear",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch._C._nn.gelu",
+        "torch.nn.functional",
+        "gelu",
+        "private_to_public:_C._nn.gelu->torch.nn.functional.gelu",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch._C._nn.softplus",
+        "torch.nn.functional",
+        "softplus",
+        "private_to_public:_C._nn.softplus->torch.nn.functional.softplus",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch._C._nn.cross_entropy_loss",
+        "torch.nn.functional",
+        "cross_entropy",
+        "private_to_public:_C._nn.cross_entropy_loss->torch.nn.functional.cross_entropy",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch._C._special.*",
+        "torch.special",
+        None,
+        "private_to_public:_C._special.special_*->torch.special.*",
+        (2, 1),
+        (2, 12),
+        "special_",
     ),
     RunnableTorchAlias(
         "torch._C._TensorBase.*",
         "torch.Tensor",
         None,
         "tensor_base_drift:torch._C._TensorBase->torch.Tensor",
+        (2, 1),
+        (2, 12),
     ),
     RunnableTorchAlias(
         "torch._C.TensorBase.*",
         "torch.Tensor",
         None,
         "tensor_base_drift:torch._C.TensorBase->torch.Tensor",
+        (2, 1),
+        (2, 12),
     ),
     RunnableTorchAlias(
         "torch.TensorBase.*",
         "torch.Tensor",
         None,
         "tensor_base_drift:torch.TensorBase->torch.Tensor",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch.Tensor.*",
+        "torch.Tensor",
+        None,
+        "tensor_prefix_drift:torch.Tensor->torch.Tensor",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "_TensorBase.*",
+        "torch.Tensor",
+        None,
+        "tensor_base_drift:_TensorBase->torch.Tensor",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "TensorBase.*",
+        "torch.Tensor",
+        None,
+        "tensor_base_drift:TensorBase->torch.Tensor",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "Tensor.*",
+        "torch.Tensor",
+        None,
+        "tensor_prefix_drift:Tensor->torch.Tensor",
+        (2, 1),
+        (2, 12),
     ),
     RunnableTorchAlias(
         "torch._C._VariableFunctions.*",
         "torch",
         None,
         "private_to_public:torch._C._VariableFunctions->torch",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch._C._VariableFunctionsClass.*",
+        "torch",
+        None,
+        "private_to_public:torch._C._VariableFunctionsClass->torch",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "torch._VariableFunctionsClass.*",
+        "torch",
+        None,
+        "private_to_public:torch._VariableFunctionsClass->torch",
+        (2, 1),
+        (2, 12),
+    ),
+    RunnableTorchAlias(
+        "_VariableFunctionsClass.*",
+        "torch",
+        None,
+        "private_to_public:_VariableFunctionsClass->torch",
+        (2, 1),
+        (2, 12),
     ),
 )
 
 
 def resolve_runnable_torch_alias(
     source_qualname: str,
+    recorded_version: str | None = None,
 ) -> tuple[str, str, str] | None:
     """Return an explicit current-runtime successor for a recorded torch path.
 
@@ -173,6 +282,10 @@ def resolve_runnable_torch_alias(
     ----------
     source_qualname:
         Fully qualified recorded callable path.
+    recorded_version:
+        Torch version that produced the registry key. Aliases are bounded to
+        supported minor releases. Unknown versions retain the compatibility
+        behavior for legacy descriptors that predate this metadata.
 
     Returns
     -------
@@ -181,7 +294,12 @@ def resolve_runnable_torch_alias(
         when the path has no explicit monotonic alias.
     """
 
+    parsed_version = _torch_minor_version(recorded_version)
     for alias in _RUNNABLE_TORCH_ALIASES:
+        if parsed_version is not None and not (
+            alias.recorded_min_version <= parsed_version <= alias.recorded_max_version
+        ):
+            continue
         target_qualname: str | None
         if alias.source.endswith(".*"):
             prefix = alias.source[:-1]
@@ -194,8 +312,33 @@ def resolve_runnable_torch_alias(
             continue
         if not target_qualname:
             return None
+        if alias.strip_target_prefix and target_qualname.startswith(alias.strip_target_prefix):
+            target_qualname = target_qualname[len(alias.strip_target_prefix) :]
         return alias.target_namespace, target_qualname, alias.provenance
     return None
+
+
+def _torch_minor_version(version: str | None) -> tuple[int, int] | None:
+    """Parse a torch major/minor prefix without inspecting the live runtime.
+
+    Parameters
+    ----------
+    version:
+        Producer torch version from runnable compatibility metadata.
+
+    Returns
+    -------
+    tuple[int, int] | None
+        Major/minor pair, or ``None`` when producer metadata is absent or not
+        parseable (for example a legacy placeholder).
+    """
+
+    if version is None:
+        return None
+    components = version.split("+", maxsplit=1)[0].split(".")
+    if len(components) < 2 or not components[0].isdigit() or not components[1].isdigit():
+        return None
+    return int(components[0]), int(components[1])
 
 
 def _probe_device_type_arg_supported() -> bool:
