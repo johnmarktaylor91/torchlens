@@ -21,7 +21,10 @@ from torchlens.intervention.errors import (
     ReplayPreconditionError,
     UntrustedCallableError,
 )
-from torchlens.intervention.resolver import _selector_from_spec
+from torchlens.intervention.resolver import (
+    _selector_from_spec,
+    function_registry_key_from_callable,
+)
 from torchlens.intervention.save import _write_tlspec_tensor_blob
 from torchlens.intervention.save import _sync_spec_records_from_log
 from torchlens.intervention.save import resolve_function_registry_key, save_intervention
@@ -779,6 +782,18 @@ def test_trusted_function_namespaces_resolve_unchanged(namespace: str, qualname:
     key = FunctionRegistryKey(namespace=namespace, qualname=qualname, dispatch_kind="function")
 
     assert callable(resolve_function_registry_key(key))
+
+
+@pytest.mark.smoke
+def test_internal_torch_builtin_key_preserves_replay_identity() -> None:
+    """Internal torch builtins resolve without collapsing to public wrappers."""
+
+    builtin = torch._C._VariableFunctionsClass.tensordot
+    key = function_registry_key_from_callable(builtin)
+
+    assert key.namespace == "custom"
+    assert key.import_path == "torch._C._VariableFunctionsClass:tensordot"
+    assert resolve_function_registry_key(key) is builtin
 
 
 @pytest.mark.smoke
