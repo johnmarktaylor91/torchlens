@@ -89,12 +89,12 @@ def _save_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> Path:
 
 
 def _relu_registry_index(run: dict) -> int:
-    """Return the callable-registry index whose key is ``("torch", "relu")``."""
+    """Return the callable-registry index whose key has terminal name ``relu``."""
 
     for index, entry in enumerate(run["callable_registry"]):
-        if entry["key"]["namespace"] == "torch" and entry["key"]["qualname"] == "relu":
+        if entry["key"]["qualname"] == "relu":
             return index
-    raise AssertionError("expected a torch.relu op in the tiny model")
+    raise AssertionError("expected a relu op in the tiny model")
 
 
 def _relu_registry_id(run: dict, index: int) -> str:
@@ -199,7 +199,10 @@ def test_runnable_load_blocks_torch_save_file_write(tmp_path: Path) -> None:
     run = manifest["run"]
     index = _relu_registry_index(run)
     registry_id = _relu_registry_id(run, index)
-    run["callable_registry"][index]["key"]["qualname"] = "save"
+    key = run["callable_registry"][index]["key"]
+    key["namespace"] = "torch"
+    key["qualname"] = "save"
+    key["import_path"] = None
     call = next(c for c in run["calls"] if c["registry_id"] == registry_id)
     call["argument_names"] = ["obj", "f"]
     call["num_positional_args"] = 2
@@ -238,7 +241,10 @@ def test_runnable_load_blocks_torch_load_rce(tmp_path: Path) -> None:
     run = manifest["run"]
     index = _relu_registry_index(run)
     registry_id = _relu_registry_id(run, index)
-    run["callable_registry"][index]["key"]["qualname"] = "load"
+    key = run["callable_registry"][index]["key"]
+    key["namespace"] = "torch"
+    key["qualname"] = "load"
+    key["import_path"] = None
     call = next(c for c in run["calls"] if c["registry_id"] == registry_id)
     call["argument_names"] = ["f"]
     call["num_positional_args"] = 1

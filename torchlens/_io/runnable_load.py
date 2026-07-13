@@ -360,6 +360,20 @@ def _resolve_registry_entry(
             moved=False,
         )
 
+    if _is_captured_internal_torch_builtin_key(key):
+        diagnostic = _diagnostic(
+            RunnableErrorCode.PRIVATE_API_UNAVAILABLE,
+            "Captured internal torch builtin is unavailable; its public wrapper is not a "
+            "safe replay substitute for the recorded call recipe.",
+            descriptor=descriptor,
+            registry_id=entry.registry_id,
+            affected_ops=affected_ops,
+            detection_stage="resolver_exact",
+            provenance="internal_builtin_identity_required",
+            details=(("recorded_key", _key_display_path(key)),),
+        )
+        return _unavailable_resolution(entry, diagnostic, "internal_builtin_identity_required")
+
     alias = resolve_runnable_torch_alias(
         stock_path or _key_display_path(key), descriptor.compatibility.backend_version
     )
@@ -625,6 +639,31 @@ def _stock_path_from_key(key: FunctionRegistryKey) -> str | None:
     if not separator or not (module_name == "torch" or module_name.startswith("torch.")):
         return None
     return f"{module_name}.{qualname}"
+
+
+def _is_captured_internal_torch_builtin_key(key: FunctionRegistryKey) -> bool:
+    """Return whether ``key`` identifies a recipe-sensitive torch builtin.
+
+    Parameters
+    ----------
+    key:
+        Saved callable registry key.
+
+    Returns
+    -------
+    bool
+        Whether the key was emitted for a canonical
+        ``_VariableFunctionsClass`` builtin.
+    """
+
+    if key.namespace != "custom" or key.import_path is None:
+        return False
+    module_name, separator, qualname = key.import_path.partition(":")
+    return (
+        separator == ":"
+        and module_name == "torch._C._VariableFunctionsClass"
+        and qualname == key.qualname
+    )
 
 
 def _key_display_path(key: FunctionRegistryKey) -> str:

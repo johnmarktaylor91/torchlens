@@ -22,6 +22,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import (
     ControlWitnessKind,
     PathFaithfulness,
+    ReadinessStatus,
     RunnableErrorCode,
     StateSlotRole,
     TensorSlotRole,
@@ -100,6 +101,86 @@ class EinsumContainerModel(nn.Module):
         """Multiply two derived matrices through an einsum operand container."""
 
         return torch.einsum("ij,jk->ik", left + 1, right * 2)
+
+
+class MultiOperandEinsumModel(nn.Module):
+    """Use a public einsum whose eager wrapper calls an internal builtin."""
+
+    def __init__(self, operand_count: int) -> None:
+        """Store the number of vector operands in the outer product.
+
+        Parameters
+        ----------
+        operand_count:
+            Number of input vectors to include in the einsum expression.
+        """
+
+        super().__init__()
+        self.operand_count = operand_count
+
+    def forward(self, *values: torch.Tensor) -> torch.Tensor:
+        """Form an outer product over every supplied vector.
+
+        Parameters
+        ----------
+        *values:
+            One-dimensional tensor operands.
+
+        Returns
+        -------
+        torch.Tensor
+            Outer-product result with one output axis per operand.
+        """
+
+        assert len(values) == self.operand_count
+        symbols = "abcdefghijklmnopqrstuvwxyz"[: self.operand_count]
+        equation = f"{','.join(symbols)}->{symbols}"
+        operands = tuple(value + index for index, value in enumerate(values, start=1))
+        return torch.einsum(equation, *operands)
+
+
+class ExplicitDimsTensordotModel(nn.Module):
+    """Use list-valued public tensordot dimensions."""
+
+    def forward(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        """Contract two tensors over two explicitly paired axes.
+
+        Parameters
+        ----------
+        left:
+            Left rank-three operand.
+        right:
+            Right rank-three operand.
+
+        Returns
+        -------
+        torch.Tensor
+            The contracted result.
+        """
+
+        return torch.tensordot(left + 1, right * 2, dims=([1, 2], [1, 0]))
+
+
+class IntegerDimsTensordotModel(nn.Module):
+    """Use scalar public tensordot dimensions."""
+
+    def forward(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        """Contract the final and initial axes of two matrices.
+
+        Parameters
+        ----------
+        left:
+            Left matrix operand.
+        right:
+            Right matrix operand.
+
+        Returns
+        -------
+        torch.Tensor
+            The matrix-product-shaped contraction.
+        """
+
+        return torch.tensordot(left + 1, right * 2, dims=1)
 
 
 class _OpaqueContainerMember:
@@ -300,6 +381,72 @@ def test_runnable_container_tensor_arguments_save_load_and_run_verified(
     expected = model(*inputs) if isinstance(inputs, tuple) else model(inputs)
 
     torch.testing.assert_close(result.output, expected)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+@pytest.mark.parametrize("operand_count", (3, 4, 5))
+def test_runnable_internal_einsum_identity_save_load_and_run_verified(
+    tmp_path: Path, operand_count: int
+) -> None:
+    """Replay multi-operand einsum through its captured internal builtin."""
+
+    inputs = tuple(torch.arange(2.0) for _ in range(operand_count))
+    model = MultiOperandEinsumModel(operand_count)
+    trace = _capture(model, inputs)
+    descriptor = build_sparse_run_descriptor(trace)
+    path = tmp_path / f"einsum_{operand_count}.tlspec"
+
+    assert descriptor.preflight.passed
+    einsum_key = next(
+        entry.key for entry in descriptor.callable_registry if entry.key.qualname == "einsum"
+    )
+    assert einsum_key.namespace == "custom"
+    assert einsum_key.import_path == "torch._C._VariableFunctionsClass:einsum"
+
+    trace.save(path, level="runnable")
+    loaded = tl.load(path)
+    assert loaded.readiness.status is ReadinessStatus.READY
+
+    result = loaded.run(inputs=inputs)
+    torch.testing.assert_close(result.output, model(*inputs))
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+@pytest.mark.parametrize(
+    ("model", "inputs"),
+    (
+        (
+            ExplicitDimsTensordotModel(),
+            (torch.ones(2, 3, 4), torch.ones(4, 3, 5)),
+        ),
+        (IntegerDimsTensordotModel(), (torch.ones(2, 3), torch.ones(3, 4))),
+    ),
+    ids=("explicit_dimension_lists", "integer_dimensions"),
+)
+def test_runnable_internal_tensordot_identity_save_load_and_run_verified(
+    tmp_path: Path,
+    model: nn.Module,
+    inputs: tuple[torch.Tensor, torch.Tensor],
+) -> None:
+    """Replay tensordot recipes through their captured internal builtin."""
+
+    trace = _capture(model, inputs)
+    descriptor = build_sparse_run_descriptor(trace)
+    path = tmp_path / f"{type(model).__name__}.tlspec"
+
+    assert descriptor.preflight.passed
+    tensordot_key = next(
+        entry.key for entry in descriptor.callable_registry if entry.key.qualname == "tensordot"
+    )
+    assert tensordot_key.namespace == "custom"
+    assert tensordot_key.import_path == "torch._C._VariableFunctionsClass:tensordot"
+
+    trace.save(path, level="runnable")
+    loaded = tl.load(path)
+    assert loaded.readiness.status is ReadinessStatus.READY
+
+    result = loaded.run(inputs=inputs)
+    torch.testing.assert_close(result.output, model(*inputs))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

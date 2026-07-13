@@ -67,6 +67,79 @@ DIRECTION_AGNOSTIC_KINDS = frozenset(
     }
 )
 
+_TORCH_INTERNAL_BUILTIN_NAMESPACE = "torch._C._VariableFunctionsClass"
+
+
+def _internal_torch_builtin_key(
+    func: Callable[..., Any],
+    name: str,
+    dispatch_kind: Literal["function", "dunder"],
+) -> FunctionRegistryKey | None:
+    """Return a replay key for an internal torch builtin, when ``func`` is one.
+
+    The public ``torch`` Python wrappers sometimes lower their calls to the
+    underlying ``_VariableFunctionsClass`` builtin with a different argument
+    convention. Sparse runnable recipes record that lowered convention, so
+    replay must keep the builtin identity instead of resolving its public
+    wrapper. Direct builtin public exports retain their existing public keys.
+
+    Parameters
+    ----------
+    func:
+        Captured callable after TorchLens wrapper unwrapping.
+    name:
+        Callable's terminal name.
+    dispatch_kind:
+        Portable dispatch category for the callable.
+
+    Returns
+    -------
+    FunctionRegistryKey | None
+        Stock internal-builtin key when the callable is owned by that namespace,
+        otherwise ``None``.
+    """
+
+    internal = getattr(torch._C._VariableFunctionsClass, name, None)
+    public = getattr(torch, name, None)
+    if internal is not func or getattr(public, "__module__", None) == "torch":
+        return None
+    return FunctionRegistryKey(
+        "custom",
+        name,
+        dispatch_kind,
+        import_path=f"{_TORCH_INTERNAL_BUILTIN_NAMESPACE}:{name}",
+    )
+
+
+def _resolve_internal_torch_builtin_key(
+    key: FunctionRegistryKey,
+) -> Callable[..., Any] | None:
+    """Resolve a captured internal torch-builtin key without importing a module.
+
+    Parameters
+    ----------
+    key:
+        Saved function registry key.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        The in-memory builtin for a canonical internal key, or ``None`` for all
+        other key shapes.
+    """
+
+    if key.namespace != "custom" or key.import_path is None:
+        return None
+    module_name, separator, qualname = key.import_path.partition(":")
+    if (
+        separator != ":"
+        or module_name != _TORCH_INTERNAL_BUILTIN_NAMESPACE
+        or qualname != key.qualname
+    ):
+        return None
+    resolved = getattr(torch._C._VariableFunctionsClass, qualname, None)
+    return cast(Callable[..., Any], resolved) if callable(resolved) else None
+
 
 def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionRegistryKey:
     """Infer a portable registry key from a captured callable.
@@ -91,6 +164,9 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
     )
 
     if module == "torch":
+        internal_key = _internal_torch_builtin_key(func, str(name), dispatch_kind)
+        if internal_key is not None:
+            return internal_key
         return FunctionRegistryKey("torch", str(name), dispatch_kind)
     if module == "torch.nn.functional":
         return FunctionRegistryKey("torch.nn.functional", str(name), dispatch_kind)
@@ -162,6 +238,15 @@ def resolve_function_registry_key(
         "operator": operator,
     }
     try:
+        internal_builtin = _resolve_internal_torch_builtin_key(key)
+        if internal_builtin is not None:
+            if not is_pure_forward_callable(internal_builtin):
+                raise UntrustedCallableError(
+                    "Refusing to resolve bundle-supplied callable "
+                    f"{key.import_path} ({unsafe_callable_reason(internal_builtin)}); "
+                    "it is not a pure forward/tensor op and can execute side effects."
+                )
+            return internal_builtin
         if key.namespace in _fixed_roots:
             resolved = cast(Callable[..., Any], getattr(_fixed_roots[key.namespace], key.qualname))
             # SECURITY BOUNDARY (tripwire). These fixed namespaces also expose
