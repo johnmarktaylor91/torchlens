@@ -273,6 +273,18 @@ def _safe_getattr(obj: Any, name: Any) -> Any:
     the enumerated torch C callable-holder classes; any other target -- including
     an already-resolved torchlens recipe function -- fails closed.
 
+    Restricting the TARGET is not enough (round-5): the admitted
+    ``_VariableFunctionsClass`` holder also exposes side-effecting file-I/O
+    builtins -- notably ``torch.from_file`` -- so ``getattr(_VariableFunctionsClass,
+    "from_file")`` would return a callable that CREATES/TRUNCATES or READS an
+    arbitrary file when used as the callable of a following pickle ``REDUCE``. The
+    resolved callable is therefore additionally gated through the shared
+    callable-safety policy (``is_pure_forward_callable``): a pure tensor-method /
+    factory reference (``sum`` / ``from_numpy`` / ``frombuffer``) is returned, while
+    ``from_file`` and any other side-effecting builtin fail closed. The policy is
+    imported lazily to keep this early-imported security front door free of
+    import-order coupling.
+
     Parameters
     ----------
     obj:
@@ -283,20 +295,30 @@ def _safe_getattr(obj: Any, name: Any) -> Any:
     Returns
     -------
     Any
-        ``getattr(obj, name)`` for an admitted torch C target.
+        ``getattr(obj, name)`` for an admitted torch C target and a non-side-effecting
+        result.
 
     Raises
     ------
     pickle.UnpicklingError
-        If ``obj`` is not an admitted torch C callable-holder class or ``name``
-        is not a string.
+        If ``obj`` is not an admitted torch C callable-holder class, ``name`` is not
+        a string, or the resolved attribute is a side-effecting callable.
     """
 
     if not isinstance(name, str) or obj not in _ALLOWED_GETATTR_OBJECTS:
         raise pickle.UnpicklingError(
             f"Blocked getattr during bundle metadata unpickle: getattr on {obj!r} is not permitted."
         )
-    return getattr(obj, name)
+    resolved = getattr(obj, name)
+    if callable(resolved):
+        from ..utils._callable_safety import is_pure_forward_callable
+
+        if not is_pure_forward_callable(resolved):
+            raise pickle.UnpicklingError(
+                "Blocked side-effecting torch callable during bundle metadata "
+                f"unpickle: getattr(..., {name!r}) is not a pure forward/tensor op."
+            )
+    return resolved
 
 
 def _safe_load_from_bytes(data: bytes) -> Any:
