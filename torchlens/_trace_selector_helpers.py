@@ -307,6 +307,39 @@ def _layers_to_save_has_negative_index(layers_to_save: object) -> bool:
     return False
 
 
+def _layers_to_save_live_subset(layers_to_save: object) -> object | None:
+    """Return selector components that can be resolved during the forward.
+
+    Parameters
+    ----------
+    layers_to_save
+        Public ``layers_to_save`` selection containing a deferred component.
+
+    Returns
+    -------
+    object | None
+        Positive integer and ordinary label components, or ``None`` when every
+        component requires final graph structure.
+    """
+
+    if isinstance(layers_to_save, bool):
+        return None
+    if isinstance(layers_to_save, int):
+        return layers_to_save if layers_to_save >= 0 else None
+    if isinstance(layers_to_save, str):
+        if layers_to_save.startswith(("output", "identity")):
+            return None
+        return layers_to_save
+    if isinstance(layers_to_save, collections.abc.Iterable):
+        live_components = [
+            component
+            for component in layers_to_save
+            if _layers_to_save_live_subset(component) is not None
+        ]
+        return live_components or None
+    return None
+
+
 def _layers_to_save_has_integer_selector(layers_to_save: object) -> bool:
     """Return whether ``layers_to_save`` contains a legacy integer selector.
 

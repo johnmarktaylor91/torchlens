@@ -217,6 +217,8 @@ class CaptureSession:
         raw_index: int,
         tensor: Any,
         fields_dict: Mapping[str, Any] | None = None,
+        *,
+        retain_activation: bool = True,
     ) -> None:
         """Retain one selector candidate before its immutable event is appended.
 
@@ -228,12 +230,14 @@ class CaptureSession:
             Live backend tensor for the operation.
         fields_dict
             Live event fields, used to identify positive-index gradient targets.
+        retain_activation
+            Whether this candidate still needs detached deferred retention.
         """
 
         profile = self.plan.retention_profile
         if raw_index in profile.gradient_live_indices and fields_dict is not None:
             self.live_gradient_labels.add(str(fields_dict["_label_raw"]))
-        if profile.activation_kind is RetentionKind.ACTIVATION:
+        if profile.activation_kind is RetentionKind.ACTIVATION and retain_activation:
             with _state.pause_logging():
                 payload = safe_copy(tensor, detach_tensor=True)
                 nbytes = int(payload.nelement() * payload.element_size())
@@ -249,6 +253,8 @@ class CaptureSession:
                     evicted = self.activation_escrow.pop(next(iter(self.activation_escrow)))
                     if evicted.tensor is not None:
                         self.activation_escrow_ram_bytes -= evicted.nbytes
+                    elif evicted.spill_path is not None:
+                        evicted.spill_path.unlink(missing_ok=True)
             self._spill_activation_escrow_to_budget()
         if profile.gradient_kind is RetentionKind.GRADIENT_REFERENCE:
             self.gradient_reference_escrow[raw_index] = tensor
@@ -264,11 +270,7 @@ class CaptureSession:
             if window is not None:
                 while len(self.gradient_reference_escrow) > window:
                     oldest_index = next(iter(self.gradient_reference_escrow))
-                    evicted = self.gradient_reference_escrow.pop(oldest_index)
-                    with _state.pause_logging():
-                        self.gradient_reference_logical_bytes -= int(
-                            evicted.nelement() * evicted.element_size()
-                        )
+                    self.gradient_reference_escrow.pop(oldest_index)
             self._warn_for_extreme_gradient_retention()
 
     def _spill_activation_escrow_to_budget(self) -> None:
@@ -301,20 +303,18 @@ class CaptureSession:
             self.activation_escrow_spilled_bytes += candidate.nbytes
 
     def _warn_for_extreme_gradient_retention(self) -> None:
-        """Warn once when unwindowable live references cross the compiled byte bound."""
+        """Warn once when graph-pinned references cross the compiled byte bound."""
 
         profile = self.plan.retention_profile
         if (
             self._gradient_warning_emitted
-            or profile.gradient_window is not None
-            or profile.spillable
             or self.gradient_reference_logical_bytes <= profile.gradient_warning_threshold_bytes
         ):
             return
         self._gradient_warning_emitted = True
         retained_mib = self.gradient_reference_logical_bytes / (1024 * 1024)
         warnings.warn(
-            "Unwindowable gradient selection is retaining graph-connected tensor references "
+            "Graph-connected gradient selection is retaining tensor references "
             f"covering approximately {retained_mib:.1f} MiB of logical tensor payload. "
             "Narrow the selector or use an explicit trace refresh to reduce peak memory.",
             RuntimeWarning,
@@ -337,7 +337,8 @@ class CaptureSession:
                     parent = trace.layer_dict_all_keys[parent_label]
                     live_output_by_raw_index[parent.raw_index] = output_tensor
             selected = _get_op_nums_from_user_labels(trace, activation_selector)
-            selected_nums = set() if selected == "all" else set(selected)
+            requested_nums = set() if selected == "all" else set(selected)
+            selected_nums = set(requested_nums)
             selected_nums.update(
                 op.raw_index
                 for op in trace.layer_list
@@ -370,6 +371,13 @@ class CaptureSession:
                         if payload is not None:
                             break
                 if payload is None:
+                    if op.has_saved_activation:
+                        continue
+                    if op.raw_index in requested_nums:
+                        raise RuntimeError(
+                            "TorchLens could not retain an explicitly requested activation "
+                            f"for {op.layer_label!r} (raw index {op.raw_index})."
+                        )
                     continue
                 op.save_activation(
                     payload,

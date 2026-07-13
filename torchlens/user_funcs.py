@@ -115,6 +115,7 @@ from ._trace_selector_helpers import (
     _combine_save_predicates,
     _is_selective_label_save,
     _layers_to_save_has_negative_index,
+    _layers_to_save_live_subset,
     _layers_to_save_mentions_identity,
     _layers_to_save_mentions_output,
     _make_layers_to_save_predicate,
@@ -2033,6 +2034,9 @@ def _trace_torch_model(
         or _layers_to_save_has_negative_index(layers_to_save)
         or _layers_to_save_mentions_identity(layers_to_save)
     )
+    live_layers_to_save = (
+        _layers_to_save_live_subset(layers_to_save) if uses_deferred_activation else layers_to_save
+    )
     needs_live_output_projection = (
         _is_selective_label_save(layers_to_save)
         and should_save_grads
@@ -2043,6 +2047,9 @@ def _trace_torch_model(
         layers_predicate = _make_layers_to_save_predicate(layers_to_save)
         save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
         layers_to_save = "all"
+    elif uses_deferred_activation and live_layers_to_save is not None:
+        layers_predicate = _make_layers_to_save_predicate(live_layers_to_save)
+        save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
     if save_predicate is not None or intervene is not None or halt is not None:
         from .capture.predicates import validate_followed_by_capability
 

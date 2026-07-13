@@ -333,6 +333,7 @@ def test_matrix_covers_required_models_paths_and_features() -> None:
         "predicate_live",
         "record",
         "two_pass_negative",
+        "mixed_selector",
     }
     features = {feature for case in CASES for feature in case.features}
     assert features >= {"intervene", "halt", "lookback", "backward", "disk", "failed"}

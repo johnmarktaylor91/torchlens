@@ -73,6 +73,7 @@ CASES: tuple[CaseSpec, ...] = (
     CaseSpec("plain_cnn__predicate_live", "plain_cnn", "predicate_live", 1),
     CaseSpec("plain_cnn__record", "plain_cnn", "record", 1),
     CaseSpec("plain_cnn__two_pass_negative", "plain_cnn", "two_pass_negative", 1),
+    CaseSpec("plain_cnn__mixed_selector", "plain_cnn", "mixed_selector", 1),
     CaseSpec("plain_cnn__lookback", "plain_cnn", "lookback_trace", 1, ("lookback",)),
     CaseSpec("plain_cnn__intervene_trace", "plain_cnn", "intervene_trace", 1, ("intervene",)),
     CaseSpec("plain_cnn__intervene_record", "plain_cnn", "intervene_record", 1, ("intervene",)),
@@ -557,6 +558,8 @@ def _run_capture(
         return recording, None, None
     if config == "two_pass_negative":
         return tl.trace(model, input_tensor, layers_to_save=[-1], random_seed=_SEED), None, None
+    if config == "mixed_selector":
+        return tl.trace(model, input_tensor, layers_to_save=[1, -1], random_seed=_SEED), None, None
     if config == "lookback_trace":
         selector = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
         trace = tl.trace(

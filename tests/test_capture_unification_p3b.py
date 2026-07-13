@@ -81,6 +81,18 @@ class SavedOrphan(nn.Module):
         return x + 1
 
 
+class FourOpArithmetic(nn.Module):
+    """Deterministic graph with enough operations to exercise tail eviction."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply four distinct arithmetic operations."""
+
+        added = x + 1
+        multiplied = added * 2
+        activated = multiplied.relu()
+        return activated - 3
+
+
 def _save_only_mul(ctx: RecordContext) -> bool:
     """Select only the downstream multiplication op."""
 
@@ -197,6 +209,42 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
     assert hooked_raw_labels == {saved[0]._label_raw}
 
 
+@pytest.mark.parametrize("live_selector", (1, "mul", "output"))
+def test_mixed_live_and_negative_selectors_retain_exact_values(live_selector: int | str) -> None:
+    """Mixed selectors retain the live winner and the deferred tail exactly once."""
+
+    input_tensor = torch.tensor([1.0, 4.0])
+    live_trace = tl.trace(FourOpArithmetic(), input_tensor, layers_to_save=[live_selector])
+    tail_trace = tl.trace(FourOpArithmetic(), input_tensor, layers_to_save=[-1])
+    mixed_trace = tl.trace(
+        FourOpArithmetic(),
+        input_tensor,
+        layers_to_save=[live_selector, -1],
+    )
+
+    expected = {
+        op.raw_index: op.out
+        for trace in (live_trace, tail_trace)
+        for op in trace.layer_list
+        if op.has_saved_activation
+    }
+    actual = {op.raw_index: op.out for op in mixed_trace.layer_list if op.has_saved_activation}
+    assert actual.keys() == expected.keys()
+    assert all(torch.equal(actual[index], value) for index, value in expected.items())
+
+
+def test_missing_explicit_deferred_activation_raises() -> None:
+    """Deferred resolution never silently skips an explicit activation request."""
+
+    trace = tl.trace(FourOpArithmetic(), torch.ones(2), layers_to_save="none")
+    trace._deferred_retention_selector = [1]
+    session = _retention_session(RetentionProfile())
+    output_tensors = [trace[output_label].out for output_label in trace.output_layers]
+
+    with pytest.raises(RuntimeError, match="explicitly requested activation"):
+        session.resolve_deferred_retention(trace, output_tensors)
+
+
 def _retention_session(profile: RetentionProfile) -> CaptureSession:
     """Return a capture session with one explicitly supplied retention profile."""
 
@@ -235,37 +283,58 @@ def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None
     assert not spill_path.exists()
 
 
-def test_gradient_retention_warning_is_extreme_unwindowable_only() -> None:
-    """The graph-retention warning excludes windowed and spillable profiles."""
+def test_windowed_activation_escrow_deletes_evicted_spill_files() -> None:
+    """Spilled window eviction unlinks payloads as soon as they leave escrow."""
 
-    extreme = _retention_session(
+    session = _retention_session(
         RetentionProfile(
-            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
-            gradient_window=None,
-            gradient_warning_threshold_bytes=1,
+            activation_kind=RetentionKind.ACTIVATION,
+            activation_window=1,
+            spillable=True,
+            activation_ram_budget_bytes=1,
         )
     )
-    with pytest.warns(RuntimeWarning, match="Unwindowable gradient selection"):
-        extreme.escrow_candidate(1, torch.ones(2, requires_grad=True))
+    evicted_paths: list[Path] = []
+    previous_path: Path | None = None
+    for raw_index in range(1, 5):
+        session.escrow_candidate(raw_index, torch.full((8,), float(raw_index)))
+        current_payload = session.activation_escrow[raw_index]
+        assert current_payload.spill_path is not None
+        if previous_path is not None:
+            evicted_paths.append(previous_path)
+        previous_path = current_payload.spill_path
+        assert session._activation_spill_dir is not None
+        spill_files = list(Path(session._activation_spill_dir.name).glob("*.pt"))
+        assert spill_files == [current_payload.spill_path]
 
-    for profile in (
+    assert all(not path.exists() for path in evicted_paths)
+    session.release()
+
+
+def test_gradient_retention_warning_counts_window_evicted_graph_bytes() -> None:
+    """The retention warning counts graph-pinned tensors evicted from its lookup window."""
+
+    tensor_shape = (256, 256)
+    tensor_nbytes = 256 * 256 * torch.tensor([], dtype=torch.float32).element_size()
+    session = _retention_session(
         RetentionProfile(
             gradient_kind=RetentionKind.GRADIENT_REFERENCE,
             gradient_window=1,
-            gradient_warning_threshold_bytes=1,
-        ),
-        RetentionProfile(
-            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
-            gradient_window=None,
-            spillable=True,
-            gradient_warning_threshold_bytes=1,
-        ),
-    ):
-        session = _retention_session(profile)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            session.escrow_candidate(1, torch.ones(2, requires_grad=True))
-        assert not [warning for warning in caught if warning.category is RuntimeWarning]
+            gradient_warning_threshold_bytes=(2 * tensor_nbytes) - 1,
+        )
+    )
+    first = torch.ones(tensor_shape, requires_grad=True) * 2
+    second = torch.ones(tensor_shape, requires_grad=True) * 3
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        session.escrow_candidate(1, first)
+    assert not [warning for warning in caught if warning.category is RuntimeWarning]
+    with pytest.warns(RuntimeWarning, match="Graph-connected gradient selection"):
+        session.escrow_candidate(2, second)
+
+    assert list(session.gradient_reference_escrow) == [2]
+    assert session.gradient_reference_logical_bytes == 2 * tensor_nbytes
 
 
 def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None:
