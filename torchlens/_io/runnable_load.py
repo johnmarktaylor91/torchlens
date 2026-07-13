@@ -364,8 +364,8 @@ def _resolve_registry_entry(
     )
     if alias is not None:
         namespace, qualname, provenance = alias
-        func = _getattr_allowlisted(namespace, qualname)
-        if func is None:
+        alias_func = _getattr_allowlisted(namespace, qualname)
+        if alias_func is None:
             private = _is_private_path(stock_path or _key_display_path(key))
             code = (
                 RunnableErrorCode.PRIVATE_API_UNAVAILABLE
@@ -385,7 +385,7 @@ def _resolve_registry_entry(
             return _unavailable_resolution(entry, diagnostic, provenance)
         return _resolved_callable(
             entry,
-            func,
+            alias_func,
             resolved_qualname=f"{namespace}.{qualname}",
             provenance=provenance,
             status=ResolverStatus.RESOLVED_ALIAS,
