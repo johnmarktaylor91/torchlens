@@ -21,7 +21,11 @@ import torchlens.user_funcs as user_funcs
 import torchlens as tl
 import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
-from torchlens.validation import validate_forward_pass
+from torchlens.validation import (
+    ValidationDiagnostic,
+    get_validation_diagnostics,
+    validate_forward_pass,
+)
 from torchlens.errors import MetadataInvariantError, TraceNotReproducibleWarning
 from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
@@ -1098,10 +1102,10 @@ def test_validate_forward_pass_plain_attribute_mutable_state_isolated() -> None:
     assert validate_forward_pass(PlainMutableState(), torch.randn(3)) is True
 
 
-def test_validate_forward_pass_restores_pristine_state_before_replay(
+def test_validate_forward_pass_pristine_replay_catches_mutation_masked_bug(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validation replay starts from the validation model's pre-capture state."""
+    """A planted replay bug cannot hide behind post-forward buffer state."""
 
     class CounterBuffer(nn.Module):
         """Model whose registered counter changes its structural forward path."""
@@ -1123,27 +1127,30 @@ def test_validate_forward_pass_restores_pristine_state_before_replay(
             step.add_(1)
             return output
 
-    replay_entry_steps: list[float] = []
+    def planted_state_sensitive_capture_bug(
+        trace: Trace,
+        ground_truth_output_tensors: list[torch.Tensor],
+        verbose: bool = False,
+        validate_metadata: bool = True,
+    ) -> bool:
+        """Simulate a replay bug whose stale source state masks a bad capture."""
 
-    def observe_replay_entry(trace: Trace) -> None:
-        """Record the validation model state visible at replay completion."""
-
-        source_ref = getattr(trace, "_source_model_ref")
+        del ground_truth_output_tensors, verbose, validate_metadata
+        source_ref = trace._source_model_ref
         source_model = source_ref()
         assert source_model is not None
-        replay_entry_steps.append(float(cast(torch.Tensor, source_model.step).item()))
+        return bool(cast(torch.Tensor, source_model.step).item() > 0)
 
+    monkeypatch.setattr(Trace, "validate_forward_pass", planted_state_sensitive_capture_bug)
     with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
         assert (
             user_public_impls._validate_forward_pass_torch(
                 CounterBuffer(),
                 torch.randn(3),
                 validate_metadata=False,
-                _trace_observer=observe_replay_entry,
             )
-            is True
+            is False
         )
-    assert replay_entry_steps == [0.0]
 
     original_restore = user_public_impls._restore_validation_replay_state
 
@@ -1156,7 +1163,6 @@ def test_validate_forward_pass_restores_pristine_state_before_replay(
 
         del model, state_dict, plain_attr_snapshot
 
-    replay_entry_steps.clear()
     monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", skip_restore)
 
     with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
@@ -1165,11 +1171,9 @@ def test_validate_forward_pass_restores_pristine_state_before_replay(
                 CounterBuffer(),
                 torch.randn(3),
                 validate_metadata=False,
-                _trace_observer=observe_replay_entry,
             )
             is True
         )
-    assert replay_entry_steps == [2.0]
     monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", original_restore)
 
 
@@ -1221,7 +1225,7 @@ def test_validate_forward_pass_replay_copy_fallback_warns_for_lock_attr() -> Non
 
 
 def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
-    """Validation warns when a second trace has a different structure."""
+    """Structural re-trace divergence emits a structured retained warning."""
 
     class ToggleBranch(nn.Module):
         """Model that changes control flow after one forward pass."""
@@ -1242,11 +1246,30 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
             self.use_mul = True
             return out
 
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
     with pytest.warns(
         TraceNotReproducibleWarning,
         match="stateful/non-reproducible.*make the forward path state-independent",
-    ):
-        assert validate_forward_pass(ToggleBranch(), torch.randn(2, 3)) is True
+    ) as caught:
+        assert user_public_impls._validate_forward_pass_torch(
+            ToggleBranch(),
+            torch.randn(2, 3),
+            _trace_observer=observe_trace,
+        )
+
+    warning = caught[0].message
+    assert isinstance(warning, TraceNotReproducibleWarning)
+    assert warning.fields["first_graph_hash"] != warning.fields["retrace_graph_hash"]
+    assert warning.fields["first_divergence"] is not None
+    assert len(diagnostics) == 1
+    assert diagnostics[0][0].check == "trace_retrace_structure_mismatch"
+    assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
 def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
@@ -1266,6 +1289,29 @@ def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
 
     messages = [str(warning.message) for warning in caught]
     assert not any("stateful/non-reproducible" in message for message in messages)
+
+
+def test_validate_forward_pass_dropout_value_drift_does_not_warn_on_retrace() -> None:
+    """RNG value drift alone does not trigger the structural re-trace warning."""
+
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
+    model = nn.Dropout(p=0.5).train()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert user_public_impls._validate_forward_pass_torch(
+            model,
+            torch.randn(4, 3),
+            _trace_observer=observe_trace,
+        )
+
+    assert not any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+    assert diagnostics == [()]
 
 
 def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None:
@@ -1293,7 +1339,7 @@ def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None
 
 
 def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
-    """Live-model fallback also runs the structural reproducibility trace."""
+    """An uncopyable model skips only the new pristine re-trace diagnostic."""
 
     execution_count = [0]
 
@@ -1317,11 +1363,24 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
             execution_count[0] += 1
             return x + 1
 
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
     model = UncopyableExecutionCounter()
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
-        assert validate_forward_pass(model, torch.randn(2, 3)) is True
+        assert user_public_impls._validate_forward_pass_torch(
+            model,
+            torch.randn(2, 3),
+            _trace_observer=observe_trace,
+        )
 
-    assert execution_count == [3]
+    assert execution_count == [2]
+    assert len(diagnostics) == 1
+    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
@@ -1355,8 +1414,8 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
     assert snapshot is not None
 
 
-def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> None:
-    """An opaque attr must not block restoration or the reproducibility tripwire."""
+def test_unsnapshotable_attr_restores_other_state_and_skips_pristine_retrace() -> None:
+    """An opaque attr preserves replay while safely skipping only the new check."""
 
     class LockBackedToggle(nn.Module):
         """Stateful model with one unsnapshotable but unused lock."""
@@ -1375,15 +1434,27 @@ def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> 
             self.step += 1
             return output
 
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = validate_forward_pass(LockBackedToggle(), torch.randn(3))
+        result = user_public_impls._validate_forward_pass_torch(
+            LockBackedToggle(),
+            torch.randn(3),
+            _trace_observer=observe_trace,
+        )
 
     assert result is True
     assert any(
         "skipping restoration for this attribute only" in str(item.message) for item in caught
     )
-    assert any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+    assert not any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_validate_forward_pass_ground_truth_copy_strips_traced_forward_wrappers() -> None:

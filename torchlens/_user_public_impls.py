@@ -1016,18 +1016,56 @@ def _warn_if_validation_trace_not_reproducible(
             return
         hint = _first_reproducibility_divergence(first_trace, second_trace)
         hint_suffix = f" ({hint})" if hint is not None else ""
-        warnings.warn(
+        message = (
             "TorchLens validation detected a stateful/non-reproducible model: "
             "fresh re-trace produced a structurally different graph. The trace "
             "may represent a one-time execution. Re-run from fresh model state or "
-            f"make the forward path state-independent{hint_suffix}.",
-            TraceNotReproducibleWarning,
+            f"make the forward path state-independent{hint_suffix}."
+        )
+        from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+
+        record_validation_diagnostic(
+            first_trace,
+            ValidationDiagnostic(
+                check="trace_retrace_structure_mismatch",
+                message=message,
+                extra={
+                    "first_graph_hash": first_hash,
+                    "retrace_graph_hash": second_hash,
+                    "first_op_count": len(first_trace.layer_list),
+                    "retrace_op_count": len(second_trace.layer_list),
+                    "first_divergence": hint,
+                },
+            ),
+        )
+        warnings.warn(
+            TraceNotReproducibleWarning(
+                message,
+                first_graph_hash=first_hash,
+                retrace_graph_hash=second_hash,
+                first_op_count=len(first_trace.layer_list),
+                retrace_op_count=len(second_trace.layer_list),
+                first_divergence=hint,
+            ),
             stacklevel=2,
         )
     except Exception as exc:
-        warnings.warn(
+        message = (
             "TorchLens validation could not run the fresh re-trace reproducibility "
-            f"check ({type(exc).__name__}: {exc}).",
+            f"check ({type(exc).__name__}: {exc})."
+        )
+        from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+
+        record_validation_diagnostic(
+            first_trace,
+            ValidationDiagnostic(
+                check="trace_retrace_unavailable",
+                message=message,
+                extra={"exception_type": type(exc).__name__},
+            ),
+        )
+        warnings.warn(
+            message,
             RuntimeWarning,
             stacklevel=2,
         )
@@ -1217,7 +1255,9 @@ def _validate_forward_pass_torch(
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
-        validation_model, validation_plain_attr_snapshot, _ = _model_for_validation_replay(model)
+        validation_model, validation_plain_attr_snapshot, validation_model_copied = (
+            _model_for_validation_replay(model)
+        )
         validation_state_dict = _clone_state_dict_with_metadata(validation_model)
         validation_input_args = safe_copy_args(input_args)
         validation_input_kwargs = safe_copy_kwargs(input_kwargs)
@@ -1270,13 +1310,28 @@ def _validate_forward_pass_torch(
                 if isinstance(getattr(op, "func_call_id", None), int)
             }
         )
-        _warn_if_validation_trace_not_reproducible(
-            trace,
-            validation_model,
-            reproducibility_input_args,
-            reproducibility_input_kwargs,
-            random_seed,
-        )
+        if validation_model_copied:
+            _warn_if_validation_trace_not_reproducible(
+                trace,
+                validation_model,
+                reproducibility_input_args,
+                reproducibility_input_kwargs,
+                random_seed,
+            )
+        else:
+            from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+
+            record_validation_diagnostic(
+                trace,
+                ValidationDiagnostic(
+                    check="trace_retrace_pristine_copy_unavailable",
+                    message=(
+                        "TorchLens validation skipped the pristine trace-vs-retrace check "
+                        "because the model could not be deep-copied."
+                    ),
+                    extra={"model_type": f"{type(model).__module__}.{type(model).__qualname__}"},
+                ),
+            )
         _restore_validation_replay_state(
             validation_model,
             validation_state_dict,

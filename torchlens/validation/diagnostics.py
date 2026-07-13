@@ -27,6 +27,7 @@ import torch
 # best-effort, and cleared at the start of each validation run so a stale
 # failure from a prior run can never be reported.
 TRACE_FAILURE_ATTR = "_last_validation_failure"
+TRACE_DIAGNOSTICS_ATTR = "_validation_diagnostics"
 
 # The named validation checks a failure can originate from. Mirrors the phases
 # documented in ``core.validate_saved_outs``.
@@ -130,6 +131,36 @@ class ValidationFailure:
         }
 
 
+@dataclass(frozen=True)
+class ValidationDiagnostic:
+    """Structured non-failing diagnostic emitted by validation.
+
+    Parameters
+    ----------
+    check:
+        Stable name for the validation diagnostic source.
+    message:
+        Human-readable explanation of the diagnostic.
+    extra:
+        Additional JSON-friendly context for downstream reporting.
+    """
+
+    check: str
+    message: str
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of this diagnostic.
+
+        Returns
+        -------
+        dict[str, Any]
+            Stable structured diagnostic payload.
+        """
+
+        return {"check": self.check, "message": self.message, "extra": dict(self.extra)}
+
+
 def reset_validation_failure(trace: Any) -> None:
     """Clear any previously-recorded failure on a Trace (best-effort, no raise)."""
 
@@ -170,6 +201,54 @@ def get_validation_failure(trace: Any) -> Optional[ValidationFailure]:
     except Exception:
         return None
     return failure if isinstance(failure, ValidationFailure) else None
+
+
+def record_validation_diagnostic(trace: Any, diagnostic: ValidationDiagnostic) -> None:
+    """Append a non-failing validation diagnostic to a live trace.
+
+    Parameters
+    ----------
+    trace:
+        Live validation trace that carries the diagnostic side channel.
+    diagnostic:
+        Diagnostic to retain for callers that need more than a warning string.
+
+    Notes
+    -----
+    Recording is deliberately best-effort: diagnostics must never turn a
+    validation warning into a validation failure.
+    """
+
+    try:
+        existing = getattr(trace, TRACE_DIAGNOSTICS_ATTR, ())
+        diagnostics = list(existing) if isinstance(existing, (list, tuple)) else []
+        diagnostics.append(diagnostic)
+        setattr(trace, TRACE_DIAGNOSTICS_ATTR, tuple(diagnostics))
+    except Exception:
+        pass
+
+
+def get_validation_diagnostics(trace: Any) -> tuple[ValidationDiagnostic, ...]:
+    """Return validation diagnostics retained on a live trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace potentially carrying validation diagnostics.
+
+    Returns
+    -------
+    tuple[ValidationDiagnostic, ...]
+        Diagnostics in emission order, or an empty tuple when unavailable.
+    """
+
+    try:
+        diagnostics = getattr(trace, TRACE_DIAGNOSTICS_ATTR, ())
+    except Exception:
+        return ()
+    if not isinstance(diagnostics, (list, tuple)):
+        return ()
+    return tuple(item for item in diagnostics if isinstance(item, ValidationDiagnostic))
 
 
 def _short_dtype(dtype: Any) -> Optional[str]:
