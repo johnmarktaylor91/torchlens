@@ -434,10 +434,27 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
 
     if isinstance(recorded, bool) or isinstance(runtime, bool):
         return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
+    # Float family (incl. numeric float subclasses such as ``numpy.float64``),
+    # excluding bool handled above. ``int`` stays distinct from ``float`` (``2``
+    # vs ``2.0`` must diverge), but ``numpy.float64(2.0)`` compares equal to the
+    # plain ``float`` the literal grammar round-trips to. Compare by IEEE-754 bit
+    # pattern of the float VALUE so the r4 signed-zero/NaN honesty is preserved.
+    rec_is_float = isinstance(recorded, float)
+    run_is_float = isinstance(runtime, float)
+    if rec_is_float or run_is_float:
+        if not (rec_is_float and run_is_float):
+            return False
+        return struct.pack(">d", float(recorded)) == struct.pack(">d", float(runtime))
+    # Integer family (incl. numeric int subclasses), excluding bool. ``int`` vs a
+    # non-int type diverges; two integers compare by value.
+    rec_is_int = isinstance(recorded, int)
+    run_is_int = isinstance(runtime, int)
+    if rec_is_int or run_is_int:
+        if not (rec_is_int and run_is_int):
+            return False
+        return int(recorded) == int(runtime)
     if type(recorded) is not type(runtime):
         return False
-    if isinstance(recorded, float):
-        return struct.pack(">d", recorded) == struct.pack(">d", runtime)
     return bool(recorded == runtime)
 
 
@@ -592,11 +609,48 @@ def _snapshot_input_byte_digests(
     }
 
 
+def _positions_are_mixed(positions: set[Any]) -> bool:
+    """Return whether a capture carries both positional and keyword model sites."""
+
+    kinds = {p[0] for p in positions if isinstance(p, tuple) and len(p) == 2}
+    return "arg" in kinds and "kwarg" in kinds
+
+
+def _split_mixed_inputs(inputs: Any) -> tuple[Sequence[Any], Mapping[Any, Any]]:
+    """Split a combined mixed-input mapping into positional and keyword parts.
+
+    A capture with BOTH positional tensor sites and keyword leaves (e.g.
+    ``forward(x, *, add)``) cannot be rebound from a bare sequence (fails the
+    keyword site) or a bare mapping (fails positional binding). The runnable
+    executor accepts a single combined ``{"args": [...], "kwargs": {...}}``
+    mapping so mixed captures have a representable ``run(inputs=)`` spelling.
+    """
+
+    if not isinstance(inputs, Mapping) or not set(inputs).issubset({"args", "kwargs"}):
+        raise TypeError(
+            "mixed positional+keyword captures require an inputs mapping of the "
+            "form {'args': [...], 'kwargs': {...}}"
+        )
+    args = inputs.get("args", ())
+    kwargs = inputs.get("kwargs", {})
+    if not isinstance(args, Sequence) or isinstance(args, (str, bytes)):
+        raise TypeError("mixed-input 'args' must be a sequence")
+    if not isinstance(kwargs, Mapping):
+        raise TypeError("mixed-input 'kwargs' must be a mapping")
+    return args, kwargs
+
+
 def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
     """Select one top-level argument or keyword site from the public input tree."""
 
     if isinstance(position, tuple) and len(position) == 2:
         kind, key = position
+        if _positions_are_mixed(positions):
+            args, kwargs = _split_mixed_inputs(inputs)
+            if kind == "arg":
+                return args[cast(int, key)]
+            if kind == "kwarg":
+                return kwargs[key]
         if kind == "arg":
             if len(positions) == 1 and key == 0:
                 return inputs

@@ -164,6 +164,11 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         ]
         container_type = _import_container_type(spec)
         if container_type is not None:
+            if spec.type_module == "torch.return_types":
+                # torch structseq classes (``torch.return_types.*``) reject
+                # positional ``*args``; they take a single iterable. Reconstruct
+                # nested structseq the same way at any container depth.
+                return container_type(values)
             return container_type(*values)
         return tuple(values)
     if spec.kind == "dataclass":

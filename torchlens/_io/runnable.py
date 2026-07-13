@@ -1491,11 +1491,16 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
     if isinstance(value, bool):
         return LiteralAtom(LiteralAtomKind.BOOL, value)
     if isinstance(value, int):
-        return LiteralAtom(LiteralAtomKind.INT, value)
+        # Normalize integer subclasses (e.g. ``IntEnum``) to a plain ``int`` so
+        # the stored literal round-trips through JSON / the safe unpickler.
+        return LiteralAtom(LiteralAtomKind.INT, int(value))
     if isinstance(value, float):
         if not torch.isfinite(torch.tensor(value)).item():
             raise _UnsupportedLiteralError("Non-finite floating-point literals are unsupported.")
-        return LiteralAtom(LiteralAtomKind.FLOAT, value)
+        # Normalize float subclasses (e.g. ``numpy.float64``) to a plain
+        # ``float`` so the recorded literal round-trips to a grammar-native value
+        # the safe metadata unpickler admits and value-equality can verify.
+        return LiteralAtom(LiteralAtomKind.FLOAT, float(value))
     if isinstance(value, str):
         return LiteralAtom(LiteralAtomKind.STR, value)
     torch_symbol = _torch_symbol_qualname(value)

@@ -783,6 +783,16 @@ def _register_model_input_container_snapshots(
         trace.__dict__["input_structure"] = first_spec
 
 
+_OPAQUE_INPUT_LEAF = object()
+"""Sentinel marking a non-tensor input subtree that cannot be witnessed.
+
+Recorded in place of the children under a mapping key that is not representable
+in the frozen literal grammar. The runnable producer treats it as an opaque
+(value-free) leaf, so the run honestly downgrades to ``UNVERIFIABLE`` instead of
+silently skipping the subtree.
+"""
+
+
 def _record_runnable_input_literal_leaves(
     trace: "Trace",
     input_args: list[Any],
@@ -823,10 +833,24 @@ def _record_runnable_input_literal_leaves(
 
     import torch as _torch
 
+    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+
     leaves: list[tuple[object, tuple[str | int, ...], Any]] = []
 
     def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
-        """Descend one boundary value, recording every non-tensor leaf."""
+        """Descend one boundary value, recording every non-tensor leaf.
+
+        A mapping child is descended under *every* key type. When a key is
+        representable in the frozen literal grammar (``bool``/``int``/``float``/
+        ``str``/``None`` or a safe scalar tuple) the encodable key becomes the
+        container-path component so a changed leaf beneath it can be witnessed
+        and diverged upon. When a key is *not* representable (enum, object,
+        non-finite float, ...) no leaf below it can be re-derived at run time, so
+        the whole child subtree is recorded as one OPAQUE marker leaf. That
+        downgrades witness coverage to UNVERIFIABLE rather than silently dropping
+        the subtree -- a silently skipped leaf under an exotic key is the
+        false-VERIFIED money bug this walker exists to prevent.
+        """
 
         if isinstance(value, _torch.Tensor):
             return
@@ -836,8 +860,12 @@ def _record_runnable_input_literal_leaves(
             return
         if isinstance(value, _Mapping):
             for key, child in value.items():
-                if isinstance(key, (str, int)) and not isinstance(key, bool):
-                    _walk(position, child, (*path, key))
+                try:
+                    _encode_literal_key(key)
+                except _UnsupportedLiteralError:
+                    leaves.append((position, path, _OPAQUE_INPUT_LEAF))
+                    continue
+                _walk(position, child, (*path, key))
             return
         if isinstance(value, (list, tuple)):
             for index, child in enumerate(value):
