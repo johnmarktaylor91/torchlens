@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
+from itertools import count
 from typing import Any, cast
 
 import torch
@@ -23,6 +24,7 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
+from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ContractCheck,
@@ -54,6 +56,8 @@ from .runnable import (
     WitnessCompleteness,
     mark_trace_path_status,
 )
+
+_RUN_FORK_COUNTER = count(1)
 
 
 def run_loaded_sparse_trace(
@@ -91,10 +95,48 @@ def run_loaded_sparse_trace(
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
     slot_values, input_checks = _bind_runtime_inputs(descriptor, inputs)
+    input_byte_digests = _snapshot_input_byte_digests(descriptor, slot_values)
     _raise_first_divergence(input_checks, divergence_policy, fork=None)
     prepared_state = prepare_runnable_state(trace, seed=seed)
     slot_values.update(_clone_state_values(prepared_state.slot_values))
     fork = trace._fork_trace(name=_run_fork_name(trace))
+    try:
+        return _execute_loaded_sparse_transaction(
+            trace,
+            inputs,
+            seed=seed,
+            divergence_policy=divergence_policy,
+            descriptor=descriptor,
+            readiness=readiness,
+            callables=callables,
+            slot_values=slot_values,
+            input_byte_digests=input_byte_digests,
+            input_checks=input_checks,
+            prepared_state=prepared_state,
+            fork=fork,
+        )
+    except BaseException:
+        _state._unregister_log(fork)
+        raise
+
+
+def _execute_loaded_sparse_transaction(
+    trace: Any,
+    inputs: Any,
+    *,
+    seed: int | None,
+    divergence_policy: DivergencePolicy,
+    descriptor: SparseRunDescriptor,
+    readiness: ReadinessReport,
+    callables: Mapping[str, Callable[..., Any]],
+    slot_values: dict[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
+    input_checks: tuple[ContractCheck, ...],
+    prepared_state: PreparedRunnableState,
+    fork: Any,
+) -> RunResult:
+    """Execute one sparse transaction whose caller owns rollback on escape."""
+
     _populate_source_slots(fork, descriptor, slot_values)
     contract_checks: list[ContractCheck] = [
         *input_checks,
@@ -159,6 +201,7 @@ def run_loaded_sparse_trace(
         descriptor,
         prepared_state,
         slot_values=slot_values,
+        input_byte_digests=input_byte_digests,
         trace=trace,
     )
     if attestation_check is not None:
@@ -385,6 +428,19 @@ def _clone_state_values(
             clones_by_identity[id(value)] = clone
         cloned[slot_id] = clone
     return cloned
+
+
+def _snapshot_input_byte_digests(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> dict[str, str]:
+    """Digest cloned model inputs before sparse calls can mutate them in place."""
+
+    return {
+        slot.slot_id: runnable_tensor_byte_digest(slot_values[slot.slot_id])
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.MODEL_INPUT and slot.slot_id in slot_values
+    }
 
 
 def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
@@ -654,7 +710,7 @@ def _execute_sparse_call(
         _write_argument(args, kwargs, tensor_argument.argument_path, value)
     try:
         return func(*args, **kwargs)
-    except (TypeError, AttributeError) as exc:
+    except Exception as exc:
         raise RuntimeSignatureDriftError(
             f"Resolved callable rejected sparse recipe for {call.call_id!r}: {exc}",
             code=RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value,
@@ -676,7 +732,7 @@ def _populate_source_slots(
         value = slot_values.get(slot.slot_id)
         op = _op_for_slot(fork, slot.slot_id)
         if value is not None and op is not None:
-            op._internal_set("out", value)
+            op._internal_set("out", value.detach().clone())
 
 
 def _write_argument(
@@ -779,7 +835,7 @@ def _bind_call_outputs(
                 slot_values[version.slot_id] = value
         op = _op_for_label(fork, op_label)
         if op is not None:
-            op._internal_set("out", value)
+            op._internal_set("out", value.detach().clone())
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(
@@ -912,7 +968,27 @@ def _reconstruct_output(
         if op is not None:
             op._internal_set("out", value.detach().clone())
         values.append((slot.output_path or (), value))
+    container_spec = _output_container_spec(fork)
+    if container_spec is not None:
+        try:
+            return rebuild_container_from_spec(container_spec, [value for _, value in values])
+        except ValueError as exc:
+            raise RunPreconditionError(
+                f"Recorded output container could not be reconstructed: {exc}",
+                code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
+            ) from exc
     return _container_from_paths(values)
+
+
+def _output_container_spec(trace: Any) -> ContainerSpec | None:
+    """Return the shared recorded model-output container specification."""
+
+    for label in getattr(trace, "output_layers", ()):
+        op = _op_for_label(trace, label)
+        spec = getattr(op, "container_spec", None)
+        if isinstance(spec, ContainerSpec):
+            return spec
+    return None
 
 
 def _reconstruct_live_output(trace: Any) -> Any:
@@ -1106,15 +1182,16 @@ def _structure_witness_check(
     """Compare a model-boundary container witness with runtime structure."""
 
     expected = _decode_literal(witness.observed_value)
-    expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
     role = expected.get("role")
-    runtime_value = (
-        _runtime_input_for_structure_witness(descriptor, expected, inputs)
-        if role == "model_input"
-        else _raw_runtime_output(descriptor, output, call_outputs)
-    )
+    if role == "model_input":
+        runtime_value = _runtime_input_for_structure_witness(descriptor, expected, inputs)
+        expected_paths = tuple(tuple(path) for path in expected.get("leaf_paths", ()))
+        expected_kind = str(expected.get("kind", "unknown"))
+    else:
+        runtime_value = _raw_runtime_output(descriptor, output, call_outputs)
+        expected_paths = tuple(_container_leaf_paths(output))
+        expected_kind = _container_kind(output)
     actual_paths = tuple(_container_leaf_paths(runtime_value))
-    expected_kind = str(expected.get("kind", "unknown"))
     actual_kind = _container_kind(runtime_value)
     kind_matches = expected_kind in {"unknown", actual_kind}
     passed = expected_paths == actual_paths and kind_matches
@@ -1288,6 +1365,7 @@ def _numeric_attestation_check(
     state: PreparedRunnableState,
     *,
     slot_values: Mapping[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
     trace: Any,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
@@ -1300,6 +1378,8 @@ def _numeric_attestation_check(
         Bound state used by this run.
     slot_values:
         Fresh scheduler outputs and source slots from this transaction.
+    input_byte_digests:
+        Model-input byte digests captured before any in-place sparse call.
     trace:
         Loaded source Trace retaining inspection-only archived activations.
 
@@ -1314,13 +1394,15 @@ def _numeric_attestation_check(
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not isinstance(layer, ActivationPayloadLayerDescriptor):
         return NumericAttestationStatus.NOT_APPLICABLE, None
+    if _descriptor_has_nondeterministic_rng(descriptor):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     # Sparse execution recomputes raw output slots, never activation transforms.
     # An archive containing transformed outputs is therefore outside the scope
     # of the all-selected-activations byte-exact claim.
     if any(member.field != "out" for member in layer.members):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = layer.members
-    if not raw_members or not _attestation_inputs_match(descriptor, layer, slot_values):
+    if not raw_members or not _attestation_inputs_match(descriptor, layer, input_byte_digests):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not _attestation_state_matches(descriptor, layer, state, slot_values):
         return NumericAttestationStatus.NOT_APPLICABLE, None
@@ -1332,11 +1414,14 @@ def _numeric_attestation_check(
         archived_record = archived.get(archive_key)
         recomputed = slot_values.get(member.slot_id)
         archived_value = getattr(archived_record, "value", None)
-        recomputed_digest = (
-            runnable_tensor_byte_digest(recomputed)
-            if isinstance(recomputed, torch.Tensor)
-            else "missing"
-        )
+        if member.slot_id in input_byte_digests:
+            recomputed_digest = input_byte_digests[member.slot_id]
+        else:
+            recomputed_digest = (
+                runnable_tensor_byte_digest(recomputed)
+                if isinstance(recomputed, torch.Tensor)
+                else "missing"
+            )
         archived_digest = (
             runnable_tensor_byte_digest(archived_value)
             if isinstance(archived_value, torch.Tensor)
@@ -1368,10 +1453,45 @@ def _numeric_attestation_check(
     )
 
 
+def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether replay contains an RNG source not tied to capture RNG state."""
+
+    if any(slot.role is TensorSlotRole.RNG_SOURCE for slot in descriptor.tensor_slots):
+        return True
+    rng_qualnames = {
+        "alpha_dropout",
+        "bernoulli",
+        "cauchy_",
+        "dropout",
+        "exponential_",
+        "feature_alpha_dropout",
+        "feature_dropout",
+        "geometric_",
+        "log_normal_",
+        "multinomial",
+        "native_dropout",
+        "normal",
+        "poisson",
+        "rand",
+        "rand_like",
+        "randint",
+        "randint_like",
+        "randn",
+        "randn_like",
+        "random_",
+        "rrelu",
+        "uniform_",
+    }
+    return any(
+        entry.key.qualname.rsplit(".", 1)[-1] in rng_qualnames
+        for entry in descriptor.callable_registry
+    )
+
+
 def _attestation_inputs_match(
     descriptor: SparseRunDescriptor,
     layer: Any,
-    slot_values: Mapping[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
 ) -> bool:
     """Return whether every available capture-input digest matches this run."""
 
@@ -1382,8 +1502,7 @@ def _attestation_inputs_match(
     if not expected_slot_ids or observed_slot_ids != expected_slot_ids:
         return False
     return all(
-        digest.slot_id in slot_values
-        and runnable_tensor_byte_digest(slot_values[digest.slot_id]) == digest.byte_digest
+        input_byte_digests.get(digest.slot_id) == digest.byte_digest
         for digest in layer.original_input_digests
     )
 
@@ -1580,9 +1699,10 @@ def _op_for_slot(trace: Any, slot_id: str) -> Any | None:
 
 
 def _run_fork_name(trace: Any) -> str:
-    """Return the ordinary deterministic Trace fork label for a run transaction."""
+    """Return a process-unique monotonic Trace label for a run transaction."""
 
-    return trace._next_fork_name()
+    base_name = trace.trace_label or "trace"
+    return f"{base_name}_fork_{next(_RUN_FORK_COUNTER)}"
 
 
 __all__ = ["raise_analysis_run_unavailable", "run_live_trace", "run_loaded_sparse_trace"]

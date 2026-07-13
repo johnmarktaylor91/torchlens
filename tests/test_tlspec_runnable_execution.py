@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import NamedTuple
 from typing import Any
 
 import pytest
@@ -17,6 +18,7 @@ from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
     RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
@@ -57,6 +59,56 @@ class HonestyControlModel(nn.Module):
         if value.sum() > 0:
             value = value * 2
         return value
+
+
+class InplaceActivationModel(nn.Module):
+    """Graph whose later in-place call must not rewrite staged activations."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Mutate a ReLU result only after another result has consumed it."""
+
+        activated = torch.relu(value)
+        preserved = activated + 1
+        activated.mul_(0)
+        return preserved + activated
+
+
+class RunnableNamedOutput(NamedTuple):
+    """Named output container used to verify portable kind reconstruction."""
+
+    primary: torch.Tensor
+    score: float
+    activated: torch.Tensor
+
+
+class MixedTupleOutputModel(nn.Module):
+    """Model returning tensor leaves around a non-tensor literal."""
+
+    def forward(self, value: torch.Tensor) -> tuple[torch.Tensor, float, torch.Tensor]:
+        """Return a mixed tuple whose literal must survive sparse execution."""
+
+        shifted = value + 1
+        return shifted, 3.0, torch.relu(shifted)
+
+
+class ListOutputModel(nn.Module):
+    """Model returning a list rather than a tuple."""
+
+    def forward(self, value: torch.Tensor) -> list[torch.Tensor]:
+        """Return two tensor leaves in a list container."""
+
+        shifted = value + 1
+        return [shifted, torch.relu(shifted)]
+
+
+class NamedTupleOutputModel(nn.Module):
+    """Model returning a namedtuple with a literal field."""
+
+    def forward(self, value: torch.Tensor) -> RunnableNamedOutput:
+        """Return a namedtuple whose type and literal field must survive."""
+
+        shifted = value + 1
+        return RunnableNamedOutput(shifted, 3.0, torch.relu(shifted))
 
 
 @pytest.fixture(scope="module")
@@ -149,6 +201,21 @@ def test_loaded_sparse_random_state_runs_have_correct_shape_and_seed_determinism
     assert first.report.random_filled_slot_ids
 
 
+def test_loaded_sparse_sequential_runs_have_unique_fork_labels(
+    runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
+) -> None:
+    """Assign distinct monotonic labels to sequential transactions on one Trace."""
+
+    path, model, _ = runnable_execution_artifact
+    loaded = tl.load(path)
+    loaded.load_state_dict(model.state_dict())
+
+    first = loaded.run(inputs=torch.ones(2, 3))
+    second = loaded.run(inputs=torch.ones(2, 3))
+
+    assert first.trace.trace_label != second.trace.trace_label
+
+
 def test_loaded_sparse_execution_pauses_recursive_capture(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
@@ -166,6 +233,85 @@ def test_loaded_sparse_execution_pauses_recursive_capture(
 
     assert observed
     assert not any(observed)
+
+
+def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
+    tmp_path: Path,
+) -> None:
+    """Keep VERIFIED fork payloads equal to capture-time pre-mutation values."""
+
+    model = InplaceActivationModel()
+    inputs = torch.tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / "inplace-activation.tlspec"
+    trace.save(path, level="runnable")
+
+    result = tl.load(path).run(inputs=inputs.clone())
+    live_relu = next(op for op in trace.layer_list if op.func_name == "relu")
+    fork_relu = next(op for op in result.trace.layer_list if op.func_name == "relu")
+    fork_relu_before_output_edit = fork_relu.out.detach().clone()
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(live_relu.out, torch.tensor([1.0, 0.0, 3.0]))
+    assert torch.equal(fork_relu.out, live_relu.out)
+    result.output.zero_()
+    assert torch.equal(fork_relu.out, fork_relu_before_output_edit)
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_type"),
+    [
+        (MixedTupleOutputModel(), tuple),
+        (ListOutputModel(), list),
+        (NamedTupleOutputModel(), RunnableNamedOutput),
+    ],
+)
+def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
+    tmp_path: Path,
+    model: nn.Module,
+    expected_type: type[Any],
+) -> None:
+    """Rebuild faithful mixed outputs without false structure divergence or holes."""
+
+    inputs = torch.tensor([-2.0, 0.0, 2.0])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / f"{expected_type.__name__}.tlspec"
+    trace.save(path, level="runnable")
+
+    loaded = tl.load(path)
+    result = loaded.run(inputs=inputs.clone())
+    expected = model(inputs)
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is expected_type
+    assert torch.equal(result.output[0], expected[0])
+    assert torch.equal(result.output[-1], expected[-1])
+    if expected_type is not list:
+        assert result.output[1] == 3.0
+    assert all(check.passed for check in result.report.contract_checks)
+    if expected_type is tuple:
+        poisoned = loaded.run(
+            inputs=torch.ones(4),
+            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        )
+        assert poisoned.report.path_faithfulness is PathFaithfulness.DIVERGED
+        assert poisoned.output[1] == 3.0
 
 
 def _logging_probe(func: Any, observed: list[bool]) -> Any:
@@ -260,6 +406,26 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
     assert result.trace.__dict__["_runnable_poisoned"] is True
     assert result.trace.__dict__["_runnable_path_faithfulness"] is PathFaithfulness.DIVERGED
     _assert_outs_equal(loaded, source_outs)
+
+
+def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
+    runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
+) -> None:
+    """Rollback registry state when wrong-shape replay fails inside a native call."""
+
+    path, model, _ = runnable_execution_artifact
+    loaded = tl.load(path)
+    loaded.load_state_dict(model.state_dict())
+    logs_before = set(_state.list_logs())
+
+    with pytest.raises(RuntimeSignatureDriftError) as caught:
+        loaded.run(
+            inputs=torch.ones(2, 4),
+            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        )
+
+    assert caught.value.fields["code"] == "runtime_signature_drift"
+    assert set(_state.list_logs()) == logs_before
 
 
 def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
