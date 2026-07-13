@@ -91,6 +91,44 @@ _EXPECTED_OPAQUE_WRAPPERS = frozenset(
     row.wrapper_name for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is None
 )
 
+_REPLACEMENT_HOOK_FILE = Path(__file__).resolve().parent / "model_prep.py"
+"""File owning the ``wrapped_hook`` frame that brackets raw replacement hooks."""
+
+_REPLACEMENT_HOOK_FUNC = "wrapped_hook"
+"""Torchlens-owned frame name that wraps a raw ``register_forward_hook`` call."""
+
+
+def _in_replacement_hook_frame() -> bool:
+    """Return whether a genuine raw replacement hook is executing above the dispatch.
+
+    A genuine output-replacement ``register_forward_hook`` runs the user hook inside
+    TorchLens's own ``wrapped_hook`` frame (``model_prep._instrumented_forward_hook``).
+    Every aten dispatch emitted while that torchlens-owned frame is live is genuine
+    replacement construction -- either a raw-aten call (unowned) or a python-wrapped
+    call whose op is orphaned out of the final trace because its only consumer is the
+    untraceable replacement tensor. This exact, per-event signal lets the completeness
+    census excuse ONLY the untraceable dispatch attributable to a real replacement
+    while STILL failing on any unrelated silent drop, which fires OUTSIDE a
+    replacement hook.
+
+    Returns
+    -------
+    bool
+        ``True`` only when a torchlens replacement-hook frame is live on the stack.
+    """
+
+    frame: Any = sys._getframe(1)
+    while frame is not None:
+        code = frame.f_code
+        if code.co_name == _REPLACEMENT_HOOK_FUNC:
+            try:
+                if Path(code.co_filename).resolve() == _REPLACEMENT_HOOK_FILE:
+                    return True
+            except (OSError, RuntimeError, ValueError):
+                pass
+        frame = frame.f_back
+    return False
+
 
 def _is_expected_opaque_dispatch(operator: str, owner: ExpectedOriginalToken) -> bool:
     """Return whether one owned dispatch exactly matches an audited boundary.
@@ -150,6 +188,7 @@ class _DispatchEvent:
     operator: str
     owner: ExpectedOriginalToken | None
     callsite: _DispatchCallsite | None
+    in_replacement_hook: bool = False
 
 
 @dataclass
@@ -311,7 +350,10 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 callsite = (
                     _dispatch_callsite() if owner is None or owner.func_call_id is None else None
                 )
-                self.state.events.append(_DispatchEvent(_operator_name(func), owner, callsite))
+                in_replacement_hook = _in_replacement_hook_frame()
+                self.state.events.append(
+                    _DispatchEvent(_operator_name(func), owner, callsite, in_replacement_hook)
+                )
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
         return func(*args, **(kwargs or {}))
@@ -360,6 +402,10 @@ def _finalize_census(state: _WitnessState) -> None:
 
     trace = state.trace
     owner_events: dict[int, tuple[ExpectedOriginalToken, list[str]]] = {}
+    # Owners whose aten dispatch fired inside a genuine raw replacement hook. The
+    # census excuses ONLY these orphaned owners (replacement construction) -- an
+    # orphaned owner outside a replacement hook stays a real silent-drop mismatch.
+    owner_in_replacement_hook: dict[int, bool] = {}
     diagnostics: list[dict[str, Any]] = []
     expected_opaque_count = 0
     accounted_count = 0
@@ -368,6 +414,8 @@ def _finalize_census(state: _WitnessState) -> None:
         if owner is not None:
             owner_entry = owner_events.setdefault(id(owner), (owner, []))
             owner_entry[1].append(event.operator)
+            if event.in_replacement_hook:
+                owner_in_replacement_hook[id(owner)] = True
         if owner is not None and _is_expected_opaque_dispatch(event.operator, owner):
             expected_opaque_count += 1
             continue
@@ -396,6 +444,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "capture_mode": getattr(trace, "capture_mode", None),
                 "scope": "active_logging",
                 "enforced": False,
+                "in_replacement_hook": event.in_replacement_hook,
             }
         )
     decompositions = trace.__dict__.setdefault("completeness_decompositions", [])
@@ -416,6 +465,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "capture_accounted": owner.capture_accounted,
                 "scope": owner_scope,
                 "aten_ops": tuple(operators),
+                "in_replacement_hook": owner_in_replacement_hook.get(id(owner), False),
             }
         )
     reports = trace.__dict__.setdefault("completeness_diagnostics", [])
