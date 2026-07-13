@@ -24,6 +24,8 @@ from ..runnable import (
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
+    ActivationPayloadLayerDescriptor,
+    ActivationPayloadMember,
     CallableRegistryEntry,
     ControlWitness,
     ControlWitnessKind,
@@ -51,6 +53,8 @@ from ..runnable import (
     RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
+    SlotByteDigest,
+    StateByteDigest,
     StateSlotBinding,
     StateSlotRole,
     StateSource,
@@ -142,7 +146,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         initializer_policy_version=cast(Any, _string(value, "initializer_policy_version")),
         payload_layers=PayloadLayersDescriptor(
             weights=_parse_payload_layer(_mapping(payload, "weights")),
-            activations=_parse_payload_layer(_mapping(payload, "activations")),
+            activations=_parse_activation_payload_layer(_mapping(payload, "activations")),
         ),
         callable_registry=registry,
         calls=calls,
@@ -1046,6 +1050,44 @@ def _parse_payload_layer(value: Mapping[str, Any]) -> PayloadLayerDescriptor:
     return PayloadLayerDescriptor(
         present=_boolean(value, "present"),
         schema=_string(value, "schema"),
+    )
+
+
+def _parse_activation_payload_layer(
+    value: Mapping[str, Any],
+) -> PayloadLayerDescriptor | ActivationPayloadLayerDescriptor:
+    """Parse selected-activation membership and eligibility digests."""
+
+    if not _boolean(value, "present"):
+        return _parse_payload_layer(value)
+    return ActivationPayloadLayerDescriptor(
+        present=_boolean(value, "present"),
+        schema=cast(Any, _string(value, "schema")),
+        members=tuple(
+            ActivationPayloadMember(
+                blob_id=_string(item, "blob_id"),
+                slot_id=_string(item, "slot_id"),
+                call_id=_optional_string(item.get("call_id"), "call_id"),
+                op_label=_string(item, "op_label"),
+                field=cast(Any, _string(item, "field")),
+                byte_digest=_string(item, "byte_digest"),
+            )
+            for item in _mapping_sequence(value, "members")
+        ),
+        original_input_digests=tuple(
+            SlotByteDigest(
+                slot_id=_string(item, "slot_id"),
+                byte_digest=_string(item, "byte_digest"),
+            )
+            for item in _mapping_sequence(value, "original_input_digests")
+        ),
+        capture_state_digests=tuple(
+            StateByteDigest(
+                state_dict_name=_string(item, "state_dict_name"),
+                byte_digest=_string(item, "byte_digest"),
+            )
+            for item in _mapping_sequence(value, "capture_state_digests")
+        ),
     )
 
 

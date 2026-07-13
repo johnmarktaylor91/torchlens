@@ -153,12 +153,18 @@ pytest tests/ -m "not slow" -x --tb=short
     (named parameters plus persistent buffers) in a separate `state_dict_v1` blob family. The
     sparse core remains tensor-value-free; load uses the ordinary strict binder and reports
     `embedded_capture_state`, never a reconstructed model.
+17b. `include_activations=True` is runnable-save-only and archives exactly the capture-time
+    `save=`-selected `out`/`transformed_out` payloads in a separate `selected_activation_v1`
+    family. `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
+    Original-input, capture-equivalent real-state runs must byte-attest saved raw slots before
+    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input or
+    random/non-equivalent-state runs report `not_applicable`.
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
     default divergence raises with rollback, while `return_diverged` is the sole monotonic poisoned
-    opt-in. Incomplete witness coverage is `unverifiable`, and sparse-only numeric attestation is
-    `not_applicable`.
+    opt-in. Incomplete witness coverage is `unverifiable`; sparse-only and ineligible activation
+    runs report numeric attestation as `not_applicable`.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing

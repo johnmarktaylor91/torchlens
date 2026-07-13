@@ -128,8 +128,8 @@ class StateSource(str, Enum):
 class NumericAttestationStatus(str, Enum):
     """Result states for the optional saved-activation oracle."""
 
-    PASSED = "passed"
-    FAILED = "failed"
+    ATTESTED = "attested"
+    NUMERIC_ATTESTATION_FAILED = "numeric_attestation_failed"
     NOT_APPLICABLE = "not_applicable"
     NOT_PRESENT = "not_present"
 
@@ -385,11 +385,62 @@ class PayloadLayerDescriptor:
 
 
 @dataclass(frozen=True, slots=True)
+class ActivationPayloadMember:
+    """One archived capture-selected activation payload."""
+
+    blob_id: str
+    slot_id: str
+    call_id: str | None
+    op_label: str
+    field: Literal["out", "transformed_out"]
+    byte_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class SlotByteDigest:
+    """Capture-time byte digest used to recognize one runtime tensor slot."""
+
+    slot_id: str
+    byte_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class StateByteDigest:
+    """Capture-time byte digest used to recognize equivalent real state."""
+
+    state_dict_name: str
+    byte_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class ActivationPayloadLayerDescriptor:
+    """Presence, membership, and eligibility metadata for activation payloads."""
+
+    present: bool
+    schema: Literal["selected_activation_v1"]
+    members: tuple[ActivationPayloadMember, ...]
+    original_input_digests: tuple[SlotByteDigest, ...]
+    capture_state_digests: tuple[StateByteDigest, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ArchivedActivation:
+    """One loaded activation payload exposed for offline inspection."""
+
+    slot_id: str
+    call_id: str | None
+    op_label: str
+    field: Literal["out", "transformed_out"]
+    byte_digest: str
+    value: Any
+
+
+@dataclass(frozen=True, slots=True)
 class PayloadLayersDescriptor:
     """Independent optional payload-layer declarations."""
 
     weights: PayloadLayerDescriptor
-    activations: PayloadLayerDescriptor
+    activations: PayloadLayerDescriptor | ActivationPayloadLayerDescriptor
 
 
 @dataclass(frozen=True, slots=True)
@@ -624,6 +675,9 @@ def refuse_poisoned_trace(trace: Any, operation: str) -> None:
 
 
 __all__ = [
+    "ActivationPayloadLayerDescriptor",
+    "ActivationPayloadMember",
+    "ArchivedActivation",
     "CANONICAL_INITIALIZER_BY_ROLE",
     "RUNNABLE_CALLABLE_REF_SCHEMA_VERSION",
     "RUNNABLE_CALL_RECIPE_VERSION",
@@ -665,11 +719,13 @@ __all__ = [
     "SparseRunDescriptor",
     "StateSlotBinding",
     "StateSlotRole",
+    "StateByteDigest",
     "StateSource",
     "TensorArgumentRef",
     "TensorSlotDescriptor",
     "TensorSlotRole",
     "TensorUseSite",
+    "SlotByteDigest",
     "WitnessCompleteness",
     "mark_trace_path_status",
     "refuse_poisoned_trace",

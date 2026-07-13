@@ -5,12 +5,14 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from hashlib import sha256
 import math
 from types import MappingProxyType
 from typing import Any
 
 import torch
 
+from . import _state
 from .errors import StateBindingError
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -666,4 +668,29 @@ def _diagnostic(
     )
 
 
-__all__ = ["PreparedRunnableState", "load_trace_state_dict", "prepare_runnable_state"]
+def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
+    """Return a SHA-256 digest of one tensor's exact logical bytes.
+
+    Parameters
+    ----------
+    value:
+        Dense tensor whose capture/runtime bytes should be attested.
+
+    Returns
+    -------
+    str
+        Lowercase SHA-256 hexadecimal digest of the contiguous CPU bytes.
+    """
+
+    with _state.pause_logging():
+        cpu_value = value.detach().cpu().contiguous()
+        payload = cpu_value.reshape(-1).view(torch.uint8).numpy().tobytes()
+    return sha256(payload).hexdigest()
+
+
+__all__ = [
+    "PreparedRunnableState",
+    "load_trace_state_dict",
+    "prepare_runnable_state",
+    "runnable_tensor_byte_digest",
+]

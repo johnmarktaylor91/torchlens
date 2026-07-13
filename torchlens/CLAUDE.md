@@ -170,6 +170,12 @@ Runnable saves are sparse by default. `include_weights=True` bundles the full ca
 `state_dict` (named parameters plus persistent buffers) as a separate `state_dict_v1` blob family;
 the sparse core still contains no tensor values. Load binds it through the same strict state
 contract used by `Trace.load_state_dict()`, while explicit user state overrides it at run time.
+`include_activations=True` independently writes capture-time `save=`-selected
+`out`/`transformed_out` values as `selected_activation_v1`. Loaded values are available through
+`Trace.archived_activations` for inspection and eligible byte-exact attestation only; the sparse
+scheduler never consumes them. Original-input, capture-equivalent real-state runs report
+`attested` or fail transactionally with `numeric_attestation_failed`; changed-input/random-state
+runs report `not_applicable`.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
 `uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward

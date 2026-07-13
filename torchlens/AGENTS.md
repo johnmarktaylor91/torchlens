@@ -61,6 +61,11 @@ resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only 
 Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
 `state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
 family, not part of the tensor-value-free sparse core or a reconstructed model.
+Use `include_activations=True` independently to archive exactly the existing capture-time `save=`
+selection as `selected_activation_v1`. Inspect it through `Trace.archived_activations`; never use
+those blobs as DAG inputs. Eligible original-input/capture-equivalent-state runs byte-attest raw
+saved slots (`attested` or transactional `numeric_attestation_failed`), while changed-input or
+random/non-equivalent-state runs are `not_applicable`.
 
 Provisional semantic I/O examples (review-day names):
 

@@ -30,6 +30,8 @@ from ..runnable import (
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
+    ActivationPayloadLayerDescriptor,
+    ActivationPayloadMember,
     CallableRegistryEntry,
     ControlWitness,
     ControlWitnessKind,
@@ -52,6 +54,8 @@ from ..runnable import (
     RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
+    SlotByteDigest,
+    StateByteDigest,
     StateSlotBinding,
     StateSlotRole,
     TensorArgumentRef,
@@ -243,7 +247,10 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         initializer_policy_version=RUNNABLE_INITIALIZER_POLICY_VERSION,
         payload_layers=PayloadLayersDescriptor(
             weights=PayloadLayerDescriptor(present=False, schema="state_dict_v1"),
-            activations=PayloadLayerDescriptor(present=False, schema="selected_activation_v1"),
+            activations=PayloadLayerDescriptor(
+                present=False,
+                schema="selected_activation_v1",
+            ),
         ),
         callable_registry=tuple(registry_entries),
         calls=tuple(calls),
@@ -315,6 +322,47 @@ def with_weight_payload(descriptor: SparseRunDescriptor) -> SparseRunDescriptor:
         payload_layers=replace(
             descriptor.payload_layers,
             weights=replace(descriptor.payload_layers.weights, present=True),
+        ),
+    )
+
+
+def with_activation_payload(
+    descriptor: SparseRunDescriptor,
+    *,
+    members: tuple[ActivationPayloadMember, ...],
+    original_input_digests: tuple[SlotByteDigest, ...],
+    capture_state_digests: tuple[StateByteDigest, ...],
+) -> SparseRunDescriptor:
+    """Declare one separately stored selected-activation payload family.
+
+    Parameters
+    ----------
+    descriptor:
+        Value-free sparse descriptor produced for the runnable artifact.
+    members:
+        Exact capture-selected payload membership and logical byte digests.
+    original_input_digests:
+        Available capture-input slot digests used only for attestation eligibility.
+    capture_state_digests:
+        Capture-time state digests used to recognize equivalent real state.
+
+    Returns
+    -------
+    SparseRunDescriptor
+        Descriptor with activation-layer metadata; the sparse recipe remains value-free.
+    """
+
+    return replace(
+        descriptor,
+        payload_layers=replace(
+            descriptor.payload_layers,
+            activations=ActivationPayloadLayerDescriptor(
+                present=True,
+                schema="selected_activation_v1",
+                members=members,
+                original_input_digests=original_input_digests,
+                capture_state_digests=capture_state_digests,
+            ),
         ),
     )
 
@@ -1453,4 +1501,6 @@ __all__ = [
     "preflight_sparse_run_descriptor",
     "require_sparse_run_descriptor",
     "sparse_descriptor_to_json",
+    "with_activation_payload",
+    "with_weight_payload",
 ]

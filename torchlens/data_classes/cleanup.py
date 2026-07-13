@@ -86,6 +86,7 @@ def cleanup(self: "Trace") -> None:
         "_runnable_descriptor",
         "_runnable_readiness",
         "_runnable_callables_by_call_id",
+        "_runnable_archived_activations",
         "_validation_replay_status",
     ]:
         if hasattr(self, attr):
