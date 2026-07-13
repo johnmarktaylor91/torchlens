@@ -1321,7 +1321,12 @@ def _path_value(value: Any, label: str) -> tuple[str | int, ...]:
         raise TypeError(f"{label} must be an array.")
     result: list[str | int] = []
     for item in value:
-        if isinstance(item, bool) or not isinstance(item, (str, int)):
+        # ``bool`` is a subclass of ``int`` and is accepted as a faithful,
+        # round-trippable container-path key (``True`` stays distinct from ``1``
+        # as a mapping key), matching the producer's normalized path grammar so a
+        # bool-keyed output/input container never advertises runnable then loses
+        # it on load.
+        if not isinstance(item, (str, int)):
             raise TypeError(f"{label} entries must be strings or integers.")
         result.append(item)
     return tuple(result)
