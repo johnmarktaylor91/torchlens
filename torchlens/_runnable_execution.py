@@ -282,7 +282,7 @@ def run_live_trace(
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:
         fork.save_new_outs(model, inputs, random_seed=seed)
-        output = _reconstruct_live_output(fork)
+        output, faithful = _reconstruct_live_output(fork)
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -293,14 +293,27 @@ def run_live_trace(
             witness_completeness=None,
             diagnostics=(),
         )
+        # Honesty gate: only a faithfully reconstructed output (exact container type
+        # and non-tensor leaves) is VERIFIED. An output we could only approximate
+        # from naive leaf paths is UNVERIFIABLE, never blessed with a wrong object.
         report = RunReport(
             readiness=readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
             initializer_policy_version=None,
             seed=seed,
             random_filled_slot_ids=(),
-            contract_checks=(ContractCheck("live_graph_alignment", True, None),),
-            path_faithfulness=PathFaithfulness.VERIFIED,
+            contract_checks=(
+                _contract_check(
+                    "live_output_reconstruction",
+                    faithful,
+                    RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
+                    "Live output could not be faithfully reconstructed from its "
+                    "captured container contract.",
+                ),
+            ),
+            path_faithfulness=(
+                PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
+            ),
             first_mismatch=None,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
             poisoned=False,
@@ -1206,14 +1219,52 @@ def _output_container_spec(trace: Any) -> ContainerSpec | None:
     return None
 
 
-def _reconstruct_live_output(trace: Any) -> Any:
-    """Reconstruct refreshed live output from synthetic output-node payloads."""
+def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
+    """Reconstruct refreshed live output faithfully and report reconstruction fidelity.
 
+    Returns
+    -------
+    tuple[Any, bool]
+        ``(output, faithful)``. ``output`` is the exact model-output object rebuilt
+        from the captured :class:`ContainerSpec` (correct container type, non-tensor
+        literal leaves preserved) when a reconstructable final-output container was
+        recorded, or the genuine single bare-tensor output. ``faithful`` is ``False``
+        only when the output could merely be approximated from naive leaf paths (no
+        faithful container contract, e.g. an opaque/BFS-fallback container); the
+        caller then downgrades ``path_faithfulness`` to ``UNVERIFIABLE`` instead of
+        blessing a lossy substitution with ``VERIFIED``.
+    """
+
+    from .data_classes.container import container_from_op
+
+    output_labels = tuple(getattr(trace, "output_layers", ()) or ())
+    for label in output_labels:
+        op = trace.ops[label]
+        container = container_from_op(op)
+        # A reconstructable final-output view carries the captured ContainerSpec, so
+        # ``reconstruct`` rebuilds the SAME object a live forward returns (container
+        # kind + literal leaves + fields).
+        if (
+            container is not None
+            and container.root_kind == "final_output"
+            and container.supports_reconstruct
+        ):
+            return container.reconstruct(values="out"), True
+    if len(output_labels) == 1:
+        op = trace.ops[output_labels[0]]
+        has_spec = getattr(op, "container_spec", None) is not None
+        has_path = bool(getattr(op, "container_path", ()) or ())
+        if not has_spec and not has_path:
+            # Genuine single bare-tensor model output: no container to reconstruct.
+            return op.out, True
+    # Multi-leaf output lacking a faithful reconstructable container contract, or a
+    # single leaf that was actually a non-reconstructable (opaque) container. Return
+    # a best-effort approximation but report it as NOT faithful.
     values = [
-        (tuple(getattr(trace[label], "container_path", ()) or ()), trace[label].out)
-        for label in trace.output_layers
+        (tuple(getattr(trace.ops[label], "container_path", ()) or ()), trace.ops[label].out)
+        for label in output_labels
     ]
-    return _container_from_paths(values)
+    return _container_from_paths(values), False
 
 
 def _container_from_paths(values: Sequence[tuple[tuple[str | int, ...], Any]]) -> Any:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 import inspect
@@ -541,7 +541,10 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             type_qualname=qualname,
             child_specs=tuple(child_specs),
         )
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
+        # A boundary INPUT that is any Mapping subclass (custom Mapping, OrderedDict,
+        # defaultdict, ...) is bound by leaf path like a plain dict; the user supplies
+        # the concrete object at run time, so no subtype reconstruction is needed.
         return ContainerSpec(
             kind="dict",
             length=len(value),
@@ -598,7 +601,7 @@ def _iter_container_children(value: Any) -> Iterator[tuple[OutputPathComponent, 
         for field in dataclasses.fields(value):
             yield DataclassField(field.name), getattr(value, field.name)
         return
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         for key, child in value.items():
             if isinstance(key, torch.Tensor):
                 continue

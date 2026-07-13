@@ -26,7 +26,13 @@ from ..constants import MODEL_LOG_FIELD_ORDER
 from ..data_classes._state_adapter import state_items, state_new, state_restore
 from ..data_classes.trace import Trace
 
-_SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device)
+# Replay-safe literals that must round-trip BYTE-EXACT through scrub/save/load.
+# ``bytes`` and ``slice`` are declared replay-safe output/argument literals
+# (see ``_literal_value_supported``); without keeping them here they fall through
+# to ``_stringify_value`` and a ``bytes`` output leaf becomes ``"<scrubbed:bytes>"``
+# while the loaded run still reports VERIFIED -- a silent honesty violation. Both
+# are immutable and natively serializable by the portable (pickle) codec.
+_SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device, bytes, slice)
 _RAW_INPUT_TEXT_LIMIT = 10_000
 _RAW_INPUT_TENSOR_BYTES_LIMIT = 1_000_000
 _RAW_OUTPUT_TEXT_LIMIT = _RAW_INPUT_TEXT_LIMIT
