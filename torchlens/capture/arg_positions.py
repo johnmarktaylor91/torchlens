@@ -1117,9 +1117,7 @@ for _name in [
     "bceloss",
     "bcewithlogitsloss",
     "cosinesimilarity",
-    "cosineembeddingloss",
     "hingeembeddingloss",
-    "marginrankingloss",
     "softmarginloss",
     "multilabelsoftmarginloss",
     "multimarginloss",
@@ -1128,9 +1126,18 @@ for _name in [
     "gaussiannllloss",
     "kldiv",
     "ctcloss",
-    "tripletmarginloss",
 ]:
     FUNC_ARG_SPECS[_name] = _P01_INPUT_TARGET
+
+# Three-input loss functions must retain every value-affecting tensor operand.
+_THREE_INPUT_TARGET_LOSS_SPEC = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input1", "input2", "target")
+)
+FUNC_ARG_SPECS["marginrankingloss"] = _THREE_INPUT_TARGET_LOSS_SPEC
+FUNC_ARG_SPECS["cosineembeddingloss"] = _THREE_INPUT_TARGET_LOSS_SPEC
+FUNC_ARG_SPECS["tripletmarginloss"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("anchor", "positive", "negative")
+)
 
 # bilinear: (input1, input2, weight, bias) — bias can be positional
 FUNC_ARG_SPECS["bilinear"] = ArgSpec(
@@ -1207,6 +1214,11 @@ FUNC_ARG_SPECS["maskedscatter"] = ArgSpec(
 )
 FUNC_ARG_SPECS["maskedselect"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "self", "mask"))
 FUNC_ARG_SPECS["multidot"] = _S0
+
+# quantile: ``q`` can be a tensor that changes the selected value.
+_QUANTILE_SPEC = ArgSpec(positions=(0, 1), tensor_kwargs=(*_P0_INPUT.tensor_kwargs, "q"))
+FUNC_ARG_SPECS["quantile"] = _QUANTILE_SPEC
+FUNC_ARG_SPECS["nanquantile"] = _QUANTILE_SPEC
 
 # Matrix-multiply family whose second operand kwarg is NOT named "other":
 # torch.mm(input, mat2), torch.bmm(input, mat2), torch.mv(input, vec).
@@ -1288,7 +1300,6 @@ for _name in [
     "modifiedbesselk1",
     "multigammaln",
     "multinomial",
-    "nanquantile",
     "ndtr",
     "ndtri",
     "normalize",
@@ -1297,7 +1308,6 @@ for _name in [
     "pinv",
     "poisson",
     "psi",
-    "quantile",
     "randintlike",
     "renorm",
     "scaledmodifiedbesselk0",
