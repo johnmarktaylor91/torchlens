@@ -99,6 +99,23 @@ _KWARG_CASES = [
     ("searchsorted", (), {"sorted_sequence": torch.arange(5), "values": torch.tensor([2, 4])}),
     ("bincount", (), {"input": torch.tensor([0, 1, 1]), "weights": torch.randn(3)}),
     ("gradient", (), {"input": _A, "spacing": (torch.arange(2.0),)}),
+    ("quantile", (_A,), {"q": torch.tensor(0.5)}),
+    ("nanquantile", (_A,), {"q": torch.tensor(0.5)}),
+    (
+        "marginrankingloss",
+        (),
+        {"input1": _A, "input2": _B, "target": torch.ones_like(_A)},
+    ),
+    (
+        "cosineembeddingloss",
+        (),
+        {"input1": _A, "input2": _B, "target": torch.tensor([1.0, -1.0])},
+    ),
+    (
+        "tripletmarginloss",
+        (),
+        {"anchor": _A, "positive": _B, "negative": _A + 2},
+    ),
     ("clamp", (), {"input": _A, "min": _B, "max": _B}),
     ("clampmin", (), {"input": _A, "min": _B}),
     ("clampmax", (), {"input": _A, "max": _B}),
@@ -476,6 +493,142 @@ def test_traced_gradient_spacing_tensor_recorded_as_parent() -> None:
     assert any("mul" in parent for parent in gradient.parents), gradient.parents
     _assert_child_edge(scaled_coordinates, gradient)
     _assert_parents_match_args_template(gradient)
+
+
+@pytest.mark.parametrize("call_style", ["positional", "keyword"])
+@pytest.mark.parametrize("func_name", ["quantile", "nanquantile"])
+@pytest.mark.smoke
+def test_traced_quantile_tensor_q_recorded_as_parent(call_style: str, func_name: str) -> None:
+    """Tensor ``q`` is a parent for positional and keyword quantile calls.
+
+    Parameters
+    ----------
+    call_style:
+        Whether ``q`` is supplied positionally or by keyword.
+    func_name:
+        Name of the quantile operation under test.
+    """
+
+    class QuantileWithTensorQ(nn.Module):
+        """Select a quantile using a tensor input."""
+
+        def forward(self, values: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
+            """Return the requested quantile.
+
+            Parameters
+            ----------
+            values:
+                Values to reduce.
+            q:
+                Tensor quantile to select.
+
+            Returns
+            -------
+            torch.Tensor
+                Selected quantile.
+            """
+
+            quantile = getattr(torch, func_name)
+            if call_style == "positional":
+                return quantile(values, q)
+            return quantile(values, q=q)
+
+    trace = _trace_with_args_templates(
+        QuantileWithTensorQ(), [torch.tensor([0.0, 10.0, 20.0]), torch.tensor(0.25)]
+    )
+    quantile = next(op for op in trace.ops if op.func_name == func_name)
+    inputs = [op for op in trace.ops if op.is_input]
+
+    assert set(quantile.parents) == {op.layer_label for op in inputs}
+    for input_op in inputs:
+        _assert_child_edge(input_op, quantile)
+    _assert_parents_match_args_template(quantile)
+
+
+@pytest.mark.parametrize(
+    ("func", "kwarg_names", "inputs"),
+    [
+        (
+            F.margin_ranking_loss,
+            ("input1", "input2", "target"),
+            [
+                torch.tensor([1.0, 2.0]),
+                torch.tensor([2.0, 0.0]),
+                torch.tensor([1.0, -1.0]),
+            ],
+        ),
+        (
+            F.cosine_embedding_loss,
+            ("input1", "input2", "target"),
+            [
+                torch.tensor([[1.0, 2.0]]),
+                torch.tensor([[2.0, 0.0]]),
+                torch.tensor([1.0]),
+            ],
+        ),
+        (
+            F.triplet_margin_loss,
+            ("anchor", "positive", "negative"),
+            [
+                torch.tensor([1.0, 2.0]),
+                torch.tensor([1.5, 2.5]),
+                torch.tensor([4.0, 5.0]),
+            ],
+        ),
+    ],
+    ids=lambda case: case.__name__ if callable(case) else None,
+)
+@pytest.mark.parametrize("call_style", ["positional", "keyword"])
+@pytest.mark.smoke
+def test_traced_three_input_losses_record_all_tensor_parents(
+    func: Any,
+    kwarg_names: tuple[str, str, str],
+    inputs: list[torch.Tensor],
+    call_style: str,
+) -> None:
+    """Every tensor operand of a three-input loss is retained as a graph parent.
+
+    Parameters
+    ----------
+    func:
+        Loss operation under test.
+    kwarg_names:
+        Schema argument names for the three tensor operands.
+    inputs:
+        Valid loss inputs.
+    call_style:
+        Whether operands are supplied positionally or by keyword.
+    """
+
+    class ThreeInputLoss(nn.Module):
+        """Apply one three-input functional loss."""
+
+        def forward(self, *operands: torch.Tensor) -> torch.Tensor:
+            """Return the configured loss.
+
+            Parameters
+            ----------
+            operands:
+                Three tensor operands for the configured loss.
+
+            Returns
+            -------
+            torch.Tensor
+                Scalar loss value.
+            """
+
+            if call_style == "positional":
+                return func(*operands)
+            return func(**dict(zip(kwarg_names, operands, strict=True)))
+
+    trace = _trace_with_args_templates(ThreeInputLoss(), inputs)
+    loss = next(op for op in trace.ops if op.func_name == func.__name__)
+    input_ops = [op for op in trace.ops if op.is_input]
+
+    assert set(loss.parents) == {op.layer_label for op in input_ops}
+    for input_op in input_ops:
+        _assert_child_edge(input_op, loss)
+    _assert_parents_match_args_template(loss)
 
 
 @pytest.mark.parametrize("bound_style", ["positional", "keyword", "mixed"])
