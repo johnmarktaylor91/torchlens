@@ -139,6 +139,68 @@ class NamedTupleOutputModel(nn.Module):
         return RunnableNamedOutput(shifted, 3.0, torch.relu(shifted))
 
 
+class TorchStructSeqOutputModel(nn.Module):
+    """Model returning one of PyTorch's field-addressable structseq outputs."""
+
+    def __init__(self, operation: str) -> None:
+        """Store the selected torch reduction or ordering operation.
+
+        Parameters
+        ----------
+        operation:
+            One of ``max``, ``min``, ``median``, ``topk``, or ``sort``.
+        """
+
+        super().__init__()
+        self.operation = operation
+
+    def forward(self, value: torch.Tensor) -> Any:
+        """Return the selected field-addressable torch structseq.
+
+        Parameters
+        ----------
+        value:
+            Input matrix reduced or ordered along its first axis.
+
+        Returns
+        -------
+        Any
+            The selected ``torch.return_types`` result.
+        """
+
+        if self.operation == "max":
+            return torch.max(value, dim=0)
+        if self.operation == "min":
+            return torch.min(value, dim=0)
+        if self.operation == "median":
+            return torch.median(value, dim=0)
+        if self.operation == "topk":
+            return torch.topk(value, k=2, dim=0)
+        if self.operation == "sort":
+            return torch.sort(value, dim=0)
+        raise ValueError(f"Unsupported torch structseq operation {self.operation!r}.")
+
+
+class SingleTensorContainerOutputModel(nn.Module):
+    """Model wrapping one final tensor call with a literal-bearing dictionary."""
+
+    def forward(self, value: torch.Tensor) -> dict[str, Any]:
+        """Return one computed tensor and fixed metadata.
+
+        Parameters
+        ----------
+        value:
+            Input tensor.
+
+        Returns
+        -------
+        dict[str, Any]
+            Tensor result plus a literal metadata leaf.
+        """
+
+        return {"value": value + 1, "metadata": None}
+
+
 @pytest.fixture(scope="module")
 def runnable_execution_artifact(
     tmp_path_factory: pytest.TempPathFactory,
@@ -340,6 +402,118 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
         )
         assert poisoned.report.path_faithfulness is PathFaithfulness.DIVERGED
         assert poisoned.output[1] == 3.0
+
+
+@pytest.mark.parametrize("operation", ("max", "min", "median", "topk", "sort"))
+def test_loaded_sparse_preserves_torch_structseq_outputs(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    """Rebuild every supported torch structseq with producer field-name paths."""
+
+    model = TorchStructSeqOutputModel(operation)
+    inputs = torch.tensor([[1.0, 4.0, 2.0], [3.0, 2.0, 5.0], [0.0, 6.0, 1.0]])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / f"{operation}-structseq.tlspec"
+    trace.save(path, level="runnable")
+
+    loaded = tl.load(path)
+    result = loaded.run(inputs=inputs.clone())
+    expected = model(inputs)
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is type(expected)
+    assert [
+        slot.output_path
+        for slot in loaded._runnable_descriptor.tensor_slots
+        if slot.role.value == "output"
+    ] == [
+        ("values",),
+        ("indices",),
+    ]
+    for actual_leaf, expected_leaf in zip(result.output, expected, strict=True):
+        assert torch.equal(actual_leaf, expected_leaf)
+    assert all(check.passed for check in result.report.contract_checks)
+
+
+def test_loaded_sparse_verifies_container_wrapping_one_final_tensor_call(tmp_path: Path) -> None:
+    """Compare the reconstructed model boundary, not its lone final tensor call."""
+
+    model = SingleTensorContainerOutputModel()
+    inputs = torch.tensor([1.0, 2.0])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / "single-tensor-container.tlspec"
+    trace.save(path, level="runnable")
+
+    result = tl.load(path).run(inputs=inputs.clone())
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is dict
+    assert torch.equal(result.output["value"], model(inputs)["value"])
+    assert result.output["metadata"] is None
+    assert all(check.passed for check in result.report.contract_checks)
+
+
+def _return_positional_pair(
+    value: torch.Tensor,
+    **_kwargs: Any,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return a positional pair to simulate a genuinely changed structseq result.
+
+    Parameters
+    ----------
+    value:
+        Input tensor passed to the recorded ``torch.max`` call.
+    **_kwargs:
+        Recorded keyword arguments, intentionally ignored by this divergent callable.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        A plain positional tuple rather than the recorded named torch structseq.
+    """
+
+    return value, value
+
+
+def test_loaded_sparse_still_diverges_for_a_genuinely_changed_output_structure(
+    tmp_path: Path,
+) -> None:
+    """Reject a positional result when the recorded call requires structseq field paths."""
+
+    inputs = torch.tensor([[1.0, 4.0], [3.0, 2.0]])
+    trace = tl.trace(
+        TorchStructSeqOutputModel("max"),
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    path = tmp_path / "changed-structseq-output.tlspec"
+    trace.save(path, level="runnable")
+    loaded = tl.load(path)
+    loaded.__dict__["_runnable_callables_by_call_id"]["call:1"] = _return_positional_pair
+
+    with pytest.raises(PathDivergenceError):
+        loaded.run(inputs=inputs.clone())
 
 
 def _logging_probe(func: Any, observed: list[bool]) -> Any:
