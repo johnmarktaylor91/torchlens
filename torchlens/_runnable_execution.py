@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
+from itertools import count
 from typing import Any, cast
 
 import torch
@@ -55,6 +56,8 @@ from .runnable import (
     WitnessCompleteness,
     mark_trace_path_status,
 )
+
+_RUN_FORK_COUNTER = count(1)
 
 
 def run_loaded_sparse_trace(
@@ -1691,9 +1694,10 @@ def _op_for_slot(trace: Any, slot_id: str) -> Any | None:
 
 
 def _run_fork_name(trace: Any) -> str:
-    """Return the ordinary deterministic Trace fork label for a run transaction."""
+    """Return a process-unique monotonic Trace label for a run transaction."""
 
-    return trace._next_fork_name()
+    base_name = trace.trace_label or "trace"
+    return f"{base_name}_fork_{next(_RUN_FORK_COUNTER)}"
 
 
 __all__ = ["raise_analysis_run_unavailable", "run_live_trace", "run_loaded_sparse_trace"]
