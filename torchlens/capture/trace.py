@@ -783,6 +783,77 @@ def _register_model_input_container_snapshots(
         trace.__dict__["input_structure"] = first_spec
 
 
+def _record_runnable_input_literal_leaves(
+    trace: "Trace",
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+) -> None:
+    """Stash capture-time non-tensor model-input leaves for runnable honesty.
+
+    A sparse runnable descriptor replays the *recorded taken-path* DAG, which is
+    only valid for the recorded inputs. Non-tensor Python inputs
+    (``bool``/``int``/``float``/``str``/``None`` literal leaves) can steer
+    Python-level control flow that TorchLens never observes as an op, so a
+    changed non-tensor input can silently make the recorded path wrong. TorchLens
+    binds only tensor input leaves at run time, so without this record a changed
+    non-tensor input is invisible and the run would falsely report a verified,
+    attested -- but numerically wrong -- result.
+
+    This records the model-boundary non-tensor leaves (site position, container
+    path, and immutable literal value) so the sparse producer can witness them
+    and the runnable executor can diverge on a changed non-tensor input instead
+    of silently replaying the recorded path. It runs only when replay templates
+    are captured (the runnable prerequisite), touches no tensors, and stores an
+    in-memory list consumed by the producer at save time.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    input_args:
+        Normalized positional model inputs.
+    input_kwargs:
+        Normalized keyword model inputs.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+
+    from collections.abc import Mapping as _Mapping
+
+    import torch as _torch
+
+    leaves: list[tuple[object, tuple[str | int, ...], Any]] = []
+
+    def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
+        """Descend one boundary value, recording every non-tensor leaf."""
+
+        if isinstance(value, _torch.Tensor):
+            return
+        if isinstance(value, tuple) and hasattr(value, "_fields"):
+            for name in value._fields:
+                _walk(position, getattr(value, name), (*path, str(name)))
+            return
+        if isinstance(value, _Mapping):
+            for key, child in value.items():
+                if isinstance(key, (str, int)) and not isinstance(key, bool):
+                    _walk(position, child, (*path, key))
+            return
+        if isinstance(value, (list, tuple)):
+            for index, child in enumerate(value):
+                _walk(position, child, (*path, index))
+            return
+        leaves.append((position, path, value))
+
+    for index, arg in enumerate(input_args):
+        _walk(("arg", index), arg, ())
+    for key, value in input_kwargs.items():
+        _walk(("kwarg", key), value, ())
+
+    if leaves:
+        trace.__dict__["_runnable_input_nontensor_leaves"] = tuple(leaves)
+
+
 def _extract_and_mark_outputs(
     self: "Trace",
     outputs: Any,
@@ -1079,6 +1150,7 @@ def run_and_log_inputs_through_model(
             for i, t in enumerate(input_tensors):
                 backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
             _register_model_input_container_snapshots(self, input_args, input_kwargs)
+            _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
 
             if self.capture_mode == "predicate":
                 outputs = _run_predicate_forward_with_root_frame(

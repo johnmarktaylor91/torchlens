@@ -234,6 +234,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
 
     _mark_inplace_versions(calls, slot_drafts)
     witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
+    witnesses.extend(_input_literal_witnesses(trace, start_order=len(witnesses)))
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics = _deduplicate_diagnostics(diagnostics)
     preflight = ProducerPreflight(passed=not diagnostics, diagnostics=tuple(diagnostics))
@@ -1218,6 +1219,75 @@ def _container_structure_witnesses(trace: Any, *, start_order: int) -> list[Cont
                     observed_value=observed,
                 )
             )
+    return witnesses
+
+
+MODEL_INPUT_LITERAL_SITE_PREFIX = "model_input_literal:"
+"""``site_label`` prefix marking a witnessed non-tensor model-input leaf."""
+
+MODEL_INPUT_LITERAL_FACT_KEY = "model_input_literal"
+"""Discriminator key present in every non-tensor model-input leaf fact."""
+
+
+def _input_literal_witnesses(trace: Any, *, start_order: int) -> list[ControlWitness]:
+    """Witness capture-time non-tensor model-input leaves as structure facts.
+
+    The runnable executor binds only tensor input leaves; a changed non-tensor
+    Python input (bool/int/float/str/None) can silently steer control flow that
+    was never captured as an op, making the recorded taken path wrong. Each
+    grammar-encodable non-tensor leaf is recorded as a ``SHAPE_STRUCTURE_FACT``
+    witness carrying its site position, container path, and literal value so the
+    executor can diverge on a changed non-tensor input rather than falsely
+    reporting a verified, attested result. Leaves outside the frozen literal
+    grammar are witnessed as value-free facts: their site position still
+    constrains input arity, but a value claim would be dishonest, so none is made.
+    No tensors are recorded.
+
+    Parameters
+    ----------
+    trace:
+        Cooked Trace carrying the capture-time non-tensor input leaf stash.
+    start_order:
+        First dense witness order to assign, continuing the existing sequence.
+
+    Returns
+    -------
+    list[ControlWitness]
+        Ordered non-tensor model-input leaf witnesses.
+    """
+
+    leaves = getattr(trace, "__dict__", {}).get("_runnable_input_nontensor_leaves", ())
+    witnesses: list[ControlWitness] = []
+    for position, path, value in leaves:
+        try:
+            _encode_literal(value)
+            encodable = True
+        except _UnsupportedLiteralError:
+            encodable = False
+        fact = {
+            MODEL_INPUT_LITERAL_FACT_KEY: True,
+            "position": list(position) if isinstance(position, tuple) else position,
+            "path": list(path),
+            "encodable": encodable,
+            "value": value if encodable else None,
+        }
+        try:
+            observed = _encode_literal(fact)
+        except _UnsupportedLiteralError:
+            # Defensive: an exotic path/position component that cannot be encoded
+            # cannot be witnessed. Tensor-slot binding still constrains arity.
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                order=order,
+                call_id=None,
+                site_label=f"{MODEL_INPUT_LITERAL_SITE_PREFIX}{position!r}:{list(path)!r}",
+                observed_value=observed,
+            )
+        )
     return witnesses
 
 
