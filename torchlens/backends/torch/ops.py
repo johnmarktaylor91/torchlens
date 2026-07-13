@@ -122,6 +122,7 @@ from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...capture.arg_positions import (
     FUNC_ARG_SPECS,
+    VARIADIC_TENSOR_ARG_FUNCS,
     extract_tensors_and_params,
     _cache_dynamic_spec,
     _normalize_func_name,
@@ -2506,15 +2507,25 @@ def _extract_arg_tensors_and_params(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[list[torch.Tensor], list[torch.nn.Parameter]]:
-    """O(1) tensor/param extraction via lookup table, with BFS fallback."""
-    spec = FUNC_ARG_SPECS.get(normalized_name) or _st._dynamic_arg_specs.get(normalized_name)
-    if spec is not None:
-        return extract_tensors_and_params(spec, args, kwargs)  # type: ignore[arg-type]
+    """O(1) tensor/param extraction via lookup table, with BFS fallback.
 
-    # Tier 3 fallback: BFS crawl once, then cache for subsequent calls.
+    Variadic transform boundary ops (``vmap``/``grad``/``autograd.functional.*``)
+    always take the fresh Tier-3 crawl and never touch the name-keyed dynamic
+    cache: their tensor-operand arity is call-dependent, so a first-call spec
+    would drop later operands (a capture gap; see ``VARIADIC_TENSOR_ARG_FUNCS``).
+    """
+    is_variadic_transform = normalized_name in VARIADIC_TENSOR_ARG_FUNCS
+    if not is_variadic_transform:
+        spec = FUNC_ARG_SPECS.get(normalized_name) or _st._dynamic_arg_specs.get(normalized_name)
+        if spec is not None:
+            return extract_tensors_and_params(spec, args, kwargs)  # type: ignore[arg-type]
+
+    # Tier 3 fallback: BFS crawl. Cache the derived spec only for fixed-arity
+    # functions; variadic transform ops must re-crawl every call.
     all_args = list(args) + list(kwargs.values())
     arg_tensors, arg_parameters = _get_tensors_and_params_from_obj(all_args)
-    _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
+    if not is_variadic_transform:
+        _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
     return arg_tensors, arg_parameters
 
 

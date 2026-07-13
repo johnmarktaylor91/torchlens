@@ -18,7 +18,12 @@ from ..user_funcs import (
 )
 from .core import validate_saved_outs as validate_trace_saved_outs
 from .consolidated import InterventionValidationReport, validate
-from .diagnostics import ValidationFailure, get_validation_failure
+from .diagnostics import (
+    ValidationDiagnostic,
+    ValidationFailure,
+    get_validation_diagnostics,
+    get_validation_failure,
+)
 from .invariants import MetadataInvariantError, check_metadata_invariants
 from .status import ValidationReplayState, ValidationReplayStatus
 
@@ -1087,9 +1092,11 @@ def _require_str_enum(
 __all__ = [
     "InterventionValidationReport",
     "ValidationFailure",
+    "ValidationDiagnostic",
     "ValidationReplayState",
     "ValidationReplayStatus",
     "get_validation_failure",
+    "get_validation_diagnostics",
     "validate_backward_pass",
     "validate_batch_of_models_and_inputs",
     "validate",

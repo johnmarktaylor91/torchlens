@@ -189,6 +189,37 @@ def _cache_dynamic_spec(
 
 
 # ============================================================================
+# Variadic-arity transform ops -- never name-cache a positional ArgSpec
+# ============================================================================
+
+# Transform-boundary ops (``vmap``/``grad``/``autograd.functional.*``) take a
+# VARIADIC number of tensor operands determined by the transformed callable's
+# signature, NOT a fixed positional layout. The Tier-3 dynamic cache keys an
+# ``ArgSpec`` by normalized func name from the FIRST observed call; for a
+# transform that first call may carry fewer tensor operands than a later one
+# (e.g. a 1-operand ``vmap`` boundary, then a 2-operand ``vmap(...)(q, kv)``).
+# Reusing the narrow first spec silently drops the extra operands' parent edges,
+# orphaning and dropping real ops from the trace -- a capture gap that also
+# leaks across captures because the dynamic cache is process-global. These names
+# must ALWAYS take the fresh Tier-3 crawl and must never populate or read the
+# dynamic ArgSpec cache. (Static ``FUNC_ARG_SPECS`` intentionally has no entry
+# for them for the same reason.)
+VARIADIC_TENSOR_ARG_FUNCS: frozenset[str] = frozenset(
+    {
+        "vmap",
+        "grad",
+        "gradandvalue",
+        "autogradjacobian",
+        "autogradhessian",
+        "autogradvjp",
+        "autogradjvp",
+        "autogradhvp",
+        "autogradvhp",
+    }
+)
+
+
+# ============================================================================
 # Shared ArgSpec instances (reduce object count)
 # ============================================================================
 

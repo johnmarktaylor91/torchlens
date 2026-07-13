@@ -21,7 +21,11 @@ import torchlens.user_funcs as user_funcs
 import torchlens as tl
 import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
-from torchlens.validation import validate_forward_pass
+from torchlens.validation import (
+    ValidationDiagnostic,
+    get_validation_diagnostics,
+    validate_forward_pass,
+)
 from torchlens.errors import MetadataInvariantError, TraceNotReproducibleWarning
 from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
@@ -45,6 +49,7 @@ from torchlens.validation.core import (
     _restore_live_parameter_args_for_replay,
     _op_reduction_depth,
     _deep_numeric_replay_matches_saved,
+    completeness_backstop_counts,
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     ValidationDecisionRecorder,
     validate_parents_of_saved_layer,
@@ -1098,10 +1103,10 @@ def test_validate_forward_pass_plain_attribute_mutable_state_isolated() -> None:
     assert validate_forward_pass(PlainMutableState(), torch.randn(3)) is True
 
 
-def test_validate_forward_pass_restores_pristine_state_before_replay(
+def test_validate_forward_pass_pristine_replay_catches_mutation_masked_bug(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validation replay starts from the validation model's pre-capture state."""
+    """A planted replay bug cannot hide behind post-forward buffer state."""
 
     class CounterBuffer(nn.Module):
         """Model whose registered counter changes its structural forward path."""
@@ -1123,27 +1128,30 @@ def test_validate_forward_pass_restores_pristine_state_before_replay(
             step.add_(1)
             return output
 
-    replay_entry_steps: list[float] = []
+    def planted_state_sensitive_capture_bug(
+        trace: Trace,
+        ground_truth_output_tensors: list[torch.Tensor],
+        verbose: bool = False,
+        validate_metadata: bool = True,
+    ) -> bool:
+        """Simulate a replay bug whose stale source state masks a bad capture."""
 
-    def observe_replay_entry(trace: Trace) -> None:
-        """Record the validation model state visible at replay completion."""
-
-        source_ref = getattr(trace, "_source_model_ref")
+        del ground_truth_output_tensors, verbose, validate_metadata
+        source_ref = trace._source_model_ref
         source_model = source_ref()
         assert source_model is not None
-        replay_entry_steps.append(float(cast(torch.Tensor, source_model.step).item()))
+        return bool(cast(torch.Tensor, source_model.step).item() > 0)
 
+    monkeypatch.setattr(Trace, "validate_forward_pass", planted_state_sensitive_capture_bug)
     with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
         assert (
             user_public_impls._validate_forward_pass_torch(
                 CounterBuffer(),
                 torch.randn(3),
                 validate_metadata=False,
-                _trace_observer=observe_replay_entry,
             )
-            is True
+            is False
         )
-    assert replay_entry_steps == [0.0]
 
     original_restore = user_public_impls._restore_validation_replay_state
 
@@ -1156,7 +1164,6 @@ def test_validate_forward_pass_restores_pristine_state_before_replay(
 
         del model, state_dict, plain_attr_snapshot
 
-    replay_entry_steps.clear()
     monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", skip_restore)
 
     with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
@@ -1165,11 +1172,9 @@ def test_validate_forward_pass_restores_pristine_state_before_replay(
                 CounterBuffer(),
                 torch.randn(3),
                 validate_metadata=False,
-                _trace_observer=observe_replay_entry,
             )
             is True
         )
-    assert replay_entry_steps == [2.0]
     monkeypatch.setattr(user_public_impls, "_restore_validation_replay_state", original_restore)
 
 
@@ -1221,7 +1226,7 @@ def test_validate_forward_pass_replay_copy_fallback_warns_for_lock_attr() -> Non
 
 
 def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
-    """Validation warns when a second trace has a different structure."""
+    """Structural re-trace divergence emits a structured retained warning."""
 
     class ToggleBranch(nn.Module):
         """Model that changes control flow after one forward pass."""
@@ -1242,11 +1247,30 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
             self.use_mul = True
             return out
 
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
     with pytest.warns(
         TraceNotReproducibleWarning,
         match="stateful/non-reproducible.*make the forward path state-independent",
-    ):
-        assert validate_forward_pass(ToggleBranch(), torch.randn(2, 3)) is True
+    ) as caught:
+        assert user_public_impls._validate_forward_pass_torch(
+            ToggleBranch(),
+            torch.randn(2, 3),
+            _trace_observer=observe_trace,
+        )
+
+    warning = caught[0].message
+    assert isinstance(warning, TraceNotReproducibleWarning)
+    assert warning.fields["first_graph_hash"] != warning.fields["retrace_graph_hash"]
+    assert warning.fields["first_divergence"] is not None
+    assert len(diagnostics) == 1
+    assert diagnostics[0][0].check == "trace_retrace_structure_mismatch"
+    assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
 def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
@@ -1266,6 +1290,29 @@ def test_validate_forward_pass_no_retrace_warning_for_stateless_model() -> None:
 
     messages = [str(warning.message) for warning in caught]
     assert not any("stateful/non-reproducible" in message for message in messages)
+
+
+def test_validate_forward_pass_dropout_value_drift_does_not_warn_on_retrace() -> None:
+    """RNG value drift alone does not trigger the structural re-trace warning."""
+
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
+    model = nn.Dropout(p=0.5).train()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert user_public_impls._validate_forward_pass_torch(
+            model,
+            torch.randn(4, 3),
+            _trace_observer=observe_trace,
+        )
+
+    assert not any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+    assert diagnostics == [()]
 
 
 def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None:
@@ -1293,7 +1340,7 @@ def test_validate_forward_pass_train_batch_norm_has_no_retrace_warning() -> None
 
 
 def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
-    """Live-model fallback also runs the structural reproducibility trace."""
+    """An uncopyable model skips only the new pristine re-trace diagnostic."""
 
     execution_count = [0]
 
@@ -1317,11 +1364,24 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
             execution_count[0] += 1
             return x + 1
 
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
     model = UncopyableExecutionCounter()
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
-        assert validate_forward_pass(model, torch.randn(2, 3)) is True
+        assert user_public_impls._validate_forward_pass_torch(
+            model,
+            torch.randn(2, 3),
+            _trace_observer=observe_trace,
+        )
 
-    assert execution_count == [3]
+    assert execution_count == [2]
+    assert len(diagnostics) == 1
+    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
@@ -1355,8 +1415,8 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
     assert snapshot is not None
 
 
-def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> None:
-    """An opaque attr must not block restoration or the reproducibility tripwire."""
+def test_unsnapshotable_attr_restores_other_state_and_skips_pristine_retrace() -> None:
+    """An opaque attr preserves replay while safely skipping only the new check."""
 
     class LockBackedToggle(nn.Module):
         """Stateful model with one unsnapshotable but unused lock."""
@@ -1375,15 +1435,27 @@ def test_unsnapshotable_attr_restores_other_state_and_warns_on_shape_drift() -> 
             self.step += 1
             return output
 
+    diagnostics: list[tuple[ValidationDiagnostic, ...]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Retain diagnostics before validation cleans up its trace."""
+
+        diagnostics.append(get_validation_diagnostics(trace))
+
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = validate_forward_pass(LockBackedToggle(), torch.randn(3))
+        result = user_public_impls._validate_forward_pass_torch(
+            LockBackedToggle(),
+            torch.randn(3),
+            _trace_observer=observe_trace,
+        )
 
     assert result is True
     assert any(
         "skipping restoration for this attribute only" in str(item.message) for item in caught
     )
-    assert any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+    assert not any(issubclass(item.category, TraceNotReproducibleWarning) for item in caught)
+    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_validate_forward_pass_ground_truth_copy_strips_traced_forward_wrappers() -> None:
@@ -1522,6 +1594,202 @@ def test_validate_forward_pass_preserves_distinct_recurrent_output_labels() -> N
             return first, second
 
     assert validate_forward_pass(SharedHeadTuple(), torch.randn(2, 3)) is True
+
+
+def test_validation_dispatch_op_count_backstop_matches_normal_capture() -> None:
+    """The dispatcher census agrees with a normal validation capture's op count."""
+
+    class TwoOpModel(nn.Module):
+        """Model with two independently dispatching captured operations."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply two tensor operations."""
+
+            return torch.relu(x + 1)
+
+    observed_counts: list[tuple[int, int]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Save both operation counts before validation cleans up the trace."""
+
+        observed_counts.append(
+            (
+                trace._validation_dispatch_op_count,
+                trace._validation_captured_dispatchable_op_count,
+            )
+        )
+
+    assert user_public_impls._validate_forward_pass_torch(
+        TwoOpModel(),
+        torch.randn(2, 3),
+        validate_metadata=False,
+        _trace_observer=observe_trace,
+    )
+    assert observed_counts == [(2, 2)]
+
+
+def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> None:
+    """A dispatcher/capture count mismatch is a hard completeness failure."""
+
+    model = nn.Sequential(nn.ReLU()).eval()
+    inputs = torch.randn(2, 3)
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+    try:
+        trace._validation_captured_dispatchable_op_count = len(
+            {
+                getattr(op, "func_call_id")
+                for op in trace.layer_list
+                if isinstance(getattr(op, "func_call_id", None), int)
+            }
+        )
+        trace._validation_dispatch_op_count = trace._validation_captured_dispatchable_op_count + 1
+        assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is False
+        assert any(
+            decision["reason"] == "dispatch_op_count_mismatch"
+            for decision in trace.validation_replay_status.decisions
+        )
+    finally:
+        trace.cleanup()
+
+
+def _backstop_op(
+    func_call_id: int | None,
+    *,
+    transform_kind: str | None = None,
+    func_name: str = "linear",
+    intervention_replaced: bool = False,
+    is_internal_source: bool = False,
+) -> SimpleNamespace:
+    """Build a minimal layer-op stand-in for the completeness backstop census."""
+
+    return SimpleNamespace(
+        func_call_id=func_call_id,
+        transform_kind=transform_kind,
+        func_name=func_name,
+        intervention_replaced=intervention_replaced,
+        is_internal_source=is_internal_source,
+    )
+
+
+def _backstop_dec(owner_func_call_id: int, *, capture_accounted: bool = True) -> dict:
+    """Build a minimal dispatcher-census decomposition record."""
+
+    return {"owner_func_call_id": owner_func_call_id, "capture_accounted": capture_accounted}
+
+
+def _backstop_trace(layer_list: list, decompositions: list) -> SimpleNamespace:
+    """Wrap census inputs in a trace-shaped object for the backstop helper."""
+
+    return SimpleNamespace(
+        layer_list=layer_list,
+        completeness_decompositions=decompositions,
+    )
+
+
+def test_completeness_backstop_transform_boundary_carveout_is_scoped() -> None:
+    """Carve-out A removes ONLY transform boundary nodes from the captured census.
+
+    A ``torch.func`` transform boundary node owns a captured ``func_call_id`` but
+    no accounted aten-dispatch owner, so it must be excluded from the captured
+    census. A NON-transform captured op with no dispatch owner must NOT be
+    excluded -- it is a genuine capture gap and must still produce a residual
+    mismatch, and a real gap alongside a transform must NOT be masked.
+    """
+
+    # Transform boundary (fcid=3) inflates the captured census by design -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(2),
+                _backstop_op(3, transform_kind="vmap", func_name="vmap"),
+            ],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert (dispatch, captured) == (2, 2)
+
+    # A NON-transform captured op with no dispatch owner is a real gap -> mismatch.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(2), _backstop_op(3, transform_kind=None)],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert dispatch != captured
+
+    # A real gap (fcid=5) alongside a genuine transform boundary (fcid=3) still
+    # leaves a residual -- the transform carve-out never blanket-clears mismatches.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(2),
+                _backstop_op(3, transform_kind="vmap", func_name="vmap"),
+                _backstop_op(5),
+            ],
+            [_backstop_dec(1), _backstop_dec(2)],
+        )
+    )
+    assert dispatch != captured
+
+
+def test_completeness_backstop_intervention_carveout_does_not_disarm_plain_capture() -> None:
+    """Carve-out B is gated on a GENUINE replacement and never relaxes plain capture.
+
+    A raw output-replacement hook may build its replacement with a python-wrapped
+    torch call whose accounted dispatch owner is orphaned out of the final trace;
+    when a genuine ``intervention_replacement`` placeholder is present, that
+    orphaned owner is excluded and the counts match. But the IDENTICAL
+    dispatch-vs-capture shape during PLAIN capture -- no genuine replacement
+    present -- must STILL fire the tripwire (an accounted op that dispatched yet
+    was silently dropped is exactly the capture gap the backstop must catch).
+    """
+
+    # Orphaned dispatch owner (fcid=4) WITH a genuine replacement placeholder -> match.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(3, func_name="relu"),
+                _backstop_op(
+                    None,
+                    func_name="intervention_replacement",
+                    intervention_replaced=True,
+                ),
+            ],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+        )
+    )
+    assert (dispatch, captured) == (2, 2)
+
+    # SAME orphaned-dispatch shape during PLAIN capture (no genuine replacement)
+    # -> the tripwire STILL fires. The carve-out did not disarm it.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [_backstop_op(1), _backstop_op(3, func_name="relu")],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+        )
+    )
+    assert dispatch != captured
+
+    # A non-genuine op merely NAMED intervention_replacement (not flagged replaced)
+    # must NOT enable the carve-out -- the plain-capture drop still fires.
+    dispatch, captured = completeness_backstop_counts(
+        _backstop_trace(
+            [
+                _backstop_op(1),
+                _backstop_op(3, func_name="relu"),
+                _backstop_op(
+                    None,
+                    func_name="intervention_replacement",
+                    intervention_replaced=False,
+                ),
+            ],
+            [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4)],
+        )
+    )
+    assert dispatch != captured
 
 
 def test_replay_validation_checks_every_recurrent_pass() -> None:
