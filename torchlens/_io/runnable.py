@@ -234,7 +234,13 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
 
     _mark_inplace_versions(calls, slot_drafts)
     witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
-    witnesses.extend(_input_literal_witnesses(trace, start_order=len(witnesses)))
+    literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
+    witnesses.extend(literal_witnesses)
+    if saw_opaque_leaf and completeness is WitnessCompleteness.COMPLETE:
+        # An opaque non-tensor input leaf cannot be re-verified, so its control
+        # dependency is unobserved: downgrade to keep the run honest
+        # (UNVERIFIABLE + NOT_APPLICABLE), never a false VERIFIED/ATTESTED.
+        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics = _deduplicate_diagnostics(diagnostics)
     preflight = ProducerPreflight(passed=not diagnostics, diagnostics=tuple(diagnostics))
@@ -1229,7 +1235,11 @@ MODEL_INPUT_LITERAL_FACT_KEY = "model_input_literal"
 """Discriminator key present in every non-tensor model-input leaf fact."""
 
 
-def _input_literal_witnesses(trace: Any, *, start_order: int) -> list[ControlWitness]:
+def _input_literal_witnesses(
+    trace: Any,
+    *,
+    start_order: int,
+) -> tuple[list[ControlWitness], bool]:
     """Witness capture-time non-tensor model-input leaves as structure facts.
 
     The runnable executor binds only tensor input leaves; a changed non-tensor
@@ -1238,10 +1248,20 @@ def _input_literal_witnesses(trace: Any, *, start_order: int) -> list[ControlWit
     grammar-encodable non-tensor leaf is recorded as a ``SHAPE_STRUCTURE_FACT``
     witness carrying its site position, container path, and literal value so the
     executor can diverge on a changed non-tensor input rather than falsely
-    reporting a verified, attested result. Leaves outside the frozen literal
-    grammar are witnessed as value-free facts: their site position still
-    constrains input arity, but a value claim would be dishonest, so none is made.
-    No tensors are recorded.
+    reporting a verified, attested result.
+
+    A leaf *outside* the frozen literal grammar (enum, dataclass, set, bytes,
+    complex, numpy scalar, non-finite ``inf``/``nan`` float, ...) cannot be
+    compared across save/load, so its value is recorded ``None`` -- a value-free
+    fact. Such a leaf can still steer unobserved Python control flow, and because
+    the executor cannot re-verify it, the run's witness coverage is genuinely
+    INCOMPLETE: the caller must downgrade ``witness_completeness`` so the run
+    reports ``UNVERIFIABLE`` + ``NOT_APPLICABLE`` instead of a false
+    ``VERIFIED``/``ATTESTED`` over a possibly-wrong replayed path. This function
+    signals that condition by returning ``saw_opaque_leaf=True`` so the caller can
+    downgrade ``witness_completeness``. It does *not* fail producer preflight: an
+    opaque-leaf artifact still saves and runs, but honestly reports
+    ``UNVERIFIABLE`` rather than a false ``VERIFIED``. No tensors are recorded.
 
     Parameters
     ----------
@@ -1252,18 +1272,22 @@ def _input_literal_witnesses(trace: Any, *, start_order: int) -> list[ControlWit
 
     Returns
     -------
-    list[ControlWitness]
-        Ordered non-tensor model-input leaf witnesses.
+    tuple[list[ControlWitness], bool]
+        Ordered non-tensor model-input leaf witnesses, and whether any leaf was
+        value-free (opaque), signalling incomplete witness coverage.
     """
 
     leaves = getattr(trace, "__dict__", {}).get("_runnable_input_nontensor_leaves", ())
     witnesses: list[ControlWitness] = []
+    saw_opaque_leaf = False
     for position, path, value in leaves:
         try:
             _encode_literal(value)
             encodable = True
         except _UnsupportedLiteralError:
             encodable = False
+        if not encodable:
+            saw_opaque_leaf = True
         fact = {
             MODEL_INPUT_LITERAL_FACT_KEY: True,
             "position": list(position) if isinstance(position, tuple) else position,
@@ -1288,7 +1312,7 @@ def _input_literal_witnesses(trace: Any, *, start_order: int) -> list[ControlWit
                 observed_value=observed,
             )
         )
-    return witnesses
+    return witnesses, saw_opaque_leaf
 
 
 def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[RunnableDiagnostic]:

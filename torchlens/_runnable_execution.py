@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
 from itertools import count
+import struct
 from typing import Any, cast
 
 import torch
@@ -417,11 +418,18 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
 
 
 def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
-    """Type-strict equality for recorded vs runtime non-tensor input leaves.
+    """Type-strict, bit-exact equality for recorded vs runtime non-tensor input leaves.
 
     ``bool`` is a subclass of ``int`` and floats are distinct from ints, so a
     changed control input like ``True`` -> ``1`` or ``2`` -> ``2.0`` must count as
     a divergence rather than silently comparing equal.
+
+    Floats are compared by their IEEE-754 bit pattern, never ``==``. Ordinary
+    ``==`` is dishonest for control witnesses at two values: ``-0.0 == +0.0`` is
+    ``True`` (a changed sign bit that steers ``math.copysign``/``1/x`` control flow
+    would falsely pass), while ``nan == nan`` is ``False`` (an unchanged ``nan``
+    would falsely diverge). Bit-pattern identity makes ``-0.0`` differ from
+    ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
 
     if isinstance(recorded, bool) or isinstance(runtime, bool):
@@ -429,9 +437,7 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     if type(recorded) is not type(runtime):
         return False
     if isinstance(recorded, float):
-        if recorded != recorded and runtime != runtime:  # NaN compares equal here.
-            return True
-        return recorded == runtime
+        return struct.pack(">d", recorded) == struct.pack(">d", runtime)
     return bool(recorded == runtime)
 
 
@@ -1551,6 +1557,11 @@ def _numeric_attestation_check(
     if not nontensor_inputs_match:
         # A changed non-tensor input means the recorded taken path may not apply,
         # so recomputed slots must never be attested against the capture archive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+        # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that
+        # cannot be re-verified) makes the path only UNVERIFIABLE, so a byte-exact
+        # attestation would dishonestly bless a possibly-wrong replayed path.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     layer = descriptor.payload_layers.activations
     if not layer.present:
