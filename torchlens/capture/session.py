@@ -353,8 +353,6 @@ class CaptureSession:
             for op in trace.layer_list:
                 if op.raw_index not in selected_nums:
                     continue
-                if op.has_saved_activation:
-                    continue
                 payload = live_output_by_raw_index.get(op.raw_index)
                 payload_entry = self.activation_escrow.get(op.raw_index)
                 if payload is None and payload_entry is not None:
@@ -373,6 +371,8 @@ class CaptureSession:
                         if payload is not None:
                             break
                 if payload is None:
+                    if op.has_saved_activation:
+                        continue
                     if op.raw_index in requested_nums:
                         raise RuntimeError(
                             "TorchLens could not retain an explicitly requested activation "
