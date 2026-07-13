@@ -247,9 +247,13 @@ def _relu_registry_index(run: dict) -> int:
 def test_runnable_load_blocks_from_file_creation(tmp_path: Path) -> None:
     """Repointing a run op to torch.from_file must not create an attacker file."""
 
-    log = tl.trace(_TinyLinear().eval(), torch.ones(1, 4), capture=_CAP)
+    model = (
+        _TinyLinear().eval()
+    )  # retain: include_weights needs the live source model (survive full-suite GC)
+    log = tl.trace(model, torch.ones(1, 4), capture=_CAP)
     clean = tmp_path / "clean.tlspec"
     tl.save(log, clean, level="runnable", include_weights=True)
+    assert model is not None
 
     evil = tmp_path / "evil.tlspec"
     shutil.copytree(clean, evil)
