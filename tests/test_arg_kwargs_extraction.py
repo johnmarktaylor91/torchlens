@@ -478,9 +478,17 @@ def test_traced_gradient_spacing_tensor_recorded_as_parent() -> None:
     _assert_parents_match_args_template(gradient)
 
 
+@pytest.mark.parametrize("bound_style", ["positional", "keyword", "mixed"])
 @pytest.mark.smoke
-def test_traced_clamp_tensor_bounds_recorded_as_parents() -> None:
-    """torch.clamp records tensor ``min`` and ``max`` bounds as parents."""
+def test_traced_clamp_tensor_bounds_recorded_as_parents(bound_style: str) -> None:
+    """torch.clamp records tensor bounds in every supported calling style.
+
+    Parameters
+    ----------
+    bound_style:
+        Whether the tensor bounds are passed positionally, by keyword, or with
+        the minimum positional and maximum by keyword.
+    """
 
     class ClampWithTensorBounds(nn.Module):
         """Clamp a derived value between two derived tensor bounds."""
@@ -502,15 +510,23 @@ def test_traced_clamp_tensor_bounds_recorded_as_parents() -> None:
             value = x + 2
             lower = x - 1
             upper = x + 1
-            return torch.clamp(value, min=lower, max=upper)
+            if bound_style == "positional":
+                return torch.clamp(value, lower, upper)
+            if bound_style == "keyword":
+                return torch.clamp(value, min=lower, max=upper)
+            return torch.clamp(value, lower, max=upper)
 
     trace = _trace_with_args_templates(ClampWithTensorBounds(), torch.zeros(3))
     clamp = next(op for op in trace.ops if op.func_name == "clamp")
-    lower_bound = next(op for op in trace.ops if op.func_name in {"sub", "__sub__"})
+    bound_producers = [
+        op for op in trace.ops if op.func_name in {"add", "__add__", "sub", "__sub__"}
+    ]
     assert len(clamp.parents) == 3
     assert any("sub" in parent for parent in clamp.parents), clamp.parents
     assert sum("add" in parent for parent in clamp.parents) == 2
-    _assert_child_edge(lower_bound, clamp)
+    assert len(bound_producers) == 3
+    for producer in bound_producers:
+        _assert_child_edge(producer, clamp)
     _assert_parents_match_args_template(clamp)
 
 

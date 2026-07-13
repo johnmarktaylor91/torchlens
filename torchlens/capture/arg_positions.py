@@ -271,7 +271,7 @@ _NONE = ArgSpec()
 # generic binary keyword aliases as well because the Tensor method and torch
 # function forms use different spellings for the primary operand.
 _CLAMP_SPEC = ArgSpec(
-    positions=_P01_BINARY.positions,
+    positions=_P012.positions,
     tensor_kwargs=(*_P01_BINARY.tensor_kwargs, "min", "max"),
 )
 
