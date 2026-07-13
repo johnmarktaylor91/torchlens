@@ -374,8 +374,12 @@ def test_genuine_cnn_runnable_still_verified(tmp_path: Path) -> None:
     """A real CNN round-trips through the runnable path and VERIFIES after the fix."""
 
     inputs = torch.randn(1, 3, 16, 16)
-    log = tl.trace(_TinyCNN().eval(), inputs, capture=_CAP)
+    model = _TinyCNN().eval()  # retain a strong ref: include_weights needs the live source model
+    log = tl.trace(model, inputs, capture=_CAP)
     path = tmp_path / "cnn.tlspec"
     tl.save(log, path, level="runnable", include_weights=True)
+    assert (
+        model is not None
+    )  # keep the model alive across save (defeats weakref GC under full-suite pressure)
     result = tl.load(path).run(inputs=inputs)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
