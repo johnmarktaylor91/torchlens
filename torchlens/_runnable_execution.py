@@ -1314,7 +1314,12 @@ def _numeric_attestation_check(
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not isinstance(layer, ActivationPayloadLayerDescriptor):
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    raw_members = tuple(member for member in layer.members if member.field == "out")
+    # Sparse execution recomputes raw output slots, never activation transforms.
+    # An archive containing transformed outputs is therefore outside the scope
+    # of the all-selected-activations byte-exact claim.
+    if any(member.field != "out" for member in layer.members):
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    raw_members = layer.members
     if not raw_members or not _attestation_inputs_match(descriptor, layer, slot_values):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not _attestation_state_matches(descriptor, layer, state, slot_values):

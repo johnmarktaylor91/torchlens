@@ -13,7 +13,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import TorchLensIOError
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
+from torchlens._runnable_state import runnable_tensor_byte_digest
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import StateSource
@@ -70,6 +72,45 @@ def _metadata(path: Path) -> dict[str, Any]:
         value = pickle.load(handle)  # noqa: S301 - created in this test process
     assert isinstance(value, dict)
     return value
+
+
+@pytest.mark.parametrize("field_name", ("annotations", "interventions"))
+def test_runnable_save_rejects_tensor_in_slotted_keep_field(
+    tmp_path: Path,
+    field_name: str,
+) -> None:
+    """Reject tensor payloads hidden in any persisted slotted Op field."""
+
+    trace = _capture(WeightPayloadModel().eval())
+    op = next(op for op in trace.layer_list if not op.is_input)
+    object.__setattr__(op, field_name, {"hidden_tensor": torch.tensor([1.0])})
+
+    with pytest.raises((AssertionError, TorchLensIOError)) as caught:
+        trace.save(tmp_path / f"{field_name}.tlspec", level="runnable")
+
+    if isinstance(caught.value, TorchLensIOError):
+        assert isinstance(caught.value.__cause__, AssertionError)
+
+
+def test_runnable_save_normal_model_remains_tensor_payload_free(tmp_path: Path) -> None:
+    """Keep the strengthened sparse-core tripwire transparent to normal saves."""
+
+    path = tmp_path / "normal.tlspec"
+    _capture(WeightPayloadModel().eval()).save(path, level="runnable")
+
+    assert path.is_dir()
+
+
+def test_runnable_tensor_digest_includes_dtype_and_shape() -> None:
+    """Distinguish logical tensors that share only their raw byte representation."""
+
+    float_value = torch.tensor([1.0], dtype=torch.float32)
+    integer_value = float_value.view(torch.int32)
+    reshaped_value = float_value.reshape(1, 1)
+
+    assert torch.equal(float_value.view(torch.uint8), integer_value.view(torch.uint8))
+    assert runnable_tensor_byte_digest(float_value) != runnable_tensor_byte_digest(integer_value)
+    assert runnable_tensor_byte_digest(float_value) != runnable_tensor_byte_digest(reshaped_value)
 
 
 @pytest.mark.smoke
