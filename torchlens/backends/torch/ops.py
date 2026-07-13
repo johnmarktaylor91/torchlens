@@ -4428,14 +4428,19 @@ def _make_layer_log_entry(
         keep_by_predicate = bool(module_filter(SimpleNamespace(**fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     raw_index = cast(int, fields_dict["raw_index"])
-    capture_session = capture_session_for(self)
-    if capture_session is not None:
-        capture_session.escrow_candidate(raw_index, t, fields_dict)
     predicate_spec, predicate_ctx = _evaluate_trace_save_predicate(self, fields_dict, t)
     if predicate_spec is None:
         save_this_activation = (layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)
     else:
         save_this_activation = predicate_spec.save_out
+    capture_session = capture_session_for(self)
+    if capture_session is not None:
+        capture_session.escrow_candidate(
+            raw_index,
+            t,
+            fields_dict,
+            retain_activation=not (keep_by_predicate and save_this_activation),
+        )
     if keep_by_predicate and save_this_activation:
         if predicate_spec is None or predicate_ctx is None:
             with _timed_phase(self, "clone_save:activation_fields"):

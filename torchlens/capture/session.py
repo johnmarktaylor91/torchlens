@@ -217,6 +217,8 @@ class CaptureSession:
         raw_index: int,
         tensor: Any,
         fields_dict: Mapping[str, Any] | None = None,
+        *,
+        retain_activation: bool = True,
     ) -> None:
         """Retain one selector candidate before its immutable event is appended.
 
@@ -228,12 +230,14 @@ class CaptureSession:
             Live backend tensor for the operation.
         fields_dict
             Live event fields, used to identify positive-index gradient targets.
+        retain_activation
+            Whether this candidate still needs detached deferred retention.
         """
 
         profile = self.plan.retention_profile
         if raw_index in profile.gradient_live_indices and fields_dict is not None:
             self.live_gradient_labels.add(str(fields_dict["_label_raw"]))
-        if profile.activation_kind is RetentionKind.ACTIVATION:
+        if profile.activation_kind is RetentionKind.ACTIVATION and retain_activation:
             with _state.pause_logging():
                 payload = safe_copy(tensor, detach_tensor=True)
                 nbytes = int(payload.nelement() * payload.element_size())
@@ -337,7 +341,8 @@ class CaptureSession:
                     parent = trace.layer_dict_all_keys[parent_label]
                     live_output_by_raw_index[parent.raw_index] = output_tensor
             selected = _get_op_nums_from_user_labels(trace, activation_selector)
-            selected_nums = set() if selected == "all" else set(selected)
+            requested_nums = set() if selected == "all" else set(selected)
+            selected_nums = set(requested_nums)
             selected_nums.update(
                 op.raw_index
                 for op in trace.layer_list
@@ -351,6 +356,8 @@ class CaptureSession:
                     )
             for op in trace.layer_list:
                 if op.raw_index not in selected_nums:
+                    continue
+                if op.has_saved_activation:
                     continue
                 payload = live_output_by_raw_index.get(op.raw_index)
                 payload_entry = self.activation_escrow.get(op.raw_index)
@@ -370,6 +377,11 @@ class CaptureSession:
                         if payload is not None:
                             break
                 if payload is None:
+                    if op.raw_index in requested_nums:
+                        raise RuntimeError(
+                            "TorchLens could not retain an explicitly requested activation "
+                            f"for {op.layer_label!r} (raw index {op.raw_index})."
+                        )
                     continue
                 op.save_activation(
                     payload,

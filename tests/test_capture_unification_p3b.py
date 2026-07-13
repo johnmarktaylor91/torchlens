@@ -81,6 +81,18 @@ class SavedOrphan(nn.Module):
         return x + 1
 
 
+class FourOpArithmetic(nn.Module):
+    """Deterministic graph with enough operations to exercise tail eviction."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply four distinct arithmetic operations."""
+
+        added = x + 1
+        multiplied = added * 2
+        activated = multiplied.relu()
+        return activated - 3
+
+
 def _save_only_mul(ctx: RecordContext) -> bool:
     """Select only the downstream multiplication op."""
 
@@ -195,6 +207,42 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
     assert saved_grad_types == {"linear"}
     hooked_raw_labels = {raw_label for raw_label, _tensor_id in log._tl_backward_hooked_tensor_keys}
     assert hooked_raw_labels == {saved[0]._label_raw}
+
+
+@pytest.mark.parametrize("live_selector", (1, "mul", "output"))
+def test_mixed_live_and_negative_selectors_retain_exact_values(live_selector: int | str) -> None:
+    """Mixed selectors retain the live winner and the deferred tail exactly once."""
+
+    input_tensor = torch.tensor([1.0, 4.0])
+    live_trace = tl.trace(FourOpArithmetic(), input_tensor, layers_to_save=[live_selector])
+    tail_trace = tl.trace(FourOpArithmetic(), input_tensor, layers_to_save=[-1])
+    mixed_trace = tl.trace(
+        FourOpArithmetic(),
+        input_tensor,
+        layers_to_save=[live_selector, -1],
+    )
+
+    expected = {
+        op.raw_index: op.out
+        for trace in (live_trace, tail_trace)
+        for op in trace.layer_list
+        if op.has_saved_activation
+    }
+    actual = {op.raw_index: op.out for op in mixed_trace.layer_list if op.has_saved_activation}
+    assert actual.keys() == expected.keys()
+    assert all(torch.equal(actual[index], value) for index, value in expected.items())
+
+
+def test_missing_explicit_deferred_activation_raises() -> None:
+    """Deferred resolution never silently skips an explicit activation request."""
+
+    trace = tl.trace(FourOpArithmetic(), torch.ones(2), layers_to_save="none")
+    trace._deferred_retention_selector = [1]
+    session = _retention_session(RetentionProfile())
+    output_tensors = [trace[output_label].out for output_label in trace.output_layers]
+
+    with pytest.raises(RuntimeError, match="explicitly requested activation"):
+        session.resolve_deferred_retention(trace, output_tensors)
 
 
 def _retention_session(profile: RetentionProfile) -> CaptureSession:
