@@ -1282,6 +1282,7 @@ class Trace(
         "_param_logs_by_module": FieldPolicy.DROP,
         "_build_state": FieldPolicy.DROP,
         "_pre_forward_rng_states": FieldPolicy.DROP,
+        "_runnable_host_rng_consumed": FieldPolicy.DROP,
         "_mlx_saved_payloads": FieldPolicy.DROP,
         "_mlx_capture_depth": FieldPolicy.DROP,
         "_out_writer": FieldPolicy.DROP,

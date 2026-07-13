@@ -55,6 +55,7 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "tensor_slots",
         "control_witnesses",
         "witness_completeness",
+        "rng_profile",
         "compatibility",
         "preflight",
         "unsupported_sites",

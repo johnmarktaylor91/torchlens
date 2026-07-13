@@ -444,6 +444,22 @@ class PayloadLayersDescriptor:
 
 
 @dataclass(frozen=True, slots=True)
+class RunnableRngProfile:
+    """Host (Python ``random`` / NumPy) RNG reproducibility metadata.
+
+    The sparse recorded path is a single taken branch. When the traced forward
+    consumed Python or NumPy RNG (e.g. ``if random.random() > 0.5:``), that
+    branch is invisible to tensor-level control witnesses, so a run under a
+    different seed than capture cannot be blessed as VERIFIED/ATTESTED -- the
+    recorded path may not be the branch a fresh seeded call would take. Only a
+    run that reproduces the captured seed/state is an honest VERIFIED replay.
+    """
+
+    host_rng_consumed: bool
+    capture_seed: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class RunnableCompatibility:
     """Producer/runtime versions recorded for readiness diagnostics."""
 
@@ -498,6 +514,7 @@ class SparseRunDescriptor:
     tensor_slots: tuple[TensorSlotDescriptor, ...]
     control_witnesses: tuple[ControlWitness, ...]
     witness_completeness: WitnessCompleteness
+    rng_profile: RunnableRngProfile
     compatibility: RunnableCompatibility
     preflight: ProducerPreflight
     unsupported_sites: tuple[RunnableDiagnostic, ...]

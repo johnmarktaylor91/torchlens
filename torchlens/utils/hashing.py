@@ -42,6 +42,14 @@ from typing import Any, List
 
 _BARCODE_ALPHABET = string.ascii_letters + string.digits
 
+# Dedicated, process-private RNG for internal tensor barcodes. Drawing from a
+# private ``random.Random`` (auto-seeded from OS entropy) -- instead of the global
+# ``random`` module -- keeps capture from perturbing the user's global Python RNG
+# stream, and lets runnable capture honestly detect *user* Python/NumPy RNG use by
+# bracketing the forward with host-RNG snapshots (torchlens's own per-tensor barcode
+# draws would otherwise masquerade as user host-RNG consumption).
+_BARCODE_RNG = random.Random()
+
 
 def make_random_barcode(barcode_len: int = 8) -> str:
     """Generate a random alphanumeric identifier for internal tensor tracking.
@@ -55,7 +63,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
     Returns:
         Random alphanumeric string of the requested length.
     """
-    return "".join(random.choices(_BARCODE_ALPHABET, k=barcode_len))
+    return "".join(_BARCODE_RNG.choices(_BARCODE_ALPHABET, k=barcode_len))
 
 
 def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 16) -> str:

@@ -97,6 +97,7 @@
         "tensor_slots",
         "control_witnesses",
         "witness_completeness",
+        "rng_profile",
         "compatibility",
         "preflight",
         "unsupported_sites"
@@ -138,6 +139,14 @@
         "calls": {"type": "array"},
         "tensor_slots": {"type": "array"},
         "control_witnesses": {"type": "array"},
+        "rng_profile": {
+          "type": "object",
+          "required": ["host_rng_consumed", "capture_seed"],
+          "properties": {
+            "host_rng_consumed": {"type": "boolean"},
+            "capture_seed": {"type": ["integer", "null"]}
+          }
+        },
         "unsupported_sites": {"type": "array"}
       }
     }

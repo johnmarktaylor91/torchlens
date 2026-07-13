@@ -322,6 +322,7 @@ def _validate_sparse_run_descriptor(
         "tensor_slots",
         "control_witnesses",
         "witness_completeness",
+        "rng_profile",
         "compatibility",
         "preflight",
         "unsupported_sites",

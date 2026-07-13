@@ -97,6 +97,61 @@ def execute_with_restored_rng_autocast(
         set_rng_from_saved_states(current_rng_states)
 
 
+def snapshot_host_rng() -> tuple[Any, Any]:
+    """Snapshot the Python ``random`` and NumPy RNG states without advancing them.
+
+    Reading ``random.getstate()`` / ``np.random.get_state()`` is side-effect free,
+    so this can bracket a forward pass to detect whether user code consumed host
+    (non-torch) RNG -- the signal a sparse runnable path uses to stay honest about
+    Python/NumPy control-flow branches it cannot re-observe.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        ``(python_random_state, numpy_random_state)`` snapshot pair.
+    """
+    return (random.getstate(), np.random.get_state())
+
+
+def host_rng_advanced(before: tuple[Any, Any], after: tuple[Any, Any]) -> bool:
+    """Return whether a host (Python/NumPy) RNG engine advanced between snapshots.
+
+    Parameters
+    ----------
+    before:
+        Snapshot from :func:`snapshot_host_rng` taken before the observed region.
+    after:
+        Snapshot from :func:`snapshot_host_rng` taken after the observed region.
+
+    Returns
+    -------
+    bool
+        ``True`` when either the Python ``random`` or NumPy engine state changed.
+    """
+    py_before, np_before = before
+    py_after, np_after = after
+    if py_before != py_after:
+        return True
+    return not _numpy_states_equal(np_before, np_after)
+
+
+def restore_host_rng(snapshot: tuple[Any, Any]) -> None:
+    """Restore Python ``random`` and NumPy engines from a :func:`snapshot_host_rng` pair."""
+    py_state, np_state = snapshot
+    random.setstate(py_state)
+    np.random.set_state(np_state)
+
+
+def _numpy_states_equal(a: Any, b: Any) -> bool:
+    """Compare two ``np.random.get_state()`` tuples (array-aware) for equality."""
+    try:
+        if a[0] != b[0] or not np.array_equal(a[1], b[1]):
+            return False
+        return tuple(a[2:]) == tuple(b[2:])
+    except (TypeError, IndexError, ValueError):
+        return a is b
+
+
 def log_current_rng_states(torch_only: bool = False) -> Dict[str, Any]:
     """Snapshot the current state of all RNG engines.
 
