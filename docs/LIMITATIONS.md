@@ -303,6 +303,16 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
   merge two unrelated loops if they share the same operation
   fingerprint. Disable with ``detect_recurrent_patterns=False`` if you
   see a layer with more passes than you expect.
+- **Completeness validation assumes a cooperative model**: the aten-dispatch
+  completeness witness observes operations through the torch dispatcher, like
+  every dispatch-based tracer. It catches operations TorchLens failed to capture
+  in ordinary models (an uncaptured *mutating* op fails validation), but it
+  cannot detect an op a model *deliberately hides* -- e.g. a custom tensor
+  subclass that runs a mutation inside ``__torch_dispatch__`` under
+  ``torch._C._DisableTorchDispatch()``, which suppresses dispatcher re-entry and
+  makes the nested op invisible to any dispatch-based observer. This is an
+  adversarial construction, not something a normal model validating its own
+  forward pass can trigger.
 
 ---
 

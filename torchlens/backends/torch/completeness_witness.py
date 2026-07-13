@@ -3,6 +3,17 @@
 The witness correlates dispatcher events to the exact wrapper edge token and
 leaf barcode used by callable escape detection and ordinary TorchLens capture.
 It deliberately does not use clocks or inferred time windows.
+
+Observational contract (cooperative-model assumption). The witness observes
+operations through the torch dispatcher, exactly like every dispatch-based
+tracer. It therefore assumes a cooperative model: one that does not deliberately
+hide operations from the dispatcher. An uncaptured op that the witness CAN see
+is reported (an uncaptured *mutating* dispatch fails completeness). But a model
+that intercepts an op inside a tensor-subclass ``__torch_dispatch__`` and runs a
+hidden mutation under ``torch._C._DisableTorchDispatch()`` suppresses dispatcher
+re-entry, so the nested op is genuinely invisible to the witness and cannot be
+detected. This is an adversarial construction, not a capture bug -- a normal
+model validating its own forward pass cannot trigger it. See docs/LIMITATIONS.md.
 """
 
 from __future__ import annotations
