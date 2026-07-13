@@ -270,11 +270,7 @@ class CaptureSession:
             if window is not None:
                 while len(self.gradient_reference_escrow) > window:
                     oldest_index = next(iter(self.gradient_reference_escrow))
-                    evicted = self.gradient_reference_escrow.pop(oldest_index)
-                    with _state.pause_logging():
-                        self.gradient_reference_logical_bytes -= int(
-                            evicted.nelement() * evicted.element_size()
-                        )
+                    self.gradient_reference_escrow.pop(oldest_index)
             self._warn_for_extreme_gradient_retention()
 
     def _spill_activation_escrow_to_budget(self) -> None:
@@ -307,20 +303,18 @@ class CaptureSession:
             self.activation_escrow_spilled_bytes += candidate.nbytes
 
     def _warn_for_extreme_gradient_retention(self) -> None:
-        """Warn once when unwindowable live references cross the compiled byte bound."""
+        """Warn once when graph-pinned references cross the compiled byte bound."""
 
         profile = self.plan.retention_profile
         if (
             self._gradient_warning_emitted
-            or profile.gradient_window is not None
-            or profile.spillable
             or self.gradient_reference_logical_bytes <= profile.gradient_warning_threshold_bytes
         ):
             return
         self._gradient_warning_emitted = True
         retained_mib = self.gradient_reference_logical_bytes / (1024 * 1024)
         warnings.warn(
-            "Unwindowable gradient selection is retaining graph-connected tensor references "
+            "Graph-connected gradient selection is retaining tensor references "
             f"covering approximately {retained_mib:.1f} MiB of logical tensor payload. "
             "Narrow the selector or use an explicit trace refresh to reduce peak memory.",
             RuntimeWarning,

@@ -311,37 +311,30 @@ def test_windowed_activation_escrow_deletes_evicted_spill_files() -> None:
     session.release()
 
 
-def test_gradient_retention_warning_is_extreme_unwindowable_only() -> None:
-    """The graph-retention warning excludes windowed and spillable profiles."""
+def test_gradient_retention_warning_counts_window_evicted_graph_bytes() -> None:
+    """The retention warning counts graph-pinned tensors evicted from its lookup window."""
 
-    extreme = _retention_session(
-        RetentionProfile(
-            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
-            gradient_window=None,
-            gradient_warning_threshold_bytes=1,
-        )
-    )
-    with pytest.warns(RuntimeWarning, match="Unwindowable gradient selection"):
-        extreme.escrow_candidate(1, torch.ones(2, requires_grad=True))
-
-    for profile in (
+    tensor_shape = (256, 256)
+    tensor_nbytes = 256 * 256 * torch.tensor([], dtype=torch.float32).element_size()
+    session = _retention_session(
         RetentionProfile(
             gradient_kind=RetentionKind.GRADIENT_REFERENCE,
             gradient_window=1,
-            gradient_warning_threshold_bytes=1,
-        ),
-        RetentionProfile(
-            gradient_kind=RetentionKind.GRADIENT_REFERENCE,
-            gradient_window=None,
-            spillable=True,
-            gradient_warning_threshold_bytes=1,
-        ),
-    ):
-        session = _retention_session(profile)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            session.escrow_candidate(1, torch.ones(2, requires_grad=True))
-        assert not [warning for warning in caught if warning.category is RuntimeWarning]
+            gradient_warning_threshold_bytes=(2 * tensor_nbytes) - 1,
+        )
+    )
+    first = torch.ones(tensor_shape, requires_grad=True) * 2
+    second = torch.ones(tensor_shape, requires_grad=True) * 3
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        session.escrow_candidate(1, first)
+    assert not [warning for warning in caught if warning.category is RuntimeWarning]
+    with pytest.warns(RuntimeWarning, match="Graph-connected gradient selection"):
+        session.escrow_candidate(2, second)
+
+    assert list(session.gradient_reference_escrow) == [2]
+    assert session.gradient_reference_logical_bytes == 2 * tensor_nbytes
 
 
 def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None:
