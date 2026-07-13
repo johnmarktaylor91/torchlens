@@ -27,6 +27,7 @@ from .intervention.replay import _CallConeNode, _walk_call_cone
 from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .runnable import (
     ActivationPayloadLayerDescriptor,
+    CallableRegistryEntry,
     ContractCheck,
     ControlWitness,
     ControlWitnessKind,
@@ -144,6 +145,8 @@ def _execute_loaded_sparse_transaction(
     ]
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
     call_outputs: dict[str, Any] = {}
+    attestation_slot_ids = _raw_activation_slot_ids(descriptor)
+    attestation_slot_values: dict[str, torch.Tensor] = {}
 
     devices = sorted(
         {
@@ -178,6 +181,8 @@ def _execute_loaded_sparse_transaction(
                     slot_values,
                     fork,
                     before_versions=before_versions,
+                    attestation_slot_ids=attestation_slot_ids,
+                    attestation_slot_values=attestation_slot_values,
                 )
             )
             contract_checks.extend(_call_witness_checks(descriptor, call, slot_values))
@@ -201,6 +206,7 @@ def _execute_loaded_sparse_transaction(
         descriptor,
         prepared_state,
         slot_values=slot_values,
+        attestation_slot_values=attestation_slot_values,
         input_byte_digests=input_byte_digests,
         trace=trace,
     )
@@ -267,32 +273,40 @@ def run_live_trace(
             code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
             provider=RunProvider.LIVE,
         )
+    prior_log_ids = {id(log) for log in _state.list_logs()}
     fork = trace._fork_trace(name=_run_fork_name(trace))
-    fork.save_new_outs(model, inputs, random_seed=seed)
-    output = _reconstruct_live_output(fork)
-    readiness = ReadinessReport(
-        status=ReadinessStatus.READY,
-        provider=RunProvider.LIVE,
-        backend=str(getattr(trace, "backend", "torch")),
-        capability="live_model_fast_capture",
-        resolver_records=(),
-        state_sources_available=(StateSource.LIVE_MODEL_STATE,),
-        witness_completeness=None,
-        diagnostics=(),
-    )
-    report = RunReport(
-        readiness=readiness,
-        state_source=StateSource.LIVE_MODEL_STATE,
-        initializer_policy_version=None,
-        seed=seed,
-        random_filled_slot_ids=(),
-        contract_checks=(ContractCheck("live_graph_alignment", True, None),),
-        path_faithfulness=PathFaithfulness.VERIFIED,
-        first_mismatch=None,
-        numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
-        poisoned=False,
-    )
-    return RunResult(output=output, trace=fork, report=report)
+    try:
+        fork.save_new_outs(model, inputs, random_seed=seed)
+        output = _reconstruct_live_output(fork)
+        readiness = ReadinessReport(
+            status=ReadinessStatus.READY,
+            provider=RunProvider.LIVE,
+            backend=str(getattr(trace, "backend", "torch")),
+            capability="live_model_fast_capture",
+            resolver_records=(),
+            state_sources_available=(StateSource.LIVE_MODEL_STATE,),
+            witness_completeness=None,
+            diagnostics=(),
+        )
+        report = RunReport(
+            readiness=readiness,
+            state_source=StateSource.LIVE_MODEL_STATE,
+            initializer_policy_version=None,
+            seed=seed,
+            random_filled_slot_ids=(),
+            contract_checks=(ContractCheck("live_graph_alignment", True, None),),
+            path_faithfulness=PathFaithfulness.VERIFIED,
+            first_mismatch=None,
+            numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
+            poisoned=False,
+        )
+        return RunResult(output=output, trace=fork, report=report)
+    except BaseException:
+        _state._unregister_log(fork)
+        for log in _state.list_logs():
+            if id(log) not in prior_log_ids:
+                _state._unregister_log(log)
+        raise
 
 
 def raise_analysis_run_unavailable(trace: Any) -> None:
@@ -780,6 +794,8 @@ def _bind_call_outputs(
     fork: Any,
     *,
     before_versions: Mapping[str, int],
+    attestation_slot_ids: frozenset[str],
+    attestation_slot_values: dict[str, torch.Tensor],
 ) -> tuple[ContractCheck, ...]:
     """Slice, validate, and stage one grouped call's tensor outputs."""
 
@@ -830,9 +846,13 @@ def _bind_call_outputs(
             )
             continue
         slot_values[slot_id] = value
+        produced_slot_ids = {slot_id}
         for version in descriptor.tensor_slots:
             if version.version_of == slot_id and version.producer_slot_id == slot_id:
                 slot_values[version.slot_id] = value
+                produced_slot_ids.add(version.slot_id)
+        for produced_slot_id in produced_slot_ids & attestation_slot_ids:
+            attestation_slot_values[produced_slot_id] = value.detach().clone()
         op = _op_for_label(fork, op_label)
         if op is not None:
             op._internal_set("out", value.detach().clone())
@@ -1365,6 +1385,7 @@ def _numeric_attestation_check(
     state: PreparedRunnableState,
     *,
     slot_values: Mapping[str, torch.Tensor],
+    attestation_slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
     trace: Any,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
@@ -1378,6 +1399,9 @@ def _numeric_attestation_check(
         Bound state used by this run.
     slot_values:
         Fresh scheduler outputs and source slots from this transaction.
+    attestation_slot_values:
+        Tensor snapshots taken when selected internal slots were produced,
+        before any later in-place call can mutate their storage.
     input_byte_digests:
         Model-input byte digests captured before any in-place sparse call.
     trace:
@@ -1412,7 +1436,7 @@ def _numeric_attestation_check(
     for member in raw_members:
         archive_key = f"{member.slot_id}:{member.field}"
         archived_record = archived.get(archive_key)
-        recomputed = slot_values.get(member.slot_id)
+        recomputed = attestation_slot_values.get(member.slot_id, slot_values.get(member.slot_id))
         archived_value = getattr(archived_record, "value", None)
         if member.slot_id in input_byte_digests:
             recomputed_digest = input_byte_digests[member.slot_id]
@@ -1453,39 +1477,76 @@ def _numeric_attestation_check(
     )
 
 
+def _raw_activation_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
+    """Return raw selected-activation slots that require production snapshots.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse runnable descriptor carrying optional activation archive metadata.
+
+    Returns
+    -------
+    frozenset[str]
+        Slot IDs whose raw output values must be copied at production time.
+    """
+
+    layer = descriptor.payload_layers.activations
+    if not isinstance(layer, ActivationPayloadLayerDescriptor):
+        return frozenset()
+    return frozenset(member.slot_id for member in layer.members if member.field == "out")
+
+
 def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
-    """Return whether replay contains an RNG source not tied to capture RNG state."""
+    """Return whether replay contains a PyTorch seeded-RNG operation.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse runnable descriptor whose registry entries identify replayed
+        PyTorch operations.
+
+    Returns
+    -------
+    bool
+        Whether replay includes a captured RNG source or an ATen operation
+        marked by PyTorch as ``nondeterministic_seeded``.
+    """
 
     if any(slot.role is TensorSlotRole.RNG_SOURCE for slot in descriptor.tensor_slots):
         return True
-    rng_qualnames = {
-        "alpha_dropout",
-        "bernoulli",
-        "cauchy_",
-        "dropout",
-        "exponential_",
-        "feature_alpha_dropout",
-        "feature_dropout",
-        "geometric_",
-        "log_normal_",
-        "multinomial",
-        "native_dropout",
-        "normal",
-        "poisson",
-        "rand",
-        "rand_like",
-        "randint",
-        "randint_like",
-        "randn",
-        "randn_like",
-        "random_",
-        "rrelu",
-        "uniform_",
-    }
-    return any(
-        entry.key.qualname.rsplit(".", 1)[-1] in rng_qualnames
-        for entry in descriptor.callable_registry
-    )
+    return any(_registry_entry_has_seeded_rng_tag(entry) for entry in descriptor.callable_registry)
+
+
+def _registry_entry_has_seeded_rng_tag(entry: CallableRegistryEntry) -> bool:
+    """Return whether one portable callable maps to a seeded ATen RNG op.
+
+    Parameters
+    ----------
+    entry:
+        Portable callable identity recorded in a runnable descriptor.
+
+    Returns
+    -------
+    bool
+        Whether any matching ATen overload has PyTorch's maintained
+        ``nondeterministic_seeded`` tag.
+    """
+
+    if entry.key.namespace not in {"torch", "torch.Tensor", "torch.nn.functional"}:
+        return False
+    name = entry.key.qualname.rsplit(".", 1)[-1]
+    candidate_names = (name, name[:-1]) if name.endswith("_") else (name,)
+    for candidate_name in candidate_names:
+        packet = getattr(torch.ops.aten, candidate_name, None)
+        overloads = getattr(packet, "overloads", None)
+        if not callable(overloads):
+            continue
+        for overload_name in overloads():
+            overload = getattr(packet, overload_name)
+            if torch.Tag.nondeterministic_seeded in getattr(overload, "tags", ()):
+                return True
+    return False
 
 
 def _attestation_inputs_match(
