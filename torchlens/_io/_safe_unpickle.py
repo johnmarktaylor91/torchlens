@@ -40,11 +40,17 @@ Allowlist policy (fail-closed):
 * A curated set of safe stdlib data/value types (``collections.OrderedDict``, the
   pure-data builtin container types plus ``object``, and the NumPy numeric-array
   reconstruction helpers).
-* Any object resolved from the ``torch`` package that is a ``type`` (tensor /
+* Any object resolved from the ``torch`` package that is a DATA ``type`` (tensor /
   Module / storage classes) or a ``torch`` dtype / layout / memory_format
   *instance*, plus the pure ``torch._utils._rebuild_*`` reconstructors. Resolving
   a global only references it; constructing a torch data type executes no attacker
-  code. Non-type torch callables (e.g. ``torch.serialization.load``) are denied.
+  code. Torch's I/O-capable types are the exception -- constructing
+  ``torch._C.PyTorchFileReader`` / ``PyTorchFileWriter`` / ``FileCheck`` /
+  ``torch.package.PackageImporter`` / ``torch.serialization.*`` / ``torch.jit.*``
+  opens/reads/writes an attacker-named filesystem path (arbitrary file access +
+  zip-bomb DoS) at unpickle time, so these TYPES are denied by a module-prefix +
+  structural-name guard aligned with torch's own ``weights_only`` exclusions.
+  Non-type torch callables (e.g. ``torch.serialization.load``) are denied.
 * Preview-backend (MLX / Paddle / JAX) numeric array/dtype ``type`` objects and
   framework dtype-like instances.
 * ``builtins.getattr`` is legitimately used to reconstruct references to torch C
@@ -128,6 +134,102 @@ def _module_denied(module: str) -> bool:
     return any(
         module == denied or module.startswith(denied + ".") for denied in _DENIED_FOREIGN_MODULES
     )
+
+
+# torch I/O / serialization / packaging / jit TYPE denylist.
+#
+# The torch-``type`` branch below admits any resolved ``torch.*`` ``type`` on the
+# premise that "resolving/constructing a torch data type executes no attacker
+# code". That premise HOLDS for the tensor / storage / Size / Parameter / dtype /
+# nn-module classes legit metadata references, but it is FALSE for torch's
+# I/O-capable types: constructing one opens/reads/writes a filesystem PATH taken
+# from the pickle stream at ``tl.load`` time -- e.g.
+# ``torch._C.PyTorchFileReader('/etc/passwd')`` (arbitrary-path read + zip-bomb
+# DoS) or ``torch.package.PackageImporter(path)`` (directory traversal read).
+# torch's own ``weights_only`` allowlist deliberately EXCLUDES these types; we
+# align with that intent and deny them here so they are never constructed.
+#
+# Denial uses two independent signals, because ``__module__`` alone is
+# insufficient: ``torch._C.PyTorchFileReader.__module__`` is ``"torch"`` -- the
+# SAME module string as ``torch.Size`` / ``torch.Tensor`` -- so a module test
+# cannot separate the file reader from a benign shape type. Hence:
+#   (a) a MODULE-PREFIX denylist over the pickled path AND the resolved real
+#       ``__module__`` (catches ``torch.serialization`` / ``torch.jit`` /
+#       ``torch.package`` / ``torch.hub`` families), plus
+#   (b) a STRUCTURAL TYPE-NAME guard (the load-bearing one) that denies any type
+#       whose pickled name or real ``__qualname__`` contains a file / reader /
+#       writer / package / directory / zip / (file)check / importer / pickler
+#       token -- this is what stops ``PyTorchFileReader`` / ``PyTorchFileWriter``
+#       / ``FileCheck`` / ``PackageImporter`` / ``DirectoryReader``.
+#
+# Residual (stated honestly): a positive allowlist of the torch DATA types is
+# impractical because legit metadata may reference ANY ``nn.Module`` subclass
+# (an open-ended set) as a ``module_type``. So this is a denylist: a
+# hypothetical future torch type whose construction does I/O yet whose name
+# contains none of the tokens and whose module is outside the denied families
+# would still be admitted. The token + module families cover the entire known
+# torch file-I/O / serialization / packaging / jit surface (audited against
+# torch's ``weights_only`` exclusions), so the residual is bounded and small.
+_DENIED_TORCH_TYPE_MODULE_PREFIXES: tuple[str, ...] = (
+    "torch.serialization",
+    "torch.jit",
+    "torch.package",
+    "torch.hub",
+    "torch.utils.tensorboard",
+    "torch.utils.cpp_extension",
+    "torch.utils.bottleneck",
+    "torch.distributed",
+    "torch.multiprocessing",
+)
+
+_DENIED_TORCH_TYPE_NAME_TOKENS: tuple[str, ...] = (
+    "file",  # PyTorchFileReader / PyTorchFileWriter / *FileStore
+    "reader",  # DirectoryReader / *Reader
+    "writer",  # *Writer
+    "package",  # PackageImporter / PackageExporter
+    "importer",
+    "exporter",
+    "directory",
+    "zip",  # *ZipFile / zip archive helpers
+    "check",  # FileCheck
+    "pickler",  # Pickler / Unpickler
+    "unpickler",
+)
+
+
+def _torch_type_denied(pickled_module: str, pickled_name: str, obj: type) -> bool:
+    """Return whether a resolved torch ``type`` is an I/O / serialization gadget.
+
+    Denies torch's file-reader / file-writer / packaging / serialization / jit
+    types whose construction is NOT inert (opens/reads/writes a filesystem path
+    from the pickle stream). See ``_DENIED_TORCH_TYPE_MODULE_PREFIXES`` /
+    ``_DENIED_TORCH_TYPE_NAME_TOKENS`` for the policy rationale.
+
+    Parameters
+    ----------
+    pickled_module:
+        Attacker-controlled pickled module path (e.g. ``"torch._C"``).
+    pickled_name:
+        Attacker-controlled pickled global name (e.g. ``"PyTorchFileReader"``).
+    obj:
+        The resolved torch ``type`` object.
+
+    Returns
+    -------
+    bool
+        ``True`` if the type must be denied (never constructed).
+    """
+
+    real_module = str(getattr(obj, "__module__", "") or "")
+    for candidate in (pickled_module, real_module):
+        if any(
+            candidate == prefix or candidate.startswith(prefix + ".")
+            for prefix in _DENIED_TORCH_TYPE_MODULE_PREFIXES
+        ):
+            return True
+    real_name = str(getattr(obj, "__qualname__", "") or getattr(obj, "__name__", "") or "")
+    haystack = f"{pickled_name} {real_name}".lower()
+    return any(token in haystack for token in _DENIED_TORCH_TYPE_NAME_TOKENS)
 
 
 @dataclass(frozen=True)
@@ -460,16 +562,29 @@ class SafeBundleUnpickler(pickle.Unpickler):
             return super().find_class(module, name)
 
         # torch package: admit value instances (dtype / layout / memory_format /
-        # ``torch.Size`` etc.) and any resolved ``type`` (tensor / Module /
+        # ``torch.Size`` etc.) and a resolved DATA ``type`` (tensor / Module /
         # storage classes, e.g. ``torch.nn.modules.linear.Identity``). Resolving a
-        # global merely references it -- constructing a torch data type executes no
-        # attacker code. Non-type callables (e.g. ``torch.serialization.load``) are
-        # denied; the two individually-dangerous ones are wrapped above.
+        # global merely references it, and constructing a torch DATA type executes
+        # no attacker code -- but constructing an I/O-capable torch type
+        # (``PyTorchFileReader`` / ``PyTorchFileWriter`` / ``FileCheck`` /
+        # ``PackageImporter`` / ``torch.serialization.*`` / ``torch.jit.*``) opens/
+        # reads/writes an attacker-named filesystem path at unpickle time. Those
+        # I/O / serialization / packaging / jit types are DENIED via
+        # ``_torch_type_denied`` (module-prefix + structural name guard), aligning
+        # with torch's own ``weights_only`` allowlist which excludes them. Non-type
+        # callables (e.g. ``torch.serialization.load``) are denied; the two
+        # individually-dangerous ones are wrapped above.
         if module == "torch" or module.startswith("torch."):
             obj = super().find_class(module, name)
             if isinstance(obj, (torch.dtype, torch.layout, torch.memory_format)):
                 return obj
             if isinstance(obj, type):
+                if _torch_type_denied(module, name, obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked torch I/O / serialization type during bundle "
+                        f"metadata unpickle: {module}.{name} (construction performs "
+                        "filesystem access; not an inert data type)."
+                    )
                 return obj
             raise pickle.UnpicklingError(
                 f"Blocked disallowed torch global during bundle metadata unpickle: {module}.{name}."
