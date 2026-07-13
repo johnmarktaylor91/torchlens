@@ -15,7 +15,12 @@ import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens.errors import NumericAttestationError
 from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.runnable import DivergencePolicy, NumericAttestationStatus, StateSource
+from torchlens.runnable import (
+    DivergencePolicy,
+    NumericAttestationStatus,
+    PathFaithfulness,
+    StateSource,
+)
 
 
 class ActivationPayloadModel(nn.Module):
@@ -54,6 +59,38 @@ class InplaceInputActivationModel(nn.Module):
 
         value.add_(1)
         return value * 2
+
+
+class InplaceInternalActivationModel(nn.Module):
+    """Model that mutates a previously saved internal activation in place."""
+
+    def __init__(self) -> None:
+        """Initialize an identity linear layer for byte-stable activations."""
+
+        super().__init__()
+        self.linear = nn.Linear(3, 3)
+        with torch.no_grad():
+            self.linear.weight.copy_(torch.eye(3))
+            self.linear.bias.zero_()
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Consume then mutate the saved internal linear output.
+
+        Parameters
+        ----------
+        value:
+            Model input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Deterministic result that includes both pre- and post-mutation values.
+        """
+
+        activation = self.linear(value)
+        before_mutation = activation * 2.0
+        activation.add_(100.0)
+        return before_mutation + activation.sum()
 
 
 class SeededRngActivationModel(nn.Module):
@@ -380,6 +417,27 @@ def test_inplace_input_attestation_uses_pre_execution_input_digest(tmp_path: Pat
 
     result = tl.load(path).run(inputs=torch.ones(4))
 
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
+def test_inplace_internal_activation_attestation_uses_production_snapshot(
+    tmp_path: Path,
+) -> None:
+    """Attest the pre-mutation internal activation rather than its live alias."""
+
+    model = InplaceInternalActivationModel().eval()
+    inputs = torch.ones(2, 3)
+    path = tmp_path / "inplace-internal.tlspec"
+    _capture(model, inputs).save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
+
+    result = tl.load(path).run(inputs=inputs.clone())
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 

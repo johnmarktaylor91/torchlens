@@ -145,6 +145,8 @@ def _execute_loaded_sparse_transaction(
     ]
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
     call_outputs: dict[str, Any] = {}
+    attestation_slot_ids = _raw_activation_slot_ids(descriptor)
+    attestation_slot_values: dict[str, torch.Tensor] = {}
 
     devices = sorted(
         {
@@ -179,6 +181,8 @@ def _execute_loaded_sparse_transaction(
                     slot_values,
                     fork,
                     before_versions=before_versions,
+                    attestation_slot_ids=attestation_slot_ids,
+                    attestation_slot_values=attestation_slot_values,
                 )
             )
             contract_checks.extend(_call_witness_checks(descriptor, call, slot_values))
@@ -202,6 +206,7 @@ def _execute_loaded_sparse_transaction(
         descriptor,
         prepared_state,
         slot_values=slot_values,
+        attestation_slot_values=attestation_slot_values,
         input_byte_digests=input_byte_digests,
         trace=trace,
     )
@@ -781,6 +786,8 @@ def _bind_call_outputs(
     fork: Any,
     *,
     before_versions: Mapping[str, int],
+    attestation_slot_ids: frozenset[str],
+    attestation_slot_values: dict[str, torch.Tensor],
 ) -> tuple[ContractCheck, ...]:
     """Slice, validate, and stage one grouped call's tensor outputs."""
 
@@ -831,9 +838,13 @@ def _bind_call_outputs(
             )
             continue
         slot_values[slot_id] = value
+        produced_slot_ids = {slot_id}
         for version in descriptor.tensor_slots:
             if version.version_of == slot_id and version.producer_slot_id == slot_id:
                 slot_values[version.slot_id] = value
+                produced_slot_ids.add(version.slot_id)
+        for produced_slot_id in produced_slot_ids & attestation_slot_ids:
+            attestation_slot_values[produced_slot_id] = value.detach().clone()
         op = _op_for_label(fork, op_label)
         if op is not None:
             op._internal_set("out", value.detach().clone())
@@ -1366,6 +1377,7 @@ def _numeric_attestation_check(
     state: PreparedRunnableState,
     *,
     slot_values: Mapping[str, torch.Tensor],
+    attestation_slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
     trace: Any,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
@@ -1379,6 +1391,9 @@ def _numeric_attestation_check(
         Bound state used by this run.
     slot_values:
         Fresh scheduler outputs and source slots from this transaction.
+    attestation_slot_values:
+        Tensor snapshots taken when selected internal slots were produced,
+        before any later in-place call can mutate their storage.
     input_byte_digests:
         Model-input byte digests captured before any in-place sparse call.
     trace:
@@ -1413,7 +1428,7 @@ def _numeric_attestation_check(
     for member in raw_members:
         archive_key = f"{member.slot_id}:{member.field}"
         archived_record = archived.get(archive_key)
-        recomputed = slot_values.get(member.slot_id)
+        recomputed = attestation_slot_values.get(member.slot_id, slot_values.get(member.slot_id))
         archived_value = getattr(archived_record, "value", None)
         if member.slot_id in input_byte_digests:
             recomputed_digest = input_byte_digests[member.slot_id]
@@ -1452,6 +1467,26 @@ def _numeric_attestation_check(
         NumericAttestationStatus.ATTESTED,
         ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
     )
+
+
+def _raw_activation_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
+    """Return raw selected-activation slots that require production snapshots.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse runnable descriptor carrying optional activation archive metadata.
+
+    Returns
+    -------
+    frozenset[str]
+        Slot IDs whose raw output values must be copied at production time.
+    """
+
+    layer = descriptor.payload_layers.activations
+    if not isinstance(layer, ActivationPayloadLayerDescriptor):
+        return frozenset()
+    return frozenset(member.slot_id for member in layer.members if member.field == "out")
 
 
 def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
