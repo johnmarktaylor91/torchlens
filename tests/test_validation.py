@@ -1524,6 +1524,62 @@ def test_validate_forward_pass_preserves_distinct_recurrent_output_labels() -> N
     assert validate_forward_pass(SharedHeadTuple(), torch.randn(2, 3)) is True
 
 
+def test_validation_dispatch_op_count_backstop_matches_normal_capture() -> None:
+    """The dispatcher census agrees with a normal validation capture's op count."""
+
+    class TwoOpModel(nn.Module):
+        """Model with two independently dispatching captured operations."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply two tensor operations."""
+
+            return torch.relu(x + 1)
+
+    observed_counts: list[tuple[int, int]] = []
+
+    def observe_trace(trace: Trace) -> None:
+        """Save both operation counts before validation cleans up the trace."""
+
+        observed_counts.append(
+            (
+                trace._validation_dispatch_op_count,
+                trace._validation_captured_dispatchable_op_count,
+            )
+        )
+
+    assert user_public_impls._validate_forward_pass_torch(
+        TwoOpModel(),
+        torch.randn(2, 3),
+        validate_metadata=False,
+        _trace_observer=observe_trace,
+    )
+    assert observed_counts == [(2, 2)]
+
+
+def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> None:
+    """A dispatcher/capture count mismatch is a hard completeness failure."""
+
+    model = nn.Sequential(nn.ReLU()).eval()
+    inputs = torch.randn(2, 3)
+    trace = trace_fn(model, inputs, save_arg_values=True, save_rng_states=True)
+    try:
+        trace._validation_captured_dispatchable_op_count = len(
+            {
+                getattr(op, "func_call_id")
+                for op in trace.layer_list
+                if isinstance(getattr(op, "func_call_id", None), int)
+            }
+        )
+        trace._validation_dispatch_op_count = trace._validation_captured_dispatchable_op_count + 1
+        assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is False
+        assert any(
+            decision["reason"] == "dispatch_op_count_mismatch"
+            for decision in trace.validation_replay_status.decisions
+        )
+    finally:
+        trace.cleanup()
+
+
 def test_replay_validation_checks_every_recurrent_pass() -> None:
     """PIN: all five executions of a shared module are replay-validated.
 

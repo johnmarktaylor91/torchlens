@@ -1236,18 +1236,39 @@ def _validate_forward_pass_torch(
         # Step 2: Run the model *through* TorchLens, saving all outs.
         # save_arg_values=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved outs.
-        trace = _run_model_and_save_specified_outs(
-            model=validation_model,
-            input_args=validation_input_args,
-            input_kwargs=validation_input_kwargs,
-            layers_to_save="all",
-            activation_transform=None,
-            mark_layer_depths=False,
-            detach_saved_activations=False,
-            save_grads=False,
-            save_arg_values=True,
-            random_seed=random_seed,
-            save_rng_states=True,
+        from . import _state
+
+        prior_witness_mode = _state._completeness_witness_mode
+        _state._completeness_witness_mode = "shadow"
+        try:
+            trace = _run_model_and_save_specified_outs(
+                model=validation_model,
+                input_args=validation_input_args,
+                input_kwargs=validation_input_kwargs,
+                layers_to_save="all",
+                activation_transform=None,
+                mark_layer_depths=False,
+                detach_saved_activations=False,
+                save_grads=False,
+                save_arg_values=True,
+                random_seed=random_seed,
+                save_rng_states=True,
+            )
+        finally:
+            _state._completeness_witness_mode = prior_witness_mode
+        trace._validation_dispatch_op_count = len(
+            {
+                entry.get("owner_func_call_id")
+                for entry in getattr(trace, "completeness_decompositions", ())
+                if entry.get("capture_accounted") is True
+            }
+        )
+        trace._validation_captured_dispatchable_op_count = len(
+            {
+                getattr(op, "func_call_id")
+                for op in getattr(trace, "layer_list", ())
+                if isinstance(getattr(op, "func_call_id", None), int)
+            }
         )
         _warn_if_validation_trace_not_reproducible(
             trace,

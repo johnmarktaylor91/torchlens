@@ -420,6 +420,32 @@ GROUND_TRUTH_OUTPUT_RTOL = 1e-6
 GROUND_TRUTH_OUTPUT_ATOL = 1e-8
 
 
+def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
+    """Check the validation replay's dispatcher census against captured ops.
+
+    Parameters
+    ----------
+    self:
+        Validation trace carrying an optional dispatcher census.
+
+    Returns
+    -------
+    ValidationCheckResult
+        A passing result when no census was supplied or both counts agree;
+        otherwise a hard completeness failure.
+    """
+
+    dispatch_count = getattr(self, "_validation_dispatch_op_count", None)
+    if dispatch_count is None:
+        return ValidationCheckResult.validated("dispatch_op_count_not_collected")
+    captured_count = int(
+        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
+    )
+    if dispatch_count == captured_count:
+        return ValidationCheckResult.validated("dispatch_op_count_matched")
+    return ValidationCheckResult.failed_result("dispatch_op_count_mismatch")
+
+
 def _raise_if_portable_bundle_log(self: Any) -> None:
     """Reject validation only when loaded logs lack replay callables.
 
@@ -553,6 +579,36 @@ def validate_saved_outs(
 
     reset_validation_failure(self)
     decision_recorder = ValidationDecisionRecorder()
+
+    dispatch_count_result = _dispatch_op_count_matches_capture(self)
+    if dispatch_count_result.failed:
+        dispatch_count = getattr(self, "_validation_dispatch_op_count")
+        captured_count = int(
+            getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
+        )
+        message = (
+            "Validation dispatcher op count does not match captured operation count: "
+            f"{dispatch_count} dispatched vs {captured_count} captured."
+        )
+        print(message)
+        record_validation_failure(
+            self,
+            ValidationFailure(
+                check=CHECK_COMPLETENESS,
+                message=message,
+                extra={"dispatch_op_count": dispatch_count, "captured_op_count": captured_count},
+            ),
+        )
+        decision_recorder.record(
+            op_label=None,
+            func_name=None,
+            phase="metadata",
+            decision="failed",
+            reason=dispatch_count_result.reason,
+        )
+        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+        setattr(self, "_validation_replay_status", status)
+        return status
 
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
