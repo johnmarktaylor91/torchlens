@@ -167,37 +167,81 @@ def resolve_function_registry_key(
             if not key.import_path:
                 raise AttributeError("custom key is missing import_path")
             module_name, _, qualname = key.import_path.partition(":")
-            # TorchLens's own callables (built-in intervention helpers such as
-            # zero_ablate/scale, keyed as "custom" because they live outside the
-            # torch namespaces) are NOT foreign arbitrary code: the library is
-            # already imported and trusted, so importing a ``torchlens.*`` module
-            # runs only TorchLens's own already-installed code. The RCE risk is
-            # bundle-supplied FOREIGN modules, so those still default-deny; only
-            # torchlens-internal callables are auto-trusted (regardless of the
-            # allowlist, so a user's own bundle with a built-in intervention loads).
-            _is_torchlens_internal = module_name == "torchlens" or module_name.startswith(
+            # SECURITY BOUNDARY (tripwire). A bundle-supplied custom key is FOREIGN
+            # arbitrary code and default-denies. The only auto-trusted custom
+            # callables are TorchLens's OWN built-in intervention helpers (e.g.
+            # zero_ablate/scale), keyed "custom" because they live outside the torch
+            # namespaces.
+            #
+            # Trust is decided by the RESOLVED CALLABLE's real ``__module__``, NEVER
+            # by the import-PATH string prefix. ~75 torchlens modules do
+            # ``import os`` / ``import sys`` / ``import subprocess`` / ``import
+            # importlib`` / ``import builtins`` at top level, so a malicious key like
+            # ``torchlens._io.tlspec:os.system`` reaches ``os.system`` by walking
+            # attributes off a torchlens module. That callable's real
+            # ``__module__`` is ``"os"``, so it is NOT torchlens-owned and must be
+            # denied. Checking only the path prefix (as an earlier version did) let
+            # such a key bypass BOTH the default-deny AND an explicit strict
+            # allowlist -- the round-2 RCE this guard closes.
+            #
+            # Importing a ``torchlens.*`` module is itself safe (it runs only our
+            # already-installed code), so we may import + inspect it without a trust
+            # gate to discover the resolved callable's true owner. A genuinely
+            # FOREIGN module is never imported until the trust gate passes, because
+            # importing it executes its top-level code.
+            path_claims_torchlens = module_name == "torchlens" or module_name.startswith(
                 "torchlens."
             )
-            if not _is_torchlens_internal:
+
+            def _walk_qualname(root: Any) -> Any:
+                """Resolve ``qualname`` off an already-imported module root."""
+
+                obj: Any = root
+                for part in qualname.split("."):
+                    obj = getattr(obj, part)
+                return obj
+
+            def _is_torchlens_owned(obj: Any) -> bool:
+                """Return whether a resolved object genuinely lives under torchlens."""
+
+                owner = str(getattr(obj, "__module__", "") or "")
+                return owner == "torchlens" or owner.startswith("torchlens.")
+
+            def _enforce_foreign_trust(resolved_module: str) -> None:
+                """Default-deny a foreign callable by its REAL module identity."""
+
                 if allowed_custom_callable_modules is not None:
-                    if module_name not in allowed_custom_callable_modules:
+                    if resolved_module not in allowed_custom_callable_modules:
                         raise UntrustedCallableError(
-                            "Refusing to import bundle-supplied custom callable "
-                            f"module {module_name!r}; it is not in "
-                            "allowed_custom_callable_modules. Importing a custom "
+                            "Refusing to resolve bundle-supplied custom callable "
+                            f"from module {resolved_module!r}; it is not in "
+                            "allowed_custom_callable_modules. Resolving a foreign "
                             "callable can execute arbitrary code."
                         )
                 elif not trust_custom_callables:
                     raise UntrustedCallableError(
-                        "Refusing to import bundle-supplied custom callable because "
-                        "importing it can execute arbitrary code. Pass "
+                        "Refusing to resolve bundle-supplied custom callable because "
+                        "importing/resolving it can execute arbitrary code. Pass "
                         "trust_custom_callables=True only for a trusted spec, or "
                         "supply allowed_custom_callable_modules."
                     )
-            module = importlib.import_module(module_name)
-            obj: Any = module
-            for part in qualname.split("."):
-                obj = getattr(obj, part)
+
+            if path_claims_torchlens:
+                # Safe to import + inspect: a torchlens module is our own code.
+                module = importlib.import_module(module_name)
+                obj = _walk_qualname(module)
+                if not _is_torchlens_owned(obj):
+                    # Reached a non-torchlens callable (e.g. os.system) by walking
+                    # attributes off a torchlens module. Deny by the callable's REAL
+                    # module -- the torchlens import path grants it nothing.
+                    _enforce_foreign_trust(str(getattr(obj, "__module__", "") or module_name))
+            else:
+                # Genuinely foreign import path: gate BEFORE importing, because the
+                # import itself executes the untrusted module's top-level code.
+                _enforce_foreign_trust(module_name)
+                module = importlib.import_module(module_name)
+                obj = _walk_qualname(module)
+
             if not callable(obj):
                 raise TypeError(f"{key.import_path!r} resolved to non-callable {obj!r}")
             return cast(Callable[..., Any], obj)
