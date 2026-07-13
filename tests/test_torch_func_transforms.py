@@ -922,6 +922,44 @@ class _TwoOperandVmapModel(nn.Module):
         return x + mask
 
 
+class _VariadicTensorBuiltinModel(nn.Module):
+    """Call one direct variadic tensor builtin with derived operands."""
+
+    def __init__(self, func_name: str, arity: int) -> None:
+        """Store the builtin name and number of operands to generate.
+
+        Parameters
+        ----------
+        func_name:
+            Name of the ``torch`` variadic builtin to call.
+        arity:
+            Number of derived tensor operands to supply.
+        """
+
+        super().__init__()
+        self.func_name = func_name
+        self.arity = arity
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Generate operands and return the selected builtin's first output.
+
+        Parameters
+        ----------
+        x:
+            Source tensor for every independently derived operand.
+
+        Returns
+        -------
+        torch.Tensor
+            The direct ``block_diag`` result or first broadcast result.
+        """
+
+        operands = tuple(x + float(index) for index in range(self.arity))
+        if self.func_name == "block_diag":
+            return torch.block_diag(*operands)
+        return torch.broadcast_tensors(*operands)[0]
+
+
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
     """A 1-operand vmap must not poison a later 2-operand vmap's parent capture.
@@ -952,3 +990,26 @@ def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
     assert arange_labels <= vmap_parents, (arange_labels, vmap_parents)
     # And validation must pass cleanly (no dispatched-but-uncaptured operand).
     assert validate_forward_pass(_TwoOperandVmapModel().eval(), x) is True
+
+
+@pytest.mark.parametrize("func_name", ("block_diag", "broadcast_tensors"))
+def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: str) -> None:
+    """Direct variadic builtins re-crawl all operands at every call arity.
+
+    The arity-three trace runs first in this process, followed by arity twelve.
+    A fixed static or stale dynamic ArgSpec would retain only the first ten
+    operands of the latter call, silently making its graph incomplete.
+    """
+
+    x = torch.ones(1, 1)
+    for arity in (3, 12):
+        trace = tl.trace(
+            _VariadicTensorBuiltinModel(func_name, arity).eval(),
+            x,
+            capture=CaptureOptions(layers_to_save="all"),
+        )
+        builtin = next(op for op in trace.layer_list if op.func_name == func_name)
+        add_ops = [op for op in trace.layer_list if op.func_name in {"__add__", "add"}]
+
+        assert len(add_ops) == arity
+        assert {op.layer_label for op in add_ops} <= set(builtin.parents)

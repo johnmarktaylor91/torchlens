@@ -192,20 +192,26 @@ def _cache_dynamic_spec(
 # Variadic-arity transform ops -- never name-cache a positional ArgSpec
 # ============================================================================
 
-# Transform-boundary ops (``vmap``/``grad``/``autograd.functional.*``) take a
-# VARIADIC number of tensor operands determined by the transformed callable's
-# signature, NOT a fixed positional layout. The Tier-3 dynamic cache keys an
-# ``ArgSpec`` by normalized func name from the FIRST observed call; for a
-# transform that first call may carry fewer tensor operands than a later one
-# (e.g. a 1-operand ``vmap`` boundary, then a 2-operand ``vmap(...)(q, kv)``).
-# Reusing the narrow first spec silently drops the extra operands' parent edges,
-# orphaning and dropping real ops from the trace -- a capture gap that also
-# leaks across captures because the dynamic cache is process-global. These names
-# must ALWAYS take the fresh Tier-3 crawl and must never populate or read the
-# dynamic ArgSpec cache. (Static ``FUNC_ARG_SPECS`` intentionally has no entry
-# for them for the same reason.)
+# These functions take a VARIADIC number of tensor operands, either directly
+# (``block_diag(*tensors)``) or via a transformed callable (``vmap``/``grad``).
+# The Tier-3 dynamic cache keys an ``ArgSpec`` by normalized func name from the
+# FIRST observed call. Reusing that narrow spec silently drops later operands'
+# parent edges, orphaning and dropping real ops from the trace. These names must
+# ALWAYS take the fresh Tier-3 crawl and must never populate or read the
+# name-keyed ArgSpec cache. Container APIs such as ``cat(tensors)`` and
+# ``stack(tensors)`` are deliberately excluded: their sequence-position specs
+# already inspect every element of their single container argument.
 VARIADIC_TENSOR_ARG_FUNCS: frozenset[str] = frozenset(
     {
+        "aligntensors",
+        "atleast1d",
+        "atleast2d",
+        "atleast3d",
+        "blockdiag",
+        "broadcasttensors",
+        "cartesianprod",
+        "chainmatmul",
+        "einsum",
         "vmap",
         "grad",
         "gradandvalue",
@@ -215,6 +221,7 @@ VARIADIC_TENSOR_ARG_FUNCS: frozenset[str] = frozenset(
         "autogradjvp",
         "autogradhvp",
         "autogradvhp",
+        "meshgrid",
     }
 )
 

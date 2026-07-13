@@ -19,15 +19,19 @@ def state_items(obj: Any) -> Iterable[tuple[str, Any]]:
     Returns
     -------
     Iterable[tuple[str, Any]]
-        ``(field_name, field_value)`` pairs. Dict-backed objects return their
-        ``vars(obj).items()`` view; slotted objects yield set slots in MRO slot
-        order.
+        ``(field_name, field_value)`` pairs. Dict-backed fields are yielded
+        first, followed by any distinct set slots in MRO slot order.
     """
 
     instance_dict = getattr(obj, "__dict__", None)
     if instance_dict is not None:
-        return instance_dict.items()
-    return _slot_items(obj)
+        yield from instance_dict.items()
+        dict_field_names = set(instance_dict)
+        for field_name, field_value in _slot_items(obj):
+            if field_name not in dict_field_names:
+                yield field_name, field_value
+        return
+    yield from _slot_items(obj)
 
 
 def state_new(cls: type[_T]) -> _T:
