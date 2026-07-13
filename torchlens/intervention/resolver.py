@@ -28,6 +28,7 @@ from .selectors import (
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..ir.container_registry import Role
+from ..utils._callable_safety import is_pure_forward_callable, unsafe_callable_reason
 from ..utils._torch_compat import resolve_runnable_torch_alias
 
 if TYPE_CHECKING:
@@ -154,15 +155,28 @@ def resolve_function_registry_key(
         has not been explicitly trusted.
     """
 
+    _fixed_roots: dict[str, Any] = {
+        "torch": torch,
+        "torch.Tensor": torch.Tensor,
+        "torch.nn.functional": torch.nn.functional,
+        "operator": operator,
+    }
     try:
-        if key.namespace == "torch":
-            return cast(Callable[..., Any], getattr(torch, key.qualname))
-        if key.namespace == "torch.Tensor":
-            return cast(Callable[..., Any], getattr(torch.Tensor, key.qualname))
-        if key.namespace == "torch.nn.functional":
-            return cast(Callable[..., Any], getattr(torch.nn.functional, key.qualname))
-        if key.namespace == "operator":
-            return cast(Callable[..., Any], getattr(operator, key.qualname))
+        if key.namespace in _fixed_roots:
+            resolved = cast(Callable[..., Any], getattr(_fixed_roots[key.namespace], key.qualname))
+            # SECURITY BOUNDARY (tripwire). These fixed namespaces also expose
+            # side-effecting callables -- above all torch.load / torch.save (both
+            # in torch.serialization), which unpickle attacker files (RCE) or
+            # write to arbitrary paths. A bundle-supplied key is UNTRUSTED, so
+            # only pure, side-effect-free forward/tensor ops may resolve. Gating
+            # on the wrapped-op inventory would NOT suffice (torch.load is in it).
+            if not is_pure_forward_callable(resolved):
+                raise UntrustedCallableError(
+                    "Refusing to resolve bundle-supplied callable "
+                    f"{key.namespace}.{key.qualname} ({unsafe_callable_reason(resolved)}); "
+                    "it is not a pure forward/tensor op and can execute side effects."
+                )
+            return resolved
         if key.namespace == "custom":
             if not key.import_path:
                 raise AttributeError("custom key is missing import_path")

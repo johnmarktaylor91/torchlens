@@ -64,6 +64,7 @@ from ..runnable import (
     TensorUseSite,
     WitnessCompleteness,
 )
+from ..utils._callable_safety import is_pure_forward_callable, unsafe_callable_reason
 from ..utils._torch_compat import resolve_runnable_torch_alias
 
 
@@ -482,6 +483,28 @@ def _resolved_callable(
             provenance=provenance,
         )
         return _unavailable_resolution(entry, diagnostic, provenance)
+    # SECURITY BOUNDARY (tripwire). A bundle is UNTRUSTED input. The torch /
+    # torch.Tensor / torch.nn.functional / operator namespaces also expose
+    # side-effecting callables -- above all torch.load / torch.save (both in
+    # torch.serialization), which unpickle attacker files (RCE) or write to
+    # arbitrary paths BEFORE any downstream path/signature check fires. Every
+    # success ladder rung (exact, alias, reverse-index) funnels through here, so
+    # this gate closes the whole class: only pure, side-effect-free forward/
+    # tensor ops may resolve. Note torch.load IS in get_orig_torch_funcs(), so
+    # gating on the wrapped-op inventory would NOT suffice.
+    if not is_pure_forward_callable(original):
+        diagnostic = _diagnostic(
+            RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT,
+            "Resolved callable is not a pure forward/tensor op and is refused "
+            "for security (side-effecting or dangerous namespace).",
+            descriptor=descriptor,
+            registry_id=entry.registry_id,
+            affected_ops=affected_ops,
+            detection_stage="resolver_security",
+            provenance="nonforward_callable_denied",
+            details=(("resolved_callable", unsafe_callable_reason(original)),),
+        )
+        return _unavailable_resolution(entry, diagnostic, "nonforward_callable_denied")
     if not all(_signature_accepts_call(original, call) for call in calls):
         diagnostic = _diagnostic(
             RunnableErrorCode.SIGNATURE_DRIFT,
