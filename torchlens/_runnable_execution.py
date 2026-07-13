@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
 from itertools import count
@@ -281,7 +282,17 @@ def run_live_trace(
     prior_log_ids = {id(log) for log in _state.list_logs()}
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:
-        fork.save_new_outs(model, inputs, random_seed=seed)
+        input_args = inputs
+        input_kwargs = None
+        if (
+            isinstance(inputs, Mapping)
+            and {"args", "kwargs"}.issubset(inputs)
+            and set(inputs).issubset({"args", "kwargs"})
+        ):
+            args, kwargs = _split_mixed_inputs(inputs)
+            input_args = list(args)
+            input_kwargs = dict(kwargs)
+        fork.save_new_outs(model, input_args, input_kwargs=input_kwargs, random_seed=seed)
         output, faithful = _reconstruct_live_output(fork)
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
@@ -1528,9 +1539,14 @@ def _tensor_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        paths: list[tuple[str | int, ...]] = []
+        for field in dataclasses.fields(value):
+            paths.extend(_tensor_leaf_paths(getattr(value, field.name), (*path, field.name)))
+        return tuple(paths)
     field_names = _container_field_names(value)
     if field_names:
-        paths: list[tuple[str | int, ...]] = []
+        paths = []
         for name in field_names:
             paths.extend(_tensor_leaf_paths(getattr(value, name), (*path, str(name))))
         return tuple(paths)
@@ -1556,9 +1572,14 @@ def _container_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        paths: list[tuple[str | int, ...]] = []
+        for field in dataclasses.fields(value):
+            paths.extend(_container_leaf_paths(getattr(value, field.name), (*path, field.name)))
+        return tuple(paths)
     field_names = _container_field_names(value)
     if field_names:
-        paths: list[tuple[str | int, ...]] = []
+        paths = []
         for name in field_names:
             paths.extend(_container_leaf_paths(getattr(value, name), (*path, str(name))))
         return tuple(paths)
@@ -1581,6 +1602,10 @@ def _container_kind(value: Any) -> str:
 
     if isinstance(value, torch.Tensor):
         return "tensor"
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return "dataclass"
+    if _is_hf_model_output(value):
+        return "hf_model_output"
     if _container_field_names(value):
         return "namedtuple"
     if isinstance(value, tuple):
@@ -1590,6 +1615,22 @@ def _container_kind(value: Any) -> str:
     if isinstance(value, Mapping):
         return "dict"
     return type(value).__name__
+
+
+def _is_hf_model_output(value: Any) -> bool:
+    """Return whether ``value`` looks like a HuggingFace ``ModelOutput``."""
+
+    cls = type(value)
+    if any(
+        base.__module__.startswith("transformers") and base.__name__ == "ModelOutput"
+        for base in cls.__mro__
+    ):
+        return True
+    return (
+        (cls.__module__.startswith("transformers") or cls.__name__.endswith("ModelOutput"))
+        and hasattr(value, "keys")
+        and hasattr(value, "__getitem__")
+    )
 
 
 def _container_field_names(value: Any) -> tuple[str, ...]:

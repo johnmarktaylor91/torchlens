@@ -258,6 +258,31 @@ def test_mixed_positional_keyword_inputs_bind_and_diverge(tmp_path: Path) -> Non
         tl.load(path).run(inputs={"args": [x], "kwargs": {"add": False}})
 
 
+@pytest.mark.smoke
+def test_live_mixed_positional_keyword_inputs_bind_and_diverge() -> None:
+    """Live ``run`` accepts the same mixed-input spelling as loaded runnable traces."""
+
+    model = _MixedInputs()
+    x = torch.tensor([2.0, 3.0])
+    trace = tl.trace(
+        model,
+        [x],
+        input_kwargs={"add": True},
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+
+    result = trace.run(inputs={"args": [x], "kwargs": {"add": True}})
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(result.output, x + 1)
+
+    with pytest.raises(ValueError, match="computational graph changed"):
+        trace.run(inputs={"args": [x], "kwargs": {"add": False}})
+
+
 # ---------------------------------------------------------------------------
 # F4 -- bool output-dict key agrees between producer and loader
 # ---------------------------------------------------------------------------
