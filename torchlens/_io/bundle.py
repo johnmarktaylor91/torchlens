@@ -28,6 +28,7 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
 from . import BlobRef, FieldPolicy, PayloadLoadHints, TLSPEC_VERSION, TorchLensIOError
+from ._safe_unpickle import SafeBundleUnpickler
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
 from .payload_codec import (
@@ -109,27 +110,42 @@ _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
 }
 
 
-class _RenameAwareUnpickler(pickle.Unpickler):
-    """Unpickler for portable fixtures written before locked class/module renames."""
+class _RenameAwareUnpickler(SafeBundleUnpickler):
+    """Restricted, rename-aware unpickler for untrusted portable bundle metadata.
 
-    def find_class(self, module: str, name: str) -> Any:
-        """Resolve renamed TorchLens classes while unpickling old bundle metadata.
+    A loaded ``.tlspec`` bundle is UNTRUSTED input, so ``metadata.pkl`` is read
+    with the default-deny :class:`SafeBundleUnpickler` class allowlist (which
+    closes a load-time ``__reduce__`` / ``os.system`` RCE). The locked
+    class/module rename remapping is preserved by feeding
+    ``_RENAMED_PICKLE_GLOBALS`` to the restricted unpickler; each remapped target
+    is still gated through the allowlist.
+    """
+
+    def __init__(
+        self,
+        file: Any,
+        *,
+        trust_custom_callables: bool = False,
+        allowed_custom_callable_modules: Collection[str] | None = None,
+    ) -> None:
+        """Initialize the restricted unpickler with the rename remapping.
 
         Parameters
         ----------
-        module:
-            Pickled module path.
-        name:
-            Pickled global name.
-
-        Returns
-        -------
-        Any
-            Resolved class or global.
+        file:
+            Binary file object positioned at the start of a pickle stream.
+        trust_custom_callables:
+            Whether to import+resolve foreign custom callables (default deny).
+        allowed_custom_callable_modules:
+            Optional narrow allowlist of foreign modules whose callables may load.
         """
 
-        module, name = _RENAMED_PICKLE_GLOBALS.get((module, name), (module, name))
-        return super().find_class(module, name)
+        super().__init__(
+            file,
+            rename_map=_RENAMED_PICKLE_GLOBALS,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
 
 
 @dataclass(frozen=True)
@@ -873,6 +889,8 @@ def load(
         map_location=map_location,
         materialize_nested=materialize_nested,
         payload_hints=payload_hints,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
 
 
@@ -885,6 +903,8 @@ def _load_trace_payload(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | None,
     sparse_run: Mapping[str, Any] | None = None,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a portable Trace payload after manifest dispatch.
 
@@ -924,7 +944,11 @@ def _load_trace_payload(
 
         python_major_mismatch = _python_major_mismatch(manifest)
         with metadata_path.open("rb") as handle:
-            scrubbed_state = _RenameAwareUnpickler(handle).load()
+            scrubbed_state = _RenameAwareUnpickler(
+                handle,
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_custom_callable_modules,
+            ).load()
     except TorchLensIOError:
         raise
     except (pickle.UnpicklingError, EOFError) as exc:
@@ -1192,6 +1216,8 @@ def _load_unified_tlspec(
             materialize_nested=materialize_nested,
             payload_hints=payload_hints,
             sparse_run=cast(Mapping[str, Any] | None, manifest.get("run")),
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
     if kind == "bundle":
         return _load_unified_bundle(bundle_path)
