@@ -808,6 +808,158 @@ def test_red_team_custom_module_side_effect_is_not_imported(
     assert not marker.exists()
 
 
+# --- Round-2 RCE regression: torchlens.* auto-trust bypass -------------------
+# A custom key whose import PATH starts with "torchlens" but whose resolved
+# callable really lives in os/importlib/builtins/subprocess (reached by walking
+# attributes off a torchlens module that did ``import os`` etc. at top level)
+# must be DENIED. Trust is decided by the resolved callable's real ``__module__``,
+# never by the import-path string prefix.
+
+_R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
+    ("torchlens._io.tlspec:os.system", "system"),
+    ("torchlens.utils:importlib.import_module", "import_module"),
+    ("torchlens.intervention.selectors:builtins.eval", "eval"),
+    ("torchlens.utils:subprocess.getoutput", "getoutput"),
+]
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(("import_path", "qualname"), _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE)
+def test_r2_torchlens_prefixed_foreign_callable_denied_by_default(
+    import_path: str, qualname: str
+) -> None:
+    """os/importlib/builtins/subprocess reached via a torchlens path stay denied."""
+
+    key = FunctionRegistryKey(
+        namespace="custom",
+        qualname=qualname,
+        dispatch_kind="function",
+        import_path=import_path,
+    )
+
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(key)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(("import_path", "qualname"), _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE)
+def test_r2_torchlens_prefixed_foreign_callable_denied_under_strict_allowlist(
+    import_path: str, qualname: str
+) -> None:
+    """The torchlens fast-path cannot bypass an explicit allowlist that omits os."""
+
+    key = FunctionRegistryKey(
+        namespace="custom",
+        qualname=qualname,
+        dispatch_kind="function",
+        import_path=import_path,
+    )
+
+    # An allowlist that does NOT name os/importlib/builtins/subprocess must still
+    # deny, even though the import path is torchlens-prefixed.
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(key, allowed_custom_callable_modules={"operator"})
+
+
+@pytest.mark.smoke
+def test_r2_os_system_not_reachable_and_not_executed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The concrete os.system RCE key resolves to nothing and never executes."""
+
+    import os
+
+    calls: list[str] = []
+    monkeypatch.setattr(os, "system", lambda cmd: calls.append(cmd) or 0)
+    key = FunctionRegistryKey(
+        namespace="custom",
+        qualname="system",
+        dispatch_kind="function",
+        import_path="torchlens._io.tlspec:os.system",
+    )
+
+    with pytest.raises(UntrustedCallableError):
+        resolved = resolve_function_registry_key(key)
+        resolved("touch /tmp/pwned")
+
+    assert calls == []
+
+
+@pytest.mark.smoke
+def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
+    """A real torchlens-owned custom callable stays auto-trusted after the fix."""
+
+    key = FunctionRegistryKey(
+        namespace="custom",
+        qualname="clamp",
+        dispatch_kind="function",
+        import_path="torchlens.intervention.helpers:clamp",
+    )
+
+    resolved = resolve_function_registry_key(key)
+    assert callable(resolved)
+    assert str(getattr(resolved, "__module__", "")).startswith("torchlens")
+
+
+@pytest.mark.smoke
+def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Analysis-only load tolerates the malicious key, importing no foreign module.
+
+    The foreign-deny split is preserved: load tolerates the well-formed key (does
+    not fail closed), never imports a NON-torchlens module, and never executes
+    os.system. Inspecting the resolved identity only touches the already-installed
+    torchlens module the path names.
+    """
+
+    import importlib as _importlib
+    import os
+
+    path = tmp_path / "r2_foreign.tlspec"
+    _log().save_intervention(path, level="audit")
+    spec_path = path / "spec.json"
+    payload = json.loads(spec_path.read_text(encoding="utf-8"))
+    payload["function_registry_keys"] = [
+        {
+            "layer_label": "malicious_1_1",
+            "key": {
+                "namespace": "custom",
+                "qualname": "system",
+                "dispatch_kind": "function",
+                "import_path": "torchlens._io.tlspec:os.system",
+            },
+        }
+    ]
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    calls: list[str] = []
+    monkeypatch.setattr(os, "system", lambda cmd: calls.append(cmd) or 0)
+
+    real_import_module = _importlib.import_module
+
+    def guarded_import(module_name: str) -> object:
+        """Allow torchlens imports; fail on any foreign (non-torchlens) import.
+
+        Parameters
+        ----------
+        module_name:
+            Module name passed to the import system.
+
+        Returns
+        -------
+        object
+            The imported torchlens module.
+        """
+
+        assert module_name == "torchlens" or module_name.startswith("torchlens."), (
+            f"unexpected foreign import of {module_name}"
+        )
+        return real_import_module(module_name)
+
+    monkeypatch.setattr("torchlens.intervention.resolver.importlib.import_module", guarded_import)
+    assert load_intervention_spec(path)
+    assert calls == []
+
+
 @pytest.mark.smoke
 def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
     """Selectors resolving to nothing on a new log produce FAIL compatibility."""
