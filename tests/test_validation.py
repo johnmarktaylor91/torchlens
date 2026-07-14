@@ -1796,10 +1796,16 @@ def _backstop_diag(
     reason: str = "unowned_dispatch",
     in_replacement_hook: bool = False,
     mutates: bool = False,
+    state_view_accessor: bool = False,
 ) -> dict:
     """Build a minimal unaccounted-dispatch witness diagnostic record."""
 
-    return {"reason": reason, "in_replacement_hook": in_replacement_hook, "mutates": mutates}
+    return {
+        "reason": reason,
+        "in_replacement_hook": in_replacement_hook,
+        "mutates": mutates,
+        "state_view_accessor": state_view_accessor,
+    }
 
 
 def _backstop_trace(
@@ -2072,8 +2078,9 @@ def _dispatch_backstop_probe(
     dispatch: int,
     captured: int,
     pruned: int | None,
+    buffer_writes: int | None = None,
 ) -> SimpleNamespace:
-    """Trace-shaped probe carrying the three completeness-backstop counters."""
+    """Trace-shaped probe carrying the completeness-backstop counters."""
 
     probe = SimpleNamespace(
         _validation_dispatch_op_count=dispatch,
@@ -2082,6 +2089,8 @@ def _dispatch_backstop_probe(
     )
     if pruned is not None:
         probe._validation_pruned_dispatchable_op_count = pruned
+    if buffer_writes is not None:
+        probe._validation_buffer_write_dispatch_op_count = buffer_writes
     return probe
 
 
@@ -2181,6 +2190,102 @@ def test_completeness_backstop_orphan_pruned_count_is_apples_to_apples() -> None
     )
     assert drop_result.failed
     assert drop_result.reason == "dispatch_op_count_mismatch"
+
+
+def test_dispatch_backstop_accounts_for_buffer_write_accessor_dispatch() -> None:
+    """A ``.data``-accessor buffer-write view dispatch is accounted, not a mismatch.
+
+    Mirrors ``DataCopyWrite`` (``self.b.data.copy_(x)``): 3 ops dispatch a real aten op --
+    the captured ``copy_`` write, the captured ``+``, and the intrinsic ``aten.detach`` the
+    buffer's ``.data`` property getter emits (unowned, uncaptured). The honest invariant is
+    ``dispatched == captured + orphan-pruned + buffer-writes``, so the backstop must PASS even
+    though ``dispatched (3) != captured (2)``. This proves the fix does NOT relax the check --
+    it balances the books with the buffer-write accessor count.
+    """
+
+    matched = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=3, captured=2, pruned=0, buffer_writes=1)
+    )
+    assert not matched.failed
+    assert matched.reason == "dispatch_op_count_matched"
+
+    # Orphan-pruned and buffer-write credits compose additively on the captured side.
+    both = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=6, captured=2, pruned=3, buffer_writes=1)
+    )
+    assert not both.failed
+
+
+def test_dispatch_backstop_buffer_write_credit_does_not_mask_a_genuine_leak() -> None:
+    """TRIPWIRE PROOF: a genuine untraced dispatch still fails despite a buffer-write credit.
+
+    A genuine leak reaches NEITHER the final graph, NOR the orphan-pruned set, NOR the
+    buffer-write accessor set. Even alongside a legitimate ``.data``-accessor detach, such a
+    dispatch leaves ``dispatched > captured + pruned + buffer-writes`` and MUST trip the
+    backstop -- the exact silent drop the tripwire exists to catch. If the fix had over-credited
+    (e.g. crediting every unowned dispatch, or a value-producing op on a buffer), this leak
+    would be masked; it must not be.
+    """
+
+    # One extra dispatched op beyond captured + pruned + buffer-write -> HARD FAIL.
+    leaked = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=4, captured=2, pruned=0, buffer_writes=1)
+    )
+    assert leaked.failed
+    assert leaked.reason == "dispatch_op_count_mismatch"
+
+    # With NO buffer-write credit recorded, a dispatched-but-uncaptured op still fails
+    # (the buffer counter defaults to 0 and cannot absorb the miss).
+    unbuffered_leak = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=3, captured=2, pruned=0, buffer_writes=None)
+    )
+    assert unbuffered_leak.failed
+    assert unbuffered_leak.reason == "dispatch_op_count_mismatch"
+
+
+def test_completeness_backstop_buffer_write_count_is_apples_to_apples() -> None:
+    """The buffer-write counter counts ONLY flagged ``state_view_accessor`` unowned dispatches.
+
+    Feed the census one accounted owner reaching the final trace plus three unowned diagnostics:
+    a ``.data``-accessor buffer view (``state_view_accessor=True``), a genuine unowned drop, and
+    a replacement-hook view (excused from the census, so NOT credited). The dispatch census
+    counts the accounted owner plus the two non-replacement unowned dispatches (3). Only the ONE
+    flagged buffer-accessor view is credited, keeping the sides comparable and leaving the
+    genuine drop unaccounted: ``dispatch (3) != captured (1) + pruned (0) + buffer-write (1)``.
+    """
+
+    probe = _backstop_trace(
+        [_backstop_op(1)],
+        [_backstop_dec(1)],
+        [
+            _backstop_diag(reason="unowned_dispatch", state_view_accessor=True),
+            _backstop_diag(reason="unowned_dispatch", state_view_accessor=False),
+            _backstop_diag(
+                reason="unowned_dispatch",
+                in_replacement_hook=True,
+                state_view_accessor=True,
+            ),
+        ],
+    )
+    dispatch, captured = completeness_backstop_counts(probe)
+    # accounted owner (1) + two non-replacement unowned dispatches = 3 dispatched, 1 captured.
+    assert (dispatch, captured) == (3, 1)
+    # Only the ONE non-replacement, flagged buffer-accessor view is credited.
+    assert probe._validation_buffer_write_dispatch_op_count == 1
+
+    # The lone flagged view does not balance the genuine unowned drop -> the backstop fails.
+    result = _dispatch_op_count_matches_capture(
+        SimpleNamespace(
+            _validation_dispatch_op_count=dispatch,
+            _validation_captured_dispatchable_op_count=captured,
+            _validation_buffer_write_dispatch_op_count=(
+                probe._validation_buffer_write_dispatch_op_count
+            ),
+            num_ops=captured,
+        )
+    )
+    assert result.failed
+    assert result.reason == "dispatch_op_count_mismatch"
 
 
 def test_replay_validation_checks_every_recurrent_pass() -> None:

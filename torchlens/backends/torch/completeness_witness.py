@@ -35,7 +35,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
-from ._tl import get_tensor_label, get_tensor_meta
+from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
 from .escape_detection import ExpectedOriginalToken, _active_token
 
 CompletenessWitnessMode = Literal["off", "shadow"]
@@ -204,6 +204,7 @@ class _DispatchEvent:
     callsite: _DispatchCallsite | None
     in_replacement_hook: bool = False
     mutates: bool = False
+    state_view_accessor: bool = False
 
 
 @dataclass
@@ -929,6 +930,65 @@ def _is_mutating_operator(func: Any) -> bool:
     return False
 
 
+# Pure-view / aliasing accessor operators emitted by the ``.data`` property getter on a
+# registered buffer. Accessing ``self.b.data`` (the standard buffer-write idiom
+# ``self.b.data.copy_(x)``) dispatches a raw ``aten.detach.default`` with NO python wrapper
+# owner -- ``.data`` is a C-level tensor property, not a wrapped torch function, so TorchLens
+# never records it as a graph op. The subsequent write (``copy_``) IS captured as a normal
+# op; only this accessor detach is legitimately uncaptured. The set is deliberately narrow to
+# PURE non-mutating views: crediting it in the completeness backstop cannot hide a
+# value-affecting drop, and a dropped value-producing op (``aten.add`` etc.) on a buffer is
+# NOT in this set and still trips the tripwire.
+_BUFFER_STATE_VIEW_OPERATORS = frozenset({"aten.detach", "aten.alias"})
+
+
+def _is_buffer_state_view_dispatch(
+    func: Any,
+    owner: "ExpectedOriginalToken | None",
+    mutates: bool,
+    args: tuple[Any, ...],
+) -> bool:
+    """Return whether an aten dispatch is a ``.data``-accessor view on a registered buffer.
+
+    This flags the intrinsic, legitimately-uncaptured ``aten.detach`` a registered buffer's
+    ``.data`` property emits during a buffer WRITE (``self.b.data.copy_(x)``). The predicate is
+    intentionally strict on every axis so it can never mask a genuine untraced dispatch:
+
+    * ``owner is None`` -- the dispatch has NO python-wrapper owner (a wrapped ``.detach()``
+      call would be an accounted owner, not a gap; only the property-accessor path is unowned).
+    * ``not mutates`` -- the operator writes to no argument (ground-truth schema flag). A
+      value-affecting in-place drop can never be credited here.
+    * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views. A dropped value-producing
+      op (``aten.add``/``aten.mul``/...) on the buffer is NOT in this set and stays unaccounted.
+    * ``args[0]`` is a REGISTERED BUFFER (``get_buffer_address`` resolves a dotted address).
+
+    Parameters
+    ----------
+    func:
+        Dispatcher operator overload.
+    owner:
+        The live wrapper owner of the dispatch, or ``None`` when unowned.
+    mutates:
+        Whether the operator writes to any argument (schema ground truth).
+    args:
+        Positional dispatcher arguments; ``args[0]`` is the view source.
+
+    Returns
+    -------
+    bool
+        ``True`` only for a ``.data``-accessor view dispatch on a registered buffer.
+    """
+
+    if owner is not None or mutates:
+        return False
+    if _operator_base_name(func) not in _BUFFER_STATE_VIEW_OPERATORS:
+        return False
+    if not args:
+        return False
+    source = args[0]
+    return isinstance(source, torch.Tensor) and get_buffer_address(source) is not None
+
+
 def _dispatch_callsite() -> _DispatchCallsite:
     """Return the first non-framework frame above the dispatch callback.
 
@@ -1040,6 +1100,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 )
                 in_replacement_hook = _in_replacement_hook_frame()
                 mutates = _is_mutating_operator(func)
+                state_view_accessor = _is_buffer_state_view_dispatch(func, owner, mutates, args)
                 self.state.events.append(
                     _DispatchEvent(
                         _operator_name(func),
@@ -1047,6 +1108,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                         callsite,
                         in_replacement_hook,
                         mutates,
+                        state_view_accessor,
                     )
                 )
             # Per-consumption host write-back sample (r16-H1 TOCTOU): if a mutable zero-copy alias
@@ -1550,6 +1612,13 @@ def _finalize_census(state: _WitnessState) -> None:
                 "enforced": False,
                 "in_replacement_hook": event.in_replacement_hook,
                 "mutates": event.mutates,
+                # A ``.data``-property accessor view (``aten.detach``/``aten.alias``) on a
+                # registered buffer -- the intrinsic, legitimately-uncaptured dispatch of the
+                # ``self.b.data.copy_(x)`` buffer-write idiom. The completeness backstop credits
+                # these apples-to-apples against the dispatch census (see
+                # ``validation.core.completeness_backstop_counts``); a genuine untraced op is
+                # never flagged here (unowned + non-mutating + pure-view + buffer only).
+                "state_view_accessor": event.state_view_accessor,
             }
         )
     decompositions = trace.__dict__.setdefault("completeness_decompositions", [])
