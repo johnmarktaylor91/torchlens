@@ -902,13 +902,16 @@ def test_r14_c3_storage_rebind_op_is_refused_at_save(
     assert any(d.code is RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT for d in diagnostics)
 
 
-# --- No over-trigger: a READ-ONLY storage-pointer / identity exposure reads no value and must
+# --- No over-trigger: a READ-ONLY storage METADATA exposure reads no value/pointer and must
 # stay VERIFIED on any input; a genuine tracked in-place on a labelled alias still replays.
+# (r15-H1: ``data_ptr()`` is NO LONGER a safe read-only exposure -- the raw pointer is
+# unobservable -> UNVERIFIABLE; only pure metadata like ``untyped_storage().nbytes()`` stays
+# VERIFIED. See ``test_r15_data_ptr_pointer_escape_is_unverifiable``.)
 class _ReadonlyStorageBridge(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x + 1.0
-        _ = y.data_ptr()
         _ = y.detach().untyped_storage().nbytes()
+        _ = y.detach().untyped_storage().size()
         return y * 2.0
 
 

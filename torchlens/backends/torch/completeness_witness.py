@@ -369,11 +369,14 @@ hands out the raw data pointer that ``ctypes`` / a foreign kernel writes through
 ``.numpy()`` / ``.data`` these bypass the dispatcher entirely, so a write-back leaves the sparse
 replay recomputing the pre-write value and would falsely VERIFY. They are therefore bracketed with
 the SAME before/after byte snapshot as the mutable numpy alias (see ``_observe_invisible_host_escapes``
--> ``_check_writeback_watch``): a source whose bytes changed after exposure -> opaque host
-write-back -> UNVERIFIABLE. Unlike ``.numpy()`` these are WATCH-ONLY -- they are NOT recorded as
-value-escape sources, because a read-only ``data_ptr()`` identity / contiguity check exposes NO
-scalar value and must stay VERIFIED (no over-trigger). A read-only exposure leaves the bytes
-unchanged and stays honestly VERIFIED.
+-> ``_check_writeback_watch``): a source whose WHOLE-STORAGE bytes changed after exposure -> opaque
+host write-back -> UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` are WATCH-ONLY -- they are
+NOT recorded as value-escape sources, because a read-only storage identity / contiguity check
+exposes NO scalar value and must stay VERIFIED (no over-trigger); a read-only exposure leaves the
+bytes unchanged and stays honestly VERIFIED. ``data_ptr()`` is the exception (r15-H1): it hands out
+a RAW pointer that a foreign READ (baking a stale literal) or a post-snapshot WRITE can use with no
+observable trace at all, so a genuine user ``data_ptr()`` call fails closed to UNVERIFIABLE (see
+``_HOST_ESCAPE_RAW_POINTER``), never relying on the byte watch alone.
 """
 
 INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
@@ -587,6 +590,31 @@ def host_escape_has_mutable_writeback(trace: Any) -> bool:
     """Return whether a host write-back through a mutable zero-copy alias was detected."""
 
     return trace in _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+
+_HOST_ESCAPE_RAW_POINTER: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces where a raw ``Tensor.data_ptr()`` pointer escaped to the host (r15-H1).
+
+``tensor.data_ptr()`` hands out the raw integer data pointer that ``ctypes`` / a foreign kernel
+reads or writes through DIRECTLY, with no aten dispatch, no version bump, and -- unlike a
+``.numpy()`` alias or an ``untyped_storage()`` handle -- NO Python object whose bytes the
+forward-end write-back watch can re-inspect. A raw READ through the pointer bakes a stale literal
+or steers control flow (unwitnessable), and a raw WRITE may land after the watch snapshot; the
+pointer is fundamentally UNOBSERVABLE. So a genuine (non-internal) user ``data_ptr()`` call on a
+value-bearing tensor fails closed: the tensor's subsequent value cannot be witnessed, so the run
+is honestly UNVERIFIABLE rather than a false VERIFIED. This is scoped to ``data_ptr()`` ONLY --
+``untyped_storage()`` / ``storage()`` value reads are already UNVERIFIABLE by the storage-bridge
+watch, and read-only ``untyped_storage().nbytes()`` / ``.size()`` metadata (no value, no pointer)
+never trips it. ``data_ptr()`` is a rare low-level accessor in real models, so the fail-closed
+over-triggers at ~zero cost. TorchLens's own capture-internal ``data_ptr`` reads run under the
+``internal_scalar_read`` marker and are excluded. Presence-only.
+"""
+
+
+def host_escape_has_raw_pointer(trace: Any) -> bool:
+    """Return whether a raw ``Tensor.data_ptr()`` pointer escaped to the host (r15-H1)."""
+
+    return trace in _HOST_ESCAPE_RAW_POINTER
 
 
 _COMPLETENESS_WITNESS_FILE = Path(__file__).resolve()
@@ -1093,6 +1121,10 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     is_storage_bridge = name in STORAGE_BRIDGE_ESCAPE_FUNCS
     watch_writeback = name in MUTABLE_ALIAS_ESCAPE_FUNCS or is_storage_bridge
     record_source = not is_storage_bridge
+    # ``data_ptr()`` alone leaks a RAW pointer no forward-end byte watch can re-inspect (r15-H1);
+    # a genuine user call fails closed to UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` keep
+    # the watch-only write-back treatment (their value reads are already UNVERIFIABLE).
+    is_raw_pointer = name == "data_ptr"
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         if (
@@ -1103,6 +1135,11 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
         ):
             if record_source:
                 _record_escape_source_tensor(state.trace, self, invisible=True)
+            # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call (internal
+            # marker inactive -- TorchLens's own bookkeeping ``data_ptr`` reads run under it) fails
+            # closed so the tensor's subsequent value cannot be silently VERIFIED.
+            if is_raw_pointer and not _internal_read_active():
+                _HOST_ESCAPE_RAW_POINTER.add(state.trace)
             # TorchLens's OWN capture-internal aliasing / version bookkeeping reads storage
             # pointers (``aliasing._tensors_alias`` -> ``untyped_storage().data_ptr()``) under the
             # explicit ``internal_scalar_read`` marker. Those are NOT user exposures: snapshotting

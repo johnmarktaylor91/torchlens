@@ -1655,6 +1655,7 @@ def _escape_witnesses(
 
     from ..backends.torch.completeness_witness import (
         host_escape_has_mutable_writeback,
+        host_escape_has_raw_pointer,
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
         host_escape_state_source_names,
@@ -1670,13 +1671,19 @@ def _escape_witnesses(
     # (``.tolist``/``.numpy``) escape with no source slot, and a detected host WRITE-BACK through
     # a mutable zero-copy alias (``.numpy()[0] = 99``) -- the write mutates the source bytes with
     # no dispatch and no version bump, so the sparse replay recomputes the pre-write value and the
-    # source digest cannot witness it; keep the run honestly UNVERIFIABLE.
+    # source digest cannot witness it; keep the run honestly UNVERIFIABLE. A raw ``data_ptr()``
+    # pointer escape is likewise unobservable (r15-H1) and fails closed here too.
     incomplete = unresolvable_escape
     if host_escape_has_unattributable_bool(trace):
         incomplete = True
     if host_escape_has_unattributable_opaque(trace):
         incomplete = True
     if host_escape_has_mutable_writeback(trace):
+        incomplete = True
+    # A raw ``Tensor.data_ptr()`` pointer escape (r15-H1) leaves the source tensor's subsequent
+    # value unobservable (a raw ctypes read/write bypasses every dispatch and byte watch), so the
+    # run must fail closed to UNVERIFIABLE rather than a false VERIFIED.
+    if host_escape_has_raw_pointer(trace):
         incomplete = True
 
     ints, floats, sequences = _collect_baked_literal_values(calls)
