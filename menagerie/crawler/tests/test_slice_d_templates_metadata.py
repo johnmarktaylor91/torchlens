@@ -66,6 +66,7 @@ def _external_metadata() -> dict[str, Any]:
         "paradigm",
         "lineage",
         "tags",
+        "keywords",
         "venue",
         "year",
         "country",

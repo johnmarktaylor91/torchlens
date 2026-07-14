@@ -15,6 +15,7 @@ MANDATORY_EXTERNAL_FIELDS = (
     "paradigm",
     "lineage",
     "tags",
+    "keywords",
     "venue",
     "year",
     "country",
@@ -44,7 +45,7 @@ TORCHLENS_DERIVABLE_FIELDS = frozenset(
 _REQUIRED_NONEMPTY_ARRAYS = frozenset(
     {"modality", "architecture_class", "domain", "task", "paradigm", "authors", "institution"}
 )
-_ARRAY_FIELDS = _REQUIRED_NONEMPTY_ARRAYS | {"lineage", "tags"}
+_ARRAY_FIELDS = _REQUIRED_NONEMPTY_ARRAYS | {"lineage", "tags", "keywords"}
 
 
 class MetadataValidationError(ValueError):
