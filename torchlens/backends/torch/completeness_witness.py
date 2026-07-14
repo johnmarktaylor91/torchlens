@@ -1037,19 +1037,38 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         return result
 
 
+def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
+    """Return a ``uint8`` tensor viewing ``source``'s ENTIRE untyped storage (all bytes).
+
+    A zero-copy alias (``source.numpy()`` / ``source.untyped_storage()`` / a raw ``data_ptr``)
+    shares the WHOLE storage, not just ``source``'s element extent: ``np.as_strided`` and a
+    storage ``__setitem__`` can write bytes OUTSIDE ``source``'s view window (r15-H2). Comparing
+    the whole aliased storage -- not ``source.detach().clone()`` (its own extent only) -- makes ANY
+    host write anywhere in the shared storage detectable at forward end.
+    """
+
+    untyped = source.untyped_storage()
+    view = torch.empty(0, dtype=torch.uint8, device=source.device)
+    view.set_(untyped, 0, (untyped.nbytes(),), (1,))
+    return view
+
+
 def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> None:
     """Record a before-image of a mutable zero-copy alias source for later write-back detection.
 
-    Snapshots ``source``'s version and a detached byte clone under ``pause_logging`` (so the clone
-    is not itself captured or censused) and holds a strong ref to ``source`` so the shared storage
-    stays alive until the forward-end comparison. A source that cannot be snapshotted (e.g. a meta
-    tensor with no storage) fails closed immediately.
+    Snapshots ``source``'s version and a detached byte clone of its WHOLE untyped storage under
+    ``pause_logging`` (so the clone is not itself captured or censused) and holds a strong ref to
+    ``source`` so the shared storage stays alive until the forward-end comparison. Snapshotting the
+    full aliased storage (not just ``source``'s element extent) closes the r15-H2 out-of-extent
+    gap: a host write through the alias's storage handle to bytes OUTSIDE ``source``'s view window
+    (storage ``__setitem__`` / ``np.as_strided``) is still caught. A source that cannot be
+    snapshotted (e.g. a meta tensor with no storage) fails closed immediately.
     """
 
     try:
         with _state.pause_logging():
             version = getattr(source, "_version", None)
-            before = source.detach().clone()
+            before = _whole_storage_uint8(source).clone()
     except (RuntimeError, TypeError, NotImplementedError):
         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
         return
@@ -1227,10 +1246,12 @@ def _MODULE_ESCAPE_TARGETS() -> tuple[tuple[Any, str], ...]:
 def _check_writeback_watch(state: _WitnessState) -> None:
     """Detect a host write-back through any watched mutable zero-copy alias at forward end.
 
-    The honest rule is keyed on BYTES, never on the version counter (r14-H1). A watched source
-    whose bytes are UNCHANGED since the mutable-alias exposure was only read: it stays VERIFIED (a
-    pure read-only ``.numpy().sum()`` / storage-pointer identity check is not over-triggered). A
-    watched source whose bytes CHANGED is UNVERIFIABLE, in BOTH sub-cases:
+    The honest rule is keyed on the WHOLE aliased storage's BYTES, never on the version counter
+    (r14-H1) and never on only the view's element extent (r15-H2). A watched source whose whole
+    storage is UNCHANGED since the mutable-alias exposure was only read: it stays VERIFIED (a pure
+    read-only ``.numpy().sum()`` / storage-pointer identity check is not over-triggered). A watched
+    source whose storage bytes CHANGED anywhere -- INCLUDING outside the view's own window (a
+    storage ``__setitem__`` / ``np.as_strided`` write) -- is UNVERIFIABLE, in BOTH sub-cases:
 
     * version UNCHANGED -> no tracked op touched it, so the byte diff can only be an opaque host
       write-back through the alias (no aten dispatch, no version bump) -> host write-back;
@@ -1250,7 +1271,7 @@ def _check_writeback_watch(state: _WitnessState) -> None:
         with _state.pause_logging():
             for source, _version, before in state.writeback_watch:
                 try:
-                    if not torch.equal(source, before):
+                    if not torch.equal(_whole_storage_uint8(source), before):
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                         break
                 except (RuntimeError, TypeError, NotImplementedError):
