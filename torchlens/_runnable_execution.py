@@ -254,6 +254,7 @@ def _execute_loaded_sparse_transaction(
     nontensor_inputs_match = all(
         check.passed for check in contract_checks if check.name.startswith("input_literal:")
     )
+    tensor_derived_scalar_stale = _tensor_derived_scalar_stale(descriptor, slot_values)
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
         prepared_state,
@@ -263,13 +264,17 @@ def _execute_loaded_sparse_transaction(
         trace=trace,
         nontensor_inputs_match=nontensor_inputs_match,
         host_rng_unreproduced=host_rng_unreproduced,
+        tensor_derived_scalar_stale=tensor_derived_scalar_stale,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
         if not attestation_check.passed:
             _raise_numeric_attestation_failure(fork, attestation_check)
     path_faithfulness, mismatch = _path_faithfulness(
-        descriptor, contract_checks, host_rng_unreproduced=host_rng_unreproduced
+        descriptor,
+        contract_checks,
+        host_rng_unreproduced=host_rng_unreproduced,
+        tensor_derived_scalar_stale=tensor_derived_scalar_stale,
     )
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
@@ -1733,11 +1738,60 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
     return field_names if len(field_names) == n_fields else ()
 
 
+def _scalar_literal_equal(actual: Any, expected: Any) -> bool:
+    """Return exact scalar equality, treating two matching NaNs as equal.
+
+    Bool and non-bool numeric types are kept distinct so a recomputed ``True`` is
+    never mistaken for a numeric ``1``. A capture-time NaN scalar recomputes to
+    NaN on the original input, so ``NaN == NaN`` must read as equal here.
+    """
+
+    if isinstance(actual, bool) != isinstance(expected, bool):
+        return False
+    if isinstance(actual, float) and isinstance(expected, float):
+        if actual != actual and expected != expected:  # both NaN
+            return True
+    return bool(actual == expected)
+
+
+def _tensor_derived_scalar_stale(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> bool:
+    """Return whether a tensor-derived baked scalar literal is stale for this run.
+
+    A ``TENSOR_DERIVED_SCALAR_LITERAL`` witness records the runtime slot of the
+    scalar-shaped internal sink that produced an escaped scalar, together with the
+    scalar's capture-time value. That escaped scalar was baked into a downstream op
+    as a literal constant the sparse DAG cannot recompute. If the sink slot
+    recomputes to a different value than at capture (a CHANGED input), the baked
+    literal may be stale, so the run must not be blessed VERIFIED/ATTESTED. A slot
+    that recomputes the exact capture-time value (the ORIGINAL input) keeps the run
+    faithful. A missing or non-scalar sink slot is treated as stale: the dependency
+    cannot be re-confirmed, so the honest ceiling is UNVERIFIABLE.
+    """
+
+    for witness in descriptor.control_witnesses:
+        if witness.kind is not ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL:
+            continue
+        recomputed = slot_values.get(witness.site_label)
+        if not isinstance(recomputed, torch.Tensor) or recomputed.numel() != 1:
+            return True
+        try:
+            actual = recomputed.item()
+        except (RuntimeError, ValueError):
+            return True
+        if not _scalar_literal_equal(actual, _decode_literal(witness.observed_value)):
+            return True
+    return False
+
+
 def _path_faithfulness(
     descriptor: SparseRunDescriptor,
     checks: Sequence[ContractCheck],
     *,
     host_rng_unreproduced: bool = False,
+    tensor_derived_scalar_stale: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -1750,6 +1804,12 @@ def _path_faithfulness(
         # A Python/NumPy-RNG control-flow capture replayed off its captured seed:
         # the single recorded branch may not be the one a fresh seeded call takes,
         # so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
+        return PathFaithfulness.UNVERIFIABLE, None
+    if tensor_derived_scalar_stale:
+        # A tensor->Python-scalar escape baked a derived constant into a downstream
+        # op; the sink slot recomputed a different value, so the baked literal may
+        # be stale for this input. The sparse DAG cannot recompute the constant, so
+        # the honest ceiling is UNVERIFIABLE, never a silently wrong VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     return PathFaithfulness.VERIFIED, None
 
@@ -1789,6 +1849,7 @@ def _numeric_attestation_check(
     trace: Any,
     nontensor_inputs_match: bool = True,
     host_rng_unreproduced: bool = False,
+    tensor_derived_scalar_stale: bool = False,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -1825,6 +1886,11 @@ def _numeric_attestation_check(
     if not nontensor_inputs_match:
         # A changed non-tensor input means the recorded taken path may not apply,
         # so recomputed slots must never be attested against the capture archive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if tensor_derived_scalar_stale:
+        # A tensor-derived baked scalar literal recomputed differently: the sparse
+        # replay cannot recompute the baked constant, so a byte-exact attestation
+        # would dishonestly bless a possibly-stale result.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
         # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that

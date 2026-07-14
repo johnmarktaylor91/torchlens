@@ -237,6 +237,9 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
     literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
     witnesses.extend(literal_witnesses)
+    witnesses.extend(
+        _tensor_derived_scalar_witnesses(trace, ops, calls, start_order=len(witnesses))
+    )
     if saw_opaque_leaf and completeness is WitnessCompleteness.COMPLETE:
         # An opaque non-tensor input leaf cannot be re-verified, so its control
         # dependency is unobserved: downgrade to keep the run honest
@@ -1230,6 +1233,130 @@ def _build_control_witnesses(
 
     witnesses.extend(_container_structure_witnesses(trace, start_order=len(witnesses)))
     return witnesses, completeness
+
+
+def _sink_scalar_value(trace: Any, op: Any) -> int | float | bool | None:
+    """Return one internal-sink op's captured Python scalar value, or ``None``.
+
+    Reads the retained capture-time output activation; a scalar escape reduces to
+    a single element, so only a ``numel() == 1`` tensor output qualifies. A
+    missing or non-scalar activation yields ``None`` (no witness), so an unsaved
+    sink is treated conservatively as un-correlatable rather than being forced to
+    an unverifiable run.
+    """
+
+    label = getattr(op, "label", None)
+    if label is None:
+        return None
+    try:
+        value = trace[label].out
+    except (KeyError, AttributeError, RuntimeError, TypeError, IndexError):
+        return None
+    if not isinstance(value, torch.Tensor) or value.numel() != 1:
+        return None
+    try:
+        return value.item()
+    except (RuntimeError, ValueError):
+        return None
+
+
+def _tensor_derived_scalar_witnesses(
+    trace: Any,
+    ops: Sequence[Any],
+    calls: Sequence[RunnableCallDescriptor],
+    *,
+    start_order: int,
+) -> list[ControlWitness]:
+    """Witness scalar sink slots whose value was baked into a downstream literal.
+
+    A tensor->Python-scalar escape (``.item()`` / ``int()`` / ``float()`` /
+    ``aten._local_scalar_dense``) used AS A VALUE bakes the derived scalar into a
+    later op as a literal constant. The escape breaks the tensor graph, so the
+    sparse DAG never recomputes that constant: on a CHANGED input the baked
+    literal is STALE while the run would otherwise report VERIFIED + ATTESTED --
+    a silently wrong output and saved activations (the r8 money bug).
+
+    The escape leaves two exact capture-time footprints the descriptor can
+    correlate: (1) the reducing op that produced the escaped scalar survives as a
+    scalar-shaped internal sink -- its tensor value left the traced graph -- and
+    its output slot is still recomputed as a call in the sparse DAG; (2) the
+    escaped scalar value appears as a baked ``LiteralAtom`` argument of a
+    downstream call. When a non-bool scalar sink's captured value equals such a
+    baked literal, a ``TENSOR_DERIVED_SCALAR_LITERAL`` witness ties the sink's
+    runtime slot to its captured scalar value. At run time the executor recomputes
+    the sink slot; if its value differs from the witnessed capture-time value the
+    baked literal may be stale, so the run reports ``UNVERIFIABLE`` +
+    ``NOT_APPLICABLE`` rather than a false ``VERIFIED``. For the ORIGINAL/unchanged
+    input the sink recomputes the same scalar, so the run still reports VERIFIED +
+    ATTESTED: the witness is input-conditional and never downgrades a faithful
+    original run.
+
+    A genuinely dead scalar sink (a reduction whose value is discarded, never
+    extracted and never baked) matches no downstream literal, so no witness is
+    emitted and a deterministic scalar-free model is UNCHANGED. Scalar-*bool*
+    escapes are handled by the existing control-witness path and excluded here.
+    """
+
+    baked_int_literals: set[int] = set()
+    baked_float_literals: set[float] = set()
+    for call in calls:
+        for literal in call.literal_arguments:
+            atom = literal.value
+            if not isinstance(atom, LiteralAtom):
+                continue
+            if atom.kind is LiteralAtomKind.INT and isinstance(atom.value, int):
+                baked_int_literals.add(int(atom.value))
+            elif atom.kind is LiteralAtomKind.FLOAT and isinstance(atom.value, float):
+                baked_float_literals.add(float(atom.value))
+    if not baked_int_literals and not baked_float_literals:
+        return []
+
+    call_id_by_slot: dict[str, str] = {}
+    for call in calls:
+        for slot_id in call.output_slot_ids:
+            call_id_by_slot.setdefault(slot_id, call.call_id)
+
+    witnesses: list[ControlWitness] = []
+    for op in ops:
+        if not bool(getattr(op, "is_internal_sink", False)):
+            continue
+        if bool(getattr(op, "is_terminal_bool", False)) or bool(
+            getattr(op, "is_scalar_bool", False)
+        ):
+            continue
+        if bool(getattr(op, "is_output", False)) or bool(getattr(op, "is_input", False)):
+            continue
+        slot_id = f"slot:{op.label}"
+        call_id = call_id_by_slot.get(slot_id)
+        if call_id is None:
+            continue
+        scalar = _sink_scalar_value(trace, op)
+        if scalar is None or isinstance(scalar, bool):
+            continue
+        if isinstance(scalar, int):
+            matched = scalar in baked_int_literals
+        elif isinstance(scalar, float):
+            matched = scalar in baked_float_literals
+        else:
+            matched = False
+        if not matched:
+            continue
+        try:
+            observed = _encode_literal(scalar)
+        except _UnsupportedLiteralError:
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL,
+                order=order,
+                call_id=call_id,
+                site_label=slot_id,
+                observed_value=observed,
+            )
+        )
+    return witnesses
 
 
 def _container_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlWitness]:
