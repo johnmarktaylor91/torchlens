@@ -54,7 +54,10 @@
         "wakeup",
         "checkpoint",
         "campaign-health",
-        "wake-noop-already-running"
+        "wake-noop-already-running",
+        "checkpoint-review",
+        "review-signoff",
+        "progress-notification"
       ],
       "description": "Mandatory operational event kind."
     },
@@ -68,7 +71,10 @@
         "checkpoint-complete",
         "checkpoint-failed",
         "healthy",
-        "failed:runner"
+        "failed:runner",
+        "paused:checkpoint-review",
+        "resumed:checkpoint-review",
+        "progress-notified"
       ],
       "description": "Mandatory closed current disposition."
     },
@@ -143,6 +149,134 @@
     "details": {
       "type": "object",
       "description": "Mandatory structured event details."
+    },
+    "models_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Terminal-model count reached at a review or progress event."
+    },
+    "funnel_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs",
+        "deferred",
+        "skipped",
+        "failed"
+      ],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current runs count."
+        },
+        "deferred": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current deferred count."
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current skipped count."
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current failed count."
+        }
+      },
+      "description": "Exact four-bucket terminal funnel snapshot."
+    },
+    "report_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Review report path presented for human sign-off."
+    },
+    "approved_by_note": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-supplied note identifying the review approval."
+    },
+    "resume_after": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Completed-model review checkpoint cleared by the sign-off."
+    },
+    "milestone": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Non-blocking completed-model milestone being reported."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "checkpoint-review",
+            "description": "Select the checkpoint-review event contract."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "models_completed",
+          "funnel_snapshot",
+          "report_path"
+        ],
+        "properties": {
+          "status": {
+            "const": "paused:checkpoint-review",
+            "description": "Checkpoint review always blocks pending sign-off."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "review-signoff",
+            "description": "Select the review-signoff event contract."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "approved_by_note",
+          "resume_after"
+        ],
+        "properties": {
+          "status": {
+            "const": "resumed:checkpoint-review",
+            "description": "Review sign-off clears a blocking review checkpoint."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "progress-notification",
+            "description": "Select the progress-notification event contract."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "models_completed",
+          "milestone",
+          "funnel_snapshot"
+        ],
+        "properties": {
+          "status": {
+            "const": "progress-notified",
+            "description": "Progress notification is informational and non-blocking."
+          }
+        }
+      }
+    }
+  ]
 }

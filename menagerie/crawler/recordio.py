@@ -15,6 +15,7 @@ from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION,
     GATE_SCHEMA_VERSION,
     MODEL_SCHEMA_VERSION,
+    OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, payload_hash
 from menagerie.crawler.models import AppendResult, JsonObject, TailRecoveryEvidence
@@ -190,6 +191,7 @@ def scan_jsonl(path: Union[str, Path], *, validate: bool = True) -> list[JsonObj
                     MODEL_SCHEMA_VERSION,
                     ATTEMPT_SCHEMA_VERSION,
                     GATE_SCHEMA_VERSION,
+                    OPERATIONAL_EVENT_SCHEMA_VERSION,
                 }:
                     validate_payload(decoded)
                 _verify_hash(decoded)

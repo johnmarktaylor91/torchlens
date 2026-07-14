@@ -19,6 +19,8 @@ STDIO_TAIL_MAX_CHARS = 1_500
 STABLE_ID_DIGEST_CHARS = 20
 DEFAULT_FORWARD_TIMEOUT_SECONDS = 300
 MAX_FORWARD_TIMEOUT_SECONDS = 1_800
+DEFAULT_REVIEW_CHECKPOINT_MODELS = 1_000
+DEFAULT_PROGRESS_NOTIFICATION_MILESTONES = (2_000, 3_000, 5_000, 10_000, 15_000, 20_000)
 
 
 class StrEnum(str, Enum):
@@ -309,3 +311,34 @@ INPUT_KINDS = frozenset(
         "random-fallback",
     }
 )
+
+
+class OperationalEventKind(StrEnum):
+    """Closed operational-event kinds."""
+
+    USAGE_PAUSE = "usage-pause"
+    USAGE_RESUME = "usage-resume"
+    WAKEUP = "wakeup"
+    CHECKPOINT = "checkpoint"
+    CAMPAIGN_HEALTH = "campaign-health"
+    WAKE_NOOP_ALREADY_RUNNING = "wake-noop-already-running"
+    CHECKPOINT_REVIEW = "checkpoint-review"
+    REVIEW_SIGNOFF = "review-signoff"
+    PROGRESS_NOTIFICATION = "progress-notification"
+
+
+class OperationalEventStatus(StrEnum):
+    """Closed operational-event dispositions."""
+
+    USAGE_PAUSED = "paused:usage-limit"
+    USAGE_RESUMED = "resumed:usage-limit"
+    WAKEUP_SCHEDULED = "wakeup-scheduled"
+    WAKEUP_FIRED = "wakeup-fired"
+    WAKE_NOOP_ALREADY_RUNNING = "wake-noop-already-running"
+    CHECKPOINT_COMPLETE = "checkpoint-complete"
+    CHECKPOINT_FAILED = "checkpoint-failed"
+    HEALTHY = "healthy"
+    RUNNER_FAILED = "failed:runner"
+    CHECKPOINT_REVIEW_PAUSED = "paused:checkpoint-review"
+    REVIEW_SIGNED_OFF = "resumed:checkpoint-review"
+    PROGRESS_NOTIFIED = "progress-notified"
