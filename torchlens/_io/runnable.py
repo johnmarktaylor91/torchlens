@@ -48,6 +48,7 @@ from ..runnable import (
     LiteralMappingEntry,
     LiteralSequence,
     LiteralSequenceKind,
+    LiteralSlice,
     LiteralTorchSymbol,
     LiteralTupleKey,
     NonTensorLiteral,
@@ -2303,6 +2304,14 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
         return LiteralAtom(LiteralAtomKind.FLOAT, float(value))
     if isinstance(value, str):
         return LiteralAtom(LiteralAtomKind.STR, value)
+    if value is Ellipsis:
+        return LiteralAtom(LiteralAtomKind.ELLIPSIS, None)
+    if isinstance(value, slice):
+        return LiteralSlice(
+            start=_encode_slice_component(value.start, "start"),
+            stop=_encode_slice_component(value.stop, "stop"),
+            step=_encode_slice_component(value.step, "step"),
+        )
     torch_symbol = _torch_symbol_qualname(value)
     if torch_symbol is not None:
         return LiteralTorchSymbol(torch_symbol)
@@ -2327,6 +2336,26 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
     raise _UnsupportedLiteralError(
         f"Value of type {value_type} is outside the frozen non-tensor literal grammar."
     )
+
+
+def _encode_slice_component(value: Any, field_name: str) -> LiteralAtom:
+    """Encode one ``slice.start``/``.stop``/``.step`` component.
+
+    A Python ``slice`` component is always ``None`` or an integer (indices with
+    ``__index__`` are normalized to ``int`` by the interpreter before the ``slice``
+    object is constructed), so the encoded shape is restricted to those two atom
+    kinds -- no callables, no arbitrary objects.
+    """
+
+    if value is None:
+        return LiteralAtom(LiteralAtomKind.NONE, None)
+    if isinstance(value, bool) or not isinstance(value, int):
+        value_type = f"{type(value).__module__}.{type(value).__qualname__}"
+        raise _UnsupportedLiteralError(
+            f"Slice component {field_name!r} of type {value_type} is outside the frozen "
+            "non-tensor literal grammar; only int or None slice components are supported."
+        )
+    return LiteralAtom(LiteralAtomKind.INT, int(value))
 
 
 def _encode_literal_key(value: Any) -> LiteralAtom | LiteralTupleKey:

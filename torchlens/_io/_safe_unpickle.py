@@ -342,6 +342,12 @@ _SAFE_EXPLICIT_GLOBALS: frozenset[tuple[str, str]] = frozenset(
         ("builtins", "str"),
         ("builtins", "bool"),
         ("builtins", "slice"),
+        # The ``Ellipsis`` singleton (``...``). Pickle resolves it as a bare
+        # ``builtins.Ellipsis`` global (no dedicated opcode, unlike ``None``);
+        # resolving the name just returns the existing singleton object, so this
+        # is strictly inert -- no different in kind from admitting the ``slice``
+        # constructor above.
+        ("builtins", "Ellipsis"),
         # torch C callable-holder classes (used as getattr targets and, rarely,
         # as bare globals). They are types; returning them is inert -- the only
         # exploit path (getattr pivot) is closed by ``_safe_getattr``.

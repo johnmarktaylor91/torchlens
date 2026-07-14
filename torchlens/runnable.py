@@ -199,6 +199,7 @@ class LiteralAtomKind(str, Enum):
     INT = "int"
     FLOAT = "float"
     STR = "str"
+    ELLIPSIS = "ellipsis"
 
 
 class LiteralSequenceKind(str, Enum):
@@ -214,6 +215,21 @@ class LiteralAtom:
 
     kind: LiteralAtomKind
     value: None | bool | int | float | str
+
+
+@dataclass(frozen=True, slots=True)
+class LiteralSlice:
+    """One ``slice(start, stop, step)`` literal in a sparse call recipe.
+
+    Each component is an already-encoded ``LiteralAtom`` restricted to the
+    ``NONE`` or ``INT`` kinds -- exactly what a Python ``slice`` object may
+    hold. Reconstruction is the inert builtin ``slice(start, stop, step)``:
+    no callables, no imports, no security surface.
+    """
+
+    start: LiteralAtom
+    stop: LiteralAtom
+    step: LiteralAtom
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,7 +272,9 @@ class LiteralMapping:
     entries: tuple[LiteralMappingEntry, ...]
 
 
-NonTensorLiteral: TypeAlias = LiteralAtom | LiteralTorchSymbol | LiteralSequence | LiteralMapping
+NonTensorLiteral: TypeAlias = (
+    LiteralAtom | LiteralSlice | LiteralTorchSymbol | LiteralSequence | LiteralMapping
+)
 ArgumentPath: TypeAlias = tuple[str | int, ...]
 ContainerPath: TypeAlias = tuple[str | int, ...]
 
@@ -716,6 +734,7 @@ __all__ = [
     "LiteralMappingEntry",
     "LiteralSequence",
     "LiteralSequenceKind",
+    "LiteralSlice",
     "LiteralTorchSymbol",
     "LiteralTupleKey",
     "NumericAttestationStatus",
