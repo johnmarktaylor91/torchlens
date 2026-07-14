@@ -34,7 +34,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
-from ._tl import get_tensor_label
+from ._tl import get_tensor_label, get_tensor_meta
 from .escape_detection import ExpectedOriginalToken, _active_token
 
 CompletenessWitnessMode = Literal["off", "shadow"]
@@ -240,12 +240,80 @@ registering a new serialized Trace field. Entries are dropped automatically when
 Trace is garbage collected.
 """
 
+_HOST_ESCAPE_STATE_SOURCE_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace subset of escape-source labels whose source is a registered param/buffer.
+
+A registered buffer/parameter read on the host (``bool(self.gate)`` /
+``self.threshold.item()``) is the runnable UNBOUND-STATE net's domain: it is
+witnessed by its capture-time state digest, not by a tensor-op source slot. When such
+a state source is read ONLY on the host it is orphan-pruned and its raw label does not
+resolve to a final op -- but that is NOT a coverage gap (the unbound-state net covers
+it), so the runnable producer must NOT close it as a pruned tensor-op chain. This
+side set lets the producer tell an unresolved STATE label (defer to the unbound net)
+from an unresolved TENSOR-OP label (a genuinely unwitnessable pruned host chain).
+"""
+
+_HOST_ESCAPE_BOOL_SOURCE_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace subset of escape-source labels whose source is a BOOL tensor.
+
+A ``bool(...)`` truth-test steering pure-Python control flow is the control-witness /
+conditional / loop / pruned-RNG net's domain, not the tensor-derived scalar net's. The
+label is still recorded in ``_HOST_ESCAPE_SOURCE_LABELS`` because the pruned-RNG
+control-flow detector consumes it, but the runnable producer uses this set to exclude
+an unresolved (orphan-pruned) BOOL predicate from the tensor-op INCOMPLETE gate -- a
+pruned bool predicate is honestly witnessed (or downgraded) by those other nets.
+"""
+
+_HOST_ESCAPE_UNATTRIBUTABLE_VALUES: "weakref.WeakKeyDictionary[Any, set[Any]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace scalar values of UNATTRIBUTABLE (unlabelled-source) non-bool escapes.
+
+A ``.data`` alias (or any tensor whose capture label cannot be resolved) that escapes
+to the host via ``aten._local_scalar_dense`` leaves no source-op label to witness by
+slot. But the escape IS a scalar (``_local_scalar_dense`` extracts exactly one value),
+so its numeric value is recorded here. The runnable producer treats these exactly like
+baked literals: an INTERNAL-SINK op whose retained output equals an unattributable
+escape value is the escaped source, so it is witnessed value-free by its capture-time
+digest. This keeps the original input VERIFIED (byte-identical slot) while a changed
+input recomputes different bytes -> UNVERIFIABLE, instead of a false VERIFIED.
+
+BOOL escape sources are NOT recorded anywhere: a ``bool(...)`` truth-test steering
+control flow is the control-witness / conditional / loop / pruned-RNG net's domain,
+not the tensor-derived scalar net's.
+"""
+
 
 def host_escape_source_labels(trace: Any) -> frozenset[str]:
     """Return the recorded raw escape-source op labels for one trace."""
 
     labels = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
     return frozenset(labels) if labels else frozenset()
+
+
+def host_escape_state_source_labels(trace: Any) -> frozenset[str]:
+    """Return the raw escape-source labels whose source is a registered param/buffer."""
+
+    labels = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def host_escape_bool_source_labels(trace: Any) -> frozenset[str]:
+    """Return the raw escape-source labels whose source is a bool control predicate."""
+
+    labels = _HOST_ESCAPE_BOOL_SOURCE_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def host_escape_unattributable_values(trace: Any) -> frozenset[Any]:
+    """Return scalar values of unattributable (unlabelled-source) non-bool escapes."""
+
+    values = _HOST_ESCAPE_UNATTRIBUTABLE_VALUES.get(trace)
+    return frozenset(values) if values else frozenset()
 
 
 _PRUNED_RNG_CONTROL_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
@@ -299,13 +367,55 @@ def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> 
     source = args[0]
     if not isinstance(source, torch.Tensor):
         return
+    is_bool = source.dtype is torch.bool
     label = get_tensor_label(source)
-    if isinstance(label, str):
-        sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
-        if sources is None:
-            sources = set()
-            _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
-        sources.add(label)
+    if not isinstance(label, str):
+        # An UNATTRIBUTABLE escape: a real captured tensor whose value left to the
+        # host but which carries no resolvable capture label (a ``.data`` alias --
+        # its fresh Python tensor object has no TorchLens metadata). A bool predicate
+        # is the control-witness / pruned-RNG net's domain, so only NON-bool values
+        # are recorded here: ``_local_scalar_dense`` extracts exactly one scalar, and
+        # the runnable producer matches it to the internal-sink op that produced it
+        # and witnesses that sink value-free.
+        if is_bool:
+            return
+        try:
+            escaped = source.detach().item()
+        except (RuntimeError, ValueError, TypeError):
+            return
+        if isinstance(escaped, bool):
+            return
+        values = _HOST_ESCAPE_UNATTRIBUTABLE_VALUES.get(trace)
+        if values is None:
+            values = set()
+            _HOST_ESCAPE_UNATTRIBUTABLE_VALUES[trace] = values
+        values.add(escaped)
+        return
+    sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
+    if sources is None:
+        sources = set()
+        _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
+    sources.add(label)
+    # A BOOL predicate source stays in the main set (the pruned-RNG control-flow
+    # detector consumes it) but is tracked here so the runnable producer excludes an
+    # unresolved bool predicate from the tensor-op INCOMPLETE gate (it is the
+    # control-witness / conditional / loop / pruned-RNG net's domain).
+    if is_bool:
+        bool_sources = _HOST_ESCAPE_BOOL_SOURCE_LABELS.get(trace)
+        if bool_sources is None:
+            bool_sources = set()
+            _HOST_ESCAPE_BOOL_SOURCE_LABELS[trace] = bool_sources
+        bool_sources.add(label)
+    # A registered buffer/parameter source (identified by a non-None state address)
+    # is the unbound-state net's domain; record it separately so the producer does
+    # not close an unresolved (orphan-pruned) STATE label as a pruned tensor-op chain.
+    meta = get_tensor_meta(source)
+    if meta is not None and getattr(meta, "address", None) is not None:
+        state_sources = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
+        if state_sources is None:
+            state_sources = set()
+            _HOST_ESCAPE_STATE_SOURCE_LABELS[trace] = state_sources
+        state_sources.add(label)
 
 
 def _operator_name(func: Any) -> str:

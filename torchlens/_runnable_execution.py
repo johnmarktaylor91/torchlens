@@ -180,7 +180,17 @@ def _execute_loaded_sparse_transaction(
 ) -> RunResult:
     """Execute one sparse transaction whose caller owns rollback on escape."""
 
-    _populate_source_slots(fork, descriptor, slot_values)
+    # Escape-source witness slots must be digested at their production point (before
+    # any later in-place op mutates the live tensor), matching the save-side digest.
+    escape_witness_slot_ids = _tensor_derived_scalar_witness_slot_ids(descriptor)
+    witness_source_snapshots: dict[str, torch.Tensor] = {}
+    _populate_source_slots(
+        fork,
+        descriptor,
+        slot_values,
+        witness_slot_ids=escape_witness_slot_ids,
+        witness_source_snapshots=witness_source_snapshots,
+    )
     contract_checks: list[ContractCheck] = [
         *input_checks,
         *_state_contract_checks(descriptor, slot_values),
@@ -237,6 +247,8 @@ def _execute_loaded_sparse_transaction(
                         before_versions=before_versions,
                         attestation_slot_ids=attestation_slot_ids,
                         attestation_slot_values=attestation_slot_values,
+                        witness_slot_ids=escape_witness_slot_ids,
+                        witness_source_snapshots=witness_source_snapshots,
                     )
                 )
                 contract_checks.extend(_call_witness_checks(descriptor, call, slot_values))
@@ -261,7 +273,9 @@ def _execute_loaded_sparse_transaction(
     nontensor_inputs_match = all(
         check.passed for check in contract_checks if check.name.startswith("input_literal:")
     )
-    tensor_derived_scalar_stale = _tensor_derived_scalar_stale(descriptor, slot_values)
+    tensor_derived_scalar_stale = _tensor_derived_scalar_stale(
+        descriptor, slot_values, witness_source_snapshots
+    )
     unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
@@ -1032,8 +1046,17 @@ def _populate_source_slots(
     fork: Any,
     descriptor: SparseRunDescriptor,
     slot_values: Mapping[str, torch.Tensor],
+    *,
+    witness_slot_ids: frozenset[str] = frozenset(),
+    witness_source_snapshots: dict[str, torch.Tensor] | None = None,
 ) -> None:
-    """Populate input and buffer source Ops on the transactional run fork."""
+    """Populate input and buffer source Ops on the transactional run fork.
+
+    A source slot (model input / buffer) that is itself a tensor->host escape
+    witness site is snapshotted here, at population -- the mutation-consistent point
+    matching the save-side digest -- so a later in-place op cannot restale the
+    staleness comparison.
+    """
 
     for slot in descriptor.tensor_slots:
         if slot.role not in {TensorSlotRole.MODEL_INPUT, TensorSlotRole.BUFFER}:
@@ -1042,6 +1065,12 @@ def _populate_source_slots(
         op = _op_for_slot(fork, slot.slot_id)
         if value is not None and op is not None:
             op._internal_set("out", value.detach().clone())
+        if (
+            value is not None
+            and witness_source_snapshots is not None
+            and slot.slot_id in witness_slot_ids
+        ):
+            witness_source_snapshots[slot.slot_id] = value.detach().clone()
 
 
 def _write_argument(
@@ -1120,6 +1149,8 @@ def _bind_call_outputs(
     before_versions: Mapping[str, int],
     attestation_slot_ids: frozenset[str],
     attestation_slot_values: dict[str, torch.Tensor],
+    witness_slot_ids: frozenset[str] = frozenset(),
+    witness_source_snapshots: dict[str, torch.Tensor] | None = None,
 ) -> tuple[ContractCheck, ...]:
     """Slice, validate, and stage one grouped call's tensor outputs."""
 
@@ -1185,6 +1216,12 @@ def _bind_call_outputs(
                 produced_slot_ids.add(version.slot_id)
         for produced_slot_id in produced_slot_ids & attestation_slot_ids:
             attestation_slot_values[produced_slot_id] = value.detach().clone()
+        if witness_source_snapshots is not None:
+            # Snapshot every escape-witness source slot at its production point so a
+            # later in-place mutation of the live tensor cannot restale the digest
+            # comparison (H3): the run-digest then matches the pre-mutation save-digest.
+            for produced_slot_id in produced_slot_ids & witness_slot_ids:
+                witness_source_snapshots[produced_slot_id] = value.detach().clone()
         op = _op_for_label(fork, op_label)
         if op is not None:
             op._internal_set("out", value.detach().clone())
@@ -1870,9 +1907,27 @@ def _scalar_literal_equal(actual: Any, expected: Any) -> bool:
     return bool(actual == expected)
 
 
+def _tensor_derived_scalar_witness_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
+    """Return the runtime slot ids of every tensor->host escape-source witness.
+
+    Each ``TENSOR_DERIVED_SCALAR_LITERAL`` witness digests its source slot at a
+    mutation-consistent snapshot (the op's capture-time production value). At run
+    time the source value must be snapshotted at the SAME logical point -- when the
+    slot is first produced -- before any later in-place op can mutate the live
+    tensor, so the run-digest compares the same logical value the save-digest did.
+    """
+
+    return frozenset(
+        witness.site_label
+        for witness in descriptor.control_witnesses
+        if witness.kind is ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL
+    )
+
+
 def _tensor_derived_scalar_stale(
     descriptor: SparseRunDescriptor,
     slot_values: Mapping[str, torch.Tensor],
+    witness_source_snapshots: Mapping[str, torch.Tensor] | None = None,
 ) -> bool:
     """Return whether a tensor->host escape source slot is stale for this run.
 
@@ -1892,10 +1947,17 @@ def _tensor_derived_scalar_stale(
     byte digest) is compared by exact scalar equality for backward compatibility.
     """
 
+    snapshots = witness_source_snapshots or {}
     for witness in descriptor.control_witnesses:
         if witness.kind is not ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL:
             continue
-        recomputed = slot_values.get(witness.site_label)
+        # Prefer the production-time snapshot: a later in-place op (``y.add_(...)``)
+        # could have mutated the live slot value after the escape read it, and the
+        # save-digest was taken at the pre-mutation production point. The snapshot
+        # compares the SAME logical value; the live slot is the honest fallback.
+        recomputed = snapshots.get(witness.site_label)
+        if recomputed is None:
+            recomputed = slot_values.get(witness.site_label)
         if not isinstance(recomputed, torch.Tensor):
             return True
         expected = _decode_literal(witness.observed_value)

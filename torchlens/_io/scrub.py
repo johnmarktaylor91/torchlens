@@ -411,6 +411,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_semantic_output_metadata",
         "tinygrad_payload_policy",
         "tinygrad_uop_captures",
+        "_orphan_pruned_func_call_ids",
     }
 
 
