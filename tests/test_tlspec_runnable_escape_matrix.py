@@ -23,6 +23,7 @@ control escape.
 
 from __future__ import annotations
 
+import ctypes
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -34,8 +35,9 @@ from torch import nn
 
 import torchlens as tl
 import torchlens as _torchlens
+from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
+from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -718,3 +720,217 @@ def test_to_dlpack_c_binding_export_is_witnessed_as_escape(tmp_path: Path) -> No
         inputs=changed_x.clone(), seed=0, on_divergence="return_diverged"
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# R14 mutation-residual regressions (cross-lab confirmed): host WRITE / mutation paths
+# that slipped the r13 detection and would false-VERIFY with the wrong output (H1/H2/H3),
+# plus a storage-rebinding op that crashed at run (C3). Each must be UNVERIFIABLE (or
+# save-refused), NEVER VERIFIED-with-wrong-output; read-only exposures must NOT
+# over-trigger, and genuine tracked in-place must still replay + VERIFY.
+# ======================================================================================
+
+_R14_X = torch.tensor([1.0, 0.5, 2.0, 0.25])
+_R14_CHANGED = torch.tensor([3.0, 4.0, 5.0, 6.0])
+
+
+# --- R14-H1: a host numpy/.data write-back on a source ALSO mutated by a TRACKED in-place op
+# bumps the version, which pre-r14 skipped the byte compare -> false VERIFIED. All three
+# orderings (write-back before / between / after tracked in-place) must be UNVERIFIABLE.
+class _WritebackThenInplace(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.detach().numpy()[0] = 99.0
+        y.add_(2.0)
+        return y * 2.0
+
+
+class _WritebackBetweenInplace(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.add_(2.0)
+        y.detach().numpy()[0] = 99.0
+        y.mul_(3.0)
+        return y * 2.0
+
+
+class _LateWriteViaKeptAlias(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        arr = y.detach().numpy()
+        y.add_(2.0)
+        arr[0] = 99.0  # host write via a kept alias, AFTER a tracked version bump
+        return y * 2.0
+
+
+_H1_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
+    ("writeback_then_inplace", _WritebackThenInplace),
+    ("writeback_between_inplace", _WritebackBetweenInplace),
+    ("late_write_via_kept_alias", _LateWriteViaKeptAlias),
+]
+
+
+@pytest.mark.parametrize("name,factory", _H1_CELLS, ids=[c[0] for c in _H1_CELLS])
+def test_r14_h1_writeback_with_tracked_inplace_is_never_verified(
+    name: str, factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """A numpy write-back layered with a tracked in-place op is UNVERIFIABLE (both inputs)."""
+    for run_x in (_R14_X, _R14_CHANGED):
+        result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+        )
+        assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# --- R14-H2: a mutation through a LABELLED VIEW of the invisible .data alias is orphan-pruned
+# yet was not recorded (the r13 flag keyed on an unlabelled target). Must be UNVERIFIABLE.
+class _DataViewSetitem(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.view(-1)[0] = 9.0
+        return y * 2.0
+
+
+class _DataReshapeSetitem(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.reshape(-1)[0] = 9.0
+        return y * 2.0
+
+
+class _DataFlattenSetitem(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.flatten()[0] = 9.0
+        return y * 2.0
+
+
+_H2_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
+    ("data.view.setitem", _DataViewSetitem),
+    ("data.reshape.setitem", _DataReshapeSetitem),
+    ("data.flatten.setitem", _DataFlattenSetitem),
+]
+
+
+@pytest.mark.parametrize("name,factory", _H2_CELLS, ids=[c[0] for c in _H2_CELLS])
+def test_r14_h2_labelled_view_of_data_alias_mutation_is_never_verified(
+    name: str, factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """A dropped mutation through a labelled view of .data is UNVERIFIABLE (both inputs)."""
+    for run_x in (_R14_X, _R14_CHANGED):
+        result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+        )
+        assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# --- R14-H3: a host write through a storage-pointer bridge (untyped_storage / storage /
+# data_ptr + ctypes) has no dispatch, no version bump, no escape record. Must be UNVERIFIABLE.
+class _UntypedStorageFill(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.detach().untyped_storage().fill_(0)
+        return y * 2.0
+
+
+class _TypedStorageSetitem(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.storage()[0] = 99.0
+        return y * 2.0
+
+
+class _CtypesDataPtrWrite(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        ctypes.c_float.from_address(y.data_ptr()).value = 99.0
+        return y * 2.0
+
+
+_H3_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
+    ("untyped_storage.fill_", _UntypedStorageFill),
+    ("storage.setitem", _TypedStorageSetitem),
+    ("ctypes.data_ptr.write", _CtypesDataPtrWrite),
+]
+
+
+@pytest.mark.filterwarnings("ignore:TypedStorage is deprecated")
+@pytest.mark.parametrize("name,factory", _H3_CELLS, ids=[c[0] for c in _H3_CELLS])
+def test_r14_h3_storage_bridge_host_write_is_never_verified(
+    name: str, factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """A host write through a storage-pointer bridge is UNVERIFIABLE (both inputs)."""
+    for run_x in (_R14_X, _R14_CHANGED):
+        result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+        )
+        assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# --- R14-C3: a storage-rebinding op (set_ / resize_ family) is not faithfully representable;
+# it must be REFUSED at SAVE with a typed diagnostic, never crash at run and never false VERIFY.
+class _StorageSet(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.set_(y.clone())
+        return y * 2.0
+
+
+class _StorageResize(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.resize_(4)
+        return y * 2.0
+
+
+_C3_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
+    ("set_", _StorageSet),
+    ("resize_", _StorageResize),
+]
+
+
+@pytest.mark.parametrize("name,factory", _C3_CELLS, ids=[c[0] for c in _C3_CELLS])
+def test_r14_c3_storage_rebind_op_is_refused_at_save(
+    name: str, factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """set_/resize_ fail closed at SAVE with a typed diagnostic (no run-time crash)."""
+    trace = tl.trace(factory(), _R14_X.clone(), capture=_CAPTURE)
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(tmp_path / "storage_rebind.tlspec", level="runnable")
+    diagnostics = excinfo.value.fields["diagnostics"]
+    assert any(d.detection_stage == "producer_storage_unsafe_op" for d in diagnostics)
+    assert any(d.code is RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT for d in diagnostics)
+
+
+# --- No over-trigger: a READ-ONLY storage-pointer / identity exposure reads no value and must
+# stay VERIFIED on any input; a genuine tracked in-place on a labelled alias still replays.
+class _ReadonlyStorageBridge(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        _ = y.data_ptr()
+        _ = y.detach().untyped_storage().nbytes()
+        return y * 2.0
+
+
+class _LabelledAliasInplace(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.detach().add_(2.0)  # tracked in-place on a LABELLED (detach) alias -> replayed
+        return y * 2.0
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [_ReadonlyStorageBridge, _LabelledAliasInplace],
+    ids=["readonly_storage_bridge", "labelled_alias_inplace"],
+)
+def test_r14_no_over_trigger_stays_verified_on_any_input(
+    factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """Read-only storage exposure and genuine labelled-alias in-place stay VERIFIED, no over-trigger."""
+    original = _save_load(factory(), _R14_X.clone(), tmp_path).run(inputs=_R14_X.clone(), seed=0)
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
+    changed = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+        inputs=_R14_CHANGED.clone(), seed=0
+    )
+    assert changed.report.path_faithfulness is PathFaithfulness.VERIFIED

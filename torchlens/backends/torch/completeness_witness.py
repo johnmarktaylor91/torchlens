@@ -358,6 +358,24 @@ UNVERIFIABLE. ``.tolist()`` copies into Python lists (writes never reach the sou
 ``.numpy().sum()`` leaves the bytes unchanged and stays honestly VERIFIED.
 """
 
+STORAGE_BRIDGE_ESCAPE_FUNCS = frozenset({"untyped_storage", "storage", "data_ptr"})
+"""Census-invisible tensor methods that hand the host a ZERO-COPY handle onto the source
+tensor's raw storage, through which a host WRITE can mutate the tensor's bytes with no aten
+dispatch, no version bump, and no escape record (r14-H3).
+
+``tensor.untyped_storage()`` / ``tensor.storage()`` return a Storage object aliasing the
+tensor's memory (``s.fill_(0)`` / ``s[0] = 99`` mutate the source), and ``tensor.data_ptr()``
+hands out the raw data pointer that ``ctypes`` / a foreign kernel writes through directly. Like
+``.numpy()`` / ``.data`` these bypass the dispatcher entirely, so a write-back leaves the sparse
+replay recomputing the pre-write value and would falsely VERIFY. They are therefore bracketed with
+the SAME before/after byte snapshot as the mutable numpy alias (see ``_observe_invisible_host_escapes``
+-> ``_check_writeback_watch``): a source whose bytes changed after exposure -> opaque host
+write-back -> UNVERIFIABLE. Unlike ``.numpy()`` these are WATCH-ONLY -- they are NOT recorded as
+value-escape sources, because a read-only ``data_ptr()`` identity / contiguity check exposes NO
+scalar value and must stay VERIFIED (no over-trigger). A read-only exposure leaves the bytes
+unchanged and stays honestly VERIFIED.
+"""
+
 INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
 """Zero-copy buffer PROTOCOL PROPERTIES (not methods) that expose a captured tensor's
 data pointer to the host.
@@ -1050,7 +1068,12 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     outputs are byte-identical.
     """
 
-    watch_writeback = name in MUTABLE_ALIAS_ESCAPE_FUNCS
+    # Storage-pointer bridges (untyped_storage / storage / data_ptr) are watched for host
+    # write-back but are WATCH-ONLY: a read-only pointer/identity check exposes no scalar value,
+    # so recording them as value-escape sources would over-trigger and is deliberately skipped.
+    is_storage_bridge = name in STORAGE_BRIDGE_ESCAPE_FUNCS
+    watch_writeback = name in MUTABLE_ALIAS_ESCAPE_FUNCS or is_storage_bridge
+    record_source = not is_storage_bridge
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         if (
@@ -1059,8 +1082,16 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
             and _state._logging_enabled
             and _state._active_trace is state.trace
         ):
-            _record_escape_source_tensor(state.trace, self, invisible=True)
-            if watch_writeback:
+            if record_source:
+                _record_escape_source_tensor(state.trace, self, invisible=True)
+            # TorchLens's OWN capture-internal aliasing / version bookkeeping reads storage
+            # pointers (``aliasing._tensors_alias`` -> ``untyped_storage().data_ptr()``) under the
+            # explicit ``internal_scalar_read`` marker. Those are NOT user exposures: snapshotting
+            # them and then byte-comparing under the r14-H1 gate would falsely trip on a later
+            # legitimate TRACKED in-place op. Only watch a storage bridge when the marker is
+            # inactive -- a genuine user ``data_ptr()`` / ``storage()`` call. (The numpy / __array__
+            # mutable alias is never called internally, so it is always watched, as in r13.)
+            if watch_writeback and not (is_storage_bridge and _internal_read_active()):
                 _snapshot_writeback_source(state, self)
         return original(self, *args, **kwargs)
 
@@ -1126,7 +1157,7 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
     """
 
     originals: dict[str, Any] = {}
-    for name in INVISIBLE_HOST_ESCAPE_FUNCS:
+    for name in INVISIBLE_HOST_ESCAPE_FUNCS | STORAGE_BRIDGE_ESCAPE_FUNCS:
         original = getattr(torch.Tensor, name, None)
         if original is None:
             continue
@@ -1196,21 +1227,30 @@ def _MODULE_ESCAPE_TARGETS() -> tuple[tuple[Any, str], ...]:
 def _check_writeback_watch(state: _WitnessState) -> None:
     """Detect a host write-back through any watched mutable zero-copy alias at forward end.
 
-    A watched source whose bytes changed while its version counter is UNCHANGED was mutated by a
-    host write through the alias (no aten dispatch, no version bump); its trace is recorded so the
-    runnable producer fails closed. A source whose version bumped was mutated by a tracked in-place
-    op (replayed or flagged separately) and is not counted here; a source whose bytes are unchanged
-    was only read and stays VERIFIED.
+    The honest rule is keyed on BYTES, never on the version counter (r14-H1). A watched source
+    whose bytes are UNCHANGED since the mutable-alias exposure was only read: it stays VERIFIED (a
+    pure read-only ``.numpy().sum()`` / storage-pointer identity check is not over-triggered). A
+    watched source whose bytes CHANGED is UNVERIFIABLE, in BOTH sub-cases:
+
+    * version UNCHANGED -> no tracked op touched it, so the byte diff can only be an opaque host
+      write-back through the alias (no aten dispatch, no version bump) -> host write-back;
+    * version BUMPED -> a tracked in-place op ALSO touched the source since the exposure, so the
+      raw byte comparison is AMBIGUOUS -- the diff could be the tracked op OR an additional host
+      write layered on top, and cannot prove the ABSENCE of a host write -> conservatively opaque.
+
+    Gating detection on ``version unchanged`` (the pre-r14 behaviour) let a tracked in-place op
+    that bumps the version AFTER the ``.numpy()`` / ``.data`` snapshot skip the byte compare, so a
+    host write-back on the same storage went undetected and the run falsely VERIFIED. Comparing
+    bytes alone closes that gate while keeping read-only exposures honestly VERIFIED.
     """
 
     if not state.writeback_watch:
         return
     try:
         with _state.pause_logging():
-            for source, version, before in state.writeback_watch:
+            for source, _version, before in state.writeback_watch:
                 try:
-                    current_version = getattr(source, "_version", None)
-                    if current_version == version and not torch.equal(source, before):
+                    if not torch.equal(source, before):
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                         break
                 except (RuntimeError, TypeError, NotImplementedError):
