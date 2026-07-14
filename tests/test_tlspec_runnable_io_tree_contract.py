@@ -309,7 +309,7 @@ def test_bool_output_dict_key_stays_runnable(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# F5 -- numpy.float64 literal verifies on identical input, diverges on change
+# F5 -- numpy.float64 literal saves, loads, and verifies like a Python float
 # ---------------------------------------------------------------------------
 
 
@@ -320,27 +320,26 @@ class _Scale(nn.Module):
 
 @pytest.mark.smoke
 def test_numpy_float64_literal_identical_verifies_changed_diverges(tmp_path: Path) -> None:
-    """A ``numpy.float64`` op literal must not false-diverge on the identical input."""
+    """A ``numpy.float64`` op literal must save, load, and verify normally."""
 
     np = pytest.importorskip("numpy")
     model = _Scale()
     t = torch.tensor([1.0, 2.0, 3.0, 4.0])
     path = _save_runnable(model, [t, np.float64(2.0)], tmp_path / "np_scalar.tlspec")
 
-    # The raw numpy scalar op-arg lives in general trace metadata guarded by the
-    # foreign-class unpickler allowlist (owned by the parallel security fix), so
-    # loading admits it explicitly. The runnable descriptor itself is normalized.
-    identical = tl.load(path, trust_custom_callables=True).run(inputs=[t, np.float64(2.0)])
+    # NumPy scalar metadata is normalized before it reaches the bundle pickle,
+    # so the normal safe loader accepts the artifact without a trust opt-in.
+    identical = tl.load(path).run(inputs=[t, np.float64(2.0)])
     assert identical.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.allclose(identical.output, t * 2.0)
 
     # A plain float with the SAME value must also verify (value-equality across
     # numeric float subclasses).
-    plain = tl.load(path, trust_custom_callables=True).run(inputs=[t, 2.0])
+    plain = tl.load(path).run(inputs=[t, 2.0])
     assert plain.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     # A changed numeric value must still diverge honestly.
-    changed = tl.load(path, trust_custom_callables=True).run(
+    changed = tl.load(path).run(
         inputs=[t, np.float64(9.0)], on_divergence=DivergencePolicy.RETURN_DIVERGED
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
