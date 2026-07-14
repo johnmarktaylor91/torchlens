@@ -320,32 +320,52 @@ def test_r10_input_escape_original_still_verified(
 
 
 # --------------------------------------------------------------------------- #
-# R10-C1: a `.data` (unlabelled-alias) escape source cannot be attributed to any
-# source slot, so it cannot be digest-witnessed. The producer must fail honest
-# (INCOMPLETE -> UNVERIFIABLE), never leave completeness COMPLETE -> false VERIFIED.
+# R10-C1: a `.data` (unlabelled-alias) escape source has no source-op label, but
+# `_local_scalar_dense` extracts exactly one scalar. That value is recorded and
+# matched to the internal-sink op that produced it, which is witnessed value-free:
+# the changed input differs -> UNVERIFIABLE, the original stays VERIFIED. (A false
+# VERIFIED on the changed input is the tripwire; a spurious original downgrade is a
+# no-regression violation -- both are avoided.)
 # --------------------------------------------------------------------------- #
 class DataAliasScalarEscape(nn.Module):
-    """R10-C1: ``.data.item()`` reads an UNLABELLED alias -> census attributes nothing."""
+    """R10-C1: ``.data.item()`` reads an UNLABELLED alias -> census records its value."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x * (x.mean().data.item() * 3.0 + 1.0)
 
 
-def test_r10_data_alias_escape_is_unverifiable(tmp_path: Path) -> None:
-    # An unattributable escape is fail-closed on BOTH the original and the changed
-    # input: without a source slot the escaped value cannot be proven valid, so the
-    # honest ceiling is UNVERIFIABLE (never a false VERIFIED on the changed input).
-    from torchlens.backends.torch.completeness_witness import host_escape_has_unattributable
+def test_r10_data_alias_escape_records_value() -> None:
+    from torchlens.backends.torch.completeness_witness import host_escape_unattributable_values
 
     trace = tl.trace(DataAliasScalarEscape(), torch.tensor([2.0, 2.0]), capture=_CAPTURE)
-    assert host_escape_has_unattributable(trace), "census must flag the unlabelled .data escape"
+    # mean([2, 2]) == 2.0; the unlabelled .data escape records that scalar so the
+    # producer can witness the internal-sink op that produced it.
+    assert 2.0 in host_escape_unattributable_values(trace)
 
-    path = _save(DataAliasScalarEscape(), torch.tensor([2.0, 2.0]), tmp_path / "c.tlspec")
+
+def test_r10_data_alias_escape_changed_is_unverifiable(tmp_path: Path) -> None:
+    path = _save(
+        DataAliasScalarEscape(),
+        torch.tensor([2.0, 2.0]),
+        tmp_path / "c.tlspec",
+        include_activations=True,
+    )
     changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return_diverged")
     _assert_not_blessed(changed.report)
     assert not torch.allclose(changed.output, DataAliasScalarEscape()(torch.tensor([10.0, 10.0])))
-    original = tl.load(path).run(inputs=torch.tensor([2.0, 2.0]), on_divergence="return_diverged")
-    assert original.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+
+
+def test_r10_data_alias_escape_original_still_verified(tmp_path: Path) -> None:
+    path = _save(
+        DataAliasScalarEscape(),
+        torch.tensor([2.0, 2.0]),
+        tmp_path / "c.tlspec",
+        include_activations=True,
+    )
+    original = tl.load(path).run(inputs=torch.tensor([2.0, 2.0]))
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not original.report.poisoned
+    assert torch.allclose(original.output, DataAliasScalarEscape()(torch.tensor([2.0, 2.0])))
 
 
 # --------------------------------------------------------------------------- #

@@ -1502,21 +1502,30 @@ def _tensor_source_escape_witnesses(
         for slot_id in call.output_slot_ids:
             call_id_by_slot.setdefault(slot_id, call.call_id)
 
-    from ..backends.torch.completeness_witness import host_escape_has_unattributable
+    from ..backends.torch.completeness_witness import host_escape_unattributable_values
 
     ints, floats, sequences = _collect_baked_literal_values(calls)
+    # An UNLABELLED-source escape (a ``.data`` alias) leaves a scalar value but no
+    # source-op label. Treat those values exactly like baked literals so the
+    # internal-sink net witnesses the sink that produced them value-free (C1). This
+    # keeps the ORIGINAL input VERIFIED (byte-identical slot) while a changed input
+    # recomputes a different digest -> UNVERIFIABLE.
+    for escaped in host_escape_unattributable_values(trace):
+        if isinstance(escaped, bool):
+            continue
+        if isinstance(escaped, int):
+            ints.add(escaped)
+        elif isinstance(escaped, float):
+            floats.add(escaped)
     sequence_lengths = {len(item) for item in sequences}
     escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
 
     witnesses: list[ControlWitness] = []
     seen_slots: set[str] = set()
-    # Fail honest for any census escape that cannot be turned into a sound witness:
-    #  * unresolvable_escape -- an orphan-PRUNED tensor-op source chain (no slot);
-    #  * host_escape_has_unattributable -- an UNLABELLED source (``.data`` alias)
-    #    that the census could not attribute to any source slot.
-    # Either leaves an escaped value that cannot be proven valid on a changed input,
-    # so mark the witness set INCOMPLETE (-> UNVERIFIABLE) instead of false VERIFIED.
-    incomplete = unresolvable_escape or host_escape_has_unattributable(trace)
+    # Fail honest for an orphan-PRUNED census escape source (its raw tensor-op label
+    # never resolves to a final op): no witnessable slot -> INCOMPLETE (-> UNVERIFIABLE)
+    # instead of the pre-R10 silent drop that read false VERIFIED.
+    incomplete = unresolvable_escape
     for op in ops:
         is_input = bool(getattr(op, "is_input", False))
         is_output = bool(getattr(op, "is_output", False))
@@ -1617,6 +1626,7 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
     """
 
     from ..backends.torch.completeness_witness import (
+        host_escape_bool_source_labels,
         host_escape_source_labels,
         host_escape_state_source_labels,
     )
@@ -1625,6 +1635,7 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
     if not raw_labels:
         return frozenset(), False
     state_labels = host_escape_state_source_labels(trace)
+    bool_labels = host_escape_bool_source_labels(trace)
     raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
     final_labels: set[str] = set()
     unresolvable = False
@@ -1635,11 +1646,12 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
         final = raw_to_final.get(raw_label)
         if isinstance(final, str):
             final_labels.add(final)
-        elif raw_label not in state_labels:
+        elif raw_label not in state_labels and raw_label not in bool_labels:
             # An unresolved TENSOR-OP source is an orphan-pruned host-only chain with
             # no witnessable slot -> fail honest. An unresolved STATE source (a
-            # buffer/param read only on the host) is instead covered by the
-            # unbound-state net, so it must NOT close as a pruned tensor-op chain.
+            # buffer/param read only on the host) is covered by the unbound-state
+            # net, and an unresolved BOOL predicate by the control-witness / pruned-RNG
+            # nets, so neither closes as a pruned tensor-op chain here.
             unresolvable = True
     return frozenset(final_labels), unresolvable
 
