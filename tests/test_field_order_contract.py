@@ -41,6 +41,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         portable_only_fields=frozenset(
             {
                 "_buffer_initial_values",
+                "_buffer_persistence",
                 "ops_with_params",
             }
         ),

@@ -1428,18 +1428,17 @@ def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
     """Build a named buffer binding from a cooked source op.
 
     Persistence is defined by canonical ``state_dict`` membership. Registered
-    buffers excluded with ``persistent=False`` retain a buffer binding for
-    replay, but never claim or require a canonical state-dict key.
+    buffer membership is captured on the trace while the source model is alive,
+    so save-time classification never depends on weak-reference or GC state.
+    Buffers excluded with ``persistent=False`` retain a buffer binding for replay,
+    but never claim or require a canonical state-dict key.
     """
 
     address = getattr(op, "address", None)
     if not isinstance(address, str) or not address:
         return None
-    source_ref = getattr(trace, "_source_model_ref", None)
-    model = source_ref() if callable(source_ref) else None
-    state_dict_method = getattr(model, "state_dict", None)
-    state = state_dict_method() if callable(state_dict_method) else {}
-    persistent = isinstance(state, Mapping) and address in state
+    persistence = getattr(trace, "_buffer_persistence", {}) or {}
+    persistent = bool(persistence.get(address, False))
     module_path, _, name = address.rpartition(".")
     return StateSlotBinding(
         module_path=module_path or "self",
