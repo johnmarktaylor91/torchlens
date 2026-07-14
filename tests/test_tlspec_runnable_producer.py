@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import json
 from pathlib import Path
 import pickle
@@ -242,6 +243,9 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
         SparseProducerModel(),
         {"features": torch.arange(3, dtype=torch.float32).reshape(1, 3)},
     )
+    gc.collect()
+    assert trace._source_model_ref is not None
+    assert trace._source_model_ref() is None
     path = tmp_path / "sparse.tlspec"
 
     trace.save(path, level="runnable")
@@ -257,6 +261,10 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
     assert run["unsupported_sites"] == []
     assert run["payload_layers"] == {
         "weights": {"present": False, "schema": "state_dict_v1"},
+        "nonpersistent_buffers": {
+            "present": False,
+            "schema": "runnable_nonpersistent_buffer_v1",
+        },
         "activations": {"present": False, "schema": "selected_activation_v1"},
     }
 

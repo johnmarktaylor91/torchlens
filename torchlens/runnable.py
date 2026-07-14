@@ -440,6 +440,7 @@ class PayloadLayersDescriptor:
     """Independent optional payload-layer declarations."""
 
     weights: PayloadLayerDescriptor
+    nonpersistent_buffers: PayloadLayerDescriptor
     activations: PayloadLayerDescriptor | ActivationPayloadLayerDescriptor
 
 

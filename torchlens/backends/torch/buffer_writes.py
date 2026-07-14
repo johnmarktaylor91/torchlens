@@ -130,6 +130,7 @@ class BufferWriteTracker:
         model = self.model_ref()
         if model is None:
             return
+        persistent_state_names = frozenset(model.state_dict())
         for module_address, module in _iter_modules_with_addresses(model):
             for name, tensor in module.named_buffers(recurse=False):
                 if tensor is None or isinstance(tensor, nn.Parameter):
@@ -137,6 +138,8 @@ class BufferWriteTracker:
                 address = f"{module_address}.{name}" if module_address else name
                 set_buffer_address(tensor, address)
                 self.trace._buffer_initial_values.setdefault(address, _copy_tensor_value(tensor))
+                persistence = self.trace.__dict__.setdefault("_buffer_persistence", {})
+                persistence[address] = address in persistent_state_names
                 self._register_address(address, tensor, _copy_tensor_value(tensor))
 
     def record_reassignment(self, module: nn.Module, name: str, value: Any) -> None:

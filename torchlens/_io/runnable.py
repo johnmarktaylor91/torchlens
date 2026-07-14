@@ -256,6 +256,13 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         initializer_policy_version=RUNNABLE_INITIALIZER_POLICY_VERSION,
         payload_layers=PayloadLayersDescriptor(
             weights=PayloadLayerDescriptor(present=False, schema="state_dict_v1"),
+            nonpersistent_buffers=PayloadLayerDescriptor(
+                present=any(
+                    draft.state_binding is not None and not draft.state_binding.persistent
+                    for draft in slot_drafts.values()
+                ),
+                schema="runnable_nonpersistent_buffer_v1",
+            ),
             activations=PayloadLayerDescriptor(
                 present=False,
                 schema="selected_activation_v1",
@@ -547,7 +554,7 @@ def _build_op_slot_drafts(
             if output_path
             else (() if role is TensorSlotRole.OUTPUT else None),
             input_binding=input_binding,
-            state_binding=_buffer_binding(op) if role is TensorSlotRole.BUFFER else None,
+            state_binding=(_buffer_binding(trace, op) if role is TensorSlotRole.BUFFER else None),
             use_sites=[],
         )
     return drafts, slot_for_op
@@ -645,7 +652,11 @@ def _add_persistent_buffer_slot_drafts(
         if existing is not None:
             binding = existing.state_binding
             assert binding is not None
-            existing.state_binding = replace(binding, alias_group=alias_group)
+            existing.state_binding = replace(
+                binding,
+                persistent=True,
+                alias_group=alias_group,
+            )
             continue
         value = cast(torch.Tensor, state[name])
         module_path, separator, leaf_name = name.rpartition(".")
@@ -1413,19 +1424,28 @@ def _mark_inplace_versions(
                 draft.version_of = version_of
 
 
-def _buffer_binding(op: Any) -> StateSlotBinding | None:
-    """Build a named buffer binding from a cooked source op."""
+def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
+    """Build a named buffer binding from a cooked source op.
+
+    Persistence is defined by canonical ``state_dict`` membership. Registered
+    buffer membership is captured on the trace while the source model is alive,
+    so save-time classification never depends on weak-reference or GC state.
+    Buffers excluded with ``persistent=False`` retain a buffer binding for replay,
+    but never claim or require a canonical state-dict key.
+    """
 
     address = getattr(op, "address", None)
     if not isinstance(address, str) or not address:
         return None
+    persistence = getattr(trace, "_buffer_persistence", {}) or {}
+    persistent = bool(persistence.get(address, False))
     module_path, _, name = address.rpartition(".")
     return StateSlotBinding(
         module_path=module_path or "self",
         state_dict_name=address,
         semantic_role=_buffer_role(name or address),
         trainable=False,
-        persistent=True,
+        persistent=persistent,
         alias_group=None,
     )
 
