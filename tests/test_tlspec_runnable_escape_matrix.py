@@ -566,3 +566,155 @@ def test_identity_and_inplace_ops_run_without_false_mutation_mismatch(
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(factory(), cap_x, tmp_path).run(inputs=changed_x, seed=0)
     assert changed.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------------------
+# R13-H1: a genuine in-place op through an UNLABELLED ``.data`` alias mutates storage the
+# sparse DAG cannot model; the op is orphan-pruned and the write silently dropped. The run
+# must NEVER report VERIFIED with the mutation lost -- it is honestly UNVERIFIABLE on both the
+# original and a changed input. The whole in-place family (add_/mul_/copy_/masked_fill_) is
+# covered. A genuine in-place on a LABELLED alias stays VERIFIED (covered above).
+# --------------------------------------------------------------------------------------
+
+
+class _DataAliasAdd(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.add_(5.0)
+        return y * 2.0
+
+
+class _DataAliasMul(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.mul_(3.0)
+        return y * 2.0
+
+
+class _DataAliasCopy(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.copy_(torch.tensor([9.0, 9.0, 9.0, 9.0]))
+        return y * 2.0
+
+
+class _DataAliasMaskedFill(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.data.masked_fill_(torch.tensor([True, False, True, False]), 7.0)
+        return y * 2.0
+
+
+_DATA_ALIAS_MUTATION_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
+    ("data.add_", _DataAliasAdd),
+    ("data.mul_", _DataAliasMul),
+    ("data.copy_", _DataAliasCopy),
+    ("data.masked_fill_", _DataAliasMaskedFill),
+]
+
+
+@pytest.mark.parametrize(
+    "name,factory", _DATA_ALIAS_MUTATION_CELLS, ids=[c[0] for c in _DATA_ALIAS_MUTATION_CELLS]
+)
+def test_data_alias_inplace_mutation_is_never_verified_with_dropped_write(
+    name: str, factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """A dropped ``.data``-alias mutation is UNVERIFIABLE, never a false VERIFIED-with-wrong-output."""
+    cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
+    changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
+    for run_x in (cap_x, changed_x):
+        result = _save_load(factory(), cap_x.clone(), tmp_path).run(
+            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+        )
+        assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------------------
+# R13-H2: a host WRITE-BACK through a mutable zero-copy ``.numpy()`` / ``__array__`` alias
+# mutates the source bytes with no dispatch and no version bump, so the sparse replay
+# recomputes the pre-write value. The run must be UNVERIFIABLE (not a false VERIFIED) even on
+# the original input, while a READ-only conversion stays VERIFIED (no over-trigger).
+# --------------------------------------------------------------------------------------
+
+
+class _NumpyViewWriteBack(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        y.detach().numpy()[0] = 99.0
+        return y * 2.0
+
+
+class _ArrayViewWriteBack(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        np.asarray(y.detach())[0] = 99.0
+        return y * 2.0
+
+
+class _NumpyReadOnly(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        return y + float(y.detach().numpy().sum())
+
+
+@pytest.mark.parametrize(
+    "factory", [_NumpyViewWriteBack, _ArrayViewWriteBack], ids=["numpy", "__array__"]
+)
+def test_host_writeback_through_mutable_alias_is_never_verified(
+    factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """A host write-back through a mutable numpy/__array__ alias is UNVERIFIABLE on the original."""
+    x = torch.tensor([1.0, 0.5, 2.0, 0.25])
+    result = _save_load(factory(), x.clone(), tmp_path).run(
+        inputs=x.clone(), seed=0, on_divergence="return_diverged"
+    )
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+def test_readonly_numpy_escape_stays_verified_on_original(tmp_path: Path) -> None:
+    """A READ-only numpy conversion (no write-back) still VERIFIES on the original input."""
+    x = torch.tensor([1.0, 0.5, 2.0, 0.25])
+    result = _save_load(_NumpyReadOnly(), x.clone(), tmp_path).run(inputs=x.clone(), seed=0)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------------------
+# R13-H3: ``torch.utils.dlpack.to_dlpack`` == ``torch._C._to_dlpack`` is a C binding that
+# bypasses the ``Tensor.__dlpack__`` method patch. Its exported tensor VALUE can be baked into
+# a downstream literal, so the module function must be observed as a host escape: a changed
+# input whose exported source differs is never VERIFIED.
+# --------------------------------------------------------------------------------------
+
+
+class _DlpackCapsuleShim:
+    # Wrap the raw capsule so np.from_dlpack accepts it (pure host code, no dispatch).
+    def __init__(self, capsule: object) -> None:
+        self._capsule = capsule
+
+    def __dlpack__(self, **kwargs: object) -> object:
+        return self._capsule
+
+    def __dlpack_device__(self) -> tuple[int, int]:
+        return (1, 0)
+
+
+class _ToDlpackExport(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + 1.0
+        capsule = torch.utils.dlpack.to_dlpack(y.detach())
+        arr = np.from_dlpack(_DlpackCapsuleShim(capsule))
+        return x + float(arr.sum())
+
+
+def test_to_dlpack_c_binding_export_is_witnessed_as_escape(tmp_path: Path) -> None:
+    """``to_dlpack`` (C binding) is observed as a host escape: a changed input is never VERIFIED."""
+    cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
+    changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
+    original = _save_load(_ToDlpackExport(), cap_x.clone(), tmp_path).run(
+        inputs=cap_x.clone(), seed=0, on_divergence="return_diverged"
+    )
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
+    changed = _save_load(_ToDlpackExport(), cap_x.clone(), tmp_path).run(
+        inputs=changed_x.clone(), seed=0, on_divergence="return_diverged"
+    )
+    assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
