@@ -112,3 +112,55 @@ def test_partition_duplicate_and_missing_are_rejected() -> None:
     duplicate = deepcopy(record)
     with pytest.raises(PartitionError):
         assert_partition(["m_example", "m_missing"], [record, duplicate])
+
+
+def test_stale_rung_check_and_pending_metadata_cannot_bypass_run_gate(
+    tmp_path: Path,
+) -> None:
+    """A run always needs a current rung decision, independent of metadata state."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(make_attempt())
+        stale_rung = make_model(accepted=True)
+        stale_rung["source_resolution"]["rung"] = "R2_VENDOR"
+        with pytest.raises(ReductionError, match="anti-slop/rung"):
+            reducer.append_model(stale_rung)
+
+    pending_paths = _paths(tmp_path / "pending")
+    with CanonicalReducer(pending_paths, stable_ids) as reducer:
+        reducer.append_attempt(make_attempt())
+        with pytest.raises(ReductionError, match="anti-slop/rung"):
+            reducer.append_model(make_model(accepted=False))
+
+
+def test_family_template_true_is_verified_against_representative(tmp_path: Path) -> None:
+    """A written true cannot conceal changed family prose."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_rep", "m_variant", *(f"m_{index}" for index in range(8))]
+    representative = make_model("m_rep", accepted=True, attempt_id="attempt-rep")
+    representative_attempt = make_attempt("m_rep", attempt_id="attempt-rep")
+    variant = make_model("m_variant", accepted=True, attempt_id="attempt-variant")
+    variant_attempt = make_attempt("m_variant", attempt_id="attempt-variant")
+    variant_attempt.pop("ledger_seq")
+    variant_attempt.pop("payload_sha256")
+    variant["identity"]["family_representative_id"] = "m_rep"
+    variant["website"].update(
+        {
+            "kind": "size-variant-template",
+            "template_source_model_id": "m_rep",
+            "variant_parameter_input_line": "2 parameters; input [1, 3, 8, 8]",
+            "template_hash": "sha256:" + "f" * 64,
+            "description": "silently altered family prose",
+        }
+    )
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(representative_attempt)
+        reducer.append_attempt(variant_attempt)
+        reducer.append_model(representative)
+        with pytest.raises(ReductionError, match="family template validation failed"):
+            reducer.append_model(variant)

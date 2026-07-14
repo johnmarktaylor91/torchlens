@@ -121,7 +121,19 @@ def make_attempt(
             "forward_completed": True,
             "mode": mode,
             "input_signature": {"shape": [1, 3, 8, 8]},
-            "output_signature": {"shape": [1, 2]},
+            "output_signature": {
+                "tree": {"leaf": 0},
+                "leaves": [
+                    {
+                        "path": "output",
+                        "kind": "tensor",
+                        "shape": [1, 2],
+                        "dtype": "float32",
+                        "device": "cpu",
+                        "python_type": "torch.Tensor",
+                    }
+                ],
+            },
             "input_kind": "standard-image",
             "input_asset": "asset:test",
             "input_note": "canonical test image",
@@ -204,7 +216,7 @@ def make_gate(
                     "proposal": HASH,
                     "source_manifest": HASH,
                     "evidence": HASH,
-                    "code": HASH,
+                    "code": None,
                     "source_to_code_map": HASH,
                     "family_template": None,
                 },

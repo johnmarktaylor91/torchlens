@@ -189,34 +189,77 @@ def _parameter_counts(model: object) -> tuple[Optional[int], Optional[int]]:
     return (total, trainable)
 
 
-def _input_signature(materialized: MaterializedInput) -> dict[str, Any]:
-    """Describe the standard input without retaining payload values.
+def _input_signature(args: tuple[object, ...], kwargs: Mapping[str, object]) -> dict[str, Any]:
+    """Describe a complete typed dummy call without retaining payload values.
 
     Parameters
     ----------
-    materialized:
-        Built standard or fallback input.
+    args, kwargs:
+        Exact positional and keyword arguments returned by the typed contract.
 
     Returns
     -------
     dict[str, Any]
-        Shape, dtype, device, and pytree location.
+        Shape, dtype, device, and complete pytree location.
     """
 
-    value = materialized.value
-    return {
-        "tree": {"tuple": [{"leaf": 0}]},
-        "leaves": [
-            {
-                "path": "args[0]",
-                "kind": "tensor",
-                "shape": list(materialized.spec.shape),
-                "dtype": str(getattr(value, "dtype", materialized.spec.dtype)),
-                "device": str(getattr(value, "device", "")) or None,
-                "python_type": f"{type(value).__module__}.{type(value).__qualname__}",
-            }
-        ],
-    }
+    return output_signature({"args": args, "kwargs": dict(kwargs)}, path="input")
+
+
+def _materialize_dummy_call(
+    loaded: LoadedRecipe, request: WorkerRequest
+) -> tuple[tuple[object, ...], dict[str, object], str, Optional[str], str]:
+    """Execute the typed input contract or build a declarative standard call.
+
+    Parameters
+    ----------
+    loaded:
+        Validated executable recipe.
+    request:
+        Complete worker request.
+
+    Returns
+    -------
+    tuple
+        Args, kwargs, input kind, optional asset, and provenance note.
+
+    Raises
+    ------
+    TypeError
+        If ``make_dummy_call`` violates its typed return contract.
+    """
+
+    if loaded.make_dummy_call is not None:
+        value = loaded.make_dummy_call(request.seed, request.device)
+        if not isinstance(value, tuple) or len(value) != 2:
+            raise TypeError("make_dummy_call must return exactly (args, kwargs)")
+        args, kwargs = value
+        if not isinstance(args, tuple):
+            raise TypeError("make_dummy_call args must be a tuple")
+        if not isinstance(kwargs, dict) or not all(isinstance(key, str) for key in kwargs):
+            raise TypeError("make_dummy_call kwargs must be a string-keyed dict")
+        return (
+            args,
+            kwargs,
+            "standard-typed-dummy-call",
+            None,
+            "typed make_dummy_call(seed, device)",
+        )
+
+    materialized: MaterializedInput = materialize_standard_input(
+        request.modality,
+        request.input_spec,
+        framework=request.framework,
+        device=request.device,
+        seed=request.seed,
+    )
+    return (
+        materialized.args,
+        materialized.kwargs,
+        materialized.input_kind,
+        materialized.input_asset,
+        materialized.input_note,
+    )
 
 
 def _set_mode(model: object, mode: RunMode) -> None:
@@ -285,7 +328,11 @@ def _native_metadata(model: object, framework: str) -> tuple[str, str]:
 
 def _mode_receipt(
     model: object,
-    materialized: MaterializedInput,
+    args: tuple[object, ...],
+    kwargs: Mapping[str, object],
+    input_kind: str,
+    input_asset: Optional[str],
+    input_note: str,
     mode: RunMode,
     framework: str,
     constructor_seconds: float,
@@ -296,8 +343,10 @@ def _mode_receipt(
     ----------
     model:
         Constructed native model.
-    materialized:
-        Shared standard input.
+    args, kwargs:
+        Shared complete dummy call.
+    input_kind, input_asset, input_note:
+        Mechanically observed dummy-call provenance.
     mode:
         Explicit runtime mode.
     framework:
@@ -320,10 +369,10 @@ def _mode_receipt(
         "constructor_completed": True,
         "constructor_seconds": constructor_seconds,
         "input_completed": True,
-        "input_signature": _input_signature(materialized),
-        "input_kind": materialized.input_kind,
-        "input_asset": materialized.input_asset,
-        "input_note": materialized.input_note,
+        "input_signature": _input_signature(args, kwargs),
+        "input_kind": input_kind,
+        "input_asset": input_asset,
+        "input_note": input_note,
         "forward_started": False,
         "forward_completed": False,
         "forward_seconds": None,
@@ -341,7 +390,7 @@ def _mode_receipt(
             raise TypeError("constructed model does not expose a callable forward attribute")
         receipt["forward_started"] = True
         with _inference_context(framework):
-            output = forward(*materialized.args, **materialized.kwargs)
+            output = forward(*args, **dict(kwargs))
         receipt["forward_seconds"] = time.monotonic() - started
         receipt["forward_completed"] = True
         receipt["output_signature"] = output_signature(output)
@@ -419,6 +468,8 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
         "constructor_completed": False,
         "input_completed": False,
         "per_mode": {},
+        "declared_meaningful_modes": [],
+        "detected_meaningful_modes": [],
         "meaningful_modes": [],
         "train_eval_divergence": None,
         "divergence_evidence": None,
@@ -436,22 +487,29 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             model = loaded.build_model()
             constructor_seconds = time.monotonic() - constructor_started
             base["constructor_completed"] = True
-            materialized = materialize_standard_input(
-                request.modality,
-                request.input_spec,
-                framework=request.framework,
-                device=request.device,
-                seed=request.seed,
+            args, kwargs, input_kind, input_asset, input_note = _materialize_dummy_call(
+                loaded, request
             )
             base["input_completed"] = True
-            modes = request.meaningful_modes or (RunMode.TRAIN, RunMode.EVAL)
-            if not modes:
-                modes = detect_meaningful_modes(model)
+            declared = request.meaningful_modes or ()
+            detected = detect_meaningful_modes(model)
+            mode_set = set(declared) | set(detected)
+            modes = tuple(mode for mode in (RunMode.TRAIN, RunMode.EVAL) if mode in mode_set)
+            base["declared_meaningful_modes"] = [mode.value for mode in declared]
+            base["detected_meaningful_modes"] = [mode.value for mode in detected]
             base["meaningful_modes"] = [mode.value for mode in modes]
             outputs: dict[str, object] = {}
             for mode in modes:
                 receipt, output = _mode_receipt(
-                    model, materialized, mode, request.framework, constructor_seconds
+                    model,
+                    args,
+                    kwargs,
+                    input_kind,
+                    input_asset,
+                    input_note,
+                    mode,
+                    request.framework,
+                    constructor_seconds,
                 )
                 base["per_mode"][mode.value] = receipt
                 if output is not None:

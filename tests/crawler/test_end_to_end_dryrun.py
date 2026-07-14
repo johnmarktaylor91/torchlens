@@ -64,8 +64,10 @@ def _assert_receipt_observations(campaign_root: Path, stable_id_to_name: Mapping
         assert receipt["awards_runs"] is False
         assert set(receipt["per_mode"]) == {"train", "eval"}
         assert all(mode["forward_completed"] for mode in receipt["per_mode"].values())
-        expected_input = "random-fallback" if name == "DryRunMLP" else "standard-image"
-        assert all(mode["input_kind"] == expected_input for mode in receipt["per_mode"].values())
+        assert all(
+            mode["input_kind"] == "standard-typed-dummy-call"
+            for mode in receipt["per_mode"].values()
+        )
         assert receipt["train_eval_divergence"] == expected[name].divergence
     item_counts = {
         name: sum(item_name == name for item_name, _variant in DRY_RUN_ITEMS)
@@ -160,8 +162,7 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
         assert record["revised_by"] == {"actor": "driver"}
         assert record["modes"]["train_eval_divergence"] == case.divergence
         assert set(record["modes"]["per_mode_run"]) == {"train", "eval"}
-        expected_input = "random-fallback" if case.name == "DryRunMLP" else "standard-image"
-        assert record["observed"]["input_kind"] == expected_input
+        assert record["observed"]["input_kind"] == "standard-typed-dummy-call"
         assert record["accuracy_gate"]["verdict"] == "accurate"
     structural_id = next(
         stable_id

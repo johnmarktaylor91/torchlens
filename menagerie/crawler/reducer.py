@@ -13,6 +13,7 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION,
     TERMINAL_STATUS_CODES,
 )
+from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
 from menagerie.crawler.models import AppendResult, JsonObject, LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError
 from menagerie.crawler.state import _select_current
@@ -235,6 +236,7 @@ class CanonicalReducer:
         self._validate_status(candidate)
         self._validate_source(candidate)
         self._validate_gates(candidate)
+        self._validate_family_template(candidate)
         self._validate_deferral(candidate)
         self._validate_execution(candidate)
         try:
@@ -345,6 +347,25 @@ class CanonicalReducer:
 
         stable_id = str(model["stable_id"])
         accuracy = model.get("accuracy_gate", {})
+        rung = model.get("source_resolution", {}).get("rung")
+        status_kind = model.get("status", {}).get("kind")
+        rung_gate_current = False
+        rung_found = self._gate_item(accuracy.get("gate_id"), stable_id)
+        if rung_found is not None:
+            rung_gate, rung_item = rung_found
+            rung_check = rung_item.get("rung_check")
+            verified_hashes = rung_item.get("verified_hashes", {})
+            rung_gate_current = bool(
+                rung_gate.get("gate_kind") == "metadata_batch"
+                and rung_item.get("vet_identity") == accuracy.get("vet_identity")
+                and isinstance(rung_check, Mapping)
+                and rung_check.get("selected_rung") == rung
+                and rung_check.get("verdict") == "accurate"
+                and verified_hashes.get("code")
+                == model.get("implementation", {}).get("code_sha256")
+            )
+        if status_kind == "runs" and not rung_gate_current:
+            raise ReductionError("runs requires a current identity-tight anti-slop/rung check gate")
         if model.get("authored_metadata_state") == "accepted":
             found = self._gate_item(accuracy.get("gate_id"), stable_id)
             if found is None:
@@ -358,15 +379,16 @@ class CanonicalReducer:
                 or item["verdict"] != "accurate"
                 or item["integrity"]["verdict"] != "accurate"
                 or not isinstance(rung_check, Mapping)
+                or rung_check.get("selected_rung") != rung
                 or rung_check.get("verdict") != "accurate"
                 or accuracy.get("verdict") != "accurate"
                 or not accuracy.get("current")
+                or gate.get("checker", {}).get("prompt_sha256") != accuracy.get("prompt_sha256")
             ):
                 raise ReductionError(
                     "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
                 )
         fidelity = model.get("fidelity", {})
-        rung = model.get("source_resolution", {}).get("rung")
         required = bool(fidelity.get("required")) or rung in {"R3_PORT", "R4_REIMPLEMENT"}
         if required:
             found = self._gate_item(fidelity.get("gate_id"), stable_id)
@@ -390,7 +412,11 @@ class CanonicalReducer:
                 else {"match", "minor-drift"}
             )
             rung_accepted = isinstance(rung_check, Mapping) and (
-                rejected_terminal or rung_check.get("verdict") == "accurate"
+                rejected_terminal
+                or (
+                    rung_check.get("verdict") == "accurate"
+                    and rung_check.get("selected_rung") == rung
+                )
             )
             if (
                 item.get("fidelity_identity") != fidelity.get("fidelity_identity")
@@ -402,6 +428,30 @@ class CanonicalReducer:
                 raise ReductionError(
                     "required fidelity gate is stale, unacceptable, or has a blocked rung check"
                 )
+
+    def _validate_family_template(self, model: Mapping[str, Any]) -> None:
+        """Mechanically compare a claimed size variant with its representative."""
+
+        if not model.get("completeness", {}).get("family_template_valid"):
+            return
+        website = model.get("website")
+        if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
+            return
+        representative_id = model.get("identity", {}).get("family_representative_id")
+        representative = self._current.get(str(representative_id))
+        representative_website = (
+            representative.get("website") if isinstance(representative, Mapping) else None
+        )
+        if not isinstance(representative_website, Mapping):
+            raise ReductionError("family variant has no accepted current representative")
+        try:
+            validate_size_variant(
+                representative_website,
+                website,
+                str(representative_id),
+            )
+        except FamilyTemplateError as exc:
+            raise ReductionError(f"family template validation failed: {exc}") from exc
 
     def _validate_execution(self, model: Mapping[str, Any]) -> None:
         """Enforce attempt/receipt and meaningful-mode rules for run awards.
@@ -427,6 +477,44 @@ class CanonicalReducer:
         attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
         accepted = set(execution.get("accepted_attempt_ids", []))
         stable_id = model["stable_id"]
+        signatures: dict[str, list[Any]] = {mode: [] for mode in meaningful}
+        counts: dict[str, int] = {mode: 0 for mode in meaningful}
+        accepted_work_ids: set[str] = set()
+        implementation = model.get("implementation", {})
+        evidence = model.get("evidence", {})
+        for attempt_id in accepted:
+            attempt = attempts_by_id.get(attempt_id)
+            if attempt is None:
+                raise ReductionError("accepted execution attempt is missing")
+            accepted_work_ids.add(str(attempt.get("work_id")))
+            identities = attempt.get("identities", {})
+            if (
+                identities.get("recipe") != implementation.get("recipe_revision")
+                or identities.get("evidence") != evidence.get("evidence_identity")
+                or identities.get("environment") != execution.get("env_generation")
+            ):
+                raise ReductionError("accepted attempt identities are stale for the current model")
+            mode = str(attempt.get("mode"))
+            receipt = attempt.get("worker_receipt", {})
+            observation = attempt.get("supervisor_observation", {})
+            signature = receipt.get("output_signature")
+            if (
+                mode not in meaningful
+                or attempt.get("result") != "succeeded"
+                or observation.get("exit_code") != 0
+                or observation.get("signal") is not None
+                or not isinstance(signature, Mapping)
+                or "tree" not in signature
+                or not isinstance(signature.get("leaves"), list)
+            ):
+                raise ReductionError("accepted attempt lacks a complete zero-exit receipt")
+            counts[mode] += 1
+            signatures[mode].append(signature)
+        if len(accepted_work_ids) != 1:
+            raise ReductionError("accepted attempts span multiple proposal work identities")
+        rung_gate = self._gate_item(model.get("accuracy_gate", {}).get("gate_id"), str(stable_id))
+        if rung_gate is None or str(rung_gate[1].get("work_id")) not in accepted_work_ids:
+            raise ReductionError("anti-slop/rung gate is stale for the accepted work identity")
         for mode in meaningful:
             reference = per_mode[mode]
             attempt_id = reference.get("attempt_id")
@@ -460,10 +548,17 @@ class CanonicalReducer:
         rung = model.get("source_resolution", {}).get("rung")
         confirmation_policy = execution.get("confirmation_policy")
         if rung in {"R3_PORT", "R4_REIMPLEMENT"}:
-            if confirmation_policy != "two-cold-r3-r4" or len(accepted) < 2:
+            if confirmation_policy != "two-cold-r3-r4" or any(
+                counts[mode] < 2 for mode in meaningful
+            ):
                 raise ReductionError("R3/R4 runs require two cold accepted attempts")
         elif confirmation_policy == "two-cold-r3-r4":
             raise ReductionError("R1/R2 runs cannot claim the R3/R4 confirmation policy")
+        if any(
+            any(signature != mode_signatures[0] for signature in mode_signatures[1:])
+            for mode_signatures in signatures.values()
+        ):
+            raise ReductionError("cold-run output tree/shape/dtype signatures do not match")
 
     def _validate_deferral(self, model: Mapping[str, Any]) -> None:
         """Require positive source/probe evidence for either closed platform deferral.

@@ -17,7 +17,12 @@ from menagerie.crawler.driver import (
     SupervisedForwardLane,
     WorkItem,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
+from menagerie.crawler.identity import (
+    canonical_json_bytes,
+    compute_recipe_revision,
+    hash_bytes,
+    stable_hash,
+)
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.tests.conftest import NOW
@@ -216,6 +221,13 @@ class TinyModelAuthor(FakeAuthor):
                 "library_recipe": None,
             }
         )
+        recipe_revision = compute_recipe_revision(
+            {"recipe_type": "typed-adapter", "path": adapter_path.name},
+            str(proposal["source_identity"]),
+            adapter_bytes=adapter_bytes,
+        )
+        proposal["recipe_revision"] = recipe_revision
+        implementation["recipe_revision"] = recipe_revision
         contract = facts["input_contract"]
         contract["code_path"] = "adapter.py"
         contract["args"][0].update(

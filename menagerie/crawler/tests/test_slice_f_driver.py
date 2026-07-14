@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -10,29 +11,45 @@ from typing import Any, Mapping, Optional, Sequence
 
 import pytest
 
+import menagerie.crawler.driver as driver_module
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
 from menagerie.crawler.constants import (
     CheckerPauseReason,
+    EnvironmentPhase,
 )
 from menagerie.crawler.driver import (
     AuthorArtifact,
     AuthorLane,
     CheckerLane,
     CheckerOutcome,
+    CommandAuthorLane,
     CommandNotifier,
     CrawlerDriver,
     DriverConfig,
     DriverDependencies,
+    DriverIntegrationError,
     DriverPaths,
     EnvironmentLane,
+    EnvironmentBinding,
     ForwardLane,
     Notifier,
     UsagePauseScheduler,
     WorkItem,
+    _execution_identity,
+    _environment_binding,
+    _runner_identity,
+    _supervise_environment_worker,
 )
-from menagerie.crawler.envs import EnvironmentIntent, load_environment_registry
+from menagerie.crawler.envs import (
+    EnvironmentIntent,
+    IntentProbes,
+    LockArtifacts,
+    load_environment_registry,
+)
 from menagerie.crawler.env_lifecycle import EnvironmentProbeError
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
+from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
@@ -51,6 +68,7 @@ from menagerie.crawler.wakeup import (
     WakeupBackend,
     WakeupManager,
 )
+from menagerie.crawler.worker_supervisor import SupervisorObservation
 
 
 class InjectedKill(RuntimeError):
@@ -166,6 +184,20 @@ class FakeChecker(CheckerLane):
         gate.pop("ledger_seq", None)
         gate.pop("payload_sha256", None)
         for item in gate["items"]:
+            artifact = next(
+                value for value in artifacts if value.proposal["stable_id"] == item["stable_id"]
+            )
+            proposal = artifact.proposal
+            item["work_id"] = proposal["work_id"]
+            item["vet_identity"] = proposal["vet_identity"]
+            item["fidelity_identity"] = None
+            item["verified_hashes"] = {
+                "proposal": proposal["proposal_sha256"],
+                **proposal["verified_hashes"],
+            }
+            item["rung_check"]["selected_rung"] = proposal["proposed_facts"]["source_resolution"][
+                "rung"
+            ]
             item["field_checks"] = [
                 {
                     "field": f"external_metadata.{field}",
@@ -195,6 +227,16 @@ class FakeChecker(CheckerLane):
         )
         gate.pop("ledger_seq", None)
         gate.pop("payload_sha256", None)
+        item = gate["items"][0]
+        item["work_id"] = artifact.proposal["work_id"]
+        item["vet_identity"] = artifact.proposal["vet_identity"]
+        item["verified_hashes"] = {
+            "proposal": artifact.proposal["proposal_sha256"],
+            **artifact.proposal["verified_hashes"],
+        }
+        item["rung_check"]["selected_rung"] = artifact.proposal["proposed_facts"][
+            "source_resolution"
+        ]["rung"]
         return CheckerOutcome(gate=gate)
 
 
@@ -221,15 +263,16 @@ class FakeForward(ForwardLane):
     def forward(
         self,
         artifact: AuthorArtifact,
-        environment_prefix: Path,
+        environment: EnvironmentBinding,
         cold_runs: int,
         work_root: Path,
     ) -> Sequence[Mapping[str, Any]]:
         """Build clean train/eval attempts with complete model output signatures."""
 
-        del environment_prefix, work_root
+        del work_root
         stable_id = str(artifact.proposal["stable_id"])
         self.calls[stable_id] = self.calls.get(stable_id, 0) + 1
+        execution_identity = _execution_identity(artifact.proposal, environment)
         output_signature = make_model()["observed"]["output_signature"]
         attempts: list[dict[str, Any]] = []
         attempt_no = 0
@@ -238,13 +281,34 @@ class FakeForward(ForwardLane):
                 attempt_no += 1
                 attempt = make_attempt(
                     stable_id,
-                    attempt_id=f"attempt-{stable_id}-{cold}-{mode}",
+                    attempt_id=(f"attempt-{stable_id}-{execution_identity[7:19]}-{cold}-{mode}"),
                     mode=mode,
                 )
                 attempt["attempt_no"] = attempt_no
                 attempt.pop("ledger_seq", None)
                 attempt.pop("payload_sha256", None)
                 attempt["worker_receipt"]["output_signature"] = output_signature
+                attempt["identities"].update(
+                    {
+                        "source": artifact.proposal["source_identity"],
+                        "evidence": artifact.proposal["evidence_identity"],
+                        "recipe": artifact.proposal["recipe_revision"],
+                        "environment": environment.env_generation,
+                        "execution": execution_identity,
+                        "runner": _runner_identity(),
+                        "author_prompt": artifact.proposal["author"]["prompt_sha256"],
+                    }
+                )
+                attempt["environment"].update(
+                    {
+                        "family": environment.family,
+                        "target": environment.target,
+                        "env_id": str(environment.prefix),
+                        "lock_sha256": environment.lock_sha256,
+                        "resolved_export_sha256": environment.resolved_export_sha256,
+                        "packages_manifest_sha256": environment.packages_manifest_sha256,
+                    }
+                )
                 attempts.append(attempt)
         return attempts
 
@@ -261,15 +325,14 @@ class OneModelForwardFailure(FakeForward):
     def forward(
         self,
         artifact: AuthorArtifact,
-        environment_prefix: Path,
+        environment: EnvironmentBinding,
         cold_runs: int,
         work_root: Path,
     ) -> Sequence[Mapping[str, Any]]:
         """Return complete attempts, changing one mode to a schema-valid failure."""
 
         attempts = [
-            dict(value)
-            for value in super().forward(artifact, environment_prefix, cold_runs, work_root)
+            dict(value) for value in super().forward(artifact, environment, cold_runs, work_root)
         ]
         stable_id = str(artifact.proposal["stable_id"])
         if stable_id != self.failed_id:
@@ -330,6 +393,24 @@ class FidelityAuthor(FakeAuthor):
                 "gate_id": None,
                 "current": False,
             }
+        )
+        return artifact
+
+
+class ChangedInputAuthor(FakeAuthor):
+    """Return a new source/input-bound recipe generation for resume tests."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Change source, recipe, and dummy-input dependencies together."""
+
+        artifact = super().author(item, work_root, config)
+        artifact.proposal["source_identity"] = "sha256:" + "b" * 64
+        artifact.proposal["recipe_revision"] = "sha256:" + "c" * 64
+        facts = artifact.proposal["proposed_facts"]
+        facts["implementation"]["recipe_revision"] = artifact.proposal["recipe_revision"]
+        facts["input_contract"]["args"][0]["shape"] = [1, 3, 9, 9]
+        artifact.proposal["proposal_sha256"] = stable_hash(
+            {key: value for key, value in artifact.proposal.items() if key != "proposal_sha256"}
         )
         return artifact
 
@@ -504,6 +585,176 @@ def _paths(tmp_path: Path, snapshot: IntakeSnapshot) -> DriverPaths:
     )
 
 
+def _test_environment(prefix: Path) -> EnvironmentBinding:
+    """Build exact synthetic byte identities for a fake active environment."""
+
+    return EnvironmentBinding(
+        prefix=prefix,
+        python_executable=Path(sys.executable),
+        family="core",
+        target="test",
+        env_generation=HASH,
+        lock_sha256=HASH,
+        resolved_export_sha256=HASH,
+        packages_manifest_sha256=HASH,
+        python_version="3.11",
+        compiler_identity="test-compiler",
+        sdk_identity="test-sdk",
+    )
+
+
+def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Runtime provenance and sandbox argv use the verified environment itself."""
+
+    lock_bytes = b"exact lock bytes"
+    export_bytes = b"exact resolved export bytes"
+    package_bytes = b'{"packages":["torch==test"]}'
+    lock_path = tmp_path / "target.lock"
+    export_path = tmp_path / "target.resolved.json"
+    lock_path.write_bytes(lock_bytes)
+    export_path.write_bytes(export_bytes)
+    prefix = tmp_path / "env-prefix"
+    (prefix / "bin").mkdir(parents=True)
+    (prefix / "bin" / "python").symlink_to(Path(sys.executable))
+    (prefix / "packages-manifest.json").write_bytes(package_bytes)
+    intent = EnvironmentIntent(
+        name="core",
+        phase=EnvironmentPhase.PYTORCH,
+        framework="pytorch",
+        description="test",
+        split_guidance="test",
+        channels=("conda-forge",),
+        dependencies=("python",),
+        probes=IntentProbes((), (), ()),
+        lock=LockArtifacts(
+            target="linux-64",
+            lock_path=lock_path,
+            export_path=export_path,
+            export_hash_path=tmp_path / "target.sha256",
+            lock_bytes=lock_bytes,
+            export_bytes=export_bytes,
+            declared_export_hash=hash_bytes(export_bytes),
+        ),
+        generation=None,
+    )
+    binding = _environment_binding(intent, prefix, strict=True)
+    assert binding.lock_sha256 == hash_bytes(lock_bytes)
+    assert binding.resolved_export_sha256 == hash_bytes(export_bytes)
+    assert binding.packages_manifest_sha256 == hash_bytes(package_bytes)
+
+    receipt_path = tmp_path / "result" / "receipt.json"
+    captured: list[str] = []
+
+    def fake_isolated(argv: Sequence[str], scratch_root: Path, **kwargs: Any) -> Any:
+        """Capture sandbox input and publish one self-hashed receipt."""
+
+        del scratch_root, kwargs
+        captured.extend(argv)
+        payload = {"receipt_version": "test"}
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_text(
+            json.dumps({**payload, "receipt_sha256": stable_hash(payload)}),
+            encoding="utf-8",
+        )
+        return SupervisorObservation(
+            argv=tuple(argv),
+            cwd=str(tmp_path),
+            exit_code=0,
+            signal_number=None,
+            wall_seconds=0.1,
+            cpu_seconds=0.1,
+            peak_rss_bytes=1,
+            timed_out=False,
+            rss_exceeded=False,
+            stdout_sha256=hash_bytes(b""),
+            stdout_bytes=0,
+            stdout_tail="",
+            stderr_sha256=hash_bytes(b""),
+            stderr_bytes=0,
+            stderr_tail="",
+            stdout_path=str(tmp_path / "stdout"),
+            stderr_path=str(tmp_path / "stderr"),
+        )
+
+    monkeypatch.setattr(driver_module, "run_isolated_subprocess", fake_isolated)
+    result = _supervise_environment_worker(
+        tmp_path / "request.json",
+        receipt_path,
+        tmp_path / "supervisor",
+        binding.python_executable,
+        timeout_seconds=1,
+        rss_limit_bytes=1024,
+        cwd=tmp_path,
+    )
+    assert result.receipt_error is None
+    assert captured[0] == str(prefix / "bin" / "python")
+
+
+def test_author_source_handshake_freezes_nonempty_cas_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Author pins are controlled-fetched before the evidence envelope is frozen."""
+
+    snapshot = _snapshot(tmp_path)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    content = b"ExampleNet is a source-grounded architecture."
+    digest = hash_bytes(content)
+
+    def fake_run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Write the author-requested exact source target."""
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        output = Path(request["required_output_path"])
+        output.write_text(
+            json.dumps(
+                {
+                    "sources": [
+                        {
+                            "source_id": "source-1",
+                            "url": "https://example.com/model.txt",
+                            "revision": "v1",
+                            "expected_sha256": digest,
+                            "media_type": "text/plain",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    monkeypatch.setattr(driver_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        driver_module,
+        "fetch_targets",
+        lambda targets, root: controlled_fetch_targets(
+            targets, root, fetch_bytes=lambda _url: content
+        ),
+    )
+    lane = CommandAuthorLane(("fake-author",))
+    manifest = lane._fetch_author_sources(item, tmp_path / "author")
+    assert manifest["sources"]
+    assert Path(manifest["sources"][0]["cas_path"]).read_bytes() == content
+
+    def empty_run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Write an invalid empty author source request."""
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        Path(request["required_output_path"]).write_text(
+            json.dumps({"sources": []}), encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    monkeypatch.setattr(driver_module.subprocess, "run", empty_run)
+    with pytest.raises(DriverIntegrationError, match="at least one pinned source"):
+        lane._fetch_author_sources(item, tmp_path / "empty-author")
+
+
 def _driver(
     tmp_path: Path,
     snapshot: IntakeSnapshot,
@@ -576,6 +827,36 @@ def test_resume_is_lock_safe_and_duplicate_free_at_critical_boundaries(
     assert len(scan_jsonl(paths.ledgers.gates)) == 1
 
 
+def test_changed_source_and_input_supersede_run_and_force_reexecution(tmp_path: Path) -> None:
+    """Stable-ID membership cannot reuse a run after dependent bytes change."""
+
+    snapshot = _snapshot(tmp_path)
+    first_forward = FakeForward()
+    first = _driver(tmp_path, snapshot, forward=first_forward).run()
+    assert first.status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    first_models = {record["stable_id"]: record for record in scan_jsonl(paths.ledgers.models)}
+    for item in snapshot.items:
+        (paths.work_root / item.stable_id / "driver-author-artifact.json").unlink()
+
+    second_forward = FakeForward()
+    second = _driver(
+        tmp_path,
+        snapshot,
+        author=ChangedInputAuthor(),
+        forward=second_forward,
+    ).run()
+
+    assert second.status == "complete"
+    assert set(second_forward.calls) == {item.stable_id for item in snapshot.items}
+    revisions = scan_jsonl(paths.ledgers.models)
+    assert len(revisions) == 2 * len(snapshot.items)
+    for item in snapshot.items:
+        current = [record for record in revisions if record["stable_id"] == item.stable_id][-1]
+        assert current["parent_revision"] == first_models[item.stable_id]["record_revision"]
+        assert current["implementation"]["recipe_revision"] == "sha256:" + "c" * 64
+
+
 def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Path) -> None:
     """Gates and worker attempts alone never create a canonical runs record."""
 
@@ -591,7 +872,9 @@ def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Pa
     assert gate is not None
     gate["ledger_seq"] = 1
     gate["payload_sha256"] = HASH
-    attempts = FakeForward().forward(artifact, tmp_path / "env", 1, paths.work_root)
+    attempts = FakeForward().forward(
+        artifact, _test_environment(tmp_path / "env"), 1, paths.work_root
+    )
     with CanonicalReducer(paths.ledgers, [item.stable_id for item in snapshot.items]) as reducer:
         reducer.append_gate(gate)
         for attempt in attempts:
