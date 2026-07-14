@@ -53,11 +53,14 @@ The implementation must preserve all of the following.
    resolved to an authoritative implementation or description fails at `source`; it never earns `runs`.
 5. Real source wins: library, exact upstream, faithful port, detailed-description reimplementation,
    then epistemic skip.
-6. The expensive source-reading pass is done once. Every source-read or agent-judgment field and its
-   literal grounding are captured now. Only cheaply derivable fields may be postponed.
-7. Every agent-authored field is blocked at canonical write until an independent Codex gate checks
-   it. This covers descriptions, citations, year, country, license, taxonomy, source mapping, input
-   semantics, and port/reimplementation fidelity.
+6. The expensive source-reading pass is done once. The crawl exhaustively captures now every metadata
+   field that requires web search, external sources, or human judgment, together with literal grounding:
+   that external set is the only re-crawl-forcing set. For every field, ask: “does this require reading
+   papers/web?” If yes, capture it now, generously; if TorchLens can derive it from the loaded model,
+   capture it cheaply only when already available or defer it to TorchLens, and never re-crawl for it.
+7. Every external-metadata and other agent-authored field is blocked at canonical write until an
+   independent Codex gate checks it. This covers descriptions, citations, year, country, license,
+   taxonomy, source mapping, input semantics, and port/reimplementation fidelity.
 8. Metadata vetting gates crawl completion, not the mechanical run award. Codex throughput or quota
    must never stop eligible mechanical R1/R2 forward execution.
 9. Exact platform target locks, artifact hashes, resolved exports, and probe results define an
@@ -258,6 +261,35 @@ not be partially populated to bypass the gate.
   `taxonomy.tasks[]`; `taxonomy.modalities[]`;
   `taxonomy.era`; `taxonomy.architecture_tags[]`; `taxonomy.novel_ops[]`.
 
+#### Exhaustive external metadata
+
+- `external_metadata: object|null`; it is null as a whole while
+  `authored_metadata_state="pending"|"failed"`, and every child is block-at-write Codex-gated before
+  an accepted canonical write. This is the exhaustive, generous web/source-derived and
+  human-judgment metadata set—the re-crawl-forcing set—not a structural-model-analysis block.
+- Mandatory: `external_metadata.modality[]` (for example vision, language, audio, video, multimodal,
+  graph, tabular, RL, point-cloud, molecular, or time-series);
+  `external_metadata.architecture_class[]` (for example CNN, Transformer, RNN, LSTM, GNN, SSM,
+  diffusion, GAN, VAE, autoencoder, MLP-mixer, capsule, or spiking), distinct from the specific
+  `external_metadata.family`; `external_metadata.domain[]`; and `external_metadata.task[]`.
+- Best-effort, with bounded `not-found-after-search` or null where applicable:
+  `external_metadata.field|null`; `external_metadata.subfield|null`;
+  `external_metadata.paradigm[]` (such as supervised, self-supervised, unsupervised, RL, generative,
+  or contrastive); `external_metadata.lineage[]`; `external_metadata.predecessors[]`; and
+  `external_metadata.tags[]` / `external_metadata.keywords[]` for website search and filtering.
+- Retained exhaustive fields: `external_metadata.family`; `external_metadata.era`;
+  `external_metadata.year`; `external_metadata.country`; `external_metadata.authors[]`;
+  `external_metadata.institution[]`; `external_metadata.venue`; `external_metadata.citation`;
+  `external_metadata.license`; `external_metadata.key_contribution`; and
+  `external_metadata.description`. `venue` remains present inside `citation` as well.
+- `external_metadata.original_framework`; `external_metadata.run_framework`; and
+  `external_metadata.modes` retain the corresponding framework/runtime-mode facts from the
+  implementation and `modes` blocks. They are source-/judgment-derived metadata and therefore share
+  this gate; the existing detailed blocks remain the normative structured representations.
+- Parameter count, layer/op types, input/output shapes, FLOPs, graph structure, dtype, and device are
+  TorchLens-derivable structural facts. They are optional if cheaply observed from an already loaded
+  model and are explicitly not acceptance must-haves or reasons to re-crawl.
+
 #### Website text and family templating
 
 - `website: object|null`; when accepted: `website.kind:
@@ -386,6 +418,10 @@ smallest source-valid variable dimensions are preferred; fixed architectural dim
 - `observed.parameter_count_total`; `observed.parameter_count_trainable`;
   `observed.output_signature: {tree, leaves[]}` where each leaf has
   `{path, kind, shape|null, dtype|null, device|null, python_type}`.
+- `observed.input_kind: "standard-image"|"standard-text"|"standard-audio"|"standard-video"|
+  "standard-tabular"|"standard-pointcloud"|...|"random-fallback"`; `observed.input_asset:
+  identifier/hash|null`; `observed.input_note`, recording the mechanically observed input provenance
+  from the accepted run rather than agent-authored metadata.
 - `observed.constructor_seconds`; `observed.forward_seconds`; `observed.peak_rss_bytes`;
   `observed.measurement_attempt_ids[]`; `observed.snippet` generated from the accepted recipe;
   `observed.snippet_sha256`.
@@ -476,7 +512,9 @@ policy failure produces an immutable attempt. Required fields are:
   contains only allowlisted keys.
 - `worker_receipt: {present, receipt_sha256, constructor_started, constructor_completed,
   input_completed, forward_started, forward_completed, mode, input_signature, output_signature,
-  parameter_count_total, parameter_count_trainable, native_framework, delegated_method}`.
+  input_kind: "standard-image"|"standard-text"|"standard-audio"|"standard-video"|
+  "standard-tabular"|"standard-pointcloud"|...|"random-fallback", input_asset: identifier/hash|null,
+  input_note, parameter_count_total, parameter_count_trainable, native_framework, delegated_method}`.
 - `supervisor_observation: {exit_code, signal, wall_seconds, cpu_seconds, peak_rss_bytes,
   stdout_sha256, stdout_bytes, stdout_tail, stderr_sha256, stderr_bytes, stderr_tail,
   full_log_local_path, full_log_retention}`.
@@ -790,11 +828,16 @@ The pipeline does not push. No crawler records are mixed into ordinary TorchLens
 
 ## 9. Do-it-once source-reading checklist
 
-Before a proposal leaves its one rich author session, deterministic validation asks whether any missing
-value would force a future agent to reopen a source. The proposal must contain:
+Before a proposal leaves its one rich author session, deterministic validation asks of every field: does it
+require papers/web or human judgment (capture it now, exhaustively), or can TorchLens derive it from the
+loaded model (optional/defer to TorchLens; never re-crawl)? The crawl errs generously on the external set.
+The proposal must contain:
 
 - canonical name, aliases/acronym, family relationship, representative/variant scope, and duplicates;
-- family, domain, tasks, modalities, era, architecture tags, and novel operators;
+- the complete external-metadata set: mandatory modality, architecture class (distinct from family),
+  domain, and task; best-effort field/subfield, paradigm, lineage/predecessors, tags/keywords, and era;
+- venue (also in the citation), year, country, authors, institution, citation, license, description, key
+  contribution, `original_framework`, `run_framework`, and `modes`, all with source grounding;
 - neutral English tagline, two-to-four-sentence description, and key contribution;
 - exact implementation, paper, project, documentation, affiliation, and license links;
 - repo commits/tags, package artifacts, paths/symbols, paper versions/sections/pages, and hashes;
@@ -811,11 +854,14 @@ value would force a future agent to reopen a source. The proposal must contain:
   deviations, and fidelity map; and
 - uncertainties and explicit bounded `not-found-after-search` results.
 
-The following are intentionally mechanical and may be derived later from accepted source/code/receipts:
-parameter counts, output pytrees/shapes/dtypes, timings, peak RSS, exact package exports, deterministic
-website recipe snippets, graph statistics, FLOPs, render assets, and embeddings. Benchmarks, training
-recipes, checkpoint inventories, and accuracy claims are outside the crawl rather than deferred source
-fields.
+External-vs-derivable demarcation: for every metadata field, ask whether it requires papers/web or human
+judgment (capture now, exhaustively, and Codex-gate it) or TorchLens can derive it from the loaded model
+(optional if already loaded; defer to TorchLens; never re-crawl). The crawler errs generously on the
+external set. The following are intentionally mechanical and may be derived later from accepted
+source/code/receipts or TorchLens analysis: parameter counts, layer/op types, output pytrees/shapes/dtypes,
+dtype/device, timings, peak RSS, exact package exports, deterministic website recipe snippets, graph
+statistics/structure, FLOPs, render assets, and embeddings. Benchmarks, training recipes, checkpoint
+inventories, and accuracy claims are outside the crawl rather than deferred source fields.
 
 Website voice is versioned and neutral: no hype, marketing adjectives, benchmark claims, or "state of the
 art"; name the distinctive mechanism; distinguish introducing work from a later library implementation;
@@ -989,7 +1035,17 @@ RSS cap is 12 GiB. The parent kills the process group on timeout/RSS violation a
 facts. The receipt records the input and output pytrees without tensor payloads, parameter counts, timing,
 and policy observations.
 
-### 12.3 Cold-forward policy
+### 12.3 Standard inputs
+
+The worker prefers a canonical, license-clean standard input keyed by `external_metadata.modality` when it
+can be shaped to the model's input specification: for example, a resized standard image for vision or a
+tokenized fixed prompt for language. Coverage is deliberately practical rather than exhaustive; unknown
+modalities or any standard-input shape/dtype mismatch use a random tensor fallback. Every per-mode receipt
+records `input_kind`, `input_asset` (the standard asset identifier/hash or null), and a brief `input_note`.
+The same chosen input is used across a model's meaningful modes and all cold runs, so this rule composes with
+the two-cold-forwards policy without changing its consistency requirement.
+
+### 12.4 Cold-forward policy
 
 - Agent-authored R3/R4 rows require two driver-owned cold forwards in separate fresh processes with
   separate empty caches, spanning all meaningful train/eval modes. The author dev-run is diagnostic and
@@ -1000,7 +1056,7 @@ and policy observations.
 - A deterministic 2% sample per environment/batch receives a second cold confirmation. Membership is
   `sha256(stable_id + "mechanical-canary-v1") mod 100 < 2` and therefore reproducible.
 
-### 12.4 Driver-only award rule
+### 12.5 Driver-only award rule
 
 The reducer awards `runs` only when all applicable predicates are true:
 
@@ -1128,10 +1184,11 @@ session for the family representative and deterministic size-variant templating;
 share grounding get separate representative sessions. Codex vets every representative and every
 model-specific authored claim.
 
-The harvest fills all `identity`, `taxonomy`, `website`, `people_and_origin`, `dates`, `citation`,
-`licenses`, `source_resolution`, `evidence`, framework, and semantic input fields from section 5.1. It
-captures literal grounding while sources are open. The driver fills measured observations and generates
-the tested-recipe snippet.
+The harvest fills all `identity`, `taxonomy`, `external_metadata`, `website`, `people_and_origin`, `dates`,
+`citation`, `licenses`, `source_resolution`, `evidence`, framework, and semantic input fields from section
+5.1. It captures literal grounding while sources are open. The driver fills measured observations and
+generates the tested-recipe snippet; it does not trigger source rereading for TorchLens-derivable
+structural fields.
 
 Description contract: tagline no more than 12 words; paragraph two to four factual sentences; contribution
 one line; no benchmarks or marketing; every architectural clause grounded. Citation comes from the exact
@@ -1420,8 +1477,14 @@ CHECK IN THIS ORDER
    introducing work. Check the first-public-year basis, not a later library release.
 4. PEOPLE AND COUNTRY: verify authors, labs, institutions, and institutional origin countries against
    affiliations/project evidence. Country is not nationality. Check confidence and note honesty.
-5. TAXONOMY AND LICENSE: verify family, domains, tasks, modalities, era, tags, novel operators, and every
-   license claim at the pinned revision. Missing license is never permission to infer one.
+5. EXTERNAL METADATA, TAXONOMY, AND LICENSE: first apply the demarcation rule to every field: papers/web
+   or human judgment means capture and gate it now; TorchLens-derivable structure is optional and never
+   re-crawl-forcing. Verify the mandatory modality, architecture class, domain, and task; then verify
+   family, field/subfield, paradigm, lineage/predecessors, tags/keywords, era, venue, year, country,
+   authors, institution, citation, description, key contribution, framework/modes, taxonomy, and every
+   license claim at the pinned revision. Missing license is never permission to infer one. Treat param
+   count, layer/op types, shapes, FLOPs, graph structure, dtype, and device as optional TorchLens-derived
+   facts, not external-metadata must-haves.
 6. WEBSITE TEXT: verify tagline, paragraph, and contribution clause-by-clause. They must be grammatical,
    neutral, mutually consistent, source-grounded, and free of benchmark/marketing overclaim. Each factual
    clause needs evidence. For size variants, verify the prose is the accepted family template and only the

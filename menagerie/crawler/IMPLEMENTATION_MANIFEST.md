@@ -15,7 +15,7 @@ environment after the registry contract is fixed.
 | 2 | A | `menagerie/crawler/__main__.py` | Route `python -m menagerie.crawler` to the typed CLI. | 1, 41 |
 | 3 | A | `menagerie/crawler/constants.py` | Hold schema versions, enums, caps, prompt names, targets, and closed status/reason vocabularies. | 1 |
 | 4 | A | `menagerie/crawler/models.py` | Define typed internal dataclasses/enums shared by driver, reducer, worker, and gates. | 3 |
-| 5 | A | `menagerie/crawler/schemas/model-v2.schema.json` | Executable full `model.v2` contract, including runtime modes, with unknown fields forbidden. | PLAN section 5.1 |
+| 5 | A | `menagerie/crawler/schemas/model-v2.schema.json` | Executable full `model.v2` contract, including the exhaustive Codex-gated `external_metadata` group (with TorchLens-derivable structural fields optional), runtime modes, and unknown fields forbidden. | PLAN section 5.1 |
 | 6 | A | `menagerie/crawler/schemas/attempt-v2.schema.json` | Executable full per-mode `attempt.v2` contract and closed errors. | PLAN section 5.2 |
 | 7 | A | `menagerie/crawler/schemas/gate-v2.schema.json` | Executable `gate.v2` metadata-batch (10--20 per-item verdicts) and per-model fidelity contract. | PLAN section 5.3 |
 | 8 | A | `menagerie/crawler/schemas/author-proposal-v2.schema.json` | Validate staged Claude proposals before any gate or canonical write. | 5 |
@@ -31,7 +31,9 @@ environment after the registry contract is fixed.
 | 18 | B | `menagerie/crawler/recipe.py` | Implement closed declarative R1 recipes and typed adapter loading with no eval/exec. | 4, 10, 11 |
 | 19 | B | `menagerie/crawler/frameworks.py` | Define transparent PyTorch/TF/JAX/Paddle forward-adapter protocol and native call metadata. | 4, 18 |
 | 20 | B | `menagerie/crawler/policy.py` | Build credential-scrubbed offline envs and network/checkpoint/write/TorchLens tripwires. | 3, 4 |
-| 21 | B | `menagerie/crawler/worker.py` | Build one model/input, explicitly invoke `forward` in BOTH `train()` and `eval()` meaningful modes, and atomically emit per-mode honest receipts. | 6, 18-20, 21a |
+| 20a | B | `menagerie/crawler/assets/standard/` | Canonical license-clean standard inputs (image, text, [audio/video/...]) for representative forwards. | none |
+| 20b | B | `menagerie/crawler/standard_inputs.py` | Given a model's modality (from `external_metadata.modality`) + its input spec (shape/dtype), materialize the appropriate canonical standard input (load+resize the standard image / tokenize the standard text / etc.) shaped to the model's expected input; fall back to a random tensor when modality is unknown or the standard input cannot be shaped; report which was used. | modality + input-spec; 20a |
+| 21 | B | `menagerie/crawler/worker.py` | Build one model/input via `standard_inputs` (canonical-by-modality where feasible, random fallback), explicitly invoke `forward` in BOTH `train()` and `eval()` meaningful modes, and atomically emit per-mode honest receipts recording the input kind. | 6, 18-20, 20b, 21a |
 | 21a | B | `menagerie/crawler/modes.py` | Detect meaningful modes and classify train/eval divergence (`none`/`statistical`/`structural`) from captured per-mode outputs. | 4 |
 | 22 | B | `menagerie/crawler/worker_supervisor.py` | Launch argv-only fresh subprocesses, enforce timeout/RSS, and record parent-only observations. | 6, 12, 20, 21 |
 | 23 | D | `menagerie/crawler/fetcher.py` | Fetch controlled exact URLs/revisions into local CAS and emit hash-bound source manifests. | 4, 11, 20 |
@@ -41,7 +43,7 @@ environment after the registry contract is fixed.
 | 27 | D | `menagerie/crawler/checker_dispatch.py` | Create fresh batch-N metadata envelopes and per-model fidelity envelopes, validate per-item atomic gate results, and handle rate/quota responses. | 7, 11, 12, 24, 44 |
 | 28 | D | `menagerie/crawler/gates.py` | Apply bounded block-at-write per batch item, requeue failed metadata items into the next batch, and route five-way per-model fidelity without editing proposals. | 7, 11, 14, 25-27 |
 | 29 | D | `menagerie/crawler/family_templates.py` | Instantiate vetted family text for size variants with only the measured param/input line changed. | 5, 11, 24, 28 |
-| 30 | D | `menagerie/crawler/metadata.py` | Enforce the do-it-once metadata checklist and derive only mechanical observation/snippet fields. | 5, 24, 28, 29 |
+| 30 | D | `menagerie/crawler/metadata.py` | Enforce the external-metadata checklist (exhaustive web/source-derived fields: modality, architecture_class, field/domain/task, paradigm, lineage, tags, venue, year, country, authors, institution, citation, license, key_contribution, description) under the demarcation rule; TorchLens-derivable structural fields are optional. | 5, 24, 28, 29 |
 | 31 | E | `menagerie/crawler/retro_audit.py` | Define calibration and ruled slop/claimer/classics/library waves and their completion gates. | 13-17, 28, 30 |
 | 32 | E | `menagerie/crawler/effort.py` | Track per-stage caps, root-cause fingerprints, grants, and actual-stage cap failures. | 3, 4, 12 |
 | 33 | C | `menagerie/crawler/envs.py` | Load the intent registry (small-set target, no hard cap), exact locks, exports, probes, and compute env generations. | 3, 4, 10, 11, 55-92 |
