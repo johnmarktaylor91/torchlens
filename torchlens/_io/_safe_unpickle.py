@@ -292,6 +292,30 @@ def _is_torchlens_owned(obj: Any) -> bool:
     return owner == "torchlens" or owner.startswith("torchlens.")
 
 
+# Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
+# third-party dependencies (rsatoolbox / brainscore_core for ``torchlens.neuro``,
+# IPython / jupyter_client for ``torchlens.notebook``). Unlike the rest of the
+# first-party ``torchlens.*`` namespace -- which is safe to import + inspect
+# because it runs only our own already-installed code (see
+# ``_is_torchlens_owned`` above) -- importing one of these two runs foreign
+# top-level code with NO trust opt-in. A bundle-supplied global naming one of
+# them (or a submodule) must therefore be EXCLUDED from the "torchlens is our
+# own code" fast path below and instead fall through to receive the exact same
+# deny-by-default / trust-opt-in / load-tolerate treatment already applied to a
+# genuinely foreign module at the tail of ``find_class`` -- never passed to
+# ``super().find_class`` (which imports the module) to make that determination.
+_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.notebook"})
+
+
+def _is_torchlens_appliance_module(module: str) -> bool:
+    """Return whether ``module`` is (nested under) an extras-gated appliance package."""
+
+    return any(
+        module == appliance or module.startswith(appliance + ".")
+        for appliance in _TORCHLENS_APPLIANCE_MODULES
+    )
+
+
 # Exact (module, name) globals resolved directly. Every entry is either a pure
 # data container/value type or a pure tensor-reconstruction helper -- none can
 # execute attacker code merely by being resolved or called on pickle-provided
@@ -617,7 +641,14 @@ class SafeBundleUnpickler(pickle.Unpickler):
         # pickled path: a key like ``torchlens._io.tlspec`` / ``os.system`` walks
         # attributes off a torchlens module to reach ``os.system`` (real module
         # ``posix``), which is NOT torchlens-owned and is therefore denied.
-        if module == "torchlens" or module.startswith("torchlens."):
+        #
+        # EXCLUDES the extras-gated appliance packages (``torchlens.neuro`` /
+        # ``torchlens.notebook``): importing THOSE runs foreign third-party code,
+        # so a global naming one of them must never reach ``super().find_class``
+        # here -- it falls through to the foreign-global handling below instead.
+        if (
+            module == "torchlens" or module.startswith("torchlens.")
+        ) and not _is_torchlens_appliance_module(module):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
                 return obj

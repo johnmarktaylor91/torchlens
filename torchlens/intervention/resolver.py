@@ -192,6 +192,29 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
     return FunctionRegistryKey("custom", str(qualname), dispatch_kind, import_path=import_path)
 
 
+# Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
+# third-party dependencies at IMPORT TIME (rsatoolbox / brainscore_core for
+# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens.notebook``).
+# Mirrors ``torchlens._io._safe_unpickle._TORCHLENS_APPLIANCE_MODULES`` --
+# duplicated here rather than imported to keep this security boundary free of
+# cross-module import-order coupling. A bundle-supplied ``custom`` key naming
+# one of these must be EXCLUDED from the "torchlens is our own code, safe to
+# import + inspect" fast path in ``resolve_function_registry_key`` and instead
+# receive the exact same deny-by-default / trust-opt-in treatment as a
+# genuinely foreign import path: denied before import, resolved only under an
+# explicit trust opt-in, decided by NAME alone -- never imported to decide it.
+_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.notebook"})
+
+
+def _is_torchlens_appliance_module(module: str) -> bool:
+    """Return whether ``module`` is (nested under) an extras-gated appliance package."""
+
+    return any(
+        module == appliance or module.startswith(appliance + ".")
+        for appliance in _TORCHLENS_APPLIANCE_MODULES
+    )
+
+
 def resolve_function_registry_key(
     key: FunctionRegistryKey,
     *,
@@ -288,9 +311,16 @@ def resolve_function_registry_key(
             # gate to discover the resolved callable's true owner. A genuinely
             # FOREIGN module is never imported until the trust gate passes, because
             # importing it executes its top-level code.
-            path_claims_torchlens = module_name == "torchlens" or module_name.startswith(
-                "torchlens."
-            )
+            #
+            # EXCEPTION: the extras-gated appliance packages (``torchlens.neuro`` /
+            # ``torchlens.notebook``) import FOREIGN third-party dependencies at
+            # import time, so a path naming one of them is NOT safe to import
+            # unconditionally -- it must receive the same treatment as a
+            # genuinely foreign import path below (denied before import, resolved
+            # only under an explicit trust opt-in).
+            path_claims_torchlens = (
+                module_name == "torchlens" or module_name.startswith("torchlens.")
+            ) and not _is_torchlens_appliance_module(module_name)
 
             def _walk_qualname(root: Any) -> Any:
                 """Resolve ``qualname`` off an already-imported module root."""
