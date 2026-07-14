@@ -329,7 +329,20 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         sentinel.unlink()
         sys.modules.pop("side_effect_mod", None)
 
-        spec = load_intervention_spec(path)
+        # DEFAULT-trust load is deny-by-default (r12 RCE guard): the foreign module is
+        # never imported at load and applying the spec raises WITHOUT executing it.
+        untrusted = load_intervention_spec(path)
+        assert not sentinel.exists()
+        assert "side_effect_mod" not in sys.modules
+        denied = _log(_ReluModel(), torch.ones(1, 3))
+        denied._intervention_spec = untrusted
+        with pytest.raises(UntrustedCallableError):
+            denied.run(_ReluModel(), torch.ones(1, 3))
+        assert not sentinel.exists()
+        assert "side_effect_mod" not in sys.modules
+
+        # A TRUSTED load stays lazy: still no import until the spec is executed.
+        spec = load_intervention_spec(path, trust_custom_callables=True)
 
         assert not sentinel.exists()
         fresh = _log(_ReluModel(), torch.ones(1, 3))
@@ -375,7 +388,20 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
         sentinel.unlink()
         sys.modules.pop("side_effect_helper_mod", None)
 
-        spec = load_intervention_spec(path)
+        # DEFAULT-trust load is deny-by-default (r12 RCE guard): applying the import-ref
+        # helper raises WITHOUT importing or executing the foreign module.
+        untrusted = load_intervention_spec(path)
+        assert not sentinel.exists()
+        assert "side_effect_helper_mod" not in sys.modules
+        denied = _log(_ReluModel(), torch.ones(1, 3))
+        denied._intervention_spec = untrusted
+        with pytest.raises(UntrustedCallableError):
+            denied.run(_ReluModel(), torch.ones(1, 3))
+        assert not sentinel.exists()
+        assert "side_effect_helper_mod" not in sys.modules
+
+        # A TRUSTED load stays lazy and preserves the executable helper spec.
+        spec = load_intervention_spec(path, trust_custom_callables=True)
 
         assert not sentinel.exists()
         assert spec.hook_specs[0].helper is not None
