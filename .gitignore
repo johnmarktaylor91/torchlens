@@ -185,3 +185,6 @@ menagerie/data/verification.db*
 
 # Internal capture-unification stage reports (codex writes to repo root; harvested to .research)
 /STAGE*_REPORT.md
+
+# Menagerie crawler disposable runtime state. Canonical records and manifests stay tracked.
+/.crawl-local/
