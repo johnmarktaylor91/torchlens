@@ -44,9 +44,11 @@ from .runnable import (
     ControlWitnessKind,
     DivergencePolicy,
     LiteralAtom,
+    LiteralAtomKind,
     LiteralMapping,
     LiteralSequence,
     LiteralSequenceKind,
+    LiteralSlice,
     LiteralTorchSymbol,
     LiteralTupleKey,
     NonTensorLiteral,
@@ -2472,7 +2474,18 @@ def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
     """Decode one safe sparse literal without importing artifact-selected code."""
 
     if isinstance(value, LiteralAtom):
+        # ``ELLIPSIS`` and ``NONE`` both carry ``value is None`` on the wire (``...`` has
+        # no JSON-native representation), so the atom KIND -- not the stored value -- is
+        # what disambiguates a real ``None`` index from a ``...`` index at decode time.
+        if value.kind is LiteralAtomKind.ELLIPSIS:
+            return Ellipsis
         return value.value
+    if isinstance(value, LiteralSlice):
+        return slice(
+            _decode_literal(value.start),
+            _decode_literal(value.stop),
+            _decode_literal(value.step),
+        )
     if isinstance(value, LiteralTupleKey):
         return tuple(_decode_literal(item) for item in value.items)
     if isinstance(value, LiteralSequence):

@@ -63,7 +63,8 @@ recipe.
 
 | Node | Exact fields | Constraint |
 |---|---|---|
-| `LiteralAtom` | `kind`, `value` | kind is `none`, `bool`, `int`, `float`, or `str`; value has exactly that Python type (`None` for `none`) |
+| `LiteralAtom` | `kind`, `value` | kind is `none`, `bool`, `int`, `float`, `str`, or `ellipsis`; value has exactly that Python type (`None` for `none` and for `ellipsis` -- the atom KIND, not the wire value, disambiguates a real `None` index from a `...` index) |
+| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; decodes to `slice(start, stop, step)` |
 | `LiteralTorchSymbol` | `qualname` | non-callable symbol below an explicitly allowlisted stock torch root |
 | `LiteralSequence` | `kind`, `items` | kind is `list` or `tuple`; items are ordered literal nodes |
 | `LiteralMapping` | `entries` | ordered `LiteralMappingEntry` nodes; duplicate keys invalid |
@@ -71,9 +72,13 @@ recipe.
 | `LiteralTupleKey` | `items` | ordered `LiteralAtom` or `LiteralTupleKey` nodes only |
 
 Floats round-trip without coercion, including non-finite values. Booleans are not integers. Dict
-order, tuple versus list, key types, nesting, and `None` are preserved. Bytes, complex values, sets,
-arbitrary enums/objects, tensors, callables, classes, import references, pickles, and opaque reprs are
-outside the grammar and fail preflight with `unsupported_literal`.
+order, tuple versus list, key types, nesting, and `None` are preserved. A Python `slice` (e.g. the
+key of `x[:, 3:]`), a bare `Ellipsis` (`x[..., 0]`), and a bare `None` newaxis index (`x[:, None]`)
+are inert value types with no callables or imports, so they round-trip exactly through the
+`LiteralSlice` node and the `none`/`ellipsis` `LiteralAtom` kinds -- including inside the tuple key
+`__getitem__` produces for multi-axis indexing (`LiteralSequence` of kind `tuple`). Bytes, complex
+values, sets, arbitrary enums/objects, tensors, callables, classes, import references, pickles, and
+opaque reprs are outside the grammar and fail preflight with `unsupported_literal`.
 
 `LiteralTorchSymbol.qualname` is resolved only through an explicit non-callable allowlist. It never
 authorizes `importlib`, arbitrary attribute walking, custom modules, or a callable fallback.

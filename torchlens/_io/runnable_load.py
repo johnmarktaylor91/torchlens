@@ -37,6 +37,7 @@ from ..runnable import (
     LiteralMappingEntry,
     LiteralSequence,
     LiteralSequenceKind,
+    LiteralSlice,
     LiteralTorchSymbol,
     LiteralTupleKey,
     NonTensorLiteral,
@@ -1254,6 +1255,12 @@ def _parse_literal(value: Any) -> NonTensorLiteral:
         )
     if keys == {"qualname"}:
         return LiteralTorchSymbol(qualname=_string(mapping, "qualname"))
+    if keys == {"start", "stop", "step"}:
+        return LiteralSlice(
+            start=_parse_literal_slice_component(mapping["start"], "start"),
+            stop=_parse_literal_slice_component(mapping["stop"], "stop"),
+            step=_parse_literal_slice_component(mapping["step"], "step"),
+        )
     if keys == {"kind", "items"}:
         return LiteralSequence(
             kind=LiteralSequenceKind(_string(mapping, "kind")),
@@ -1270,6 +1277,25 @@ def _parse_literal(value: Any) -> NonTensorLiteral:
             )
         )
     raise ValueError(f"Unsupported tagged runnable literal fields: {sorted(keys)}")
+
+
+def _parse_literal_slice_component(value: Any, field_name: str) -> LiteralAtom:
+    """Parse one ``slice.start``/``.stop``/``.step`` tagged atom.
+
+    A slice component is restricted to the ``NONE`` or ``INT`` atom kinds on the
+    encode side (see ``_io/runnable.py::_encode_slice_component``); reject anything
+    else here rather than silently widening what a loaded bundle may claim.
+    """
+
+    parsed = _parse_literal(value)
+    if not isinstance(parsed, LiteralAtom) or parsed.kind not in (
+        LiteralAtomKind.NONE,
+        LiteralAtomKind.INT,
+    ):
+        raise ValueError(
+            f"Runnable literal slice component {field_name!r} must be a NONE or INT atom."
+        )
+    return parsed
 
 
 def _parse_literal_key(value: Any) -> LiteralAtom | LiteralTupleKey:
