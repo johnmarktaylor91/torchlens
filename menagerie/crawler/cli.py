@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Protocol, Sequence
 
+from menagerie.crawler.checkpoint import CheckpointError, create_canonical_checkpoint
 from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
 from menagerie.crawler.driver import (
     CommandAuthorLane,
@@ -32,7 +33,6 @@ from menagerie.crawler.driver import (
 from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import create_intake_snapshot, load_intake_snapshot
-from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import materialize_current
 from menagerie.crawler.routing import ModelRequirements, phase_routes, route_model
 from menagerie.crawler.status import funnel_counts, partition_report
@@ -174,7 +174,7 @@ def main(
     except DriverLockError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_LOCKED
-    except (DriverError, OSError, ValueError) as exc:
+    except (CheckpointError, DriverError, OSError, ValueError) as exc:
         print(f"crawler error: {exc}", file=sys.stderr)
         return EXIT_ERROR
     return EXIT_USAGE
@@ -391,19 +391,25 @@ def _status_command(args: argparse.Namespace) -> int:
 
 
 def _checkpoint_command(args: argparse.Namespace) -> int:
-    """Verify all canonical ledgers and report their immutable counts."""
+    """Run and report one complete fail-closed canonical checkpoint transaction."""
 
-    del args.verify_views
-    records_root = args.records_root or args.repo_root / "menagerie" / "crawler" / "records"
-    paths = (
-        records_root / "models" / "current-shard.jsonl",
-        records_root / "attempts" / "local.jsonl",
-        records_root / "gates" / "current-shard.jsonl",
+    del args.verify_ledgers, args.verify_views
+    result = create_canonical_checkpoint(
+        args.repo_root,
+        args.intake,
+        records_root=args.records_root,
     )
-    counts = {str(path): len(scan_jsonl(path)) for path in paths}
-    if args.verify_ledgers:
-        load_intake_snapshot(args.intake)
-    print(json.dumps({"verified": True, "ledger_counts": counts}, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "verified": True,
+                "branch": result.branch,
+                "staged_paths": [path.as_posix() for path in result.paths],
+                "license_report": result.license_report.to_dict(),
+            },
+            sort_keys=True,
+        )
+    )
     return EXIT_OK
 
 

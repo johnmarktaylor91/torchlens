@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
     OPERATIONAL_EVENT_SCHEMA_VERSION,
@@ -13,15 +14,21 @@ from menagerie.crawler.constants import (
     OperationalEventStatus,
 )
 from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.intake import load_intake_snapshot
 from menagerie.crawler.licenses import (
+    LicenseDecision,
     LicenseSweepReport,
     LicensedArtifact,
     PublicMergeRejected,
+    RedistributionClass,
     pre_public_merge_sweep,
 )
 from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
 from menagerie.crawler.models import AppendResult, JsonObject
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
+from menagerie.crawler.reducer import default_ledger_paths, materialize_current
+from menagerie.crawler.status import completeness_report
+from menagerie.crawler.tools.rebuild_views import rebuild_views
 from menagerie.crawler.wakeup import OperationalContext, record_operational_event
 
 CRAWLER_BRANCH = "menagerie/crawler-pipeline"
@@ -130,6 +137,13 @@ _SECRET_BYTE_MARKERS = (
     b"github_token=",
     b"openai_api_key=",
     b"anthropic_api_key=",
+)
+_CANONICAL_MANIFEST_NAMES = ("public-manifest.jsonl", "private-manifest.jsonl")
+_DERIVED_VIEW_PATHS = (
+    Path("current-models/current.jsonl"),
+    Path("release-models.jsonl"),
+    Path("deferred-linux.jsonl"),
+    Path("status-summary.json"),
 )
 
 
@@ -428,6 +442,12 @@ def create_checkpoint_set(
         )
     candidates = tuple(sorted({_normalize_path(path) for path in candidate_paths}, key=str))
     existing_staged = _staged_paths(repo_root, runner)
+    unexpected_staged = tuple(path for path in existing_staged if path not in candidates)
+    if unexpected_staged:
+        raise NonAllowlistedPath(
+            "checkpoint index contains paths outside the derived candidate set: "
+            f"{[path.as_posix() for path in unexpected_staged]}"
+        )
     for path in (*existing_staged, *candidates):
         _validate_allowlisted_path(repo_root, path, require_exists=path in candidates)
     try:
@@ -449,6 +469,340 @@ def create_checkpoint_set(
         if result.returncode != 0:
             raise CheckpointValidationError(f"git add failed: {result.stderr.strip()}")
     return CheckpointSet(candidates, actual_branch, license_report)
+
+
+def create_canonical_checkpoint(
+    repo_root: Path,
+    intake_root: Path,
+    *,
+    records_root: Optional[Path] = None,
+    mirrors: Optional[MirrorStore] = None,
+    expected_branch: str = CRAWLER_BRANCH,
+    branch: Optional[str] = None,
+    git_runner: Optional[GitRunner] = None,
+) -> CheckpointSet:
+    """Run the canonical transaction and normalize every validation failure.
+
+    Parameters
+    ----------
+    repo_root:
+        Git worktree root.
+    intake_root:
+        Canonical immutable intake snapshot directory.
+    records_root:
+        Optional canonical records root; defaults inside the crawler tree.
+    mirrors:
+        Optional separated byte stores. Defaults to the conventional runtime mirror roots.
+    expected_branch, branch, git_runner:
+        Branch policy and deterministic Git injection accepted by ``create_checkpoint_set``.
+
+    Returns
+    -------
+    CheckpointSet
+        Fully validated derived paths staged without commit or push.
+
+    Raises
+    ------
+    CheckpointError
+        If any branch, partition, completeness, view, mirror, license-report, or staging gate fails.
+    """
+
+    try:
+        return _create_canonical_checkpoint(
+            repo_root,
+            intake_root,
+            records_root=records_root,
+            mirrors=mirrors,
+            expected_branch=expected_branch,
+            branch=branch,
+            git_runner=git_runner,
+        )
+    except CheckpointError:
+        raise
+    except Exception as exc:
+        raise CheckpointValidationError(str(exc)) from exc
+
+
+def _create_canonical_checkpoint(
+    repo_root: Path,
+    intake_root: Path,
+    *,
+    records_root: Optional[Path],
+    mirrors: Optional[MirrorStore],
+    expected_branch: str,
+    branch: Optional[str],
+    git_runner: Optional[GitRunner],
+) -> CheckpointSet:
+    """Implement the canonical fail-closed transaction.
+
+    Parameters
+    ----------
+    repo_root, intake_root, records_root, mirrors, expected_branch, branch, git_runner:
+        Fully normalized transaction inputs documented by ``create_canonical_checkpoint``.
+
+    Returns
+    -------
+    CheckpointSet
+        Fully validated derived paths staged without commit or push.
+    """
+
+    root = repo_root.resolve()
+    runner = git_runner or _run_git
+    actual_branch = branch or _current_branch(root, runner)
+    if actual_branch != expected_branch or actual_branch in {"main", "master"}:
+        raise WrongCheckpointBranch(
+            f"checkpoint requires branch {expected_branch!r}, got {actual_branch!r}"
+        )
+    canonical_root = root / "menagerie" / "crawler"
+    canonical_records = (records_root or canonical_root / "records").resolve()
+    _require_under_root(canonical_records, canonical_root / "records", "records root")
+    snapshot = load_intake_snapshot(intake_root.resolve())
+    ledgers = default_ledger_paths(canonical_records)
+    current = materialize_current(ledgers)
+    completeness = completeness_report((item.stable_id for item in snapshot.items), current)
+    if not completeness.complete:
+        raise CheckpointValidationError(
+            "crawler checkpoint is incomplete: "
+            f"missing={sorted(completeness.partition.missing_ids)}, "
+            f"extra={sorted(completeness.partition.extra_ids)}, "
+            f"duplicates={sorted(completeness.partition.duplicate_ids)}, "
+            f"issues={dict(completeness.incomplete_by_issue)}, "
+            f"workflows={dict(completeness.workflow_counts)}"
+        )
+
+    views_root = canonical_root / "views"
+    view_check = _derived_view_check(snapshot.root / "items.jsonl", canonical_records, views_root)
+    mirror_store = mirrors or MirrorStore(
+        root / ".crawl-local" / "mirrors" / "public",
+        root / ".crawl-local" / "mirrors" / "private",
+        root / ".crawl-local" / "mirrors" / "local",
+    )
+    manifest_root = canonical_root / "mirrors"
+    public_artifacts, mirror_manifests = _derive_mirror_facts(manifest_root)
+    report = _validate_persisted_license_report(
+        canonical_root / "license_reports", public_artifacts, mirror_store
+    )
+    candidates = _derive_candidate_paths(root, canonical_root)
+    if not any(
+        path.parts[:3] == ("menagerie", "crawler", "license_reports") for path in candidates
+    ):
+        raise CheckpointValidationError("checkpoint requires a persisted passing license report")
+
+    result = create_checkpoint_set(
+        root,
+        candidates,
+        ledger_paths=(ledgers.models, ledgers.attempts, ledgers.gates),
+        derived_view_checks=(view_check,),
+        public_artifacts=public_artifacts,
+        mirrors=mirror_store,
+        mirror_manifests=mirror_manifests,
+        expected_branch=expected_branch,
+        branch=actual_branch,
+        git_runner=runner,
+    )
+    if result.license_report != report:
+        raise CheckpointValidationError(
+            "persisted license report changed during checkpoint validation"
+        )
+    return result
+
+
+def _require_under_root(path: Path, root: Path, label: str) -> None:
+    """Require a resolved path to remain under its canonical repository root.
+
+    Parameters
+    ----------
+    path, root:
+        Resolved candidate and required ancestor.
+    label:
+        Diagnostic name for the candidate.
+    """
+
+    resolved_root = root.resolve()
+    if path != resolved_root and resolved_root not in path.parents:
+        raise NonAllowlistedPath(f"checkpoint {label} is outside {resolved_root}: {path}")
+
+
+def _derived_view_check(
+    intake_path: Path, records_root: Path, committed_views_root: Path
+) -> ValidationCheck:
+    """Build an exact isolated view comparison closure.
+
+    Parameters
+    ----------
+    intake_path, records_root, committed_views_root:
+        Canonical inputs and committed derived-view destination.
+
+    Returns
+    -------
+    ValidationCheck
+        Validator that rebuilds and compares every canonical view byte-for-byte.
+    """
+
+    def check() -> None:
+        """Rebuild views in isolation and reject missing, extra, or changed output."""
+
+        with tempfile.TemporaryDirectory(prefix="torchlens-crawler-checkpoint-") as temporary:
+            temporary_root = Path(temporary)
+            rebuilt_root = temporary_root / "views"
+            digests = rebuild_views(
+                intake_path, records_root, rebuilt_root, temporary_root / "state.sqlite"
+            )
+            expected_digest_keys = {"current", "release", "deferred", "status"}
+            if set(digests) != expected_digest_keys:
+                raise CheckpointValidationError(
+                    f"view rebuild returned incomplete digests: {sorted(digests)}"
+                )
+            committed_files = {
+                path.relative_to(committed_views_root)
+                for path in committed_views_root.rglob("*")
+                if path.is_file() and path.suffix in _ALLOWLIST_SUFFIXES
+            }
+            if committed_files != set(_DERIVED_VIEW_PATHS):
+                raise CheckpointValidationError(
+                    "committed derived-view set does not match canonical rebuild: "
+                    f"{sorted(path.as_posix() for path in committed_files)}"
+                )
+            for relative in _DERIVED_VIEW_PATHS:
+                committed = committed_views_root / relative
+                rebuilt = rebuilt_root / relative
+                if committed.read_bytes() != rebuilt.read_bytes():
+                    raise CheckpointValidationError(
+                        f"derived view does not match canonical rebuild: {relative.as_posix()}"
+                    )
+
+    return check
+
+
+def _derive_mirror_facts(
+    manifest_root: Path,
+) -> tuple[tuple[LicensedArtifact, ...], tuple[ArtifactManifest, ...]]:
+    """Parse public license artifacts and all hash-verifiable mirror manifests.
+
+    Parameters
+    ----------
+    manifest_root:
+        Canonical committed mirror-manifest directory.
+
+    Returns
+    -------
+    tuple[tuple[LicensedArtifact, ...], tuple[ArtifactManifest, ...]]
+        Public sweep inputs and complete public/private mirror manifests.
+    """
+
+    public_artifacts: list[LicensedArtifact] = []
+    manifests: list[ArtifactManifest] = []
+    for name in _CANONICAL_MANIFEST_NAMES:
+        path = manifest_root / name
+        if not path.is_file():
+            raise CheckpointValidationError(f"missing canonical mirror manifest: {path}")
+        for row in scan_jsonl(path, validate=False):
+            artifact = _licensed_artifact(row)
+            manifests.append(artifact.manifest)
+            if name == "public-manifest.jsonl":
+                public_artifacts.append(artifact)
+    return tuple(public_artifacts), tuple(manifests)
+
+
+def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
+    """Parse one canonical hash- and license-bound mirror row.
+
+    Parameters
+    ----------
+    payload:
+        Row containing ``staged_path``, ``manifest``, and ``decision``.
+
+    Returns
+    -------
+    LicensedArtifact
+        Typed artifact suitable for mirror and license verification.
+    """
+
+    manifest_raw = payload.get("manifest")
+    decision_raw = payload.get("decision")
+    if not isinstance(manifest_raw, Mapping) or not isinstance(decision_raw, Mapping):
+        raise CheckpointValidationError("mirror row requires manifest and decision objects")
+    try:
+        manifest = ArtifactManifest.from_dict(manifest_raw)
+        decision = LicenseDecision(
+            content_sha256=str(decision_raw["content_sha256"]),
+            redistribution_class=RedistributionClass(str(decision_raw["redistribution_class"])),
+            evidence_ids=tuple(str(item) for item in decision_raw.get("evidence_ids", [])),
+            rationale=str(decision_raw["rationale"]),
+        )
+        staged_path = _normalize_path(Path(str(payload["staged_path"])))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CheckpointValidationError(f"invalid licensed mirror artifact: {exc}") from exc
+    return LicensedArtifact(staged_path, manifest, decision)
+
+
+def _validate_persisted_license_report(
+    report_root: Path,
+    public_artifacts: Sequence[LicensedArtifact],
+    mirrors: MirrorStore,
+) -> LicenseSweepReport:
+    """Require exactly one persisted report equal to a fresh passing sweep.
+
+    Parameters
+    ----------
+    report_root:
+        Canonical committed report directory.
+    public_artifacts:
+        Artifacts derived from the public mirror manifest.
+    mirrors:
+        Store used for fresh hash verification.
+
+    Returns
+    -------
+    LicenseSweepReport
+        Fresh passing report matching persisted bytes.
+    """
+
+    reports = sorted(path for path in report_root.glob("*.json") if path.is_file())
+    if len(reports) != 1:
+        raise CheckpointValidationError(
+            f"checkpoint requires exactly one persisted license report, found {len(reports)}"
+        )
+    try:
+        report = pre_public_merge_sweep(public_artifacts, mirrors)
+    except PublicMergeRejected as exc:
+        raise RestrictedPublicArtifact(str(exc)) from exc
+    try:
+        persisted = scan_jsonl(reports[0], validate=False)
+    except Exception as exc:
+        raise CheckpointValidationError(f"invalid persisted license report: {exc}") from exc
+    if len(persisted) != 1 or persisted[0] != report.to_dict():
+        raise CheckpointValidationError(
+            "persisted license report does not match the freshly derived passing sweep"
+        )
+    return report
+
+
+def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path, ...]:
+    """Derive the complete checkpoint set solely from canonical public roots.
+
+    Parameters
+    ----------
+    repo_root, canonical_root:
+        Git worktree and canonical crawler roots.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Sorted repository-relative files accepted by the checkpoint allowlist.
+    """
+
+    paths: set[Path] = set()
+    for allowed_root in _ALLOWLIST_ROOTS:
+        absolute_root = repo_root / Path(allowed_root.as_posix())
+        for path in absolute_root.rglob("*"):
+            if path.is_file() and path.suffix in _ALLOWLIST_SUFFIXES:
+                paths.add(path.relative_to(repo_root))
+    if not paths:
+        raise CheckpointValidationError(
+            f"no canonical checkpoint facts found under {canonical_root}"
+        )
+    return tuple(sorted(paths, key=lambda path: path.as_posix()))
 
 
 def _base_milestone_event(
