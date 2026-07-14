@@ -10,6 +10,7 @@ import re
 import struct
 from typing import Any, cast
 
+import numpy as np
 import torch
 
 from . import _state
@@ -511,6 +512,8 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
 
+    recorded = _normalize_numpy_scalar(recorded)
+    runtime = _normalize_numpy_scalar(runtime)
     if isinstance(recorded, bool) or isinstance(runtime, bool):
         return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
     # Float family (incl. numeric float subclasses such as ``numpy.float64``),
@@ -535,6 +538,23 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     if type(recorded) is not type(runtime):
         return False
     return bool(recorded == runtime)
+
+
+def _normalize_numpy_scalar(value: Any) -> Any:
+    """Convert one NumPy scalar to its Python equivalent for literal comparison.
+
+    Parameters
+    ----------
+    value:
+        Captured or runtime literal leaf.
+
+    Returns
+    -------
+    Any
+        ``value.item()`` for NumPy scalars, otherwise the original value.
+    """
+
+    return value.item() if isinstance(value, np.generic) else value
 
 
 def _input_literal_contract_checks(

@@ -344,3 +344,46 @@ def test_numpy_float64_literal_identical_verifies_changed_diverges(tmp_path: Pat
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert changed.report.poisoned
+
+
+# ---------------------------------------------------------------------------
+# F6 -- NumPy scalar control inputs follow the Python-scalar divergence contract
+# ---------------------------------------------------------------------------
+
+
+class _IntegerControlBranch(nn.Module):
+    """Choose one recorded arm from an integer control input."""
+
+    def forward(self, value: torch.Tensor, mode: int) -> torch.Tensor:
+        """Return distinct values for the two control-flow arms."""
+
+        if mode == 0:
+            return value + 1
+        return value * 10
+
+
+@pytest.mark.smoke
+def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> None:
+    """Changed NumPy integer controls must diverge rather than become unverifiable."""
+
+    np = pytest.importorskip("numpy")
+    value = torch.tensor([2.0, 3.0])
+    path = _save_runnable(
+        _IntegerControlBranch(),
+        [value, np.int64(0)],
+        tmp_path / "numpy_control.tlspec",
+    )
+
+    unchanged = tl.load(path).run(inputs=[value, np.int64(0)])
+    assert unchanged.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(unchanged.output, value + 1)
+
+    with pytest.raises(PathDivergenceError):
+        tl.load(path).run(inputs=[value, np.int64(1)])
+
+    diverged = tl.load(path).run(
+        inputs=[value, np.int64(1)],
+        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+    )
+    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
+    assert diverged.report.poisoned
