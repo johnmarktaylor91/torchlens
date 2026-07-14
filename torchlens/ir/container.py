@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+import dataclasses
 from dataclasses import dataclass
-import importlib
+import sys
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._io import FieldPolicy
@@ -184,7 +185,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             _rebuild_child_or_leaf(child_by_key, NamedField(field_name), leaf_iter)
             for field_name in spec.fields
         ]
-        container_type = _import_container_type(spec)
+        container_type = _resolve_container_type(spec)
         if container_type is not None:
             if spec.type_module == "torch.return_types":
                 # torch structseq classes (``torch.return_types.*``) reject
@@ -198,7 +199,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             field_name: _rebuild_child_or_leaf(child_by_key, DataclassField(field_name), leaf_iter)
             for field_name in spec.fields
         }
-        container_type = _import_container_type(spec)
+        container_type = _resolve_container_type(spec)
         if container_type is not None:
             return container_type(**field_values)
         return field_values
@@ -206,7 +207,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         key_values = {
             key: _rebuild_child_or_leaf(child_by_key, HFKey(key), leaf_iter) for key in spec.keys
         }
-        container_type = _import_container_type(spec)
+        container_type = _resolve_container_type(spec)
         if container_type is not None:
             return container_type(**key_values)
         return key_values
@@ -215,7 +216,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
             for index in range(spec.length or 0)
         ]
-        container_type = _import_container_type(spec)
+        container_type = _resolve_container_type(spec)
         if container_type is None:
             raise ValueError(
                 f"Registered container type {spec.type_module}.{spec.type_qualname} "
@@ -254,7 +255,7 @@ def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
         capture and never reach reconstruction).
     """
 
-    container_type = _import_container_type(spec)
+    container_type = _resolve_container_type(spec)
     if container_type is None:
         raise ValueError(
             f"Mapping type {spec.type_module}.{spec.type_qualname} could not be imported."
@@ -307,8 +308,114 @@ def _rebuild_child_or_leaf(
         raise ValueError("Not enough leaves supplied for ContainerSpec.") from exc
 
 
-def _import_container_type(spec: ContainerSpec) -> type[Any] | None:
-    """Import the concrete container type named by a spec when available.
+class ContainerReconstructionError(ValueError):
+    """Raised when an output-container spec names a type that is not admissible.
+
+    The output ``ContainerSpec`` is portable, attacker-influenceable data. Its
+    ``type_module`` / ``type_qualname`` name the concrete container class to rebuild.
+    This error is the default-deny tripwire: a spec that names a type outside the
+    benign container allowlist for its ``kind`` is refused BEFORE any construction,
+    mirroring the safe-unpickler's global denial. Subclasses ``ValueError`` so the
+    runnable run wrapper reports it as a typed ``RunPreconditionError`` denial.
+    """
+
+
+# ``dict``-subtype output containers are only ever recorded for the two mapping
+# classes ``torchlens.backends.torch.ops._mapping_reconstruction`` can faithfully
+# rebuild; every other mapping is recorded ``opaque`` (honest-reject at save) and so
+# never reaches reconstruction. Any other ``(module, qualname)`` for a ``dict`` kind
+# is therefore a tampered / corrupt spec and is refused.
+_ALLOWED_MAPPING_TYPE_REFS: frozenset[tuple[str, str]] = frozenset(
+    {("collections", "OrderedDict"), ("collections", "defaultdict")}
+)
+
+
+def _is_hf_model_output_type(container_type: type[Any]) -> bool:
+    """Return whether ``container_type`` is a HuggingFace ``ModelOutput`` container class.
+
+    Mirrors the capture-side ``ir.container_registry._is_hf_model_output`` heuristic at
+    the class level. Inspects only the ALREADY-RESOLVED class (its MRO / name / mapping
+    protocol); it never imports ``transformers`` to satisfy an attacker.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved class to classify.
+
+    Returns
+    -------
+    bool
+        True when the class is a real ``transformers`` ``ModelOutput`` subclass or a
+        HuggingFace-style mapping output class.
+    """
+
+    for base in getattr(container_type, "__mro__", ()):
+        if base.__module__.startswith("transformers") and base.__name__ == "ModelOutput":
+            return True
+    return (
+        (
+            container_type.__module__.startswith("transformers")
+            or container_type.__name__.endswith("ModelOutput")
+        )
+        and hasattr(container_type, "keys")
+        and hasattr(container_type, "__getitem__")
+    )
+
+
+def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec) -> bool:
+    """Return whether ``container_type`` may be constructed for ``spec.kind``.
+
+    Default-deny: a resolved type is admissible only when it structurally matches the
+    benign container kind that capture recorded, so constructing it cannot execute
+    arbitrary attacker code (e.g. ``subprocess.Popen`` fails every branch).
+
+    Parameters
+    ----------
+    container_type:
+        Already-resolved candidate class.
+    spec:
+        Container spec being reconstructed.
+
+    Returns
+    -------
+    bool
+        True when the type is an admissible container class for the spec's kind.
+    """
+
+    kind = spec.kind
+    if kind == "namedtuple":
+        # torch structseq classes (``torch.return_types.*``) that torch itself emits,
+        # or any genuine namedtuple class (a ``tuple`` subclass carrying ``_fields``).
+        if spec.type_module == "torch.return_types":
+            return True
+        return issubclass(container_type, tuple) and hasattr(container_type, "_fields")
+    if kind == "dataclass":
+        return dataclasses.is_dataclass(container_type)
+    if kind == "hf_model_output":
+        return _is_hf_model_output_type(container_type)
+    if kind == "dict":
+        return (spec.type_module, spec.type_qualname) in _ALLOWED_MAPPING_TYPE_REFS
+    if kind == "registered":
+        return get_registered_container(container_type) is not None
+    return False
+
+
+def _resolve_container_type(spec: ContainerSpec) -> type[Any] | None:
+    """Resolve the concrete container type named by a spec under a default-deny gate.
+
+    Security contract (this is the fix for the output-container reconstruction RCE):
+
+    * NEVER imports an attacker-named module -- importing runs top-level module code.
+      The type is resolved ONLY from a module already present in ``sys.modules``; every
+      legit container type was produced by the traced model, so its module is loaded.
+    * A resolved type is returned ONLY when it structurally matches the benign container
+      kind recorded in the spec (see ``_container_type_is_admissible``); a resolved type
+      that is NOT admissible (e.g. ``subprocess.Popen`` under a ``namedtuple`` kind) is a
+      tampered spec and is refused with a typed ``ContainerReconstructionError`` BEFORE
+      any construction.
+    * An unresolvable reference (module not loaded / attribute missing / not a type)
+      returns ``None`` so the caller falls back to its plain container shape, preserving
+      the historical graceful behavior for genuinely-unavailable types.
 
     Parameters
     ----------
@@ -318,18 +425,39 @@ def _import_container_type(spec: ContainerSpec) -> type[Any] | None:
     Returns
     -------
     type[Any] | None
-        Imported type, or ``None`` if it cannot be resolved.
+        The admissible container type, or ``None`` when no type is recorded or the
+        reference cannot be resolved to a loaded type.
+
+    Raises
+    ------
+    ContainerReconstructionError
+        If the reference resolves to a loaded type that is not admissible for the
+        recorded container kind.
     """
 
-    if spec.type_module is None or spec.type_qualname is None:
+    module_name = spec.type_module
+    qualname = spec.type_qualname
+    if module_name is None or qualname is None:
         return None
+    module = sys.modules.get(module_name)
+    if module is None:
+        # Refuse to import an arbitrary bundle-named module; fall back to the plain
+        # container shape rather than executing that module's top-level code.
+        return None
+    resolved: Any = module
     try:
-        obj: Any = importlib.import_module(spec.type_module)
-        for name in spec.type_qualname.split("."):
-            obj = getattr(obj, name)
-    except (AttributeError, ImportError):
+        for attribute_name in qualname.split("."):
+            resolved = getattr(resolved, attribute_name)
+    except AttributeError:
         return None
-    return obj if isinstance(obj, type) else None
+    if not isinstance(resolved, type):
+        return None
+    if not _container_type_is_admissible(resolved, spec):
+        raise ContainerReconstructionError(
+            "Refusing to reconstruct output container from disallowed type "
+            f"{module_name}.{qualname} for container kind {spec.kind!r}."
+        )
+    return resolved
 
 
 class RegisteredContainer:

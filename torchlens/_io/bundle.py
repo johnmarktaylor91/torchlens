@@ -1664,6 +1664,52 @@ def _load_unified_bundle(bundle_path: Path) -> "Bundle":
     return bundle
 
 
+def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
+    """Resolve a ``bundle.json`` member path under the bundle root, rejecting escapes.
+
+    Mirrors the anti-traversal protection of ``resolve_bundle_blob_path`` (which is
+    scoped to ``<bundle>/blobs``) for nested bundle members, which are written directly
+    under the bundle root (``members/NNNN.tlspec``). A member ``path`` is portable,
+    attacker-influenceable data: without this guard an absolute or ``..`` member path
+    would load (and thus reconstruct) an arbitrary filesystem location outside the
+    bundle. The resolved path is required to stay inside the bundle root.
+
+    Parameters
+    ----------
+    bundle_path:
+        Bundle root directory.
+    relative_path:
+        Manifest-provided member path relative to the bundle root.
+
+    Returns
+    -------
+    Path
+        Absolute resolved member path guaranteed to lie inside ``bundle_path``.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the path is absolute, contains ``".."``, or resolves outside the bundle root.
+    """
+
+    candidate_path = Path(relative_path)
+    if candidate_path.is_absolute():
+        raise TorchLensIOError(f"Bundle rejected absolute member path {relative_path!r}.")
+    if ".." in candidate_path.parts:
+        raise TorchLensIOError(
+            f"Bundle rejected parent traversal in member path {relative_path!r}."
+        )
+    candidate = (bundle_path / candidate_path).resolve()
+    allowed_root = bundle_path.resolve()
+    try:
+        candidate.relative_to(allowed_root)
+    except ValueError as exc:
+        raise TorchLensIOError(
+            f"Bundle rejected member path traversal outside bundle root: {relative_path!r}."
+        ) from exc
+    return candidate
+
+
 def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "Bundle":
     """Load a unified bundle container from nested member specs.
 
@@ -1704,7 +1750,7 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
         relative_path = entry.get("path")
         if not isinstance(name, str) or not isinstance(relative_path, str):
             raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
-        member_path = bundle_path / relative_path
+        member_path = _resolve_bundle_member_path(bundle_path, relative_path)
         loaded = load(member_path)
         if not isinstance(loaded, Trace):
             raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
