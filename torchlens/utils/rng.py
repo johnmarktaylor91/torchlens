@@ -29,6 +29,7 @@ import numpy as np
 import torch
 
 from ._torch_compat import autocast_get_dtype, autocast_is_enabled
+from .hashing import seed_barcode_rng
 from .tensor_utils import _is_cuda_available
 
 _AUTOCAST_DEVICES = ("cpu", "cuda")
@@ -50,6 +51,12 @@ def set_random_seed(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    # Keep torchlens's private barcode RNG in lockstep with the seed so a fixed
+    # capture seed yields reproducible tensor barcodes (a fork replay reuses the
+    # original seed; matching barcodes keep tensor/op/param cross-references
+    # consistent). The barcode RNG stays a separate stream, so this does not
+    # perturb the user's global ``random`` state that host-RNG honesty brackets.
+    seed_barcode_rng(seed)
 
 
 def execute_with_restored_rng_autocast(

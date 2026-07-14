@@ -51,6 +51,21 @@ _BARCODE_ALPHABET = string.ascii_letters + string.digits
 _BARCODE_RNG = random.Random()
 
 
+def seed_barcode_rng(seed: int) -> None:
+    """Seed the process-private barcode RNG for reproducible tensor barcodes.
+
+    The barcode RNG is a torchlens-internal engine kept off the global ``random``
+    stream (so barcode draws never masquerade as user host-RNG consumption during a
+    forward). It must still track :func:`torchlens.utils.rng.set_random_seed`: a fixed
+    capture seed has to produce a reproducible barcode sequence so that a fork replay
+    of the same graph (``save_new_outs`` reuses the original capture seed) assigns
+    matching barcodes -- otherwise tensor<->op<->param cross-references diverge between
+    the original and replayed captures. Seeding a *private* ``random.Random`` keeps the
+    host-RNG honesty bracketing intact while restoring that determinism.
+    """
+    _BARCODE_RNG.seed(seed)
+
+
 def make_random_barcode(barcode_len: int = 8) -> str:
     """Generate a random alphanumeric identifier for internal tensor tracking.
 
