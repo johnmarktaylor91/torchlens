@@ -218,16 +218,38 @@ class _WitnessState:
     record_escapes: bool = False
 
 
-HOST_ESCAPE_OPERATORS = frozenset({"aten._local_scalar_dense.default"})
-"""Aten operators that hand a captured tensor's value to the Python host.
+HOST_ESCAPE_OPERATORS = frozenset(
+    {
+        "aten._local_scalar_dense",
+        "aten.equal",
+        "aten.allclose",
+        "aten.is_nonzero",
+    }
+)
+"""Aten operators (overload-stripped base names) that read a captured tensor's VALUE
+out to the Python host.
 
-``aten._local_scalar_dense.default`` is the single dispatcher footprint of every
-tensor->Python scalar escape TorchLens can see: ``.item()``, ``int()``,
-``float()``, ``__index__``, and ``bool()`` all lower to it. Recording the SOURCE
-tensor of this escape lets the runnable descriptor witness the escape by its
-producing op (keyed on the ESCAPE EVENT), never by correlating a baked literal by
-value. Multi-element ``.tolist()`` / ``.numpy()`` conversions do NOT emit this op
-(they are dispatcher-invisible) and are handled by the descriptor's complementary
+This is a NARROW allowlist of genuine tensor->host VALUE escapes, NOT a general
+"any non-tensor output" census (which mis-fires on tensor STRUCTURE/METADATA ops --
+``size`` / ``sym_size`` / ``numel`` / ``dim`` / ``stride`` / ``is_contiguous`` /
+``dtype`` / ``device`` / ``storage_offset`` / ... -- whose non-tensor output derives
+from shape/layout, is input-VALUE-independent, and is already covered by the separate
+input-shape-mismatch check; witnessing those is both wrong (it over-triggers a false
+UNVERIFIABLE on an escape-free model) and a pathological per-op capture slowdown
+because a real model reads shapes constantly).
+
+* ``aten._local_scalar_dense`` -- the single dispatcher footprint of every
+  tensor->Python SCALAR escape: ``.item()``, ``int()``, ``float()``, ``__index__``,
+  and ``bool()`` all lower to it (single tensor operand).
+* ``aten.equal`` / ``aten.allclose`` / ``aten.is_nonzero`` -- pure tensor->``bool``
+  predicates that return a raw Python value DIRECTLY from the dispatcher and never emit
+  ``aten._local_scalar_dense`` (two/one tensor operands).
+
+Recording the SOURCE tensor(s) of such an escape lets the runnable descriptor witness
+the escape by its producing op (keyed on the ESCAPE EVENT), never by correlating a
+baked literal by value. Multi-element ``.tolist()`` / ``.numpy()`` / ``__array__`` /
+``__dlpack__`` conversions do NOT emit any of these ops (they are dispatcher-invisible)
+and are handled by the scoped method/property patch plus the descriptor's complementary
 value-equality net.
 """
 
@@ -542,29 +564,33 @@ def _iter_tensor_operands(args: tuple[Any, ...]) -> Iterator[torch.Tensor]:
 
 
 def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...], result: Any) -> None:
-    """Record the raw producing-op label of every tensor->host escape SOURCE for one dispatch.
+    """Record the raw producing-op label of every tensor->host VALUE-escape SOURCE.
 
-    GENERAL host-escape rule (closes the class by construction, not by an op-name
-    allowlist): ANY aten dispatch whose inputs include a tensor and whose OUTPUT is a
-    NON-TENSOR host value (a Python ``bool`` / ``int`` / ``float`` / ``complex``, or a
-    ``list`` / ``tuple`` thereof) hands a captured tensor's value to the Python host.
-    That host value can be baked into a downstream op literal (verbatim OR after
-    arbitrary Python arithmetic) or steer pure-Python control flow -- neither of which
-    the sparse DAG can recompute. This uniformly catches:
+    NARROW value-escape rule: the dispatch's operator (overload-stripped) must be one of
+    the ``HOST_ESCAPE_OPERATORS`` VALUE reads (``aten._local_scalar_dense`` from
+    ``.item()`` / ``int()`` / ``float()`` / ``__index__`` / ``bool()``, or the direct
+    tensor->``bool`` predicates ``aten.equal`` / ``aten.allclose`` / ``aten.is_nonzero``)
+    AND its output must be a pure Python host value. That host value can be baked into a
+    downstream op literal (verbatim OR after arbitrary Python arithmetic) or steer
+    pure-Python control flow -- neither of which the sparse DAG can recompute.
 
-    * ``aten._local_scalar_dense`` -- ``.item()`` / ``int()`` / ``float()`` /
-      ``__index__`` / ``bool()`` (single tensor operand);
-    * ``aten.equal`` / ``aten.allclose`` / ``aten.is_nonzero`` -- pure tensor->``bool``
-      predicates that return a raw Python value directly from the dispatcher and NEVER
-      emit ``aten._local_scalar_dense`` (two/one tensor operands); and
-    * any future op of the same shape.
+    The rule is DELIBERATELY not a general "any non-tensor output" census: tensor
+    STRUCTURE/METADATA ops (``size`` / ``sym_size`` / ``numel`` / ``dim`` / ``stride`` /
+    ``is_contiguous`` / ``dtype`` / ``device`` / ``storage_offset`` / ...) also return
+    non-tensor host values, but those derive from shape/layout, are input-VALUE-
+    independent (already covered by the separate input-shape-mismatch check), and a real
+    model reads them constantly -- witnessing them over-triggers a false UNVERIFIABLE on
+    escape-free models and pathologically slows per-op capture. Restricting to the value
+    allowlist keeps genuine escapes witnessed without either regression.
 
-    Every tensor operand is recorded as an escape source; its raw capture label lets the
-    runnable descriptor witness that source slot and, at run time, refuse a false
+    Every tensor operand of a value escape is recorded as a source; its raw capture label
+    lets the runnable descriptor witness that source slot and, at run time, refuse a false
     VERIFIED when the slot recomputes different bytes for a changed input.
     """
 
     if not args or not _is_aten_operator(func):
+        return
+    if _operator_base_name(func) not in HOST_ESCAPE_OPERATORS:
         return
     if not _output_is_host_value(result):
         return
@@ -675,6 +701,21 @@ def _operator_name(func: Any) -> str:
         return str(func)
     except Exception:
         return type(func).__name__
+
+
+def _operator_base_name(func: Any) -> str:
+    """Return a dispatcher operator's namespace+base name with the overload stripped.
+
+    ``_operator_name`` yields the fully-qualified ``aten.<op>.<overload>`` (e.g.
+    ``aten.equal.default``); this drops the trailing ``.<overload>`` so a value-escape
+    op is matched by its overload-independent base (``aten.equal``) against
+    ``HOST_ESCAPE_OPERATORS``. A name with no overload segment is returned unchanged.
+    """
+
+    name = _operator_name(func)
+    if name.count(".") >= 2:
+        return name.rsplit(".", 1)[0]
+    return name
 
 
 def _is_aten_operator(func: Any) -> bool:

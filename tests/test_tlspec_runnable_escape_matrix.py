@@ -422,9 +422,30 @@ class _CleanElementwise(nn.Module):
         return (x * 2.0 + 1.0).tanh()
 
 
+class _ShapeReadClean(nn.Module):
+    """r12 regression guard: a model that reads tensor SHAPE/METADATA constantly but has
+    NO value escape must stay VERIFIED. ``x.size()`` / ``x.shape`` / ``x.numel()`` /
+    ``x.dim()`` return non-tensor host values, but they derive from LAYOUT, not data
+    values, so the narrowed value-escape rule must NOT witness them (the over-broad
+    "any non-tensor output = escape" rule falsely downgraded this class to UNVERIFIABLE
+    AND pathologically slowed capture)."""
+
+    def __init__(self) -> None:
+        torch.manual_seed(0)
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b = x.size(0)
+        assert x.dim() == 2 and x.numel() == b * x.shape[1]
+        h = self.lin(x).relu()
+        return h.reshape(b, -1) * float(h.shape[1])
+
+
 _ESCAPE_FREE: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = [
     ("clean_linear", _CleanLinear, _VEC_IN, _VEC_IN_CHANGED),
     ("clean_elementwise", _CleanElementwise, _TWO, _TWO_CHANGED),
+    ("shape_read_clean", _ShapeReadClean, _VEC_IN, _VEC_IN_CHANGED),
 ]
 
 
