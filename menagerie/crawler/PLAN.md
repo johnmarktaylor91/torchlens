@@ -1131,6 +1131,27 @@ Cap exhaustion is `failed:<actual-stage>` with `reason_code=effort-cap-exhausted
 defer. Only `tools/requeue --reason ... --grant ...` creates an explicit new work generation; it records the
 grant and preserves history.
 
+### 13.3 Human review checkpoint and progress notifications
+
+The single-writer driver owns two terminal-count notification policies. `review_checkpoint_at` defaults
+to `1000`; `0` or `null` disables it. When the terminal partition count first reaches that value, the
+driver writes a runtime check-in report containing the funnel, fidelity-verdict distribution, accepted
+sample, and concerning patterns; appends one `checkpoint-review` operational event; notifies JMT; sets
+its disposable state to `paused:review-checkpoint`; tears down the active environment; and stops. This is
+a blocking, one-shot checkpoint. `crawler resume --after-review`, or an already recorded
+`review-signoff` event, appends/consumes the sign-off and allows the campaign to continue without
+blocking again at the same checkpoint.
+
+`progress_milestones` defaults to `[2000, 3000, 5000, 10000, 15000, 20000]` and may be empty. Crossing a
+configured value appends exactly one `progress-notification` event with the completed count and funnel,
+notifies JMT, and continues immediately. Persisted operational events make both review and milestone
+delivery idempotent across resume.
+
+Both policies use `notify_command`. Its default resolves `send-to-jmt.sh` from `PATH`,
+`~/scripts`, or `~/bin`, and otherwise uses log-only delivery. Notification text is a single plain-ASCII
+summary line. A missing or failing notifier is recorded in the driver log and never crashes, pauses, or
+blocks campaign progress.
+
 ## 14. Unattended operation and usage-limit self-wake
 
 The driver checkpoints continuously through fsynced facts; relaunch is therefore cheap.

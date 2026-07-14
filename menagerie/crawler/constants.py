@@ -356,3 +356,10 @@ class OperationalEventStatus(StrEnum):
     CHECKPOINT_REVIEW_PAUSED = "paused:checkpoint-review"
     REVIEW_SIGNED_OFF = "resumed:checkpoint-review"
     PROGRESS_NOTIFIED = "progress-notified"
+
+
+# Slice-F scheduler configuration defaults.  The earlier names remain the
+# compatibility surface used by Slice E's event builders.
+DEFAULT_REVIEW_CHECKPOINT_AT = DEFAULT_REVIEW_CHECKPOINT_MODELS
+DEFAULT_PROGRESS_MILESTONES = DEFAULT_PROGRESS_NOTIFICATION_MILESTONES
+DEFAULT_NOTIFY_COMMAND: str | None = None
