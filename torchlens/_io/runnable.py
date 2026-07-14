@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 from hashlib import sha256
@@ -527,6 +527,53 @@ def sparse_descriptor_to_json(descriptor: SparseRunDescriptor) -> dict[str, Any]
     return value
 
 
+def detach_sparse_core_nested_trace_backrefs(value: Any) -> None:
+    """Detach runtime-only nested-``Trace`` back-references from a scrub product.
+
+    A conditional arm records a private ``_trace`` back-reference to its owning
+    ``Trace`` (bound in postprocess finalization to serve the ``evaluation_ops`` /
+    ``execution_ops`` convenience accessors). ``ConditionalAccessor`` has no
+    ``PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
+    ``_trace`` still points at the LIVE trace -- dragging that trace's
+    ``_runnable_capture_state`` (and every other live tensor field) into the value-free
+    sparse core through ``conditionals._list.<i>.arms.<j>._trace``. The top-level
+    capture-state is dropped by ``Trace.PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
+    routed to the separate ``state_dict_v1`` blob; the arm back-reference must get the
+    SAME treatment. Arm replay is driven entirely by the descriptor's recorded
+    ``conditional_arm_entry_edges`` control witnesses and top-level state, never by this
+    back-reference, so it is dropped (not routed): the sparse core stays value-free.
+
+    This mutates only the passed SCRUB-PRODUCT container (a throwaway dict built by the
+    bundle scrub for pickling) -- it rebuilds the ``conditionals`` entry from detached
+    shallow arm copies and leaves the LIVE ``Trace`` fully intact (its own accessor
+    object is untouched, so ``evaluation_ops`` keeps working after ``save``). It is a
+    no-op for the frozen ``SparseRunDescriptor`` projection (which carries no nested
+    trace back-reference), and it does NOT weaken the tensor-payload tripwire: any
+    OTHER stray tensor still fails :func:`assert_sparse_core_has_no_tensor_payload`.
+    """
+
+    import copy as _copy
+
+    from ..data_classes.trace import Conditional, ConditionalAccessor
+
+    if not isinstance(value, MutableMapping):
+        return
+    accessor = value.get("conditionals")
+    if not isinstance(accessor, ConditionalAccessor):
+        return
+    detached: list[Conditional] = []
+    for conditional in accessor.values():
+        detached_arms = []
+        for arm in conditional.arms:
+            arm_copy = _copy.copy(arm)
+            arm_copy._trace = None
+            detached_arms.append(arm_copy)
+        conditional_copy = _copy.copy(conditional)
+        conditional_copy.arms = detached_arms
+        detached.append(conditional_copy)
+    value["conditionals"] = ConditionalAccessor(detached)
+
+
 def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
     """Assert that a sparse core contains no tensor or tensor-blob value.
 
@@ -542,6 +589,13 @@ def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
     """
 
     from . import BlobRef
+
+    # Detach runtime-only nested-Trace back-references (conditional arm ``_trace``)
+    # from the scrub product BEFORE the value-free invariant is enforced. These are
+    # not sparse-core payload; leaving them bound would drag the live trace's
+    # capture-state tensors into the core (mirrors the top-level DROP-and-route). The
+    # tensor-payload walk below is unchanged and still fails on any genuine stray.
+    detach_sparse_core_nested_trace_backrefs(value)
 
     seen: set[int] = set()
 
