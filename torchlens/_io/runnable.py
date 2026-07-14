@@ -1610,14 +1610,35 @@ def _mark_inplace_versions(
     """Attach version relations for in-place call outputs."""
 
     for call in calls:
-        if not call.is_inplace or not call.tensor_arguments:
+        version_of = _mutation_target_slot_id(call)
+        if not call.is_inplace or version_of is None:
             continue
-        version_of = call.tensor_arguments[0].slot_id
         for output_slot_id in call.output_slot_ids:
             draft = slot_drafts.get(output_slot_id)
             if draft is not None:
                 draft.mutable = True
                 draft.version_of = version_of
+
+
+def _mutation_target_slot_id(call: RunnableCallDescriptor) -> str | None:
+    """Return the tensor slot mutated by one recorded call.
+
+    Parameters
+    ----------
+    call:
+        Frozen runnable call descriptor.
+
+    Returns
+    -------
+    str | None
+        The ``out=`` tensor slot when present, otherwise the first tensor
+        argument for conventional in-place operators.
+    """
+
+    for argument in call.tensor_arguments:
+        if argument.argument_path == ("kwargs", "out"):
+            return argument.slot_id
+    return call.tensor_arguments[0].slot_id if call.tensor_arguments else None
 
 
 def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:

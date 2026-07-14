@@ -387,3 +387,33 @@ def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> 
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.poisoned
+
+
+# ---------------------------------------------------------------------------
+# F7 -- out= operations mutate and alias their explicit output tensor
+# ---------------------------------------------------------------------------
+
+
+class _OutParameterAdd(nn.Module):
+    """Compute through a non-aliasing input and an explicit ``out=`` tensor."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Return ``value + 1`` written into a fresh output tensor."""
+
+        output = torch.empty_like(value)
+        torch.add(value, 1, out=output)
+        return output
+
+
+@pytest.mark.smoke
+def test_out_parameter_operation_runs_verified_on_original_input(tmp_path: Path) -> None:
+    """``out=`` mutation checks must alias the output slot, not the first input."""
+
+    torch.manual_seed(0)
+    value = torch.randn(2)
+    path = _save_runnable(_OutParameterAdd(), value, tmp_path / "out_parameter.tlspec")
+
+    result = tl.load(path).run(inputs=value)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+    assert torch.equal(result.output, value + 1)
