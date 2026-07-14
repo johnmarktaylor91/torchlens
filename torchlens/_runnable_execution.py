@@ -2122,17 +2122,50 @@ def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
     if isinstance(value, LiteralMapping):
         return {_decode_literal(entry.key): _decode_literal(entry.value) for entry in value.entries}
     if isinstance(value, LiteralTorchSymbol):
-        if value.qualname.startswith("torch.device(") and value.qualname.endswith(")"):
-            return torch.device(value.qualname[13:-1])
-        name = value.qualname.removeprefix("torch.")
-        symbol = getattr(torch, name, None)
-        if symbol is None or callable(symbol):
-            raise RunPreconditionError(
-                f"Unsupported torch literal symbol {value.qualname!r}.",
-                code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
-            )
-        return symbol
+        return _decode_torch_symbol(value.qualname)
     raise TypeError(f"Unknown sparse literal type {type(value).__name__}.")
+
+
+# POSITIVE allowlist of the torch symbolic constant *types* a forward op
+# legitimately takes as a literal argument. A loaded bundle is untrusted input,
+# so decoding an arbitrary ``torch`` attribute by name would otherwise admit whole
+# submodules (``torch.serialization`` / ``torch.os``) or any other non-callable
+# attribute. These are the only symbolic literals the encoder ever emits
+# (``_torch_symbol_qualname``): dtype / layout / memory_format instances, plus
+# qscheme and the ``torch.Size`` type -- everything else is denied by construction.
+_ALLOWED_TORCH_SYMBOL_TYPES: tuple[type, ...] = (
+    torch.dtype,
+    torch.layout,
+    torch.memory_format,
+    torch.qscheme,
+)
+
+
+def _decode_torch_symbol(qualname: str) -> Any:
+    """Decode one allowlisted non-callable torch symbolic literal.
+
+    ``torch.device(...)`` round-trips through the device constructor. Every other
+    accepted symbol must be a bare ``torch.<name>`` lookup resolving to a
+    dtype / layout / memory_format / qscheme instance or the ``torch.Size`` type;
+    dotted attribute traversal, modules, callables (other than ``torch.Size``),
+    and any other attribute are rejected as unsupported literals.
+    """
+
+    if qualname.startswith("torch.device(") and qualname.endswith(")"):
+        return torch.device(qualname[13:-1])
+    name = qualname.removeprefix("torch.")
+    if name == qualname or "." in name or not name.isidentifier():
+        raise RunPreconditionError(
+            f"Unsupported torch literal symbol {qualname!r}.",
+            code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
+        )
+    symbol = getattr(torch, name, None)
+    if symbol is torch.Size or isinstance(symbol, _ALLOWED_TORCH_SYMBOL_TYPES):
+        return symbol
+    raise RunPreconditionError(
+        f"Unsupported torch literal symbol {qualname!r}.",
+        code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
+    )
 
 
 def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:

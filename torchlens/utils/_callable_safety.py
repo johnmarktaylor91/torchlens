@@ -89,8 +89,62 @@ _ALLOWED_FORWARD_OP_MODULES: frozenset[str] = frozenset(
         "torch._C._VariableFunctionsClass",
         "torch._C._TensorBase",
         "torch._C.TensorBase",
-        "operator",
-        "_operator",
+    }
+)
+
+# The ``operator`` / ``_operator`` root is handled by a dedicated POSITIVE
+# allowlist (below), NOT the module gate: the module also exposes generic
+# gadget / side-effecting primitives (``operator.call`` / ``attrgetter`` /
+# ``methodcaller`` / ``itemgetter`` / ``setitem`` / ``delitem`` / the ``i*``
+# in-place mutators) that are plainly not forward ops. It is therefore
+# deliberately absent from ``_ALLOWED_FORWARD_OP_MODULES``.
+_OPERATOR_MODULES: frozenset[str] = frozenset({"operator", "_operator"})
+
+# Pure, side-effect-free ``operator`` callables that legitimately appear in a
+# captured forward graph: arithmetic, comparison, bitwise, and index/sequence
+# operators. This is a POSITIVE allowlist (default-DENY the rest of
+# ``operator`` / ``_operator``). Unlike torch's dynamic ``_VariableFunctions``
+# namespace -- thousands of drifting builtins that forced a denylist -- the pure
+# operator set is small and stable, so an allowlist closes the generic-gadget
+# class BY CONSTRUCTION: ``operator.call`` / ``attrgetter`` / ``methodcaller`` /
+# ``itemgetter`` / ``setitem`` / ``delitem`` / ``setattr`` / ``delattr`` and the
+# in-place ``iadd`` / ``imul`` / ... mutators can never be re-admitted by a
+# future widening. The ``and_`` / ``or_`` names carry the module's trailing
+# underscore; ``getitem`` (not ``setitem``) and ``concat`` (not ``iconcat``) are
+# the read-only sequence ops.
+_ALLOWED_OPERATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "add",
+        "sub",
+        "mul",
+        "truediv",
+        "floordiv",
+        "mod",
+        "pow",
+        "neg",
+        "pos",
+        "abs",
+        "matmul",
+        "and_",
+        "or_",
+        "xor",
+        "invert",
+        "lshift",
+        "rshift",
+        "lt",
+        "le",
+        "eq",
+        "ne",
+        "gt",
+        "ge",
+        "getitem",
+        "index",
+        "concat",
+        "contains",
+        "not_",
+        "is_",
+        "is_not",
+        "length_hint",
     }
 )
 
@@ -381,7 +435,12 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     terminal NAME is not a side-effecting callable (file-I/O / serialization /
     import gadget, process-global-state mutator, or storage-unsafe in-place op)
     and (b) its module is on the positive allowlist and off the side-effecting
-    denylist. Module-less C tensor method descriptors are admitted when bound to a
+    denylist. The ``operator`` / ``_operator`` root is gated separately by a
+    POSITIVE NAME allowlist (``_ALLOWED_OPERATOR_NAMES``), so generic gadget /
+    mutation primitives (``operator.call`` / ``attrgetter`` / ``methodcaller`` /
+    ``itemgetter`` / ``setitem`` / ``delitem`` / ``iadd`` / ...) are default-denied
+    while the pure arithmetic / comparison / bitwise / index operators still
+    resolve. Module-less C tensor method descriptors are admitted when bound to a
     Tensor class. Anything else -- notably ``torch.load`` / ``torch.save`` /
     ``torch.from_file``, the state mutators ``set_default_dtype`` / ``manual_seed``
     / ``set_num_threads``, the storage-unsafe ``resize_`` / ``set_``, and any
@@ -399,6 +458,12 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
         return _is_tensor_method_descriptor(real)
     if _matches(module, _DENIED_MODULES):
         return False
+    if module in _OPERATOR_MODULES:
+        # POSITIVE allowlist for the operator root: only the pure arithmetic /
+        # comparison / bitwise / index operators are admitted; every generic
+        # gadget or mutation primitive (``call`` / ``attrgetter`` / ``setitem``
+        # / ``iadd`` / ...) is default-denied.
+        return _terminal_callable_name(real) in _ALLOWED_OPERATOR_NAMES
     return _matches(module, _ALLOWED_FORWARD_OP_MODULES)
 
 
