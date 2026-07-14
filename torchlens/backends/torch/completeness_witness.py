@@ -1154,6 +1154,35 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     return wrapper
 
 
+def _make_storage_raw_pointer_wrapper(original: Any, state: _WitnessState) -> Any:
+    """Wrap ``UntypedStorage.data_ptr`` / ``TypedStorage.data_ptr`` to fail closed, then read through.
+
+    ``tensor.data_ptr()`` is fail-closed by :func:`_make_invisible_escape_wrapper` (r15-H1), but the
+    SAME raw pointer is reachable off the Storage HANDLE: ``tensor.untyped_storage().data_ptr()`` /
+    ``tensor.storage().data_ptr()`` call ``data_ptr`` on the ``UntypedStorage`` / ``TypedStorage``
+    object, NOT on ``torch.Tensor`` -- so the Tensor patch never fires and the raw pointer escapes
+    unobserved (r16-C1). A ``ctypes`` READ through it bakes a stale literal and a WRITE through it
+    mutates the source with no dispatch, no version bump, and no byte the forward-end watch can
+    re-inspect. A genuine USER storage ``data_ptr()`` therefore fails closed to UNVERIFIABLE, exactly
+    like the Tensor path. Scoped to the ``data_ptr()`` ACCESSOR only: read-only
+    ``untyped_storage().nbytes()`` / ``.size()`` (pure metadata, no pointer) never trips it.
+    TorchLens's own capture-internal storage-pointer reads (``aliasing._tensors_alias`` ->
+    ``untyped_storage().data_ptr()``) run under the ``internal_scalar_read`` marker and are excluded.
+    """
+
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        if (
+            threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+            and not _internal_read_active()
+        ):
+            _HOST_ESCAPE_RAW_POINTER.add(state.trace)
+        return original(self, *args, **kwargs)
+
+    return wrapper
+
+
 def _make_module_escape_wrapper(original: Any, state: _WitnessState) -> Any:
     """Wrap a module-level tensor->host export function to record its tensor argument SOURCE.
 
@@ -1236,6 +1265,19 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         module_originals.append((module, func_name, original_func))
+    # Storage-handle raw-pointer accessors (r16-C1): ``UntypedStorage.data_ptr`` /
+    # ``TypedStorage.data_ptr`` reach the SAME raw pointer as ``Tensor.data_ptr`` but off the
+    # storage object, so the Tensor patch never sees them. Fail closed on a genuine user call.
+    storage_originals: list[tuple[Any, Any]] = []
+    for storage_cls in _STORAGE_RAW_POINTER_TARGETS():
+        storage_original = storage_cls.data_ptr
+        try:
+            setattr(
+                storage_cls, "data_ptr", _make_storage_raw_pointer_wrapper(storage_original, state)
+            )
+        except (TypeError, AttributeError):
+            continue
+        storage_originals.append((storage_cls, storage_original))
     property_originals: dict[str, Any] = {}
     for name in INVISIBLE_HOST_ESCAPE_PROPERTIES:
         descriptor = type(torch.Tensor).__dict__.get(name) or torch.Tensor.__dict__.get(name)
@@ -1259,12 +1301,33 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 setattr(module, func_name, original_func)
             except (TypeError, AttributeError):
                 pass
+        for storage_cls, storage_original in storage_originals:
+            try:
+                setattr(storage_cls, "data_ptr", storage_original)
+            except (TypeError, AttributeError):
+                pass
         for name, descriptor in property_originals.items():
             try:
                 setattr(torch.Tensor, name, descriptor)
             except (TypeError, AttributeError):
                 pass
         _check_writeback_watch(state)
+
+
+def _STORAGE_RAW_POINTER_TARGETS() -> tuple[Any, ...]:
+    """Return storage classes whose ``data_ptr`` accessor leaks the raw pointer (r16-C1).
+
+    ``tensor.untyped_storage()`` yields a ``torch.UntypedStorage`` and ``tensor.storage()`` a
+    ``torch.TypedStorage``; ``data_ptr()`` on either hands out the same raw pointer the r15 Tensor
+    patch fails closed on. Both are Python-visible classes whose ``data_ptr`` method is patchable.
+    """
+
+    targets: list[Any] = []
+    for name in ("UntypedStorage", "TypedStorage"):
+        cls = getattr(torch, name, None)
+        if cls is not None and hasattr(cls, "data_ptr"):
+            targets.append(cls)
+    return tuple(targets)
 
 
 def _MODULE_ESCAPE_TARGETS() -> tuple[tuple[Any, str], ...]:
