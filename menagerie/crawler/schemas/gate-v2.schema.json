@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/gate-v2.schema.json",
+  "title": "Menagerie crawler immutable checker gate v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "gate_id", "ledger_seq", "payload_sha256", "gate_kind", "batch_size", "gate_round", "gate_identity", "checker", "items", "result_envelope_sha256"],
+  "properties": {
+    "schema_version": {"const": "menagerie.crawler.gate.v2"},
+    "gate_id": {"$ref": "#/$defs/nonempty_string"},
+    "ledger_seq": {"type": "integer", "minimum": 1},
+    "payload_sha256": {"$ref": "#/$defs/hash"},
+    "gate_kind": {"enum": ["metadata_batch", "fidelity"]},
+    "batch_size": {"type": "integer", "minimum": 1, "maximum": 20},
+    "gate_round": {"type": "integer", "minimum": 1},
+    "gate_identity": {"$ref": "#/$defs/hash"},
+    "checker": {"$ref": "#/$defs/checker"},
+    "items": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "result_envelope_sha256": {"$ref": "#/$defs/hash"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"gate_kind": {"const": "metadata_batch"}}},
+      "then": {
+        "properties": {
+          "batch_size": {"type": "integer", "minimum": 10, "maximum": 20},
+          "items": {
+            "type": "array", "minItems": 10, "maxItems": 20,
+            "items": {
+              "allOf": [
+                {"$ref": "#/$defs/item"},
+                {"properties": {"fidelity": {"properties": {"required": {"const": false}, "verdict": {"const": "not-applicable"}}}}}
+              ]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "batch_size": {"const": 1},
+          "items": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/item"}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullable_hash": {"oneOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "nonempty_string": {"type": "string", "minLength": 1},
+    "nullable_string": {"oneOf": [{"$ref": "#/$defs/nonempty_string"}, {"type": "null"}]},
+    "string_array": {"type": "array", "items": {"type": "string"}},
+    "accuracy_verdict": {"enum": ["accurate", "inaccurate", "cannot-verify"]},
+    "rung": {"enum": ["R1_LIBRARY", "R2_VENDOR", "R3_PORT", "R4_REIMPLEMENT", "R5_SKIP"]},
+    "checker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "model", "version", "prompt_sha256", "started_at", "finished_at"],
+      "properties": {
+        "provider": {"const": "openai"}, "model": {"$ref": "#/$defs/nonempty_string"},
+        "version": {"$ref": "#/$defs/nonempty_string"}, "prompt_sha256": {"$ref": "#/$defs/hash"},
+        "started_at": {"$ref": "#/$defs/timestamp"}, "finished_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "verified_hashes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["proposal", "source_manifest", "evidence", "code", "source_to_code_map", "family_template"],
+      "properties": {
+        "proposal": {"$ref": "#/$defs/hash"}, "source_manifest": {"$ref": "#/$defs/hash"},
+        "evidence": {"$ref": "#/$defs/hash"}, "code": {"$ref": "#/$defs/nullable_hash"},
+        "source_to_code_map": {"$ref": "#/$defs/hash"}, "family_template": {"$ref": "#/$defs/nullable_hash"}
+      }
+    },
+    "integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["verdict", "hash_mismatches", "excerpt_discrepancies", "locator_failures"],
+      "properties": {
+        "verdict": {"$ref": "#/$defs/accuracy_verdict"}, "hash_mismatches": {"$ref": "#/$defs/string_array"},
+        "excerpt_discrepancies": {"$ref": "#/$defs/string_array"}, "locator_failures": {"$ref": "#/$defs/string_array"}
+      }
+    },
+    "field_check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["field", "verdict", "evidence_ids", "checked_source_ids", "reason", "required_repair"],
+      "properties": {
+        "field": {"$ref": "#/$defs/nonempty_string"}, "verdict": {"$ref": "#/$defs/accuracy_verdict"},
+        "evidence_ids": {"$ref": "#/$defs/string_array"}, "checked_source_ids": {"$ref": "#/$defs/string_array"},
+        "reason": {"$ref": "#/$defs/nonempty_string"}, "required_repair": {"$ref": "#/$defs/nullable_string"}
+      }
+    },
+    "material_check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["category", "verdict", "source_id", "source_locator", "evidence_ids", "code_path", "code_locator", "reason"],
+      "properties": {
+        "category": {"$ref": "#/$defs/nonempty_string"},
+        "verdict": {"enum": ["match", "minor-drift", "major-drift", "slop", "cannot-verify"]},
+        "source_id": {"$ref": "#/$defs/nonempty_string"}, "source_locator": {"$ref": "#/$defs/nonempty_string"},
+        "evidence_ids": {"$ref": "#/$defs/string_array"}, "code_path": {"$ref": "#/$defs/nullable_string"},
+        "code_locator": {"$ref": "#/$defs/nullable_string"}, "reason": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "fidelity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required", "verdict", "material_checks", "unsupported_choices", "contradictions", "omissions", "permanent_scar"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "verdict": {"enum": ["match", "minor-drift", "major-drift", "slop", "cannot-verify", "not-applicable"]},
+        "material_checks": {"type": "array", "items": {"$ref": "#/$defs/material_check"}},
+        "unsupported_choices": {"$ref": "#/$defs/string_array"}, "contradictions": {"$ref": "#/$defs/string_array"},
+        "omissions": {"$ref": "#/$defs/string_array"}, "permanent_scar": {"type": "boolean"}
+      }
+    },
+    "rung_check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["selected_rung", "highest_applicable", "verdict", "findings"],
+      "properties": {
+        "selected_rung": {"$ref": "#/$defs/rung"}, "highest_applicable": {"$ref": "#/$defs/rung"},
+        "verdict": {"$ref": "#/$defs/accuracy_verdict"}, "findings": {"$ref": "#/$defs/string_array"}
+      }
+    },
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["work_id", "stable_id", "family_representative_id", "fidelity_identity", "vet_identity", "verified_hashes", "integrity", "verdict", "field_checks", "fidelity", "rung_check", "unsupported_claims", "required_repairs", "confidence"],
+      "properties": {
+        "work_id": {"$ref": "#/$defs/nonempty_string"}, "stable_id": {"$ref": "#/$defs/nonempty_string"},
+        "family_representative_id": {"$ref": "#/$defs/nonempty_string"}, "fidelity_identity": {"$ref": "#/$defs/nullable_hash"},
+        "vet_identity": {"$ref": "#/$defs/hash"}, "verified_hashes": {"$ref": "#/$defs/verified_hashes"},
+        "integrity": {"$ref": "#/$defs/integrity"}, "verdict": {"$ref": "#/$defs/accuracy_verdict"},
+        "field_checks": {"type": "array", "items": {"$ref": "#/$defs/field_check"}},
+        "fidelity": {"$ref": "#/$defs/fidelity"}, "rung_check": {"$ref": "#/$defs/rung_check"},
+        "unsupported_claims": {"$ref": "#/$defs/string_array"}, "required_repairs": {"$ref": "#/$defs/string_array"},
+        "confidence": {"enum": ["high", "medium", "low"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/operational-event-v1.schema.json",
+  "title": "Menagerie crawler operational event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "ledger_seq", "payload_sha256", "created_at", "event_kind", "status", "provider", "observed_response", "reset_at", "queued_work_counts", "current_environment", "run_id", "machine_id", "details"],
+  "properties": {
+    "schema_version": {"const": "menagerie.crawler.operational-event.v1"},
+    "event_id": {"type": "string", "minLength": 1},
+    "ledger_seq": {"type": "integer", "minimum": 1},
+    "payload_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "event_kind": {"enum": ["usage-pause", "usage-resume", "wakeup", "checkpoint", "campaign-health", "wake-noop-already-running"]},
+    "status": {"enum": ["paused:usage-limit", "resumed:usage-limit", "wakeup-scheduled", "wakeup-fired", "wake-noop-already-running", "checkpoint-complete", "checkpoint-failed", "healthy", "failed:runner"]},
+    "provider": {"oneOf": [{"enum": ["anthropic", "openai"]}, {"type": "null"}]},
+    "observed_response": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+    "reset_at": {"oneOf": [{"type": "string", "format": "date-time", "pattern": "Z$"}, {"type": "null"}]},
+    "queued_work_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "current_environment": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+    "run_id": {"type": "string", "minLength": 1},
+    "machine_id": {"type": "string", "minLength": 1},
+    "details": {"type": "object"}
+  }
+}

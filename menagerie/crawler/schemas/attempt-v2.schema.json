@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/attempt-v2.schema.json",
+  "title": "Menagerie crawler immutable attempt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "attempt_id", "ledger_seq", "payload_sha256", "work_id", "stable_id",
+    "attempt_no", "parent_attempt_id", "actor", "stage", "mode", "started_at", "finished_at",
+    "result", "attempted_rungs", "retries", "identities", "environment", "host", "invocation",
+    "worker_receipt", "supervisor_observation", "policy_observation", "error", "defer_evidence"
+  ],
+  "properties": {
+    "schema_version": {"const": "menagerie.crawler.attempt.v2"},
+    "attempt_id": {"$ref": "#/$defs/nonempty_string"},
+    "ledger_seq": {"type": "integer", "minimum": 1},
+    "payload_sha256": {"$ref": "#/$defs/hash"},
+    "work_id": {"$ref": "#/$defs/nonempty_string"},
+    "stable_id": {"$ref": "#/$defs/nullable_string"},
+    "attempt_no": {"type": "integer", "minimum": 1},
+    "parent_attempt_id": {"$ref": "#/$defs/nullable_string"},
+    "actor": {"$ref": "#/$defs/nonempty_string"},
+    "stage": {"$ref": "#/$defs/stage"},
+    "mode": {"oneOf": [{"enum": ["train", "eval"]}, {"type": "null"}]},
+    "started_at": {"$ref": "#/$defs/timestamp"},
+    "finished_at": {"$ref": "#/$defs/timestamp"},
+    "result": {"enum": ["succeeded", "failed", "observed"]},
+    "attempted_rungs": {
+      "type": "array", "items": {"$ref": "#/$defs/rung"}, "uniqueItems": true
+    },
+    "retries": {"$ref": "#/$defs/retries"},
+    "identities": {"$ref": "#/$defs/identities"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "host": {"$ref": "#/$defs/host"},
+    "invocation": {"$ref": "#/$defs/invocation"},
+    "worker_receipt": {"$ref": "#/$defs/worker_receipt"},
+    "supervisor_observation": {"$ref": "#/$defs/supervisor_observation"},
+    "policy_observation": {"$ref": "#/$defs/policy_observation"},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]},
+    "defer_evidence": {"oneOf": [{"$ref": "#/$defs/defer_evidence"}, {"type": "null"}]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"stage": {"const": "forward"}}},
+      "then": {
+        "properties": {
+          "mode": {"enum": ["train", "eval"]},
+          "invocation": {"properties": {"mode": {"enum": ["train", "eval"]}}},
+          "worker_receipt": {"properties": {"mode": {"enum": ["train", "eval"]}}}
+        }
+      },
+      "else": {"properties": {"mode": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"result": {"const": "failed"}}},
+      "then": {"properties": {"error": {"$ref": "#/$defs/error"}}}
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullable_hash": {"oneOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "nonempty_string": {"type": "string", "minLength": 1},
+    "nullable_string": {
+      "oneOf": [{"$ref": "#/$defs/nonempty_string"}, {"type": "null"}]
+    },
+    "string_array": {"type": "array", "items": {"type": "string"}},
+    "stage": {
+      "enum": ["intake", "source", "fetch", "evidence", "accuracy-gate", "environment", "import", "constructor", "input", "forward", "fidelity", "resource", "policy", "runner"]
+    },
+    "reason_code": {
+      "enum": [
+        "schema-invalid", "stable-id-conflict", "duplicate-revision-conflict", "migration-invariant",
+        "identity-unresolved", "missing-mandatory-link", "source-model-mismatch", "higher-rung-unresolved",
+        "unreachable", "revision-missing", "hash-mismatch", "access-denied", "artifact-missing",
+        "locator-missing", "excerpt-mismatch", "insufficient-detail", "coverage-incomplete", "search-incomplete",
+        "inaccurate-cap-exhausted", "cannot-verify-cap-exhausted", "identity-mismatch", "checker-contract-invalid",
+        "solve-failed", "lock-missing", "artifact-hash-mismatch", "build-failed", "probe-failed",
+        "resolved-export-mismatch", "island-cap", "below-minimum-island-size", "module-missing",
+        "symbol-missing", "abi-load-failed", "import-exception", "exception", "requires-checkpoint",
+        "requires-weight-asset", "invalid-model-object", "contract-invalid", "source-invalid-shape",
+        "generation-exception", "semantic-constraint", "mode-run", "incomplete-receipt",
+        "invalid-output-signature", "confirmation-mismatch", "major-drift-cap-exhausted",
+        "slop-cap-exhausted", "timeout", "oom", "disk-floor", "scratch-cap", "rss-cap",
+        "network-attempt", "checkpoint-read", "write-outside-scratch", "credentials-exposed",
+        "torchlens-import", "opaque-code", "native-crash", "signal", "missing-receipt",
+        "protocol-violation", "ledger-corruption", "internal-error", "effort-cap-exhausted"
+      ]
+    },
+    "rung": {"enum": ["R1_LIBRARY", "R2_VENDOR", "R3_PORT", "R4_REIMPLEMENT", "R5_SKIP"]},
+    "retries": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage_attempt", "root_cause_repeat", "author_round", "gate_round"],
+      "properties": {
+        "stage_attempt": {"type": "integer", "minimum": 0},
+        "root_cause_repeat": {"type": "integer", "minimum": 0},
+        "author_round": {"type": "integer", "minimum": 0},
+        "gate_round": {"type": "integer", "minimum": 0}
+      }
+    },
+    "identities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "evidence", "recipe", "environment", "execution", "runner", "author_prompt", "checker_prompt"],
+      "properties": {
+        "source": {"$ref": "#/$defs/nullable_hash"}, "evidence": {"$ref": "#/$defs/nullable_hash"},
+        "recipe": {"$ref": "#/$defs/nullable_hash"}, "environment": {"$ref": "#/$defs/nullable_hash"},
+        "execution": {"$ref": "#/$defs/nullable_hash"}, "runner": {"$ref": "#/$defs/nullable_hash"},
+        "author_prompt": {"$ref": "#/$defs/nullable_hash"}, "checker_prompt": {"$ref": "#/$defs/nullable_hash"}
+      }
+    },
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["family", "target", "env_id", "lock_sha256", "resolved_export_sha256", "python", "packages_manifest_sha256", "compiler_identity", "sdk_identity"],
+      "properties": {
+        "family": {"$ref": "#/$defs/nonempty_string"}, "target": {"$ref": "#/$defs/nonempty_string"},
+        "env_id": {"$ref": "#/$defs/nonempty_string"}, "lock_sha256": {"$ref": "#/$defs/hash"},
+        "resolved_export_sha256": {"$ref": "#/$defs/hash"}, "python": {"$ref": "#/$defs/nonempty_string"},
+        "packages_manifest_sha256": {"$ref": "#/$defs/hash"},
+        "compiler_identity": {"$ref": "#/$defs/nonempty_string"}, "sdk_identity": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "host": {
+      "type": "object", "additionalProperties": false,
+      "required": ["machine_id", "os", "os_build", "architecture", "cpu", "ram_bytes", "accelerator", "accelerator_runtime"],
+      "properties": {
+        "machine_id": {"$ref": "#/$defs/nonempty_string"}, "os": {"$ref": "#/$defs/nonempty_string"},
+        "os_build": {"$ref": "#/$defs/nonempty_string"}, "architecture": {"$ref": "#/$defs/nonempty_string"},
+        "cpu": {"$ref": "#/$defs/nonempty_string"}, "ram_bytes": {"type": "integer", "minimum": 0},
+        "accelerator": {"$ref": "#/$defs/nullable_string"}, "accelerator_runtime": {"$ref": "#/$defs/nullable_string"}
+      }
+    },
+    "invocation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["argv", "cwd", "safe_env", "seed", "device", "mode", "network_policy", "timeout_seconds", "rss_limit_bytes", "scratch_limit_bytes"],
+      "properties": {
+        "argv": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "cwd": {"$ref": "#/$defs/nonempty_string"},
+        "safe_env": {"type": "object", "additionalProperties": {"type": "string"}},
+        "seed": {"type": "integer"}, "device": {"$ref": "#/$defs/nonempty_string"},
+        "mode": {"oneOf": [{"enum": ["train", "eval"]}, {"type": "null"}]},
+        "network_policy": {"$ref": "#/$defs/nonempty_string"},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 1800},
+        "rss_limit_bytes": {"type": "integer", "minimum": 1},
+        "scratch_limit_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "input_kind": {"type": "string", "pattern": "^(standard-[a-z0-9-]+|random-fallback)$"},
+    "worker_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["present", "receipt_sha256", "constructor_started", "constructor_completed", "input_completed", "forward_started", "forward_completed", "mode", "input_signature", "output_signature", "input_kind", "input_asset", "input_note", "parameter_count_total", "parameter_count_trainable", "native_framework", "delegated_method"],
+      "properties": {
+        "present": {"type": "boolean"}, "receipt_sha256": {"$ref": "#/$defs/nullable_hash"},
+        "constructor_started": {"type": "boolean"}, "constructor_completed": {"type": "boolean"},
+        "input_completed": {"type": "boolean"}, "forward_started": {"type": "boolean"},
+        "forward_completed": {"type": "boolean"},
+        "mode": {"oneOf": [{"enum": ["train", "eval"]}, {"type": "null"}]},
+        "input_signature": {}, "output_signature": {}, "input_kind": {"oneOf": [{"$ref": "#/$defs/input_kind"}, {"type": "null"}]},
+        "input_asset": {"$ref": "#/$defs/nullable_string"}, "input_note": {"type": "string"},
+        "parameter_count_total": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "parameter_count_trainable": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "native_framework": {"$ref": "#/$defs/nullable_string"}, "delegated_method": {"$ref": "#/$defs/nullable_string"}
+      }
+    },
+    "supervisor_observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["exit_code", "signal", "wall_seconds", "cpu_seconds", "peak_rss_bytes", "stdout_sha256", "stdout_bytes", "stdout_tail", "stderr_sha256", "stderr_bytes", "stderr_tail", "full_log_local_path", "full_log_retention"],
+      "properties": {
+        "exit_code": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+        "signal": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+        "wall_seconds": {"type": "number", "minimum": 0}, "cpu_seconds": {"type": "number", "minimum": 0},
+        "peak_rss_bytes": {"type": "integer", "minimum": 0}, "stdout_sha256": {"$ref": "#/$defs/hash"},
+        "stdout_bytes": {"type": "integer", "minimum": 0}, "stdout_tail": {"type": "string", "maxLength": 1500},
+        "stderr_sha256": {"$ref": "#/$defs/hash"}, "stderr_bytes": {"type": "integer", "minimum": 0},
+        "stderr_tail": {"type": "string", "maxLength": 1500}, "full_log_local_path": {"$ref": "#/$defs/nonempty_string"},
+        "full_log_retention": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "policy_observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["network_attempted", "socket_targets", "checkpoint_or_weight_read_attempted", "checkpoint_paths", "write_outside_scratch_attempted", "write_paths", "credentials_present", "torchlens_import_attempted", "cache_read_attempted"],
+      "properties": {
+        "network_attempted": {"type": "boolean"}, "socket_targets": {"$ref": "#/$defs/string_array"},
+        "checkpoint_or_weight_read_attempted": {"type": "boolean"}, "checkpoint_paths": {"$ref": "#/$defs/string_array"},
+        "write_outside_scratch_attempted": {"type": "boolean"}, "write_paths": {"$ref": "#/$defs/string_array"},
+        "credentials_present": {"type": "boolean"}, "torchlens_import_attempted": {"type": "boolean"},
+        "cache_read_attempted": {"type": "boolean"}
+      }
+    },
+    "error": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "reason_code", "exception_type", "message", "traceback", "no_traceback_reason", "native_crash", "root_cause_fingerprint", "details"],
+      "properties": {
+        "stage": {"$ref": "#/$defs/stage"}, "reason_code": {"$ref": "#/$defs/reason_code"},
+        "exception_type": {"$ref": "#/$defs/nullable_string"}, "message": {"type": "string"},
+        "traceback": {"$ref": "#/$defs/nullable_string"}, "no_traceback_reason": {"$ref": "#/$defs/nullable_string"},
+        "native_crash": {"type": "boolean"}, "root_cause_fingerprint": {"$ref": "#/$defs/hash"},
+        "details": {"type": "object"}
+      },
+      "oneOf": [
+        {"properties": {"traceback": {"type": "string", "minLength": 1}, "no_traceback_reason": {"type": "null"}}},
+        {"properties": {"traceback": {"type": "null"}, "no_traceback_reason": {"type": "string", "minLength": 1}}}
+      ]
+    },
+    "defer_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["target_status", "source_ids", "probe_attempt_ids", "explanation"],
+      "properties": {
+        "target_status": {"enum": ["deferred:needs-cuda", "deferred:needs-x86"]},
+        "source_ids": {"$ref": "#/$defs/string_array"}, "probe_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "explanation": {"$ref": "#/$defs/nonempty_string"}
+      }
+    }
+  }
+}
