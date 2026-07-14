@@ -57,7 +57,8 @@
         "wake-noop-already-running",
         "checkpoint-review",
         "review-signoff",
-        "progress-notification"
+        "progress-notification",
+        "notification-delivery"
       ],
       "description": "Mandatory operational event kind."
     },
@@ -74,7 +75,10 @@
         "failed:runner",
         "paused:checkpoint-review",
         "resumed:checkpoint-review",
-        "progress-notified"
+        "progress-notified",
+        "progress-recorded",
+        "notification-delivered",
+        "notification-failed"
       ],
       "description": "Mandatory closed current disposition."
     },
@@ -272,8 +276,32 @@
         ],
         "properties": {
           "status": {
-            "const": "progress-notified",
-            "description": "Progress notification is informational and non-blocking."
+            "enum": [
+              "progress-notified",
+              "progress-recorded"
+            ],
+            "description": "Progress milestone identity is informational and non-blocking."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "notification-delivery",
+            "description": "Select the best-effort notification delivery contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "enum": [
+              "notification-delivered",
+              "notification-failed"
+            ],
+            "description": "Delivery is recorded separately from notification identity."
           }
         }
       }

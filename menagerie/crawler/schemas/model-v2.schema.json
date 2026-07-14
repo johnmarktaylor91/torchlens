@@ -234,6 +234,37 @@
         "properties": {
           "status": {
             "properties": {
+              "kind": {
+                "const": "runs",
+                "description": "Select successful run terminal records."
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "description": "Select the terminal status contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "modes": {
+            "properties": {
+              "per_mode_run": {
+                "minProperties": 1,
+                "description": "Successful runs require at least one mode receipt."
+              }
+            },
+            "description": "Successful run mode receipts."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": {
               "code": {
                 "const": "skipped:insufficient-description",
                 "description": "Mandatory closed status code."
@@ -2230,7 +2261,6 @@
         "per_mode_run": {
           "type": "object",
           "additionalProperties": false,
-          "minProperties": 1,
           "properties": {
             "train": {
               "$ref": "#/$defs/mode_run",

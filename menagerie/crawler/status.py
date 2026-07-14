@@ -18,6 +18,10 @@ class PartitionError(ValueError):
     """Raised when current terminal records do not exactly partition intake."""
 
 
+class StatusCompletenessError(ValueError):
+    """Raised when a terminal status omits its closed required evidence."""
+
+
 def _records(
     current_records: Iterable[Mapping[str, Any]] | Mapping[str, Mapping[str, Any]],
 ) -> list[Mapping[str, Any]]:
@@ -120,6 +124,51 @@ def assert_partition(
             f"duplicates={sorted(report.duplicate_ids)}, invalid={invalid}"
         )
     return report
+
+
+def assert_status_completeness(
+    current_records: Iterable[Mapping[str, Any]] | Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Assert that every represented terminal status is internally complete.
+
+    Parameters
+    ----------
+    current_records:
+        Current terminal model revisions.
+
+    Raises
+    ------
+    StatusCompletenessError
+        If a status is not closed or omits required failure evidence.
+    """
+
+    failures: list[str] = []
+    for record in _records(current_records):
+        stable_id = str(record.get("stable_id"))
+        status = record.get("status", {})
+        code = status.get("code")
+        kind = status.get("kind")
+        if code not in TERMINAL_STATUS_CODES or kind != str(code).split(":", 1)[0]:
+            failures.append(f"{stable_id}:invalid-code-kind")
+            continue
+        if kind == "failed":
+            stage = str(code).split(":", 1)[1]
+            if status.get("stage") != stage or not status.get("reason_code"):
+                failures.append(f"{stable_id}:missing-stage-reason")
+            if status.get("traceback") is None and status.get("no_traceback_reason") is None:
+                failures.append(f"{stable_id}:missing-traceback-disposition")
+            if status.get("root_cause_fingerprint") is None:
+                failures.append(f"{stable_id}:missing-root-cause")
+            if code == "failed:accuracy-gate" and not status.get("human_review", {}).get(
+                "required"
+            ):
+                failures.append(f"{stable_id}:missing-human-review")
+        elif status.get("stage") is not None or status.get("reason_code") is not None:
+            failures.append(f"{stable_id}:nonfailure-has-failure-fields")
+    if failures:
+        raise StatusCompletenessError(
+            f"terminal status completeness invalid: {', '.join(sorted(failures))}"
+        )
 
 
 def filter_funnel(
@@ -247,10 +296,11 @@ def completeness_report(
                 issues[field].append(stable_id)
         for issue in completeness.get("issues", []):
             issues[f"record:{issue}"].append(stable_id)
-        meaningful = set(record.get("modes", {}).get("meaningful_modes", []))
-        outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
-        if meaningful != outcomes:
-            issues["meaningful_mode_outcomes_incomplete"].append(stable_id)
+        if record.get("status", {}).get("kind") == "runs":
+            meaningful = set(record.get("modes", {}).get("meaningful_modes", []))
+            outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
+            if meaningful != outcomes:
+                issues["meaningful_mode_outcomes_incomplete"].append(stable_id)
     workflow_counts = Counter(workflow_states)
     unknown_workflows = set(workflow_counts) - WORKFLOW_STATES
     for workflow in unknown_workflows:

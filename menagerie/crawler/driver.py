@@ -16,6 +16,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import traceback
 from collections import Counter, defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
@@ -32,12 +33,12 @@ from menagerie.crawler.checker_dispatch import (
 from menagerie.crawler.checkpoint import (
     FunnelSnapshot,
     record_checkpoint_review,
-    record_progress_notification,
     record_review_signoff,
 )
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
+    DEFAULT_NOTIFY_TIMEOUT_SECONDS,
     DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
@@ -52,6 +53,9 @@ from menagerie.crawler.envs import (
     load_environment_registry,
 )
 from menagerie.crawler.env_lifecycle import (
+    DiskRecoveryError,
+    EnvironmentProbeError,
+    EnvironmentSolveError,
     ProbeResult,
     SequentialEnvironmentLifecycle,
     SolveResult,
@@ -71,7 +75,7 @@ from menagerie.crawler.routing import (
     route_model,
 )
 from menagerie.crawler.state import rebuild_state
-from menagerie.crawler.status import funnel_counts
+from menagerie.crawler.status import assert_partition, assert_status_completeness, funnel_counts
 from menagerie.crawler.wakeup import OperationalContext, WakeupManager
 from menagerie.crawler.worker_supervisor import SupervisedResult, supervise_worker
 
@@ -195,6 +199,10 @@ class AuthorArtifact:
     proposal: JsonObject
     source_manifest: JsonObject
     model_dir: Path
+    terminal_status: Optional[str] = None
+    terminal_reason_code: Optional[str] = None
+    terminal_detail: Optional[str] = None
+    defer_evidence: Optional[JsonObject] = None
 
 
 @dataclass(frozen=True)
@@ -357,10 +365,18 @@ class DriverLock:
 class CommandNotifier:
     """Best-effort argv-only notifier with log-only fallback."""
 
-    def __init__(self, command: Optional[str]) -> None:
+    def __init__(
+        self,
+        command: Optional[str],
+        *,
+        timeout_seconds: float = DEFAULT_NOTIFY_TIMEOUT_SECONDS,
+    ) -> None:
         """Resolve an explicit command or the conventional JMT script."""
 
+        if timeout_seconds <= 0:
+            raise ValueError("notifier timeout must be positive")
         self._argv = _resolve_notify_command(command)
+        self._timeout_seconds = timeout_seconds
 
     def notify(self, summary: str) -> bool:
         """Invoke the notifier once, logging and continuing on any failure."""
@@ -371,9 +387,20 @@ class CommandNotifier:
             return False
         try:
             completed = subprocess.run(
-                [*self._argv, ascii_summary], check=False, capture_output=True, text=True
+                [*self._argv, ascii_summary],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=self._timeout_seconds,
             )
-        except OSError as exc:
+        except subprocess.TimeoutExpired:
+            LOGGER.warning(
+                "crawler notifier timed out after %.1fs: %s",
+                self._timeout_seconds,
+                ascii_summary,
+            )
+            return False
+        except Exception as exc:  # noqa: BLE001 -- notifications are strictly best-effort
             LOGGER.warning("crawler notifier failed (%s): %s", exc, ascii_summary)
             return False
         if completed.returncode != 0:
@@ -806,10 +833,7 @@ class CrawlerDriver:
             elif after_review:
                 raise DriverIntegrationError("--after-review requires a pending review checkpoint")
 
-            baseline = int(state.get("last_terminal_count", len(reducer.current_records)))
-            self._handle_progress(
-                operational, reducer.current_records, previous_count=baseline, state=state
-            )
+            self._handle_progress(operational, reducer.current_records, state=state)
             if self._maybe_pause_for_review(operational, reducer.current_records, state):
                 return DriverResult(
                     "paused:review-checkpoint", len(reducer.current_records), 0, "review-checkpoint"
@@ -821,17 +845,24 @@ class CrawlerDriver:
                     phase_work = tuple(item for item in work if item.route.phase is phase)
                     if not phase_work:
                         continue
-                    artifacts = self._ensure_authors(phase_work)
-                    pause = self._ensure_gates(phase_work, artifacts, reducer, operational)
+                    artifacts = self._ensure_authors(phase_work, reducer, operational, state)
+                    eligible_work = tuple(
+                        item for item in phase_work if item.stable_id in artifacts
+                    )
+                    pause = self._ensure_gates(
+                        eligible_work, artifacts, reducer, operational, state
+                    )
                     if pause is not None:
                         return DriverResult(
                             "paused:usage-limit", len(reducer.current_records), 0, pause
                         )
                     by_intent: dict[str, list[WorkItem]] = defaultdict(list)
-                    for item in phase_work:
+                    for item in eligible_work:
                         by_intent[item.route.intent].append(item)
                     for intent_name in self._ordered_intents(by_intent):
                         intent = self.registry.intents[intent_name]
+                        use_entered = False
+                        use_completed = False
 
                         def use(
                             prefix: Path,
@@ -840,6 +871,8 @@ class CrawlerDriver:
                         ) -> None:
                             """Process one intent's models while its sole environment exists."""
 
+                            nonlocal use_entered, use_completed
+                            use_entered = True
                             for item in items:
                                 if item.stable_id in reducer.current_records:
                                     continue
@@ -851,8 +884,46 @@ class CrawlerDriver:
                                     operational,
                                     state,
                                 )
+                            use_completed = True
 
-                        self.dependencies.environments.run(intent, use=use)
+                        try:
+                            self.dependencies.environments.run(intent, use=use)
+                        except DriverPaused:
+                            raise
+                        except Exception as exc:  # noqa: BLE001 -- classify per-model env failures
+                            if use_entered and not use_completed:
+                                raise
+                            pending = [
+                                item
+                                for item in by_intent[intent_name]
+                                if item.stable_id not in reducer.current_records
+                            ]
+                            if not pending:
+                                raise
+                            stage, reason = _environment_failure(exc)
+                            for item in pending:
+                                attempt = _driver_failure_attempt(
+                                    item,
+                                    artifacts[item.stable_id],
+                                    stage,
+                                    reason,
+                                    exc,
+                                    self.config,
+                                    environment=intent.name,
+                                    created_at=self.dependencies.clock(),
+                                )
+                                persisted = reducer.append_attempt(attempt).record
+                                self._terminalize(
+                                    item,
+                                    artifacts[item.stable_id],
+                                    f"failed:{stage}",
+                                    reason,
+                                    str(exc),
+                                    (persisted,),
+                                    reducer,
+                                    operational,
+                                    state,
+                                )
             except DriverPaused:
                 return DriverResult(
                     "paused:review-checkpoint",
@@ -863,11 +934,28 @@ class CrawlerDriver:
             rebuild_state(
                 self.paths.state_database, snapshot.root / "items.jsonl", self.paths.ledgers
             )
-            state.update(
-                {"status": "complete", "last_terminal_count": len(reducer.current_records)}
+            current = reducer.current_records
+            in_scope_ids = tuple(item.stable_id for item in snapshot.items)
+            if self.config.phase is not None:
+                in_scope_ids = tuple(
+                    item.stable_id
+                    for item in snapshot.items
+                    if _framework_phase(item) == self.config.phase
+                )
+            scoped_current = {
+                stable_id: current[stable_id] for stable_id in in_scope_ids if stable_id in current
+            }
+            assert_partition(in_scope_ids, scoped_current)
+            assert_status_completeness(scoped_current)
+            global_complete = set(current) == set(intake_ids)
+            completion_status = (
+                "complete"
+                if self.config.phase is None or global_complete
+                else f"phase-complete:{self.config.phase}"
             )
+            state.update({"status": completion_status, "last_terminal_count": len(current)})
             _write_driver_state(self.paths.driver_state, state)
-            return DriverResult("complete", len(reducer.current_records), self._reduced, None)
+            return DriverResult(completion_status, len(current), self._reduced, None)
 
     def _ordered_work(
         self, snapshot: IntakeSnapshot, current: Mapping[str, JsonObject]
@@ -894,7 +982,13 @@ class CrawlerDriver:
             work = tuple(item for item in work if item.route.phase.value == self.config.phase)
         return work
 
-    def _ensure_authors(self, work: Sequence[WorkItem]) -> dict[str, AuthorArtifact]:
+    def _ensure_authors(
+        self,
+        work: Sequence[WorkItem],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> dict[str, AuthorArtifact]:
         """Create or reload one durable author result per model."""
 
         artifacts: dict[str, AuthorArtifact] = {}
@@ -906,71 +1000,301 @@ class CrawlerDriver:
                     proposal=dict(value["proposal"]),
                     source_manifest=dict(value["source_manifest"]),
                     model_dir=Path(str(value["model_dir"])),
+                    terminal_status=value.get("terminal_status"),
+                    terminal_reason_code=value.get("terminal_reason_code"),
+                    terminal_detail=value.get("terminal_detail"),
+                    defer_evidence=(
+                        dict(value["defer_evidence"])
+                        if isinstance(value.get("defer_evidence"), Mapping)
+                        else None
+                    ),
                 )
                 continue
-            artifact = self.dependencies.author.author(item, self.paths.work_root, self.config)
+            try:
+                artifact = self.dependencies.author.author(item, self.paths.work_root, self.config)
+            except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
+                attempt = _driver_failure_attempt(
+                    item,
+                    None,
+                    "runner",
+                    "internal-error",
+                    exc,
+                    self.config,
+                    environment=None,
+                    created_at=self.dependencies.clock(),
+                )
+                persisted = reducer.append_attempt(attempt).record
+                self._terminalize(
+                    item,
+                    None,
+                    "failed:runner",
+                    "internal-error",
+                    str(exc),
+                    (persisted,),
+                    reducer,
+                    operational,
+                    state,
+                )
+                continue
             if artifact.proposal.get("stable_id") != item.stable_id:
-                raise DriverIntegrationError("author proposal stable_id does not match intake")
+                integration_error = DriverIntegrationError(
+                    "author proposal stable_id does not match intake"
+                )
+                attempt = _driver_failure_attempt(
+                    item,
+                    artifact,
+                    "runner",
+                    "protocol-violation",
+                    integration_error,
+                    self.config,
+                    environment=None,
+                    created_at=self.dependencies.clock(),
+                )
+                persisted = reducer.append_attempt(attempt).record
+                self._terminalize(
+                    item,
+                    artifact,
+                    "failed:runner",
+                    "protocol-violation",
+                    str(integration_error),
+                    (persisted,),
+                    reducer,
+                    operational,
+                    state,
+                )
+                continue
             _write_json_atomic(
                 cache,
                 {
                     "proposal": artifact.proposal,
                     "source_manifest": artifact.source_manifest,
                     "model_dir": str(artifact.model_dir),
+                    "terminal_status": artifact.terminal_status,
+                    "terminal_reason_code": artifact.terminal_reason_code,
+                    "terminal_detail": artifact.terminal_detail,
+                    "defer_evidence": artifact.defer_evidence,
                 },
             )
-            artifacts[item.stable_id] = artifact
+            terminal = _artifact_terminal_status(artifact)
+            if terminal is not None:
+                status_code, reason_code = terminal
+                self._terminalize(
+                    item,
+                    artifact,
+                    status_code,
+                    reason_code,
+                    artifact.terminal_detail,
+                    (),
+                    reducer,
+                    operational,
+                    state,
+                )
+            else:
+                artifacts[item.stable_id] = artifact
             self.dependencies.boundary_hook("after-author", item.stable_id)
         return artifacts
 
     def _ensure_gates(
         self,
         work: Sequence[WorkItem],
-        artifacts: Mapping[str, AuthorArtifact],
+        artifacts: dict[str, AuthorArtifact],
         reducer: CanonicalReducer,
         operational: JsonlLedger,
+        state: JsonObject,
     ) -> Optional[str]:
         """Run metadata batches and required per-model fidelity gates durably."""
 
         persisted = scan_jsonl(self.paths.ledgers.gates)
-        missing_metadata = [
-            artifacts[item.stable_id]
+        items_by_id = {item.stable_id: item for item in work}
+        pending_ids = {
+            item.stable_id
             for item in work
-            if _find_gate(persisted, item.stable_id, "metadata_batch") is None
-        ]
-        for batch in _metadata_batches(missing_metadata):
-            outcome = self.dependencies.checker.check_metadata(
-                batch, self.paths.work_root, self.config
-            )
-            if outcome.backoff is not None:
-                return self._pause_for_usage(outcome.backoff, operational, len(work))
-            gate = _prepare_ledger_record(_require_gate(outcome), len(persisted) + 1)
-            route_metadata_gate(gate, {}, max_repairs=2)
-            for record in emit_gate_records(gate):
-                persisted_record = reducer.append_gate(record).record
-            persisted.append(persisted_record)
-            for artifact in batch:
-                stable_id = str(artifact.proposal["stable_id"])
-                self.dependencies.boundary_hook("after-gate", stable_id)
+            if not _metadata_gate_accepted(persisted, item.stable_id)
+        }
+        while pending_ids:
+            for stable_id in tuple(sorted(pending_ids)):
+                terminal_gate = _terminal_metadata_gate(persisted, stable_id, max_repairs=2)
+                if terminal_gate is None:
+                    continue
+                self._terminalize_accuracy_gate(
+                    items_by_id[stable_id],
+                    artifacts[stable_id],
+                    terminal_gate,
+                    reducer,
+                    operational,
+                    state,
+                )
+                pending_ids.remove(stable_id)
+            if not pending_ids:
+                break
+
+            repair_counts = {
+                stable_id: _metadata_repair_count(persisted, stable_id) for stable_id in pending_ids
+            }
+            for stable_id, count in repair_counts.items():
+                if count == 0:
+                    continue
+                artifacts[stable_id] = self._repair_author(
+                    items_by_id[stable_id], artifacts[stable_id], persisted, count
+                )
+
+            pending_artifacts = [artifacts[stable_id] for stable_id in sorted(pending_ids)]
+            requeued: set[str] = set()
+            for batch in _metadata_batches(pending_artifacts):
+                batch_ids = tuple(str(artifact.proposal["stable_id"]) for artifact in batch)
+                try:
+                    outcome = self.dependencies.checker.check_metadata(
+                        batch, self.paths.work_root, self.config
+                    )
+                except Exception as exc:  # noqa: BLE001 -- checker failure is per batch item
+                    for stable_id in batch_ids:
+                        item = items_by_id[stable_id]
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifacts[stable_id],
+                            "accuracy-gate",
+                            "checker-contract-invalid",
+                            exc,
+                            self.config,
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifacts[stable_id],
+                            "failed:accuracy-gate",
+                            "checker-contract-invalid",
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=True,
+                        )
+                        pending_ids.discard(stable_id)
+                    continue
+                if outcome.backoff is not None:
+                    return self._pause_for_usage(outcome.backoff, operational, len(work))
+                raw_gate = _require_gate(outcome)
+                gate = _normalize_gate_generation(raw_gate, persisted, batch_ids)
+                route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
+                counts = {
+                    stable_id: _metadata_repair_count(persisted, stable_id)
+                    for stable_id in batch_ids
+                }
+                decisions = route_metadata_gate(route_ready, counts, max_repairs=2)
+                for record in emit_gate_records(route_ready):
+                    result = reducer.append_gate(_without_ledger_fields(record))
+                    if result.appended:
+                        persisted.append(result.record)
+                    elif not any(
+                        existing.get("gate_id") == result.record.get("gate_id")
+                        for existing in persisted
+                    ):
+                        persisted.append(result.record)
+                for decision in decisions:
+                    stable_id = decision.stable_id
+                    if decision.canonical_write_allowed:
+                        pending_ids.discard(stable_id)
+                    elif decision.human_review_required:
+                        latest = _find_gate(persisted, stable_id, "metadata_batch")
+                        if latest is None:
+                            raise DriverIntegrationError(
+                                f"persisted metadata gate missing for {stable_id}"
+                            )
+                        self._terminalize_accuracy_gate(
+                            items_by_id[stable_id],
+                            artifacts[stable_id],
+                            latest,
+                            reducer,
+                            operational,
+                            state,
+                        )
+                        pending_ids.discard(stable_id)
+                    else:
+                        requeued.add(stable_id)
+                    self.dependencies.boundary_hook("after-gate", stable_id)
+            if pending_ids and not requeued:
+                pending_ids.intersection_update(requeued)
 
         for item in work:
+            if item.stable_id in reducer.current_records:
+                continue
+            artifact = artifacts[item.stable_id]
+            skip_status = _r5_terminal_status(artifact)
+            if skip_status is not None:
+                self._terminalize(
+                    item,
+                    artifact,
+                    skip_status,
+                    None,
+                    artifact.terminal_detail,
+                    (),
+                    reducer,
+                    operational,
+                    state,
+                )
+
+        for item in work:
+            if item.stable_id in reducer.current_records:
+                continue
             artifact = artifacts[item.stable_id]
             if not _fidelity_required(artifact.proposal):
                 continue
             if _find_gate(persisted, item.stable_id, "fidelity") is not None:
                 continue
-            outcome = self.dependencies.checker.check_fidelity(
-                artifact, self.paths.work_root, self.config
-            )
+            try:
+                outcome = self.dependencies.checker.check_fidelity(
+                    artifact, self.paths.work_root, self.config
+                )
+            except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
+                attempt = _driver_failure_attempt(
+                    item,
+                    artifact,
+                    "fidelity",
+                    "identity-mismatch",
+                    exc,
+                    self.config,
+                    environment=None,
+                    created_at=self.dependencies.clock(),
+                )
+                persisted_attempt = reducer.append_attempt(attempt).record
+                self._terminalize(
+                    item,
+                    artifact,
+                    "failed:fidelity",
+                    "identity-mismatch",
+                    str(exc),
+                    (persisted_attempt,),
+                    reducer,
+                    operational,
+                    state,
+                    human_review=True,
+                )
+                continue
             if outcome.backoff is not None:
                 return self._pause_for_usage(outcome.backoff, operational, len(work))
-            gate = _prepare_ledger_record(_require_gate(outcome), len(persisted) + 1)
-            decision = route_fidelity_gate(gate, artifact.proposal)
-            if not decision.accepted_for_fidelity:
-                raise DriverIntegrationError(
-                    f"fidelity gate blocked {item.stable_id}: {decision.verdict.value}"
+            gate = _normalize_gate_generation(_require_gate(outcome), persisted, (item.stable_id,))
+            route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
+            fidelity_decision = route_fidelity_gate(route_ready, artifact.proposal)
+            persisted_gate = reducer.append_gate(_without_ledger_fields(route_ready)).record
+            persisted.append(persisted_gate)
+            if not fidelity_decision.accepted_for_fidelity:
+                reason = fidelity_decision.failure_reason_code or "cannot-verify-cap-exhausted"
+                self._terminalize(
+                    item,
+                    artifact,
+                    "failed:fidelity",
+                    reason,
+                    f"fidelity gate blocked: {fidelity_decision.verdict.value}",
+                    (),
+                    reducer,
+                    operational,
+                    state,
+                    human_review=True,
                 )
-            persisted.append(reducer.append_gate(gate).record)
+                continue
             self.dependencies.boundary_hook("after-gate", item.stable_id)
         return None
 
@@ -988,21 +1312,95 @@ class CrawlerDriver:
         attempts = _matching_attempts(self.paths.ledgers.attempts, artifact.proposal)
         cold_runs = 2 if _fidelity_required(artifact.proposal) else 1
         if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
-            generated = self.dependencies.forward.forward(
-                artifact,
-                environment_prefix,
-                cold_runs,
-                self.paths.work_root,
-            )
-            ledger_count = len(scan_jsonl(self.paths.ledgers.attempts))
+            generated: tuple[Mapping[str, Any], ...]
+            cache = self.paths.work_root / item.stable_id / "driver-forward-attempts.json"
+            if cache.is_file():
+                cached = _read_json(cache)
+                if cached.get("work_id") != artifact.proposal.get("work_id"):
+                    raise DriverIntegrationError(
+                        f"forward attempt cache work identity changed for {item.stable_id}"
+                    )
+                generated = tuple(
+                    dict(value)
+                    for value in cached.get("attempts", [])
+                    if isinstance(value, Mapping)
+                )
+            else:
+                try:
+                    generated = tuple(
+                        self.dependencies.forward.forward(
+                            artifact,
+                            environment_prefix,
+                            cold_runs,
+                            self.paths.work_root,
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001 -- supervisor failure is model-local
+                    generated = (
+                        _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "runner",
+                            "internal-error",
+                            exc,
+                            self.config,
+                            environment=environment_prefix.name,
+                            created_at=self.dependencies.clock(),
+                        ),
+                    )
+                _write_json_atomic(
+                    cache,
+                    {"work_id": artifact.proposal["work_id"], "attempts": list(generated)},
+                )
             for attempt in generated:
-                ledger_count += 1
-                reducer.append_attempt(_prepare_ledger_record(attempt, ledger_count))
+                reducer.append_attempt(_without_ledger_fields(attempt))
+                self.dependencies.boundary_hook("after-attempt", item.stable_id)
             attempts = _matching_attempts(self.paths.ledgers.attempts, artifact.proposal)
             if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
-                raise DriverIntegrationError(
-                    f"worker attempts do not satisfy modes/cold policy for {item.stable_id}"
+                all_attempts = _matching_model_attempts(
+                    self.paths.ledgers.attempts, artifact.proposal
                 )
+                failure = next(
+                    (
+                        attempt
+                        for attempt in reversed(all_attempts)
+                        if attempt["result"] == "failed"
+                    ),
+                    None,
+                )
+                if failure is None:
+                    integration_error = DriverIntegrationError(
+                        f"worker attempts do not satisfy modes/cold policy for {item.stable_id}"
+                    )
+                    failure = reducer.append_attempt(
+                        _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "runner",
+                            "protocol-violation",
+                            integration_error,
+                            self.config,
+                            environment=environment_prefix.name,
+                            created_at=self.dependencies.clock(),
+                        )
+                    ).record
+                    all_attempts = (*all_attempts, failure)
+                error = failure["error"]
+                if not isinstance(error, Mapping):
+                    raise DriverIntegrationError("failed attempt lost its structured error")
+                stage = str(error["stage"])
+                self._terminalize(
+                    item,
+                    artifact,
+                    f"failed:{stage}",
+                    str(error["reason_code"]),
+                    str(error["message"]),
+                    all_attempts,
+                    reducer,
+                    operational,
+                    state,
+                )
+                return
             self.dependencies.boundary_hook("after-forward", item.stable_id)
         gates = scan_jsonl(self.paths.ledgers.gates)
         model = _assemble_run_model(item, artifact, attempts, gates, self.config)
@@ -1011,12 +1409,144 @@ class CrawlerDriver:
             self._reduced += 1
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current = reducer.current_records
-        previous = int(state.get("last_terminal_count", len(current) - 1))
-        self._handle_progress(operational, current, previous_count=previous, state=state)
+        self._handle_progress(operational, current, state=state)
         if self._maybe_pause_for_review(operational, current, state):
             raise DriverPaused("review checkpoint reached")
         state["last_terminal_count"] = len(current)
         state["status"] = "running"
+        _write_driver_state(self.paths.driver_state, state)
+
+    def _repair_author(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        gates: Sequence[Mapping[str, Any]],
+        generation: int,
+    ) -> AuthorArtifact:
+        """Persist checker findings and request one bounded author repair generation."""
+
+        latest = _find_gate(gates, item.stable_id, "metadata_batch")
+        if latest is None:
+            raise DriverIntegrationError(f"repair gate missing for {item.stable_id}")
+        gate_item = next(value for value in latest["items"] if value["stable_id"] == item.stable_id)
+        repair_path = (
+            self.paths.work_root / item.stable_id / "repair" / f"generation-{generation}.json"
+        )
+        request = {
+            "stable_id": item.stable_id,
+            "generation": generation,
+            "gate_id": latest["gate_id"],
+            "root_cause_fingerprint": _gate_item_fingerprint(gate_item),
+            "required_repairs": list(gate_item.get("required_repairs", [])),
+        }
+        if not repair_path.is_file():
+            _write_json_atomic(repair_path, request)
+        repaired = self.dependencies.author.author(item, self.paths.work_root, self.config)
+        if repaired.proposal.get("stable_id") != item.stable_id:
+            raise DriverIntegrationError("repaired author proposal stable_id does not match intake")
+        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+        _write_json_atomic(
+            cache,
+            {
+                "proposal": repaired.proposal,
+                "source_manifest": repaired.source_manifest,
+                "model_dir": str(repaired.model_dir),
+                "repair_generation": generation,
+                "terminal_status": repaired.terminal_status,
+                "terminal_reason_code": repaired.terminal_reason_code,
+                "terminal_detail": repaired.terminal_detail,
+                "defer_evidence": repaired.defer_evidence,
+            },
+        )
+        del artifact
+        return repaired
+
+    def _terminalize_accuracy_gate(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        gate: Mapping[str, Any],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> None:
+        """Append the bounded human-review terminal for one rejected metadata item."""
+
+        gate_item = next(value for value in gate["items"] if value["stable_id"] == item.stable_id)
+        verdict = str(gate_item["verdict"])
+        reason = (
+            "inaccurate-cap-exhausted" if verdict == "inaccurate" else "cannot-verify-cap-exhausted"
+        )
+        self._terminalize(
+            item,
+            artifact,
+            "failed:accuracy-gate",
+            reason,
+            "; ".join(str(value) for value in gate_item.get("required_repairs", []))
+            or f"metadata gate {verdict}",
+            (),
+            reducer,
+            operational,
+            state,
+            human_review=True,
+            root_cause_fingerprint=_gate_item_fingerprint(gate_item),
+        )
+
+    def _terminalize(
+        self,
+        item: WorkItem,
+        artifact: Optional[AuthorArtifact],
+        status_code: str,
+        reason_code: Optional[str],
+        detail: Optional[str],
+        attempts: Sequence[Mapping[str, Any]],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+        *,
+        human_review: bool = False,
+        root_cause_fingerprint: Optional[str] = None,
+    ) -> None:
+        """Append one driver-owned non-run terminal revision through the reducer."""
+
+        terminal_attempts = tuple(attempts)
+        if status_code.startswith("deferred:") and not terminal_attempts:
+            if artifact is None or artifact.defer_evidence is None:
+                raise DriverIntegrationError(
+                    f"{status_code} requires positive source or probe evidence"
+                )
+            deferral_attempt = _driver_deferral_attempt(
+                item,
+                artifact,
+                status_code,
+                artifact.defer_evidence,
+                self.config,
+                created_at=self.dependencies.clock(),
+            )
+            terminal_attempts = (reducer.append_attempt(deferral_attempt).record,)
+        gates = scan_jsonl(self.paths.ledgers.gates)
+        model = _assemble_terminal_model(
+            item,
+            artifact,
+            status_code,
+            reason_code,
+            detail,
+            terminal_attempts,
+            gates,
+            self.config,
+            self.dependencies.clock(),
+            human_review=human_review,
+            root_cause_fingerprint=root_cause_fingerprint,
+        )
+        result = reducer.append_model(model)
+        if result.appended:
+            self._reduced += 1
+        self.dependencies.boundary_hook("after-reduce", item.stable_id)
+        current = reducer.current_records
+        self._handle_progress(operational, current, state=state)
+        if self._maybe_pause_for_review(operational, current, state):
+            raise DriverPaused("review checkpoint reached")
+        state.update({"last_terminal_count": len(current), "status": "running"})
         _write_driver_state(self.paths.driver_state, state)
 
     def _pause_for_usage(
@@ -1055,10 +1585,9 @@ class CrawlerDriver:
         operational: JsonlLedger,
         current: Mapping[str, JsonObject],
         *,
-        previous_count: int,
         state: JsonObject,
     ) -> None:
-        """Emit every newly crossed configured milestone once without pausing."""
+        """Derive every unrecorded crossed milestone from canonical facts alone."""
 
         completed = len(current)
         existing = {
@@ -1069,19 +1598,84 @@ class CrawlerDriver:
         }
         snapshot = _funnel_snapshot(current)
         for milestone in sorted(self.config.progress_milestones):
-            if milestone in existing or not previous_count < milestone <= completed:
+            if milestone in existing or milestone > completed:
                 continue
-            record_progress_notification(
+            created_at = self.dependencies.clock()
+            event_id = f"progress-{milestone}-{self.config.run_id}"
+            event = {
+                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                "event_id": event_id,
+                "created_at": created_at,
+                "event_kind": OperationalEventKind.PROGRESS_NOTIFICATION.value,
+                "status": OperationalEventStatus.PROGRESS_RECORDED.value,
+                "provider": None,
+                "observed_response": None,
+                "reset_at": None,
+                "queued_work_counts": {"models": 0},
+                "current_environment": None,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+                "details": {"identity_only": True},
+                "models_completed": completed,
+                "milestone": milestone,
+                "funnel_snapshot": snapshot.to_dict(),
+            }
+            operational.append(event)
+            self._deliver_notification(
                 operational,
-                models_completed=completed,
-                milestone=milestone,
-                funnel_snapshot=snapshot,
-                context=self._context(0, None),
-                created_at=self.dependencies.clock(),
+                event_id,
+                _progress_summary(completed, milestone, snapshot),
             )
-            summary = _progress_summary(completed, milestone, snapshot)
-            self.dependencies.notifier.notify(summary)
         state["last_terminal_count"] = completed
+
+    def _deliver_notification(
+        self,
+        operational: JsonlLedger,
+        notification_event_id: str,
+        summary: str,
+    ) -> bool:
+        """Record best-effort delivery separately from its durable notification identity."""
+
+        try:
+            delivered = bool(self.dependencies.notifier.notify(summary))
+            error: Optional[str] = None
+        except Exception as exc:  # noqa: BLE001 -- injected notifiers are also best-effort
+            delivered = False
+            error = f"{type(exc).__module__}.{type(exc).__qualname__}: {exc}"
+            LOGGER.warning("crawler notifier failed (%s): %s", error, summary)
+        delivery_id = stable_hash(
+            {
+                "notification_event_id": notification_event_id,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+            }
+        )[7:31]
+        operational.append(
+            {
+                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                "event_id": f"notification-delivery-{delivery_id}",
+                "created_at": self.dependencies.clock(),
+                "event_kind": OperationalEventKind.NOTIFICATION_DELIVERY.value,
+                "status": (
+                    OperationalEventStatus.NOTIFICATION_DELIVERED.value
+                    if delivered
+                    else OperationalEventStatus.NOTIFICATION_FAILED.value
+                ),
+                "provider": None,
+                "observed_response": None,
+                "reset_at": None,
+                "queued_work_counts": {"models": 0},
+                "current_environment": None,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+                "details": {
+                    "notification_event_id": notification_event_id,
+                    "delivered": delivered,
+                    "error": error,
+                },
+            }
+        )
+        return delivered
 
     def _maybe_pause_for_review(
         self,
@@ -1113,7 +1707,10 @@ class CrawlerDriver:
             context=self._context(0, None),
             created_at=self.dependencies.clock(),
         )
-        self.dependencies.notifier.notify(_review_summary(len(current), snapshot, report_path))
+        try:
+            self.dependencies.notifier.notify(_review_summary(len(current), snapshot, report_path))
+        except Exception as exc:  # noqa: BLE001 -- review delivery cannot block checkpointing
+            LOGGER.warning("crawler review notifier failed: %s", exc)
         state.update(
             {
                 "status": "paused:review-checkpoint",
@@ -1286,19 +1883,15 @@ def _attempts_from_supervised(
         )
         observation = result.observation
         error: Optional[JsonObject] = None
+        attempt_stage = "forward"
+        attempt_mode: Optional[str] = mode
         if not succeeded:
+            failure = _supervised_failure(result, receipt, mode_receipt, policy)
+            attempt_stage = failure["stage"]
+            attempt_mode = mode if attempt_stage == "forward" else None
             error = {
-                "stage": "forward",
-                "reason_code": "incomplete-receipt",
-                "exception_type": None,
-                "message": str(result.receipt_error or mode_receipt.get("error") or "mode failed"),
-                "traceback": None,
-                "root_cause_fingerprint": stable_hash(
-                    {
-                        "receipt_error": result.receipt_error,
-                        "mode_error": mode_receipt.get("error"),
-                    }
-                ),
+                **failure,
+                "root_cause_fingerprint": stable_hash(failure),
             }
         worker_receipt = {
             "present": result.worker_receipt is not None,
@@ -1328,8 +1921,8 @@ def _attempts_from_supervised(
                 "attempt_no": cold_index * len(modes) + mode_index + 1,
                 "parent_attempt_id": None,
                 "actor": "worker",
-                "stage": "forward",
-                "mode": mode,
+                "stage": attempt_stage,
+                "mode": attempt_mode,
                 "started_at": proposal["created_at"],
                 "finished_at": utc_now(),
                 "result": "succeeded" if succeeded else "failed",
@@ -1377,7 +1970,7 @@ def _attempts_from_supervised(
                     "safe_env": {"MENAGERIE_EXECUTION_OFFLINE": "1"},
                     "seed": cold_index,
                     "device": facts["implementation"]["device_policy"],
-                    "mode": mode,
+                    "mode": attempt_mode,
                     "network_policy": "offline",
                     "timeout_seconds": timeout_seconds,
                     "rss_limit_bytes": rss_limit_bytes,
@@ -1419,6 +2012,134 @@ def _attempts_from_supervised(
             }
         )
     return tuple(attempts)
+
+
+def _supervised_failure(
+    result: SupervisedResult,
+    receipt: Mapping[str, Any],
+    mode_receipt: Mapping[str, Any],
+    policy: Mapping[str, Any],
+) -> JsonObject:
+    """Classify a failed worker observation into its actual closed stage and reason."""
+
+    policy_reasons = (
+        ("network_attempted", "network-attempt"),
+        ("checkpoint_or_weight_read_attempted", "checkpoint-read"),
+        ("write_outside_scratch_attempted", "write-outside-scratch"),
+        ("credentials_present", "credentials-exposed"),
+        ("torchlens_import_attempted", "torchlens-import"),
+    )
+    for field, reason in policy_reasons:
+        if policy.get(field):
+            return _attempt_error_fields(
+                "policy",
+                reason,
+                receipt.get("error"),
+                f"worker policy violation: {reason}",
+                native_crash=False,
+                details={"policy_field": field},
+            )
+    observation = result.observation
+    if observation.timed_out:
+        return _attempt_error_fields(
+            "resource",
+            "timeout",
+            None,
+            "worker exceeded the parent wall timeout",
+            native_crash=False,
+            details={"wall_seconds": observation.wall_seconds},
+        )
+    if observation.rss_exceeded:
+        return _attempt_error_fields(
+            "resource",
+            "rss-cap",
+            None,
+            "worker exceeded the parent RSS limit",
+            native_crash=False,
+            details={"peak_rss_bytes": observation.peak_rss_bytes},
+        )
+    if observation.signal_number is not None:
+        return _attempt_error_fields(
+            "runner",
+            "signal",
+            None,
+            f"worker terminated by signal {observation.signal_number}",
+            native_crash=True,
+            details={"signal": observation.signal_number},
+        )
+    if result.worker_receipt is None:
+        reason = (
+            "missing-receipt" if result.receipt_error == "missing-receipt" else "protocol-violation"
+        )
+        return _attempt_error_fields(
+            "runner",
+            reason,
+            None,
+            str(result.receipt_error or "worker receipt unavailable"),
+            native_crash=False,
+            details={"receipt_error": result.receipt_error},
+        )
+    global_error = receipt.get("error")
+    if not receipt.get("constructor_started"):
+        return _attempt_error_fields(
+            "import",
+            "import-exception",
+            global_error,
+            "worker failed while loading the recipe",
+            native_crash=False,
+            details={"receipt_error": global_error},
+        )
+    if not receipt.get("constructor_completed"):
+        return _attempt_error_fields(
+            "constructor",
+            "exception",
+            global_error,
+            "model constructor failed",
+            native_crash=False,
+            details={"receipt_error": global_error},
+        )
+    if not receipt.get("input_completed"):
+        return _attempt_error_fields(
+            "input",
+            "generation-exception",
+            global_error,
+            "dummy input generation failed",
+            native_crash=False,
+            details={"receipt_error": global_error},
+        )
+    return _attempt_error_fields(
+        "forward",
+        "mode-run",
+        mode_receipt.get("error"),
+        "meaningful mode forward failed",
+        native_crash=False,
+        details={"mode_error": mode_receipt.get("error")},
+    )
+
+
+def _attempt_error_fields(
+    stage: str,
+    reason_code: str,
+    worker_error: Any,
+    fallback_message: str,
+    *,
+    native_crash: bool,
+    details: Mapping[str, Any],
+) -> JsonObject:
+    """Build complete attempt error fields from optional worker Python evidence."""
+
+    error = worker_error if isinstance(worker_error, Mapping) else {}
+    traceback_text = error.get("traceback")
+    return {
+        "stage": stage,
+        "reason_code": reason_code,
+        "exception_type": error.get("exception_type"),
+        "message": str(error.get("message") or fallback_message),
+        "traceback": traceback_text,
+        "no_traceback_reason": None if traceback_text else "no Python traceback was available",
+        "native_crash": native_crash,
+        "details": dict(details),
+    }
 
 
 def _physical_memory_bytes() -> int:
@@ -1464,6 +2185,135 @@ def _prepare_ledger_record(record: Mapping[str, Any], ledger_seq: int) -> JsonOb
     prepared["ledger_seq"] = ledger_seq
     prepared["payload_sha256"] = "sha256:" + "0" * 64
     return prepared
+
+
+def _without_ledger_fields(record: Mapping[str, Any]) -> JsonObject:
+    """Return a logical ledger payload so the locked ledger assigns its sequence."""
+
+    return {
+        key: deepcopy(value)
+        for key, value in record.items()
+        if key not in {"ledger_seq", "payload_sha256"}
+    }
+
+
+def _normalize_gate_generation(
+    gate: Mapping[str, Any],
+    persisted: Sequence[Mapping[str, Any]],
+    stable_ids: Sequence[str],
+) -> JsonObject:
+    """Bind one checker result to the next durable repair generation deterministically."""
+
+    normalized = _without_ledger_fields(gate)
+    prior_round = max(
+        (
+            int(existing.get("gate_round", 0))
+            for existing in persisted
+            if any(item.get("stable_id") in stable_ids for item in existing.get("items", []))
+            and existing.get("gate_kind") == gate.get("gate_kind")
+        ),
+        default=0,
+    )
+    generation = prior_round + 1
+    original_gate_id = str(gate["gate_id"])
+    normalized["gate_round"] = generation
+    normalized["gate_id"] = f"{original_gate_id}-generation-{generation}"
+    normalized["gate_identity"] = stable_hash(
+        {
+            "checker_gate_identity": gate["gate_identity"],
+            "stable_ids": list(stable_ids),
+            "generation": generation,
+        }
+    )
+    normalized["result_envelope_sha256"] = stable_hash(
+        {
+            "checker_result_envelope_sha256": gate["result_envelope_sha256"],
+            "gate_id": normalized["gate_id"],
+            "gate_identity": normalized["gate_identity"],
+        }
+    )
+    return normalized
+
+
+def _gate_item_fingerprint(item: Mapping[str, Any]) -> str:
+    """Return a stable root-cause fingerprint for one checker item."""
+
+    return stable_hash(
+        {
+            "verdict": item.get("verdict"),
+            "integrity": item.get("integrity"),
+            "field_checks": item.get("field_checks"),
+            "rung_check": item.get("rung_check"),
+            "unsupported_claims": item.get("unsupported_claims"),
+            "required_repairs": item.get("required_repairs"),
+        }
+    )
+
+
+def _metadata_gate_history(
+    gates: Sequence[Mapping[str, Any]], stable_id: str
+) -> tuple[tuple[JsonObject, JsonObject], ...]:
+    """Return persisted metadata gates and matching items for one model."""
+
+    history: list[tuple[JsonObject, JsonObject]] = []
+    for gate in gates:
+        if gate.get("gate_kind") != "metadata_batch":
+            continue
+        for item in gate.get("items", []):
+            if item.get("stable_id") == stable_id:
+                history.append((dict(gate), dict(item)))
+                break
+    return tuple(history)
+
+
+def _metadata_gate_accepted(gates: Sequence[Mapping[str, Any]], stable_id: str) -> bool:
+    """Return whether the latest metadata gate item is fully accurate."""
+
+    history = _metadata_gate_history(gates, stable_id)
+    if not history:
+        return False
+    _gate, item = history[-1]
+    return bool(
+        item.get("verdict") == "accurate"
+        and item.get("integrity", {}).get("verdict") == "accurate"
+        and item.get("rung_check", {}).get("verdict") == "accurate"
+    )
+
+
+def _metadata_repair_count(gates: Sequence[Mapping[str, Any]], stable_id: str) -> int:
+    """Count durable rejected metadata generations for one model."""
+
+    return sum(
+        not (
+            item.get("verdict") == "accurate"
+            and item.get("integrity", {}).get("verdict") == "accurate"
+            and item.get("rung_check", {}).get("verdict") == "accurate"
+        )
+        for _gate, item in _metadata_gate_history(gates, stable_id)
+    )
+
+
+def _terminal_metadata_gate(
+    gates: Sequence[Mapping[str, Any]], stable_id: str, *, max_repairs: int
+) -> Optional[JsonObject]:
+    """Return the latest gate when cap exhaustion or a repeated cause requires review."""
+
+    rejected = [
+        (gate, item)
+        for gate, item in _metadata_gate_history(gates, stable_id)
+        if not (
+            item.get("verdict") == "accurate"
+            and item.get("integrity", {}).get("verdict") == "accurate"
+            and item.get("rung_check", {}).get("verdict") == "accurate"
+        )
+    ]
+    if not rejected:
+        return None
+    fingerprints = [_gate_item_fingerprint(item) for _gate, item in rejected]
+    repeated = len(fingerprints) >= 2 and fingerprints[-1] in fingerprints[:-1]
+    if len(rejected) > max_repairs or repeated:
+        return rejected[-1][0]
+    return None
 
 
 def _metadata_batches(
@@ -1530,6 +2380,18 @@ def _matching_attempts(path: Path, proposal: Mapping[str, Any]) -> tuple[JsonObj
     )
 
 
+def _matching_model_attempts(path: Path, proposal: Mapping[str, Any]) -> tuple[JsonObject, ...]:
+    """Return every persisted attempt for a proposal work identity in ledger order."""
+
+    stable_id = proposal["stable_id"]
+    work_id = proposal["work_id"]
+    return tuple(
+        record
+        for record in scan_jsonl(path)
+        if record.get("stable_id") == stable_id and record.get("work_id") == work_id
+    )
+
+
 def _attempt_policy_satisfied(
     attempts: Sequence[Mapping[str, Any]], proposal: Mapping[str, Any], cold_runs: int
 ) -> bool:
@@ -1565,6 +2427,630 @@ def _attempt_policy_satisfied(
         ):
             counts[mode] += 1
     return all(counts[mode] >= cold_runs for mode in modes)
+
+
+def _driver_failure_attempt(
+    item: WorkItem,
+    artifact: Optional[AuthorArtifact],
+    stage: str,
+    reason_code: str,
+    exc: Exception,
+    config: DriverConfig,
+    *,
+    environment: Optional[str],
+    created_at: str,
+) -> JsonObject:
+    """Build one complete parent-observed attempt for a model-local lane failure."""
+
+    proposal = artifact.proposal if artifact is not None else {}
+    facts = proposal.get("proposed_facts", {})
+    source = proposal.get("source_identity")
+    evidence = proposal.get("evidence_identity")
+    recipe = proposal.get("recipe_revision")
+    fingerprint = stable_hash(
+        {
+            "stable_id": item.stable_id,
+            "stage": stage,
+            "reason_code": reason_code,
+            "exception_type": f"{type(exc).__module__}.{type(exc).__qualname__}",
+            "message": str(exc),
+        }
+    )
+    attempt_id = stable_hash(
+        {
+            "work_id": proposal.get("work_id", f"work-{item.stable_id}"),
+            "stage": stage,
+            "reason_code": reason_code,
+            "root_cause_fingerprint": fingerprint,
+        }
+    )
+    formatted = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    return {
+        "schema_version": ATTEMPT_SCHEMA_VERSION,
+        "attempt_id": attempt_id,
+        "work_id": proposal.get("work_id", f"work-{item.stable_id}"),
+        "stable_id": item.stable_id,
+        "attempt_no": 1,
+        "parent_attempt_id": None,
+        "actor": "driver",
+        "stage": stage,
+        "mode": None,
+        "started_at": created_at,
+        "finished_at": created_at,
+        "result": "failed",
+        "attempted_rungs": [facts.get("source_resolution", {}).get("rung", "R5_SKIP")],
+        "retries": {
+            "stage_attempt": 1,
+            "root_cause_repeat": 0,
+            "author_round": 1 if artifact is not None else 0,
+            "gate_round": 0,
+        },
+        "identities": {
+            "source": source,
+            "evidence": evidence,
+            "recipe": recipe,
+            "environment": stable_hash(environment or "environment-unavailable"),
+            "execution": stable_hash(
+                {"stable_id": item.stable_id, "stage": stage, "environment": environment}
+            ),
+            "runner": stable_hash("menagerie.crawler.driver.v1"),
+            "author_prompt": proposal.get("author", {}).get("prompt_sha256"),
+            "checker_prompt": stable_hash("codex_accuracy_checker_v2"),
+        },
+        "environment": {
+            "family": environment or "not-created",
+            "target": config.target,
+            "env_id": environment or "not-created",
+            "lock_sha256": stable_hash(environment or "not-created"),
+            "resolved_export_sha256": stable_hash(environment or "not-created"),
+            "python": platform.python_version(),
+            "packages_manifest_sha256": stable_hash(environment or "not-created"),
+            "compiler_identity": platform.python_compiler() or "unknown-compiler",
+            "sdk_identity": platform.platform() or "unknown-sdk",
+        },
+        "host": {
+            "machine_id": config.machine_id,
+            "os": platform.system().lower() or "unknown-os",
+            "os_build": platform.version() or "unknown-build",
+            "architecture": platform.machine() or "unknown-architecture",
+            "cpu": platform.processor() or "unknown-cpu",
+            "ram_bytes": _physical_memory_bytes(),
+            "accelerator": None,
+            "accelerator_runtime": None,
+        },
+        "invocation": {
+            "argv": ["menagerie.crawler.driver", stage],
+            "cwd": str(Path.cwd()),
+            "safe_env": {},
+            "seed": 0,
+            "device": "cpu",
+            "mode": None,
+            "network_policy": "not-invoked",
+            "timeout_seconds": DEFAULT_FORWARD_TIMEOUT_SECONDS,
+            "rss_limit_bytes": 1,
+            "scratch_limit_bytes": 1,
+        },
+        "worker_receipt": {
+            "present": False,
+            "receipt_sha256": None,
+            "constructor_started": False,
+            "constructor_completed": False,
+            "input_completed": False,
+            "forward_started": False,
+            "forward_completed": False,
+            "mode": None,
+            "input_signature": None,
+            "output_signature": None,
+            "input_kind": None,
+            "input_asset": None,
+            "input_note": "worker was not invoked for this driver-observed failure",
+            "parameter_count_total": None,
+            "parameter_count_trainable": None,
+            "native_framework": None,
+            "delegated_method": None,
+        },
+        "supervisor_observation": {
+            "exit_code": None,
+            "signal": None,
+            "wall_seconds": 0.0,
+            "cpu_seconds": 0.0,
+            "peak_rss_bytes": 0,
+            "stdout_sha256": stable_hash(""),
+            "stdout_bytes": 0,
+            "stdout_tail": "",
+            "stderr_sha256": stable_hash(""),
+            "stderr_bytes": 0,
+            "stderr_tail": "",
+            "full_log_local_path": "driver-observed",
+            "full_log_retention": "campaign",
+        },
+        "policy_observation": {
+            "network_attempted": False,
+            "socket_targets": [],
+            "checkpoint_or_weight_read_attempted": False,
+            "checkpoint_paths": [],
+            "write_outside_scratch_attempted": False,
+            "write_paths": [],
+            "credentials_present": False,
+            "torchlens_import_attempted": False,
+            "cache_read_attempted": False,
+        },
+        "error": {
+            "stage": stage,
+            "reason_code": reason_code,
+            "exception_type": f"{type(exc).__module__}.{type(exc).__qualname__}",
+            "message": str(exc),
+            "traceback": formatted or None,
+            "no_traceback_reason": None if formatted else "exception had no Python traceback",
+            "native_crash": reason_code == "native-crash",
+            "root_cause_fingerprint": fingerprint,
+            "details": {"driver_observed": True, "environment": environment},
+        },
+        "defer_evidence": None,
+    }
+
+
+def _driver_deferral_attempt(
+    item: WorkItem,
+    artifact: AuthorArtifact,
+    status_code: str,
+    evidence: Mapping[str, Any],
+    config: DriverConfig,
+    *,
+    created_at: str,
+) -> JsonObject:
+    """Build one observed driver attempt retaining positive platform evidence."""
+
+    if evidence.get("target_status") != status_code:
+        raise DriverIntegrationError("deferral evidence target does not match terminal status")
+    if not evidence.get("source_ids") and not evidence.get("probe_attempt_ids"):
+        raise DriverIntegrationError("deferral evidence requires source or focused-probe IDs")
+    marker = RuntimeError(str(evidence.get("explanation") or status_code))
+    attempt = _driver_failure_attempt(
+        item,
+        artifact,
+        "environment",
+        "probe-failed",
+        marker,
+        config,
+        environment=item.route.intent,
+        created_at=created_at,
+    )
+    attempt["attempt_id"] = stable_hash(
+        {
+            "work_id": artifact.proposal["work_id"],
+            "status_code": status_code,
+            "defer_evidence": evidence,
+        }
+    )
+    attempt["result"] = "observed"
+    attempt["error"] = None
+    attempt["defer_evidence"] = deepcopy(dict(evidence))
+    return attempt
+
+
+def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
+    """Build schema-complete unresolved facts without inventing an executable model."""
+
+    source_id = "intake-discovery-record"
+    catalog_name = (
+        "deferred.jsonl" if item.intake.discovery_source == "deferred" else "master_catalog.jsonl"
+    )
+    source_url = (
+        f"https://github.com/johnmarktaylor91/torchlens/blob/main/menagerie/data/{catalog_name}"
+    )
+    evidence_text = f"name={item.intake.name}; zoo={item.intake.zoo}; variant={item.intake.variant}"
+    return {
+        "identity": {
+            "canonical_name": item.intake.name,
+            "aliases": [],
+            "acronym": None,
+            "variant": item.intake.variant,
+            "variant_scope": "family",
+            "family_representative_id": item.stable_id,
+            "duplicate_of": None,
+            "alias_of": None,
+        },
+        "taxonomy": None,
+        "external_metadata": None,
+        "website": None,
+        "people_and_origin": None,
+        "dates": None,
+        "citation": None,
+        "licenses": None,
+        "source_resolution": {
+            "rung": "R5_SKIP",
+            "decision": "source resolution did not complete",
+            "rung_evidence": source_id,
+            "sufficiency_gap": None,
+            "searched_at": created_at,
+            "attempted_rungs": [
+                {
+                    "rung": "R5_SKIP",
+                    "result": "not-reached",
+                    "reason_code": "author-lane-failed",
+                    "evidence_ids": ["intake-identity"],
+                }
+            ],
+            "search_report": {
+                "queries": [],
+                "places_checked": ["trusted intake snapshot"],
+                "links_checked": [source_url],
+                "languages_checked": [],
+                "archives_checked": [],
+                "started_at": created_at,
+                "finished_at": created_at,
+                "conclusion": "The model-local lane failed before source resolution completed.",
+            },
+            "mandatory_link_status": "ok",
+            "primary_source_id": source_id,
+            "sources": [
+                {
+                    "source_id": source_id,
+                    "role": "documentation",
+                    "kind": "repository",
+                    "url": source_url,
+                    "revision_kind": "commit",
+                    "revision": "campaign-branch",
+                    "locator": (f"{item.intake.name}|{item.intake.zoo}|{item.intake.variant}"),
+                    "content_sha256": item.intake.legacy_row_sha256,
+                    "byte_count": len(evidence_text.encode("utf-8")),
+                    "media_type": "application/x-ndjson",
+                    "retrieved_at": created_at,
+                    "fetch_recipe": "trusted-intake-snapshot",
+                    "mirror_class": "public",
+                    "mirror_digest": item.intake.legacy_row_sha256,
+                }
+            ],
+        },
+        "evidence": {
+            "excerpts": [
+                {
+                    "evidence_id": "intake-identity",
+                    "source_id": source_id,
+                    "locator": f"natural-key:{item.intake.natural_key!r}",
+                    "text": evidence_text,
+                    "text_sha256": stable_hash(evidence_text),
+                    "supports": ["identity.canonical_name"],
+                    "family_level": False,
+                    "disposition": "supporting",
+                    "license_disposition": "short-excerpt-committed",
+                }
+            ],
+            "coverage": {
+                "all_agent_fields_have_support": False,
+                "missing_support": ["authored_metadata"],
+                "family_grounding_complete": False,
+            },
+            "evidence_identity": stable_hash(evidence_text),
+            "family_grounding_path": None,
+        },
+        "implementation": {
+            "original_framework": _framework_from_intake(item.intake),
+            "run_framework": _framework_from_intake(item.intake),
+            "native_object_type": "unresolved",
+            "native_call_method": "forward",
+            "transparent_forward_adapter": False,
+            "recipe_type": "none",
+            "code_path": None,
+            "code_sha256": None,
+            "builder_symbol": None,
+            "dummy_call_symbol": None,
+            "library_recipe": None,
+            "upstream_files": [],
+            "patches": [],
+            "source_to_code_map": [],
+            "declared_choices": [],
+            "initialization": {
+                "policy": "random",
+                "pretrained_disabled": True,
+                "source_specified_choices": [],
+            },
+            "mode": "eval",
+            "device_policy": "cpu",
+            "required_construct_asset": None,
+            "recipe_revision": stable_hash({"stable_id": item.stable_id, "state": "unresolved"}),
+            "torchlens_import_static_check": "passed",
+        },
+        "input_contract": {
+            "code_path": None,
+            "builder_symbol": "make_dummy_call",
+            "seed": 0,
+            "semantic_description": "Input contract unresolved.",
+            "source_basis": ["intake-identity"],
+            "smallest_valid_probe_rationale": "No probe ran before terminalization.",
+            "args": [],
+            "kwargs": [],
+            "non_tensor_values": [],
+            "masks_state_and_control": [],
+            "expected_output_semantics": "unresolved",
+        },
+        "modes": {
+            "meaningful_modes": ["eval"],
+            "per_mode_run": {},
+            "train_eval_divergence": "none",
+            "divergence_evidence": "No forward mode completed.",
+        },
+        "fidelity": {
+            "required": False,
+            "reason": "No implementation was accepted.",
+            "verdict": None,
+            "fidelity_identity": None,
+            "gate_id": None,
+            "current": True,
+            "permanent_scar": False,
+            "deviations": [],
+        },
+    }
+
+
+def _terminal_observation(attempts: Sequence[Mapping[str, Any]]) -> JsonObject:
+    """Return best-effort schema-complete observations without fabricating a receipt."""
+
+    receipt: Mapping[str, Any] = {}
+    supervisor: Mapping[str, Any] = {}
+    for attempt in reversed(attempts):
+        candidate = attempt.get("worker_receipt", {})
+        if candidate.get("present"):
+            receipt = candidate
+            supervisor = attempt.get("supervisor_observation", {})
+            break
+    output = receipt.get("output_signature")
+    if not isinstance(output, Mapping) or not {"tree", "leaves"}.issubset(output):
+        output = {"tree": None, "leaves": []}
+    snippet = "driver-owned terminal disposition; no run awarded"
+    return {
+        "parameter_count_total": int(receipt.get("parameter_count_total") or 0),
+        "parameter_count_trainable": int(receipt.get("parameter_count_trainable") or 0),
+        "output_signature": dict(output),
+        "input_kind": str(receipt.get("input_kind") or "random-fallback"),
+        "input_asset": receipt.get("input_asset"),
+        "input_note": str(receipt.get("input_note") or "No complete worker input receipt."),
+        "constructor_seconds": float(receipt.get("constructor_seconds") or 0.0),
+        "forward_seconds": float(receipt.get("forward_seconds") or 0.0),
+        "peak_rss_bytes": int(supervisor.get("peak_rss_bytes") or 0),
+        "measurement_attempt_ids": [str(attempt["attempt_id"]) for attempt in attempts],
+        "snippet": snippet,
+        "snippet_sha256": stable_hash(snippet),
+    }
+
+
+def _assemble_terminal_model(
+    item: WorkItem,
+    artifact: Optional[AuthorArtifact],
+    status_code: str,
+    reason_code: Optional[str],
+    detail: Optional[str],
+    attempts: Sequence[Mapping[str, Any]],
+    gates: Sequence[Mapping[str, Any]],
+    config: DriverConfig,
+    created_at: str,
+    *,
+    human_review: bool,
+    root_cause_fingerprint: Optional[str],
+) -> JsonObject:
+    """Assemble one schema-complete driver terminal revision from durable evidence."""
+
+    proposal = artifact.proposal if artifact is not None else {}
+    facts = (
+        deepcopy(dict(proposal["proposed_facts"]))
+        if artifact is not None
+        else _placeholder_facts(item, created_at)
+    )
+    metadata_gate = _find_gate(gates, item.stable_id, "metadata_batch")
+    metadata_item: Optional[Mapping[str, Any]] = None
+    metadata_accepted = False
+    if metadata_gate is not None:
+        metadata_item = next(
+            value for value in metadata_gate["items"] if value["stable_id"] == item.stable_id
+        )
+        metadata_accepted = bool(
+            metadata_item["verdict"] == "accurate"
+            and metadata_item["integrity"]["verdict"] == "accurate"
+            and metadata_item["rung_check"]["verdict"] == "accurate"
+        )
+    if metadata_accepted and metadata_item is not None:
+        validate_external_metadata_for_write(facts["external_metadata"], metadata_item)
+        metadata_state = "accepted"
+    else:
+        metadata_state = "failed"
+        for field in (
+            "taxonomy",
+            "external_metadata",
+            "website",
+            "people_and_origin",
+            "dates",
+            "citation",
+            "licenses",
+        ):
+            facts[field] = None
+
+    fidelity_gate = _find_gate(gates, item.stable_id, "fidelity")
+    if fidelity_gate is not None:
+        fidelity_item = next(
+            value for value in fidelity_gate["items"] if value["stable_id"] == item.stable_id
+        )
+        facts["fidelity"].update(
+            {
+                "required": True,
+                "verdict": fidelity_item["fidelity"]["verdict"],
+                "fidelity_identity": fidelity_item["fidelity_identity"],
+                "gate_id": fidelity_gate["gate_id"],
+                "current": True,
+                "permanent_scar": fidelity_item["fidelity"]["permanent_scar"],
+            }
+        )
+
+    failed_attempt = next(
+        (attempt for attempt in reversed(attempts) if attempt.get("result") == "failed"), None
+    )
+    error = failed_attempt.get("error") if failed_attempt is not None else None
+    if isinstance(error, Mapping):
+        traceback_text = error.get("traceback")
+        no_traceback_reason = error.get("no_traceback_reason")
+        fingerprint = root_cause_fingerprint or str(error["root_cause_fingerprint"])
+    else:
+        traceback_text = None
+        no_traceback_reason = "terminal checker or author decision produced no Python traceback"
+        fingerprint = root_cause_fingerprint or stable_hash(
+            {"stable_id": item.stable_id, "status": status_code, "detail": detail}
+        )
+    kind = status_code.split(":", 1)[0]
+    stage = status_code.split(":", 1)[1] if kind == "failed" else None
+    attempt_ids = [str(attempt["attempt_id"]) for attempt in attempts]
+    source_rung = str(facts["source_resolution"]["rung"])
+    metadata_gate_id = metadata_gate["gate_id"] if metadata_gate is not None else None
+    metadata_verdict = metadata_item["verdict"] if metadata_item is not None else None
+    model: JsonObject = {
+        "schema_version": "menagerie.crawler.model.v2",
+        "stable_id": item.stable_id,
+        "parent_revision": None,
+        "created_at": created_at,
+        "revised_by": {"actor": "driver"},
+        "authored_metadata_state": metadata_state,
+        "intake": {
+            "snapshot_id": "driver-loaded",
+            "snapshot_sha256": stable_hash(item.intake.to_dict()),
+            "legacy_row_sha256": item.intake.legacy_row_sha256,
+            "legacy_recipe_sha256": None,
+            "legacy_module_sha256": None,
+            "legacy_claims_untrusted": True,
+            "preserved_legacy_flags": [],
+            "discovery_sources": [item.intake.discovery_source],
+        },
+        **facts,
+        "observed": _terminal_observation(attempts),
+        "modes": {
+            **deepcopy(dict(facts["modes"])),
+            "per_mode_run": {
+                str(attempt["mode"]): {
+                    "attempt_id": attempt["attempt_id"],
+                    "status": attempt["result"],
+                }
+                for attempt in attempts
+                if attempt.get("mode") in facts["modes"]["meaningful_modes"]
+            },
+        },
+        "accuracy_gate": {
+            "required": True,
+            "vet_identity": metadata_item.get("vet_identity") if metadata_item else None,
+            "gate_id": metadata_gate_id,
+            "verdict": metadata_verdict,
+            "current": metadata_gate is not None,
+            "checker_model": (
+                str(metadata_gate["checker"]["model"])
+                if metadata_gate is not None
+                else config.checker_model
+            ),
+            "checker_version": (
+                str(metadata_gate["checker"]["version"])
+                if metadata_gate is not None
+                else config.checker_version
+            ),
+            "prompt_sha256": (
+                str(metadata_gate["checker"]["prompt_sha256"])
+                if metadata_gate is not None
+                else stable_hash("codex_accuracy_checker_v2")
+            ),
+        },
+        "execution": {
+            "execution_identity": stable_hash(
+                {"stable_id": item.stable_id, "status": status_code, "attempts": attempt_ids}
+            ),
+            "environment_id": str(
+                attempts[-1].get("environment", {}).get("env_id", item.route.intent)
+                if attempts
+                else item.route.intent
+            ),
+            "env_generation": (
+                str(attempts[-1]["identities"]["environment"])
+                if attempts
+                else stable_hash(item.route.intent)
+            ),
+            "accepted_attempt_ids": [],
+            "confirmation_policy": "single-mechanical",
+            "network_attempted": False,
+            "checkpoint_accessed": False,
+            "last_verified_at": created_at,
+            "current": False,
+        },
+        "status": {
+            "kind": kind,
+            "code": status_code,
+            "stage": stage,
+            "reason_code": reason_code,
+            "detail": detail,
+            "traceback": traceback_text if kind == "failed" else None,
+            "no_traceback_reason": no_traceback_reason if kind == "failed" else None,
+            "attempted_rungs": [source_rung],
+            "retries": {
+                retry_stage: (
+                    1 if retry_stage in {stage, "gate" if stage == "accuracy-gate" else ""} else 0
+                )
+                for retry_stage in (
+                    "source",
+                    "fetch",
+                    "evidence",
+                    "author",
+                    "gate",
+                    "environment",
+                    "import",
+                    "constructor",
+                    "input",
+                    "forward",
+                    "fidelity",
+                )
+            },
+            "environment": item.route.intent,
+            "timestamp": created_at,
+            "attempt_ids": attempt_ids,
+            "root_cause_fingerprint": fingerprint if kind == "failed" else None,
+            "supersedes_revision": None,
+            "human_review": {
+                "required": human_review,
+                "reason": detail if human_review else None,
+                "queue": "crawler-human-review" if human_review else None,
+                "requested_at": created_at if human_review else None,
+            },
+        },
+        "provenance": {
+            "author_model": str(proposal.get("author", {}).get("model", config.author_model)),
+            "author_version": str(proposal.get("author", {}).get("version", config.author_version)),
+            "author_prompt_sha256": str(
+                proposal.get("author", {}).get(
+                    "prompt_sha256", stable_hash("claude_crawler_author_v2")
+                )
+            ),
+            "checker_model": config.checker_model,
+            "checker_version": config.checker_version,
+            "producer_run_id": config.run_id,
+            "machine_id": config.machine_id,
+        },
+        "budget": {
+            "author_sessions_used": int(artifact is not None),
+            "author_sessions_max": 3,
+            "gate_rounds_used": _metadata_repair_count(gates, item.stable_id)
+            + int(fidelity_gate is not None),
+            "run_revisions_used": 1,
+            "explicit_grants": [],
+        },
+        "flags": [],
+        "notes": "",
+        "scar_history": (["slop"] if facts["fidelity"].get("permanent_scar") else []),
+        "completeness": {
+            "schema_valid": True,
+            "mandatory_source_present": True,
+            "source_read_fields_complete": metadata_accepted,
+            "evidence_coverage_complete": metadata_accepted,
+            "accuracy_gate_current": metadata_gate is not None,
+            "required_fidelity_current": bool(facts["fidelity"].get("current")),
+            "execution_current": False,
+            "family_template_valid": metadata_accepted,
+            "release_eligible": False,
+            "issues": [status_code],
+        },
+    }
+    return model
 
 
 def _assemble_run_model(
@@ -1854,6 +3340,48 @@ def _framework_from_intake(item: IntakeItem) -> str:
         if marker in text:
             return marker
     return "pytorch"
+
+
+def _framework_phase(item: IntakeItem) -> str:
+    """Return the configured scheduler phase for one intake row."""
+
+    return "pytorch" if _framework_from_intake(item) == "pytorch" else "native-tail"
+
+
+def _artifact_terminal_status(
+    artifact: AuthorArtifact,
+) -> Optional[tuple[str, Optional[str]]]:
+    """Return an explicit non-execution author disposition."""
+
+    if artifact.terminal_status is not None:
+        return artifact.terminal_status, artifact.terminal_reason_code
+    return None
+
+
+def _r5_terminal_status(artifact: AuthorArtifact) -> Optional[str]:
+    """Infer the closed epistemic skip only after its metadata gate accepts."""
+
+    resolution = artifact.proposal.get("proposed_facts", {}).get("source_resolution", {})
+    if resolution.get("rung") != "R5_SKIP":
+        return None
+    if resolution.get("sufficiency_gap"):
+        return "skipped:insufficient-description"
+    decision = str(resolution.get("decision", "")).lower()
+    if "not-a-real-nn" in decision or "not a real" in decision:
+        return "skipped:not-a-real-NN"
+    return "skipped:no-description"
+
+
+def _environment_failure(exc: Exception) -> tuple[str, str]:
+    """Map a typed environment-lifecycle exception to its closed failure reason."""
+
+    if isinstance(exc, EnvironmentProbeError):
+        return "environment", "probe-failed"
+    if isinstance(exc, EnvironmentSolveError):
+        return "environment", "solve-failed"
+    if isinstance(exc, DiskRecoveryError):
+        return "resource", "disk-floor"
+    return "environment", "build-failed"
 
 
 def _future_reset(now: str, signal: CheckerBackoffSignal) -> str:

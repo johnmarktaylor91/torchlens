@@ -19,6 +19,7 @@ STDIO_TAIL_MAX_CHARS = 1_500
 STABLE_ID_DIGEST_CHARS = 20
 DEFAULT_FORWARD_TIMEOUT_SECONDS = 300
 MAX_FORWARD_TIMEOUT_SECONDS = 1_800
+DEFAULT_NOTIFY_TIMEOUT_SECONDS = 5
 DEFAULT_REVIEW_CHECKPOINT_MODELS = 1_000
 DEFAULT_PROGRESS_NOTIFICATION_MILESTONES = (2_000, 3_000, 5_000, 10_000, 15_000, 20_000)
 
@@ -339,6 +340,7 @@ class OperationalEventKind(StrEnum):
     CHECKPOINT_REVIEW = "checkpoint-review"
     REVIEW_SIGNOFF = "review-signoff"
     PROGRESS_NOTIFICATION = "progress-notification"
+    NOTIFICATION_DELIVERY = "notification-delivery"
 
 
 class OperationalEventStatus(StrEnum):
@@ -356,6 +358,9 @@ class OperationalEventStatus(StrEnum):
     CHECKPOINT_REVIEW_PAUSED = "paused:checkpoint-review"
     REVIEW_SIGNED_OFF = "resumed:checkpoint-review"
     PROGRESS_NOTIFIED = "progress-notified"
+    PROGRESS_RECORDED = "progress-recorded"
+    NOTIFICATION_DELIVERED = "notification-delivered"
+    NOTIFICATION_FAILED = "notification-failed"
 
 
 # Slice-F scheduler configuration defaults.  The earlier names remain the

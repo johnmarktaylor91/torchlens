@@ -235,6 +235,7 @@ class CanonicalReducer:
         self._validate_status(candidate)
         self._validate_source(candidate)
         self._validate_gates(candidate)
+        self._validate_deferral(candidate)
         self._validate_execution(candidate)
         try:
             result = self._models.append(candidate)
@@ -370,17 +371,32 @@ class CanonicalReducer:
         if required:
             found = self._gate_item(fidelity.get("gate_id"), stable_id)
             if found is None:
+                status = model.get("status", {})
+                if (
+                    status.get("code") == "failed:fidelity"
+                    and status.get("reason_code") == "identity-mismatch"
+                    and not fidelity.get("current")
+                ):
+                    return
                 raise ReductionError("required fidelity is missing its gate")
             gate, item = found
             if gate["gate_kind"] != "fidelity":
                 raise ReductionError("fidelity must reference a per-model fidelity gate")
             rung_check = item.get("rung_check")
+            rejected_terminal = model.get("status", {}).get("code") == "failed:fidelity"
+            allowed_verdicts = (
+                {"major-drift", "slop", "cannot-verify"}
+                if rejected_terminal
+                else {"match", "minor-drift"}
+            )
+            rung_accepted = isinstance(rung_check, Mapping) and (
+                rejected_terminal or rung_check.get("verdict") == "accurate"
+            )
             if (
                 item.get("fidelity_identity") != fidelity.get("fidelity_identity")
                 or item["fidelity"]["verdict"] != fidelity.get("verdict")
-                or fidelity.get("verdict") not in {"match", "minor-drift"}
-                or not isinstance(rung_check, Mapping)
-                or rung_check.get("verdict") != "accurate"
+                or fidelity.get("verdict") not in allowed_verdicts
+                or not rung_accepted
                 or not fidelity.get("current")
             ):
                 raise ReductionError(
@@ -448,6 +464,30 @@ class CanonicalReducer:
                 raise ReductionError("R3/R4 runs require two cold accepted attempts")
         elif confirmation_policy == "two-cold-r3-r4":
             raise ReductionError("R1/R2 runs cannot claim the R3/R4 confirmation policy")
+
+    def _validate_deferral(self, model: Mapping[str, Any]) -> None:
+        """Require positive source/probe evidence for either closed platform deferral.
+
+        Parameters
+        ----------
+        model:
+            Proposed model revision.
+        """
+
+        status_code = model.get("status", {}).get("code")
+        if status_code not in {"deferred:needs-cuda", "deferred:needs-x86"}:
+            return
+        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        for attempt_id in model.get("status", {}).get("attempt_ids", []):
+            attempt = attempts_by_id.get(attempt_id)
+            evidence = attempt.get("defer_evidence") if attempt is not None else None
+            if (
+                isinstance(evidence, Mapping)
+                and evidence.get("target_status") == status_code
+                and (evidence.get("source_ids") or evidence.get("probe_attempt_ids"))
+            ):
+                return
+        raise ReductionError("platform deferral requires positive source or focused-probe evidence")
 
 
 def materialize_current(ledgers: LedgerPaths) -> Mapping[str, JsonObject]:
