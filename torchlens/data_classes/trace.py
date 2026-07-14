@@ -1298,6 +1298,9 @@ class Trace(
         "_grad_stream_retain_in_memory": FieldPolicy.DROP,
         "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
         "_out_sink": FieldPolicy.DROP,
+        # Runtime-only: the set of dispatchable op func-call-ids the orphan-removal
+        # pass pruned, read by the validation dispatch-count backstop. Never portable.
+        "_orphan_pruned_func_call_ids": FieldPolicy.DROP,
         "_capture_events": FieldPolicy.DROP,
         "_tl_backward_hooked_tensor_keys": FieldPolicy.DROP,
         "_active_backward_pass_index": FieldPolicy.DROP,
