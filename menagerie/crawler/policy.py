@@ -6,15 +6,20 @@ import ast
 import builtins
 import importlib.abc
 import importlib.machinery
+import json
 import os
+import platform
 import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
-from typing import Any, IO, Mapping, Optional, Sequence, Union
+from typing import Any, IO, Literal, Mapping, Optional, Sequence, Union
 
 
 _CREDENTIAL_MARKERS = (
@@ -39,6 +44,466 @@ _SAFE_INHERITED_KEYS = (
     "WINDIR",
     "TMPDIR",
 )
+
+SandboxKind = Literal["sandbox-exec", "bubblewrap", "unshare"]
+
+
+@dataclass(frozen=True)
+class OperatingSystemSandbox:
+    """A capability-probed OS sandbox executable.
+
+    Parameters
+    ----------
+    kind:
+        Closed sandbox implementation name.
+    executable:
+        Absolute path to the sandbox launcher.
+    mount_executable:
+        Absolute mount utility used only by the Linux ``unshare`` fallback.
+    """
+
+    kind: SandboxKind
+    executable: str
+    mount_executable: Optional[str] = None
+
+
+class SandboxUnavailableError(RuntimeError):
+    """Raised when worker execution has no usable OS isolation boundary."""
+
+
+def _normalized_write_roots(write_roots: Sequence[Path]) -> tuple[Path, ...]:
+    """Return sorted, resolved writable roots without redundant descendants.
+
+    Parameters
+    ----------
+    write_roots:
+        Candidate sandbox write roots.
+
+    Returns
+    -------
+    tuple[Path, ...]
+        Minimal deterministic set of writable roots.
+    """
+
+    resolved = sorted({path.resolve() for path in write_roots}, key=lambda path: str(path))
+    roots: list[Path] = []
+    for path in resolved:
+        if not any(path == root or root in path.parents for root in roots):
+            roots.append(path)
+    return tuple(roots)
+
+
+def generate_macos_sandbox_profile(write_roots: Sequence[Path]) -> str:
+    """Generate a deterministic sandbox-exec profile for offline execution.
+
+    Parameters
+    ----------
+    write_roots:
+        Sole filesystem roots where writes are permitted.
+
+    Returns
+    -------
+    str
+        Complete Seatbelt profile denying network and all other writes.
+    """
+
+    roots = _normalized_write_roots(write_roots)
+    lines = [
+        "(version 1)",
+        "(allow default)",
+        "(deny network*)",
+        "(deny file-write*)",
+        '(allow file-write* (literal "/dev/null"))',
+    ]
+    for root in roots:
+        encoded = json.dumps(str(root), ensure_ascii=True)
+        lines.append(f"(allow file-write* (literal {encoded}))")
+        lines.append(f"(allow file-write* (subpath {encoded}))")
+    return "\n".join(lines) + "\n"
+
+
+def _probe_command(argv: Sequence[str]) -> bool:
+    """Return whether a sandbox capability probe exits successfully.
+
+    Parameters
+    ----------
+    argv:
+        Exact probe command.
+
+    Returns
+    -------
+    bool
+        True only for a prompt zero exit.
+    """
+
+    try:
+        completed = subprocess.run(
+            list(argv),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
+
+
+def _python_probe_argv() -> tuple[str, ...]:
+    """Return a minimal Python startup command for sandbox probes.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Isolated interpreter command that also verifies OS randomness access.
+    """
+
+    return (sys.executable, "-I", "-S", "-c", "import os; os.urandom(1)")
+
+
+def _linux_compute_devices() -> tuple[Path, ...]:
+    """Return explicit accelerator device paths needed by Linux workers.
+
+    Returns
+    -------
+    tuple[Path, ...]
+        Existing CUDA/DRM compute device paths in deterministic order.
+    """
+
+    candidates = {
+        *Path("/dev").glob("nvidia*"),
+        Path("/dev/dri"),
+        Path("/dev/kfd"),
+    }
+    return tuple(sorted((path for path in candidates if path.exists()), key=lambda path: str(path)))
+
+
+def _probe_bubblewrap(executable: str) -> bool:
+    """Return whether bubblewrap can create the required namespaces and mounts.
+
+    Parameters
+    ----------
+    executable:
+        Bubblewrap executable.
+
+    Returns
+    -------
+    bool
+        True when the complete boundary can launch a no-op.
+    """
+
+    return _probe_command(
+        (
+            executable,
+            "--unshare-net",
+            "--unshare-ipc",
+            "--die-with-parent",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--remount-ro",
+            "/dev",
+            "--",
+            *_python_probe_argv(),
+        )
+    )
+
+
+def _probe_sandbox_exec(executable: str) -> bool:
+    """Return whether macOS sandbox-exec accepts the generated profile.
+
+    Parameters
+    ----------
+    executable:
+        sandbox-exec executable.
+
+    Returns
+    -------
+    bool
+        True when Seatbelt launches a no-op under the profile.
+    """
+
+    profile = generate_macos_sandbox_profile(())
+    return _probe_command((executable, "-p", profile, *_python_probe_argv()))
+
+
+def _unshare_helper_argv(
+    executable: str,
+    mount_executable: str,
+    argv: Sequence[str],
+    cwd: Path,
+    write_roots: Sequence[Path],
+) -> tuple[str, ...]:
+    """Build the unshare fallback command including its mount-namespace helper.
+
+    Parameters
+    ----------
+    executable:
+        unshare executable.
+    mount_executable:
+        mount executable used inside the namespace.
+    argv:
+        Child command.
+    cwd:
+        Child working directory.
+    write_roots:
+        Writable bind roots.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Exact argv-only namespace launch.
+    """
+
+    roots_json = json.dumps(
+        [str(path) for path in _normalized_write_roots(write_roots)],
+        separators=(",", ":"),
+    )
+    return (
+        executable,
+        "--net",
+        "--map-root-user",
+        "--mount",
+        "--ipc",
+        "--fork",
+        "--kill-child",
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--enter-unshare-sandbox",
+        mount_executable,
+        str(cwd.resolve()),
+        roots_json,
+        "--",
+        *argv,
+    )
+
+
+def _probe_unshare(executable: str, mount_executable: str) -> bool:
+    """Return whether unshare can enforce both network and mount isolation.
+
+    Parameters
+    ----------
+    executable:
+        unshare executable.
+    mount_executable:
+        mount executable used by the namespace helper.
+
+    Returns
+    -------
+    bool
+        True only when the full fallback boundary launches successfully.
+    """
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="menagerie-sandbox-probe-") as temporary:
+            root = Path(temporary).resolve()
+            argv = _unshare_helper_argv(
+                executable,
+                mount_executable,
+                _python_probe_argv(),
+                Path.cwd(),
+                (root,),
+            )
+            return _probe_command(argv)
+    except OSError:
+        return False
+
+
+@lru_cache(maxsize=4)
+def detect_os_sandbox(system_name: Optional[str] = None) -> Optional[OperatingSystemSandbox]:
+    """Detect a working fail-closed OS sandbox for the current platform.
+
+    Parameters
+    ----------
+    system_name:
+        Optional platform override used by deterministic tests.
+
+    Returns
+    -------
+    OperatingSystemSandbox | None
+        First working preferred sandbox, or ``None`` when execution must fail closed.
+    """
+
+    detected_system = platform.system() if system_name is None else system_name
+    if detected_system == "Darwin":
+        sandbox_exec = shutil.which("sandbox-exec")
+        if sandbox_exec is not None and _probe_sandbox_exec(sandbox_exec):
+            return OperatingSystemSandbox("sandbox-exec", sandbox_exec)
+        return None
+    if detected_system != "Linux":
+        return None
+    bubblewrap = shutil.which("bwrap")
+    if bubblewrap is not None and _probe_bubblewrap(bubblewrap):
+        return OperatingSystemSandbox("bubblewrap", bubblewrap)
+    unshare = shutil.which("unshare")
+    mount = shutil.which("mount")
+    if unshare is not None and mount is not None and _probe_unshare(unshare, mount):
+        return OperatingSystemSandbox("unshare", unshare, mount)
+    return None
+
+
+def wrap_with_os_sandbox(
+    sandbox: OperatingSystemSandbox,
+    argv: Sequence[str],
+    cwd: Path,
+    write_roots: Sequence[Path],
+    *,
+    macos_profile_path: Optional[Path] = None,
+) -> tuple[str, ...]:
+    """Wrap a child command in a capability-probed OS sandbox.
+
+    Parameters
+    ----------
+    sandbox:
+        Selected sandbox implementation.
+    argv:
+        Original child argv.
+    cwd:
+        Read-only child working directory.
+    write_roots:
+        Sole writable scratch/result roots.
+    macos_profile_path:
+        Generated profile path required by sandbox-exec.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Wrapped command suitable for ``subprocess.Popen``.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the selected implementation lacks required launch data.
+    """
+
+    roots = _normalized_write_roots(write_roots)
+    if sandbox.kind == "sandbox-exec":
+        if macos_profile_path is None:
+            raise SandboxUnavailableError("sandbox-exec profile path is required")
+        return (sandbox.executable, "-f", str(macos_profile_path), *argv)
+    if sandbox.kind == "bubblewrap":
+        wrapped: list[str] = [
+            sandbox.executable,
+            "--unshare-net",
+            "--unshare-ipc",
+            "--die-with-parent",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+        ]
+        for device in _linux_compute_devices():
+            wrapped.extend(("--dev-bind", str(device), str(device)))
+        wrapped.extend(("--remount-ro", "/dev"))
+        for root in roots:
+            wrapped.extend(("--bind", str(root), str(root)))
+        wrapped.extend(("--chdir", str(cwd.resolve()), "--", *argv))
+        return tuple(wrapped)
+    if sandbox.mount_executable is None:
+        raise SandboxUnavailableError("unshare requires a mount executable")
+    return _unshare_helper_argv(
+        sandbox.executable,
+        sandbox.mount_executable,
+        argv,
+        cwd,
+        roots,
+    )
+
+
+def _run_mount(mount_executable: str, *arguments: str) -> None:
+    """Run one required mount operation inside an unshared namespace.
+
+    Parameters
+    ----------
+    mount_executable:
+        Absolute mount executable.
+    *arguments:
+        Exact mount arguments.
+    """
+
+    subprocess.run((mount_executable, *arguments), check=True)
+
+
+def _enter_unshare_sandbox(
+    mount_executable: str,
+    cwd: Path,
+    write_roots: Sequence[Path],
+    argv: Sequence[str],
+) -> None:
+    """Make the unshared root read-only, preserve write roots, and exec the child.
+
+    Parameters
+    ----------
+    mount_executable:
+        Absolute mount utility.
+    cwd:
+        Child working directory.
+    write_roots:
+        Writable bind roots prepared by the parent.
+    argv:
+        Original child command.
+    """
+
+    _run_mount(mount_executable, "--make-rprivate", "/")
+    for root in _normalized_write_roots(write_roots):
+        _run_mount(mount_executable, "--bind", str(root), str(root))
+    for volatile_device_root in (Path("/dev/shm"), Path("/dev/mqueue")):
+        if volatile_device_root.exists():
+            _run_mount(
+                mount_executable,
+                "--bind",
+                str(volatile_device_root),
+                str(volatile_device_root),
+            )
+            _run_mount(
+                mount_executable,
+                "-o",
+                "remount,bind,ro",
+                str(volatile_device_root),
+            )
+    _run_mount(mount_executable, "-o", "remount,bind,ro", "/")
+    os.chdir(cwd)
+    os.execvpe(argv[0], list(argv), os.environ)
+
+
+def _sandbox_helper_main(argv: Sequence[str]) -> int:
+    """Run the private unshare mount helper protocol.
+
+    Parameters
+    ----------
+    argv:
+        Command-line arguments after the module path.
+
+    Returns
+    -------
+    int
+        Nonzero only for a malformed helper invocation.
+    """
+
+    if len(argv) < 6 or argv[0] != "--enter-unshare-sandbox" or "--" not in argv:
+        return 2
+    separator = argv.index("--")
+    if separator != 4 or separator == len(argv) - 1:
+        return 2
+    try:
+        decoded_roots = json.loads(argv[3])
+    except json.JSONDecodeError:
+        return 2
+    if not isinstance(decoded_roots, list) or not all(
+        isinstance(value, str) for value in decoded_roots
+    ):
+        return 2
+    _enter_unshare_sandbox(
+        argv[1],
+        Path(argv[2]),
+        tuple(Path(value) for value in decoded_roots),
+        argv[separator + 1 :],
+    )
+    return 127
 
 
 class PolicyViolation(RuntimeError):
@@ -525,3 +990,7 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         if self._import_blocker in sys.meta_path:
             sys.meta_path.remove(self._import_blocker)
         return None
+
+
+if __name__ == "__main__":
+    raise SystemExit(_sandbox_helper_main(sys.argv[1:]))
