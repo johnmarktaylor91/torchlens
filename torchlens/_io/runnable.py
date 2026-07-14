@@ -17,6 +17,7 @@ import torch
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._runnable_state import runnable_tensor_byte_digest
+from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from ..data_classes._state_adapter import state_items
 from ..errors import RunnablePreflightError
 from ..intervention.types import (
@@ -180,6 +181,31 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             registry_id = f"callable:{len(registry_entries) + 1}"
             registry_id_by_key[func_id] = registry_id
             registry_entries.append(CallableRegistryEntry(registry_id=registry_id, key=func_id))
+
+        # r14-C3: a storage-rebinding / storage-reallocating op (``set_`` / ``resize_`` family)
+        # cannot be faithfully represented in the sparse DAG -- the resolver already denies it at
+        # LOAD as a non-forward callable, which left ``run()`` crashing with a ReattachError. Refuse
+        # it at SAVE with a typed diagnostic so the model fails closed here (RunnablePreflightError)
+        # rather than crashing at run time, and is never a false VERIFIED.
+        storage_unsafe_name = str(getattr(func_id, "qualname", "") or "").rsplit(".", 1)[-1]
+        if (
+            storage_unsafe_name in _STORAGE_UNSAFE_NAMES
+            or str(getattr(representative, "func_name", "")) in _STORAGE_UNSAFE_NAMES
+        ):
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT,
+                    f"Op {storage_unsafe_name or str(getattr(representative, 'func_name', ''))!r} "
+                    "rebinds or reallocates tensor storage (the set_/resize_ family) and is not a "
+                    "faithfully representable pure-forward op, so it cannot be saved as a runnable "
+                    "call; save is refused here (fail closed at save time, never a crash at run "
+                    "time or a false VERIFIED).",
+                    registry_id=registry_id,
+                    affected_ops=tuple(str(op.label) for op in call_ops),
+                    detection_stage="producer_storage_unsafe_op",
+                )
+            )
+            continue
 
         template = getattr(representative, "args_template", None)
         if not isinstance(template, CapturedArgTemplate):
