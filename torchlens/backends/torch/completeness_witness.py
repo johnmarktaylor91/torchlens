@@ -282,9 +282,62 @@ escape value is the escaped source, so it is witnessed value-free by its capture
 digest. This keeps the original input VERIFIED (byte-identical slot) while a changed
 input recomputes different bytes -> UNVERIFIABLE, instead of a false VERIFIED.
 
-BOOL escape sources are NOT recorded anywhere: a ``bool(...)`` truth-test steering
-control flow is the control-witness / conditional / loop / pruned-RNG net's domain,
-not the tensor-derived scalar net's.
+BOOL escape sources are NOT recorded anywhere by the census: a ``bool(...)``
+truth-test steering control flow is the control-witness / conditional / loop /
+pruned-RNG net's domain, not the tensor-derived scalar net's. An UNATTRIBUTABLE
+bool escape whose predicate is NOT covered by any of those nets is recorded in
+``_HOST_ESCAPE_UNATTRIBUTABLE_BOOL`` below so the runnable producer can fail closed.
+"""
+
+INVISIBLE_HOST_ESCAPE_FUNCS = frozenset({"tolist", "numpy", "__array__"})
+"""Torch-function names that hand a captured tensor's value to the Python host WITHOUT
+emitting any aten dispatch.
+
+``.tolist()`` / ``.numpy()`` / ``np.asarray(tensor)`` (``__array__``) convert a tensor
+to a Python/NumPy container. They emit NO ``aten._local_scalar_dense`` (they are
+dispatcher-invisible), so the aten census cannot see them. A scoped method patch
+(``_observe_invisible_host_escapes``) records the SOURCE tensor of each such call for the
+duration of one runnable forward, so an invisible escape is witnessed by the SAME
+source-digest machinery as a census (``.item()``) escape -- host ARITHMETIC on the escaped
+value (``sum(t.tolist())``) is irrelevant because the SOURCE tensor is what changes on a
+changed-input/changed-state run. A patch is used rather than a ``TorchFunctionMode`` because
+any active function mode flips ``has_torch_function`` globally and breaks TorchLens's own
+function-wrapping capture.
+"""
+
+_HOST_ESCAPE_STATE_SOURCE_NAMES: "weakref.WeakKeyDictionary[Any, set[str]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace ``state_dict`` names (addresses) of every escape source that is a registered
+param/buffer, whether or not that state also feeds a traced graph op.
+
+A registered buffer/parameter read on the host (``self.threshold.item()`` /
+``self.gate.numpy()``) is witnessed by its capture-time STATE digest keyed to its state
+slot -- NOT by a tensor-op source slot, and NOT only when the state is unbound. Recording
+the address here lets the runnable producer witness the escape's state slot (bound OR
+unbound) so a changed staged value -> UNVERIFIABLE while capture-equivalent state ->
+VERIFIED. bound-ness exempts a state slot from the UNBOUND-state net, never from the escape
+witness.
+"""
+
+_HOST_ESCAPE_UNATTRIBUTABLE_BOOL: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces that observed an UNATTRIBUTABLE (unlabelled-source) BOOL escape.
+
+``bool(self.gate.data > 0.5)`` truth-tests a bool tensor produced on a ``.data`` alias;
+the predicate op is orphan-pruned (input-disconnected) and the escaped source carries no
+resolvable capture label. NO net (control-witness, conditional, loop, or pruned-RNG) covers
+such a pruned non-RNG bool predicate, so its branch source cannot be witnessed. The runnable
+producer downgrades witness completeness to keep the model honestly UNVERIFIABLE rather than
+falsely VERIFIED, exactly like a pruned-RNG control escape. Membership is presence-only.
+"""
+
+_HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces that observed an UNATTRIBUTABLE census-INVISIBLE escape (``.tolist()`` /
+``.numpy()`` on an unlabelled tensor, e.g. a ``.data`` alias).
+
+A dispatcher-invisible conversion of a tensor with no resolvable capture label leaves no
+source-op slot AND no reliable scalar to value-match (it may be multi-element). Its source
+cannot be witnessed, so the runnable producer fails closed (UNVERIFIABLE). Presence-only.
 """
 
 
@@ -293,6 +346,25 @@ def host_escape_source_labels(trace: Any) -> frozenset[str]:
 
     labels = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
     return frozenset(labels) if labels else frozenset()
+
+
+def host_escape_state_source_names(trace: Any) -> frozenset[str]:
+    """Return the ``state_dict`` names of every registered-state escape source."""
+
+    names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
+    return frozenset(names) if names else frozenset()
+
+
+def host_escape_has_unattributable_bool(trace: Any) -> bool:
+    """Return whether an unwitnessable (pruned, unlabelled) bool escape was seen."""
+
+    return trace in _HOST_ESCAPE_UNATTRIBUTABLE_BOOL
+
+
+def host_escape_has_unattributable_opaque(trace: Any) -> bool:
+    """Return whether an unwitnessable census-invisible escape (``.tolist``/``.numpy``) was seen."""
+
+    return trace in _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE
 
 
 def host_escape_state_source_labels(trace: Any) -> frozenset[str]:
@@ -349,6 +421,60 @@ def record_pruned_rng_control_source(trace: Any, label: str) -> None:
     labels.add(label)
 
 
+_COMPLETENESS_WITNESS_FILE = Path(__file__).resolve()
+"""This module's path, skipped when locating the true invoker of an escape."""
+
+_WRAPPERS_FILE = _COMPLETENESS_WITNESS_FILE.parent / "wrappers.py"
+"""TorchLens torch-function wrapper plumbing; skipped when finding the true invoker."""
+
+_TORCHLENS_ROOT = _COMPLETENESS_WITNESS_FILE.parents[2]
+"""The ``torchlens`` package root; a true-invoker frame here marks an internal read."""
+
+_MAX_ESCAPE_STACK_DEPTH = 60
+"""Bounded stack walk when classifying an escape dispatch's origin."""
+
+
+def _escape_source_is_torchlens_internal() -> bool:
+    """Return whether an escape dispatch's TRUE invoker is TorchLens capture internals.
+
+    TorchLens itself reads a scalar/bool from a tensor during capture -- extracting
+    ``is_scalar_bool`` from a freshly-produced op output (``ops._log_output_tensor_info``),
+    validating a float literal key with ``torch.isfinite`` (``runnable._encode_literal``),
+    and similar metadata reads -- which lower to ``aten._local_scalar_dense`` and would
+    otherwise be misrecorded as USER escapes and falsely trip the fail-closed INCOMPLETE
+    gates. Every such read is invoked directly from TorchLens code; a genuine user escape is
+    invoked directly from USER forward code. Since a user ``.item()`` lowers through
+    TorchLens's own ``wrapped_func`` plumbing, the TRUE invoker is found by skipping the
+    ``torch`` dispatch frames, this module's frames, and the ``wrappers.py`` wrapper
+    plumbing: the first remaining frame is the real caller. A frame under the ``torchlens``
+    package is an internal read (skip the escape); a user frame is a genuine escape (record).
+    The walk is bounded and inspects only frame code objects, never any tensor.
+    """
+
+    torch_root = Path(torch.__file__).resolve().parent
+    frame: Any = sys._getframe(2)
+    depth = 0
+    while frame is not None and depth < _MAX_ESCAPE_STACK_DEPTH:
+        depth += 1
+        try:
+            resolved = Path(frame.f_code.co_filename).resolve()
+        except (OSError, RuntimeError, ValueError):
+            frame = frame.f_back
+            continue
+        if resolved == _COMPLETENESS_WITNESS_FILE or resolved == _WRAPPERS_FILE:
+            frame = frame.f_back
+            continue
+        try:
+            if resolved.is_relative_to(torch_root):
+                frame = frame.f_back
+                continue
+            # First real (non-torch, non-plumbing) invoker frame: TorchLens => internal.
+            return resolved.is_relative_to(_TORCHLENS_ROOT)
+        except (OSError, RuntimeError, ValueError):
+            return False
+    return False
+
+
 def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> None:
     """Record the raw producing-op label of one tensor->host escape source.
 
@@ -367,18 +493,46 @@ def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> 
     source = args[0]
     if not isinstance(source, torch.Tensor):
         return
+    _record_escape_source_tensor(trace, source, invisible=False)
+
+
+def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible: bool) -> None:
+    """Record ONE tensor->host escape source, visible or census-invisible, uniformly.
+
+    ``invisible`` is ``True`` for a ``.tolist()`` / ``.numpy()`` / ``__array__``
+    conversion (observed by the scoped method patch) and ``False`` for an
+    ``aten._local_scalar_dense`` scalar escape (observed by the aten census). Both
+    mechanisms feed the SAME per-trace side tables so the runnable descriptor witnesses
+    every source class -- input, internal op, bound/unbound param, bound/unbound buffer --
+    by its capture-time digest through one uniform pass.
+
+    An escape dispatched from TorchLens's own op-logging internals (a metadata read of a
+    freshly-produced op output) is NOT a user escape and is skipped, so the fail-closed
+    INCOMPLETE gates never fire on TorchLens's own reads.
+    """
+
+    if _escape_source_is_torchlens_internal():
+        return
     is_bool = source.dtype is torch.bool
     label = get_tensor_label(source)
     if not isinstance(label, str):
         # An UNATTRIBUTABLE escape: a real captured tensor whose value left to the
         # host but which carries no resolvable capture label (a ``.data`` alias --
-        # its fresh Python tensor object has no TorchLens metadata). A bool predicate
-        # is the control-witness / pruned-RNG net's domain, so only NON-bool values
-        # are recorded here: ``_local_scalar_dense`` extracts exactly one scalar, and
-        # the runnable producer matches it to the internal-sink op that produced it
-        # and witnesses that sink value-free.
+        # its fresh Python tensor object has no TorchLens metadata, and its own
+        # producing op is orphan-pruned).
         if is_bool:
+            # A pruned, unlabelled bool predicate is covered by NO net -> fail closed.
+            _HOST_ESCAPE_UNATTRIBUTABLE_BOOL.add(trace)
             return
+        if invisible:
+            # A census-invisible conversion of an unlabelled tensor leaves no source
+            # slot and no reliable scalar (may be multi-element): fail closed. (Never
+            # call ``.item()`` here -- it would emit a stray dispatch under the census.)
+            _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(trace)
+            return
+        # A census scalar escape extracts exactly one value; record it so the runnable
+        # producer can match it to the internal-sink op (or capture-state slot) that
+        # produced it and witness that source value-free.
         try:
             escaped = source.detach().item()
         except (RuntimeError, ValueError, TypeError):
@@ -406,16 +560,25 @@ def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> 
             bool_sources = set()
             _HOST_ESCAPE_BOOL_SOURCE_LABELS[trace] = bool_sources
         bool_sources.add(label)
-    # A registered buffer/parameter source (identified by a non-None state address)
-    # is the unbound-state net's domain; record it separately so the producer does
-    # not close an unresolved (orphan-pruned) STATE label as a pruned tensor-op chain.
+    # A registered buffer/parameter source (identified by a non-None state address) is
+    # witnessed by its state slot digest. Record BOTH the raw label (so the producer
+    # does not close an unresolved orphan-pruned STATE label as a pruned tensor-op
+    # chain) AND the state_dict name/address (so the producer witnesses the state slot
+    # even when the state ALSO feeds a traced graph op -- bound-ness never exempts the
+    # escape witness).
     meta = get_tensor_meta(source)
-    if meta is not None and getattr(meta, "address", None) is not None:
+    address = getattr(meta, "address", None) if meta is not None else None
+    if address is not None:
         state_sources = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
         if state_sources is None:
             state_sources = set()
             _HOST_ESCAPE_STATE_SOURCE_LABELS[trace] = state_sources
         state_sources.add(label)
+        state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
+        if state_names is None:
+            state_names = set()
+            _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
+        state_names.add(str(address))
 
 
 def _operator_name(func: Any) -> str:
@@ -624,6 +787,62 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         return func(*args, **(kwargs or {}))
 
 
+def _make_invisible_escape_wrapper(original: Any, state: _WitnessState) -> Any:
+    """Wrap a tensor->host conversion method to record its SOURCE, then call through.
+
+    The wrapper records the receiver tensor (the escape SOURCE) into the shared escape
+    tables, gated to the owner thread / active trace / logging-enabled window so a
+    TorchLens-internal conversion (run under ``pause_logging``) is never mistaken for a
+    user escape. It always calls the original method unchanged, so values, goldens, and
+    outputs are byte-identical.
+    """
+
+    def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
+        if (
+            isinstance(self, torch.Tensor)
+            and threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+        ):
+            _record_escape_source_tensor(state.trace, self, invisible=True)
+        return original(self, *args, **kwargs)
+
+    return wrapper
+
+
+@contextmanager
+def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
+    """Scoped-patch ``.tolist()`` / ``.numpy()`` / ``__array__`` to record escape sources.
+
+    These conversions emit NO aten dispatch, so the aten census cannot see them. A
+    ``TorchFunctionMode`` WOULD observe them but flips ``has_torch_function`` globally,
+    which breaks TorchLens's own function-wrapping capture (an unrelated capture bug).
+    Instead this temporarily replaces the exact ``torch.Tensor`` conversion methods for the
+    duration of ONE runnable forward and restores them unconditionally, without installing
+    any torch mode -- so ordinary capture is completely undisturbed. The record is gated to
+    the active forward, so TorchLens-internal conversions do not register as user escapes.
+    """
+
+    originals: dict[str, Any] = {}
+    for name in INVISIBLE_HOST_ESCAPE_FUNCS:
+        original = getattr(torch.Tensor, name, None)
+        if original is None:
+            continue
+        try:
+            setattr(torch.Tensor, name, _make_invisible_escape_wrapper(original, state))
+        except (TypeError, AttributeError):
+            continue
+        originals[name] = original
+    try:
+        yield
+    finally:
+        for name, original in originals.items():
+            try:
+                setattr(torch.Tensor, name, original)
+            except (TypeError, AttributeError):
+                pass
+
+
 def _effective_mode() -> CompletenessWitnessMode:
     """Return the validated process-level witness mode.
 
@@ -830,6 +1049,18 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
         record_escapes=record_escapes,
     )
     mode_context = _CompletenessDispatchMode(state)
+    # A runnable capture additionally observes census-INVISIBLE ``.tolist()`` /
+    # ``.numpy()`` / ``__array__`` escapes via a scoped method patch so every escape
+    # mechanism feeds one uniform source-witness pass. The patch is a pure observer,
+    # restored unconditionally, and is skipped entirely for the non-runnable census path.
+    if record_escapes:
+        with _observe_invisible_host_escapes(state), mode_context:
+            try:
+                yield
+            finally:
+                if mode == "shadow":
+                    _finalize_census(state)
+        return
     with mode_context:
         try:
             yield
