@@ -53,8 +53,6 @@ from typing import (
 
 import torch
 
-import importlib
-
 from .._deprecations import MISSING
 from .._io import (
     FieldPolicy,
@@ -501,33 +499,6 @@ def _summarize_call_kwargs(saved_kwargs: Any, non_tensor_kwargs: Any) -> str | N
     if not rendered:
         return ""
     return ", ".join(rendered)
-
-
-def _resolve_container_type(
-    type_module: str | None, type_qualname: str | None
-) -> type | str | None:
-    """Resolve a stored container type reference to a runtime class.
-
-    Falls back to the qualified name string when the class cannot be imported
-    (e.g. after ``.tlspec`` load with the defining module unavailable). Returns
-    ``None`` when no type reference was captured.
-    """
-
-    if type_qualname is None:
-        return None
-    if type_module:
-        try:
-            module = importlib.import_module(type_module)
-            obj: Any = module
-            for part in type_qualname.split("."):
-                obj = getattr(obj, part)
-            if isinstance(obj, type):
-                return obj
-        except (ImportError, AttributeError):
-            pass
-    if type_module:
-        return f"{type_module}.{type_qualname}"
-    return type_qualname
 
 
 def apply_transform(
@@ -1856,21 +1827,46 @@ class Op:
     def multi_output_type(self) -> type | str | None:
         """Python class of the multi-output container this Op came from.
 
-        Resolves ``container_spec.type_module``/``type_qualname`` to a runtime
-        class when importable, falling back to the qualified name string when the
-        class cannot be imported (e.g. after ``.tlspec`` load). ``None`` when this
-        Op is not from a multi-output container.
+        Resolves ``container_spec.type_module``/``type_qualname`` to a runtime class
+        through the single default-deny container resolver in
+        ``torchlens.ir.container`` -- the SAME resolver used by output-container
+        reconstruction. That resolver NEVER imports an attacker-named module (the
+        ``ContainerSpec`` fields are portable, bundle-controlled strings that ride
+        through the safe unpickler untouched, so importing one would execute its
+        top-level code = arbitrary-code-execution); it resolves only from a module
+        already present in ``sys.modules`` and only to a type that structurally
+        matches the recorded container kind. When the type cannot be resolved
+        WITHOUT importing (its defining module is not loaded), fall back to the
+        qualified name string exactly as before, rather than importing it. ``None``
+        when this Op is not from a multi-output container.
+
+        Raises
+        ------
+        ContainerReconstructionError
+            If the reference resolves to an already-loaded type that is not
+            admissible for the recorded container kind (a tampered spec). This is
+            the security tripwire firing, not a legit-capture path.
         """
+
+        from ..ir.container import resolve_container_type
 
         if not self.in_multi_output:
             return None
         spec = self.container_spec
         if spec is None:
             return None
-        return _resolve_container_type(
-            getattr(spec, "type_module", None),
-            getattr(spec, "type_qualname", None),
-        )
+        resolved = resolve_container_type(spec)
+        if resolved is not None:
+            return resolved
+        # Unresolvable without importing an untrusted, bundle-controlled module
+        # name. Preserve the historical graceful string fallback WITHOUT importing.
+        type_module = getattr(spec, "type_module", None)
+        type_qualname = getattr(spec, "type_qualname", None)
+        if type_qualname is None:
+            return None
+        if type_module:
+            return f"{type_module}.{type_qualname}"
+        return type_qualname
 
     @property
     def container(self) -> Any:

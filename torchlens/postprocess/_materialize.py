@@ -1599,6 +1599,17 @@ def _resolve_module_class(class_qualname: str | None) -> type[Any] | None:
     if class_qualname is None or "." not in class_qualname:
         return None
     module_name, _, qualname = class_qualname.rpartition(".")
+    # SECURITY (not attacker-controlled): ``class_qualname`` here originates from a
+    # ``ModulePrepEvent`` built during LIVE model preparation from the real in-process
+    # ``nn.Module`` subclass (``model_prep._module_type`` -> ``{cls.__module__}.{cls.__qualname__}``).
+    # ``materialize_from_events`` is invoked ONLY from live-capture backends and partial-capture
+    # recovery -- NEVER from ``tl.load()`` -- so this resolver never sees a deserialized,
+    # bundle-controlled string. It is therefore intentionally NOT the default-deny
+    # ``sys.modules``-only resolver used for the portable, attacker-influenceable
+    # ``ContainerSpec`` (see ``torchlens.ir.container.resolve_container_type``): the module
+    # of a live model class is already imported, and hardening this hot path would only add
+    # cost without closing an attack surface. If a future load path ever re-materializes a
+    # deserialized event stream, this MUST be routed through a default-deny resolver instead.
     try:
         obj: Any = importlib.import_module(module_name)
         for part in qualname.split("."):
