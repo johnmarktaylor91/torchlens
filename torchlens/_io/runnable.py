@@ -255,6 +255,24 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # UNVERIFIABLE. The unified pass folds the former tensor-op and unbound-state
         # incomplete signals into this single fail-closed downgrade.
         completeness = WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+    if (
+        _has_forward_value_override_intervention(trace)
+        and completeness is WitnessCompleteness.COMPLETE
+    ):
+        # A forward-modifying intervention (e.g. ``zero_ablate``/``replace_with``)
+        # substituted the captured value of an op INSIDE the forward pass. The sparse
+        # DAG records only the ORIGINAL op recipe, so a replay recomputes the
+        # un-intervened value: the captured output/activations reflect the intervened
+        # forward, but the recorded ops do not encode the override. TorchLens cannot
+        # cheaply prove at save time whether the override happens to be byte-identical
+        # to the natural output (an op-representable no-op like ``scale(1.0)``) without
+        # re-executing, so it fails closed here. The single completeness downgrade
+        # drives BOTH honesty layers together -- ``_path_faithfulness`` reports
+        # UNVERIFIABLE and ``_numeric_attestation_check`` reports NOT_APPLICABLE (never
+        # a false VERIFIED, and never a contradicting NumericAttestationError). An
+        # observe-only or backward/grad intervention leaves the forward output
+        # reproducible byte-for-byte and is NOT flagged here, so it still VERIFIES.
+        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     if _has_pruned_rng_control_flow(trace) and completeness is WitnessCompleteness.COMPLETE:
         # A torch-RNG draw steered pure-Python control flow, so its predicate chain
         # is input-disconnected and was orphaned out of the visible graph. The
@@ -1444,6 +1462,35 @@ def _has_pruned_rng_control_flow(trace: Any) -> bool:
     from ..backends.torch.completeness_witness import pruned_rng_control_source_labels
 
     return bool(pruned_rng_control_source_labels(trace))
+
+
+def _has_forward_value_override_intervention(trace: Any) -> bool:
+    """Return whether the capture applied a forward-modifying value-override.
+
+    A forward intervention that REPLACED an op's output value (``zero_ablate``,
+    ``replace_with``, ``scale``, ``mean_ablate``, ...) makes the captured forward
+    diverge from what the recorded sparse DAG ops recompute: the DAG stores only the
+    original op recipe, never the value substitution. Such an artifact cannot
+    faithfully re-run the intervention-captured forward, so the producer downgrades
+    witness completeness to keep the run honestly UNVERIFIABLE + NOT_APPLICABLE
+    rather than falsely VERIFIED (with a contradicting NumericAttestationError when
+    activations are archived).
+
+    Only forward-direction, value-replacing interventions are flagged. An
+    observe-only intervention (``replaced=False``) or a backward/grad intervention
+    (``direction != "forward"``) leaves the forward output reproducible byte-for-byte
+    and is intentionally NOT flagged, so it still saves and VERIFIES. A plain,
+    non-intervened capture records no such op and is unchanged.
+    """
+
+    for op in getattr(trace, "layer_list", ()) or ():
+        if not getattr(op, "intervention_replaced", False):
+            continue
+        for record in getattr(op, "interventions", ()) or ():
+            direction = getattr(record, "direction", None)
+            if bool(getattr(record, "replaced", False)) and direction == "forward":
+                return True
+    return False
 
 
 def _escape_witnesses(
