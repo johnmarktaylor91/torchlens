@@ -11,6 +11,7 @@ import json
 import platform
 from typing import Any, cast
 
+import numpy as np
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
@@ -132,6 +133,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         is returned for diagnostics and must not be written as runnable.
     """
 
+    _normalize_trace_numpy_scalar_metadata(trace)
     diagnostics: list[RunnableDiagnostic] = []
     backend = str(getattr(trace, "backend", "torch"))
     if backend != "torch":
@@ -291,6 +293,73 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     )
     assert_sparse_core_has_no_tensor_payload(descriptor)
     return descriptor
+
+
+def _normalize_trace_numpy_scalar_metadata(trace: Any) -> None:
+    """Replace NumPy scalar metadata with equivalent Python values before saving.
+
+    NumPy scalar subclasses are not admitted by the safe metadata unpickler.
+    Runnable recipes already use a frozen Python-literal grammar, so preserving a
+    raw NumPy scalar in duplicate trace metadata would make an otherwise valid
+    runnable artifact save successfully but fail during load.
+
+    Parameters
+    ----------
+    trace:
+        Cooked trace whose runnable projection is being built.
+    """
+
+    for op in getattr(trace, "layer_list", ()):
+        for field_name in (
+            "non_tensor_pos_args",
+            "non_tensor_kwargs",
+            "func_non_tensor_args",
+            "args_template",
+            "kwargs_template",
+        ):
+            if hasattr(op, field_name):
+                setattr(op, field_name, _normalize_numpy_scalars(getattr(op, field_name)))
+    leaves = getattr(trace, "_runnable_input_nontensor_leaves", None)
+    if leaves is not None:
+        trace._runnable_input_nontensor_leaves = _normalize_numpy_scalars(leaves)
+
+
+def _normalize_numpy_scalars(value: Any) -> Any:
+    """Recursively convert NumPy scalar leaves to their Python equivalents.
+
+    Parameters
+    ----------
+    value:
+        Arbitrary captured non-tensor metadata.
+
+    Returns
+    -------
+    Any
+        Equivalent metadata with no ``numpy.generic`` leaves.
+    """
+
+    if isinstance(value, np.generic):
+        return _normalize_numpy_scalars(value.item())
+    if isinstance(value, LiteralValue):
+        return replace(value, value=_normalize_numpy_scalars(value.value))
+    if isinstance(value, CapturedArgTemplate):
+        return replace(
+            value,
+            args=tuple(_normalize_numpy_scalars(item) for item in value.args),
+            kwargs=tuple((key, _normalize_numpy_scalars(item)) for key, item in value.kwargs),
+        )
+    if isinstance(value, list):
+        return [_normalize_numpy_scalars(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_normalize_numpy_scalars(item) for item in value)
+    if isinstance(value, set):
+        return {_normalize_numpy_scalars(item) for item in value}
+    if isinstance(value, Mapping):
+        return {
+            _normalize_numpy_scalars(key): _normalize_numpy_scalars(item)
+            for key, item in value.items()
+        }
+    return value
 
 
 def _build_rng_profile(trace: Any) -> RunnableRngProfile:
@@ -1541,14 +1610,35 @@ def _mark_inplace_versions(
     """Attach version relations for in-place call outputs."""
 
     for call in calls:
-        if not call.is_inplace or not call.tensor_arguments:
+        version_of = _mutation_target_slot_id(call)
+        if not call.is_inplace or version_of is None:
             continue
-        version_of = call.tensor_arguments[0].slot_id
         for output_slot_id in call.output_slot_ids:
             draft = slot_drafts.get(output_slot_id)
             if draft is not None:
                 draft.mutable = True
                 draft.version_of = version_of
+
+
+def _mutation_target_slot_id(call: RunnableCallDescriptor) -> str | None:
+    """Return the tensor slot mutated by one recorded call.
+
+    Parameters
+    ----------
+    call:
+        Frozen runnable call descriptor.
+
+    Returns
+    -------
+    str | None
+        The ``out=`` tensor slot when present, otherwise the first tensor
+        argument for conventional in-place operators.
+    """
+
+    for argument in call.tensor_arguments:
+        if argument.argument_path == ("kwargs", "out"):
+            return argument.slot_id
+    return call.tensor_arguments[0].slot_id if call.tensor_arguments else None
 
 
 def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:

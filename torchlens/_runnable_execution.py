@@ -10,6 +10,7 @@ import re
 import struct
 from typing import Any, cast
 
+import numpy as np
 import torch
 
 from . import _state
@@ -31,6 +32,7 @@ from .ir.container import ContainerSpec, rebuild_container_from_spec
 from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .runnable import (
     ActivationPayloadLayerDescriptor,
+    ActivationPayloadMember,
     CallableRegistryEntry,
     ContractCheck,
     ControlWitness,
@@ -511,6 +513,8 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
 
+    recorded = _normalize_numpy_scalar(recorded)
+    runtime = _normalize_numpy_scalar(runtime)
     if isinstance(recorded, bool) or isinstance(runtime, bool):
         return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
     # Float family (incl. numeric float subclasses such as ``numpy.float64``),
@@ -535,6 +539,23 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     if type(recorded) is not type(runtime):
         return False
     return bool(recorded == runtime)
+
+
+def _normalize_numpy_scalar(value: Any) -> Any:
+    """Convert one NumPy scalar to its Python equivalent for literal comparison.
+
+    Parameters
+    ----------
+    value:
+        Captured or runtime literal leaf.
+
+    Returns
+    -------
+    Any
+        ``value.item()`` for NumPy scalars, otherwise the original value.
+    """
+
+    return value.item() if isinstance(value, np.generic) else value
 
 
 def _input_literal_contract_checks(
@@ -1113,6 +1134,13 @@ def _bind_call_outputs(
             continue
         slot_values[slot_id] = value
         produced_slot_ids = {slot_id}
+        out_argument_slot_id = _out_argument_slot_id(call) if call.is_inplace else None
+        if out_argument_slot_id is not None:
+            # ``out=`` calls mutate their explicit destination, which may have
+            # been produced by an earlier call. Keep that aliased slot current
+            # for downstream reads and activation attestation.
+            slot_values[out_argument_slot_id] = value
+            produced_slot_ids.add(out_argument_slot_id)
         for version in descriptor.tensor_slots:
             if version.version_of == slot_id and version.producer_slot_id == slot_id:
                 slot_values[version.slot_id] = value
@@ -1189,7 +1217,8 @@ def _mutation_contract_checks(
                 details=(("changed_slot_ids", repr(tuple(sorted(changed)))),),
             ),
         )
-    if not call.tensor_arguments or not call.output_slot_ids:
+    input_slot_id = _mutation_target_slot_id(call)
+    if input_slot_id is None or not call.output_slot_ids:
         return (
             _contract_check(
                 f"mutation:{call.call_id}",
@@ -1199,7 +1228,6 @@ def _mutation_contract_checks(
                 affected_op_labels=call.op_labels,
             ),
         )
-    input_slot_id = call.tensor_arguments[0].slot_id
     input_value = slot_values.get(input_slot_id)
     try:
         output_value = _value_at_path(output, ()) if len(call.output_slot_ids) == 1 else output
@@ -1225,6 +1253,52 @@ def _mutation_contract_checks(
                 ("output_aliases_input", repr(aliases)),
             ),
         ),
+    )
+
+
+def _mutation_target_slot_id(call: RunnableCallDescriptor) -> str | None:
+    """Return the tensor slot expected to alias an in-place call's output.
+
+    Parameters
+    ----------
+    call:
+        Frozen runnable call descriptor.
+
+    Returns
+    -------
+    str | None
+        The explicit ``out=`` tensor slot when present, otherwise the first
+        tensor argument for conventional in-place operators.
+    """
+
+    out_argument_slot_id = _out_argument_slot_id(call)
+    if out_argument_slot_id is not None:
+        return out_argument_slot_id
+    return call.tensor_arguments[0].slot_id if call.tensor_arguments else None
+
+
+def _out_argument_slot_id(call: RunnableCallDescriptor) -> str | None:
+    """Return an explicit ``out=`` tensor slot, if the call has one.
+
+    Parameters
+    ----------
+    call:
+        Frozen runnable call descriptor.
+
+    Returns
+    -------
+    str | None
+        The explicit output tensor slot or ``None`` for conventional in-place
+        calls that mutate their first tensor argument.
+    """
+
+    return next(
+        (
+            argument.slot_id
+            for argument in call.tensor_arguments
+            if argument.argument_path == ("kwargs", "out")
+        ),
+        None,
     )
 
 
@@ -1910,6 +1984,12 @@ def _numeric_attestation_check(
     if any(member.field != "out" for member in layer.members):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = layer.members
+    if _has_out_mutated_activation_member(descriptor, raw_members):
+        # An archived activation that later became an ``out=`` destination was
+        # captured before its mutation. Its pre-write bytes are allocator data,
+        # not a reproducible result, so attesting it would create a false
+        # divergence on an otherwise faithful original-input replay.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     if not raw_members or not _attestation_inputs_match(descriptor, layer, input_byte_digests):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if not _attestation_state_matches(descriptor, layer, state, slot_values):
@@ -1959,6 +2039,36 @@ def _numeric_attestation_check(
         NumericAttestationStatus.ATTESTED,
         ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
     )
+
+
+def _has_out_mutated_activation_member(
+    descriptor: SparseRunDescriptor,
+    members: Sequence[ActivationPayloadMember],
+) -> bool:
+    """Return whether activation attestation includes an ``out=`` destination.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse recipe whose mutating calls are being inspected.
+    members:
+        Archived raw activation records selected at capture time.
+
+    Returns
+    -------
+    bool
+        Whether any archived slot is later written through an explicit ``out=``
+        argument and therefore has no stable pre-write byte contract.
+    """
+
+    out_slots = {
+        argument.slot_id
+        for call in descriptor.calls
+        if call.is_inplace
+        for argument in call.tensor_arguments
+        if argument.argument_path == ("kwargs", "out")
+    }
+    return any(member.slot_id in out_slots for member in members)
 
 
 def _raw_activation_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
